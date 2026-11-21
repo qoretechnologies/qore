@@ -88,6 +88,8 @@
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QC_AbstractConnectionPool.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxPollOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <string.h>
 
@@ -2973,8 +2975,8 @@ ThreadCleanupList::~ThreadCleanupList() {
     }
 }
 
-void ThreadCleanupList::exec() {
-    class ThreadCleanupNode* w = head;
+void qore_thread_cleanup_list_ops::execImpl(ThreadCleanupList* b) {
+    class ThreadCleanupNode* w = b->head;
     while (w) {
         w->func(w->arg);
         w = w->next;
@@ -7638,7 +7640,7 @@ int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInhe
     // the thread is counted against the limit of the manager that governs everything but policy checks; the
     // policy manager differs only under a policy barrier, which does not change who started the thread
     if (QoreSandboxManager* sm = sbx->ctx.manager) {
-        if (sm->acquireThreadSlot(xsink)) {
+        if (qore_sandbox_manager_ops(sm).acquireThreadSlot(xsink)) {
             return -1;
         }
         sm->ref();
@@ -7654,7 +7656,7 @@ QoreInheritedSandbox::~QoreInheritedSandbox() {
 
 void QoreInheritedSandbox::releaseSlot() {
     if (counted) {
-        counted->releaseThreadSlot();
+        qore_sandbox_manager_ops(counted).releaseThreadSlot();
         counted->deref(nullptr);
         counted = nullptr;
     }
@@ -9038,7 +9040,7 @@ int q_deregister_foreign_thread() {
     int tid = td->tid;
 
     // run any thread cleanup functions
-    tclist.exec();
+    qore_thread_cleanup_list_ops(tclist).exec();
 
     assert(xsink.isException() || !td->active_exceptions);
 
@@ -9095,7 +9097,7 @@ int q_deregister_reserved_foreign_thread() {
     xsink.handleExceptions();
 
     // run any thread cleanup functions
-    tclist.exec();
+    qore_thread_cleanup_list_ops(tclist).exec();
 
     assert(xsink.isException() || !td->active_exceptions);
 
@@ -9651,7 +9653,7 @@ namespace {
                 printd(4, "q_run_thread(): thread terminating");
 
                 // run any cleanup functions
-                tclist.exec();
+                qore_thread_cleanup_list_ops(tclist).exec();
 
                 assert(xsink.isException() || !td->active_exceptions);
 
@@ -9890,7 +9892,7 @@ namespace {
                 printd(4, "thread terminating");
 
                 // run any cleanup functions
-                tclist.exec();
+                qore_thread_cleanup_list_ops(tclist).exec();
 
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
                 cleanup_delegate.reset();

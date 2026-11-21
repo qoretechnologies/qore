@@ -8641,7 +8641,7 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
         return;
     }
     if (!class_ctx) {
-        helper.vl.addMemberNotification(obj, key);
+        qore_auto_vlock_ops(helper.vl).addMemberNotification(obj, key);
     }
     // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
     if (const ReferenceNode* ref = helper.getReference()) {
@@ -20699,6 +20699,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,

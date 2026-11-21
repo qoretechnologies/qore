@@ -101,6 +101,7 @@ struct qore_socket_private;
     @since %Qore 3.0
 */
 class SocketPollSocketOperationBase : public SocketPollOperationBase {
+    friend class qore_socket_poll_socket_operation_base_ops;
 public:
     //! Creates the operation with a QoreObject self reference (for Qore-space ops)
     DLLEXPORT SocketPollSocketOperationBase(QoreObject* self);
@@ -120,14 +121,6 @@ public:
     /** @note Out-of-line because the implementation accesses socket internals.
     */
     DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
-
-    //! Releases the operation's claim on the socket without using the socket's descriptor
-    /** The async I/O controller calls this before it delivers the result of an operation that it ends without
-        aborting it, because the descriptor that the operation waited on was closed or replaced, or the socket was
-        deleted; abort() is not called then, as it can close the descriptor that the socket has now.  The code that
-        gets the result can then use the socket at once, although the operation object is released only later.
-    */
-    DLLLOCAL void releaseSocketClaim();
 
 protected:
     std::unique_ptr<AbstractPollState> poll_state;

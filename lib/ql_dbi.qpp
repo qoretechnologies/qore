@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_dbi_private.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 /** @defgroup old_dbi_functions Old DBI Functions
     Old DBI functions; see @ref dbi_functions
@@ -72,7 +73,7 @@ nothing parseDatasource() [flags=NOOP,DEPRECATED] {
     @deprecated use dbi_get_driver_list() instead; camel-case function names were deprecated in %Qore 0.8.12
  */
 *list<string> getDBIDriverList() [flags=CONSTANT,DEPRECATED] {
-    return DBI.getDriverList();
+    return qore_dbi_driver_list_ops(DBI).getDriverList();
 }
 
 //! Returns a list of each capability supported by the given DBI driver (see @ref dbi_capabilities) or @ref nothing if the driver cannot be found
@@ -195,7 +196,7 @@ hash<auto> parse_datasource(string datasource) [flags=RET_VALUE_ONLY,NAMED_ARGS]
     @since %Qore 0.8.6
 */
 *list<string> dbi_get_driver_list() [flags=CONSTANT] {
-    return DBI.getDriverList();
+    return qore_dbi_driver_list_ops(DBI).getDriverList();
 }
 
 //! Returns a list of each capability supported by the given DBI driver (see @ref dbi_capabilities) or @ref nothing if the driver cannot be found

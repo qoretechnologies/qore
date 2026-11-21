@@ -50,6 +50,7 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include <qore/QoreBufferNode.h>
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <bit>
 
@@ -1239,7 +1240,7 @@ QoreValue qore_value_ops::evalImpl(QoreValue* b, RuntimeConfig& rc, bool& needs_
         needs_deref = false;
         return *b;
     }
-    return n->eval(rc, needs_deref, xsink);
+    return qore_abstract_node_ops(n).eval(rc, needs_deref, xsink);
 }
 
 // ============================================================================
@@ -1507,7 +1508,7 @@ int qore_value_eval_ref_holder_ops::evalInternImpl(ValueEvalRefHolder* b, Runtim
         return 0;
     }
     b->needs_deref = true;
-    b->v = exp->eval(rc, b->needs_deref, b->xsink);
+    b->v = qore_abstract_node_ops(exp).eval(rc, b->needs_deref, b->xsink);
     return b->xsink && *b->xsink ? -1 : 0;
 }
 

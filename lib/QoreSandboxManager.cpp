@@ -40,6 +40,7 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <cassert>
 #include <cctype>
@@ -1024,8 +1025,8 @@ void QoreNetworkSecurityManager::allowHTTPSOnly() {
     addAllowedPort(443, QSEC_NET_TCP);
 }
 
-bool QoreNetworkSecurityManager::allowsPort(int port, int proto) const {
-    return priv->isPortAllowed(port, proto);
+bool qore_network_security_manager_ops::allowsPortImpl(QoreNetworkSecurityManager* b, int port, int proto) {
+    return b->priv->isPortAllowed(port, proto);
 }
 
 void QoreNetworkSecurityManager::setDefaultPolicy(bool allow) {
@@ -1374,7 +1375,7 @@ bool QoreSandboxManager::trustsUncontrolledApis() const {
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
-    notifyThreadSlotReleased();
+    qore_sandbox_manager_ops(this).notifyThreadSlotReleased();
 }
 
 int QoreSandboxManager::getMaxThreads() const {
@@ -1436,24 +1437,24 @@ bool QoreSandboxManager::restricts() const {
     return networkRestricts() || filesystemRestricts() || limitsRestrict();
 }
 
-int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
+int qore_sandbox_manager_ops::acquireThreadSlotImpl(QoreSandboxManager* b, ExceptionSink* xsink) {
     bool released = false;
-    int rc = acquireThreadSlotQuiet(xsink, released);
+    int rc = qore_sandbox_manager_ops(b).acquireThreadSlotQuiet(xsink, released);
     if (released) {
         // the slots of a composition taken before a member refused one were released again
-        notifyThreadSlotReleased();
+        qore_sandbox_manager_ops(b).notifyThreadSlotReleased();
     }
     return rc;
 }
 
-int QoreSandboxManager::acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released) {
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+int qore_sandbox_manager_ops::acquireThreadSlotQuietImpl(QoreSandboxManager* b, ExceptionSink* xsink, bool& released) {
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         size_t acquired = 0;
         for (auto* manager : *managers) {
             if ((!(acquired % 100) && qore_check_cancel(xsink, "sandbox thread reservation"))
-                    || manager->acquireThreadSlotQuiet(xsink, released)) {
+                    || qore_sandbox_manager_ops(manager).acquireThreadSlotQuiet(xsink, released)) {
                 while (acquired) {
-                    (*managers)[--acquired]->releaseThreadSlotQuiet();
+                    qore_sandbox_manager_ops((*managers)[--acquired]).releaseThreadSlotQuiet();
                     released = true;
                 }
                 return -1;
@@ -1462,15 +1463,15 @@ int QoreSandboxManager::acquireThreadSlotQuiet(ExceptionSink* xsink, bool& relea
         }
         return 0;
     }
-    int count = active_threads.load();
+    int count = b->active_threads.load();
     while (true) {
-        int max = max_threads.load();
+        int max = b->max_threads.load();
         if (max > 0 && count >= max) {
             xsink->raiseException("THREAD-CREATION-FAILURE", "cannot start a thread: sandbox thread limit of %d "
                 "reached", max);
             return -1;
         }
-        if (active_threads.compare_exchange_weak(count, count + 1)) {
+        if (b->active_threads.compare_exchange_weak(count, count + 1)) {
             return 0;
         }
     }
@@ -1541,29 +1542,29 @@ void ThreadPool::notifySlotReleased(QoreSandboxManager* sm, const AbstractPrivat
     }
 }
 
-void QoreSandboxManager::releaseThreadSlot() {
-    releaseThreadSlotQuiet();
-    notifyThreadSlotReleased();
+void qore_sandbox_manager_ops::releaseThreadSlotImpl(QoreSandboxManager* b) {
+    qore_sandbox_manager_ops(b).releaseThreadSlotQuiet();
+    qore_sandbox_manager_ops(b).notifyThreadSlotReleased();
 }
 
-void QoreSandboxManager::notifyThreadSlotReleased(const AbstractPrivateData* except) {
+void qore_sandbox_manager_ops::notifyThreadSlotReleasedImpl(QoreSandboxManager* b, const AbstractPrivateData* except) {
     // a thread pool waiting for a slot of this manager, or of a member of this composition, can start a worker now
-    ThreadPool::notifySlotReleased(this, except);
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+    ThreadPool::notifySlotReleased(b, except);
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         for (auto* manager : *managers) {
             ThreadPool::notifySlotReleased(manager, except);
         }
     }
 }
 
-void QoreSandboxManager::releaseThreadSlotQuiet() {
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b) {
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         for (auto* manager : *managers) {
-            manager->releaseThreadSlotQuiet();
+            qore_sandbox_manager_ops(manager).releaseThreadSlotQuiet();
         }
         return;
     }
-    int prev = active_threads.fetch_sub(1);
+    int prev = b->active_threads.fetch_sub(1);
     assert(prev > 0);
     (void)prev;
 }

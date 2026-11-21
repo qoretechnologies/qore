@@ -107,6 +107,7 @@ struct qore_tm {
     @see DateTimeNode
  */
 class DateTime {
+    friend class qore_date_time_ops;
    friend class DateTimeNode;
    friend class qore_relative_time;
    friend class qore_absolute_time;
@@ -114,9 +115,6 @@ class DateTime {
 protected:
    //! private date data - most are ints so relative dates can hold a lot of data
    class qore_date_private *priv;
-
-   DLLLOCAL void setDateLiteral(int64 date);
-   DLLLOCAL void setRelativeDateLiteral(int64 date);
 
    //! this function is not implemented; it is here as a private function in order to prohibit it from being used
    DLLLOCAL DateTime& operator=(const DateTime&);
@@ -829,7 +827,5 @@ public:
    */
    DLLEXPORT static DateTime* makeRelativeFromSeconds(int64 n_second, int n_us, ExceptionSink* xsink);
 };
-
-
 
 #endif

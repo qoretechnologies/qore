@@ -33,6 +33,7 @@
 #define QTP_DEFAULT_RELEASE_MS 5000
 
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <deque>
 #include <optional>
@@ -375,7 +376,7 @@ protected:
             notify_pending = false;
             sl.unlock();
             // this pool released the slot itself: it does not need to be woken for it
-            sbx->notifyThreadSlotReleased(this);
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased(this);
             sl.lock();
         }
     }
@@ -395,7 +396,7 @@ protected:
         // the limit is a capacity of the pool here, like max: a failure is not an error of any caller
         ExceptionSink slot_xsink;
         bool released = false;
-        int rc = sbx->acquireThreadSlotQuiet(&slot_xsink, released);
+        int rc = qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(&slot_xsink, released);
         if (released) {
             notify_pending = true;
         }
@@ -412,7 +413,7 @@ protected:
     */
     DLLLOCAL void releaseWorkerSlotUnlocked() {
         if (sbx) {
-            sbx->releaseThreadSlotQuiet();
+            qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             notify_pending = true;
         }
     }
@@ -649,7 +650,7 @@ public:
         bool released = false;
         int rc = submitUnlocked(task, released, xsink);
         if (released) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return rc;
     }
@@ -665,7 +666,7 @@ public:
         // sandbox thread limit raises THREAD-CREATION-FAILURE in the submitting code instead of leaving the task in a
         // pool that cannot start a worker
         if (sbx && !reserved && fh.empty() && ah.empty()) {
-            if (sbx->acquireThreadSlotQuiet(xsink, released)) {
+            if (qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(xsink, released)) {
                 return -1;
             }
             ++reserved;
@@ -717,12 +718,12 @@ public:
             // the thread leaves the pool and ends; its slot is released quietly, and the waiting pools are notified
             // below, without the lock
             if (sbx) {
-                sbx->releaseThreadSlotQuiet();
+                qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             }
         }
 
         if (sbx) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return -1;
     }

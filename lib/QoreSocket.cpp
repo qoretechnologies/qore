@@ -54,6 +54,7 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QoreNetInternal.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/SocketRecvHttpLinePollOperation.h"
@@ -1783,7 +1784,7 @@ public:
             assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
             int accepted_fd = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
             poll_state.reset();
-            accepted_socket.reset(sock->createAcceptedSocket(accepted_fd));
+            accepted_socket.reset(qore_socket_ops(sock).createAcceptedSocket(accepted_fd));
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
@@ -3218,7 +3219,7 @@ public:
                     int descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
                     poll_state.reset();
                     accept_completed = true;
-                    accepted_socket.reset(sock->createAcceptedSocket(descriptor));
+                    accepted_socket.reset(qore_socket_ops(sock).createAcceptedSocket(descriptor));
                     if (ssl) {
                         state = SPS_ACCEPTING_SSL;
                         bumpFdGeneration();
@@ -4095,26 +4096,26 @@ static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSourc
     return rv;
 }
 
-QoreSocket* QoreSocket::createAcceptedSocket(int descriptor) {
-    QoreSocket* s = new QoreSocket(descriptor, priv->sfamily, priv->stype, priv->sprot, priv->enc);
+QoreSocket* qore_socket_ops::createAcceptedSocketImpl(QoreSocket* b, int descriptor) {
+    QoreSocket* s = new QoreSocket(descriptor, b->priv->sfamily, b->priv->stype, b->priv->sprot, b->priv->enc);
     // accepted with qore_accept_nonblock()
     s->priv->fd_nonblocking.store(true, std::memory_order_relaxed);
-    if (!priv->socketname.empty()) {
-        s->priv->socketname = priv->socketname;
+    if (!b->priv->socketname.empty()) {
+        s->priv->socketname = b->priv->socketname;
     }
 
-    s->priv->setSslVerifyMode(priv->ssl_verify_mode);
-    s->priv->acceptAllCertificates(priv->ssl_accept_all_certs);
-    if (priv->ssl_capture_remote_cert) {
+    s->priv->setSslVerifyMode(b->priv->ssl_verify_mode);
+    s->priv->acceptAllCertificates(b->priv->ssl_accept_all_certs);
+    if (b->priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
-    if (!priv->alpn_protocols.empty()) {
-        s->priv->alpn_protocols = priv->alpn_protocols;
+    if (!b->priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = b->priv->alpn_protocols;
     }
-    s->priv->ssl_ca_file = priv->ssl_ca_file;
-    s->priv->ssl_ca_path = priv->ssl_ca_path;
+    s->priv->ssl_ca_file = b->priv->ssl_ca_file;
+    s->priv->ssl_ca_path = b->priv->ssl_ca_path;
     // the placement of the fields of the HTTP messages read (qore#6761)
-    s->priv->http_fields_at_top_level.store(priv->http_fields_at_top_level.load(std::memory_order_relaxed),
+    s->priv->http_fields_at_top_level.store(b->priv->http_fields_at_top_level.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
     return s;
 }
@@ -5859,7 +5860,7 @@ int do_read_error(qore_offset_t rc, const char* method_name, int timeout_ms, Exc
         return 0;
     }
     if (!*xsink) {
-        QoreSocket::doException(rc, method_name, timeout_ms, xsink);
+        qore_socket_ops::doException(rc, method_name, timeout_ms, xsink);
     }
     return -1;
 }
@@ -6932,8 +6933,8 @@ const char* SocketSource::getHostName() const {
    return priv->hostname ? priv->hostname->c_str() : 0;
 }
 
-void SocketSource::setAll(QoreObject *o, ExceptionSink* xsink) {
-   return priv->setAll(o, xsink);
+void qore_socket_source_ops::setAllImpl(SocketSource* b, QoreObject *o, ExceptionSink* xsink) {
+   return b->priv->setAll(o, xsink);
 }
 
 static int qore_cares_library_init(ExceptionSink* xsink) {
@@ -11902,7 +11903,7 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
     return pushed;
 }
 
-void QoreSocket::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
+void qore_socket_ops::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
     assert(xsink);
     switch (rc) {
         case 0:
@@ -12531,30 +12532,30 @@ QoreSocket::~QoreSocket() {
     priv->deref();
 }
 
-int QoreSocket::setNoDelay(int nodelay) {
-    return qore_socket_exec_setup_no_exception(this,
-        new QoreSocketControllerSetupPollOperation(this,
+int qore_socket_ops::setNoDelayImpl(QoreSocket* b, int nodelay) {
+    return qore_socket_exec_setup_no_exception(b,
+        new QoreSocketControllerSetupPollOperation(b,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetNoDelay, nodelay),
         "setNoDelay");
 }
 
-int QoreSocket::getNoDelay() const {
-    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
-        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+int qore_socket_ops::getNoDelayImpl(QoreSocket* b) {
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(b),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(b),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetNoDelay),
         "getNoDelay");
 }
 
-int QoreSocket::setUserTimeout(int ms) {
-    return qore_socket_exec_setup_no_exception(this,
-        new QoreSocketControllerSetupPollOperation(this,
+int qore_socket_ops::setUserTimeoutImpl(QoreSocket* b, int ms) {
+    return qore_socket_exec_setup_no_exception(b,
+        new QoreSocketControllerSetupPollOperation(b,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetUserTimeout, ms),
         "setUserTimeout");
 }
 
-int QoreSocket::getUserTimeout() const {
-    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
-        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+int qore_socket_ops::getUserTimeoutImpl(QoreSocket* b) {
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(b),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(b),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetUserTimeout),
         "getUserTimeout");
 }
@@ -12583,8 +12584,8 @@ int QoreSocket::getDescriptorForLibrary() const {
     return priv->sock;
 }
 
-int QoreSocket::getDescriptor() const {
-    return priv->sock;
+int qore_socket_ops::getDescriptorImpl(QoreSocket* b) {
+    return b->priv->sock;
 }
 
 int QoreSocket::holdDescriptor(int fd, std::shared_ptr<void>& hold) const {
@@ -13056,26 +13057,25 @@ AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, QoreSSLCert
     return new SocketConnectSslPollState(xsink, priv, cert, pkey);
 }
 
-AbstractPollState* QoreSocket::startProxySslConnect(ExceptionSink* xsink) {
-    if (priv->sock == QORE_INVALID_SOCKET) {
+AbstractPollState* qore_socket_ops::startProxySslConnectImpl(QoreSocket* b, ExceptionSink* xsink) {
+    if (b->priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-    if (priv->ssl) {
+    if (b->priv->ssl) {
         se_ssl_already_established("Socket", "startSslConnect", xsink);
         return nullptr;
     }
     // the client certificate and the ALPN protocols of the socket are meant for the target server
-    return new SocketConnectSslPollState(xsink, priv, nullptr, nullptr, false);
+    return new SocketConnectSslPollState(xsink, b->priv, nullptr, nullptr, false);
 }
 
-AbstractPollState* QoreSocket::startLayeredSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert,
-        QoreSSLPrivateKey* pkey) {
-    if (priv->sock == QORE_INVALID_SOCKET) {
+AbstractPollState* qore_socket_ops::startLayeredSslConnectImpl(QoreSocket* b, ExceptionSink* xsink, QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
+    if (b->priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-    qore_socket_private::SslRef ssl = priv->getSsl();
+    qore_socket_private::SslRef ssl = b->priv->getSsl();
     if (!ssl) {
         xsink->raiseException("SOCKET-SSL-ERROR", "Socket::startSslConnect(): a TLS connection carried by another "
             "TLS connection requires the socket to have a TLS connection");
@@ -13085,7 +13085,7 @@ AbstractPollState* QoreSocket::startLayeredSslConnect(ExceptionSink* xsink, Qore
         se_ssl_already_established("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-    std::unique_ptr<AbstractPollState> rv(new SocketConnectLayeredSslPollState(xsink, priv, cert, pkey));
+    std::unique_ptr<AbstractPollState> rv(new SocketConnectLayeredSslPollState(xsink, b->priv, cert, pkey));
     if (*xsink) {
         return nullptr;
     }
@@ -15936,12 +15936,12 @@ int64 QoreSocket::getHttp2MaxRequestBodySize() const {
     return priv->max_http2_body_size.load(std::memory_order_relaxed);
 }
 
-void QoreSocket::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, with_data);
+void qore_socket_ops::setEventQueueImpl(QoreSocket* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setEventQueue(xsink, q, arg, with_data);
 }
 
-Queue* QoreSocket::getQueue() {
-    return priv->getEventQueue();
+Queue* qore_socket_ops::getQueueImpl(QoreSocket* b) {
+    return b->priv->getEventQueue();
 }
 
 void QoreSocket::cleanup(ExceptionSink* xsink) {
@@ -15954,8 +15954,8 @@ void QoreSocket::cleanup(ExceptionSink* xsink) {
     }
 }
 
-int64 QoreSocket::getObjectIDForEvents() const {
-    return priv->getObjectIDForEvents();
+int64 qore_socket_ops::getObjectIDForEventsImpl(QoreSocket* b) {
+    return b->priv->getObjectIDForEvents();
 }
 
 QoreHashNode* QoreSocket::getPeerInfo(ExceptionSink* xsink) const {
@@ -15978,9 +15978,9 @@ QoreHashNode* QoreSocket::getSocketInfo(ExceptionSink* xsink, bool host_lookup) 
         "SOCKET-GETSOCKETINFO-ERROR", xsink);
 }
 
-void QoreSocket::setAccept(QoreObject *o) {
+void qore_socket_ops::setAcceptImpl(QoreSocket* b, QoreObject *o) {
     ExceptionSink xsink;
-    ReferenceHolder<QoreHashNode> info(qore_socket_exec_address_info(this,
+    ReferenceHolder<QoreHashNode> info(qore_socket_exec_address_info(b,
         QoreSocketControllerAddressInfoPollOperation::Action::Peer, true, "setAccept",
         "SOCKET-GETPEERINFO-ERROR", &xsink), &xsink);
     if (!xsink && info) {
@@ -16163,15 +16163,15 @@ bool SocketPollSocketOperationBase::abortNeedsClose() const {
     return true;
 }
 
-void SocketPollSocketOperationBase::releaseSocketClaim() {
+void qore_socket_poll_socket_operation_base_ops::releaseSocketClaimImpl(SocketPollSocketOperationBase* b) {
     // a Qore-language operation has no socket of its own
-    if (!sock) {
+    if (!b->sock) {
         return;
     }
-    AutoLocker al(sock->priv->m);
-    if (set_non_block) {
-        sock->priv->clearNonBlock(non_block_direction);
-        set_non_block = false;
+    AutoLocker al(b->sock->priv->m);
+    if (b->set_non_block) {
+        b->sock->priv->clearNonBlock(b->non_block_direction);
+        b->set_non_block = false;
     }
 }
 
@@ -17051,10 +17051,10 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
                 poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
                 break;
             case SslUpgradeMode::Proxy:
-                poll_state.reset(sock->priv->socket->startProxySslConnect(xsink));
+                poll_state.reset(qore_socket_ops(sock->priv->socket).startProxySslConnect(xsink));
                 break;
             case SslUpgradeMode::Layered:
-                poll_state.reset(sock->priv->socket->startLayeredSslConnect(xsink, sock->priv->cert,
+                poll_state.reset(qore_socket_ops(sock->priv->socket).startLayeredSslConnect(xsink, sock->priv->cert,
                     sock->priv->pk));
                 break;
         }
@@ -21277,6 +21277,8 @@ QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock) {

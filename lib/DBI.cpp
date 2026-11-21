@@ -35,6 +35,7 @@
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cassert>
 #include <cctype>
@@ -709,8 +710,8 @@ DBIDriverList::~DBIDriverList() {
     delete priv;
 }
 
-DBIDriver* DBIDriverList::find_intern(const char* name) const {
-    return priv->find_intern(name);
+DBIDriver* qore_dbi_driver_list_ops::find_internImpl(DBIDriverList* b, const char* name) {
+    return b->priv->find_intern(name);
 }
 
 DBIDriver* DBIDriverList::find(const char* name) const {
@@ -750,8 +751,8 @@ DBIDriver* DBIDriverList::registerDriver(const char* name, const qore_dbi_method
     return dd;
 }
 
-QoreListNode* DBIDriverList::getDriverList() const {
-    return priv->getDriverList();
+QoreListNode* qore_dbi_driver_list_ops::getDriverListImpl(DBIDriverList* b) {
+    return b->priv->getDriverList();
 }
 
 void DBI_concat_numeric(QoreString* str, QoreValue v) {

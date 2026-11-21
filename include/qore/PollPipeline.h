@@ -62,6 +62,7 @@
     @since %Qore 3.0
 */
 class PollPipelinePriv : public SocketPollOperationBase {
+    friend class qore_poll_pipeline_ops;
 public:
     //! Step types
     enum class StepType : uint8_t {
@@ -564,43 +565,13 @@ private:
 
     // --- Internal methods ---
 
-    //! Create the inner poll operation for a step
-    DLLLOCAL SocketPollOperationBase* createInnerOp(const Step& step, ExceptionSink* xsink);
 
-    //! Handles completion of an inner op for a RECV_IMAP_RESPONSE step
-    /** Appends the chunk just read to ctx.imap_accum, then either arms the next inner
-        read (line or literal) or completes the step.
 
-        @return 1 if the step is complete and execution should advance, 0 if a new inner
-        op was armed and the continuePoll loop should iterate, -1 on error (an exception
-        has been raised)
-    */
-    DLLLOCAL int handleImapResponse(ExceptionSink* xsink);
 
-    //! Arms a CRLF-delimited line read as the current inner op (RECV_IMAP_RESPONSE)
-    /** @return 0 on success, -1 on error (an exception has been raised)
-    */
-    DLLLOCAL int armImapLineRead(ExceptionSink* xsink);
 
-    //! Arms a fixed-size literal read as the current inner op (RECV_IMAP_RESPONSE)
-    /** @return 0 on success, -1 on error (an exception has been raised)
-    */
-    DLLLOCAL int armImapLiteralRead(size_t count, ExceptionSink* xsink);
 
-    //! Extract output from current_op into context
-    DLLLOCAL void extractOutput(ExceptionSink* xsink);
 
-    //! Release current inner operation
-    DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
 
-    //! Deliver result via action
-    DLLLOCAL void deliverResult(ExceptionSink* xsink);
-
-    //! Build result hash from context
-    DLLLOCAL QoreHashNode* buildResultHash(ExceptionSink* xsink) const;
-
-    //! Set error state
-    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
-};
+    };
 
 #endif // _QORE_POLLPIPELINE_H

@@ -46,6 +46,7 @@
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -1359,7 +1360,7 @@ void Http2ClientPollOperationPriv::releaseStreamQueueInfos(std::vector<StreamQue
         }
         if (info.queue) {
             if (info.room) {
-                info.queue->removeRoomListener(info.room.get());
+                qore_queue_ops(info.queue).removeRoomListener(info.room.get());
             }
             info.queue->deref(xsink);
         }
@@ -1384,7 +1385,7 @@ int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQ
     assert(!info.pending);
     // the queue's own exceptions are not raised (see drainStreamQueuesLocked())
     ExceptionSink push_xsink;
-    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    QoreQueue::TryPushResult rc = qore_queue_ops(info.queue).tryPush(&push_xsink, data);
     push_xsink.clear();
     if (rc == QoreQueue::QTP_PUSHED) {
         return 0;
@@ -1394,10 +1395,10 @@ int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQ
         info.pending = data;
         if (!info.room) {
             info.room = makeStreamQueueRoomListener();
-            info.queue->addRoomListener(info.room);
+            qore_queue_ops(info.queue).addRoomListener(info.room);
             // room may have appeared before the listener was added: the next drain tries again
             ExceptionSink retry_xsink;
-            QoreQueue::TryPushResult rc2 = info.queue->tryPush(&retry_xsink, data);
+            QoreQueue::TryPushResult rc2 = qore_queue_ops(info.queue).tryPush(&retry_xsink, data);
             retry_xsink.clear();
             if (rc2 == QoreQueue::QTP_PUSHED) {
                 info.pending = nullptr;
@@ -1474,7 +1475,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                 // the old registration's room listener is removed from its queue; its pending data goes to the new
                 // registration (see below)
                 if (old.room) {
-                    old.queue->removeRoomListener(old.room.get());
+                    qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                 }
                 StreamQueueInfo rel;
                 rel.queue = old.queue != info.queue ? old.queue : nullptr;
@@ -1579,7 +1580,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                     info.pending = nullptr;
                 }
                 ExceptionSink push_xsink;
-                info.queue->tryPush(&push_xsink, QoreValue(), true);
+                qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
                 push_xsink.clear();
                 if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
                         == data_ready_streams.end()) {
@@ -1597,7 +1598,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
             // is full, after the stream's data; a queue that refuses it ends the registration all the same, and its
             // listener reads the error from it
             ExceptionSink push_xsink;
-            info.queue->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -1635,7 +1636,7 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
                     // released, and the old one's pending data and room listener with them
                     StreamQueueInfo& old = it->second;
                     if (old.room) {
-                        old.queue->removeRoomListener(old.room.get());
+                        qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                     }
                     StreamQueueInfo rel;
                     rel.queue = old.queue != info.queue ? old.queue : nullptr;
@@ -1670,7 +1671,7 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840);
         // the marker is pushed even if the queue is full, without waiting (issue #5859)
         ExceptionSink push_xsink;
-        info.queue->tryPush(&push_xsink, err_hash.release(), true);
+        qore_queue_ops(info.queue).tryPush(&push_xsink, err_hash.release(), true);
         push_xsink.clear();
         if (info.notifier) {
             info.notifier->notify();
@@ -2107,7 +2108,7 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
             it->second.pending = nullptr;
         }
         if (it->second.room) {
-            it->second.queue->removeRoomListener(it->second.room.get());
+            qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
             it->second.room.reset();
         }
     }

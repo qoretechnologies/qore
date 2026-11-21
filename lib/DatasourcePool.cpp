@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/qore_ds_private.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 #include <algorithm>
 #include <memory>
 
@@ -119,7 +120,7 @@ Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink*
     // registered on the pool applies to connections opened later and a per-thread declaration
     // survives connection allocation and release within a transaction
     if (mctx) {
-        ds->setMutationContext(mctx->refSelf(), xsink);
+        qore_datasource_ops(ds).setMutationContext(mctx->refSelf(), xsink);
     }
 
     // set options; they are recorded as set by the code that created the pool, not by the code running on this
@@ -1005,7 +1006,7 @@ SqlMutationContext* DatasourcePool::getOrCreateMutationContext() {
     // from the config in DatasourceConfig::get()
     ExceptionSink xsink;
     for (unsigned i = 0; i < cmax; ++i) {
-        pool[i]->setMutationContext(mctx->refSelf(), &xsink);
+        qore_datasource_ops(pool[i]).setMutationContext(mctx->refSelf(), &xsink);
     }
     assert(!xsink);
     return mctx;

@@ -502,6 +502,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/qore_date_private.h>
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -3193,7 +3194,7 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         return;
     }
     if (!class_ctx) {
-        helper.vl.addMemberNotification(obj, key);
+        qore_auto_vlock_ops(helper.vl).addMemberNotification(obj, key);
     }
     // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
     if (const ReferenceNode* ref = helper.getReference()) {

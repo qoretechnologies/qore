@@ -49,6 +49,7 @@
 // the debug-build counters of the synchronous releases (qore_dbg_sync_release_taken/refused)
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -7468,7 +7469,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         SocketPollSocketOperationBase* sock_op
                             = dynamic_cast<SocketPollSocketOperationBase*>(pinfo.spop_base);
                         if (sock_op) {
-                            sock_op->releaseSocketClaim();
+                            qore_socket_poll_socket_operation_base_ops(sock_op).releaseSocketClaim();
                         }
                     }
 

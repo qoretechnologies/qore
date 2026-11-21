@@ -296,6 +296,7 @@ private:
     @since Qore 3.0
 */
 class QoreNetworkSecurityManager : public AbstractPrivateData {
+    friend class qore_network_security_manager_ops;
 public:
     //! Creates a new network security manager with default deny policy
     DLLEXPORT QoreNetworkSecurityManager();
@@ -371,11 +372,6 @@ public:
 
     //! Preset: Allows only HTTPS connections (port 443)
     DLLEXPORT void allowHTTPSOnly();
-
-    //! Returns true if a connection to the port with the protocol is allowed by the port rules
-    /** True also when no port rule is set, which allows every port
-    */
-    DLLLOCAL bool allowsPort(int port, int proto) const;
 
     //! Sets default policy for unlisted destinations
     /** @param allow If true, unlisted destinations are allowed; if false (default), denied
@@ -534,6 +530,7 @@ private:
     @since Qore 3.0
 */
 class QoreSandboxManager : public AbstractPrivateData {
+    friend class qore_sandbox_manager_ops;
 public:
     //! Creates a new sandbox manager with default settings
     DLLEXPORT QoreSandboxManager();
@@ -974,37 +971,10 @@ private:
     // reserves and releases thread slots for the workers of a ThreadPool created by a Program with this sandbox
     friend class ThreadPool;
 
-    //! Counts a new thread governed by this sandbox; raises THREAD-CREATION-FAILURE at the thread limit
-    /** @return 0 if the thread is counted, -1 if the limit has been reached (an exception is raised)
-    */
-    DLLLOCAL int acquireThreadSlot(ExceptionSink* xsink);
 
-    //! Counts a new thread like acquireThreadSlot() without waking the thread pools waiting for a slot
-    /** For a ThreadPool taking a slot with its lock held.  A composition that cannot take a slot of every member
-        releases the slots it took again; \a released is then set to true, and the caller must call
-        notifyThreadSlotReleased() once it has released its lock.
-    */
-    DLLLOCAL int acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released);
 
-    //! Stops counting a thread counted with acquireThreadSlot() and wakes the thread pools waiting for a slot
-    /** Must not be called with the lock of a ThreadPool held; see releaseThreadSlotQuiet()
-    */
-    DLLLOCAL void releaseThreadSlot();
 
-    //! Stops counting a thread counted with acquireThreadSlot() without waking the thread pools waiting for a slot
-    /** For a ThreadPool releasing a slot with its lock held, which notifies the waiting pools once it has released
-        its lock
-    */
-    DLLLOCAL void releaseThreadSlotQuiet();
-
-    //! Wakes the thread pools waiting for a slot of this manager or of a member of this composition
-    /** Must not be called with the lock of a ThreadPool held
-
-        @param except a pool not to wake: the pool that released slots itself, which retries only when another
-        thread released one
-    */
-    DLLLOCAL void notifyThreadSlotReleased(const AbstractPrivateData* except = nullptr);
-};
+    };
 
 //! RAII helper that acquires a ref'd sandbox manager for the current running program
 /** Acquires a strong reference under lock to prevent use-after-free
@@ -1218,7 +1188,6 @@ DLLEXPORT QoreProgram* qore_get_caller_program();
     @since %Qore 3.0
 */
 #define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
-
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language

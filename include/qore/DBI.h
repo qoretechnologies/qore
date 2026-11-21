@@ -692,11 +692,10 @@ struct qore_dbi_dlist_private;
     @see ModuleManager
 */
 class DBIDriverList {
+    friend class qore_dbi_driver_list_ops;
 private:
     //! private implementation
     struct qore_dbi_dlist_private *priv;
-
-    DLLLOCAL DBIDriver* find_intern(const char* name) const;
 
 public:
     //! registers a new DBI driver
@@ -732,7 +731,6 @@ public:
 
     DLLLOCAL DBIDriverList();
     DLLLOCAL ~DBIDriverList();
-    DLLLOCAL QoreListNode* getDriverList() const;
 };
 
 //! list of DBI drivers currently reigsted by the Qore library

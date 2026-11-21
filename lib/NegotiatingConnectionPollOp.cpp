@@ -41,6 +41,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cstdio>
 
@@ -656,7 +657,7 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
     }
 
     // the concrete connection can be created on another thread than this one; it was opened for the same code
-    concrete->inheritOpener(*this);
+    qore_http_client_connection_base_ops(concrete).inheritOpener(*this);
     return concrete;
 }
 
