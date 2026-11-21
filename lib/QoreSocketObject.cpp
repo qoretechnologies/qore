@@ -1374,62 +1374,6 @@ static void qore_socket_object_wake_async_controller(QoreSocketObject* s, Except
     ctl_priv->wakeSocketByObject(*sock_obj, xsink);
 }
 
-static int qore_socket_object_parse_http2_request_headers(const QoreHashNode* headers, std::string& method,
-        std::string& path, std::vector<std::pair<std::string, std::string>>& request_headers,
-        ExceptionSink* xsink) {
-    if (!headers) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-        return -1;
-    }
-
-    request_headers.reserve(headers->size() + 4);
-    auto append = [&](const std::string& key, const char* sval) {
-        if (key == ":method") {
-            if (sval && *sval) {
-                method = sval;
-            }
-        } else if (key == ":path") {
-            if (sval && *sval) {
-                path = sval;
-            }
-        }
-        request_headers.emplace_back(key, sval ? sval : "");
-    };
-
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        const char* key = hi.getKey();
-        QoreValue val = hi.get();
-        std::string skey(key);
-        // a NT_STRING value may be stored inline (SSO short string) with no QoreStringNode to
-        // dereference; QoreStringValueHelper yields the string buffer safely in either case
-        if (val.getType() == NT_STRING) {
-            QoreStringValueHelper str(val);
-            append(skey, str->c_str());
-        } else if (val.getType() == NT_LIST) {
-            const QoreListNode* l = val.get<const QoreListNode>();
-            for (size_t i = 0; i < l->size(); ++i) {
-                QoreValue elem = l->retrieveEntry(i);
-                if (elem.getType() == NT_STRING) {
-                    QoreStringValueHelper str(elem);
-                    append(skey, str->c_str());
-                }
-            }
-        }
-    }
-
-    if (method.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-        return -1;
-    }
-    if (path.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        return -1;
-    }
-
-    return 0;
-}
-
 static std::shared_ptr<QuicSession> qore_socket_object_get_quic_session(const QoreSocketObject* s,
         int64_t session_id) {
     my_socket_priv* priv = my_socket_priv::getPriv(*const_cast<QoreSocketObject*>(s));
@@ -1768,7 +1712,7 @@ public:
             const void* body_ptr, size_t body_len, bool streaming, bool wake_controller, ExceptionSink* xsink)
             : sock(sock), action(Action::Request), streaming(streaming), wake_controller(wake_controller) {
         sock->ref();
-        parseRequestHeaders(headers, xsink);
+        qore_get_http2_request_headers(headers, method, path, request_headers, xsink);
         if (body_ptr && body_len) {
             body = new BinaryNode;
             body->append(body_ptr, body_len);
@@ -1989,10 +1933,6 @@ public:
     }
 
 private:
-    DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
-        qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink);
-    }
-
     QoreSocketObject* sock;
     Action action;
     int32_t stream_id = 0;
@@ -5825,7 +5765,7 @@ static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, cons
         std::string method;
         std::string path;
         std::vector<std::pair<std::string, std::string>> request_headers;
-        if (qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink)) {
+        if (qore_get_http2_request_headers(headers, method, path, request_headers, xsink)) {
             return -1;
         }
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
@@ -7070,6 +7010,15 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(this, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
+}
+
+int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    return h2->streamTakenBytes(static_cast<int32_t>(stream_id));
 }
 
 int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {

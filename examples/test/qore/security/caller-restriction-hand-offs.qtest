@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class CallerRestrictionHandOffsTest
+
+#! Work that library code hands over to another thread runs for the code that it was handed over for (issues #6844,
+#! #6996)
+/** Each check runs in a process of its own, with the callers in both orders, as the process-wide state that the
+    checks depend on is created once:
+    - a task of the process-wide async socket I/O controller, which the first caller that needed it created with the
+      caller's restrictions, so that every later caller was judged as that caller (issue #6996)
+    - a listener with a certificate file added by an unrestricted caller after a caller that is restricted from the
+      file system added a listener of its own (the case of issue #6996)
+    - a task of a library module's own code, and the frame callback of a WebSocket operation that it sets, which an
+      I/O worker runs: they ran with the restrictions of the code that started the worker (none), not of the caller
+      that the module code submitted them for; code whose Program is on the stack when it runs (the caller's own, or
+      that of a Program that it created) is decided by that Program
+*/
+class CallerRestrictionHandOffsTest inherits QUnit::Test {
+    private {
+        string dir = get_script_dir() + "caller-restriction" + DirSep;
+    }
+
+    constructor() : Test("CallerRestrictionHandOffs", "1.0", \ARGV) {
+        # each order of the callers is a case of its own, so that a failure in one does not hide the other
+        foreach string probe in (("global", "module-task", "ws-frame")) {
+            addTestCase(probe + ", restricted caller first", \handOffTest(), (probe, "r"));
+            addTestCase(probe + ", unrestricted caller first", \handOffTest(), (probe, "u"));
+        }
+        addTestCase("a TLS listener after a restricted caller's listener", \httpsTest());
+        addTestCase("the process-wide controller when a Program without uncontrolled APIs loads the module",
+            \loaderTest());
+        addTestCase("thread initialization code that library code sets", \threadInitTest());
+        set_return_value(main());
+    }
+
+    #! runs the probe in a child process with the callers in the given order, so that the directory of the probe
+    #! module is a directory of the module path, from which library code is loaded
+    private string run(string probe, string first) {
+        TmpDir tmp("caller-restriction-hand-offs-");
+        return backquote(sprintf("QORE_MODULE_DIR=%s %s %s %s %s %s 2>/dev/null",
+            (dir, get_script_dir() + "../../../../qlib", ENV.QORE_MODULE_DIR).join(PathSep),
+            TestInterpreter::qore_interpreter(), dir + "HandOffChild.q", probe, first, tmp.path));
+    }
+
+    #! runs a child script of the directory of the probe module with the module path of the test; its standard
+    #! output only
+    private string runScript(string script) {
+        return backquote(sprintf("QORE_MODULE_DIR=%s %s %s 2>/dev/null",
+            (dir, get_script_dir() + "../../../../qlib", ENV.QORE_MODULE_DIR).join(PathSep),
+            TestInterpreter::qore_interpreter(), dir + script));
+    }
+
+    #! the restricted caller's work is restricted and the unrestricted caller's is not, in either order of the callers:
+    #! "global" checks a task of the process-wide controller, which the first caller that needs it creates (issue
+    #! #6996); "module-task" a task of the module's own code on an I/O worker; "ws-frame" the module's frame callback
+    handOffTest(string probe, string first) {
+        assertEq(first == "r" ? "r: True\nu: False\n" : "u: False\nr: True\n", run(probe, first));
+    }
+
+    #! the library modules' Programs have the options of the Program that loads them first: the controller is still
+    #! created for no caller (issue #6996)
+    loaderTest() {
+        assertEq("r: True\nu: False\n", runScript("HandOffLoaderChild.q"));
+    }
+
+    #! thread initialization code that library code sets for its own Program runs for the code that set it, whoever
+    #! starts the thread
+    threadInitTest() {
+        foreach hash<auto> i in ({"r r": "True", "r u": "True", "u r": "False", "u u": "False"}.pairIterator()) {
+            list<string> who = i.key.split(" ");
+            assertEq(i.value + "\n", runScript("ThreadInitChild.q " + who[0] + " " + who[1]),
+                "set by " + who[0] + ", thread started by " + who[1]);
+        }
+    }
+
+    #! the unrestricted caller reads its certificate file, whichever caller used the server first (the refusal of
+    #! the restricted caller's own certificate file is checked with the file location handlers)
+    httpsTest() {
+        foreach string first in (("r", "u")) {
+            string out = run("https", first);
+            assertTrue(out =~ /^u: "listening"$/m, first + " first: " + out);
+        }
+    }
+}

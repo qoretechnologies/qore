@@ -1,0 +1,179 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes first (the cleanup deletes the data of the user modules in the order
+# of their names, so before that of the library modules that it uses): its destructor starts an HTTP/2 server with a
+# WebSocket handler with a heartbeat, connects a client, and makes the client send a frame whose notification the
+# test hook holds until the cleanup's deadline has passed; the server's stream then re-arms its heartbeat timer in
+# work that the cleanup handed over, which is refused after the deadline; and an operation that the cleanup cancels
+# creates an HTTP/2 SSE stream in its onComplete(), whose heartbeat timer is refused too; both are handled quietly
+# (qore#7027); see servers-client.qr
+
+%modern
+
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires HttpServerAsyncIo
+%requires AcKeeper
+%requires ../../../TestCertificates.qm
+
+module AbServers {
+    version = "1.0";
+    desc = "starts HTTP/2 WebSocket and SSE servers after the deadline of the module cleanup";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbServers {
+#! returns the callback of the client; created outside of a method, as a closure created in one cannot run once its
+#! object is gone
+code sub make_echo_callback(Counter received) {
+    return sub (*data msg) {
+        if (exists msg) {
+            printf("echo received: %s\n", msg);
+            flush();
+            received.dec();
+        }
+    };
+}
+
+#! writes the debug messages of the server's heartbeats
+class HeartbeatAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("heartbeat", new LoggerLayoutPattern("%m")) {
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /heartbeat/) {
+            printf("server log: %s\n", params);
+            flush();
+        }
+    }
+}
+
+#! sends every message back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! the WebSocket echo handler, with a heartbeat
+class EchoWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler(NOTHING, {"heartbeat": 3600}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+#! an operation that never reaches its goal: the cleanup cancels it, and its onComplete() creates an HTTP/2 SSE stream
+#! whose response headers were sent, which arms its heartbeat timer
+class SseCreatingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return "pending";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # waits for data that does not come
+        return <SocketPollInfo>{"socket": notifier, "events": SOCK_POLLIN};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        try {
+            HttpServerAsyncIo::Http2SseStream stream(new Socket(), 1, NOTHING, True);
+            printf("sse stream created: canceled: %y\n", result.canceled);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("sse stream not created: %s: %s\n", ex.err, ex.desc);
+        }
+        flush();
+    }
+}
+
+#! starts the servers and connects to them when the cleanup deletes it
+class Connector {
+    destructor() {
+        Logger logger("ab-servers", LoggerLevel::getLevelDebug());
+        HeartbeatAppender appender();
+        appender.open();
+        logger.addAppender(appender);
+        EchoWsHandler ws_handler();
+        ws_handler.setLogger(logger);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        server.setDefaultHandler("ws", ws_handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+        }).port;
+
+        Counter received(1);
+        WebSocketClient ws(make_echo_callback(received), {
+            "url": sprintf("wss://127.0.0.1:%d", port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "heartbeat": 1h,
+        });
+        ws.connect();
+        ws.send("hello");
+        if (received.waitForZero(20s)) {
+            printf("no echo\n");
+        }
+        # the frame of the next message is processed by the server when the cleanup releases its notification, after
+        # its deadline
+        call_function("dbg_async_io_hold_module_cleanup_work", True, True);
+        ws.send("again");
+        # the server's notification of the frame is held before the cleanup reaches its deadline (and cancels the
+        # server's connection)
+        if (!call_function("dbg_async_io_wait_held_module_cleanup_work", 1, 20s, "Http2PollOperation")) {
+            printf("the server's notification of the frame was not held\n");
+        }
+        # the connections are kept until the cleanup cancels them at its deadline
+        Keeper::keep = (server, ws);
+
+        # the SSE stream: created in the onComplete() of an operation that the cleanup cancels
+        EventNotifier notifier();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new SseCreatingOperation(notifier),
+            "owner": "ab-servers-sse",
+        });
+        printf("servers started\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class Holder {
+    public {
+        static Connector connector();
+    }
+}
+}

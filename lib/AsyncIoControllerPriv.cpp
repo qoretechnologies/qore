@@ -46,6 +46,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreObjectIntern.h"
 // the debug-build counters of the synchronous releases (qore_dbg_sync_release_taken/refused)
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreValueExceptionOps.h"
@@ -205,6 +206,8 @@ QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     }
     aio_singleton = *holder;
     QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
+    // the singleton is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(obj);
     aio_singleton_obj = obj;
     // Register cleanup callback to cancel operations when QorePrograms are destroyed
     qore_register_program_cleanup_callback(aio_program_cleanup);
@@ -283,6 +286,28 @@ static thread_local int current_io_thread_idx = -1;
 */
 static thread_local bool io_command_module_cleanup_delegate = false;
 
+// true while the current thread runs the work of an operation that the module cleanup canceled (its abort(), its
+// onComplete(), the release of its references), or cancels such operations for the cleanup: such work cannot start
+// new asynchronous work (see AsyncIoControllerPriv::checkModuleCleanupNewWork(), qore#7027)
+static thread_local bool module_cleanup_async_callback = false;
+
+namespace {
+//! sets module_cleanup_async_callback for the processing of one work item
+class ModuleCleanupAsyncCallbackHelper {
+public:
+    ModuleCleanupAsyncCallbackHelper(bool set) : prev(module_cleanup_async_callback) {
+        module_cleanup_async_callback = prev || set;
+    }
+
+    ~ModuleCleanupAsyncCallbackHelper() {
+        module_cleanup_async_callback = prev;
+    }
+
+private:
+    bool prev;
+};
+}
+
 namespace {
 //! Sets io_command_module_cleanup_delegate for the processing of one command
 class IoCommandModuleCleanupDelegateHelper {
@@ -313,11 +338,11 @@ namespace {
 //! sets io_command_placeholder while the context of an I/O thread is created
 class IoCommandPlaceholderHelper {
 public:
-    DLLLOCAL IoCommandPlaceholderHelper() : prev(io_command_placeholder) {
+    IoCommandPlaceholderHelper() : prev(io_command_placeholder) {
         io_command_placeholder = true;
     }
 
-    DLLLOCAL ~IoCommandPlaceholderHelper() {
+    ~IoCommandPlaceholderHelper() {
         io_command_placeholder = prev;
     }
 
@@ -990,7 +1015,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     refs.state_queue_obj = state_queue_obj;
     refs.spop_base = spop_base;
     // taken before the context is released below
-    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(sandbox_ctx);
+    refs.setModuleCleanup(sandbox_ctx);
+    refs.caller_restrictions = async_io_caller_restrictions(sandbox_ctx);
     sock_obj = nullptr;
     sock = nullptr;
     spop_obj = nullptr;
@@ -1029,9 +1055,16 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
     return nullptr;
 }
 
+void AsyncIoDeferredRelease::setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    module_cleanup_delegate = async_io_module_cleanup_delegate(ctx);
+    module_cleanup_canceled = async_io_module_cleanup_canceled(ctx);
+}
+
 void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     // the destructors of the work that the module cleanup handed over can enter the Programs of the modules
     QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
+    // those of an operation that the cleanup canceled cannot start new asynchronous work (qore#7027)
+    ModuleCleanupAsyncCallbackHelper canceled_work(module_cleanup_canceled);
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -1303,9 +1336,21 @@ namespace {
 struct AsyncIoDebugHeldModuleCleanupWork {
     //! True while such items are held; checked without the lock first
     std::atomic<bool> hold{false};
+    //! True if the stream data and poll-complete notifications of such operations are held too
+    std::atomic<bool> hold_stream_data{false};
     QoreThreadLock lock;
     //! the items held, with the dispatcher that they were queued to
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+    //! signaled when an item is held (dbgWaitHeldModuleCleanupWork())
+    QoreCondition held_cond;
+    //! the tasks held (qore_dbg_hold_module_cleanup_task()), signaled when one is released
+    QoreCondition task_cond;
+    //! the number of tasks held that the module cleanup counts, and of those that it does not
+    int held_counted_tasks = 0;
+    int held_uncounted_tasks = 0;
+    //! incremented when the counted tasks held are released, and when the hold ends
+    uint64_t counted_task_release_gen = 0;
+    uint64_t task_hold_end_gen = 0;
 
     //! Returns the state, which is never destroyed (see AsyncIoDebugHeldReleases::get())
     static AsyncIoDebugHeldModuleCleanupWork& get() {
@@ -1315,10 +1360,18 @@ struct AsyncIoDebugHeldModuleCleanupWork {
 };
 }
 
-void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold) {
+void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold, bool stream_data) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     AutoLocker al(state.lock);
+    state.hold_stream_data.store(hold && stream_data, std::memory_order_release);
     state.hold.store(hold, std::memory_order_release);
+    if (!hold && (state.held_counted_tasks || state.held_uncounted_tasks)) {
+        // the tasks held run now
+        ++state.counted_task_release_gen;
+        ++state.task_hold_end_gen;
+        state.held_counted_tasks = state.held_uncounted_tasks = 0;
+        state.task_cond.broadcast();
+    }
 }
 
 //! Holds @a item if it is an onComplete() that the module cleanup hands over while the test hook holds them
@@ -1330,7 +1383,9 @@ static thread_local bool dbg_requeue_held_module_cleanup_work = false;
 bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     if (dbg_requeue_held_module_cleanup_work || !state.hold.load(std::memory_order_acquire)
-            || item.type != DT_ON_COMPLETE
+            || (item.type != DT_ON_COMPLETE && item.type != DT_CALLBACK
+                && !(state.hold_stream_data.load(std::memory_order_acquire)
+                    && (item.type == DT_STREAM_DATA_NOTIFY || item.type == DT_POLL_COMPLETE_NOTIFY)))
             || !async_io_module_cleanup_delegate(item.sandbox_ctx)) {
         return false;
     }
@@ -1340,27 +1395,126 @@ bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
             return false;
         }
         state.held.emplace_back(this, std::move(item));
+        state.held_cond.broadcast();
     }
     // the module cleanup releases it when it waits for its work
     qore_dbg_module_cleanup_work_held();
     return true;
 }
 
+//! the releases of held test-hook work that the module cleanup's drain makes (QDMCDP_* flags)
+static std::atomic<int> dbg_module_cleanup_drain_releases{0};
+
+void AsyncIoControllerPriv::dbgModuleCleanupDrainReleases(int flags) {
+    dbg_module_cleanup_drain_releases.store(flags, std::memory_order_release);
+}
+
+void qore_dbg_module_cleanup_drain_point(int point) {
+    if (!(dbg_module_cleanup_drain_releases.load(std::memory_order_acquire) & point)) {
+        return;
+    }
+    ExceptionSink xsink;
+    if (point == QDMCDP_AFTER_TIMER_SCAN) {
+        AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(&xsink);
+    } else {
+        AsyncIoControllerPriv::dbgReleaseHeldStepResults(&xsink);
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(size_t count, const char* class_part, int64 timeout_ms) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+    AutoLocker al(state.lock);
+    while (true) {
+        size_t n = 0;
+        for (auto& i : state.held) {
+            if (!class_part || (i.second.spop_obj && strstr(i.second.spop_obj->getClassName(), class_part))) {
+                ++n;
+            }
+        }
+        if (n >= count) {
+            return true;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        state.held_cond.wait2(state.lock, (remaining_us + 999) / 1000);
+    }
+}
+
+void qore_dbg_hold_module_cleanup_task(bool counted) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    if (!state.hold.load(std::memory_order_acquire)) {
+        return;
+    }
+    SafeLocker sl(state.lock);
+    if (!state.hold.load(std::memory_order_relaxed)) {
+        return;
+    }
+    uint64_t release_gen = state.counted_task_release_gen;
+    uint64_t end_gen = state.task_hold_end_gen;
+    ++(counted ? state.held_counted_tasks : state.held_uncounted_tasks);
+    sl.unlock();
+    // the module cleanup releases it when it waits for its work, if it counts it, and else when the hold ends
+    qore_dbg_module_cleanup_work_held();
+    sl.lock();
+    while (end_gen == state.task_hold_end_gen && (!counted || release_gen == state.counted_task_release_gen)) {
+        state.task_cond.wait(state.lock);
+    }
+}
+
 void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
     bool hold_ended = false;
+    int tasks = 0;
     {
         AutoLocker al(state.lock);
+        // the tasks held: those that the cleanup counts when it waits for its work, all when the hold ends
+        tasks = state.held_counted_tasks + (end_hold ? state.held_uncounted_tasks : 0);
+        if (tasks) {
+            ++state.counted_task_release_gen;
+            state.held_counted_tasks = 0;
+            if (end_hold) {
+                ++state.task_hold_end_gen;
+                state.held_uncounted_tasks = 0;
+            }
+            state.task_cond.broadcast();
+        }
         if (end_hold && state.hold.load(std::memory_order_relaxed)) {
             // the work that the cleanup hands over from now on is queued
             state.hold.store(false, std::memory_order_release);
             hold_ended = true;
         }
-        held.swap(state.held);
+        if (end_hold) {
+            held.swap(state.held);
+        } else {
+            // the cleanup waits only for the work that it counts: work whose context is delegated but not counted
+            // (an operation that work of the cleanup submitted) stays held until the hold ends (qore#7027)
+            // the stream data and poll-complete notifications held only after its deadline, as the test hook holds
+            // them to make the frames that they bring be processed in the work of the cleanup after its deadline
+            const bool deadline_passed = qore_module_cleanup_deadline_passed();
+            auto it = state.held.begin();
+            while (it != state.held.end()) {
+                if (((it->second.sandbox_ctx && it->second.sandbox_ctx->module_cleanup_work)
+                        || it->second.module_cleanup_work)
+                    && (deadline_passed || (it->second.type != QoreCallDispatcher::DT_STREAM_DATA_NOTIFY
+                        && it->second.type != QoreCallDispatcher::DT_POLL_COMPLETE_NOTIFY))) {
+                    held.push_back(std::move(*it));
+                    it = state.held.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
     }
     if (hold_ended) {
         fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
+        fflush(stderr);
+    }
+    if (tasks) {
+        fprintf(stderr, "held module cleanup work: %d task%s released (%s)\n", tasks, tasks == 1 ? "" : "s", by);
         fflush(stderr);
     }
     if (held.empty()) {
@@ -1937,7 +2091,8 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.state_queue = cmd.submit_state_queue;
                 refs.state_queue_obj = cmd.submit_state_queue_obj;
                 refs.spop_base = cmd.submit_spop_base;
-                refs.module_cleanup_delegate = async_io_module_cleanup_delegate(cmd.submit_sandbox_ctx);
+                refs.setModuleCleanup(cmd.submit_sandbox_ctx);
+                refs.caller_restrictions = async_io_caller_restrictions(cmd.submit_sandbox_ctx);
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
                 cmd.submit_spop_obj = nullptr;
@@ -2069,8 +2224,10 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
-    // also only the isolation of a trusted build that submits the operation (qore#6536)
-    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation) {
+    // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
+    // capturing code alone, which the step runs with (qore#6844)
+    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
+            || ctx->caller_restrictions) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -2169,6 +2326,12 @@ void QoreCallDispatcher::dispatchNativeTaskAsync(AsyncIoNativeTask* task) {
 }
 
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+    // the release (a destructor, a native task's discard()) runs for the code that submitted the work, also on a thread
+    // of other code that drains or cancels it, and on a release of a Program's parked items (qore#6844)
+    // (a deferred release of the controller's own references carries them with the references)
+    QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
+        ? item.sandbox_ctx->caller_restrictions
+        : (item.release ? item.release->caller_restrictions : QoreParseOptions()));
     if (item.native_task) {
         // the task was never run
         item.native_task->discard(xsink);
@@ -2242,6 +2405,14 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         if (item.pgm) {
             item.pgm->depRef();
         }
+    }
+
+    // the completion of work of the module cleanup that the cleanup does not count (an operation that ended on its
+    // own, a timer that fired, a task) is work that the cleanup waits for; the steps of such an operation are not,
+    // as the cleanup cancels the operation (qore#7027)
+    if (async_io_module_cleanup_uncounted(item.sandbox_ctx) && (item.type == DT_ABORT || item.type == DT_ON_COMPLETE
+            || item.type == DT_CALLBACK || item.type == DT_NATIVE_TASK)) {
+        item.module_cleanup_work = true;
     }
 
 #ifdef DEBUG
@@ -2336,7 +2507,7 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             }
 
             if (!active_workers && ((item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work)
-                    || (item.release && item.release->module_cleanup_delegate))) {
+                    || item.module_cleanup_work || (item.release && item.release->module_cleanup_delegate))) {
                 // work that the module cleanup handed over and waits for (qore#6928): if no worker runs and none can
                 // be started, it would wait for stop(), which comes after the cleanup; its references are released
                 // now, as stop() releases them
@@ -2878,6 +3049,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // item (or a synchronous caller), which carries the flag itself (AsyncIoDeferredRelease::module_cleanup_delegate)
         QoreModuleCleanupDelegateHelper cleanup_delegate(async_item.sandbox_ctx
             && async_item.sandbox_ctx->module_cleanup_delegate);
+        // the work of an operation that the cleanup canceled cannot start new asynchronous work (see
+        // checkModuleCleanupNewWork(), qore#7027)
+        ModuleCleanupAsyncCallbackHelper cleanup_callback(async_item.sandbox_ctx
+            && async_item.sandbox_ctx->module_cleanup_canceled);
         // the item's callbacks run with the parse options of its Program, as calls of the code of that Program do,
         // installed before the Program is entered, whose thread entry handler and initialization run then: a
         // callback that is a call reference to builtin code sets no options of its own, and the worker has none, so
@@ -2886,7 +3061,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.pgm) {
             item_po.po = async_item.pgm->getParseOptions();
         }
-        QoreThreadRuntimeParseOptionsHelper item_po_helper(async_item.pgm ? &item_po : nullptr);
+        // a step runs for the code that submitted the operation: its caller restrictions replace those of the code
+        // that started the worker (empty: workers are started without inheriting them) (qore#6844)
+        const bool submitter_restrictions = async_item.sandbox_ctx
+            && async_item.sandbox_ctx->caller_restrictions;
+        if (submitter_restrictions) {
+            item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
+        }
+        QoreThreadRuntimeParseOptionsHelper item_po_helper((async_item.pgm || submitter_restrictions)
+            ? &item_po : nullptr);
         // a callback that is not run in a Program (a timer's) runs with the options of the code that registered it,
         // which for module code running for a sandboxed caller include the caller's restrictions (qore#6208)
         QoreThreadRuntimeParseOptionsHelper registrar_po_helper(async_item.runtime_po.get());
@@ -3861,6 +4044,7 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
         timer_callback_po.reset();
         for (auto& [id, tinfo] : timer_info_map) {
             tinfo.udata.discard(xsink);
+            tinfo.cancel_cb.discard(xsink);
         }
         timer_info_map.clear();
         delete this;
@@ -3869,6 +4053,9 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
 
 int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
         ExceptionSink* xsink) {
+    // the references that this method takes over are released if the task is not submitted
+    ReferenceHolder<ResolvedCallReferenceNode> task_holder(task, xsink);
+    ReferenceHolder<ResolvedCallReferenceNode> cancel_holder(cancel, xsink);
     if (checkForked("submitTask", xsink)) {
         return -1;
     }
@@ -3899,7 +4086,9 @@ int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedC
     }
     // Safe to use tp outside the lock: stopThreadPool() is only called from deref() when
     // ROdereference() returns true (last reference), so no concurrent submitTask() is possible
-    return tp->submit(task, cancel, xsink);
+    // a task that the module cleanup or its work submits is waited for by the cleanup (qore#7027); the pool takes
+    // over the references
+    return tp->submit(task_holder.release(), cancel_holder.release(), xsink, true);
 }
 
 void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
@@ -4112,6 +4301,23 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         int64 ms = v.getAsBigInt();
         if (__builtin_mul_overflow(ms, static_cast<int64>(1000), &timeout_us)) {
             timeout_us = ms > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+        }
+    }
+    // an operation that the module cleanup or its work submits (a destructor that closes a connection or flushes a
+    // log at the end of the process) is waited for by the cleanup until its deadline, whatever the operation's own
+    // timeout; then it is canceled (see qore_module_cleanup_drain_work()); after the deadline, it is canceled when
+    // an I/O thread admits it if work that the cleanup handed over submitted it, and else when the cleanup waits
+    // for its work (qore#7027)
+    // submitted by work that the cleanup handed over, not by the cleanup itself (see
+    // cancelAdmittedAfterModuleCleanupDeadline())
+    const bool module_cleanup_handed_over = async_io_module_cleanup_delegate(sandbox_ctx)
+        && qore_module_cleanup_handed_over_work();
+    if (async_io_module_cleanup_uncounted(sandbox_ctx) && !qore_module_cleanup_deadline_passed()) {
+        try {
+            sandbox_ctx = std::make_shared<const QoreSandboxContext>(sandbox_ctx.get(),
+                QoreSandboxContext::ModuleCleanupWork::Submitted);
+        } catch (std::bad_alloc&) {
+            // the operation keeps its context and is canceled for the cleanup
         }
     }
 
@@ -4416,6 +4622,10 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         ++t.submit_seq;
         t.processed_seq.store(t.submit_seq.load(std::memory_order_relaxed),
             std::memory_order_release);
+        // work of the module cleanup admitted after its deadline is canceled at once (qore#7027)
+        if (async_io_module_cleanup_delegate(pinfo.sandbox_ctx)) [[unlikely]] {
+            cancelAdmittedAfterModuleCleanupDeadline(t, uh, module_cleanup_handed_over, xsink);
+        }
     } else {
         // Worker thread: package data into SubmitOp command
         // Route to the correct I/O thread based on operation key
@@ -4448,6 +4658,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
         cmd.submit_socket_async_io = socket_async_io_guard.active;
         cmd.submit_sandbox_ctx = std::move(sandbox_ctx);
+        cmd.submit_module_cleanup_handed_over = module_cleanup_handed_over;
         cmd.submit_sync_release = std::move(sync_release);
 
         // Compute socket hash BEFORE publishing the cmd so it is read while
@@ -5577,6 +5788,168 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     return count;
 }
 
+int AsyncIoControllerPriv::checkModuleCleanupNewWork(const char* method, bool timer, ExceptionSink* xsink) {
+    // the work of an operation that the module cleanup canceled cannot start new asynchronous work: the cleanup would
+    // cancel it in turn, and an onComplete() that submits its operation again or a timer that re-arms itself would
+    // make the end of the process wait forever; nor can the work that the cleanup handed over add a timer after its
+    // deadline (a timer callback that re-arms itself, a heartbeat), which would keep the cleanup waiting for its
+    // callbacks; its operations are canceled when they are admitted after the deadline, and its tasks are waited for
+    // (the delivery of a message that a connection received), and the cleanup itself can do all of it (a destructor
+    // of the data of a module that it deletes after its deadline) (qore#7027)
+    // nor can a task of the cleanup start a task after the deadline: a task that submits itself again would keep the
+    // cleanup waiting for ever, as the cleanup waits for its tasks and does not cancel them
+    if (!module_cleanup_async_callback && !((timer || qore_module_cleanup_task_running)
+            && qore_module_cleanup_deadline_passed() && qore_module_cleanup_handed_over_work())) [[likely]] {
+        return 0;
+    }
+    xsink->raiseException("ASYNC-IO-SHUTDOWN-ERROR", "AsyncIoController::%s(): the asynchronous I/O controller "
+        "accepts no new work from %s at the end of the process", method, module_cleanup_async_callback
+            ? "the work of an operation that the module cleanup canceled"
+            : "the work of the module cleanup after its deadline");
+    return -1;
+}
+
+std::string AsyncIoControllerPriv::moduleCleanupOpName(const PollInfo& pinfo) {
+    std::string name = pinfo.spop_obj ? pinfo.spop_obj->getClassName() : "poll operation";
+    if (!pinfo.owner.empty()) {
+        name += " (owner '";
+        name += pinfo.owner;
+        name += "')";
+    }
+    return name;
+}
+
+size_t AsyncIoControllerPriv::cancelModuleCleanupUncounted(bool deadline, std::vector<std::string>* names,
+        ExceptionSink* xsink) {
+    assert(!on_async_io_thread);
+    if (forked()) {
+        return 0;
+    }
+    // the destructors that the cancels below run when they release the references of the timers and operations cannot
+    // start new asynchronous work, which the cleanup would wait for in turn (see checkModuleCleanupNewWork())
+    ModuleCleanupAsyncCallbackHelper canceled_work(true);
+    size_t canceled = 0;
+    // the timers are canceled first, before the command round-trip below: a timer that fires meanwhile is dispatched
+    // by its I/O thread before it processes the next command, so its callback is counted (when it is queued) before
+    // the round-trip ends, and the cleanup sees it when it checks its count after this call
+    {
+        std::vector<int64_t> timer_ids;
+        {
+            AutoLocker al(m);
+            for (auto& [id, tinfo] : timer_info_map) {
+                if (async_io_module_cleanup_cancel_match(tinfo.sandbox_ctx, deadline)) {
+                    timer_ids.push_back(id);
+                }
+            }
+        }
+#ifdef DEBUG
+        // a timer that has fired and was held by the test hook is dispatched now, after the scan
+        qore_dbg_module_cleanup_drain_point(QDMCDP_AFTER_TIMER_SCAN);
+#endif
+        for (int64_t id : timer_ids) {
+            if (cancelTimerForModuleCleanup(id, xsink)) {
+                ++canceled;
+            }
+        }
+    }
+#ifdef DEBUG
+    // a step result that the test hook held is sent now, before the round-trip below
+    qore_dbg_module_cleanup_drain_point(QDMCDP_BEFORE_CANCEL_ROUND);
+#endif
+    std::vector<PollInfo> cancel_pinfos;
+    AsyncOpCompletion* completion = nullptr;
+    std::vector<IoThreadContext*> live_targets;
+    {
+        AutoLocker al(m);
+        for (auto& tp : io_threads) {
+            if (readsCommands(*tp)) {
+                live_targets.push_back(tp.get());
+                continue;
+            }
+            // a thread that does not read commands: its operations are taken here
+            std::vector<std::string> keys;
+            for (auto& [key, pinfo] : tp->cache) {
+                if (async_io_module_cleanup_cancel_match(pinfo.sandbox_ctx, deadline)) {
+                    keys.push_back(key);
+                }
+            }
+            for (auto& key : keys) {
+                auto it = tp->cache.find(key);
+                if (it != tp->cache.end()) {
+                    cancel_pinfos.push_back(tp->takeUnregisteredOp(it));
+                }
+            }
+        }
+        if (!live_targets.empty()) {
+            completion = new AsyncOpCompletion((int)live_targets.size());
+            for (auto* tp : live_targets) {
+                Command cmd;
+                cmd.cmd = IoCommand::CancelByProgram;
+                // no Program: the operations of work of the cleanup that it does not count, or at its deadline all
+                // that it has not canceled
+                cmd.pgm = nullptr;
+                cmd.module_cleanup_deadline = deadline;
+                completion->ROreference();  // one ref per cmd
+                cmd.completion = completion;
+                tp->cmdq.push(std::move(cmd));
+                ++submit_seq;
+                ++tp->submit_seq;
+            }
+        }
+    }
+    if (completion) {
+        for (auto* tp : live_targets) {
+            tp->notifier->notify();
+        }
+        {
+            AutoLocker al(m);
+            completion->waitForCompletion(m);
+            for (auto& p : completion->cancel_pinfos) {
+                cancel_pinfos.push_back(std::move(p));
+            }
+            completion->cancel_pinfos.clear();
+            if (names) {
+                try {
+                    names->insert(names->end(), completion->in_flight_names.begin(),
+                        completion->in_flight_names.end());
+                } catch (std::bad_alloc&) {
+                    // the operations are canceled without their names
+                }
+            }
+        }
+        canceled += completion->in_flight_canceled.load(std::memory_order_relaxed);
+        completion->deref();
+    }
+    // canceled on the thread of the cleanup: each operation gets a counted context (applyModuleCleanupCancel()), and
+    // its onComplete() is work that the cleanup waits for
+    size_t rv = canceled + cancel_pinfos.size();
+    if (names) {
+        try {
+            for (auto& pinfo : cancel_pinfos) {
+                names->push_back(moduleCleanupOpName(pinfo));
+            }
+        } catch (std::bad_alloc&) {
+            // the operations are canceled without their names
+        }
+    }
+    for (auto& pinfo : cancel_pinfos) {
+        doCancelIntern(pinfo, xsink);
+        pinfo.cleanup(xsink);
+    }
+    return rv;
+}
+
+size_t qore_async_io_cancel_module_cleanup_uncounted(bool deadline, std::vector<std::string>* names) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = qore_get_async_io_controller_if_exists();
+    if (!ctrl) {
+        return 0;
+    }
+    size_t rv = ctrl->cancelModuleCleanupUncounted(deadline, names, &xsink);
+    ctrl->deref(&xsink);
+    return rv;
+}
+
 void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink) {
     if (forked()) {
         // nothing of the Program runs in this controller in this process (see forked())
@@ -6526,6 +6899,7 @@ void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
     }
     for (auto& [id, tinfo] : stolen_timers) {
         tinfo.udata.discard(xsink);
+        tinfo.cancel_cb.discard(xsink);
     }
 }
 
@@ -6558,20 +6932,20 @@ QoreObject* AsyncIoControllerPriv::getLogger() const {
 }
 
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
-        ExceptionSink* xsink, const std::string& owner) {
+        ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel) {
     // an absolute deadline in microseconds since the epoch, compared with the system clock
-    return addTimerIntern(deadline->getEpochMicrosecondsUTC(), false, "addTimer", udata, xsink, owner);
+    return addTimerIntern(deadline->getEpochMicrosecondsUTC(), false, "addTimer", udata, xsink, owner, cancel);
 }
 
 int64_t AsyncIoControllerPriv::addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner) {
+        const std::string& owner, ResolvedCallReferenceNode* cancel) {
     // the deadline is taken now, on the monotonic clock, so that a step of the system clock does not move it
     return addTimerIntern(q_get_monotonic_us() + (delay_us > 0 ? delay_us : 0), true, "addTimerDelay", udata, xsink,
-        owner);
+        owner, cancel);
 }
 
 int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotonic, const char* method,
-        QoreValue udata, ExceptionSink* xsink, const std::string& owner) {
+        QoreValue udata, ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel) {
     if (checkForked(method, xsink)) {
         return -1;
     }
@@ -6623,6 +6997,9 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         // the old thread to finish, causing the timer to fire with no callback
         TimerInfo tinfo;
         tinfo.udata = udata.refSelf();
+        if (cancel) {
+            tinfo.cancel_cb = cancel->refRefSelf();
+        }
         tinfo.owner = owner;
         // the sandbox of the code that adds the timer governs its callback
         tinfo.sandbox_ctx = std::move(sandbox_ctx);
@@ -6647,6 +7024,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     }
     bool found = false;
     QoreValue discard_udata;
+    QoreValue discard_cancel;
     // the timer's options, released after the lock, as their references to Programs can be the last ones (qore#6208)
     AsyncIoRuntimeOptions discard_po;
     // module code running for an application with restrictions can cancel only the timers added for it
@@ -6667,6 +7045,8 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
 
         // Always remove from timer_info_map immediately (so a second cancel returns False)
         discard_udata = it->second.udata;
+        // the owner cancels the timer itself: its cancel callback is not run (see TimerInfo::cancel_cb)
+        discard_cancel = it->second.cancel_cb;
         discard_po = std::move(it->second.runtime_po);
         timer_info_map.erase(it);
 
@@ -6687,8 +7067,62 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     }
 
     discard_udata.discard(xsink);
+    discard_cancel.discard(xsink);
 
     return found;
+}
+
+bool AsyncIoControllerPriv::cancelTimerForModuleCleanup(int64_t id, ExceptionSink* xsink) {
+    QoreValue discard_udata;
+    QoreValue cancel_cb;
+    AsyncIoSandboxContext ctx;
+    std::string owner;
+    AsyncIoRuntimeOptions po;
+    {
+        AutoLocker al(m);
+        auto it = timer_info_map.find(id);
+        if (it == timer_info_map.end()) {
+            return false;
+        }
+        discard_udata = it->second.udata;
+        cancel_cb = it->second.cancel_cb;
+        ctx = std::move(it->second.sandbox_ctx);
+        owner = std::move(it->second.owner);
+        po = std::move(it->second.runtime_po);
+        timer_info_map.erase(it);
+
+        IoThreadContext& target = getThreadForTimer(id);
+        if (readsCommands(target)) {
+            Command cmd;
+            cmd.cmd = IoCommand::CancelTimer;
+            cmd.timer_id = id;
+            cmd.timer_deadline_us = 0;
+            target.cmdq.push(std::move(cmd));
+            ++submit_seq;
+            ++target.submit_seq;
+            target.notifier->notify();
+        }
+    }
+    discard_udata.discard(xsink);
+    if (!cancel_cb.hasNode()) {
+        return true;
+    }
+    // the owner is told that its timer will not fire: the cancel callback runs as the work of an operation that the
+    // cleanup canceled, which it counts and waits for, and which cannot start new asynchronous work (qore#7116)
+    try {
+        ctx = std::make_shared<const QoreSandboxContext>(ctx.get(), QoreSandboxContext::ModuleCleanupWork::Canceled);
+    } catch (std::bad_alloc&) {
+        // the callback runs with the timer's own context: it is counted when it is queued (enqueue())
+    }
+    ensureCallDispatcher();
+    try {
+        call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cancel_cb.get<ResolvedCallReferenceNode>(),
+            nullptr, owner, std::move(ctx), std::move(po));
+    } catch (std::bad_alloc&) {
+        // the callback is not run: its reference is released
+        cancel_cb.discard(xsink);
+    }
+    return true;
 }
 
 void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
@@ -7431,7 +7865,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (node) {
                         node->second.spop_base->ref();
                         refs.spop_base = node->second.spop_base;
-                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
+                        refs.setModuleCleanup(node->second.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(node->second.sandbox_ctx);
                     }
                     releaseOffIoThread(refs, xsink);
                 };
@@ -8254,6 +8689,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             AsyncIoRuntimeOptions runtime_po;
         };
         std::vector<TimerEvent> timer_events;
+        //! the cancel callbacks of the timers that fired, released after the lock (qore#7116)
+        std::vector<AsyncIoDeferredRelease> fired_cancel_refs;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
         // the options of the code that set the timer callback, taken with it
         AsyncIoRuntimeOptions cb_snapshot_po;
@@ -8337,6 +8774,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         int64_t tid_val = poll_events[i].timer_id;
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
+                            if (it->second.cancel_cb.hasNode()) {
+                                // the timer fires: its cancel callback is not run (see TimerInfo::cancel_cb), and it
+                                // is released off the I/O thread below
+                                AsyncIoDeferredRelease cancel_refs;
+                                cancel_refs.udata = it->second.cancel_cb;
+                                cancel_refs.setModuleCleanup(it->second.sandbox_ctx);
+                                cancel_refs.caller_restrictions = async_io_caller_restrictions(it->second.sandbox_ctx);
+                                it->second.cancel_cb = QoreValue();
+                                fired_cancel_refs.push_back(cancel_refs);
+                            }
                             timer_events.push_back({tid_val, it->second.udata, it->second.owner,
                                 std::move(it->second.sandbox_ctx), std::move(it->second.runtime_po)});
                             timer_info_map.erase(it);
@@ -8351,6 +8798,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
+        for (auto& refs : fired_cancel_refs) {
+            releaseOffIoThread(refs, xsink);
+        }
+        fired_cancel_refs.clear();
+
         // Deliver timer events outside lock — dispatch to worker threads
         {
             // Ensure call_dispatcher exists for async dispatch
@@ -8361,6 +8813,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         for (auto& te : timer_events) {
             // taken before the context is moved to the dispatched callback
             const bool te_delegate = async_io_module_cleanup_delegate(te.sandbox_ctx);
+            const bool te_canceled = async_io_module_cleanup_canceled(te.sandbox_ctx);
             // the references of the callback to dispatch, taken before the controller's reference is handed over
             ReferenceHolder<ResolvedCallReferenceNode> code_ref(xsink);
             ReferenceHolder<QoreListNode> args(xsink);
@@ -8393,6 +8846,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 AsyncIoDeferredRelease refs;
                 refs.udata = te.udata;
                 refs.module_cleanup_delegate = te_delegate;
+                refs.module_cleanup_canceled = te_canceled;
                 te.udata = QoreValue();
                 releaseOffIoThread(refs, xsink);
             }
@@ -8540,9 +8994,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             t.loop->cancelTimer(id);
             AsyncIoDeferredRelease refs;
             refs.udata = tinfo.udata;
-            refs.module_cleanup_delegate = async_io_module_cleanup_delegate(tinfo.sandbox_ctx);
+            refs.setModuleCleanup(tinfo.sandbox_ctx);
+            refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
+            if (tinfo.cancel_cb.hasNode()) {
+                // the controller stops: the cancel callback is not run (see TimerInfo::cancel_cb)
+                AsyncIoDeferredRelease cancel_refs;
+                cancel_refs.udata = tinfo.cancel_cb;
+                cancel_refs.setModuleCleanup(tinfo.sandbox_ctx);
+                cancel_refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
+                tinfo.cancel_cb = QoreValue();
+                exit_timer_refs.push_back(cancel_refs);
+            }
             exit_timer_pos.push_back(std::move(tinfo.runtime_po));
         }
         timer_info_map.clear();
@@ -8949,7 +9413,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     AsyncIoDeferredRelease refs;
                     refs.spop_base = spop_base;
                     if (found) {
-                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
+                        refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -8986,7 +9451,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     AsyncIoDeferredRelease refs;
                     refs.spop_obj = obj;
                     if (found) {
-                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
+                        refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -9158,10 +9624,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::CancelByProgram: {
-                    // Find all operations belonging to this QoreProgram
+                    // Find all operations belonging to this QoreProgram, or without a Program the operations of work
+                    // of the module cleanup that it does not count (cancelModuleCleanupUncounted(), qore#7027)
                     std::vector<std::string> keys;
                     for (auto& [key, pinfo] : t.cache) {
-                        if (pinfo.spop_obj && pinfo.spop_obj->getProgram() == cmd.pgm) {
+                        if (cmd.pgm ? (pinfo.spop_obj && pinfo.spop_obj->getProgram() == cmd.pgm)
+                                : async_io_module_cleanup_cancel_match(pinfo.sandbox_ctx,
+                                    cmd.module_cleanup_deadline)) {
                             keys.push_back(key);
                         }
                     }
@@ -9188,6 +9657,21 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // (see applyModuleCleanupCancel())
                                 applyModuleCleanupCancel(pinfo_copy);
                                 t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
+                                if (!cmd.pgm && cmd.completion) {
+                                    // reported to the cleanup, which waits for the result of the step (qore#7027)
+                                    cmd.completion->in_flight_canceled.fetch_add(1, std::memory_order_relaxed);
+                                    if (cmd.module_cleanup_deadline) {
+                                        // named in the warning of the deadline
+                                        const PollInfo& aborted = t.pending_aborts.find(op_id)->second;
+                                        try {
+                                            std::string name = moduleCleanupOpName(aborted);
+                                            AutoLocker al2(cmd.completion->pinfos_lock);
+                                            cmd.completion->in_flight_names.push_back(std::move(name));
+                                        } catch (std::bad_alloc&) {
+                                            // canceled without its name
+                                        }
+                                    }
+                                }
                             } else if (cmd.completion) {
                                 // Append to the completion's shared vector
                                 // (guarded by its own pinfos_lock).
@@ -9533,6 +10017,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     cmd.submit_socket_async_io = false;
                     cmd.submit_route_sock_hash.clear();
                     cmd.submit_route_thread_idx = -1;
+                    // work of the module cleanup admitted after its deadline is canceled at once (qore#7027)
+                    if (async_io_module_cleanup_delegate(pinfo.sandbox_ctx)) [[unlikely]] {
+                        cancelAdmittedAfterModuleCleanupDeadline(t, cmd.key, cmd.submit_module_cleanup_handed_over,
+                            xsink);
+                    }
                     break;
                 }
 
@@ -9759,6 +10248,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (finished && deliver_finished) {
                         // taken before the context is moved
                         const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
+                        const bool dd_canceled = async_io_module_cleanup_canceled(dd.sandbox_ctx);
                         deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete,
                             dd.result, xsink, dd.owner, std::move(dd.sandbox_ctx), dd.sync_release.get());
                         dd.spop_obj = nullptr;
@@ -9771,6 +10261,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             AsyncIoDeferredRelease refs;
                             refs.queue_obj = dd.queue_obj;
                             refs.module_cleanup_delegate = dd_delegate;
+                            refs.module_cleanup_canceled = dd_canceled;
                             dd.queue_obj = nullptr;
                             releaseOffIoThread(refs, xsink, dd.sync_release.get());
                         }
@@ -9833,21 +10324,61 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 }
 
 void AsyncIoControllerPriv::applyModuleCleanupCancel(PollInfo& pinfo) {
-    // a context that is already counted for the cleanup is kept; one that is delegated but not counted (an operation
-    // that work of the cleanup submitted, whose context it captured: QoreSandboxContext(bool)) gets a counted copy,
-    // as the cleanup waits for the work of the operation (qore#6928)
-    if ((pinfo.sandbox_ctx && pinfo.sandbox_ctx->module_cleanup_work)
+    // a context of an operation that the cleanup canceled already is kept; any other one gets a copy that is counted,
+    // as the cleanup waits for the work of the operation (qore#6928), and marks that work as the work of a canceled
+    // operation, which cannot start new asynchronous work (qore#7027)
+    if (async_io_module_cleanup_canceled(pinfo.sandbox_ctx)
             || !(async_io_module_cleanup_delegate(pinfo.sandbox_ctx) || io_command_module_cleanup_delegate
                 || qore_module_cleanup_delegation())) {
         return;
     }
     // the operation keeps its own context if the copy cannot be allocated
     try {
-        pinfo.sandbox_ctx = std::make_shared<const QoreSandboxContext>(pinfo.sandbox_ctx.get(), true);
+        pinfo.sandbox_ctx = std::make_shared<const QoreSandboxContext>(pinfo.sandbox_ctx.get(),
+            QoreSandboxContext::ModuleCleanupWork::Canceled);
     } catch (std::bad_alloc&) {
         log(QORE_LOG_LEVEL_ERROR, "out of memory creating the module cleanup context of a canceled %s operation",
             pinfo.spop_obj ? pinfo.spop_obj->getClassName() : "poll");
     }
+}
+
+void AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
+        bool handed_over, ExceptionSink* xsink) {
+    // the flag is set before the cancel round of the deadline sends its commands to the I/O threads: an operation that
+    // an I/O thread admits after it processed that command, or that it admits while it does not read commands yet,
+    // sees it, so no operation of the work of the cleanup escapes both
+    // an operation of the cleanup thread itself is canceled by its next cancel round, which it runs after the
+    // destructor that submitted it: no round can miss it, and a synchronous wait for it (a destructor that logs out
+    // or resolves a name) keeps the operation's own timeout
+    if (!handed_over || !qore_module_cleanup_deadline_passed()) {
+        return;
+    }
+    auto it = t.cache.find(key);
+    if (it == t.cache.end() || !async_io_module_cleanup_cancel_match(it->second.sandbox_ctx, true)) {
+        return;
+    }
+    PollInfo pinfo_copy = retireOp(t, it, xsink);
+    // the operation's work is the work of a canceled operation (applyModuleCleanupCancel()), counted
+    applyModuleCleanupCancel(pinfo_copy);
+    std::vector<std::string> names;
+    try {
+        names.push_back(moduleCleanupOpName(pinfo_copy));
+    } catch (std::bad_alloc&) {
+        // canceled without its name
+    }
+    if (pinfo_copy.continue_poll_in_flight) {
+        // its step is in flight: the cancel completes when its result arrives
+        uint64_t op_id = pinfo_copy.op_id;
+        t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
+    } else {
+        doCancelIntern(pinfo_copy, xsink);
+        pinfo_copy.cleanup(xsink);
+    }
+    {
+        AutoLocker al(m);
+        signalCancelLocked(key);
+    }
+    qore_module_cleanup_report_canceled(QMCRC_SUBMITTED_AFTER_DEADLINE, names);
 }
 
 void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink) {
@@ -9865,7 +10396,9 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     // an abort() dispatched to a worker is dispatched below, with the delivery of the result, which must follow it
     bool async_abort = worker_abort && on_async_io_thread;
     if (!async_abort) {
-        // C++ built-in or not on I/O thread - safe to call directly
+        // C++ built-in or not on I/O thread - safe to call directly; the abort() of an operation that the module
+        // cleanup canceled cannot start new asynchronous work (see checkModuleCleanupNewWork(), qore#7027)
+        ModuleCleanupAsyncCallbackHelper canceled_work(async_io_module_cleanup_canceled(pinfo.sandbox_ctx));
         callAbort(pinfo.spop_obj, xsink);
     }
 
@@ -9929,6 +10462,7 @@ void AsyncIoControllerPriv::deliverDeferred(DeferredDelivery& dd, ExceptionSink*
         dd.key.c_str(), (int)dd.has_on_complete);
     // taken before the context is moved
     const bool dd_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
+    const bool dd_canceled = async_io_module_cleanup_canceled(dd.sandbox_ctx);
     deliverResult(dd.queue, dd.queue_obj, dd.spop_obj, dd.has_on_complete, dd.result, xsink, dd.owner,
         std::move(dd.sandbox_ctx), dd.sync_release.get());
     dd.spop_obj = nullptr;
@@ -9942,6 +10476,7 @@ void AsyncIoControllerPriv::deliverDeferred(DeferredDelivery& dd, ExceptionSink*
         AsyncIoDeferredRelease refs;
         refs.queue_obj = dd.queue_obj;
         refs.module_cleanup_delegate = dd_delegate;
+        refs.module_cleanup_canceled = dd_canceled;
         dd.queue_obj = nullptr;
         releaseOffIoThread(refs, xsink, dd.sync_release.get());
     }
@@ -9994,7 +10529,8 @@ void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete,
     refs.other = dd.result;
     refs.queue = dd.queue;
     refs.queue_obj = dd.queue_obj;
-    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(dd.sandbox_ctx);
+    refs.setModuleCleanup(dd.sandbox_ctx);
+    refs.caller_restrictions = async_io_caller_restrictions(dd.sandbox_ctx);
     dd.spop_obj = nullptr;
     dd.result = nullptr;
     dd.queue = nullptr;
@@ -11239,12 +11775,14 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
     bool dispatch_on_complete = has_on_complete && spop_obj;
     // taken before the context is moved to a dispatched onComplete()
     const bool delegate = async_io_module_cleanup_delegate(sandbox_ctx);
+    const bool canceled = async_io_module_cleanup_canceled(sandbox_ctx);
     // the references dropped here can be the last ones; see releaseOffIoThread()
     auto release_refs = [&](QoreObject* obj, QoreHashNode* hash) {
         AsyncIoDeferredRelease refs;
         refs.spop_obj = obj;
         refs.other = hash;
         refs.module_cleanup_delegate = delegate;
+        refs.module_cleanup_canceled = canceled;
         releaseOffIoThread(refs, xsink);
     };
     if (dispatch_on_complete && !result) {
@@ -11270,6 +11808,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* queue_obj, Q
             AsyncIoDeferredRelease refs;
             refs.spop_obj = spop_obj;
             refs.module_cleanup_delegate = delegate;
+            refs.module_cleanup_canceled = canceled;
             releaseOffIoThread(refs, xsink, sync_release);
             spop_obj = nullptr;
         }

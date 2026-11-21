@@ -1094,8 +1094,6 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
-    // a Program that a trusted build creates does not identify the code that the build serves (qore#6852)
-    created_in_trusted_build = qore_thread_in_trusted_build();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -2247,6 +2245,8 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
         std::swap(thr_init_po.po, po.po);
         std::swap(thr_init_po.override, po.override);
+        // the init code runs for the code that set it, with its restrictions (qore#6844)
+        std::swap(thr_init_po.caller_domain_restrictions, po.caller_domain_restrictions);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -4117,6 +4117,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
         thr_init = nullptr;
         std::swap(old_thr_init_po.po, thr_init_po.po);
         std::swap(old_thr_init_po.override, thr_init_po.override);
+        std::swap(old_thr_init_po.caller_domain_restrictions, thr_init_po.caller_domain_restrictions);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);
@@ -5770,7 +5771,7 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
 
 template <bool LexicalInvocation>
 QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
-        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy, bool given_args) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -5803,6 +5804,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const
     } else {
         fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
     }
+    // a list that the caller gives is a temporary list of evaluated values that the call takes over (qore#6052)
+    if (given_args && args) {
+        fc->setTmpArgs();
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
@@ -5818,6 +5823,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
     return callFunctionImpl<true>(name, args, xsink, policy);
+}
+
+QoreValue qore_program_private::callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink) {
+    return callFunctionImpl<false>(name, args, xsink, {}, true);
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {

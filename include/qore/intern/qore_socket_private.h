@@ -171,6 +171,11 @@ class QoreSocketObject;
     @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
     out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
 */
+//! Returns the bytes of an HTTP/2 stream's buffered data that nghttp2 has taken so far (never decreases)
+/** @return the byte count, -1 if the session is closed or the stream is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
+
 //! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session
 /** @return the byte count (never decreases), -1 if the session or the stream's data record is gone, or if an
     exception was raised

@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - mutual TLS on a loopback socket and access to certificate files
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FileLocationTestConnectionProvider
+%requires FileLocationHandler
+%requires RestClient
+%requires RestClientIo
+%requires HttpServer
+%requires HttpServerUtil
+%requires FsUtil
+%requires ../../TestCertificates.qm
+%requires QUnit
+
+%exec-class RestConnectionTlsTest
+
+class TlsPeer inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "authenticated", {"Content-Type": "text/plain"});
+    }
+}
+
+class RestConnectionTlsTest inherits QUnit::Test {
+    constructor() : Test("REST connection TLS file ownership", "1.0") {
+        addTestCase("configured credentials", \credentials());
+        set_return_value(main());
+    }
+
+    private static writePem(string path, string value) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        f.write(value);
+    }
+
+    credentials() {
+        TmpDir tmp("rest-connection-tls-");
+        string cert = tmp.path + DirSep + "cert.pem";
+        string key = tmp.path + DirSep + "key.pem";
+        string other = tmp.path + DirSep + "other.pem";
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("tls", new TlsPeer());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "get_remote_certs": True,
+            "ssl_verify_flags": SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+        }).port;
+        server.waitForAsyncIo();
+        # The files arrive after registration, as they can when credentials are rotated.
+        RestConnection conn("rest-tls", "client TLS", sprintf("rests://127.0.0.1:%d", port), {},
+            {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_verify_cert": False});
+        TestStore::rest_tls = conn;
+        on_exit remove TestStore::rest_tls;
+        writePem(cert, TestCertificates::CertPem);
+        writePem(key, TestCertificates::KeyPem);
+        writePem(other, TestCertificates::CertPem);
+        Program providers(PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
+        providers.setGlobalVarValue("ENV", ENV + {"QORE_CONNECTION_PROVIDERS":
+            get_script_dir() + "FileLocationTestConnectionProvider.qm"});
+        providers.loadApplyToUserModule(normalize_dir(get_script_dir() + "../../../../qlib/ConnectionProvider"), True);
+        Program restricted(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        restricted.parse("%requires FileLocationHandler\n%requires RestClient\n"
+            "object sub make(string c, string k) { return new RestConnection(\"new\", \"\", \"rests://localhost\", {}, "
+            "{\"ssl_cert_path\": c, \"ssl_key_path\": k}); }\n"
+            "object sub client(object c, *hash<auto> opts) { return c.getAsync(True, opts); }\n"
+            "string sub read(string loc) { return FileLocationHandler::getTextFileFromLocation(loc); }", "reader");
+        string loc = "conn://rest-tls/content";
+        assertEq("authenticated", restricted.callFunction("read", loc));
+        assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", cert));
+        object untrusted = restricted.callFunction("make", cert, key);
+        assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("client", untrusted));
+        assertThrows("PERMISSION-DENIED", \restricted.callFunction(),
+            ("client", conn, {"ssl_key_path": other}));
+        hash<auto> saved = restricted.callFunction("client", conn).getConstructorOptions();
+        assertEq(key, saved.ssl_key_path);
+        assertFalse(saved.hasKey("ssl_key_data"));
+        conn.real_opts.ssl_cert_path = other;
+        assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", loc));
+        assertEq("authenticated", FileLocationHandler::getTextFileFromLocation(loc));
+        conn.real_opts.ssl_cert_path = cert;
+        conn.real_opts.ssl_key_path = other;
+        assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", loc));
+        conn.real_opts.ssl_key_path = key;
+        assertThrows("LOCATION-ERROR", "unsupported read option.*ssl_cert_path", \restricted.callFunction(),
+            ("read", loc + "{ssl_cert_path=" + other + "}"));
+        writePem(cert, "");
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \restricted.callFunction(), ("read", loc));
+        writePem(cert, TestCertificates::CertPem);
+        assertEq("authenticated", restricted.callFunction("read", loc));
+    }
+}

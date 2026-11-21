@@ -56,7 +56,7 @@ list<hash<auto>> docs = cursor.toList();
 
     @since mongodb 1.0
 */
-qclass MongoCursor<DocT: hash<auto> = hash<auto>> [arg=QoreMongoCursor* cursor; ns=mongodb; flags=final;
+qclass MongoCursor<DocT: hash<auto> = hash<auto>> [arg=QoreMongoCursor* cursor; ns=mongodb; flags=final; dom=NETWORK;
     legacy_raw];
 
 //! Returns the next document from the cursor

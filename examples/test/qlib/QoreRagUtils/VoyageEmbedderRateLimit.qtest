@@ -1079,7 +1079,7 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     }
 
     testSharedClientKeys() {
-        int before = VoyageRestClient::VoyageRestClientBase::getSharedClientCount();
+        *int before = VoyageRestClient::VoyageRestClientBase::getSharedClientCount();
         hash<EmbedderConfig> cfg = config();
         VoyageRestClient::VoyageRestClientIo a = VoyageRestClient::VoyageRestClientBase::getSharedClient(cfg.url,
             cfg.api_key);

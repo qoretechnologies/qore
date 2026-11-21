@@ -220,6 +220,8 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 
     qore_license = license;
     qore_library_options = n_qore_library_options;
+    // a value that is not valid is reported now, at the start of the process (qore#7027)
+    qore_init_module_cleanup_timeout();
 
     // the canonical path of this libqore, for the module manager
     std::string libqore_path;

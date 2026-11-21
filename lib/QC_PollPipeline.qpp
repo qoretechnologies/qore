@@ -2516,7 +2516,8 @@ int PollPipeline::addRecvExact(int byte_count, bool as_string = False) [dom=NETW
 int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True, int max_size = 0)
         [dom=NETWORK; flags=NAMED_ARGS] {
     if (max_size < 0) {
-        return xsink->raiseException("PIPELINE-ADD-ERROR", "the maximum size cannot be negative (%d)", max_size);
+        return xsink->raiseException("PIPELINE-ADD-ERROR", "the maximum size cannot be negative (" QLLD ")",
+            max_size);
     }
     return priv->addRecvUntil(pattern->c_str(), as_string, static_cast<size_t>(max_size));
 }

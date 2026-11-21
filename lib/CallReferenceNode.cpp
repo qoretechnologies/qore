@@ -80,11 +80,9 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
 }
 
 void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm) {
-    // only a reference to library module code records anything, and then only for restricted creating code
-    if (!code_pgm || !qore_program_is_library_module(code_pgm)) {
-        return;
-    }
-    QoreParseOptions origin = qore_creation_origin_restrictions();
+    // only a reference whose code runs where the creating code is not on the stack records anything, and then only
+    // for restricted creating code
+    QoreParseOptions origin = qore_creation_origin_for(code_pgm);
     if (!origin) {
         return;
     }
@@ -121,6 +119,90 @@ void qore_release_call_reference_provenance(const ResolvedCallReferenceNode* ref
     if (context) {
         context->deref();
     }
+}
+
+//! returns the restricting options of a Program that is not a module's, or none for a module's Program or nullptr
+/** The code of a Program that is not a module's runs with that Program on the stack, which decides for it and records
+    nothing; the Program that creates a value runs the creating code
+*/
+static QoreParseOptions qore_non_module_program_restrictions(const QoreProgram* pgm) {
+    return pgm && !qore_program_is_module_inline(pgm) ? qore_program_private::getParseOptions(*pgm)
+        : QoreParseOptions();
+}
+
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr);
+
+QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
+    // only the restricting options are domains: not the positive options (PO_ALLOW_*) or PO_IN_MODULE
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    QoreParseOptions rv;
+    switch (v.getType()) {
+        case NT_FUNCREF:
+        case NT_RUNTIME_CLOSURE: {
+            const ResolvedCallReferenceNode* rcr = v.get<const ResolvedCallReferenceNode>();
+            // the restrictions recorded when it was created, for module or builtin code
+            // (qore_capture_call_reference_origin())
+            QoreSandboxContext* context = qore_get_call_reference_provenance(rcr);
+            if (context) {
+                rv = context->origin_restrictions;
+                context->deref();
+            }
+            // the Program whose code it runs, and the Program that created it, which the reference keeps alive: the
+            // code of a restricted Program, or a reference that it created to the code of another Program (a method of
+            // an object of a class that the host imported into it, for example)
+            // the Program whose code it runs: for a method, the source Program of its class, referenced, as it can be
+            // deleted while the reference exists; otherwise a Program that the reference keeps alive
+            const QoreMethod* m = qore_call_reference_code_method(rcr);
+            if (m) {
+                const QoreClass* cls = m->getClass();
+                QoreProgram* code_pgm = qore_class_private::get(*cls)->getReferencedSourceProgram();
+                if (code_pgm) {
+                    rv |= qore_non_module_program_restrictions(code_pgm);
+                    code_pgm->deref();
+                } else {
+                    rv |= qore_non_module_program_restrictions(cls->getProgram());
+                }
+            } else {
+                rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
+            }
+            rv |= qore_non_module_program_restrictions(rcr->getProgram());
+            // the code that created a run-time reference, if it is the code of a Program that is not a module's: a
+            // reference that restricted code created to a method of an object of another Program (one lent to it)
+            const ResolvedCallReferenceNodeIntern* intern = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(rcr);
+            const QoreParseOptions* creator_po = intern ? intern->getNonModuleCreatorParseOptions() : nullptr;
+            if (creator_po) {
+                rv |= *creator_po;
+            }
+            break;
+        }
+        case NT_OBJECT: {
+            const QoreObject* obj = v.get<const QoreObject>();
+            const qore_object_private* priv = qore_object_private::get(*obj);
+            // set when the object is constructed and not changed after
+            if (priv->sandbox_provenance) {
+                rv = priv->sandbox_provenance->origin_restrictions;
+            }
+            // the Program that created it, which the object keeps alive: also for an object of a builtin class or of
+            // a class that the host imported into it, which records nothing
+            rv |= qore_non_module_program_restrictions(obj->getProgram());
+            // the source Program of its class, referenced, as it can be deleted while the object exists
+            const qore_class_private* qc = qore_class_private::get(*obj->getClass());
+            QoreProgram* code_pgm = qc->getReferencedSourceProgram();
+            if (code_pgm) {
+                rv |= qore_non_module_program_restrictions(code_pgm);
+                code_pgm->deref();
+            }
+            break;
+        }
+        default:
+            return QoreParseOptions();
+    }
+    return rv & restricting;
+}
+
+int64 qore_callable_origin_restrictions(const QoreValue v) {
+    return qore_callable_origin_restrictions_po(v).getLo();
 }
 
 QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
@@ -378,6 +460,7 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
         creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
     }
     has_creator_po = true;
+    creator_non_module = pgm && !qore_program_is_module_inline(pgm);
     // the run-time call reference classes call this from their constructors, when the reference is complete: a
     // reference to library module code records the restrictions of the code that creates it (qore#6520)
     qore_capture_call_reference_origin(this, getOriginCodeProgram());
@@ -1344,8 +1427,10 @@ int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, Excep
     return 0;
 }
 
-const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
-    assert(rcr);
+//! returns the method whose code a call of a method or static method reference runs, or nullptr for another reference
+/** For a method of an object, the method that the call is dispatched to on the object's class
+*/
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr) {
     const QoreMethod* m = nullptr;
     // the object a method is called on, if any: the call is dispatched on its class
     const QoreObject* obj = nullptr;
@@ -1369,6 +1454,12 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
             m = dm;
         }
     }
+    return m;
+}
+
+const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
+    assert(rcr);
+    const QoreMethod* m = qore_call_reference_code_method(rcr);
     if (!m) {
         // a closure's code is that of the Program that defines it, which is not necessarily the Program it runs
         // in: a closure that module code creates while running a method for an object of a class of its caller
@@ -2746,7 +2837,7 @@ private:
         // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
         // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
         QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
-        barrier.emplace(QoreTrustedBuildTag());
+        barrier.emplace(QoreTrustedBuildTag{trusted_program});
         if (!barrier->recorded()) {
             if (callers) {
                 callers->deref(nullptr);
