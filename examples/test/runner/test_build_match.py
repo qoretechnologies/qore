@@ -343,6 +343,10 @@ class BuildMatchTest(unittest.TestCase):
         # when it runs (no object of its own, though a directory above has objects of other sources), a source of lib/
         # that libqore does not have (a build with an object for each source has none for it), and an include/
         # header that only a module includes, whose module was built again
+        # a build with an object for each source (not one compilation unit)
+        with open(self.build / "CMakeCache.txt", "a") as f:
+            f.write("SINGLE_COMPILATION_UNIT:BOOL=OFF\n")
+        os.utime(self.build / "CMakeCache.txt", (BUILD_TIME, BUILD_TIME))
         (self.build / "modules/m").mkdir(parents=True)
         (self.build / "modules/m/m-api-1.0.qmod").touch()
         os.utime(self.build / "modules/m/m-api-1.0.qmod", (LATER + 10, LATER + 10))
@@ -495,18 +499,13 @@ class BuildMatchTest(unittest.TestCase):
         (self.tree / "qlib/Sep/Sep.qmod").symlink_to(other / "qlib-qmod/Sep/Sep.qmod")
         self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
 
-    def test_a_file_removed_from_a_module_in_qlib_is_compared_with_its_qmod(self):
-        # the module's other sources are still there: the newest of them is compared with the module's .qmod, not
-        # their directory, which an editor's file changes
-        qmod = self.separated_module()
+    def test_a_file_removed_from_a_module_in_qlib_is_not_compared(self):
+        # like any file that is gone (a limit that the comment of the check names): the module's directory, which an
+        # editor's file changes, is no build's time
+        self.separated_module()
         git(self.tree, "rm", "-q", "qlib/Sep/X.qc")
         (self.tree / "qlib/Sep/.Y.qc.swp").write_text("an editor's file\n")
         os.utime(self.tree / "qlib/Sep", (LATER + 30, LATER + 30))
-        self.assert_runs(self.run_runner())
-        # a remaining source changed after the .qmod
-        os.utime(self.tree / "qlib/Sep/Y.qc", (LATER, LATER))
-        self.assert_refused(self.run_runner(), "    qlib/Sep/X.qc")
-        os.utime(qmod, (LATER + 10, LATER + 10))
         self.assert_runs(self.run_runner())
 
     def test_headers_of_example_modules_in_other_directories_are_compared(self):
@@ -531,6 +530,48 @@ class BuildMatchTest(unittest.TestCase):
                 self.assert_refused(self.run_runner(), "    " + header)
                 os.utime(self.build / obj, (LATER + 10, LATER + 10))
                 self.assert_runs(self.run_runner())
+
+    def test_libqore_s_sources_in_one_compilation_unit_are_compared_with_libqore(self):
+        # the default build (SINGLE_COMPILATION_UNIT) compiles most of libqore's sources in one unit: libqore.dir/lib/
+        # has single-compilation-unit.cpp.o and a few objects of sources that are compiled on their own, but none of a
+        # source that the unit includes
+        with open(self.build / "CMakeCache.txt", "a") as f:
+            f.write("SINGLE_COMPILATION_UNIT:BOOL=ON\n")
+        os.utime(self.build / "CMakeCache.txt", (BUILD_TIME, BUILD_TIME))
+        for obj in ("lib/single-compilation-unit.cpp.o", "lib/JITRuntimeTakeOver.cpp.o"):
+            (self.build / "CMakeFiles/libqore.dir" / obj).parent.mkdir(parents=True, exist_ok=True)
+            (self.build / "CMakeFiles/libqore.dir" / obj).touch()
+            os.utime(self.build / "CMakeFiles/libqore.dir" / obj, (BUILD_TIME, BUILD_TIME))
+        (self.tree / "lib/a.cpp").write_text("int a = 7;\n")
+        os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+        self.assert_refused(self.run_runner(), "    lib/a.cpp")
+        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+
+    def test_another_tree_s_build_is_compared_for_every_source_of_libqore(self):
+        # a build of another tree with an object for each source, which has none for a source that differs: it is
+        # refused all the same (only a build of this tree tells which sources libqore has)
+        other = self.base / "other-build"
+        stand_in_build(other, self.base / "other-tree", self.commit)
+        with open(other / "CMakeCache.txt", "a") as f:
+            f.write("SINGLE_COMPILATION_UNIT:BOOL=OFF\n")
+        (other / "CMakeFiles/libqore.dir/lib").mkdir(parents=True)
+        (other / "CMakeFiles/libqore.dir/lib/b.cpp.o").touch()
+        (self.tree / "lib/a.cpp").write_text("int a = 8;\n")
+        os.utime(self.tree / "lib/a.cpp", (SOURCE_TIME, SOURCE_TIME))
+        self.assert_refused(self.run_runner(build=other), "    lib/a.cpp")
+
+    def test_a_cmake_file_of_a_fixture_is_compared_only_if_cmake_processed_it(self):
+        # a test compiles a fixture with a CMakeLists.txt of its own when it runs: the build's configure does not read
+        # it, unless the build has a directory for it
+        cmake = self.tree / "examples/test/qore/misc/fixture/CMakeLists.txt"
+        cmake.parent.mkdir(parents=True)
+        cmake.write_text("add_executable(fixture fixture.c)\n")
+        git(self.tree, "add", str(cmake))
+        os.utime(cmake, (LATER, LATER))
+        self.assert_runs(self.run_runner())
+        (self.build / "examples/test/qore/misc/fixture/CMakeFiles").mkdir(parents=True)
+        self.assert_refused(self.run_runner(), "    examples/test/qore/misc/fixture/CMakeLists.txt")
 
     def test_the_check_leaves_the_tests_environment_as_it_is(self):
         # GIT_NO_LAZY_FETCH is for the check's git only: "VAR=value function" leaves it set and exported in bash
