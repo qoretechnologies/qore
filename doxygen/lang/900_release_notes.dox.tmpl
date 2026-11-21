@@ -135,6 +135,12 @@
     still contain \c "@" (see @ref datasource_secrets;
     <a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>).
 
+    @par Name Resolution Requires the NETWORK Functional Domain
+    @ref Qore::gethostbyname() "gethostbyname()", @ref Qore::getaddrinfo() "getaddrinfo()" and the other name-resolution
+    functions are in the \c NETWORK as well as the \c EXTERNAL_INFO @ref function_domains "functional domain", so
+    code restricted with @ref PO_NO_NETWORK cannot call them, as a lookup sends queries over the network
+    (<a href="https://github.com/qoretechnologies/qore/issues/7133">issue 7133</a>).
+
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
     (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
