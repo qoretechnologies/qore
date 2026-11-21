@@ -2519,6 +2519,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed \c qdp ending with an unhandled \c TERMIOS-GET-WINDOW-SIZE-ERROR exception when it printed descriptions
+      without a controlling terminal; descriptions are shortened to the width in the \c COLUMNS environment variable,
+      else to that of the terminal, and are not shortened without one
+      (<a href="https://github.com/qoretechnologies/qore/issues/7125">issue 7125</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

@@ -82,6 +82,9 @@ class QdpCmd {
         #! Signal handler flag for graceful shutdown
         static bool shutdown_requested = False;
 
+        #! the width of a line with a description, once known (see getLineWidth())
+        static *int line_width;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
@@ -837,12 +840,46 @@ class QdpCmd {
         }
     }
 
+    #! returns the width of a line with a description: the COLUMNS environment variable, else the width of the
+    #! terminal, or 0 (no limit) when the process has no terminal (qore#7125)
+    static int getLineWidth() {
+        if (!exists line_width) {
+            line_width = QdpCmd::getLineWidthIntern();
+        }
+        return line_width;
+    }
+
+    private static int getLineWidthIntern() {
+        *string columns = ENV.COLUMNS;
+        if (columns =~ /^[0-9]+$/ && columns.toInt() > 0) {
+            return columns.toInt();
+        }
+        # no terminal support in this build
+        if (!Option::HAVE_TERMIOS) {
+            return 0;
+        }
+        try {
+            return TermIOS::getWindowSize().columns;
+        } catch (hash<ExceptionInfo> ex) {
+            # no controlling terminal (output to a pipe or a file in a process without one, as in CI or a background
+            # job): descriptions are not shortened
+            if (ex.err !~ /^TERMIOS-/) {
+                rethrow;
+            }
+        }
+        return 0;
+    }
+
     static string getDesc(int offset, hash<auto> h) {
-        int len = TermIOS::getWindowSize().columns - offset;
-        map len -= h{$1}.length(), argv;
         string desc = h.desc ?? "";
         desc =~ s/\n/ /g;
         desc =~ s/ +/ /g;
+        int width = QdpCmd::getLineWidth();
+        if (!width) {
+            return desc;
+        }
+        int len = width - offset;
+        map len -= h{$1}.length(), argv;
         if (len < 0) {
             return "";
         }
@@ -2498,6 +2535,8 @@ class QdpCmd {
         printHelpLine(color.key("-Y, --yaml"), "Use YAML for input and output", key_width);
         printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
         printHelpLine(color.key("-v, --verbose"), "Increase verbosity (can repeat)", key_width);
+        printHelpLine(color.key("COLUMNS=N"), "Shorten descriptions to N columns (default: the terminal width; "
+            "not shortened without a terminal)", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("SEARCH OPTIONS"));
