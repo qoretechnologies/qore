@@ -32,6 +32,11 @@
 class DatasourceForkTest inherits QUnit::Test {
     public {
         const ConnStr = "dbitest:u/p@db";
+
+        #! a datasource string with distinct credentials, a host and a port, for the description of the fork error
+        const SecretConnStr = "dbitest:u_SECRET1/p_SECRET2@d_SECRET3%h-host:4321";
+        #! the description of SecretConnStr in the fork error, with the credentials masked (qore#6961)
+        const SecretMasked = "dbitest:****/****@****%h-host:4321: ";
     }
 
     constructor() : QUnit::Test("DatasourceForkTest", "1.0", \ARGV) {
@@ -41,6 +46,7 @@ class DatasourceForkTest inherits QUnit::Test {
         addTestCase("a child uses a Datasource of its parent", \testUse());
         addTestCase("a child reads an option of a Datasource of its parent", \testReadOption());
         addTestCase("a child uses a Datasource in a transaction of the forking thread", \testUseInTransaction());
+        addTestCase("the fork error does not show the credentials of the Datasource", \testForkErrorMasked());
         addTestCase("a child uses a Datasource in a transaction after actions that need no connection",
             \testUseInTransactionAfterNoConnection());
         addTestCase("a child closes a Datasource in a transaction of the forking thread", \testCloseInTransaction());
@@ -178,6 +184,27 @@ class DatasourceForkTest inherits QUnit::Test {
         });
         assertEq("opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0 new_session=True", result);
         assertEq(session, ds.getOption("session"));
+    }
+
+    testForkErrorMasked() {
+        Datasource ds(SecretConnStr);
+        ds.beginTransaction();
+        ds.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            try {
+                ds.select("select 1");
+                return "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                string text;
+                for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                    text += sprintf("%s: %s: %y\n", e.err, e.desc, e.arg);
+                }
+                list<string> shown = select ("u_SECRET1", "p_SECRET2", "d_SECRET3"), text.find($1) >= 0;
+                return sprintf("%s masked=%y shown=%y", ex.err, ex.desc.find(SecretMasked) == 0, shown);
+            }
+        });
+        assertEq("DATASOURCE-FORK-ERROR masked=True shown=[]", result);
+        ds.rollback();
     }
 
     testUseInTransaction() {

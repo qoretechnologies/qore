@@ -20922,6 +20922,35 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
 }
 #endif
 
+#ifdef DEBUG
+//! waits until the given number of threads wait for a free connection of a DatasourcePool
+/** For tests that need a thread to be waiting in the pool before the connection that it waits for is released, as
+    with the warning callback, which is called only for a thread that waited (qore#6961)
+
+    @param pool the DatasourcePool
+    @param count the number of waiting threads
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if that many threads are waiting, False if the timeout expired first
+ */
+static QoreValue f_dbg_dsp_wait_for_waiters(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* o = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    int64 count = get_param_value(params, 1).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
+    if (count < 1 || timeout_ms < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_dsp_wait_for_waiters() requires a positive count and "
+            "timeout; got count " QLLD " and timeout " QLLD, count, timeout_ms);
+        return QoreValue();
+    }
+    ReferenceHolder<DatasourcePool> dsp(o->getReferencedPrivateData<DatasourcePool>(CID_DATASOURCEPOOL, xsink),
+        xsink);
+    if (!dsp) {
+        return QoreValue();
+    }
+    return dsp->dbgWaitForWaiters(static_cast<unsigned>(count), static_cast<int>(timeout_ms));
+}
+#endif
+
 // --- code flag oracle (debug builds only) ---
 
 /* The functions below exist so that the parser's code-flag diagnostics can be tested against every
@@ -28722,6 +28751,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
         stringTypeInfo, QORE_PARAM_NO_ARG, "op_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "when");
+    qns.addBuiltinVariant("dbg_dsp_wait_for_waiters", f_dbg_dsp_wait_for_waiters,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        QC_DATASOURCEPOOL->getTypeInfo(), QORE_PARAM_NO_ARG, "pool",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_hold_program_release_at_thread_exit", f_dbg_hold_program_release_at_thread_exit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_program_release_held", f_dbg_wait_program_release_held, QCF_NO_FLAGS,

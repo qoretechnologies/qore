@@ -151,6 +151,15 @@
     methods of @ref HttpServer::HttpListenerInterface "HttpListenerInterface", one per listener
     (<a href="https://github.com/qoretechnologies/qore/issues/6921">issue 6921</a>).
 
+    @par The DatasourcePool Warning Callback Gets a Masked Description of the Pool
+    The description of the pool passed to a
+    @ref Qore::SQL::DatasourcePool::setWarningCallback() "DatasourcePool warning callback" shows the driver name, host
+    and port of the pool with its user name, password and database name masked as \c "****" (ex:
+    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of the pool
+    with its password;
+    @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
+    configuration (issue #6961).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
@@ -2623,7 +2632,8 @@
       datasource string shows only its driver name, and the errors of a datasource show its driver, host and port with
       the other values masked as \c "****"; a driver name that is not a valid driver name (only ASCII letters, digits,
       \c "_" and \c "-"), such as a datasource string given with other connection arguments, is no longer looked up
-      or loaded as a module, and is rejected without being shown (issue #6961)
+      or loaded as a module, and is rejected without being shown (issue #6961); also the debug output of URL parsing
+      no longer shows the URL or its password
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)

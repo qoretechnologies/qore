@@ -197,6 +197,11 @@ protected:
         wait_max,
         tl_warning_ms;
 
+#ifdef DEBUG
+    //! signalled with the pool lock held when a thread starts to wait for a free connection; see dbgWaitForWaiters()
+    QoreCondition dbg_waiter_cond;
+#endif
+
     int64 tl_timeout_ms,
         stats_reqs,
         stats_hits
@@ -320,6 +325,10 @@ public:
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
         qore_condition_ops(static_cast<QoreCondition*>(this)).reinitAfterFork();
+#ifdef DEBUG
+        // a thread of the parent can wait on it in dbgWaitForWaiters()
+        qore_condition_ops(&dbg_waiter_cond).reinitAfterFork();
+#endif
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
     }
@@ -406,6 +415,11 @@ public:
 #ifdef DEBUG
     //! arms a one-shot debug connection abort on the pool-wide context; see lib/ql_debug.cpp
     DLLLOCAL void dbgArmConnectionAbort(const char* op_id, int when);
+
+    //! waits until at least \a count threads wait for a free connection; see lib/ql_debug.cpp
+    /** @return true if that many threads are waiting, false if the timeout expired first
+    */
+    DLLLOCAL bool dbgWaitForWaiters(unsigned count, int timeout_ms);
 #endif
 
     // functions supporting DatasourceStatementHelper

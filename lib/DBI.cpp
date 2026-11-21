@@ -939,7 +939,8 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
                         ++eq;
                         len = oend ? oend - eq : strlen(eq);
                         if (opt->existsKey(p)) {
-                            return parse_error("option '%s' repeated", p);
+                            // the option name is not shown either, as it is text of the string (qore#6961)
+                            return parse_error("an option is repeated in the option specification");
                         }
 
                         QoreString key(p);
