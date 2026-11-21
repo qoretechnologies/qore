@@ -28,7 +28,9 @@
     -O0 and -O3, without a debugger and with a debugger's request at a step event of a statement of such a handler.
     A request in a handler that a return runs ends the handler, and the return goes on with its value, also from a
     handler of a handler's body (qore#6949).  The paths after a block do not run the handlers of the block and of the
-    blocks in it again, which have run (qore#6955).
+    blocks in it again, which have run (qore#6955).  A break or a continue request in a handler of a block of the body
+    of a handler that is not the last one of its exit ends that handler, whose request the next handler's normal end
+    replaces (qore#7040).
 */
 class InlineHandlerFlowLoopTest inherits QUnit::Test {
     public {
@@ -36,7 +38,9 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
         const Functions = ("loopThrow", "loopReturn", "switchBreak", "nestedLoops", "noLoop", "deepReturn", "nestIf",
             "nestLoop", "deepIf", "loopIf", "midReturn", "tryReturn", "tryNested", "switchContinue", "tryExitBreak",
             "tryExitContinue", "tryCutReturn", "loopHandlerTop", "scopeMidHandler", "scopeMid", "scopeMidLoop",
-            "tryHandlerTry", "tryNestedHandlers");
+            "tryHandlerTry", "tryNestedHandlers", "nonLast", "nonLastLoop", "nonLastSwitch", "nonLastInnerLoop",
+            "nonLastDeep", "nonLastInner", "nonLastTry", "nonLastSuccess", "retNonLast", "retLast", "retLastLoop",
+            "retNonLastLoop", "retDeep", "retDeepLast");
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
         #! request, tag and hit
@@ -117,6 +121,45 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             ("tryHandlerTry", "return", "try_handler_try_inner", 1),
             ("tryHandlerTry", "continue", "try_handler_try_inner", 1, "return", "try_handler_try", 1),
             ("tryNestedHandlers", "return", "try_nested_handlers", 1),
+            # a break or a continue request in a handler of a block of the body of a handler that is not the last of
+            # its exit ends that handler, and the next one's normal end replaces it; a return request goes on
+            # (qore#7040: qcc executables ended the function, or took a loop or a switch statement around the block)
+            ("nonLast", "break", "non_last", 1),
+            ("nonLast", "continue", "non_last", 1),
+            ("nonLast", "return", "non_last", 1),
+            ("nonLastLoop", "break", "non_last_loop", 1),
+            ("nonLastLoop", "continue", "non_last_loop", 1),
+            ("nonLastLoop", "break", "non_last_loop", 2),
+            ("nonLastLoop", "return", "non_last_loop", 1),
+            ("nonLastSwitch", "break", "non_last_switch", 1),
+            ("nonLastSwitch", "continue", "non_last_switch", 1),
+            # a loop of the handler's body takes the request
+            ("nonLastInnerLoop", "break", "non_last_inner_loop", 1),
+            ("nonLastInnerLoop", "continue", "non_last_inner_loop", 1),
+            ("nonLastDeep", "break", "non_last_deep", 1),
+            ("nonLastDeep", "continue", "non_last_deep", 2),
+            ("nonLastDeep", "return", "non_last_deep", 1),
+            ("nonLastInner", "break", "non_last_inner", 1),
+            ("nonLastInner", "continue", "non_last_inner", 1),
+            ("nonLastInner", "break", "non_last_inner", 2),
+            ("nonLastTry", "break", "non_last_try", 1),
+            ("nonLastTry", "continue", "non_last_try", 1),
+            ("nonLastSuccess", "break", "non_last_success", 1),
+            ("nonLastSuccess", "continue", "non_last_success", 1),
+            # in the cleanups of a return statement of the handler's body: the request abandons the return unless it
+            # ends the function, which then returns the return's value (qore#7040)
+            ("retNonLast", "break", "ret_non_last", 1),
+            ("retNonLast", "continue", "ret_non_last", 1),
+            ("retLast", "break", "ret_last", 1),
+            ("retLast", "continue", "ret_last", 1),
+            ("retLastLoop", "break", "ret_last_loop", 1),
+            ("retLastLoop", "continue", "ret_last_loop", 1),
+            ("retNonLastLoop", "break", "ret_non_last_loop", 1),
+            ("retNonLastLoop", "continue", "ret_non_last_loop", 1),
+            ("retDeep", "break", "ret_deep", 1),
+            ("retDeep", "continue", "ret_deep", 1),
+            ("retDeepLast", "break", "ret_deep_last", 1),
+            ("retDeepLast", "continue", "ret_deep_last", 1),
         );
 
         #! the qcc optimization levels

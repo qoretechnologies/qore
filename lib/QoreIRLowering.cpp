@@ -7498,6 +7498,25 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
     }
     QoreIRBasicBlock* scope_path = rc == RC_RETURN ? paths->return_path
         : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
+    // a break or a continue that no loop or switch statement of the body of the handler around it takes ends that
+    // handler's body, as the AST interpreter ends the blocks of that body with it, and goes on as a request of that
+    // handler (qore#7040): that handler's code of the request takes it, or drops it if that handler is not the last
+    // of its exit, as the normal end of the next handler replaces a break or a continue there
+    // (StatementBlock::execIntern()); otherwise the scope's paths would take a loop or switch statement around that
+    // handler's block, or end the function.  In the cleanups of a return statement of that handler's body, the request
+    // replaces the return as well (the return is abandoned), unless it ends the function: then the function returns
+    // the return's value, as the code after the handler does, which goes on with the return (below)
+    if (rc != RC_RETURN) {
+        const size_t outer_index = inlineHandlerOuterBody(hf_index);
+        if (outer_index != SIZE_MAX) {
+            const LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK, scope_entry);
+            if ((!jt.target || jt.cleanup_depth < inline_handler_flow_stack[outer_index].cleanup_depth)
+                    && (!inline_handler_flow_stack[hf_index].return_walk
+                        || !inlineHandlerRequestEndsFunction(outer_index, rc))) {
+                return lowerInlineHandlerOuterRequest(hf_index, outer_index, rc, error);
+            }
+        }
+    }
     // a return request in a try statement of the body ends the try statement, whose return value (none) replaces that
     // of the return, as in the AST interpreter (TryStatement::execImpl()): the scope's return path (qore#6949)
     if (!in_try && scope_path == paths->return_path) {
@@ -7528,55 +7547,7 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
                     || inline_handler_flow_stack[outer_index].try_depth
                         == inline_handler_flow_stack[hf_index].scope_try_depth)
                 && inlineHandlerInReturnWalk(outer_index, return_request)) {
-            // a break and a continue that go on in that handler share the code (not the code of one that a switch
-            // statement of the body takes)
-            if (!return_request) {
-                if (QoreIRBasicBlock* shared = inline_handler_flow_stack[hf_index].propagated_end) {
-                    inline_handler_flow_stack[hf_index].request_end[end_index] = shared;
-                    return shared;
-                }
-            }
-            const InlineHandlerFlow outer = inline_handler_flow_stack[outer_index];
-            const size_t inner_depth = inline_handler_flow_stack[hf_index].cleanup_depth;
-            const size_t inner_temp_depth = inline_handler_flow_stack[hf_index].temp_depth;
-            QoreIRBasicBlock* outer_end = getInlineHandlerFlowEndAt(outer_index, rc, error);
-            if (!outer_end) {
-                return nullptr;
-            }
-            QoreIRFunction* func = builder.getFunction();
-            QoreIRBasicBlock* end = createBlock("debug.flow.handler.outer");
-            if (!end) {
-                error = "IR builder failed to create the block of a debugger flow request";
-                return nullptr;
-            }
-            QoreIRBasicBlock* saved_block = builder.getBlock();
-            const size_t first_block = func->blocks.size() - 1;
-            QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
-            // the walk starts where this handler's body starts, with its temp scopes, whatever event asks first
-            builder.truncateTempScopes(inner_temp_depth);
-            bool ok;
-            {
-                DebugFlowPathLowering path_lowering(*this);
-                builder.setBlock(end);
-                ok = emitBlockCleanups(outer.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
-                    outer.temp_depth, nullptr, inner_depth);
-                if (ok && !blockHasTerminator(builder.getBlock())) {
-                    builder.createBranch(outer_end, nullptr);
-                }
-            }
-            builder.restoreTempScopeState(std::move(temp_state));
-            builder.setBlock(saved_block);
-            if (!ok) {
-                return nullptr;
-            }
-            for (size_t i = first_block; i < func->blocks.size(); ++i) {
-                func->blocks[i]->debug_flow = true;
-            }
-            inline_handler_flow_stack[hf_index].request_end[end_index] = end;
-            if (!return_request) {
-                inline_handler_flow_stack[hf_index].propagated_end = end;
-            }
-            return end;
+            return lowerInlineHandlerOuterRequest(hf_index, outer_index, rc, error);
         }
     }
     // the requests whose paths after the handler are the same (a break or a continue that no loop or switch
@@ -7604,6 +7575,85 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
     builder.createBranch(scope_path, nullptr);
     builder.setBlock(saved_block);
     ends()[end_index] = end;
+    return end;
+}
+
+bool QoreIRLowering::inlineHandlerRequestEndsFunction(size_t hf_index, int rc) const {
+    assert(rc != RC_RETURN);
+    while (true) {
+        const InlineHandlerFlow& hf = inline_handler_flow_stack[hf_index];
+        // the next handler's normal end replaces the request of a handler that is not the last of its exit
+        if (!hf.last) {
+            return false;
+        }
+        const LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK, hf.scope_entry);
+        // the request goes on in the handler around it unless a loop or switch statement of that handler's body takes
+        // it (getInlineHandlerFlowEndAt())
+        const size_t outer = inlineHandlerOuterBody(hf_index);
+        if (outer != SIZE_MAX
+                && (!jt.target || jt.cleanup_depth < inline_handler_flow_stack[outer].cleanup_depth)) {
+            hf_index = outer;
+            continue;
+        }
+        return !jt.target;
+    }
+}
+
+QoreIRBasicBlock* QoreIRLowering::lowerInlineHandlerOuterRequest(size_t hf_index, size_t outer_index, int rc,
+        std::string& error) {
+    assert(hf_index < inline_handler_flow_stack.size() && outer_index < hf_index);
+    const bool return_request = rc == RC_RETURN;
+    const size_t end_index = return_request ? 0 : (rc == RC_BREAK ? 1 : 2);
+    QoreIRBasicBlock* outer_end = getInlineHandlerFlowEndAt(outer_index, rc, error);
+    if (!outer_end) {
+        return nullptr;
+    }
+    // a break and a continue that go on in that handler share the code (not the code of one that a switch
+    // statement of the body takes) if that handler's code of both is the same (its join, or a return's): a loop
+    // around the last handler's block takes them to different targets
+    if (!return_request && inline_handler_flow_stack[hf_index].propagated_outer_end == outer_end) {
+        QoreIRBasicBlock* shared = inline_handler_flow_stack[hf_index].propagated_end;
+        assert(shared);
+        inline_handler_flow_stack[hf_index].request_end[end_index] = shared;
+        return shared;
+    }
+    const InlineHandlerFlow outer = inline_handler_flow_stack[outer_index];
+    const size_t inner_depth = inline_handler_flow_stack[hf_index].cleanup_depth;
+    const size_t inner_temp_depth = inline_handler_flow_stack[hf_index].temp_depth;
+    QoreIRFunction* func = builder.getFunction();
+    QoreIRBasicBlock* end = createBlock("debug.flow.handler.outer");
+    if (!end) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return nullptr;
+    }
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    const size_t first_block = func->blocks.size() - 1;
+    QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+    // the walk starts where this handler's body starts, with its temp scopes, whatever event asks first
+    builder.truncateTempScopes(inner_temp_depth);
+    bool ok;
+    {
+        DebugFlowPathLowering path_lowering(*this);
+        builder.setBlock(end);
+        ok = emitBlockCleanups(outer.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
+            outer.temp_depth, nullptr, inner_depth);
+        if (ok && !blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(outer_end, nullptr);
+        }
+    }
+    builder.restoreTempScopeState(std::move(temp_state));
+    builder.setBlock(saved_block);
+    if (!ok) {
+        return nullptr;
+    }
+    for (size_t i = first_block; i < func->blocks.size(); ++i) {
+        func->blocks[i]->debug_flow = true;
+    }
+    inline_handler_flow_stack[hf_index].request_end[end_index] = end;
+    if (!return_request && !inline_handler_flow_stack[hf_index].propagated_end) {
+        inline_handler_flow_stack[hf_index].propagated_end = end;
+        inline_handler_flow_stack[hf_index].propagated_outer_end = outer_end;
+    }
     return end;
 }
 

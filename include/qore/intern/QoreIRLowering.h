@@ -1002,8 +1002,11 @@ private:
         //! the body (see try_depth), which the scope's paths end
         QoreIRBasicBlock* request_end_try[3] = {};
         //! for the last handler: the code of a break or a continue that goes on as a request of the handler around it
-        //! (getInlineHandlerFlowEndAt()), which they share
+        //! (lowerInlineHandlerOuterRequest()), which they share when that handler's code of both is the same
+        //! (propagated_outer_end)
         QoreIRBasicBlock* propagated_end = nullptr;
+        //! the code of the handler around it that propagated_end ends with
+        QoreIRBasicBlock* propagated_outer_end = nullptr;
         //! for the last handler: the code of each request after the handler (RC_RETURN, RC_BREAK, RC_CONTINUE)
         QoreIRBasicBlock* request_end[3] = {};
         //! the paths of the requests that the step events of the body with the same lowering state share, as the
@@ -1028,6 +1031,16 @@ private:
         with the try statement's own value (InlineHandlerFlow::try_depth)
     */
     bool inlineHandlerInReturnWalk(size_t hf_index, bool return_request) const;
+    //! Returns the code of the request \a rc in the handler at \a hf_index of inline_handler_flow_stack that goes on as
+    //! a request of the handler at \a outer_index, whose body has its scope (inlineHandlerOuterBody()): the cleanups
+    //! of the blocks of that body from where the handler's body starts, then that handler's code of the request
+    //! (getInlineHandlerFlowEndAt()); nullptr with \a error set on failure (qore#6949, qore#7040)
+    QoreIRBasicBlock* lowerInlineHandlerOuterRequest(size_t hf_index, size_t outer_index, int rc, std::string& error);
+    //! Returns true if a break (\a rc RC_BREAK) or a continue request that ends the body of the handler at \a hf_index
+    //! of inline_handler_flow_stack ends the function: the handler is the last of its exit, and no loop or switch
+    //! statement around its block takes the request, nor does the code of the handlers around it that the request goes
+    //! on in (getInlineHandlerFlowEndAt(), qore#7040)
+    bool inlineHandlerRequestEndsFunction(size_t hf_index, int rc) const;
     //! Returns the index in inline_handler_flow_stack of the handler around the one at \a hf_index whose body (its top
     //! block or a block in it) has that handler's scope: the innermost one whose body starts at or below the scope's
     //! entry, or SIZE_MAX if none does (qore#6949)
