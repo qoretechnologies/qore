@@ -71,26 +71,28 @@ So the loader uses the links only for the build of its own libqore (`qore_own_bu
 `lib/ModuleManager.cpp`): when libqore is in a CMake build tree (its directory has the `CMakeCache.txt` of the build,
 which names the source tree, `CMAKE_HOME_DIRECTORY`), a `.qmod` that is a symbolic link in that source tree's `qlib`
 directory (or a directory below it) to the module at the same relative path in the `qlib-qmod` directory of another
-build is replaced by the module at that path in libqore's own `qlib-qmod` directory; if libqore's build has none (a module it does not build, or a build
-without AOT modules), the link is not used, and the loader goes on as if it were not there: it finds the source
-module in the same directory.  This applies to a module found in the module path, to one named by the path of the
-link (without a module of the build and without a source next to the link, that load fails with
-`LOAD-MODULE-ERROR`), and to the candidate files of an optional module that a compile records.  The checks of this
-document then apply to the module that is used.  Whether the module is library code (trusted, see
+build is replaced by the module at that path in libqore's own `qlib-qmod` directory; if libqore's build has none (a
+module it does not build, or a build without AOT modules), the link is not used, and the loader goes on as if it were
+not there: it finds the source module in the same directory.  This applies to a module found in the module path, to
+one named by the path of the link (without a module of the build and without a source next to the link, that load
+fails with `LOAD-MODULE-ERROR`), and to the candidate files of an optional module that a compile records.  The checks
+of this document then apply to the module that is used.  Whether the module is library code (trusted, see
 `QoreModuleManager::isTrustedModulePath()`) is decided by the link where it was found, which is in the module path,
 while the build's `qlib-qmod` directory need not be: the module is chosen by the build of the library, not by the code
 that loads it, so code whose functional domains are restricted loads it as it loads the link.
 
 The module that replaces a link is a regular file, so the checks above treat it as one: it is checked with its own
-dependency file only (every module of a build has one), and the modification-time rule for a link without a
-dependency file no longer applies to it.  When no source module is found to load instead, the out-of-date check
+dependency file only (every module of a build has one), and the modification-time rule for a link without a dependency
+file no longer applies to it.  When no source module is found to load instead, the out-of-date check
 (`refuse_stale_aot_module_without_source`) takes the directory of the replacement, the build's `qlib-qmod` directory,
 as the source directory, which only that rule uses.  A link whose target is gone (the other build was removed) is
 replaced as well: the decision uses the target that the link names, so the build's own module is loaded, not the
 source.  A link to another link whose final target is gone is used as found, as before (the source loads), unless the
-first link names the module of a build's `qlib-qmod` directory itself.  The dependency check of an AOT module finds a dependency that is not loaded yet as the loader would
-(`findModuleFileUnlocked()`), so it judges the build's own module, not the other build's file and dependency file.
-The search looks at a missing path with `lstat()` (a link whose target is gone) only when libqore is in a build tree.
+first link names the module of a build's `qlib-qmod` directory itself.  The dependency check of an AOT module finds a
+dependency that is not loaded yet as the loader would (`findModuleFileUnlocked()`), so it would judge the build's own
+module, not the other build's file and dependency file; this is defensive, as the dependencies of a module are
+normally loaded by the time it is checked.  The search looks at a missing path with `lstat()` (a link whose target is
+gone) only when libqore is in a build tree.
 
 A process therefore loads only the modules of its own build, whichever build linked them last, and the development
 workflow is unchanged: after a change to a module's source, rebuild the module (`<name>-qmod`) in the build that runs

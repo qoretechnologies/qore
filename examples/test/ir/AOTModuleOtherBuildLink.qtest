@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - which libqore a process loads (dladdr() of a copied libqore) and AOT modules linked between build trees
+# test-platform: macos - which libqore a process loads (dladdr() of a copy) and AOT modules linked between builds
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -362,9 +362,9 @@ printf(\"%s\\n\", realpath(get_module_hash().Mod.filename));";
 
     indirectDependencyTest() {
         TmpDir tmp = initTree();
-        # Top requires Mid, which requires Leaf, and re-exports Leaf: each build compiles them against its own modules;
-        # the check of the files that Top was compiled against looks for Leaf, which is not loaded then, in the module
-        # path, where it finds the link
+        # Top requires Mid, which requires Leaf, and re-exports Leaf: each build compiles them against its own modules,
+        # and each loads its own, with a re-exported indirect dependency; this does not reach the replacement in
+        # findModuleFileUnlocked(), as every module that the check of Top names is loaded by then
         write(src_qlib + "/Leaf.qm", moduleSource("Leaf", "source"));
         write(src_qlib + "/Mid.qm", moduleSource("Mid", "source", "%requires Leaf\n"));
         write(src_qlib + "/Top.qm", moduleSource("Top", "source", "%requires(reexport) Leaf\n%requires Mid\n"));
