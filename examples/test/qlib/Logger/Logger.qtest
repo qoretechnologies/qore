@@ -676,6 +676,12 @@ class Test inherits QUnit::Test {
         }
     }
 
+    #! returns True if a helper thread has failed
+    private bool hasHelperFailure() {
+        AutoLock al(m_helper_lock);
+        return exists m_helper_ex;
+    }
+
     #! fails the test case with the first exception of a helper thread, if any; called after the threads have ended
     private checkHelperThreads() {
         *hash<ExceptionInfo> ex;
@@ -736,7 +742,8 @@ class Test inherits QUnit::Test {
             push tids, background startPostThread(la);
             n--;
         }
-        while (m_counter.getCount() > 0 || !sos.hasData()) {
+        # ends when a helper has failed too, as a failed post can leave no data to wait for
+        while ((m_counter.getCount() > 0 || !sos.hasData()) && !hasHelperFailure()) {
             la.getQueue().process(100ms);
         }
         m_counter.waitForZero();
