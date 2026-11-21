@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# The hooks a host gives a module (issue #6845): set once by trusted code, read by the module's trusted code, and
+# neither set nor read by code that a sandbox governs
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%exec-class ModuleHostHooksTest
+
+class ModuleHostHooksTest inherits QUnit::Test {
+    constructor() : Test("ModuleHostHooksTest", "1.0") {
+        addTestCase("a host sets a module's hooks once, and the module reads them", \setOnce());
+        addTestCase("a module without hooks reads none", \noHooks());
+        addTestCase("code that a sandbox governs can neither set nor read hooks", \sandboxed());
+        set_return_value(main());
+    }
+
+    setOnce() {
+        code resolver = string sub (string conn) { return "tenant-of-" + conn; };
+        DataProvider::setModuleHostHooks("HostHooksModuleA", {"resolver": resolver, "limit": 4});
+        *hash<auto> hooks = DataProvider::getModuleHostHooks("HostHooksModuleA");
+        assertEq(4, hooks.limit);
+        assertEq("tenant-of-x", hooks.resolver("x"), "the hook is the host's code");
+        # set once: code that runs later cannot replace them
+        assertThrows("MODULE-HOST-HOOKS-ERROR", \DataProvider::setModuleHostHooks(), ("HostHooksModuleA", {}));
+        assertEq(4, DataProvider::getModuleHostHooks("HostHooksModuleA").limit, "the first hooks stay");
+        # each module has its own
+        DataProvider::setModuleHostHooks("HostHooksModuleB", {"limit": 2});
+        assertEq(2, DataProvider::getModuleHostHooks("HostHooksModuleB").limit);
+        assertEq(4, DataProvider::getModuleHostHooks("HostHooksModuleA").limit);
+    }
+
+    noHooks() {
+        assertNothing(DataProvider::getModuleHostHooks("HostHooksModuleWithout"));
+    }
+
+    sandboxed() {
+        DataProvider::setModuleHostHooks("HostHooksModuleC", {"secret": "host-only"});
+        Program pgm(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        pgm.parse("%requires DataProvider\n"
+            + "sub setHooks() { DataProvider::setModuleHostHooks(\"HostHooksModuleD\", {}); }\n"
+            + "auto sub getHooks() { return DataProvider::getModuleHostHooks(\"HostHooksModuleC\"); }\n",
+            "module-host-hooks-sandboxed");
+        pgm.setSandboxManager(new SandboxManager());
+        foreach string func in (("setHooks", "getHooks")) {
+            bool refused = False;
+            try {
+                pgm.callFunction(func);
+            } catch (hash<ExceptionInfo> ex) {
+                refused = True;
+                assertTrue(inlist(ex.err, ("DATA-PROVIDER-CALLBACK-ERROR", "INVALID-FUNCTION-ACCESS")),
+                    func + " is refused: " + ex.err);
+            }
+            assertTrue(refused, func + " is refused to sandboxed code");
+        }
+        # the refused set changed nothing
+        assertNothing(DataProvider::getModuleHostHooks("HostHooksModuleD"));
+    }
+}
