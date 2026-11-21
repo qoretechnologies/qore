@@ -13598,11 +13598,30 @@ struct QoreRtCrossModuleCallState {
         QoreParseOptions old_po;
     };
 
+    //! the Program of the caller, for the frame that the callee's fast entry pushes (qore#7101)
+    /** The fast entry pushes the frame of the call itself, once the callee's Program has been entered, so the frame
+        would record the callee's Program as its caller's: library code that reads the Programs of the frames
+        (Program::getCallerCapabilityMask(), for example) would not see the restrictions of a module that calls it
+    */
+    class CallSiteProgram {
+    public:
+        explicit CallSiteProgram(QoreProgram* caller_pgm) : prev(set_runtime_call_site_program(caller_pgm)) {
+        }
+
+        ~CallSiteProgram() {
+            restore_runtime_call_site_program(prev);
+        }
+
+    private:
+        QoreProgram* prev;
+    };
+
     std::optional<QoreSourceProgramHolder> exec_pgm_holder;
     std::optional<ProgramThreadCountContextHelper> ptcch;
     std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
     std::optional<QoreRtUserCallOverrideHelper> po_override;
     std::optional<RuntimeContextSwap> runtime_context;
+    std::optional<CallSiteProgram> call_site_pgm;
 };
 static_assert(sizeof(QoreRtCrossModuleCallState) <= QORE_RT_CROSS_MODULE_CALL_STATE_SIZE,
     "QORE_RT_CROSS_MODULE_CALL_STATE_SIZE is too small");
@@ -13694,6 +13713,10 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
         state->runtime_context.emplace(uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
+    }
+    // the frame that the callee pushes records the caller's Program, not the callee's that was entered (qore#7101)
+    if (state->ptcch) {
+        state->call_site_pgm.emplace(caller_pgm);
     }
     return 0;
 }

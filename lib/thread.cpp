@@ -722,6 +722,13 @@ public:
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
     const QoreProgram* callback_from_pgm = nullptr;
+    //! the Program of the caller of a call that entered the callee's Program before the callee pushes its frame
+    /** Set by a native cross-module call after it enters the callee's Program (qore_rt_enter_cross_module_call()),
+        whose callee pushes the frame of the call itself; taken (and cleared) by the next frame pushed, which records
+        it as the Program of the caller instead of the current one, as call_site_loc gives the frame its location
+        (qore#7101); see set_runtime_call_site_program()
+    */
+    QoreProgram* call_site_pgm = nullptr;
     //! the data of the thread's RuntimeConfig (rc_get_tls_impl()), once it has been looked up; see
     //! sync_runtime_config_program()
     mutable RuntimeConfig::Impl* rc = nullptr;
@@ -4202,10 +4209,11 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     ThreadData* td = thread_data.get();
 
     // written before the location is pushed: other threads can read it from then on
-    current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    current_pgm = frame_pgm ? frame_pgm : (td->call_site_pgm ? td->call_site_pgm : td->current_pgm);
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
+    td->call_site_pgm = nullptr;
 
     return publish_pushed_stack_location(td, stack_loc);
 }
@@ -4216,10 +4224,11 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     ThreadData* td = thread_data.get();
 
     // written before the location is pushed: other threads can read it from then on
-    current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    current_pgm = frame_pgm ? frame_pgm : (td->call_site_pgm ? td->call_site_pgm : td->current_pgm);
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
+    td->call_site_pgm = nullptr;
 
     old_runtime_loc = td->runtime_loc;
     td->runtime_loc = &loc_builtin;
@@ -4237,8 +4246,10 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
     assert(td == thread_data.get());
 
-    // written before the location is pushed: other threads can read it from then on
-    current_pgm = td->current_pgm;
+    // written before the location is pushed: other threads can read it from then on; the Program of the caller of a
+    // native cross-module call that entered the callee's Program before this frame (qore#7101)
+    current_pgm = td->call_site_pgm ? td->call_site_pgm : td->current_pgm;
+    td->call_site_pgm = nullptr;
     current_stmt = td->runtime_statement;
     runtime_loc = td->runtime_loc;
     if (call_loc) {
@@ -4311,6 +4322,17 @@ void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLoc
     prev = td->call_site_loc;
     td->call_site_loc = loc;
     return td;
+}
+
+QoreProgram* set_runtime_call_site_program(QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    QoreProgram* prev = td->call_site_pgm;
+    td->call_site_pgm = pgm;
+    return prev;
+}
+
+void restore_runtime_call_site_program(QoreProgram* prev) {
+    thread_data.get()->call_site_pgm = prev;
 }
 
 void clear_runtime_call_site() {
@@ -9556,6 +9578,7 @@ static void leave_background_thread_program(ThreadData* td) {
     sync_runtime_config_program(td);
     td->runtime_loc = &loc_builtin;
     td->call_site_loc = nullptr;
+    td->call_site_pgm = nullptr;
     td->runtime_statement = nullptr;
 }
 
