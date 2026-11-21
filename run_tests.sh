@@ -1359,8 +1359,9 @@ unset QORE_BIN
 # load the build's libqore by themselves: one from a build directory copied from another tree loads the other tree's,
 # and a qcc from another build or installation (QCC in the environment, or the one in the PATH that the tests take
 # when the build has none) compiles programs that load its own.  A run with a build refuses them (#7029), and a qore or
-# qcc that the loader cannot be asked about (a script, or a program that does not report the libqore it loads).
-if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ]; then
+# qcc that the loader cannot be asked about (a script, or a program that does not report the libqore it loads).  A
+# libqore that is not a Mach-O library is a stand-in that no program can load (the runner's checkers), and is not checked.
+if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ] && is_macho "$LIBQORE"; then
     EXPECTED_LIBQORE=`physical_file "$LIBQORE" || echo "$LIBQORE"`
     check_loaded_libqore "the qore of the run ($QORE)" "$QORE"
     tests_qcc_list=`tests_qccs`
