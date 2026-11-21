@@ -386,15 +386,21 @@ public:
             LexicalSemanticPolicy policy);
 
     //! merges the members of the object that the current class context can use into \a hash
-    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
-        member of this object; qore#7107)
-    */
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, bool lock = true) const;
+            LexicalSemanticPolicy policy) const;
+
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical, bool Lock>
+    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
 
     template <bool Lexical>
-    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, bool lock) const;
+    DLLLOCAL void mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -779,11 +785,11 @@ public:
     }
 
     //! merges the members of the object that the current class context can use into \a hash
-    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
-        member of this object; qore#7107)
-    */
-    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            bool lock = true) const;
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
+
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
 
     DLLLOCAL bool checkData(qore_classid_t key) {
         if (!privateData) {
