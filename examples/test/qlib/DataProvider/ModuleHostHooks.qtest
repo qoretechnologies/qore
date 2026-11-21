@@ -14,6 +14,8 @@ class ModuleHostHooksTest inherits QUnit::Test {
         addTestCase("a host sets a module's hooks once, and the module reads them", \setOnce());
         addTestCase("a module without hooks reads none", \noHooks());
         addTestCase("code that a sandbox governs can neither set nor read hooks", \sandboxed());
+        addTestCase("code denied process control can neither set nor read hooks, refused when it is parsed",
+            \restricted());
         set_return_value(main());
     }
 
@@ -44,18 +46,26 @@ class ModuleHostHooksTest inherits QUnit::Test {
             + "auto sub getHooks() { return DataProvider::getModuleHostHooks(\"HostHooksModuleC\"); }\n",
             "module-host-hooks-sandboxed");
         pgm.setSandboxManager(new SandboxManager());
+        # the methods' own check: a sandbox governs the caller
         foreach string func in (("setHooks", "getHooks")) {
-            bool refused = False;
-            try {
-                pgm.callFunction(func);
-            } catch (hash<ExceptionInfo> ex) {
-                refused = True;
-                assertTrue(inlist(ex.err, ("DATA-PROVIDER-CALLBACK-ERROR", "INVALID-FUNCTION-ACCESS")),
-                    func + " is refused: " + ex.err);
-            }
-            assertTrue(refused, func + " is refused to sandboxed code");
+            assertThrows("DATA-PROVIDER-CALLBACK-ERROR", "a module's host hooks", \pgm.callFunction(), (func,),
+                func + " is refused to sandboxed code");
         }
         # the refused set changed nothing
         assertNothing(DataProvider::getModuleHostHooks("HostHooksModuleD"));
+    }
+
+    #! A restricted Program that no sandbox governs is refused by the methods' functional domain alone
+    restricted() {
+        foreach hash<auto> i in ({
+                "setModuleHostHooks": "sub t() { DataProvider::setModuleHostHooks(\"HostHooksModuleE\", {}); }\n",
+                "getModuleHostHooks": "auto sub t() { return DataProvider::getModuleHostHooks(\"HostHooksModuleC\"); }\n",
+            }.pairIterator()) {
+            Program pgm(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_PROCESS_CONTROL, True);
+            assertThrows("PARSE-EXCEPTION", "parse options do not allow access to method 'DataProvider::" + i.key
+                + "\\(\\)'", \pgm.parse(), ("%requires DataProvider\n" + i.value, "module-host-hooks-restricted"),
+                i.key + " is refused when it is parsed");
+        }
+        assertNothing(DataProvider::getModuleHostHooks("HostHooksModuleE"), "the refused set changed nothing");
     }
 }
