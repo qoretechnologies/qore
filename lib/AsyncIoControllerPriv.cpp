@@ -303,7 +303,9 @@ private:
 }
 
 //! true while the current thread creates the context of an I/O thread, whose command queue keeps a placeholder
-//! command (MpscQueue's sentinel node) for as long as it exists: it is not work of the module cleanup (qore#7027)
+//! command (MpscQueue's sentinel node) for as long as it exists: it is not work of the module cleanup, which would
+//! wait for it forever when it creates the controller itself (a destructor that submits the first operation of the
+//! process at its end) or sets the number of I/O threads
 static thread_local bool io_command_placeholder = false;
 
 namespace {
@@ -325,7 +327,7 @@ private:
 
 bool AsyncIoControllerPriv::commandModuleCleanupDelegation() {
     // also a command that an I/O thread creates while it processes a command of the cleanup (qore#6928); not the
-    // placeholder of a command queue, which an I/O thread started by the cleanup creates (qore#7027)
+    // placeholder of a command queue (see io_command_placeholder)
     return !io_command_placeholder && (io_command_module_cleanup_delegate || qore_module_cleanup_delegation());
 }
 
