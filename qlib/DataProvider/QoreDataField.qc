@@ -178,6 +178,7 @@ public class QoreDataField inherits AbstractDataField {
         @param new_desc the new string to add to the description
     */
     appendDescription(string separator, string new_desc) {
+        checkChange();
         if (desc) {
             desc += separator;
         }

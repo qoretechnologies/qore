@@ -209,6 +209,8 @@ type.setRequiredGroups((("input_path", "data"), ("output_path", "return_data")))
                 return;
             }
         }
+        # the type is changed only here, so a call that changes nothing is not refused
+        checkChange("fields");
         # convert to *hash<auto>
         type = type.getOrNothingType();
     }

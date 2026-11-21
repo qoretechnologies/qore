@@ -5309,7 +5309,10 @@ public class OpenApi3TupleDataType inherits ListDataType {
     }
     #! Marks an independent snapshot for response validation
     /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
-    setResponseDirection() { for_request = False; }
+    setResponseDirection() {
+        checkChange("direction");
+        for_request = False;
+    }
     #! Validates array positions without coercing an image into a timestamp or vice versa
     /** @param value positional array
         @return validated array
@@ -5408,7 +5411,10 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
     #! Marks an independent type snapshot for response validation
     /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
-    setResponseDirection() { for_request = False; }
+    setResponseDirection() {
+        checkChange("direction");
+        for_request = False;
+    }
 
     #! Returns the type's short description
     string getShortDescription() {
