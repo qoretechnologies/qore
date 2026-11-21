@@ -24189,6 +24189,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     || it->second.context_independent_fast_entry)
                                 && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                                 && (it->second.approach_b_eligible || (take_over && it->second.guarded_method_entry))
+                                && (!call_gives_args || take_over || !it->second.local_method_takes_args)
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastMethodCallEligible(
                                     static_call->getVariant(),
@@ -28498,6 +28499,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || it->second.context_independent_fast_entry)
                         && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                         && (it->second.approach_b_eligible || (aot_take_over && it->second.guarded_method_entry))
+                        && (!call_gives_args || aot_take_over || !it->second.local_method_takes_args)
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
@@ -29036,6 +29038,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && it->second.implicit_self_method
                         && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
                             || (object_take_over && it->second.guarded_method_entry))
+                        && (!call_gives_args || object_take_over || !it->second.local_method_takes_args)
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
@@ -29976,6 +29979,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && it->second.implicit_self_method
                         && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
                             || (object_take_over && it->second.guarded_method_entry))
+                        && (!call_gives_args || object_take_over || !it->second.local_method_takes_args)
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))

@@ -1,0 +1,21 @@
+%modern
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+module OwnedMethodModule {
+    version = "1.0";
+    desc = "Test ownership of temporary arguments inside a compiled module";
+    author = "Qore";
+    license = "MIT";
+}
+public namespace OwnedMethodModule {
+    public class Box {
+        private { int offset = 1; }
+        int length(list<auto> a) { int n = a.size(); a = (); return offset + n; }
+    }
+    public int sub value(int n) {
+        Box b();
+        try { return b.length((n, n + 1)); }
+        catch (hash<ExceptionInfo> e) { rethrow; }
+    }
+}

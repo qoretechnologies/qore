@@ -48,6 +48,7 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
         addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        addTestCase("a compiled module calls its own method with an owning argument", \testModuleCall());
         addTestCase("a later JIT batch calls the owning entry", \testLaterJitBatch());
         addTestCase("a stack overflow in an entry that takes its arguments over", \testStackOverflow());
         addTestCase("the stack check of the large frame of an entry that takes its arguments over",
@@ -184,6 +185,23 @@ class FastEntryTakeOverTest inherits QUnit::Test {
             assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
             assertEq(expected_out, r.stdout, "-O" + opt);
         }
+    }
+
+    testModuleCall() {
+        string compiler = qcc();
+        TmpDir tmp("qore-owned-method-module-");
+        string image = tmp.path + "/OwnedMethodModule.qmod";
+        string dump = tmp.path + "/module.ll";
+        int rc;
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -m -o %s %s/OwnedMethodModule.qm "
+            "2>%s", env, compiler, image, dir, dump), \rc);
+        assertEq(0, rc, out);
+        assertTrue(ReadOnlyFile::readTextFile(dump) =~ /call [^@\n]*@"?[^ ("\n]*Box__length_[^ ("]*\.own\.1"?\(/,
+            "the call in the module hands its temporary to the method");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR=%s %s -b %s/module-owner.q", env, tmp.path, qore_bin, dir));
+        assertEq(0, r.rc, r.out);
+        assertEq("3\n", r.stdout, "the compiled module runs the method with its receiver");
     }
 
     testOwnedEntry() {

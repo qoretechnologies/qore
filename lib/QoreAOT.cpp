@@ -17456,6 +17456,12 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                     info.body_contract_qore_path = aotRelocMethodDisplayKey(qc, meth->getName(), variant);
                     info.approach_b_eligible = true;
                     info.implicit_self_method = implicit_self;
+                    // A separately compiled module need not publish its method IR to the runtime variant.
+                    // Use the body that supplied this local entry's ABI to decide whether it takes arguments.
+                    if (!uvb->getCachedIR()) {
+                        info.local_method_takes_args = qore_ir_collect_take_over_params(*ir_func,
+                            sig->lv.data(), num_params, nullptr);
+                    }
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
                     info.param_kinds = std::move(param_kinds);
