@@ -275,10 +275,15 @@ struct qore_number_private : public qore_number_private_intern {
                 exp = -exp;
             }
         }
-        // the significant digits
-        int64_t digits = last - first + 1;
-        // the decimal exponent of the first significant digit
-        int64_t magnitude = int_digits - 1 - first + exp;
+        // the significant digits, and the decimal exponent of the first significant digit
+        return getDecimalPrec(last - first + 1, int_digits - 1 - first + exp);
+    }
+
+    //! returns the precision of a nonzero decimal value (see getDecimalStringPrec())
+    /** @param digits the significant digits of the value: those of its shortest significand
+        @param magnitude the decimal exponent of the first significant digit of the value
+    */
+    DLLLOCAL static mpfr_prec_t getDecimalPrec(int64_t digits, int64_t magnitude) {
         if (magnitude < 0) {
             magnitude = -magnitude;
         }
@@ -658,9 +663,15 @@ struct qore_number_private : public qore_number_private_intern {
 
     // for round functions: round(), ceil(), floor()
     //! rounds to a multiple of 10^-prec, exactly; see roundDecimal()
+    /** With digits after the decimal point (@a prec > 0), the result is a decimal value, and it has the precision of
+        the number parsed from its decimal string (see getDecimalRoundPrec()), so that it is the same number as the
+        number literal of the value (issue #7014); otherwise the result has the precision of the number.
+    */
     DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int64 prec = 0, ExceptionSink* xsink = NULL)
             const {
-        std::unique_ptr<qore_number_private> p0(new qore_number_private(mpfr_get_prec(num)));
+        std::unique_ptr<qore_number_private> p0(new qore_number_private(prec > 0 && mpfr_regular_p(num)
+            ? getDecimalRoundPrec(num, func, prec)
+            : mpfr_get_prec(num)));
 
         // zero, infinity and NaN are their own result at any precision
         if (prec == 0 || !mpfr_regular_p(num)) {
@@ -685,6 +696,17 @@ struct qore_number_private : public qore_number_private_intern {
         @param prec the number of decimal digits after the decimal point; a negative number rounds to a power of 10
     */
     DLLLOCAL static void roundDecimal(mpfr_t rv, const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec);
+
+    //! returns the precision of the number parsed from the decimal string of the multiple of 10^-prec that
+    //! roundDecimal() gives for @a x (see getDecimalStringPrec())
+    /** The result of roundDecimal() correctly rounded to this precision is the number parsed from its decimal string
+        (issue #7014)
+
+        @param x a regular (finite, nonzero) value
+        @param func mpfr_round(), mpfr_ceil() or mpfr_floor()
+        @param prec the number of decimal digits after the decimal point; must be positive
+    */
+    DLLLOCAL static mpfr_prec_t getDecimalRoundPrec(const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec);
 
     DLLLOCAL mpfr_prec_t getPrec() const {
         return mpfr_get_prec(num);

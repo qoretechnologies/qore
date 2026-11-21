@@ -2518,10 +2518,10 @@
       a Python module that module-python imported) skipped its destructor with a \c PROGRAM-ERROR exception (see
       @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
       6791</a>)
-    - a @ref number "number" parsed from a decimal string of 22 to 31 digits, including a value read from a
-      \c buffer<decimal128>, has enough precision to print as the value, where it could print with binary
-      conversion noise; the precision depends only on the value, so numbers of the same value parsed from different
-      strings compare equal (see @ref number_string_precision; issues #6824, #6976)
+    - a @ref number "number" parsed from a decimal string, including a value read from a \c buffer<decimal128>, prints
+      as the value where a value of 22 to 31 digits could print with binary conversion noise, and its precision and
+      that of a result of round(), ceil() or floor() with digits after the decimal point depend only on the value, so
+      that numbers of the same value compare equal (see @ref number_string_precision; issues #6824, #6976, #7014)
     - code that is not trusted (sandboxed or restricted) no longer adds a process-wide encoding for every new name that
       it uses as an encoding name: a name that is not known resolves to a known encoding or a label that data may
       select, registers only a plain name that iconv converts, and otherwise gives the encoding
@@ -2718,8 +2718,8 @@
       with more after it (<tt>%%requires-x</tt>) is an unknown directive, not a directive with an argument (see
       @ref unknown_parse_directives "unknown parse directives"; issue #56)
     - @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" and @ref Qore::floor() "floor()" of a number with a
-      precision give the exact multiple of the power of 10, correctly rounded to the number's precision, and infinity
-      for a result beyond the exponent range of a number; they used a floating-point power of 10, which is inexact
+      precision give the exact multiple of the power of 10, correctly rounded, and infinity for a result beyond the
+      exponent range of a number; they used a floating-point power of 10, which is inexact
       above 10^22 and was clamped to about 1e308 (issue #6278)
     - character set names in HTTP headers and bodies and in MIME messages select only an encoding that %Qore knows or
       a standard character set, so that untrusted data can no longer register encodings without limit; any other
