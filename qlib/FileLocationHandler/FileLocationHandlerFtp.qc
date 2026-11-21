@@ -198,7 +198,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
     }
 
     #! The network for the code that calls it (qore#6959)
-    private int getCallerDomainsImpl(string scheme) {
+    private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
         return DOM_NETWORK;
     }
 

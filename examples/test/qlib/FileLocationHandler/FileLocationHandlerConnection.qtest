@@ -167,18 +167,52 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
     }
 
     #! a caller restricted from the file system uses a conn location that the connection policy allows, as the
-    #! connection decides, but not the file location that it resolves to (qore#6959)
+    #! connection decides, but not the file location that it resolves to, nor options that it adds itself (qore#6959)
     restrictedCallerTest() {
         makeFile("restricted.txt");
+        string f = tmp.path + DirSep + "restricted.txt";
         Program rp(PO_NEW_STYLE | PO_NO_FILESYSTEM);
-        rp.parse("%requires FileLocationHandler\nstring sub t(string loc) { try { "
-            "return FileLocationHandler::getTextFileFromLocation(loc); } catch (hash<ExceptionInfo> ex) { "
-            "return ex.err; } }", "restricted");
-        assertEq(FileContents, rp.callFunction("t", p("restricted.txt")));
-        assertEq("PERMISSION-DENIED", rp.callFunction("t", "file://" + tmp.path + DirSep + "restricted.txt"));
+        rp.parse("%requires FileLocationHandler\nstring sub t(code c) { try { auto v = c(); "
+            "return v.typeCode() == NT_STRING ? v : (v.typeCode() == NT_BINARY ? v.toString() : \"ok\"); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "string sub read(string loc) { return t(auto sub () { return FileLocationHandler::getTextFileFromLocation(loc); }); }\n"
+            "string sub write(string loc) { return t(auto sub () { FileLocationHandler::writeFileToLocation(loc, \"w\"); }); }\n"
+            "string sub stream(string loc) { return t(auto sub () { "
+            "return FileLocationHandler::getStreamReaderFromLocation(loc).readString(); }); }\n"
+            "string sub resource(string loc) { return t(auto sub () { "
+            "return FileLocationHandler::getResourceFromLocation(loc).data; }); }\n"
+            "string sub output(string loc) { return t(auto sub () { OutputStreamWrapper o = "
+            "FileLocationHandler::getOutputStreamForLocation(loc); o.write(binary(\"o\")); o.close(); "
+            "o.waitForIo(); }); }", "restricted");
+        # every read and write entry, through the exemption
+        assertEq(FileContents, rp.callFunction("read", p("restricted.txt")));
+        assertEq(FileContents, rp.callFunction("stream", p("restricted.txt")));
+        # (the binary stream of a file location is a FileInputStream, whose methods the caller's own restriction refuses)
+        assertEq(FileContents, rp.callFunction("resource", p("restricted.txt")));
+        assertEq("ok", rp.callFunction("write", p("restricted-w.txt")));
+        assertEq("ok", rp.callFunction("output", p("restricted-o.txt")));
+        # the file location that the connection resolves to is refused when the caller gives it itself
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", "file://" + f));
+        assertEq("PERMISSION-DENIED", rp.callFunction("write", "file://" + f + "-w"));
+        assertEq("PERMISSION-DENIED", rp.callFunction("stream", f));
         # the exemption covers only the call that the connection makes: the next direct call is refused again
-        assertEq(FileContents, rp.callFunction("t", p("restricted.txt")));
-        assertEq("PERMISSION-DENIED", rp.callFunction("t", tmp.path + DirSep + "restricted.txt"));
+        assertEq(FileContents, rp.callFunction("read", p("restricted.txt")));
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", f));
+
+        # an https location of a connection is used as the connection decides, but a local file that the caller
+        # names in its own options is refused
+        string web = rp.callFunction("read", "conn://web/x");
+        assertNeq("PERMISSION-DENIED", web, "the connection's https location");
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", "conn://web/x{ssl_cert_path=" + f + "}"),
+            "a certificate file that the caller adds");
+
+        # the URL that an application's file API returns is read with the caller's own restrictions
+        TestStore::read_url = "file://" + f;
+        on_exit remove TestStore::read_url;
+        setFileApi({"read_mode": DPFR_URL, "read_data_field": "url"});
+        assertEq("PERMISSION-DENIED", rp.callFunction("read", "conn://testapp/anything"), "a file URL of the app");
+        TestStore::read_url = "data://via-data";
+        assertEq("via-data", rp.callFunction("read", "conn://testapp/anything"), "a data URL of the app");
     }
 
     readTest() {

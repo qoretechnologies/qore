@@ -42,6 +42,9 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         */
         *object bound_client;
 
+        #! True if code restricted from the network bound the handler to its client (qore#6959)
+        bool bound_by_restricted;
+
         #! The connection manager of a bound handler
         *object bound_mgr;
 
@@ -70,6 +73,8 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         neither changes nor closes the client
     */
     constructor(object client, *string url, *hash<auto> opts) {
+        # the handler is not a capability of the host if code restricted from the network bound it (qore#6959)
+        bound_by_restricted = SandboxManager::isCallerRestricted(DOM_NETWORK);
         bound_client = client;
         if (client instanceof HTTPClient) {
             HTTPClient hc = cast<HTTPClient>(client);
@@ -220,8 +225,11 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     }
 
     #! The network for the code that calls it, unless the handler is bound to a client that it was given (qore#6959)
-    private int getCallerDomainsImpl(string scheme) {
-        return isBoundImpl() ? 0 : DOM_NETWORK;
+    private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
+        # a client that restricted code bound is not a capability of the host; the certificate and key files are
+        # local files that the handler reads for the caller (qore#6959)
+        return ((isBoundImpl() && !bound_by_restricted) ? 0 : DOM_NETWORK)
+            | ((opts.ssl_cert_path.val() || opts.ssl_key_path.val()) ? DOM_FILESYSTEM : 0);
     }
 
     #! Retrieves a text file from the given location

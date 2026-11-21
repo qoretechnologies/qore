@@ -237,6 +237,16 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     If no filter is set in code, \c QORE_FILE_LOCATION_CONNECTIONS is used instead; when set, it lists the allowed
     connection names separated by @ref Qore::PathSep "PathSep" characters.  If neither is set, all connections are
     allowed.
+    @section filelocationhandler_conn_callers Calling Code Restricted From the File System or the Network
+
+    A \c conn location is used as the connection's policy decides (the filter above, and the connection's
+    configuration), also by calling code restricted from the file system or the network (see
+    @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "getCallerDomains()"): the handler that
+    the connection gives the location to does not refuse the domains that it uses with the options of the connection.
+    The options that the caller adds in braces are checked against the caller: a caller restricted from the file
+    system cannot add \c ssl_cert_path to a connection's \c https location, for example.  The URL that an
+    application's file API returns for a read (the second mechanism above) is read with the caller's own
+    restrictions, as it can name any location, \c file locations included.
 */
 /** @page filelocationhandler_nonblocking Non-Blocking Reads
 
@@ -384,7 +394,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       \c file locations (and locations without a scheme) are in the \c FILESYSTEM domain, and \c http, \c https,
       \c ftp, \c ftps, \c sftp, \c rest and \c rests locations in the \c NETWORK domain, unless the handler is bound
       to a client; \c data locations, \c conn locations (whose connection's policy decides) and the schemes that host
-      code registers apply their own policy; see
+      code registers apply their own policy; options that name local files (\c ssl_cert_path, \c ssl_key_path,
+      \c ssh2_private_key, \c ssh2_public_key) are in the \c FILESYSTEM domain, and a handler that restricted code
+      bound to a client keeps the \c NETWORK domain; see
       @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "AbstractFileLocationHandler::getCallerDomains()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
     - text reads (\c getTextFileFromLocation() and \c getStreamReaderFromLocation()) check the text in its encoding

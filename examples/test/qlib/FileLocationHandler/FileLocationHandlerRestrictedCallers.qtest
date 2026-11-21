@@ -26,7 +26,7 @@
 */
 class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
     private {
-        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT};
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 
         #! the uses refused to a caller restricted from the file system (given the directory "d" with the file "f")
         const FilesystemUses = {
@@ -58,6 +58,32 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
             "write": "FileLocationHandler::writeFileToLocation(sprintf(\"http://localhost:%d/x\", port), \"x\")",
             "getHandler": "FileLocationHandler::AbstractFileLocationHandler h = FileLocationHandler::getHandler(\"http\"); "
                 "h.getTextFile(\"http\", sprintf(\"localhost:%d/\", port))",
+            "ftps": "FileLocationHandler::getTextFileFromLocation(sprintf(\"ftps://localhost:%d/x\", port))",
+            "rests": "FileLocationHandler::getTextFileFromLocation(sprintf(\"rests://localhost:%d/x\", port))",
+        };
+
+        #! the handler of every built-in scheme that is in a domain, from getHandler(): the restriction and the
+        #! location (given the directory "d" and the closed port "port")
+        const HandlerUses = {
+            "file": (PO_NO_FILESYSTEM, "d + \"/f\""),
+            "http": (PO_NO_NETWORK, "sprintf(\"localhost:%d/\", port)"),
+            "https": (PO_NO_NETWORK, "sprintf(\"localhost:%d/\", port)"),
+            "ftp": (PO_NO_NETWORK, "sprintf(\"localhost:%d/x\", port)"),
+            "ftps": (PO_NO_NETWORK, "sprintf(\"localhost:%d/x\", port)"),
+            "sftp": (PO_NO_NETWORK, "sprintf(\"localhost:%d/x\", port)"),
+            "rest": (PO_NO_NETWORK, "sprintf(\"localhost:%d/x\", port)"),
+            "rests": (PO_NO_NETWORK, "sprintf(\"localhost:%d/x\", port)"),
+        };
+
+        #! the options that name local files, which a caller restricted from the file system cannot give even where it
+        #! may use the network (given the directory "d" with the file "f" and the closed port "port")
+        const PathOptionUses = {
+            "https ssl_cert_path": "FileLocationHandler::getTextFileFromLocation(sprintf(\"https://localhost:%d/x"
+                "{ssl_cert_path=%s}\", port, d + \"/f\"))",
+            "https ssl_key_path": "FileLocationHandler::getTextFileFromLocation(sprintf(\"https://localhost:%d/x"
+                "{ssl_key_path=%s}\", port, d + \"/f\"))",
+            "sftp ssh2_private_key": "FileLocationHandler::getTextFileFromLocation(sprintf(\"sftp://localhost:%d/x"
+                "{ssh2_private_key=%s}\", port, d + \"/f\"))",
         };
     }
 
@@ -67,6 +93,9 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
             addTestCase("file system, " + m, sub () { testDomain(m, PO_NO_FILESYSTEM, FilesystemUses); });
             addTestCase("network, " + m, sub () { testDomain(m, PO_NO_NETWORK, NetworkUses); });
             addTestCase("other domains and schemes, " + m, sub () { testAllowed(m); });
+            addTestCase("the handlers of getHandler(), " + m, sub () { testHandlers(m); });
+            addTestCase("options that name local files, " + m, sub () { testPathOptions(m); });
+            addTestCase("handlers bound to a client, " + m, sub () { testBound(m); });
         }
         addTestCase("registered scheme", \testRegistered());
         set_return_value(main());
@@ -102,6 +131,60 @@ class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
             "FileLocationHandler::getTextFileFromLocation(sprintf(\"http://localhost:%d/\", port))", d, port);
         assertNeq("PERMISSION-DENIED", rv, "http, " + mode);
         assertNeq("called", rv, "http, " + mode);
+    }
+
+    #! the handler of every built-in scheme in a domain refuses a caller restricted from it
+    private testHandlers(string mode) {
+        TmpDir tmp("qore-flh-handlers-");
+        string d = tmp.path;
+        writeFile(d + "/f");
+        int port = get_free_port();
+        foreach hash<auto> i in (HandlerUses.pairIterator()) {
+            string code = sprintf("FileLocationHandler::AbstractFileLocationHandler h = "
+                "FileLocationHandler::getHandler(%y); h.getBinaryFile(%y, %s)", i.key, i.key, i.value[1]);
+            assertEq("PERMISSION-DENIED", run(mode, i.value[0], code, d, port), sprintf("%s, %s", i.key, mode));
+        }
+    }
+
+    #! a caller restricted from the file system that may use the network cannot give options that name local files
+    private testPathOptions(string mode) {
+        TmpDir tmp("qore-flh-path-options-");
+        string d = tmp.path;
+        writeFile(d + "/f");
+        int port = get_free_port();
+        foreach hash<auto> i in (PathOptionUses.pairIterator()) {
+            assertEq("PERMISSION-DENIED", run(mode, PO_NO_FILESYSTEM, i.value, d, port), sprintf("%s, %s", i.key, mode));
+        }
+        # without them, the request is made, and fails as nothing listens on the port
+        string rv = run(mode, PO_NO_FILESYSTEM, "FileLocationHandler::getTextFileFromLocation(sprintf("
+            "\"https://localhost:%d/x\", port))", d, port);
+        assertNeq("PERMISSION-DENIED", rv, "https without path options, " + mode);
+        assertNeq("called", rv, "https without path options, " + mode);
+    }
+
+    #! a handler bound to a client is the capability of the code that bound it: a handler that code restricted from
+    #! the network bound to a client that it made is refused, one that trusted code bound is not
+    private testBound(string mode) {
+        int port = get_free_port();
+        string url = sprintf("http://localhost:%d", port);
+        string code = sprintf("object m = create_object(\"HttpClientIo::HttpClientConnectionManager\"); "
+            "FileLocationHandler::AbstractFileLocationHandler h = FileLocationHandler::getHttpHandlerForClient(m, %y); "
+            "h.getTextFile(\"http\", \"/x\")", url);
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires FileLocationHandler\n%requires HttpClientIo\nstring sub t() { try { " + code
+            + "; return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "string sub host(FileLocationHandler::AbstractFileLocationHandler h) { try { h.getTextFile(\"http\", "
+            "\"/x\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }", "bound");
+        assertEq("PERMISSION-DENIED", p.callFunction("t"), "bound by restricted code, " + mode);
+        # a handler that trusted code bound is the host's capability: the request is made and fails as nothing
+        # listens on the port
+        load_module("HttpClientIo");
+        object m = create_object("HttpClientIo::HttpClientConnectionManager");
+        AbstractFileLocationHandler h = FileLocationHandler::getHttpHandlerForClient(m, url);
+        string rv = p.callFunction("host", h);
+        assertNeq("PERMISSION-DENIED", rv, "bound by trusted code, " + mode);
+        assertNeq("called", rv, "bound by trusted code, " + mode);
     }
 
     #! a scheme that unrestricted host code registers follows its handler's own policy
