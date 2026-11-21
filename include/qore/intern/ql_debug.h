@@ -402,7 +402,10 @@ DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
 
 //! The query options of the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
 struct QoreDbgCaresQueryOptions {
-    //! the timeout of the first try of a query
+    //! the timeout of the first try of a query; c-ares (1.32 and later) caps it with its maximum timeout, which the
+    //! channels are given as the greater of this timeout and c-ares's default maximum (5 s), and it takes a timeout
+    //! from the latency of a server once it has a few answers from it (five times the average latency, at least
+    //! 250 ms; qore#7119)
     int timeout_ms = 1000;
     //! the tries of a query
     int tries = 3;
@@ -419,6 +422,27 @@ struct QoreDbgCaresQueryOptions {
 //! Sets the query options of the c-ares channels made from now on that ask the servers of
 //! qore_dbg_cares_set_servers(); returns the previous options
 DLLLOCAL QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts);
+
+//! A synchronous transport for the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
+/** While set, each UDP socket that such a channel makes is one end of a Unix-domain datagram socketpair, and the other
+    end is given to @ref peer, which owns it from then on: a query is at the other end when c-ares's send returns, and
+    an answer written there can be read by c-ares at once, on every platform (UDP over the loopback interface is
+    delivered by an input thread on macOS, and a delivery delayed beyond the timeout of a query made a lookup of a
+    test time out; qore#7119).  c-ares sees the address that it connected the socket to as the peer of the socket.
+*/
+struct QoreDbgCaresLocalTransport {
+    //! called with the other end of each socketpair; it must not throw
+    void (*peer)(int fd, void* arg) = nullptr;
+    //! the argument of @ref peer
+    void* arg = nullptr;
+};
+
+//! Sets the transport of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers()
+/** @param transport the transport; one with no @ref QoreDbgCaresLocalTransport::peer "peer" for UDP sockets
+
+    @return the previous setting
+*/
+DLLLOCAL QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport);
 
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file
