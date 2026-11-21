@@ -24,6 +24,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class MultiByteIconvParityTest
 
@@ -53,7 +54,8 @@ class MultiByteIconvParityTest inherits QUnit::Test {
     }
 
     parity() {
-        string qore = QORE_ARGV[0];
+        # the native test is built next to the interpreter that the runner gives
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_MULTIBYTE_ICONV_PARITY_TEST ?? dirname(qore) + "/qore-multibyte-iconv-parity-test";
         if (!is_file(native)) {
             testSkip("the native multi-byte iconv parity test executable is not available");
