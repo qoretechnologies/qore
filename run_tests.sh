@@ -1196,8 +1196,14 @@ BUILD_CHANGES_EOF
     fi
 }
 
-# Checks the qcc and the .qmod files that the tests use (see above); a qlib/*.qmod link into another build of this tree
-# is not checked, as the module loader does not take its module (qore#7030)
+# Checks the qcc and the .qmod files that the tests use (see above).  The links of qlib are checked as the module loader
+# uses them (qore#7030, lib/ModuleManager.cpp qore_own_build_qmod()): when the directory of the run's libqore has a
+# CMakeCache.txt (a regular file) whose CMAKE_HOME_DIRECTORY's qlib is this tree's qlib (both physically), the loader
+# does not load a link of this tree's qlib to the module at the same path in a qlib-qmod directory (qlib/<name>.qmod to
+# <dir>/qlib-qmod/<name>.qmod, qlib/<name>/<name>.qmod to <dir>/qlib-qmod/<name>/<name>.qmod), whichever build that is:
+# it loads libqore's own build's module instead, or none, so such a link is not checked.  Otherwise (the libqore of
+# another tree's build, a libqore without CMakeCache.txt next to it, such as an installed one or one in a directory of
+# each configuration, build/Release/) the loader follows every link, and every link is checked.
 check_build_parts() {
     if [ -z "$BUILD_HASH" ]; then
         return
@@ -1222,6 +1228,17 @@ check_build_parts() {
     if [ -n "$BUILD_QMOD_DIR" ]; then
         check_companion_build "the .qmod files in $BUILD_QMOD_DIR" "`dirname "$BUILD_QMOD_DIR"`"
     fi
+    # whether the loader replaces the links of this tree's qlib (see above)
+    loader_replaces_links=0
+    libqore_build=`physical_dir "$(dirname "$LIBQORE")"`
+    if [ -n "$libqore_build" ] && [ -f "$libqore_build/CMakeCache.txt" ]; then
+        libqore_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' \
+            "$libqore_build/CMakeCache.txt" 2>/dev/null | head -1`
+        if [ -n "$libqore_source" ] \
+                && [ "`physical_dir "$libqore_source/qlib"`" = "`physical_dir "$QORE_SOURCE_DIR/qlib"`" ]; then
+            loader_replaces_links=1
+        fi
+    fi
     # the builds that the tree's links to .qmod files point into, each once: qlib/<name>.qmod links to
     # <build>/qlib-qmod/<name>.qmod, and qlib/<name>/<name>.qmod (a separated module) to
     # <build>/qlib-qmod/<name>/<name>.qmod; ls prints each link and its target, after "->" (BusyBox's readlink takes one
@@ -1230,18 +1247,30 @@ check_build_parts() {
         | while IFS= read -r qmod_line; do
             qmod_link=${qmod_line% -> *}
             qmod_target=${qmod_line##* -> }
+            qmod_name=${qmod_link##*/}
             case "$qmod_link" in
                 */qlib/*/*.qmod)
                     # relative to the module's directory in qlib; the build is three levels up
-                    qmod_base=${qmod_link##*/}
-                    qmod_base=$QORE_SOURCE_DIR/qlib/${qmod_base%.qmod}
+                    qmod_base=$QORE_SOURCE_DIR/qlib/${qmod_name%.qmod}
+                    qmod_rel=${qmod_name%.qmod}/$qmod_name
                     qmod_build=${qmod_target%/*/*/*}
                     ;;
                 *)
                     qmod_base=$QORE_SOURCE_DIR/qlib
+                    qmod_rel=$qmod_name
                     qmod_build=${qmod_target%/*/*}
                     ;;
             esac
+            # a link to the module at the same path in a qlib-qmod directory, which the loader does not load
+            if [ $loader_replaces_links -eq 1 ]; then
+                case "$qmod_target" in
+                    /*) qmod_full=$qmod_target ;;
+                    *) qmod_full=$qmod_base/$qmod_target ;;
+                esac
+                case "$qmod_full" in
+                    */qlib-qmod/"$qmod_rel") continue ;;
+                esac
+            fi
             case "$qmod_build" in
                 /*) echo "$qmod_build" ;;
                 *) echo "$qmod_base/$qmod_build" ;;
@@ -1249,19 +1278,6 @@ check_build_parts() {
         done | sort -u`
     if [ -n "$qmod_link_dirs" ]; then
         while IFS= read -r qmod_build; do
-            # A link into another build of this tree (its CMakeCache.txt names the tree; a build-debug of an older
-            # commit, for example) is not loaded: the module loader takes libqore's own build's module instead, or
-            # ignores the link (qore#7030).  A link into the run's own build, or into a build of another tree, is
-            # checked.
-            qmod_build_dir=`physical_dir "$qmod_build"`
-            if [ -n "$qmod_build_dir" ] && [ "$qmod_build_dir" != "$QORE_BUILD_DIR" ]; then
-                qmod_build_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' \
-                    "$qmod_build_dir/CMakeCache.txt" 2>/dev/null`
-                if [ -n "$qmod_build_source" ] \
-                        && [ "`physical_dir "$qmod_build_source"`" = "$QORE_SOURCE_DIR" ]; then
-                    continue
-                fi
-            fi
             check_companion_build "the qlib .qmod links into $qmod_build" "$qmod_build"
         done <<QMOD_LINKS_EOF
 $qmod_link_dirs
