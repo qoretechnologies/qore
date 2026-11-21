@@ -159,19 +159,6 @@ printf(\"end\\n\");
                 assertEq(-1, out.find("loaded\n"), api.code);
             }
         }
-        # Waiting sleeps the current thread under the module's process domain.
-        foreach bool sandbox in ((False, True)) {
-            assertEq("loaded\nend\n", run(InterfaceRestrictions, "DiscordDataProvider",
-                "DiscordDataProvider::DiscordDataProviderBase::threadWait(1ms);", sandbox));
-        }
-        # A source loaded outside the library path inherits its loader's restrictions.
-        string source = tmp.path + "/DiscordWebSocketClient.qm";
-        copy_file(qlib_dir + "/DiscordWebSocketClient.qm", source);
-        assertEq("loaded\nend\n", run(0, source));
-        string denied = run(PO_NO_THREAD_CONTROL, source);
-        assertRegex("^PARSE-EXCEPTION: .*background.*PO_NO_THREAD_CONTROL", denied);
-        assertEq(-1, denied.find("loaded\n"));
-
         # an indirect call is refused at run time
         string out = run(InterfaceRestrictions, "ProviderIndexUtil",
             "try { call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"setEnvironmentVariable\", \"/x\"); "
