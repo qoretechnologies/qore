@@ -809,6 +809,7 @@ static QoreHashNode* qore_dbi_check_tcp_target(const char* driver, const QoreStr
         bool found = false;
         ConstListIterator i(*addresses);
         while (i.next()) {
+            // note: safe; the list holds the string nodes made below
             if (addr == i.getValue().get<const QoreStringNode>()->c_str()) {
                 found = true;
                 break;
@@ -893,10 +894,12 @@ int qore_ds_private::checkConnectTargets(ExceptionSink* xsink) {
         QoreValue host = t ? t->getKeyValue("host") : QoreValue();
         QoreValue port = t ? t->getKeyValue("port") : QoreValue();
         QoreHashNode* c;
+        // a driver can report a value that it was given, which can be an inline short string with no node (issue
+        // #7038)
         if (socket.getType() == NT_STRING && host.isNothing()) {
-            c = qore_dbi_check_socket_target(drv->name, socket.get<const QoreStringNode>(), managers, xsink);
+            c = qore_dbi_check_socket_target(drv->name, *QoreStringNodeValueHelper(socket), managers, xsink);
         } else if (host.getType() == NT_STRING && port.getType() == NT_INT && socket.isNothing()) {
-            c = qore_dbi_check_tcp_target(drv->name, host.get<const QoreStringNode>(), port.getAsBigInt(),
+            c = qore_dbi_check_tcp_target(drv->name, *QoreStringNodeValueHelper(host), port.getAsBigInt(),
                 managers, xsink);
         } else {
             xsink->raiseException("NETWORK-ACCESS-DENIED", "the %s driver reported an invalid destination of a "

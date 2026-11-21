@@ -2929,10 +2929,11 @@ static bool qore_background_is_value_type(const QoreTypeInfo* ti) {
 
 //! returns the constant member name of a dereference, or nullptr
 static const char* qore_background_member_name(QoreValue right, QoreString& buf) {
-    if (right.getType() != NT_STRING) {
+    QoreStringDataHelper name(right);
+    if (!name) {
         return nullptr;
     }
-    buf.concat(right.get<const QoreStringNode>()->c_str());
+    buf.concat(name.c_str());
     return buf.c_str();
 }
 

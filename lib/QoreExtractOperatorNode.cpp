@@ -221,6 +221,7 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
         }
     }
     else if (vt == NT_STRING) {
+        // note: safe; val.ensureUnique() above makes a node of an inline short string
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
         if (!length_exp && !new_exp)
             rv = vs->extract(offset, xsink);

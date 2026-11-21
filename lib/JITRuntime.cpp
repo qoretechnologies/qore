@@ -3497,6 +3497,7 @@ static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result
         case NT_STRING: {
             if (!entry->isNothing()) {
                 QoreStringValueHelper str(*entry);
+                // note: safe; the result is the string node made by qore_rt_new_list_selector_result()
                 qore_string_private::get(*const_cast<QoreStringNode*>(result.get<const QoreStringNode>()))
                     ->concat(*str);
             }
