@@ -558,7 +558,8 @@ int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
     logger of the process-wide controller: code that is sandboxed or acts for sandboxed code gets a new wrapper of the
     same controller with each call instead, which has no logger (see @ref sandbox_process_wide_registries), so that
     it cannot log through the process's logger or test which logger it is, and a logger that it gives its wrapper is
-    not used by any other caller.  Creating that wrapper leaves the autostop setting of the controller as it is.
+    not used by any other caller; the new wrapper is transferred to the sandboxed caller (see
+    @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()").  Creating that wrapper leaves the autostop setting of the controller as it is.
 
     @return the process-wide AsyncSocketIoController singleton, or for code that is sandboxed or acts for sandboxed
     code, a new wrapper without a logger
@@ -569,7 +570,10 @@ public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
     # the logger of the global wrapper is process-wide: not reachable by sandboxed code, which gets a wrapper of its
     # own, as a shared one could be given a logger through a subclass or reflection (issue #6836)
     if (!SandboxManager::isProcessWideRegistrationAllowed()) {
-        return new AsyncSocketIoController();
+        # the new wrapper is the caller's own, so that it can give it a logger
+        AsyncSocketIoController rv();
+        SandboxManager::transferObjectToCaller(rv);
+        return rv;
     }
     return globalController ?? (globalController = new AsyncSocketIoController(True));
 }
