@@ -518,9 +518,16 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             cache{name}.timer_id = controller.addTimerDelay(delay, sub () {
                 controller.submitTask(task, cancel_cb);
             });
-        } catch () {
+        } catch (hash<ExceptionInfo> ex) {
             task_cnt.dec();
-            rethrow;
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection is not polled
+            # again (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            log(LoggerLevel::DEBUG, "ping of connection %y not scheduled at the end of the process: %s: %s", name,
+                ex.err, ex.desc);
         }
     }
 

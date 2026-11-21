@@ -18056,13 +18056,15 @@ static QoreValue f_dbg_async_io_hold_step_results(const QoreListNode* params, Ru
     return QoreValue();
 }
 
-//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not
+//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not;
+//! with the second argument True, also the stream data and poll-complete notifications of its operations
 /** The items held run when the module cleanup releases them (qore_dbg_release_held_module_cleanup_work()); see
     AsyncIoControllerPriv::dbgHoldModuleCleanupWork() (qore#6928)
 */
 static QoreValue f_dbg_async_io_hold_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool());
+    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool(),
+        get_param_value(params, 1).getAsBool());
     return QoreValue();
 }
 
@@ -27851,8 +27853,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_hold_module_cleanup_work", f_dbg_async_io_hold_module_cleanup_work,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
-        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold",
+        boolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "stream_data");
     qns.addBuiltinVariant("dbg_async_io_module_cleanup_drain_releases",
         f_dbg_async_io_module_cleanup_drain_releases, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "flags");

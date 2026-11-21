@@ -3375,9 +3375,23 @@ printf("%d connection(s) migrated\n", migrated);
             "to": wait_ms,
             "has_on_complete": True,
         });
-        int timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
-            HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
-        }, owner_id);
+        int timer_id;
+        try {
+            timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
+                HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
+            }, owner_id);
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"); the watch operation submitted
+            # above is canceled then, and its onComplete() takes the step of the race, which the safety timer only
+            # backs up (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            log(LoggerLevel::DEBUG, "background race safety timer not armed at the end of the process: %s: %s",
+                ex.err, ex.desc);
+            return;
+        }
         bool stale;
         {
             AutoLock al(create_mutex);
