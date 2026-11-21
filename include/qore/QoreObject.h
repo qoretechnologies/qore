@@ -629,6 +629,8 @@ public:
 
         @since %Qore 3.0
     */
+    DLLEXPORT int setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
+
     //! returns the referenced value of a private:internal member of the given class
     /** for the members that the library keeps for a system class (qore#6839); the read is made in the storage of the
         class directly, without a class context of the thread; the class must declare the member with private:internal
@@ -644,11 +646,6 @@ public:
     */
     DLLEXPORT QoreValue getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
             ExceptionSink* xsink) const;
-
-    //! sets the value of a private:internal member of the given class as it is, without a type check
-    /** see setInternalMemberValue() above
-    */
-    DLLEXPORT int setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
 
     //! call this function when an object's private data is deleted externally
     /** this function will clear the private data and delete the object
