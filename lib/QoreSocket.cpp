@@ -15946,7 +15946,11 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
     // private:internal member of SocketPollOperationBase (qore#6839)
     const QoreObject* self_obj = *self;
     ValueHolder rv(xsink);
-    const SocketPollOperationMembers* m = qore_poll_op_cast_members(this);
+    // the class of the object decides first (kept with the class): only the operations of SocketPollOperation
+    // objects keep the members with the operation, so an operation that runs in the object of another class (the
+    // inner operations of an HTTP client operation, for example) reads the member at once, with no cast and no lock
+    const SocketPollOperationMembers* m = qore_poll_op_class_keeps_members(self_obj)
+        ? qore_poll_op_cast_members(this) : nullptr;
     if (m) {
         // the operation of the object, whose members these are, or an operation that it runs and that shares its
         // object, whose own members are not set and which therefore reads them through the object
@@ -15955,9 +15959,9 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
             rv = qore_poll_op_get_referenced_member(self_obj, "sock", xsink);
         }
     } else {
-        // an operation without the members (the poll operations that are not of qore/SocketPollOperation.h): its
-        // object keeps the socket in the private:internal member, as no operation that keeps it with it runs
-        // other operations that have no members of their own in its object
+        // the object keeps the socket in the private:internal member: its class is not SocketPollOperation, or its
+        // operation has no members of its own (the poll operations that are not of qore/SocketPollOperation.h), and
+        // no operation that keeps it with it runs other operations that have no members of their own in its object
         assert(!qore_poll_op_object_keeps_socket(self_obj));
         rv = self_obj->getReferencedInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
     }
