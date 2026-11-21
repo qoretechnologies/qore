@@ -3073,7 +3073,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @param encoding the encoding of the response
         @param head the request is a HEAD request
 
-        @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners
+        @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners: of another server, of
+        a listener that has been removed from this server, or an object that the server did not give
 
         @since HttpServer 1.7
     */
@@ -4803,6 +4804,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         remove cx."response-sent";
+        # the listener object of the handlers (qore#6921), read once per request
+        HttpServer::HttpListenerInterface hview = listener.getHandlerView();
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         # text from outside the server that is not valid is refused before any handler or other check
@@ -5061,7 +5064,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(listener.getHandlerView(), \hdr, \cx);
+                    ah = handler.preprocessRequest(hview, \hdr, \cx);
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5079,7 +5082,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(listener.getHandlerView(), hdr, \cx);
+                        ah = handler.authenticateRequest(hview, hdr, \cx);
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5116,13 +5119,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # the decompressed octets are text in the charset of the request, decoded as an
                         # uncompressed body is (qore#6618)
                         body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
-                            handler.getMaxDecodedBodySize(listener.getHandlerView()));
+                            handler.getMaxDecodedBodySize(hview));
                         if (handler.decompress_to_string) {
                             body = decodeRequestText(hdr, body);
                         }
                     }
 
-                    hash<auto!> hrv = handler.handleRequest(listener.getHandlerView(), s, cx, hdr, body);
+                    hash<auto!> hrv = handler.handleRequest(hview, s, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -6588,6 +6591,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         const PollInterval = 250ms;
         const ListenQueue = 1024;
+
+        #! the longest wait of signalPersistentSessionClose() for the cleanup of the session that it closes
+        const PersistentSessionCloseTimeout = 60s;
         const BodyLogLimit = 40;
 
         # handler ref count
@@ -7285,18 +7291,46 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         Safe to call from any thread; idempotent (no-op if no queue is
         registered under @c uh, e.g. when the dedicated thread has already
-        exited).
+        exited).  The wait for the cleanup is bounded by
+        @ref PersistentSessionCloseTimeout: if the dedicated thread has not completed its cleanup by then, the wait
+        ends and an error is logged (qore#6921).
 
         @param uh the connection unique hash identifying the persistent
             session to close
     */
     signalPersistentSessionClose(softstring uh) {
+        signalPersistentSessionCloseIntern(uh);
+    }
+
+    #! Force-closes the persistent session for the given connection, if the given handler registered it
+    /** As signalPersistentSessionClose(softstring), but the session is closed only if \a handler registered it
+        (qore#6921)
+
+        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param handler the handler whose persistent session it is
+
+        @since HttpServer 1.7
+    */
+    signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+        signalPersistentSessionCloseIntern(uh, handler);
+    }
+
+    #! Signals the close of a persistent session and waits, bounded, for its cleanup
+    private:internal signalPersistentSessionCloseIntern(string uh, *HttpServer::AbstractHttpRequestHandler owner) {
         *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv
             ? serv.getHttpAsyncIo() : NOTHING;
         if (ctrl) {
             Queue close_ack(1);
-            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack)) {
-                close_ack.get();
+            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack, owner)) {
+                try {
+                    close_ack.get(PersistentSessionCloseTimeout);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "QUEUE-TIMEOUT") {
+                        rethrow;
+                    }
+                    logError("persistent session %y: its cleanup did not complete within %y", uh,
+                        PersistentSessionCloseTimeout);
+                }
             }
         }
     }
@@ -8130,14 +8164,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             Queue pq();
-            code<nothing(string, Queue)> register_fn =
-                header_info.register_persistent_queue;
+            # the queue is registered for its handler, which alone can close the session through its listener object
+            # (qore#6921)
+            code register_fn = header_info.register_persistent_queue;
             # Both explicit session termination and exception cleanup can deregister this queue. Bind
             # cleanup to its identity so a delayed exit cannot remove a new session on the same socket.
             code<nothing(string)> deregister_fn = sub (string key) {
                 header_info.deregister_persistent_queue(key, pq);
             };
-            register_fn(sock_key, pq);
+            register_fn(sock_key, pq, NOTHING, phi.handler);
             on_exit deregister_fn(sock_key);
             # this thread stays with the connection until persistence ends: it leaves the handler pool, so that it
             # does not count against max_handler_threads for that time (qore#5758)
@@ -9210,12 +9245,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 }
 
 #! The listener as the code of its handlers sees it (qore#6921)
-/** The handlers of a listener's requests and connections get this object instead of the listener: it gives only
-    the methods of @ref HttpServer::HttpListenerInterface "HttpListenerInterface", which it forwards to the listener,
-    so that the code of a handler, which may be sandboxed and may serve one of the listeners of a shared server,
-    cannot reach the listener's other methods (its TLS certificate and private key, the other connections' handlers,
-    its handlers and its stop) or those of its socket, whatever type it casts the object to or however it calls its
-    methods.  The class is not exported, so no code outside the module can name it.
+/** The handlers of a listener's requests and connections get this object instead of the listener: it has only the
+    methods of @ref HttpServer::HttpListenerInterface "HttpListenerInterface", which it forwards to the listener;
+    the listener's other methods (such as those that give its TLS certificate and private key, or the handlers of
+    its other connections) and those of its socket are not methods of this object, whatever type it is cast to or
+    however its methods are called.  The class is not exported, so no code outside the module can name it.
 
     Each listener has one such object for its whole life (see HttpListener::getHandlerView()), so code that keeps the
     object of one request and uses it in a later one, also on another thread, reaches the same listener.  The object
@@ -9233,15 +9267,24 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
         self.listener := listener;
     }
 
+    # the format and its arguments are forwarded as they are: the listener formats a message only if it is logged
     log(string fmt, ...) {
         if (*HttpListener l = listener) {
-            l.log("%s", vsprintf(fmt, argv));
+            softlist<auto> args = fmt;
+            if (argv) {
+                args += argv;
+            }
+            call_object_method_args(l, "log", args);
         }
     }
 
     logError(string fmt, ...) {
         if (*HttpListener l = listener) {
-            l.logError("%s", vsprintf(fmt, argv));
+            softlist<auto> args = fmt;
+            if (argv) {
+                args += argv;
+            }
+            call_object_method_args(l, "logError", args);
         }
     }
 
@@ -9252,8 +9295,12 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     }
 
     #! Removes a dedicated socket handler; refused to sandboxed code, which removes only its own handler's connection
-    /** @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed: it calls
-        removeExternalDedicatedSocket(softstring, AbstractHttpSocketHandlerInterface) instead
+    /** The variant without the handler cannot tell whose connection it removes, so it is refused to any code that a
+        sandbox governs (SandboxManager::isSandboxed()), also to a sandbox that sets only resource limits: the check
+        fails closed, and such code calls removeExternalDedicatedSocket(softstring,
+        AbstractHttpSocketHandlerInterface) with its own handler, as the standard socket handlers do
+
+        @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
     */
     removeExternalDedicatedSocket(softstring id) {
         if (SandboxManager::isSandboxed()) {
@@ -9302,9 +9349,26 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
         }
     }
 
+    #! Closes a persistent session; refused to sandboxed code, which closes only its own handler's session
+    /** As removeExternalDedicatedSocket(softstring), the variant without the handler cannot tell whose session it
+        closes, so it is refused to any code that a sandbox governs (the check fails closed); such code calls
+        signalPersistentSessionClose(softstring, AbstractHttpRequestHandler) with its own handler
+
+        @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
+    */
     signalPersistentSessionClose(softstring uh) {
+        if (SandboxManager::isSandboxed()) {
+            throw "HTTPLISTENER-ACCESS-ERROR", "sandboxed code can close only the persistent session of its own "
+                "handler";
+        }
         if (*HttpListener l = listener) {
             l.signalPersistentSessionClose(uh);
+        }
+    }
+
+    signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+        if (*HttpListener l = listener) {
+            l.signalPersistentSessionClose(uh, handler);
         }
     }
 }

@@ -1133,10 +1133,10 @@ public class HttpAsyncSocketIoController {
         @param filter optional predicate selecting requests for this persistent session
 
     */
-    registerPersistentQueue(string key, Queue q, *code<bool(hash<auto>)> filter) {
+    registerPersistentQueue(string key, Queue q, *code<bool(hash<auto>)> filter, *object owner) {
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
-        persistent_queues{key} = {"queue": q, "filter": filter};
+        persistent_queues{key} = {"queue": q, "filter": filter, "owner": owner};
     }
 
     #! Deregisters a persistent queue for a connection
@@ -1196,15 +1196,30 @@ public class HttpAsyncSocketIoController {
         return True;
     }
 
-    private hash<auto> addPersistentQueueClosures(hash<auto> header_info) {
+    private hash<auto> addPersistentQueueClosures(hash<auto> header_info, string own_key) {
         header_info.register_persistent_queue = sub (string key, Queue q,
-                *code<bool(hash<auto>)> filter) {
-            self.registerPersistentQueue(key, q, filter);
+                *code<bool(hash<auto>)> filter, *object owner) {
+            HttpAsyncSocketIoController::checkPersistentQueueKey(key, own_key);
+            self.registerPersistentQueue(key, q, filter, owner);
         };
         header_info.deregister_persistent_queue = sub (string key, *Queue expected_queue) {
+            HttpAsyncSocketIoController::checkPersistentQueueKey(key, own_key);
             self.deregisterPersistentQueue(key, expected_queue);
         };
         return header_info;
+    }
+
+    #! Refuses a key of another connection to the persistent queue closures of a request (qore#6921)
+    /** The closures are in the request's header information, which its handler gets: they register and deregister
+        only the queue of the request's own connection (or HTTP/3 session)
+
+        @throw PERSISTENT-QUEUE-ERROR the key is not that of the request's own connection
+    */
+    private static checkPersistentQueueKey(string key, string own_key) {
+        if (key != own_key) {
+            throw "PERSISTENT-QUEUE-ERROR", "the persistent queue of a request can be registered or deregistered "
+                "only for its own connection";
+        }
     }
 
     private bool routeRequestToPersistentQueue(string uh, hash<HttpConnectionInfo> conn_info) {
@@ -1238,13 +1253,19 @@ public class HttpAsyncSocketIoController {
         @param close_ack optional completion queue; when provided, the dedicated
             handler thread pushes a value only after its persistent-close
             callback and thread-local cleanup have completed
+        @param owner if given, the session is closed only if this object (the handler) registered it
 
         @return @ref True when a close entry was queued, @ref False when no
             persistent queue was registered for @p uh
     */
-    bool signalPersistentQueuesForConnection(string uh, *Queue close_ack) {
+    bool signalPersistentQueuesForConnection(string uh, *Queue close_ack, *object owner) {
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
+        # a session is closed for an owner only if that owner registered it (qore#6921)
+        if (owner && persistent_queues{uh} && persistent_queues{uh}.owner !== owner) {
+            log(LoggerLevel::DEBUG, "persistent queue %y not signalled: registered by another handler", uh);
+            return False;
+        }
         if (persistent_queues{uh}) {
             log(LoggerLevel::DEBUG, "signalling persistent queue for closed connection: %y", uh);
             persistent_queues{uh}.queue.push({
@@ -2488,8 +2509,11 @@ public class HttpAsyncSocketIoController {
                     h3op.registerStreamListener(session_id, stream_id, notifier);
                 },
                 "register_persistent_queue": sub (string key, Queue q,
-                        *code<bool(hash<auto>)> filter) {
-                    self.registerPersistentQueue(key, q, filter);
+                        *code<bool(hash<auto>)> filter, *object owner) {
+                    # the key of the QUIC session, as the server derives it
+                    HttpAsyncSocketIoController::checkPersistentQueueKey(key,
+                        listener.uniqueHash() + ":quic:" + session_id);
+                    self.registerPersistentQueue(key, q, filter, owner);
                     # Bind the queue to the QUIC session so libqore delivers a
                     # close signal on peer stream reset / session close, releasing
                     # the dedicated handler thread even though disconnect() does
@@ -2497,6 +2521,8 @@ public class HttpAsyncSocketIoController {
                     h3op.registerPersistentSessionQueue(session_id, q);
                 },
                 "deregister_persistent_queue": sub (string key) {
+                    HttpAsyncSocketIoController::checkPersistentQueueKey(key,
+                        listener.uniqueHash() + ":quic:" + session_id);
                     self.deregisterPersistentQueue(key);
                     h3op.deregisterPersistentSessionQueue(session_id);
                 },
@@ -4006,7 +4032,7 @@ public class HttpAsyncSocketIoController {
             "ssl": dispatch_ssl,
         };
 
-        output.info = addPersistentQueueClosures(output.info);
+        output.info = addPersistentQueueClosures(output.info, dispatch_sock.uniqueHash());
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": dispatch_sock,
             "hdr": output.hdr,
@@ -5315,8 +5341,9 @@ public class HttpAsyncSocketIoController {
                     dispatch_h2op.registerStreamListener(dispatch_stream_id, notifier);
                 },
                 "register_persistent_queue": sub (string key, Queue q,
-                        *code<bool(hash<auto>)> filter) {
-                    self.registerPersistentQueue(key, q, filter);
+                        *code<bool(hash<auto>)> filter, *object owner) {
+                    HttpAsyncSocketIoController::checkPersistentQueueKey(key, dispatch_sock.uniqueHash());
+                    self.registerPersistentQueue(key, q, filter, owner);
                     # Bind the queue to the H2 connection so libqore delivers a
                     # close signal on peer stream reset, releasing the dedicated
                     # handler thread even though disconnect() does not close a
@@ -5324,6 +5351,7 @@ public class HttpAsyncSocketIoController {
                     dispatch_h2op.registerPersistentSessionQueue(q);
                 },
                 "deregister_persistent_queue": sub (string key) {
+                    HttpAsyncSocketIoController::checkPersistentQueueKey(key, dispatch_sock.uniqueHash());
                     self.deregisterPersistentQueue(key);
                     dispatch_h2op.deregisterPersistentSessionQueue();
                 },

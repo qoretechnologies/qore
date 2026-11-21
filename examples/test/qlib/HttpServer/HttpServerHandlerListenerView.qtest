@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) WebSocket connections and sandboxed HTTP handlers
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -9,8 +10,122 @@
 %requires QUnit
 %requires HttpServer
 %requires HttpServerUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
 
 %exec-class HttpServerHandlerListenerViewTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! A listener that tells the test whether a connection is registered as a dedicated connection
+class DedicatedListener inherits HttpListener {
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts) : HttpListener(server, handleRequest, id, ss, opts) {
+    }
+
+    bool hasDedicated(softstring id) {
+        m.lock();
+        on_exit m.unlock();
+        return exists shh{id};
+    }
+}
+
+#! A server whose listeners are DedicatedListener objects
+class DedicatedServer inherits HttpServer {
+    public {
+        *DedicatedListener last;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return last = new DedicatedListener(server, \handleRequest(), id, seqSessions, info);
+    }
+}
+
+#! Records the listener objects that the methods of a handler get for one request
+class MethodsHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue q();
+        hash<auto> got;
+    }
+
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        got.preprocess = listener;
+        return AbstractHttpRequestHandler::preprocessRequest(listener, \hdr, \cx);
+    }
+
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        got.authenticate = listener;
+        return AbstractHttpRequestHandler::authenticateRequest(listener, hdr, \cx);
+    }
+
+    int getMaxDecodedBodySize(*HttpListenerInterface listener) {
+        got.decoded = listener;
+        return AbstractHttpRequestHandler::getMaxDecodedBodySize(listener);
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        got.handle = listener;
+        q.push(remove got);
+        return makeResponse(200, "ok");
+    }
+}
+
+#! Records the listener object of the context of each WebSocket connection
+class ViewWsHandler inherits WebSocketHandler {
+    public {
+        Queue q();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        q.push({
+            "proto": cx."header-info".http3 ? "h3" : (cx."header-info".http2 ? "h2" : "h1"),
+            "listener": cx.listener,
+        });
+        return new WebSocketConnection(self);
+    }
+}
+
+#! A trusted handler with a persistent session: keeps the listener object and reports the end of its session
+class PersistHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HttpListenerInterface kept;
+        Queue closed();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        kept = listener;
+        if (hdr.path =~ /start$/) {
+            Queue q = closed;
+            notifyClosed(sub () {
+                q.push(True);
+            });
+            setPersistent(True);
+            return makeResponse({"x-key": cx.sock_key, "x-tid": string(gettid())}, 200, "started");
+        }
+        return makeResponse({"x-tid": string(gettid())}, 200, isPersistent() ? "continued" : "not persistent");
+    }
+}
+
+#! An object of the interface that no server gave
+class ForgedListener inherits HttpListenerInterface {
+    log(string fmt, ...) {
+    }
+    logError(string fmt, ...) {
+    }
+    addUserThreadContext(hash<auto> uctx) {
+    }
+    auto removeUserThreadContext(*string k) {
+    }
+}
 
 #! A trusted handler: keeps the listener object of one request and uses it in a later one, also on another thread
 class KeepingHandler inherits AbstractHttpRequestHandler {
@@ -102,11 +217,100 @@ AbstractHttpRequestHandler sub get_handler() {
     return new TenantHandler();
 }
 ";
+
+        #! a tenant's handler that tries to close, take over or end another connection's persistent session
+        const TenantPersistSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+string sub try_it(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+class TenantPersistProbe inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string key = hdr.\"x-key\";
+        string r;
+        if (hdr.path =~ /close1$/) {
+            r = try_it(sub () { listener.signalPersistentSessionClose(key); });
+        } else if (hdr.path =~ /close2$/) {
+            r = try_it(sub () { call_object_method(listener, \"signalPersistentSessionClose\", key, self); });
+        } else if (hdr.path =~ /register$/) {
+            r = try_it(sub () { cx.\"header-info\".register_persistent_queue(key, new Queue()); });
+        } else if (hdr.path =~ /deregister$/) {
+            r = try_it(sub () { cx.\"header-info\".deregister_persistent_queue(key); });
+        }
+        return makeResponse(200, r);
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantPersistProbe();
+}
+";
+
+        #! a tenant's socket handler: tries to remove its connection with another handler, then ends it as its own
+        const TenantSocketSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+class TenantSocketHandler inherits AbstractHttpSocketHandler {
+    private {
+        Queue to_host;
+        Queue from_host;
+    }
+
+    constructor(Queue to_host, Queue from_host) {
+        self.to_host = to_host;
+        self.from_host = from_host;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"test6921\", \"Connection\": \"Upgrade\"}};
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        string other;
+        try {
+            cx.listener.removeExternalDedicatedSocket(cx.id, new TenantSocketHandler(to_host, from_host));
+            other = \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            other = ex.err;
+        }
+        to_host.push({\"cid\": cx.id, \"other\": other});
+        from_host.get();
+        code c = setExternallyManaged(lid, cx, s);
+        try {
+            c();
+            to_host.push(\"ok\");
+        } catch (hash<ExceptionInfo> ex) {
+            to_host.push(ex.err);
+        }
+        return True;
+    }
+}
+
+AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
+    return new TenantSocketHandler(to_host, from_host);
+}
+";
     }
 
     constructor() : QUnit::Test("HttpServer handler listener view", "1.0", \ARGV) {
         addTestCase("a sandboxed handler cannot reach the listener", \sandboxedTest());
         addTestCase("a trusted handler keeps the object of its listener", \trustedTest());
+        addTestCase("every method of a handler gets the object", \methodsTest());
+        addTestCase("the context of a WebSocket connection gives the object", \webSocketTest());
+        addTestCase("the server takes only the objects of its own listeners", \sendHttpErrorTest());
+        addTestCase("a handler closes, takes over and ends only its own persistent session", \persistentTest());
+        addTestCase("a sandboxed socket handler removes only its own connection", \dedicatedTest());
         set_return_value(main());
     }
 
@@ -140,7 +344,6 @@ AbstractHttpRequestHandler sub get_handler() {
     trustedTest() {
         KeepingHandler handler();
         HttpServer server(<HttpServerOptionInfo>{});
-        on_exit delete server;
         server.setHandler("keep", "", NOTHING, handler);
         server.setDefaultHandler("keep", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
@@ -157,6 +360,174 @@ AbstractHttpRequestHandler sub get_handler() {
         assertEq("v", r.uctx_added);
         assertTrue(r.uctx_removed);
         assertEq(DefaultMaxDecodedBodySize, r.other_thread, "the kept object works on another thread");
+
+        # once the listener is gone, the kept object does nothing and gives the defaults of the interface
+        HttpListenerInterface k = handler.kept;
+        delete server;
+        k.log("after the listener %s", "is gone");
+        k.logError("after the listener %s", "is gone");
+        assertEq("ISO-8859-1", k.getDefaultTextEncoding());
+        assertEq(DefaultMaxDecodedBodySize, k.getMaxDecodedBodySize());
+        assertEq(NOTHING, k.getDefaultResponseHeaders());
+        k.signalPersistentSessionClose("io-0");
+    }
+
+    methodsTest() {
+        MethodsHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("m", "", NOTHING, handler);
+        server.setDefaultHandler("m", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        # a compressed body, so that the handler is asked for its maximum decoded size
+        hc.send(gzip("body"), "POST", "/", {"Content-Encoding": "gzip"});
+        hash<auto> got = handler.q.get(10s);
+        assertEq(("authenticate", "decoded", "handle", "preprocess"), sort(keys got));
+        foreach hash<auto> i in (got.pairIterator()) {
+            assertTrue(i.value instanceof HttpListenerInterface, i.key);
+            assertFalse(i.value instanceof HttpListener, i.key + ": not the listener");
+            assertTrue(i.value === got.handle, i.key + ": the same object");
+        }
+    }
+
+    webSocketTest() {
+        ViewWsHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+        # HTTP/1.1 upgrade, HTTP/2 and HTTP/3 extended CONNECT
+        foreach string v in (("1.1", "2.0", "3.0")) {
+            WebSocketClient wsc(sub (*data msg) {}, {
+                "url": sprintf("wss://localhost:%d", port),
+                "http_version": v,
+                "ssl_verify_cert": False,
+                "timeout": HangGuard,
+            });
+            wsc.connect();
+            on_exit wsc.disconnect();
+            hash<auto> r = handler.q.get(HangGuard);
+            string proto = {"1.1": "h1", "2.0": "h2", "3.0": "h3"}{v};
+            assertEq(proto, r.proto);
+            assertTrue(r.listener instanceof HttpListenerInterface, proto);
+            assertFalse(r.listener instanceof HttpListener, proto + ": not the listener");
+        }
+    }
+
+    sendHttpErrorTest() {
+        KeepingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("keep", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        hc.get("/");
+        HttpListenerInterface view = handler.kept;
+
+        HttpServer other(<HttpServerOptionInfo>{});
+        on_exit delete other;
+        # the object of another server's listener, and one that no server gave
+        assertThrows("INVALID-LISTENER-ERROR", \other.sendHttpError(), (view, {}, new Socket(), 500, "x", NOTHING,
+            NOTHING, NOTHING, False));
+        assertThrows("INVALID-LISTENER-ERROR", \server.sendHttpError(), (new ForgedListener(), {}, new Socket(),
+            500, "x", NOTHING, NOTHING, NOTHING, False));
+    }
+
+    persistentTest() {
+        Program tenant = getTenantProgram(TenantPersistSource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        PersistHandler owner();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("p", "/p", NOTHING, owner);
+        server.setHandler("t", "/t", NOTHING, probe);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string url = "http://127.0.0.1:" + port;
+
+        # the owner's persistent session, on its own connection
+        HTTPClient oc({"url": url, "timeout": 10s});
+        oc.connect();
+        on_exit oc.disconnect();
+        hash<auto> start = oc.send(NOTHING, "GET", "/p/start");
+        string key = start."x-key";
+        string tid = start."x-tid";
+
+        # the tenant's handler, on another connection of the same listener
+        HTTPClient tc({"url": url, "timeout": 10s});
+        hash<string, string> r;
+        foreach string op in (("close1", "close2", "register", "deregister")) {
+            r{op} = tc.send(NOTHING, "GET", "/t/" + op, {"x-key": key}).body;
+        }
+        assertEq({
+            # the variant without the handler is refused to sandboxed code
+            "close1": "HTTPLISTENER-ACCESS-ERROR",
+            # with its own handler, it does not close a session that another handler registered
+            "close2": "ok",
+            # the closures of its request register and deregister only its own connection's queue
+            "register": "PERSISTENT-QUEUE-ERROR",
+            "deregister": "PERSISTENT-QUEUE-ERROR",
+        }, r);
+        # the owner's session is still the owner's: its next request reaches its thread
+        hash<auto> next;
+        try {
+            next = oc.send(NOTHING, "GET", "/p/continue");
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("the owner's request did not reach it: %s: %s", ex.err, ex.desc));
+        }
+        assertEq("continued", next.body);
+        assertEq(tid, next."x-tid", "the owner's session thread");
+        assertEq(0, owner.closed.size(), "the session was not closed");
+        # the owner closes its own session
+        owner.kept.signalPersistentSessionClose(key, owner);
+        assertTrue(owner.closed.get(HangGuard), "the owner's session is closed");
+    }
+
+    dedicatedTest() {
+        Program tenant = getTenantProgram(TenantSocketSource);
+        Queue to_host();
+        Queue from_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_handler", to_host, from_host);
+        DedicatedServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("s", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send("GET /s HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: test6921\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(HangGuard);
+        assertEq(101, resp.status_code);
+
+        hash<auto> step = to_host.get(HangGuard);
+        assertEq("ok", step.other);
+        assertTrue(server.last.hasDedicated(step.cid), "another handler does not remove the connection");
+        from_host.push(True);
+        # the handler ends its own connection through setExternallyManaged() (no false refusal)
+        assertEq("ok", to_host.get(HangGuard));
+        assertFalse(server.last.hasDedicated(step.cid), "the handler removed its own connection");
+    }
+
+    #! Returns a sandboxed Program with the given source
+    private Program getTenantProgram(string source) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(source, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
     }
 
     #! runs one request with the given handler and returns what it found
