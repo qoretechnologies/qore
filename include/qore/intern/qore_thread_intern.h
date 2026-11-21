@@ -2598,7 +2598,7 @@ private:
    const qore_class_private* old_class;
    QoreObject* old_rc_obj;
    const qore_class_private* old_rc_class;
-   bool do_rc_update;
+   ThreadData* td;
 
 public:
    DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c);

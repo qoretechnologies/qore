@@ -4823,29 +4823,35 @@ void CalleeContextHelper::restoreArgv() {
     td->current_implicit_arg = old_argv;
 }
 
-ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
-    ThreadData* td  = thread_data.get();
+// The RuntimeConfig remains with the thread for its lifetime. Preserve rc_get_tls_ref()'s
+// initialization of a missing location when a caller cleared it between context changes.
+static RuntimeConfig::Impl& object_context_runtime_config(ThreadData* td) {
+    if (!td->rc || !td->rc->loc) {
+        td->rc = rc_get_tls_impl();
+    }
+    return *td->rc;
+}
+
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c)
+        : td(thread_data.get()) {
     old_obj = td->current_obj;
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
-    RuntimeConfig& rc = rc_get_tls_ref();
-    old_rc_obj = rc.getObject();
-    old_rc_class = rc.getClass();
-    rc.setObject(obj);
-    rc.setClass(c);
-    do_rc_update = true;
+    RuntimeConfig::Impl& rc = object_context_runtime_config(td);
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    rc.cls = c;
 }
 
 ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
-    ThreadData* td  = thread_data.get();
+    assert(td == thread_data.get());
     td->current_obj = old_obj;
     td->current_class = old_class;
-    if (do_rc_update) {
-        RuntimeConfig& rc = rc_get_tls_ref();
-        rc.setObject(old_rc_obj);
-        rc.setClass(old_rc_class);
-    }
+    RuntimeConfig::Impl& rc = object_context_runtime_config(td);
+    rc.obj = old_rc_obj;
+    rc.cls = old_rc_class;
 }
 
 class qore_object_context_helper : public ObjectSubstitutionHelper {
