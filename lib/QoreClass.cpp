@@ -38,6 +38,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -2316,6 +2317,23 @@ void qore_class_private::parseCheckNameKindClashes(QoreProgram* pgm) {
     }
 }
 
+//! hides the type parameters of the code being parsed while a class is initialized (qore#7136)
+/** A class can be initialized on demand while other code is parsed, for example when a generic function accesses a
+    member of an object of the class; the types in the class's declarations (its members, method signatures and base
+    classes) must name only its own type parameters, not those of the generic function, closure or hashdecl parsed
+    around it, or a member declared as \c *T would have the type of the function's type parameter \c T, which the
+    receiver of the class does not substitute
+*/
+class QoreClassTypeParamScopeHelper {
+public:
+    DLLLOCAL QoreClassTypeParamScopeHelper() : signature_context(nullptr), hashdecl_context(nullptr) {
+    }
+
+private:
+    UserSignatureTypeParamContextHelper signature_context;
+    HashDeclTypeParamContextHelper hashdecl_context;
+};
+
 int qore_class_private::initializeIntern() {
     //printd(5, "qore_class_private::initializeIntern() this: %p %s class: %p scl: %p initialized: %d\n", this, name.c_str(), cls, scl, initialized);
     if (initialized) {
@@ -2323,6 +2341,9 @@ int qore_class_private::initializeIntern() {
     }
 
     initialized = true;
+
+    // the class names only its own type parameters (qore#7136)
+    QoreClassTypeParamScopeHelper type_param_scope;
 
     assert(!name.empty());
     //printd(5, "qore_class_private::initializeIntern() %s class: %p scl: %p\n", name.c_str(), cls, scl);
@@ -8760,6 +8781,9 @@ int qore_class_private::parseInitPartial() {
         return 0;
     }
 
+    // the class names only its own type parameters (qore#7136)
+    QoreClassTypeParamScopeHelper type_param_scope;
+
     int err = parseResolveHierarchy();
 
     if (initialize() && !err) {
@@ -8864,6 +8888,9 @@ int qore_class_private::parseInit() {
     if (committed) {
         return 0;
     }
+
+    // the class names only its own type parameters (qore#7136)
+    QoreClassTypeParamScopeHelper type_param_scope;
 
     // make sure initialize() is called first
     int err = initialize();

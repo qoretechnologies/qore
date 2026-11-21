@@ -48,6 +48,16 @@ class NamedScope;
 
 DLLLOCAL const typed_hash_decl_private* parse_get_hashdecl_type_param_context();
 
+//! sets the generic hashdecl whose type parameters the types parsed name, or none (nullptr), for its lifetime
+class HashDeclTypeParamContextHelper {
+public:
+    DLLLOCAL HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context);
+    DLLLOCAL ~HashDeclTypeParamContextHelper();
+
+private:
+    const typed_hash_decl_private* old_context;
+};
+
 class HashDeclMemberInfo : public QoreMemberInfoBase {
 public:
     DLLLOCAL HashDeclMemberInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeInfo = nullptr,

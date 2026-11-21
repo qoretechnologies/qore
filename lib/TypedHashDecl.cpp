@@ -42,20 +42,14 @@
 
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
-class HashDeclTypeParamContextHelper {
-public:
-    DLLLOCAL HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
-            : old_context(parse_hashdecl_type_param_context) {
-        parse_hashdecl_type_param_context = n_context;
-    }
+HashDeclTypeParamContextHelper::HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
+        : old_context(parse_hashdecl_type_param_context) {
+    parse_hashdecl_type_param_context = n_context;
+}
 
-    DLLLOCAL ~HashDeclTypeParamContextHelper() {
-        parse_hashdecl_type_param_context = old_context;
-    }
-
-private:
-    const typed_hash_decl_private* old_context;
-};
+HashDeclTypeParamContextHelper::~HashDeclTypeParamContextHelper() {
+    parse_hashdecl_type_param_context = old_context;
+}
 
 const typed_hash_decl_private* parse_get_hashdecl_type_param_context() {
     return parse_hashdecl_type_param_context;

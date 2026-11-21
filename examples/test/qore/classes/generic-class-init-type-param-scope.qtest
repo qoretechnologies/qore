@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code for generic classes initialized while generic code is parsed
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class GenericClassInitTypeParamScopeTest
+
+#! a generic class initialized while generic code is parsed names its own type parameters (qore#7136)
+/** A class is initialized on demand when code that is parsed uses it (ex: accesses a member of an object of the
+    class); the types of its declarations were resolved with the type parameters of the generic function, closure or
+    hashdecl being parsed: a member declared as <tt>*T</tt> in <tt>Box<T></tt> had the type of the function's type
+    parameter \c T when the function's type parameter had the same name, which the receiver <tt>Box<int></tt> does not
+    substitute, so <tt>new Box<int>(1)</tt> raised RUNTIME-TYPE-ERROR (<tt><lvalue> expects type '*T'</tt>), and a
+    constructor parameter declared as <tt>*T</tt> refused its argument after a generic hashdecl initialized the
+    class.  The programs (generic-class-init-type-param-scope/: a generic function, a closure in a generic function,
+    a generic hashdecl's member initializer) run in each execution mode in a child process, at the IR tier and
+    promoted to native code with tiered execution, and as qcc-compiled executables (-O0, -O3).
+*/
+class GenericClassInitTypeParamScopeTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the class's members and parameters have its type argument, and a value of another type is refused
+        const Tail = "new: 1\nstring: \"s\"\nRUNTIME-TYPE-ERROR\n";
+
+        const Expected = {
+            "function": "get: null\n" + Tail,
+            "closure": "closure: 2\n" + Tail,
+            "hashdecl": "hashdecl: null\n" + Tail,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("GenericClassInitTypeParamScope", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        dir = get_script_dir() + DirSep + "generic-class-init-type-param-scope";
+
+        addTestCase("a generic class initialized while generic code is parsed has its own types in every mode",
+            \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-class-init-type-param-scope-");
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            string label = i.key;
+            string file = dir + DirSep + label + ".q";
+            foreach string mode in (ExecModes) {
+                assertEq(i.value, backquote(sprintf("%s %s --enable-debug --exec-mode=%s %s 2>&1", env, qore_bin,
+                    mode, file)), sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(i.value, backquote(sprintf("%s %s --enable-debug --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(i.value, backquote(sprintf("%s %s --enable-debug --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = tmp.path + DirSep + label + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(i.value, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                    libqore_dir, libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+}
