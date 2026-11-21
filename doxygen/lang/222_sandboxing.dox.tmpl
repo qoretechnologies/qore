@@ -546,6 +546,40 @@ authenticate();
       caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
       not logged; never to a logger of another tenant
 
+    State that the host or the library sets for the whole process and that can hold data or configuration of the host
+    or of other tenants is not readable by sandboxed code either, until a separate view per isolation domain is
+    available, and an API that returns it requires the functional domain that its content requires:
+    - the code of a sandboxed %Program does not get the values of the application registry
+      (@ref Qore::get_app_registry() "get_app_registry()") or the module options
+      (@ref Qore::get_module_option() "get_module_option()"): they return @ref nothing "NOTHING" for it, and both
+      require the \c PROCESS functional domain; library module code that reads them to serve sandboxed code still
+      gets them, as the \c DataProvider module does for the custom expressions that the host publishes there
+    - code that is sandboxed or acts for sandboxed code does not get the process-wide YAML tag handler registry of the
+      \c YamlTagHandler module (\c globalTagRegistry() raises \c YAML-TAG-REGISTRATION-DENIED), the lock of the
+      process-wide type cache of \c DataProvider, the default post-processing code of the connections of
+      \c ConnectionProvider (\c AbstractConnection::getPostProcessing()), the locale data fallbacks of the \c i18n
+      module, which record the locales of every caller (\c SANDBOX-REGISTRATION-ERROR), or the number of shared
+      clients of \c VoyageRestClient, whose clients it shares only with the code of its own %Program
+    - an object that a builtin constant of the library or of a binary module holds, such as
+      @ref Qore::stdout "stdout", the type constants of the \c reflection module and the level objects of the
+      \c logger_bin module (which \c LoggerLevel::getLevel() also returns), and the process-wide
+      @ref Qore::AsyncIoController "AsyncIoController" object, is one object for every %Program: no code can add
+      members to it (\c SYSTEM-OBJECT-ERROR), so that no data passes through it from one caller to another; only an
+      object that no %Program owns is such a constant (a constant that a language bridge imports into a %Program is
+      that %Program's), and a member write gate of the class, which owns the storage of its undeclared members, is
+      evaluated before the rule
+    - the code of a sandboxed %Program cannot give a member that the class does not declare to an object of a
+      builtin class without a public member list that another %Program or the library created
+      (\c SYSTEM-OBJECT-ERROR): such an object can be shared, as one that a module keeps in a static member is,
+      such as the \c Type object of \c Mapper::recordType; the members that the class declares, which its own code
+      writes, and the objects that the %Program created itself are not affected (an object that a %Program that it
+      created, or a module that it loaded by its path, created is another %Program's)
+    - type descriptors, constants and settings that hold no data of any caller can still be read, such as the types
+      of the process-wide type cache of \c DataProvider and the global options of that module
+    - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
+      member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
+      \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
+
     @since %Qore 3.0
 
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller

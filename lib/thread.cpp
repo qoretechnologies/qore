@@ -6681,6 +6681,11 @@ bool qore_calling_code_is_untrusted() {
     return !!(td->current_pgm->getParseOptions() & restricting);
 }
 
+bool qore_calling_code_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm);
+}
+
 bool qore_caller_is_sandboxed() {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs

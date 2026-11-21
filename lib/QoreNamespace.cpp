@@ -37,6 +37,7 @@
 #include "qore/intern/QoreRegexBase.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/StaticClassVarRefNode.h"
@@ -1232,6 +1233,8 @@ void QoreNamespace::addConstant(const char* cname, QoreValue val) {
 }
 
 void QoreNamespace::addConstant(const char* cname, QoreValue val, const QoreTypeInfo* typeInfo) {
+    // an object of a builtin constant is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(val);
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(rns);

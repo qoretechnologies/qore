@@ -27,4 +27,9 @@
     @ref Qore::Logger::LoggerEvent::setStartTime() "LoggerEvent::setStartTime()" raises
     \c SANDBOX-REGISTRATION-ERROR for code that is sandboxed or acts for sandboxed code, as the start time of relative
     time is process-wide and applies to the log output of every caller.
+
+    The builtin level objects (the \c Level* constants of @ref Qore::Logger::LoggerLevel "LoggerLevel", which
+    @ref Qore::Logger::LoggerLevel::getLevel() "LoggerLevel::getLevel()" and the other static methods of the class
+    return) are shared by the whole process: adding a member to one raises \c SYSTEM-OBJECT-ERROR, so that no data
+    passes through them from one caller to another, also between sandboxed tenants (qore#6749).
 */

@@ -2943,6 +2943,10 @@ bool locale_data_available(string locale) [flags=RET_VALUE_ONLY] {
     @return the canonical BCP 47 tags of the recorded locales, sorted; empty if every locale used so far had its
     own data
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot read the list, which is
+    process-wide and records the locales of the operations of every caller, also of other sandboxes (see the
+    sandboxing documentation on process-wide registries and settings)
+
     @par Example:
     @code{.py}
 list<string> missing = I18n::get_locale_data_fallbacks();
@@ -2953,6 +2957,11 @@ if (missing) {
 
 */
 list<string> get_locale_data_fallbacks() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    // the list is process-wide and is made from the locales of every caller's operations: not read by sandboxed code
+    // (qore#6749)
+    if (qore_check_process_wide_registration("read the locale data fallbacks of the process", xsink)) {
+        return QoreValue();
+    }
     std::vector<std::string> fallbacks;
     {
         std::lock_guard<std::mutex> lock(i18n_locale_data_fallback_lock);

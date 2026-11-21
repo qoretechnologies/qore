@@ -212,6 +212,18 @@ class VRMutex;
 */
 DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
 
+//! Marks the objects in \a v as constants of the whole process, whose members no code can change (qore#6749)
+/** Called for the value of each builtin constant of the library and of binary modules (QoreNamespace::addConstant(),
+    QoreClass::addBuiltinConstant()) and for the process-wide singleton objects of the library, before the objects are
+    shared: one such object serves every Program and thread, so a member that one caller gave it would be read by
+    every other caller, also by the code of other sandboxes.  The objects in the lists and hashes of \a v are marked
+    too; only system objects (no Program owns them) are marked, as an object that a Program owns, such as one that a
+    language bridge imports as a constant of a Program, is that Program's.  Adding a member to a marked object raises
+    \c SYSTEM-OBJECT-ERROR (a class's member write gate, which owns the storage of its undeclared members, is
+    evaluated first).
+*/
+DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
+
 //! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
 /** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
     released), nor if the root's scan reached it (it is in the root's valid set).
@@ -264,6 +276,13 @@ public:
     private_data_scan_list_t* private_data_scans = nullptr;
 
     bool system_object;
+    //! set when the object is a constant of the whole process: its members cannot be changed (qore#6749)
+    /** An object that a builtin constant of the library or of a binary module holds, and a process-wide singleton
+        object of the library, is one object for every Program and thread: a member that any code gave it would be
+        seen by all other code, also by the code of other sandboxes.  Set before the object is shared (see
+        qore_object_mark_process_constant()) and never cleared, so it is read without a lock.
+    */
+    bool process_constant = false;
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
@@ -400,6 +419,53 @@ public:
 
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,
             ExceptionSink* xsink);
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the member write is refused (qore#6749)
+    /** see checkProcessConstantWrite() and checkForeignBuiltinMemberWrite(); called only where a member is created
+        (the miss path of a member write) and for merges, so that a write to a member that exists, such as a declared
+        member, costs nothing more
+
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkMemberWrite(const char* mem, const QoreHashNode* h, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const {
+        // only a constant of the whole process or an object of a builtin class
+        if (!process_constant && !qore_class_private::get(*theclass)->sys) [[likely]] {
+            return 0;
+        }
+        return checkProcessConstantWrite(mem, xsink) || checkForeignBuiltinMemberWrite(mem, h, class_ctx, xsink)
+            ? -1 : 0;
+    }
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the object is a constant of the whole process (qore#6749)
+    /** @param mem the member written, or nullptr for a merge
+    */
+    DLLLOCAL int checkProcessConstantWrite(const char* mem, ExceptionSink* xsink) const {
+        if (!process_constant) [[likely]] {
+            return 0;
+        }
+        return raiseProcessConstantWrite(mem, xsink);
+    }
+
+    //! Raises \c SYSTEM-OBJECT-ERROR for a member write to a constant of the whole process; returns -1
+    DLLLOCAL int raiseProcessConstantWrite(const char* mem, ExceptionSink* xsink) const;
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if sandboxed code gives a member to a foreign builtin object
+    /** The code of a sandboxed Program cannot give an object of a builtin class without a public member list,
+        which another Program or the library created, a member that the class does not declare (qore#6749): the
+        object can be shared, as one that a module keeps in a static member is, and the member would be read by other
+        callers, also by the code of other sandboxes.  The members that the class declares (the private and internal
+        members of a builtin class, which its C++ code writes) and the objects that the Program created are not
+        affected.
+
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
+            const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
         // get the current class context
