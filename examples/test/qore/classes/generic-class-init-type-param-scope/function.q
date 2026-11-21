@@ -12,12 +12,15 @@ class Box<T> {
     }
 }
 
-auto sub get<T>() {
-    return (new Box<T>()).v;
+auto sub get<T>(T x) {
+    auto v = (new Box<T>()).v;
+    # the function's own type parameter after the class is initialized
+    T y = x;
+    return v ?? y;
 }
 
 sub check() {
-    printf("get: %y\n", get<int>());
+    printf("get: %y\n", get<int>(3));
     printf("new: %y\n", new Box<int>(1).v);
     Box<string> b("s");
     printf("string: %y\n", b.v);

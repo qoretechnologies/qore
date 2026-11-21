@@ -19,9 +19,11 @@
     parameter \c T when the function's type parameter had the same name, which the receiver <tt>Box<int></tt> does not
     substitute, so <tt>new Box<int>(1)</tt> raised RUNTIME-TYPE-ERROR (<tt><lvalue> expects type '*T'</tt>), and a
     constructor parameter declared as <tt>*T</tt> refused its argument after a generic hashdecl initialized the
-    class.  The programs (generic-class-init-type-param-scope/: a generic function, a closure in a generic function,
-    a generic hashdecl's member initializer) run in each execution mode in a child process, at the IR tier and
-    promoted to native code with tiered execution, and as qcc-compiled executables (-O0, -O3).
+    class.  The programs (generic-class-init-type-param-scope/: a generic function, which uses its own type
+    parameter after the class is initialized, a closure in a generic function, a generic hashdecl's member
+    initializer, and a subclass with a method parameter and a return type of its type parameter) run in each
+    execution mode in a child process, at the IR tier and promoted to native code with tiered execution, and as
+    qcc-compiled executables (-O0, -O3).
 */
 class GenericClassInitTypeParamScopeTest inherits QUnit::Test {
     public {
@@ -31,9 +33,11 @@ class GenericClassInitTypeParamScopeTest inherits QUnit::Test {
         const Tail = "new: 1\nstring: \"s\"\nRUNTIME-TYPE-ERROR\n";
 
         const Expected = {
-            "function": "get: null\n" + Tail,
+            "function": "get: 3\n" + Tail,
             "closure": "closure: 2\n" + Tail,
             "hashdecl": "hashdecl: null\n" + Tail,
+            # the call of the method with a value of another type finds no variant
+            "subclass": "subclass: 4\nnew: 1\nstring: \"s\"\nRUNTIME-OVERLOAD-ERROR\n",
         };
     }
 
