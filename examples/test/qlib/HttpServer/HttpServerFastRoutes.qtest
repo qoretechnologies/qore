@@ -104,6 +104,16 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         return {"code": h.status_code, "body": rbody, "hdr": h.headers};
     }
 
+    #! returns the header of a response without its Date field, at its top level and in its "headers" sub-hash: two
+    #! responses can be made in different seconds
+    private static hash<auto> withoutDate(hash<auto> hdr) {
+        hash<auto> rv = hdr - "date";
+        if (rv.headers) {
+            rv.headers -= "date";
+        }
+        return rv;
+    }
+
     private Socket connect() {
         Socket c();
         c.connect("127.0.0.1:" + port);
@@ -260,8 +270,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("same", fast.body);
         assertEq(normal.code, fast.code);
         # the headers are the same, apart from the date: names and values
-        hash<auto> nh = normal.hdr - ("date",);
-        hash<auto> fh = fast.hdr - ("date",);
+        hash<auto> nh = withoutDate(normal.hdr);
+        hash<auto> fh = withoutDate(fast.hdr);
         assertEq(sort(keys nh), sort(keys fh), "the same header names");
         foreach string name in (keys nh) {
             assertEq(nh{name}, fh{name}, "header " + name);
@@ -276,9 +286,9 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> fcl = request(cc2, "GET", "/fast", {"Connection": "close"});
         assertEq("same", ncl.body);
         assertEq("same", fcl.body);
-        assertEq(sort(keys (ncl.hdr - ("date",))), sort(keys (fcl.hdr - ("date",))),
+        assertEq(sort(keys (withoutDate(ncl.hdr))), sort(keys (withoutDate(fcl.hdr))),
             "the same headers with Connection: close");
-        foreach string name in (keys (ncl.hdr - ("date",))) {
+        foreach string name in (keys (withoutDate(ncl.hdr))) {
             assertEq(ncl.hdr{name}, fcl.hdr{name}, "close, header " + name);
         }
         assertEq("close", fcl.hdr.connection);
@@ -393,7 +403,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> b = request(c, "GET", "/fixed");
         assertEq("one", a.body);
         assertEq(b.code, a.code);
-        assertEq(sort(keys (b.hdr - ("date",))), sort(keys (a.hdr - ("date",))), "the same headers as a fixed response");
+        assertEq(sort(keys (withoutDate(b.hdr))), sort(keys (withoutDate(a.hdr))),
+            "the same headers as a fixed response");
         assertEq(b.hdr."content-type", a.hdr."content-type");
         assertEq(b.hdr.server, a.hdr.server);
 
@@ -968,8 +979,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("same", fr.body);
         assertTrue(exists nr.hdr."alt-svc", "the listener advertises HTTP/3 to the handler's responses");
         assertEq(nr.hdr."alt-svc", fr.hdr."alt-svc", "and to the responses of a route");
-        assertEq(sort(keys (nr.hdr - ("date",))), sort(keys (fr.hdr - ("date",))), "the same header names");
-        foreach string name in (keys (nr.hdr - ("date",))) {
+        assertEq(sort(keys (withoutDate(nr.hdr))), sort(keys (withoutDate(fr.hdr))), "the same header names");
+        foreach string name in (keys (withoutDate(nr.hdr))) {
             assertEq(nr.hdr{name}, fr.hdr{name}, "TLS header " + name);
         }
         # a route that sets Alt-Svc itself keeps its own
