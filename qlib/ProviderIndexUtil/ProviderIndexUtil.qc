@@ -4474,7 +4474,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Creates the shared context used to reconstruct typed provider metadata
-    static private hash<MetadataDeserializeContext> createMetadataDeserializeContext() {
+    static private:internal hash<MetadataDeserializeContext> createMetadataDeserializeContext() {
         # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
         load_module("DataProvider");
         load_module("MapperUtil");
@@ -4557,6 +4557,24 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         return rv;
     }
 
+    #! Returns the given action as stored in the index as a DataProviderIndexedActionInfo hash
+    /** For the tests of the index format, which inherit the class
+
+        @param action the action as stored in the index
+
+        @return a \c DataProvider::DataProviderIndexedActionInfo hash
+
+        @throw PERMISSION-DENIED the calling code is restricted from loading modules or from reflection, which the
+        restoration uses (qore#7044)
+    */
+    static private hash<auto> restoreIndexedAction(hash<auto> action) {
+        if (SandboxManager::isCallerRestricted(DOM_MODULE | DOM_REFLECTION)) {
+            throw "PERMISSION-DENIED", "the calling code may not restore an indexed action, as it is restricted from "
+                "loading modules or from reflection";
+        }
+        return getIndexedAction(action, createMetadataDeserializeContext(), True);
+    }
+
     #! Returns the given action as a DataProviderIndexedActionInfo hash
     /** @param action the action as stored in the index, or a registered action
         @param ctx the prepared deserialization context
@@ -4565,7 +4583,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return a \c DataProvider::DataProviderIndexedActionInfo hash
     */
-    static private hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
+    static private:internal hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
             *bool indexed) {
         # the type description tables of the action's chunk, if it stores its type descriptions in tables; a
         # registered action is a typed hash without this key
@@ -4754,9 +4772,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param path the target path
         @param contents the contents to write
 
-        @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain; the method
-        is visible to subclasses (such as ProviderIndex::ProviderIndex), so it refuses code that may not write files
-        itself (qore#7044); the index writers that call it declare the domain, so their callers pass the check
+        @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain (qore#7044)
     */
     static private writeFileAtomic(string path, data contents) {
         if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {

@@ -64,8 +64,7 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_4 ProviderIndex v1.4
-    - the internal helpers of @ref ProviderIndex::ProviderIndex "ProviderIndex" are no longer visible to subclasses,
-      so code that inherits the class cannot run the workers of an index build or write their files
+    - the internal helpers of @ref ProviderIndex::ProviderIndex "ProviderIndex" are not visible to subclasses
       (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - fixed an index build whose @ref ProviderIndex::ProviderIndexCreateOptions::apps "apps" option names no
       registered app raising a \c RUNTIME-TYPE-ERROR: the index is built without the apps, which are reported as

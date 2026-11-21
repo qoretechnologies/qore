@@ -2490,9 +2490,8 @@
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
-      "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are no longer visible to subclasses, which
-      could use them with the modules' rights; see @ref providerindexutil_v1_2 and @ref providerindex_v1_4
-      (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
+      "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
+      @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
