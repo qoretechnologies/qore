@@ -58,6 +58,8 @@ class DatasourceMaskOptionsTest inherits QUnit::Test {
         addTestCase("the masked hash of a string and of a hash", \hashTest());
         addTestCase("the default form is unchanged", \defaultTest());
         addTestCase("a database name with a control character", \controlDbTest());
+        addTestCase("a database name that can be more than a database name", \connectionStringDbTest());
+        addTestCase("a database name in another encoding", \encodedDbTest());
         addTestCase("option names that cannot be shown", \badOptionNameTest());
         addTestCase("an ambiguous string is described by its driver only", \ambiguousTest());
         addTestCase("an unknown option", \unknownOptionTest());
@@ -118,6 +120,49 @@ class DatasourceMaskOptionsTest inherits QUnit::Test {
         hash<auto> h = DsHash + {"db": "orders\nforged"};
         assertEq("pgsql:****/****@****%dbhost.example:5432", mask_datasource(h, {"show_db": True}));
         assertEq("****", mask_datasource_hash(h, {"show_db": True}).db);
+    }
+
+    # a database name can be a connection string of its own, with credentials, or make the description show another
+    # host or options: it is masked
+    connectionStringDbTest() {
+        list<string> masked = (
+            # a PostgreSQL conninfo string and URI, an ODBC string
+            "host=h user=u password=db-secret dbname=d",
+            "postgresql://u:db-secret@h/d",
+            "DSN=x;UID=u;PWD=db-secret",
+            # the separators of a datasource string
+            "orders@other",
+            "orders%evil.host:1",
+            "orders{opt=1}",
+            "orders(latin1)",
+            # a C1 control character (NEL) and a bidirectional override
+            "orders\u0085forged",
+            "orders\u202esecret",
+            "orders\u2066x",
+        );
+        foreach string db in (masked) {
+            hash<auto> h = DsHash + {"db": db};
+            assertEq("****", mask_datasource_hash(h, Opts.both).db, sprintf("%y", db));
+            string s = mask_datasource(h, Opts.both);
+            assertEq("pgsql:****/****@****(utf8)%dbhost.example:5432{min=****,conn=****}", s, sprintf("%y", db));
+            assertEq(-1, s.find("db-secret"));
+        }
+        # names that are only names are shown: a path with ":" and "/" (SQLite, Windows), non-ASCII letters
+        foreach string db in (("/var/lib/db/orders.sqlite", "C:\\data\\orders.db", "bestellungen-ä", "db_1.x")) {
+            assertEq(db, mask_datasource_hash(DsHash + {"db": db}, Opts.db).db, sprintf("%y", db));
+        }
+    }
+
+    # a database name in another encoding is checked and shown in UTF-8; bytes that are not valid in the encoding of
+    # the string mask it
+    encodedDbTest() {
+        string latin1 = convert_encoding("bestellungen-ä", "ISO-8859-1");
+        hash<auto> h = mask_datasource_hash(DsHash + {"db": latin1}, Opts.db);
+        assertEq("bestellungen-ä", h.db);
+        assertEq("UTF-8", h.db.encoding());
+        binary invalid = binary("orders") + <ff>;
+        assertEq("****", mask_datasource_hash(DsHash + {"db": force_encoding(invalid.toString(), "UTF-8")},
+            Opts.db).db);
     }
 
     # an option name that cannot be shown masks the whole option block

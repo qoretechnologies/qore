@@ -102,9 +102,10 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par Serialized SqlUtil Objects Keep No Datasource Credentials
-    Serialized @ref sqlutilintro "SqlUtil" objects keep the masked configuration of their datasource instead of its
-    credentials, and the datasource is restored with a registered deserializer or credential resolver (see
-    @ref sqlutil_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
+    Serialized @ref sqlutilintro "SqlUtil" objects keep the connection name or the masked configuration of their
+    datasource instead of its credentials; a registered deserializer gets an empty string for such data, and a
+    registered credential resolver gives the credentials (see @ref sqlutil_serialization;
+    <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
 
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and

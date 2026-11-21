@@ -32,6 +32,17 @@ Sqlite3Table sub table(AbstractDatasource ds) {
     cast<Datasource>(restored.getDatasource()).close();
 }
 
+# a pool of a named connection is restored as a pool of the connection
+{
+    Datasource ds = ConnectionProvider::get_connection("conn7016").get();
+    DatasourcePool pool(ds.getConfigHash() + {"options": {"min": 1, "max": 2}});
+    ds.close();
+    pool.setConnectionName("conn7016");
+    AbstractTable restored = Serializable::deserialize(table(pool).serializeToData());
+    printf("restored pool: %s %s\n", restored.getDatasource().className(),
+        restored.getDatasource().getConnectionName());
+}
+
 # a connection that is not a datasource connection is refused
 {
     Datasource ds({"type": "sqlite3", "db": getenv("SQLUTIL_7016_DB")});

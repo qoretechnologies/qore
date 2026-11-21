@@ -1006,17 +1006,91 @@ QoreHashNode* q_ds_masked_string_hash(const QoreString& ds, unsigned flags) {
 
 // returns true if the database name can be shown: it is not empty and has no control character, which could forge a
 // line of a log, and no NUL character (qore#7017)
+/* the name is shown only if it is valid UTF-8 and has no character that could make it more than a database name
+   (qore#7017):
+   - no control character (C0, DEL or C1), which could forge a line of a log, and no bidirectional formatting
+     character, which could make it display as other text
+   - none of the separators of a datasource string ("@", "%", "{", "}", "(", ")"), which would make the description
+     show another host or options than the datasource's
+   - no "=" or ";" and no "://": a database name can be a connection string of its own (ex: a PostgreSQL conninfo
+     string such as "host=h user=u password=p dbname=d", a URI, or an ODBC string with "PWD="), with credentials
+*/
 static bool q_ds_valid_db_name(const char* db, size_t len) {
     if (!len) {
         return false;
     }
-    for (const char* p = db, *e = db + len; p < e; ++p) {
-        unsigned char c = static_cast<unsigned char>(*p);
-        if (c < 0x20 || c == 0x7f) {
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(db);
+    const unsigned char* e = p + len;
+    while (p < e) {
+        unsigned c = *p;
+        unsigned cp;
+        size_t n;
+        if (c < 0x80) {
+            cp = c;
+            n = 1;
+        } else if ((c & 0xe0) == 0xc0) {
+            cp = c & 0x1f;
+            n = 2;
+        } else if ((c & 0xf0) == 0xe0) {
+            cp = c & 0x0f;
+            n = 3;
+        } else if ((c & 0xf8) == 0xf0) {
+            cp = c & 0x07;
+            n = 4;
+        } else {
             return false;
         }
+        if (static_cast<size_t>(e - p) < n) {
+            return false;
+        }
+        for (size_t i = 1; i < n; ++i) {
+            if ((p[i] & 0xc0) != 0x80) {
+                return false;
+            }
+            cp = (cp << 6) | (p[i] & 0x3f);
+        }
+        // overlong forms, surrogates and values above U+10FFFF are not valid UTF-8
+        if ((n == 2 && cp < 0x80) || (n == 3 && cp < 0x800) || (n == 4 && (cp < 0x10000 || cp > 0x10ffff))
+            || (cp >= 0xd800 && cp <= 0xdfff)) {
+            return false;
+        }
+        if (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f)
+            || cp == 0x061c || cp == 0x200e || cp == 0x200f || (cp >= 0x202a && cp <= 0x202e)
+            || (cp >= 0x2066 && cp <= 0x2069)) {
+            return false;
+        }
+        switch (cp) {
+            case '@': case '%': case '{': case '}': case '(': case ')': case '=': case ';':
+                return false;
+            case ':':
+                if (static_cast<size_t>(e - p) >= 3 && p[1] == '/' && p[2] == '/') {
+                    return false;
+                }
+                break;
+        }
+        p += n;
     }
     return true;
+}
+
+// returns the database name of a datasource hash in UTF-8 if it can be shown (see q_ds_valid_db_name()), or nullptr
+static QoreStringNode* q_ds_shown_db_name(const QoreValue v) {
+    QoreStringDataHelper db(v);
+    if (!db || db.empty()) {
+        return nullptr;
+    }
+    // the value can be in any encoding: it is checked and shown in UTF-8
+    ExceptionSink xsink;
+    QoreString str(db.c_str(), db.size(), db.getEncoding());
+    TempEncodingHelper utf8(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    if (!q_ds_valid_db_name(utf8->c_str(), utf8->size())) {
+        return nullptr;
+    }
+    return new QoreStringNode(utf8->c_str(), utf8->size(), QCS_UTF8);
 }
 
 // returns true if the name has only ASCII letters, digits, '_', '-' and '.': an encoding or an option name that can be
@@ -1044,9 +1118,8 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
         : QORE_DS_MASK), nullptr);
     rv->setKeyValue("user", new QoreStringNode(QORE_DS_MASK), nullptr);
     {
-        QoreStringDataHelper db(h ? h->getKeyValue("db") : QoreValue());
-        rv->setKeyValue("db", new QoreStringNode((flags & QDS_MASK_SHOW_DB) && db
-            && q_ds_valid_db_name(db.c_str(), db.size()) ? db.c_str() : QORE_DS_MASK), nullptr);
+        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
+        rv->setKeyValue("db", db ? db : new QoreStringNode(QORE_DS_MASK), nullptr);
     }
     if (!h) {
         return rv.release();

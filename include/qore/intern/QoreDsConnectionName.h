@@ -34,6 +34,7 @@
 
 #include <qore/QoreStringNode.h>
 #include <qore/ExceptionSink.h>
+#include <qore/QoreEncoding.h>
 
 #include <atomic>
 
@@ -69,7 +70,12 @@ public:
                 "be empty");
             return -1;
         }
-        SimpleRefHolder<QoreStringNode> n(new QoreStringNode(new_name));
+        // kept in UTF-8, so that the same name in another encoding is the same name
+        TempEncodingHelper utf8(new_name, QCS_UTF8, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        SimpleRefHolder<QoreStringNode> n(new QoreStringNode(utf8->c_str(), utf8->size(), QCS_UTF8));
         QoreStringNode* current = nullptr;
         if (name.compare_exchange_strong(current, *n, std::memory_order_acq_rel, std::memory_order_acquire)) {
             n.release();

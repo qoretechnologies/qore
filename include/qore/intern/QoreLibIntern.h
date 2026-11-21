@@ -1938,8 +1938,9 @@ DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
 /** The hash has the keys of a datasource hash, with the masking of q_ds_append_masked_flags():
     - \c "type": the driver name, or \ref QORE_DS_MASK if it is not a valid driver name
     - \c "user": always \ref QORE_DS_MASK, whether a user is set or not
-    - \c "db": the database name with \ref QDS_MASK_SHOW_DB if it has no control character, otherwise always
-      \ref QORE_DS_MASK
+    - \c "db": the database name in UTF-8 with \ref QDS_MASK_SHOW_DB if it can be only a database name (valid in its
+      encoding, with no control or bidirectional formatting character, no separator of a datasource string, and no
+      \c "=", \c ";" or \c "://", as a connection string with credentials has), otherwise always \ref QORE_DS_MASK
     - \c "charset": the encoding, with \ref QDS_MASK_SHOW_OPTIONS only, if it is a valid encoding name
     - \c "host" and \c "port": as in q_ds_append_masked()
     - \c "options": with \ref QDS_MASK_SHOW_OPTIONS only: the option names, each with the value

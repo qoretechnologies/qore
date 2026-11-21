@@ -188,7 +188,11 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
     shows more, given with the \a opts of @ref Qore::SQL::mask_datasource(string, *hash<auto>) "mask_datasource()" and
     @ref Qore::SQL::mask_datasource_hash(string, *hash<auto>) "mask_datasource_hash()":
     |!Option|!Type|!Description
-    |\c show_db|\c bool|the database name is shown, if it has no control character
+    |\c show_db|\c bool|the database name is shown if it can be only a database name: it is masked if it is not \
+        valid in its encoding, or has a control or bidirectional formatting character, a separator of a datasource \
+        string (\c "@", \c "%", \c "{", \c "}", \c "(", \c ")"), or \c "=", \c ";" or \c "://", as a database \
+        name can be a connection string of its own with credentials (a PostgreSQL conninfo string or URI, an ODBC \
+        string); a database name that is shown is given in UTF-8
     |\c show_options|\c bool|the character encoding and the names of the options are shown, with every option value \
         masked as \c "****"
 
