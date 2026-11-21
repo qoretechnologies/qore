@@ -154,6 +154,36 @@
 #include <system_error>
 #include <thread>
 
+//! gives the string node of a value: a string in either representation, or nullptr for any other value
+/** A string of up to QoreValue::SHORTSTR_MAX_BYTES bytes can be held inline, with no QoreStringNode (issue #7038):
+    a node is made for it, which this object holds
+*/
+class DbgStringNodeHelper {
+public:
+    DLLLOCAL DbgStringNodeHelper(const QoreValue v) {
+        if (v.getType() == NT_STRING) {
+            str = QoreStringNodeValueHelper(v).getReferencedValue();
+        }
+    }
+
+    DLLLOCAL ~DbgStringNodeHelper() {
+        if (str) {
+            str->deref();
+        }
+    }
+
+    //! returns the string node, or nullptr if the value is not a string
+    DLLLOCAL const QoreStringNode* operator*() const {
+        return str;
+    }
+
+private:
+    QoreStringNode* str = nullptr;
+
+    DbgStringNodeHelper(const DbgStringNodeHelper&) = delete;
+    DbgStringNodeHelper& operator=(const DbgStringNodeHelper&) = delete;
+};
+
 static inline void strindent(QoreString* s, int indent) {
     for (int i = 0; i < indent; i++) {
         s->concat(' ');
@@ -916,7 +946,7 @@ static void ut_stateful_string_api(UnitTestCounters& c) {
             return false;
         }
         QoreValue err = xs.getExceptionErr();
-        return err.getType() == NT_STRING && err.get<const QoreStringNode>()->equal("UNSUPPORTED-ENCODING");
+        return QoreStringDataHelper(err) == "UNSUPPORTED-ENCODING";
     };
     unsigned clen = 0;
     s->getUnicodePointFromBytePos(0, clen, &xsink);
@@ -2091,9 +2121,9 @@ void parse_lock_window_a(ExceptionSink* xsink, void* arg) {
     int rc = qore_program_private::lockParsing(*t->q, &wait_xsink);
     std::string err;
     if (wait_xsink) {
-        QoreValue e = wait_xsink.getExceptionErr();
-        if (e.getType() == NT_STRING) {
-            err = e.get<const QoreStringNode>()->c_str();
+        QoreStringDataHelper e(wait_xsink.getExceptionErr());
+        if (e) {
+            err = e.c_str();
         }
         wait_xsink.clear();
     }
@@ -5219,9 +5249,9 @@ private:
         if (xsink) {
             const QoreValue arg = xsink.getExceptionArg();
             const QoreHashNode* h = arg.getType() == NT_HASH ? arg.get<const QoreHashNode>() : nullptr;
-            QoreValue st = h ? h->getKeyValue("status") : QoreValue();
-            if (st.getType() == NT_STRING) {
-                rv = st.get<const QoreStringNode>()->c_str();
+            QoreStringDataHelper st(h ? h->getKeyValue("status") : QoreValue());
+            if (st) {
+                rv = st.c_str();
             } else {
                 QoreStringValueHelper err(xsink.getExceptionErr());
                 rv = err->c_str();
@@ -7369,11 +7399,10 @@ public:
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
             QoreValue desc = exh ? exh->getKeyValue("desc") : QoreValue();
             // the error of the refused connection, not of one that timed out
-            UT_ASSERT(c, err.getType() == NT_STRING
-                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CONNECT-ERROR"),
+            UT_ASSERT(c, QoreStringDataHelper(err) == "SOCKET-CONNECT-ERROR",
                 "the connection fails with SOCKET-CONNECT-ERROR");
             UT_ASSERT(c, desc.getType() == NT_STRING
-                && strstr(desc.get<const QoreStringNode>()->c_str(), strerror(ECONNREFUSED)),
+                && strstr(QoreStringDataHelper(desc).c_str(), strerror(ECONNREFUSED)),
                 "the connection is refused");
         }
         xsink.clear();
@@ -10867,7 +10896,7 @@ int ut_dsopt_opt_set(Datasource* ds, const char* opt, const QoreValue val, Excep
         // the setter that a driver judges the value by (Datasource::getOptionRestrictions())
         ut_dsopt_seen_setter = qore_ds_private::get(*ds)->getOptionSetter(opt);
     }
-    if (val.getType() == NT_STRING && !strcmp(val.get<const QoreStringNode>()->c_str(), "refuse")) {
+    if (QoreStringDataHelper(val) == "refuse") {
         xsink->raiseException("UT-DSOPT-REFUSED", "the unit-test driver refuses the value of option '%s'", opt);
         return -1;
     }
@@ -10984,8 +11013,9 @@ void ut_dsopt_window_hook(qore_ds_private& ds, const char* name, void* arg) {
         w.pending_after_reopen = ds.getOptionSetter(name);
         QoreValue v = ut_dsopt_opt_get(w.reopen, "opt");
         ValueHolder holder(v, nullptr);
-        if (v.getType() == NT_STRING) {
-            w.reopen_value = v.get<const QoreStringNode>()->c_str();
+        QoreStringDataHelper str(v);
+        if (str) {
+            w.reopen_value = str.c_str();
         }
     }
 }
@@ -11200,11 +11230,11 @@ std::string ut_ds_str(QoreStringNode* str) {
 
 //! returns the string value of a key of a hash, or "<none>"
 std::string ut_ds_hash_str(const QoreHashNode* h, const char* key) {
-    QoreValue v = h ? h->getKeyValue(key) : QoreValue();
-    if (v.getType() != NT_STRING) {
+    QoreStringDataHelper v(h ? h->getKeyValue(key) : QoreValue());
+    if (!v) {
         return "<none>";
     }
-    return v.get<const QoreStringNode>()->c_str();
+    return v.c_str();
 }
 
 //! releases a ManagedDatasource
@@ -11595,7 +11625,7 @@ static void ut_debug_step_every_statement(UnitTestCounters& c, QoreProgram* pare
     rv = pgm->callFunction("caught", nullptr, &xsink);
     UT_ASSERT(c, !xsink, "an exception raised by the debugger is caught by the program");
     UT_ASSERT(c, dbg.raised, "the debugger raised its exception");
-    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR"),
+    UT_ASSERT(c, QoreStringDataHelper(rv) == "DEBUGGER-ERROR",
         "the catch block of the program gets the exception raised by the debugger");
     rv.discard(&xsink);
     // the statement where the debugger raised the exception is not executed; the catch block is
@@ -11904,7 +11934,7 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     UT_ASSERT(c, !xsink, "an exception raised by the debugger at a folded statement is caught by the program");
     UT_ASSERT(c, dbg.getRaised(), "the debugger raised its exception at the folded statement");
     // 1 + 2 + 1 + 3; the operation of the statement where the debugger raised the exception did not run (++a)
-    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR:7"),
+    UT_ASSERT(c, QoreStringDataHelper(rv) == "DEBUGGER-ERROR:7",
         "the folded statements ran after their step events, and the one where the debugger raised the exception "
         "did not");
     rv.discard(&xsink);
@@ -17949,7 +17979,8 @@ bool qore_dbg_http1_header_read_op_must_fail(const char* site) {
 */
 static QoreValue f_dbg_fail_http1_header_read_op(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* site = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper site_param(get_param_value(params, 0));
+    const QoreStringNode* site = *site_param;
     DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
     AutoLocker al(f.m);
     f.armed = true;
@@ -18234,7 +18265,8 @@ static QoreValue f_dbg_async_io_on_complete_dispatched(const QoreListNode* param
 */
 static QoreValue f_dbg_async_io_mark_owner_shutting_down(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* owner = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper owner_param(get_param_value(params, 0));
+    const QoreStringNode* owner = *owner_param;
     bool mark = HARD_QORE_VALUE_BOOL(params, 1);
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !ctl_obj) {
@@ -18326,7 +18358,8 @@ static QoreValue f_dbg_quic_datagram_totals(const QoreListNode* params, RuntimeC
 //! Debug-only: waits for datagrams from an address; see qore_quic_test_wait_received_from()
 static QoreValue f_dbg_quic_wait_received_from(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* addr = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper addr_param(get_param_value(params, 0));
+    const QoreStringNode* addr = *addr_param;
     int64 count = get_param_value(params, 1).getAsBigInt();
     int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
     if (timeout_ms < 0 || timeout_ms > std::numeric_limits<int>::max()) {
@@ -18809,11 +18842,11 @@ static std::string dbg_aot_mem_str(const QoreHashNode* h, const char* key, const
     if (!h) {
         return def;
     }
-    QoreValue v = h->getKeyValue(key);
-    if (v.getType() != NT_STRING) {
+    QoreStringDataHelper v(h->getKeyValue(key));
+    if (!v) {
         return def;
     }
-    return v.get<const QoreStringNode>()->c_str();
+    return v.c_str();
 }
 
 //! Debug-only: runs operations on the memory admission of qcc batch compiles, over a simulated memory domain
@@ -21046,7 +21079,8 @@ static const void* dbg_poll_op_key(QoreObject* obj, qore_classid_t cid, Exceptio
 static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
-    const QoreStringNode* site = get_param_value(params, 1).get<const QoreStringNode>();
+    DbgStringNodeHelper site_param(get_param_value(params, 1));
+    const QoreStringNode* site = *site_param;
     const QoreClass* cls = obj->getClass();
     const void* key = nullptr;
     if (cls->getClass(CID_HTTP1CLIENTPOLLOPERATIONBASE)) {
@@ -21081,7 +21115,8 @@ static QoreValue f_dbg_poll_close_before_open_state(const QoreListNode* params, 
     reference of a class of a module has a newline of its own (qore#6026)
 */
 static QoreValue f_dbg_aot_split_method_ref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* encoded = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper encoded_param(get_param_value(params, 0));
+    const QoreStringNode* encoded = *encoded_param;
     QoreAOTStaticMethodRef ref(encoded->c_str());
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("method", ref.method_name ? new QoreStringNode(ref.method_name) : QoreValue(), xsink);
@@ -21215,9 +21250,8 @@ static QoreValue f_dbg_run_program_thread_hub_tests(const QoreListNode* params, 
 static QoreValue f_dbg_cancel_thread_after_end(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
-    const QoreStringNode* reason = get_param_value(params, 1).getType() == NT_STRING
-        ? get_param_value(params, 1).get<const QoreStringNode>()
-        : nullptr;
+    DbgStringNodeHelper reason_param(get_param_value(params, 1));
+    const QoreStringNode* reason = *reason_param;
     std::function<void()> wait_for_end = [tid]() {
         ExceptionSink join_xsink;
         thread_list.joinThread(tid, 60000, &join_xsink);
@@ -21623,11 +21657,12 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
     // takes the record of the next call made by the test program
     auto take = [&] () -> std::string {
         ValueHolder v(pgm->callFunction("ut_take", nullptr, &xsink), &xsink);
-        if (xsink || v->getType() != NT_STRING) {
+        QoreStringDataHelper str(*v);
+        if (xsink || !str) {
             xsink.clear();
             return std::string();
         }
-        return v->get<const QoreStringNode>()->c_str();
+        return str.c_str();
     };
 
     // the calls that hold the object in a background thread
@@ -21699,8 +21734,7 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
             ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgOther::m", other);
             ValueHolder rv(n->eval(&xsink), &xsink);
             QoreValue err = xsink.isException() ? xsink.getExceptionErr() : QoreValue();
-            UT_ASSERT(c, err.getType() == NT_STRING
-                && !strcmp(err.get<const QoreStringNode>()->c_str(), "METHOD-DOES-NOT-EXIST"),
+            UT_ASSERT(c, QoreStringDataHelper(err) == "METHOD-DOES-NOT-EXIST",
                 "a qualified call of a class that the object does not inherit raises METHOD-DOES-NOT-EXIST");
             xsink.clear();
         }
@@ -21737,11 +21771,9 @@ static void ut_old_background_self_call_helper(UnitTestCounters& c) {
         if (!xsink.isException()) {
             return false;
         }
-        QoreValue err = xsink.getExceptionErr();
-        QoreValue desc = xsink.getExceptionDesc();
-        return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "AOT-RUNTIME-ERROR")
-            && desc.getType() == NT_STRING && strstr(desc.get<const QoreStringNode>()->c_str(), "'m'")
-            && strstr(desc.get<const QoreStringNode>()->c_str(), "recompile the program");
+        QoreStringDataHelper desc(xsink.getExceptionDesc());
+        return QoreStringDataHelper(xsink.getExceptionErr()) == "AOT-RUNTIME-ERROR"
+            && desc && strstr(desc.c_str(), "'m'") && strstr(desc.c_str(), "recompile the program");
     };
     {
         ExceptionSink xsink;
@@ -22367,8 +22399,8 @@ static void ut_thread_scratch(UnitTestCounters& c) {
                 ExceptionSink xsink;
                 recv_rc = qore_quic_test_recv_dispatch(fd, &xsink);
                 if (xsink) {
-                    QoreValue err = xsink.getExceptionErr();
-                    recv_err = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "?";
+                    QoreStringDataHelper err(xsink.getExceptionErr());
+                    recv_err = err ? err.c_str() : "?";
                     QoreValue arg = xsink.getExceptionArg();
                     recv_errno = static_cast<int>(arg.getAsBigInt());
                     xsink.clear();
@@ -23094,8 +23126,8 @@ static QoreValue f_dbg_run_in_foreign_thread(const QoreListNode* params, Runtime
         ExceptionSink txsink;
         ValueHolder rv(code->invoke(nullptr, &txsink), &txsink);
         if (txsink) {
-            QoreValue e = txsink.getExceptionErr();
-            err = e.getType() == NT_STRING ? e.get<const QoreStringNode>()->c_str() : "EXCEPTION";
+            QoreStringDataHelper e(txsink.getExceptionErr());
+            err = e ? e.c_str() : "EXCEPTION";
             txsink.clear();
         }
     });
@@ -23346,7 +23378,8 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
     @throw DBG-ARGUMENT-ERROR the loop is unknown
 */
 static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* loop = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper loop_param(get_param_value(params, 0));
+    const QoreStringNode* loop = *loop_param;
     int64_t index = get_param_value(params, 1).getAsBigInt();
     int which;
     if (!strcmp(loop->c_str(), "reload-chain-slots")) {
@@ -23369,10 +23402,12 @@ static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::BgCompileHoldPoint point;
-    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+    DbgStringNodeHelper point_param(get_param_value(params, 0));
+    if (!dbg_get_bg_compile_hold_point(*point_param, point, xsink)) {
         return QoreValue();
     }
-    const QoreStringNode* func = get_param_value(params, 1).get<const QoreStringNode>();
+    DbgStringNodeHelper func_param(get_param_value(params, 1));
+    const QoreStringNode* func = *func_param;
     if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
     }
@@ -23382,7 +23417,8 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
 //! waits until the background JIT compiler is stopped at the given point; returns False on timeout
 static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::BgCompileHoldPoint point;
-    if (!dbg_get_bg_compile_hold_point(get_param_value(params, 0).get<const QoreStringNode>(), point, xsink)) {
+    DbgStringNodeHelper point_param(get_param_value(params, 0));
+    if (!dbg_get_bg_compile_hold_point(*point_param, point, xsink)) {
         return QoreValue();
     }
     return QoreJIT::instance().dbgWaitBgCompileHeld(point, get_param_value(params, 1).getAsBigInt());
@@ -23655,7 +23691,8 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
 //! that are recorded for the errors of the module's own directives; the record is cleared when the module's code has
 //! been parsed (qore#5682)
 static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper name_param(get_param_value(params, 0));
+    const QoreStringNode* name = *name_param;
     QoreAbstractModule* mi = QMM.findModule(name->c_str());
     if (!mi) {
         return xsink->raiseException("DBG-MODULE-ERROR", "module '%s' is not loaded", name->c_str());
@@ -23718,7 +23755,8 @@ static QoreValue f_dbg_object_external_deref(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_class_member_index_info(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper path_param(get_param_value(params, 0));
+    const QoreStringNode* path = *path_param;
     const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
     if (*xsink) {
         return QoreValue();
@@ -23747,8 +23785,10 @@ static QoreValue f_dbg_class_member_index_info(const QoreListNode* params, Runti
     @return the number of indexes that the class's member map has replaced so far
 */
 static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
-    const QoreStringNode* name = get_param_value(params, 1).get<const QoreStringNode>();
+    DbgStringNodeHelper path_param(get_param_value(params, 0));
+    const QoreStringNode* path = *path_param;
+    DbgStringNodeHelper name_param(get_param_value(params, 1));
+    const QoreStringNode* name = *name_param;
     const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
     if (*xsink) {
         return QoreValue();
@@ -23773,7 +23813,8 @@ static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, Runtim
 
 //! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
 static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper func_param(get_param_value(params, 0));
+    const QoreStringNode* func = *func_param;
     qore_dbg_hold_batch_collection(func ? func->c_str() : "");
     return QoreValue();
 }
@@ -23793,7 +23834,8 @@ static QoreValue f_dbg_wait_teardown_compile_hold(const QoreListNode* params, Ru
 //! counts the holds refused to the batch collections and effect analyses of the named root function (qore#5874)
 static QoreValue f_dbg_count_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper func_param(get_param_value(params, 0));
+    const QoreStringNode* func = *func_param;
     qore_dbg_count_batch_collection_refusals(func ? func->c_str() : "");
     return QoreValue();
 }
@@ -23904,7 +23946,8 @@ static QoreValue f_dbg_get_cancel_wake_count(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_cancel_in_cancellable_wait(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* reason = get_param_value(params, 1).get<const QoreStringNode>();
+    DbgStringNodeHelper reason_param(get_param_value(params, 1));
+    const QoreStringNode* reason = *reason_param;
     return q_cancel_in_cancellable_wait(static_cast<int>(get_param_value(params, 0).getAsBigInt()), reason->c_str(),
         get_param_value(params, 2).getAsBigInt());
 }
@@ -24482,7 +24525,8 @@ void dbg_hold_constant_store_hook(const char* name) {
     @throw DBG-ARGUMENT-ERROR a hold is already armed
 */
 static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper name_param(get_param_value(params, 0));
+    const QoreStringNode* name = *name_param;
     ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -24570,7 +24614,8 @@ void dbg_hold_deref_last_hook(const char* class_name) {
 template <typename T>
 QoreValue dbg_arm_deref_point_hold(DerefPointHold& h, std::atomic<T>& hook, T func, const QoreListNode* params,
         ExceptionSink* xsink) {
-    const QoreStringNode* class_name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper class_name_param(get_param_value(params, 0));
+    const QoreStringNode* class_name = *class_name_param;
     ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -24713,7 +24758,8 @@ void dbg_hold_deref_collect_hook(const char* class_name) {
     @throw DBG-ARGUMENT-ERROR a hold is already armed
 */
 static QoreValue f_dbg_hold_deref_collect(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* class_name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper class_name_param(get_param_value(params, 0));
+    const QoreStringNode* class_name = *class_name_param;
     ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -24779,7 +24825,8 @@ void dbg_deref_wait_notify_hook(const char* name) {
     @throw DBG-ARGUMENT-ERROR a notification is already armed
 */
 static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper name_param(get_param_value(params, 0));
+    const QoreStringNode* name = *name_param;
     ReferenceHolder<Counter> waiting(get_counter_arg(params, 1, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -25094,7 +25141,8 @@ void dbg_count_closure_var_collections_hook(const char* name) {
     @throw DBG-ARGUMENT-ERROR a hold is already armed
 */
 static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper name_param(get_param_value(params, 0));
+    const QoreStringNode* name = *name_param;
     ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -25153,7 +25201,8 @@ static QoreValue f_dbg_hold_removed_object_scan(const QoreListNode* params, Runt
 */
 static QoreValue f_dbg_count_closure_var_collections(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper name_param(get_param_value(params, 0));
+    const QoreStringNode* name = *name_param;
     ClosureVarCollections& h = closure_var_collections;
     std::lock_guard<std::mutex> l(h.m);
     h.name = name->c_str();
@@ -25534,9 +25583,9 @@ std::string dbg_http1_bytes_arg(const QoreListNode* params, size_t i) {
         const BinaryNode* b = v.get<const BinaryNode>();
         return std::string(static_cast<const char*>(b->getPtr()), b->size());
     }
-    if (v.getType() == NT_STRING) {
-        const QoreStringNode* str = v.get<const QoreStringNode>();
-        return std::string(str->c_str(), str->size());
+    QoreStringDataHelper str(v);
+    if (str) {
+        return std::string(str.c_str(), str.size());
     }
     return std::string();
 }
@@ -26483,7 +26532,8 @@ static QoreValue f_dbg_http_new_connection_wait_clear(const QoreListNode* params
     @throw DBG-ARGUMENT-ERROR an unknown point, the point is already armed, or the peer's socket uses TLS
 */
 static QoreValue f_dbg_http1_answer_at(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* point = get_param_value(params, 0).get<const QoreStringNode>();
+    DbgStringNodeHelper point_param(get_param_value(params, 0));
+    const QoreStringNode* point = *point_param;
     if (!point || (*point != "idle-check" && *point != "after-sent")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http1_answer_at(): the point must be \"idle-check\" or "
             "\"after-sent\"");
@@ -26925,8 +26975,10 @@ static QoreValue f_dbg_check_parse_diagnostic_lookup(const QoreListNode* params,
     if (!pgm) {
         return QoreValue();
     }
-    const QoreStringNode* first = get_param_value(params, 1).get<const QoreStringNode>();
-    const QoreStringNode* second = get_param_value(params, 2).get<const QoreStringNode>();
+    DbgStringNodeHelper first_param(get_param_value(params, 1));
+    const QoreStringNode* first = *first_param;
+    DbgStringNodeHelper second_param(get_param_value(params, 2));
+    const QoreStringNode* second = *second_param;
     qore_set_program_parse_diagnostics_accumulated(**pgm);
 
     ExceptionSink first_xsink;
@@ -27471,19 +27523,32 @@ static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, Runti
 /** Tests that a slice in the middle of a string is copied with an exact allocation (issue #6239)
 */
 static QoreValue f_dbg_string_capacity(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const qore_string_private* p = qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>());
+    QoreValue v = get_param_value(params, 0);
+    // an inline short string has no buffer of its own (issue #7038)
+    if (v.isShortString()) {
+        return 0;
+    }
+    const qore_string_private* p = qore_string_private::get(*v.get<const QoreStringNode>());
     return p->view_parent ? 0 : static_cast<int64>(p->allocated);
 }
 
 //! Returns the known ASCII prefix of the string (the cache of issue #6138)
 static QoreValue f_dbg_string_ascii_prefix(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return static_cast<int64>(qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>())
-        ->getAsciiPrefix());
+    QoreValue v = get_param_value(params, 0);
+    // an inline short string has no cache (issue #7038)
+    if (v.isShortString()) {
+        return 0;
+    }
+    return static_cast<int64>(qore_string_private::get(*v.get<const QoreStringNode>())->getAsciiPrefix());
 }
 
 static QoreValue f_dbg_string_is_view(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
-    return qore_string_private::get(*str)->view_parent != nullptr;
+    QoreValue v = get_param_value(params, 0);
+    // an inline short string is never a view (issue #7038)
+    if (v.isShortString()) {
+        return false;
+    }
+    return qore_string_private::get(*v.get<const QoreStringNode>())->view_parent != nullptr;
 }
 
 static QoreValue f_dbg_get_string_scan_bytes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
