@@ -26,7 +26,8 @@ class SharedTypeResolutionFailureTest inherits QUnit::Test {
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
         string fixture = get_script_dir() + "/SharedTypeResolutionFailure.q";
-        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedTypeResolutionFailure.expected");
+        # read once the cases run (a debug build), see the constructor
+        string expected;
     }
 
     constructor() : QUnit::Test("shared type resolution failure", "1.0", \ARGV) {
@@ -37,6 +38,7 @@ class SharedTypeResolutionFailureTest inherits QUnit::Test {
             set_return_value(main());
             return;
         }
+        expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedTypeResolutionFailure.expected");
         foreach string mode in (ExecModeHarness::ExecModes) {
             string execution_mode = mode;
             addTestCase("execution mode " + mode, sub () {
