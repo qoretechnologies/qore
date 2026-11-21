@@ -1,0 +1,34 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class CallerRestrictionGrantsTest
+
+#! The one rule of every check of a caller's domains: the initialization of library code is not a call by the code that
+#! loads it, and a host grant lends access to the code inside it (issues #6844, #6982)
+class CallerRestrictionGrantsTest inherits QUnit::Test {
+    constructor() : Test("CallerRestrictionGrants", "1.0", \ARGV) {
+        addTestCase("module initialization and host grants", \grantsTest());
+        set_return_value(main());
+    }
+
+    #! runs in a child process, so that the directory of the probe module is a directory of the module path, from
+    #! which library code is loaded
+    grantsTest() {
+        string dir = get_script_dir() + "caller-restriction" + DirSep;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s %s 2>&1", (dir, ENV.QORE_MODULE_DIR).join(PathSep),
+            TestInterpreter::qore_interpreter(), dir + "CallerRestrictionChild.q"));
+        # the module's initialization is not a call by the restricted Program that loads it first; a plain call is
+        # restricted; a policy barrier and a capability lend access; the restricted code that a barrier calls back is
+        # still restricted; a function that declares the domain is refused for the restricted caller and lent under a
+        # policy barrier
+        assertEq("[False, True, False, False, True, \"INVALID-FUNCTION-ACCESS\", True]\n", out);
+    }
+}

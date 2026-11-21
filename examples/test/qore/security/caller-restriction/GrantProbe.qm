@@ -1,0 +1,85 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-grants.qtest: it reports whether its calling code is restricted from external
+#! information, in its initialization, for a plain call, under a host grant, and for code that a grant calls back
+
+%modern
+
+module GrantProbe {
+    # the module's own code uses the domain that its declared function declares
+    domains = "EXTERNAL_INFO";
+    version = "1.0";
+    desc = "test module reporting the restrictions of its calling code";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        GrantProbe::InitRestricted = SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+        # the capability, and the call reference that the policy barrier calls, are created here: a call reference
+        # created while serving a restricted caller keeps its restrictions; the methods are called by name, so that the
+        # module can be loaded by code that may not use uncontrolled APIs
+        GrantProbe::Capability = call_static_method("SandboxManager", "createSystemPolicyCall", \GrantProbe::probe());
+        GrantProbe::Probe = \GrantProbe::probe();
+        GrantProbe::Declared = \GrantProbe::declared();
+    };
+}
+
+public namespace GrantProbe {
+    our bool InitRestricted;
+    our code Capability;
+    our code Probe;
+    our code Declared;
+
+    #! a function that declares the domain: the calling code is checked when it is entered
+    bool sub declared() [dom=EXTERNAL_INFO] {
+        return True;
+    }
+
+    #! calls the declared function directly, or returns the error
+    public auto sub declared_plain() {
+        try {
+            return declared();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! calls the declared function under a policy barrier, or returns the error
+    public auto sub declared_barrier() {
+        try {
+            return call_static_method("SandboxManager", "callWithSystemPolicy", Declared);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    bool sub probe() {
+        return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+    }
+
+    #! returns whether the module's initialization saw a restricted caller
+    public bool sub init_restricted() {
+        return InitRestricted;
+    }
+
+    #! returns whether the calling code is restricted
+    public bool sub plain() {
+        return probe();
+    }
+
+    #! returns whether the calling code is restricted under a policy barrier
+    public bool sub barrier() {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", Probe);
+    }
+
+    #! returns whether the calling code is restricted in a capability
+    public bool sub capability() {
+        return Capability();
+    }
+
+    #! calls back the caller's code under a policy barrier
+    public auto sub call_barrier(code c) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", c);
+    }
+}

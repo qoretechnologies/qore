@@ -1602,7 +1602,16 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
     of a sandboxed caller that the module code runs with, and those of the modules on the way that are not library code
     (a module loaded by its path, which has the restrictions of the %Program that loaded it first); the options of a
     library module's own %Program do not, and neither
-    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
+    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).  The code of an object
+    or call reference that restricted code created is restricted as its creator is.
+
+    The same rule decides the declared domains of user module code (see @ref sandbox_caller_domains):
+    - the initialization of library module code is not a call by the code that loads it: the calling code is not
+      looked up past it, while the objects and call references that restricted code created keep their restrictions
+    - the host lends access with a policy barrier (callWithSystemPolicy()) or a capability (createSystemPolicyCall()):
+      only the code that runs inside the innermost grant counts then, so trusted code can perform the operation for a
+      restricted caller, while restricted code that the grant calls back is still restricted (a capability also masks
+      the provenance of the code that ran before it)
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 
