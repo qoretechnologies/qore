@@ -8831,6 +8831,8 @@ public:
             }
             if (form == Form::Bookkept) {
                 qore_owned_descriptor_release(desc.owned);
+                // released: the descriptor is closed now or by the last hold, not again by its destructor
+                desc.x = -1;
                 struct stat st;
                 UT_ASSERT(c, !removed || fstat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
                     (v + ": the removal releases the hold, so the owner's release closes the descriptor").c_str());
