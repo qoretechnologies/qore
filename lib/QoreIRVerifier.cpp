@@ -3310,6 +3310,56 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
 //! Returns true if the locals of its function that an on_block_exit handler references can be found in its IR (#5951)
 /** A handler that delegates a statement to the AST evaluates locals that its IR does not show
 */
+//! Returns true if an on_block_exit handler can create a reference (#6990)
+/** As the function's own instructions: an instruction that creates a reference, a statement or a functional operator
+    that the AST evaluates, an expression that creates one, a node that the scan does not know, and a nested handler
+    that can create one, or that has no IR
+*/
+static bool qore_ir_handler_creates_reference(const QoreIRFunction& handler,
+        std::unordered_set<const QoreIRFunction*>& visited) {
+    if (!visited.insert(&handler).second) {
+        return false;
+    }
+    std::unordered_set<const void*> locals;
+    bool unknown_node_found = false;
+    bool created = false;
+    for (const auto& block : handler.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (!inst) {
+                continue;
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::CreateParseRef:
+                case QoreIROpcode::RefForeachInit:
+                case QoreIROpcode::Find:
+                    return true;
+                default:
+                    break;
+            }
+            if (isDelegateToASTStatement(inst->opcode)) {
+                return true;
+            }
+            if (isLValueOp(inst->opcode)) {
+                collectLocalsFromExpr(static_cast<const QoreIRLValueInstruction*>(inst.get())->lvalue, locals,
+                    unknown_node_found, &created);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, locals, unknown_node_found, &created);
+            }
+            if (created || unknown_node_found) {
+                return true;
+            }
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (!obe->handler_ir || qore_ir_handler_creates_reference(*obe->handler_ir, visited)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static bool qore_ir_handler_locals_from_ir(const QoreIRFunction& handler) {
     for (const auto& block : handler.blocks) {
         for (const auto& inst : block->instructions) {
@@ -4134,9 +4184,16 @@ void QoreIRFunction::computeIROnlyLocals() {
             // creating a reference so untyped locals in the function stay AST-visible.
             if (inst->opcode == QoreIROpcode::CreateParseRef
                     || inst->opcode == QoreIROpcode::RefForeachInit
-                    || inst->opcode == QoreIROpcode::Find
-                    || inst->opcode == QoreIROpcode::OnBlockExit) {
+                    || inst->opcode == QoreIROpcode::Find) {
                 reference_created = true;
+            }
+            // a handler creates a reference only if its IR does; one without IR is taken to create one (#6990)
+            if (inst->opcode == QoreIROpcode::OnBlockExit && !reference_created) {
+                const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                std::unordered_set<const QoreIRFunction*> scanned;
+                if (!obe->handler_ir || qore_ir_handler_creates_reference(*obe->handler_ir, scanned)) {
+                    reference_created = true;
+                }
             }
 
             if (inst->opcode == QoreIROpcode::Find) {
