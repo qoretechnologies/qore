@@ -3106,12 +3106,13 @@ static ClosureVarValue* findClosureVarValueForIR(LocalVar* var);
 /** @param mode the mode of the assignment: a weak or opaque assignment is given the value assigned, whose type the
     assignment checks before it makes the weak or opaque reference that the variable holds, as the AST interpreter
     does (LValueHelper::assign(); qore#6979)
-    @param stored if not null, the value that the variable holds is returned here, with a reference for the caller,
-    or no value if the assignment raised an exception
+    @param converted if not null, the value that the variable holds after a weak or opaque assignment, as the value
+    of the assignment: the value assigned, converted to the variable's type, with a weak reference replaced by its
+    target (qore#7084), owned by the caller, or no value if the assignment raised an exception
 */
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
         bool initial_assignment = false, const char* desc = "<lvalue>", AssignmentMode mode = AssignmentMode::Normal,
-        QoreValue* stored = nullptr) {
+        QoreValue* converted = nullptr) {
     if (!var) {
         return;
     }
@@ -3125,8 +3126,9 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (helper.assign(value.needsRef() ? value.refSelf() : value, desc, true, mode)) {
         return;
     }
-    if (stored) {
-        *stored = helper.getReferencedValue();
+    if (converted) {
+        *converted = helper.getReferencedValue();
+        evaluateOwnedWeakReferenceResult(*converted, xsink);
     }
 }
 
@@ -3214,7 +3216,13 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
     if (helper.assign(stored, "<lvalue>", true, mode)) {
         return QoreValue();
     }
-    return helper.getReferencedValue();
+    // the value of a weak or opaque assignment is read while the helper keeps a container that the variable's type
+    // converted to a copy of its own (qore#7084)
+    QoreValue rv = helper.getReferencedValue();
+    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
+        evaluateOwnedWeakReferenceResult(rv, xsink);
+    }
+    return rv;
 }
 
 static void assignObjectMemberValue(QoreObject* obj, const char* key, const QoreValue& value,
@@ -16972,7 +16980,13 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                     if (local_inst->result.isValid()) {
+                        // the result of a weak or opaque assignment is the value assigned, converted to the variable's
+                        // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives
+                        // the value the variable holds
                         QoreValue res = helper.getReferencedValue();
+                        if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
+                            evaluateOwnedWeakReferenceResult(res, xsink);
+                        }
                         setValueSlot(values, local_inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
@@ -17617,12 +17631,16 @@ load_local_done:
                     }
                 }
                 // the value is only stored in the variable: other threads can change it, so the frame keeps no copy;
-                // the result of a weak or opaque assignment is the reference that the variable holds
+                // the result of a weak or opaque assignment is the value assigned, converted to the variable's type,
+                // as the AST interpreter gives it to its consumers (qore#7084)
                 QoreValue converted_res;
                 assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment, store_desc,
                     converts ? store_mode : AssignmentMode::Normal,
                     converts && local_inst->result.isValid() ? &converted_res : nullptr);
-                if (local_inst->result.isValid() && !(xsink && *xsink)) {
+                // releasing the variable's previous value can raise an exception after the value was converted
+                if (xsink && *xsink) {
+                    converted_res.discard(xsink);
+                } else if (local_inst->result.isValid()) {
                     QoreValue res = converts ? converted_res : (val.needsRef() ? val.refSelf() : val);
                     setValueSlot(values, local_inst->result.id, res, xsink);
                     if (res.needsRef()) {
@@ -17708,6 +17726,8 @@ load_local_done:
                 ValueHolder stored(assignGlobalVarValueStored(var_inst->var, val, xsink,
                     converts ? store_mode : AssignmentMode::Normal), xsink);
                 if (var_inst->result.isValid() && !(xsink && *xsink)) {
+                    // the result of a weak or opaque assignment is the value assigned, converted to the variable's
+                    // type, as the AST interpreter gives it to its consumers (qore#7084)
                     QoreValue res = stored.release();
                     setValueSlot(values, var_inst->result.id, res, xsink);
                     if (res.needsRef()) {
@@ -17794,6 +17814,8 @@ load_local_done:
                 ValueHolder stored(assignGlobalVarValueStored(var_inst->var, val, xsink,
                     converts ? store_mode : AssignmentMode::Normal), xsink);
                 if (var_inst->result.isValid() && !(xsink && *xsink)) {
+                    // the result of a weak or opaque assignment is the value assigned, converted to the variable's
+                    // type, as the AST interpreter gives it to its consumers (qore#7084)
                     QoreValue res = stored.release();
                     setValueSlot(values, var_inst->result.id, res, xsink);
                     if (res.needsRef()) {
