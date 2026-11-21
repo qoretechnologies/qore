@@ -101,6 +101,10 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional Domains for Standard Module Sources
+    Restricted Programs now get a parse error when explicitly loading standard module sources outside the
+    process-wide module path if the source needs a denied @ref function_domains "functional domain".
+
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
     (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
