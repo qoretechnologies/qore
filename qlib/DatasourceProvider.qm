@@ -193,7 +193,7 @@ namespace Priv {
     # other string, such as a datasource string, which can have a user name, a password and a database name
     # (issue #6988)
     string sub get_ds_desc(string str) {
-        return (str =~ /[\/@:%]/) ? mask_datasource(str) : str;
+        return (str =~ /[\/@:%({]/) ? mask_datasource(str) : str;
     }
 
     string sub try_get_ds_string(string mod, string str) {

@@ -45,6 +45,30 @@ public class DatasourceProviderTest inherits QUnit::Test {
     # a datasource string that is not matched is not shown in an exception; an identifier is (qore#6988)
     datasourceProviderMaskedTest() {
         list<string> secrets = ("u_SECRET1", "p_SECRET2", "d_SECRET3");
+
+        # with a provider module that does not match the string
+        {
+            Program mp(PO_NO_CHILD_PO_RESTRICTIONS|PO_NEW_STYLE);
+            mp.setGlobalVarValue("ENV", ENV + {"QORE_DATASOURCE_PROVIDERS": get_script_dir()
+                + "./TestDatasourceProvider.qm"});
+            mp.loadApplyToUserModule(get_script_dir() + "../../../../qlib/DatasourceProvider.qm", True);
+            Program pp(PO_NEW_STYLE);
+            pp.loadModule("DatasourceProvider");
+            pp.parse("string sub test(string str) { return get_ds_string(str); }", "");
+            foreach string str in (("u_SECRET1/p_SECRET2@d_SECRET3", "d_SECRET3(utf8){p_SECRET2=u_SECRET1}")) {
+                try {
+                    pp.callFunction("test", str);
+                    fail("no exception was raised");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("DATASOURCE-ERROR", ex.err);
+                    assertRegex("tried the following datasource provider modules", ex.desc);
+                    string text = sprintf("%s: %y", ex.desc, ex.arg);
+                    foreach string secret in (secrets) {
+                        assertEq(-1, text.find(secret), secret);
+                    }
+                }
+            }
+        }
         # a string without a driver that is not matched is not shown in the exception, an identifier is
         Program np(PO_NEW_STYLE);
         np.loadModule("DatasourceProvider");
