@@ -24894,9 +24894,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 // can be one of them (qore#7107)
                 ReferenceHolder<QoreHashNode> members(new QoreHashNode(autoTypeInfo), xsink);
                 if constexpr (Lexical) {
-                    op->mergeDataToHash(*members, sdh, xsink, policy, false);
+                    op->mergeDataToHashHeld(*members, sdh, xsink, policy);
                 } else {
-                    op->mergeDataToHash(*members, sdh, xsink, false);
+                    op->mergeDataToHashHeld(*members, sdh, xsink);
                 }
                 if (*xsink) {
                     return QoreValue();
@@ -24921,13 +24921,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         // a char is added as its one-character string is
         const QoreValue operand = right.isChar() ? qore_plus_equals_replace_char(right_holder) : right;
         QoreObject* o = v.getValue().get<QoreObject>();
-        if (right.getType() == NT_HASH || right.getType() == NT_OBJECT) {
-            // the lock that the lvalue holds: that of the object whose member is the lvalue
-            const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
-            if (qore_class_private::get(*o->getClass())->has_member_accessors
-                    || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
-                        || (right.getType() == NT_OBJECT
-                            && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml)))) {
+        // the lock that the lvalue holds: that of the object whose member is the lvalue (qore#7107); the operand's
+        // type is needed only with accessor members or such a lock, so a merge into an object in a local variable
+        // costs nothing more
+        const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
+        bool accessors = qore_class_private::get(*o->getClass())->has_member_accessors;
+        if (accessors || vl_lock) {
+            qore_type_t rtype = right.getType();
+            if ((rtype == NT_HASH || rtype == NT_OBJECT)
+                    && (accessors || vl_lock == &qore_object_private::get(*o)->rml
+                        || (rtype == NT_OBJECT
+                            && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml))) {
                 return mergeObjectMembersUnlocked<Lexical>(v, o, right, xsink, policy);
             }
         }

@@ -1428,17 +1428,27 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     lvh.objectRemoved(*this, scan_value_removed);
 }
 
-template <bool Lexical>
+template <bool Lexical, bool Lock>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy, bool lock) const {
+        LexicalSemanticPolicy policy) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         class_ctx = nullptr;
     }
 
-    QoreSafeVarRWReadLocker sl(rml, lock);
+    if constexpr (Lock) {
+        QoreSafeVarRWReadLocker sl(rml);
+        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx);
+    } else {
+        // this thread holds the object's lock for writing (qore#7107)
+        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx);
+    }
+}
 
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const {
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
         return;
@@ -1499,14 +1509,23 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
     }
 }
 
-void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        bool lock) const {
-    return mergeDataToHashImpl<false>(hash, sdh, xsink, {}, lock);
+// each variant is a function of its own: the common one with the object's read lock is the code of before qore#7107
+void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
+    mergeDataToHashImpl<false, true>(hash, sdh, xsink, {});
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy, bool lock) const {
-    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy, lock);
+        LexicalSemanticPolicy policy) const {
+    mergeDataToHashImpl<true, true>(hash, sdh, xsink, policy);
+}
+
+void qore_object_private::mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
+    mergeDataToHashImpl<false, false>(hash, sdh, xsink, {});
+}
+
+void qore_object_private::mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    mergeDataToHashImpl<true, false>(hash, sdh, xsink, policy);
 }
 
 QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* member, const qore_class_private* class_ctx) {
