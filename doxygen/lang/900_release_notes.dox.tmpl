@@ -109,9 +109,8 @@
     explicit port 0, which was accepted as a datasource without a port, is now refused.
 
     @par A Datasource String With an Option Name With "@" Raises an Error
-    A datasource string with an option name that has \c "@" raises \c DATASOURCE-PARSE-ERROR, as the option block is
-    found from the last \c "{" of the string, so a \c "{" in a password could make a part of the password an option
-    name; an option value can still have \c "@" (see @ref datasource_secrets;
+    A datasource string with an option name containing \c "@" now raises \c DATASOURCE-PARSE-ERROR; option values can
+    still contain \c "@" (see @ref datasource_secrets;
     <a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>).
 
     @par Functional Domains for Standard Module Sources
