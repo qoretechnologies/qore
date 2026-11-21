@@ -98,8 +98,10 @@ class MultiByteIconvParityTest inherits QUnit::Test {
                     assertEq(known.count, iconv_only, sprintf("%s: sequences that iconv decodes and the character "
                         "functions refuse: %s", enc, m[6]));
                 } else {
-                    assertEq(0, iconv_only, sprintf("%s: sequences that iconv decodes and the character functions "
-                        "refuse: %s", enc, m[6]));
+                    # the first bytes of the sequences are given as well, so that a difference of a platform's iconv
+                    # can be described in KnownDifferences from the output of one run
+                    assertEq(0, iconv_only, sprintf("%s (iconv %s): sequences that iconv decodes and the character "
+                        "functions refuse, with the first bytes [%s]: %s", enc, impl, leads, m[6]));
                 }
             } else if (iconv_only) {
                 lenient += sprintf("%s: %d (%s)", enc, iconv_only, m[6]);
