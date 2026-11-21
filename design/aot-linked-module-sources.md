@@ -81,6 +81,16 @@ document then apply to the module that is used.  Whether the module is library c
 while the build's `qlib-qmod` directory need not be: the module is chosen by the build of the library, not by the code
 that loads it, so code whose functional domains are restricted loads it as it loads the link.
 
+The module that replaces a link is a regular file, so the checks above treat it as one: it is checked with its own
+dependency file only (every module of a build has one), and the modification-time rule for a link without a
+dependency file no longer applies to it.  When no source module is found to load instead, the out-of-date check
+(`refuse_stale_aot_module_without_source`) takes the directory of the replacement, the build's `qlib-qmod` directory,
+as the source directory, which only that rule uses.  A link whose target is gone (the other build was removed) is
+replaced as well: the decision uses the target that the link names, so the build's own module is loaded, not the
+source.  The dependency check of an AOT module finds a dependency that is not loaded yet as the loader would
+(`findModuleFileUnlocked()`), so it judges the build's own module, not the other build's file and dependency file.
+The search looks at a missing path with `lstat()` (a link whose target is gone) only when libqore is in a build tree.
+
 A process therefore loads only the modules of its own build, whichever build linked them last, and the development
 workflow is unchanged: after a change to a module's source, rebuild the module (`<name>-qmod`) in the build that runs
 the tests.  The same applies to qcc, which runs with the libqore of its build when the build compiles a module that
@@ -289,7 +299,10 @@ test, load their own modules for a link into another build (flat and split modul
 named by the path of the link), the source module when they have none (flat and split), the module of their own
 build for code whose functional domains are restricted when only the source `qlib` is in the module path, and a link
 as found with a libqore outside a build tree, for a link in another source tree, for a link outside the `qlib-qmod`
-directory of a build, and for a module that is not a link (qore#7030).
+directory of a build, and for a module that is not a link; a chain of dependencies is loaded from the build without a
+warning, a link whose target was removed loads the build's module, a libqore found through a relative library path
+uses its build after the program changes its working directory, and qcc records the build's module as a candidate file
+of an optional module (qore#7030).
 
 `examples/test/ir/AOTLinkedModuleStale.qtest`: a current module is loaded; a changed source (of the same size, and of
 another size) and a changed dependency are found; sources that only got new modification times are not; the

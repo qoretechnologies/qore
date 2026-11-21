@@ -65,6 +65,14 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
             \restrictedCodeTest());
         addTestCase("a link that does not lead into the qlib-qmod directory of a build is used as found",
             \notBuildLinkTest());
+        addTestCase("a link into another build with indirect dependencies loads the modules of the build of the "
+            "libqore", \indirectDependencyTest());
+        addTestCase("a link into a build that was removed loads the module of the build of the libqore",
+            \danglingLinkTest());
+        addTestCase("a libqore found through a relative library path uses its build after a change of directory",
+            \relativeLibraryPathTest());
+        addTestCase("qcc records the module of the build of its libqore as a candidate of an optional module",
+            \optionalModuleCandidateTest());
         addTestCase("a link is used as found by a libqore outside a build tree", \notBuildTreeTest());
         addTestCase("a link in the qlib directory of another source tree is used as found", \otherSourceTreeTest());
         addTestCase("a module that is not a link is used as found", \notLinkTest());
@@ -91,10 +99,12 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
     }
 
     #! returns the source of a module whose value() returns the given string
-    private static string moduleSource(string name, string value) {
-        return sprintf("%%modern\nmodule %s { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
-            "license = \"MIT\"; }\npublic namespace %s { public string sub value() { return %y; } }\n", name, name,
-            value);
+    /** @param extra code before the module's declaration (%requires directives)
+    */
+    private static string moduleSource(string name, string value, string extra = "") {
+        return sprintf("%%modern\n%smodule %s { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\npublic namespace %s { public string sub value() { return %y; } }\n", extra, name,
+            name, value);
     }
 
     #! returns the shell-quoted form of a string
@@ -150,7 +160,7 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
         @param name the module's name
         @param split True for a module in a directory of its own (qlib-qmod/<name>/<name>.qmod)
     */
-    private compileModule(string build, string name, bool split = False) {
+    private compileModule(string build, string name, bool split = False, string extra = "") {
         # the module's source in the build, so that the module returns the build's name
         string src = build + "/src-" + name;
         mkdir(src);
@@ -168,12 +178,14 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
             qmod = build + "/qlib-qmod/" + name + "/" + name + ".qmod";
             input = mod_dir;
         } else {
-            write(src + "/" + name + ".qm", moduleSource(name, value));
+            write(src + "/" + name + ".qm", moduleSource(name, value, extra));
             qmod = build + "/qlib-qmod/" + name + ".qmod";
             input = src + "/" + name + ".qm";
         }
+        # the modules that it requires are those of the build, as a build compiles them
         string out = run(sprintf("%s=%s QORE_MODULE_DIR=%s %s -m --depfile=%s --depfile-module-deps=source -o %s %s",
-            lib_path_var, q(libqore_dir), q(src), q(qcc_bin), q(qmod + ".d"), q(qmod), q(input)));
+            lib_path_var, q(libqore_dir), q(src + ":" + build + "/qlib-qmod"), q(qcc_bin), q(qmod + ".d"), q(qmod),
+            q(input)));
         assertTrue(is_file(qmod), "compiled " + qmod + ": " + out);
     }
 
@@ -346,6 +358,92 @@ printf(\"%s\\n\", realpath(get_module_hash().Mod.filename));";
         string out = runWith(b1, code);
         assertRegex("LOAD-MODULE-ERROR.*links into another build of the source tree", out);
         assertEq("b2", runWith(b2, code));
+    }
+
+    indirectDependencyTest() {
+        TmpDir tmp = initTree();
+        # Top requires Mid, which requires Leaf: each build compiles them against its own modules
+        write(src_qlib + "/Leaf.qm", moduleSource("Leaf", "source"));
+        write(src_qlib + "/Mid.qm", moduleSource("Mid", "source", "%requires Leaf\n"));
+        write(src_qlib + "/Top.qm", moduleSource("Top", "source", "%requires Mid\n"));
+        string b1 = makeBuild("b1", src_tree);
+        string b2 = makeBuild("b2", src_tree);
+        foreach string b in ((b1, b2)) {
+            compileModule(b, "Leaf");
+            compileModule(b, "Mid", False, "%requires Leaf\n");
+            compileModule(b, "Top", False, "%requires Mid\n");
+        }
+        map link(b2, $1 + ".qmod"), ("Leaf", "Mid", "Top");
+        # no warning: each module is the one that the build compiled its dependents against
+        string code = "%requires Top\nprintf(\"%s\\n\", (map $1 + \"=\" + realpath(get_module_hash(){$1}.filename), "
+            "(\"Top\", \"Mid\", \"Leaf\")).join(\" \"));";
+        foreach string b in ((b1, b2)) {
+            string out = runWith(b, code);
+            assertEq(sprintf("Top=%s Mid=%s Leaf=%s", realpath(b + "/qlib-qmod/Top.qmod"),
+                realpath(b + "/qlib-qmod/Mid.qmod"), realpath(b + "/qlib-qmod/Leaf.qmod")), out, basename(b));
+        }
+    }
+
+    danglingLinkTest() {
+        TmpDir tmp = initTree();
+        string b1 = makeBuild("b1", src_tree);
+        string b2 = makeBuild("b2", src_tree);
+        compileModule(b1, "Mod");
+        compileModule(b2, "Mod");
+        link(b2, "Mod.qmod");
+        # the modules of b2 are removed (rm -rf build-debug): the link remains
+        assertEq(0, system(sprintf("rm -rf %s", q(b2 + "/qlib-qmod"))));
+        assertTrue(is_link(src_qlib + "/Mod.qmod"));
+        string b1_qmod = realpath(b1 + "/qlib-qmod/Mod.qmod");
+        assertEq("b1 " + b1_qmod, load(b1), "found in the module path");
+        string code = sprintf("%%requires %s\nprintf(\"%%s %%s\\n\", Mod::value(), "
+            "realpath(get_module_hash().Mod.filename));", src_qlib + "/Mod.qmod");
+        assertEq("b1 " + b1_qmod, runWith(b1, code), "named by its path");
+    }
+
+    relativeLibraryPathTest() {
+        TmpDir tmp = initTree();
+        string b1 = makeBuild("b1", src_tree);
+        string b2 = makeBuild("b2", src_tree);
+        compileModule(b1, "Mod");
+        compileModule(b2, "Mod");
+        link(b2, "Mod.qmod");
+        # libqore found through a relative directory of the library path (as LD_LIBRARY_PATH=build); the program
+        # changes its working directory before it loads the module
+        string out = trim(run(sprintf("cd %s && %s=b1 QORE_MODULE_DIR=%s %s -ne %s", q(tmp_dir), lib_path_var,
+            q(src_qlib), q(qore_bin), q("chdir(\"/\"); load_module(\"Mod\"); printf(\"%s %s\\n\", "
+            "call_function(\"Mod::value\"), realpath(get_module_hash().Mod.filename));"))));
+        assertEq("b1 " + realpath(b1 + "/qlib-qmod/Mod.qmod"), out);
+    }
+
+    optionalModuleCandidateTest() {
+        TmpDir tmp = initTree();
+        # Opt requires Dep, which no build has any more: Opt cannot be loaded, and a module that tries it records the
+        # files where it was found as dependencies, so that a change to one of them rebuilds it
+        write(src_qlib + "/Dep.qm", moduleSource("Dep", "source"));
+        write(src_qlib + "/Opt.qm", moduleSource("Opt", "source", "%requires Dep\n"));
+        string b1 = makeBuild("b1", src_tree);
+        string b2 = makeBuild("b2", src_tree);
+        foreach string b in ((b1, b2)) {
+            compileModule(b, "Dep");
+            compileModule(b, "Opt", False, "%requires Dep\n");
+            unlink(b + "/qlib-qmod/Dep.qmod");
+        }
+        unlink(src_qlib + "/Dep.qm");
+        link(b2, "Opt.qmod");
+        # a module compiled with the qcc of b1 (its libqore) records the module of b1
+        string user_dir = tmp_dir + "/user";
+        mkdir(user_dir);
+        write(user_dir + "/User.qm", "%modern\n%try-module Opt\n%endtry\nmodule User { version = \"1.0\"; "
+            "desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n");
+        string qmod = user_dir + "/User.qmod";
+        string out = run(sprintf("%s=%s QORE_MODULE_DIR=%s %s -m --depfile=%s --depfile-module-deps=source -o %s %s",
+            lib_path_var, q(b1), q(src_qlib), q(qcc_bin), q(qmod + ".d"), q(qmod), q(user_dir + "/User.qm")));
+        assertTrue(is_file(qmod), "compiled User.qmod: " + out);
+        # the depfile lists the sources of a module (--depfile-module-deps=source): those of the module of b1
+        string depfile = ReadOnlyFile::readTextFile(qmod + ".d");
+        assertTrue(depfile.find(realpath(b1 + "/src-Opt/Opt.qm")) >= 0, "the module of b1: " + depfile);
+        assertEq(-1, depfile.find(realpath(b2 + "/src-Opt")), "not that of b2: " + depfile);
     }
 
     notBuildTreeTest() {
