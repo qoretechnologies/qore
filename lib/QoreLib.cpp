@@ -1634,14 +1634,10 @@ static bool runtime_call_ref_ctx_may_access(const qore_class_private* cls) {
     (qore_class_private::getMethodForEval()), so a class-scoped name cannot reach a private method of a parent class
     through an object of another branch of the hierarchy (qore#6806); a static method does not depend on the object
 
-    @param found_ctx set to the class context that the method was found with, if any, which a call of a reference
-    to it selects its variants with (qore#6859)
-
     @return the method found, or nullptr if there is no method of the name
 */
 static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* pcls, const char* name,
-        ClassAccess& access, bool& callable, const qore_class_private*& found_ctx,
-        const qore_class_private* obj_cls = nullptr) {
+        ClassAccess& access, bool& callable, const qore_class_private* obj_cls = nullptr) {
     const qore_class_private* class_ctx = runtime_call_ref_ctx(pcls);
     const qore_class_private* normal_ctx = class_ctx;
     if (normal_ctx && obj_cls && obj_cls != pcls && !obj_cls->runtimeCheckPrivateClassAccess(normal_ctx)) {
@@ -1657,7 +1653,6 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
         callable = false;
         return nullptr;
     }
-    found_ctx = ctx;
     if (access > Public) {
         // the method that a call of the name makes from here, if the caller cannot call the method found first
         meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, ctx);
@@ -1669,7 +1664,7 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, bool callable,
-        const char* name, const qore_class_private* pcls, const qore_class_private* found_ctx, ExceptionSink* xsink) {
+        const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
     // the constructor, destructor and copy method run only when an object is created, deleted or copied, also when
     // a base class declares them (qore#6783)
     if (qore_class_private::checkReferenceable(*meth, xsink)) {
@@ -1693,12 +1688,9 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     // see if non-static method is part of self's class hierarchy
     if (!meth->isStatic()) {
         // by identity: a method of another class with the same name and signature is not a method of the object
-        // (qore#7036); a method of a private:internal parent class of the caller's class context is bound for the
-        // context's code, which calls it directly on the objects of its subclasses, if the context is a class of the
-        // object's hierarchy, by identity (qore#6859)
+        // (qore#7036)
         bool priv;
-        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *meth->getClass(), priv,
-                runtime_get_class())) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *meth->getClass(), priv)) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
             // no call reference with the error (issue #5866)
@@ -1713,12 +1705,7 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         }
     }
     if (self) {
-        // the reference has the class context that the creating code looked the method up with, for the variants
-        // that a call of it can select, as a call reference made in that code (\o.m()) has: not the class of the
-        // method, whose context could select every variant of the method, also a private:internal or private variant
-        // that the creating code cannot call (qore#6859); a reference to a private method made in its class can still
-        // be called from anywhere
-        return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, found_ctx));
+        return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, qore_class_private::get(*meth->getClass())));
     }
     // a value created at run time: it records the permissions of the code creating it, which a call through it runs
     // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
@@ -1745,23 +1732,21 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
             const qore_class_private* pcls = qore_class_private::get(*cls);
             ClassAccess access;
             bool callable;
-            const qore_class_private* found_ctx = nullptr;
             // the object's class is checked as for a method call on the object (qore#6806)
             const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access, callable,
-                found_ctx, self ? qore_class_private::get(*self->getClass()) : nullptr);
+                self ? qore_class_private::get(*self->getClass()) : nullptr);
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
-                return do_method_intern(self, meth, access, callable, name->c_str(), pcls, found_ctx, xsink);
+                return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
             }
         }
     } else if (self) {
         const qore_class_private* pcls = qore_class_private::get(*self->getClass());
         ClassAccess access;
         bool callable;
-        const qore_class_private* found_ctx = nullptr;
-        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access, callable, found_ctx);
+        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access, callable);
         if (meth) {
-            return do_method_intern(self, meth, access, callable, name->c_str(), pcls, found_ctx, xsink);
+            return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
         }
     }
 
