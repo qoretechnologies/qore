@@ -4760,10 +4760,13 @@ public class AbstractHttpSocketHandlerInterface {
     }
 
     #! Returns a closure that can be used to confirm that the connection has been closed
+    /** The id of a dedicated connection over HTTP/2 or HTTP/3 is that of its stream (\c "<connection id>:<stream
+        id>"), a string (qore#7042)
+    */
     code setExternallyManaged(softstring lid, hash<auto> cx, Socket s) {
         # get local vars that will be bound in the closure
         HttpServer::HttpListenerInterface listener = cx.listener;
-        int cid = cx.id;
+        string cid = cx.id.toString();
 
         # return a closure to confirm that the connection has been closed
         return sub () {

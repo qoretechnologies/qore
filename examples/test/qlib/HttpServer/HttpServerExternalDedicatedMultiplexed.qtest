@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) extended CONNECT streams of dedicated connections
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketUtil
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerExternalDedicatedMultiplexedTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A listener that tells the test whether a connection is registered as a dedicated connection
+class DedicatedListener inherits HttpListener {
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts) : HttpListener(server, handleRequest, id, ss, opts) {
+    }
+
+    bool hasDedicated(softstring id) {
+        m.lock();
+        on_exit m.unlock();
+        return exists shh{id};
+    }
+}
+
+#! A server whose listeners are DedicatedListener objects
+/** A listener with \c "http_version": \c "auto" is two listeners: one for TCP (HTTP/1.1 and HTTP/2) and one for
+    QUIC (HTTP/3); the test asks all of them
+*/
+class DedicatedServer inherits HttpServer {
+    public {
+        list<DedicatedListener> dedicated_listeners = ();
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    #! Returns True if a listener of the server has the given dedicated connection
+    bool hasDedicated(softstring id) {
+        foreach DedicatedListener l in (dedicated_listeners) {
+            if (l.hasDedicated(id)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        DedicatedListener l(server, \handleRequest(), id, seqSessions, info);
+        push dedicated_listeners, l;
+        return l;
+    }
+}
+
+#! A socket handler for an extended CONNECT stream that ends its connection with setExternallyManaged()
+class EndingHandler inherits AbstractHttpSocketHandler {
+    public {
+        Queue to_host();
+        Queue from_host();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"sec-websocket-accept": ws_get_response_key(hdr."sec-websocket-key")},
+            "streaming": True,
+            "stream_type": "websocket",
+        };
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        try {
+            code c = setExternallyManaged(lid, cx, s);
+            to_host.push({"cid": cx.id, "proto": cx."header-info".http3 ? "h3" : "h2"});
+            from_host.get();
+            c();
+            to_host.push("ended");
+        } catch (hash<ExceptionInfo> ex) {
+            to_host.push({"err": ex.err, "desc": ex.desc});
+        }
+        return True;
+    }
+}
+
+#! Returns the session or connection of its request
+class WhoamiHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "ok");
+    }
+}
+
+#! setExternallyManaged() ends a dedicated connection over HTTP/2 and HTTP/3 (qore#7042)
+/** The id of such a connection is that of its stream ("<connection id>:<stream id>"), which the method stored as an
+    integer: it raised RUNTIME-TYPE-ERROR instead of returning the closure that ends the connection
+*/
+class HttpServerExternalDedicatedMultiplexedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("external dedicated connections over HTTP/2 and HTTP/3", "1.0", \ARGV) {
+        addTestCase("HTTP/2: setExternallyManaged() ends the connection", \endTest(), "2.0");
+        addTestCase("HTTP/3: setExternallyManaged() ends the connection", \endTest(), "3.0");
+        set_return_value(main());
+    }
+
+    endTest(string http_version) {
+        EndingHandler handler();
+        DedicatedServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ded", "^ded", NOTHING, handler);
+        server.setHandler("whoami", "^whoami", NOTHING, new WhoamiHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d/ded", port),
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+        # the connection is set up while the handler holds it: the client connects in a thread of its own
+        Queue connected();
+        background sub () {
+            try {
+                wsc.connect();
+                connected.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                connected.push(ex.err);
+            }
+        }();
+        on_exit wsc.disconnect();
+
+        auto step = handler.to_host.get(HangGuard);
+        assertEq(Type::Hash, step.type(), sprintf("the closure is returned: %y", step));
+        assertFalse(exists step.err, sprintf("no error: %y", step));
+        string proto = {"2.0": "h2", "3.0": "h3"}{http_version};
+        assertEq(proto, step.proto);
+        assertTrue(step.cid =~ /:[0-9]+$/, "the id of the connection is that of its stream");
+        assertTrue(server.hasDedicated(step.cid), "the connection is registered");
+        handler.from_host.push(True);
+        assertEq("ended", handler.to_host.get(HangGuard), "the closure ends the connection");
+        assertFalse(server.hasDedicated(step.cid), "the connection is removed");
+        # the client's connect ends (the stream may end before the client reads the response)
+        connected.get(HangGuard);
+
+        # the listener still serves requests
+        HTTPClient hc({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+        on_exit hc.disconnect();
+        assertEq("ok", hc.get("/whoami"));
+    }
+}

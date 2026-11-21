@@ -123,8 +123,8 @@ AbstractHttpRequestHandler sub get_handler() {
 }
 ";
 
-        #! a sandboxed tenant's socket handler for an extended CONNECT stream: ends its connection with the calls that
-        #! end a dedicated connection (the shutdown() and close() of the socket of the request)
+        #! a sandboxed tenant's socket handler for an extended CONNECT stream: ends its connection with
+        #! setExternallyManaged(), whose closure calls the shutdown() and close() of the socket of the request
         const TenantDedicatedSource = "%modern
 %requires HttpServer
 %requires HttpServerUtil
@@ -150,15 +150,16 @@ class TenantDedicatedHandler inherits AbstractHttpSocketHandler {
     }
 
     private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
-        # the calls that end a dedicated connection (see setExternallyManaged())
+        # ends the connection as the standard socket handlers do: the closure removes the handler's own connection
+        # and calls the shutdown() and close() of the socket of the request
         try {
-            s.shutdown();
-            s.close();
+            code c = setExternallyManaged(lid, cx, s);
+            c();
             to_host.push(cx.\"header-info\".http3 ? \"ended h3\" : \"ended\");
         } catch (hash<ExceptionInfo> ex) {
             to_host.push(ex.err);
         }
-        return False;
+        return True;
     }
 }
 
