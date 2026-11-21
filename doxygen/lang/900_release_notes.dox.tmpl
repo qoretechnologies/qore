@@ -1581,8 +1581,8 @@
 
     @par Sandbox Enforcement Levels
     A sandbox isolates tenants (\c QSEL_TENANT_ISOLATION, the default) or only checks code safety
-    (\c QSEL_CODE_SAFETY), as its creator sets with @ref Qore::SandboxManager::setEnforcementLevel() (C++:
-    \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
+    (\c QSEL_CODE_SAFETY), as its creator sets with @ref Qore::SandboxManager::setEnforcementLevel() (parse define
+    and C++ macro \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
 
     @par Sandboxed Code Changes Only the Objects That Its Sandbox Created
     At tenant isolation, the code of a class that sandboxed code declared cannot write a non-public member of an object

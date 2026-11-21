@@ -111,6 +111,7 @@ bool sub isolated() {
         addTestCase("owner rules", \ownerRulesTest());
         addTestCase("strictest level", \strictestTest());
         addTestCase("copy", \copyTest());
+        addTestCase("parse define", \parseDefineTest());
         set_return_value(main());
     }
 
@@ -256,6 +257,31 @@ bool sub isolated() {
         # two code-safety sandboxes: no owner rules
         Program safe_tenant2 = tenant(safe2_sm);
         assertFalse(safe_tenant2.callFunction("call_program", safe, "isolated"), "only code-safety sandboxes");
+    }
+
+    #! Qore code can test for the enforcement level and the owner check with parse defines, in every execution mode
+    parseDefineTest() {
+        foreach hash<auto> i in ({"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED}.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            p.setExecMode(i.value);
+            p.parse("%modern
+%ifdef QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL
+bool sub level() { return True; }
+%else
+bool sub level() { return False; }
+%endif
+%ifdef QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK
+bool sub owner() { return True; }
+%else
+bool sub owner() { return False; }
+%endif
+", "parse-define");
+            assertTrue(p.callFunction("level"), i.key + ": QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL");
+            assertTrue(p.callFunction("owner"), i.key + ": QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK");
+        }
+%ifndef QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL
+        assertTrue(False, "QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL in the test itself");
+%endif
     }
 
     copyTest() {
