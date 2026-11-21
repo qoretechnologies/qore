@@ -702,6 +702,19 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.  A <tt><b>private:internal</b></tt> member is separate from the members with the same name declared by other classes in the hierarchy: each class reads and writes its own, which is initialized in every object of the class or of a subclass, however deep the hierarchy, and whatever the order of the parent classes in the <tt><b>inherits</b></tt> clauses of the hierarchy.\n\n
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
 
+    @subsection private_access_class_identity Private Access and the Identity of Classes
+    The private and <tt><b>private:internal</b></tt> members and methods of an object can be used by the code of a
+    class only if it is the object's class (or, for <tt><b>private</b></tt> declarations, a class of its hierarchy)
+    itself: the same declaration, or a copy of it that a module or
+    @ref Qore::Program::importClass() "Program::importClass()" puts in another %Program, or a class that a %Program
+    injects in place of another one.  A class that only has the
+    same name and the same declarations as another class, in another namespace or in another %Program, is another class
+    and has no private access to the objects of the other class: it cannot read or write their members, call their
+    methods or see the members in an enumeration of an object (such as @ref keys "keys" or an iterator), and its own
+    <tt><b>private:internal</b></tt> members are separate from those of the other class.  This applies to all code,
+    sandboxed or not, in every @ref execution_modes "execution mode".  The type checks of values are not changed:
+    there, classes of different %Program objects with the same name and signature are still compatible.
+
     @subsection transient Transient Members
     Members declared with the <b><tt>transient</tt></b> keyword will not be processed with @ref Qore::Serializable "object serialization"
     and will get their default value (if any) when deserialized.

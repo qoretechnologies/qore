@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the member and method accesses of a class context
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ClassIdentityPrivateAccessTest
+
+#! Private access is given to the class itself, not to another class with the same name and signature (qore#7036)
+/** The code of a class can use the private and private:internal members and methods of an object only if the class is
+    the object's class, a copy of its declaration (a class imported into another Program) or, for the private
+    declarations, a class of its hierarchy; a class that has the name and the declarations of the object's class but
+    is another declaration (a look-alike) cannot read or write them, call them or see them in an enumeration of the
+    object.
+
+    ClassIdentityPrivateAccess.q checks look-alikes of a plain user class, of a module class that inherits a builtin
+    class and of the listener object that HTTP handlers get, declared in another namespace, in a child Program and in a
+    sandboxed child Program (also its private static declarations, call references and calls through reflection), a
+    method of a look-alike bound to an object of the real class (a call reference or a call by the qualified name of
+    the method, reflection) and a method of the real class called on an object of a look-alike, and the access of the
+    class itself, of a subclass, of an imported copy and of an injected subclass; its output must be the one in
+    ClassIdentityPrivateAccess.expected in every execution mode, on the IR tier and in programs compiled with qcc -O0
+    and -O3.
+*/
+class ClassIdentityPrivateAccessTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/ClassIdentityPrivateAccess.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/ClassIdentityPrivateAccess.expected");
+    }
+
+    constructor() : QUnit::Test("class identity private access", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                check(ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            check(ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! compares the output with the expected one, after checking that no look-alike got access
+    /** The result of every operation of a look-alike is an exception, or an enumeration or a test that shows nothing
+        of the object's non-public members
+    */
+    private check(string output) {
+        foreach string line in (output.split("\n")) {
+            if (line =~ /^((stream|view|reflection|bound) )?(namespace|program|sandbox|static|qualified) /) {
+                assertTrue(line =~ /: ([A-Z][-A-Z]+|\[\]|"\[\]"|null|False)$/, "a look-alike has no access: " + line);
+            }
+        }
+        assertEq(expected, output);
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/class-identity-private-access";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        check(backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

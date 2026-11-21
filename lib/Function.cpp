@@ -1102,7 +1102,8 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
             last_class = qore_class_private::get(*fc);
             if (last_class && class_ctx) {
                 // set the internal access flag
-                internal_access = last_class->equal(*class_ctx);
+                // by identity, never by name and signature (qore#7036)
+                internal_access = last_class->sameClass(*class_ctx);
             }
         }
     }
@@ -2292,7 +2293,7 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
         if ((va > Public && !class_ctx) || (va == Internal
-            && !qore_class_private::get(*mv->getClass())->equal(*qc))) {
+            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
                 mv->className(), func->getName(), mv->getSignature()->getSignatureText());
             return -1;

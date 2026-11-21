@@ -1971,8 +1971,9 @@ bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_pr
     if (class_ctx == this) {
         return true;
     }
+    // the classes by identity, never by name and signature (qore#7036)
     ClassAccess ca;
-    return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
+    return getAccessClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getAccessClass(*decl, ca));
 }
 
 bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const {
@@ -2010,8 +2011,9 @@ bool qore_class_private::checkPrivateMemberContext(const qore_class_private* cla
     if (!decl) {
         return true;
     }
+    // the classes by identity, never by name and signature (qore#7036)
     ClassAccess ca;
-    return class_ctx->getClass(*decl, ca) != nullptr;
+    return class_ctx->getAccessClass(*decl, ca) != nullptr;
 }
 
 int qore_class_private::initializeMembers() {
@@ -3976,6 +3978,25 @@ const QoreClass *BCNode::parseGetClass(const qore_class_private& qc, ClassAccess
     return rv;
 }
 
+const QoreClass* BCNode::getAccessClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    // sclass can be 0 if the class could not be found during parse initialization
+    if (!sclass) {
+        return nullptr;
+    }
+
+    if (access >= Internal && !toplevel) {
+        return nullptr;
+    }
+
+    const QoreClass* rv = sclass->priv->getAccessClassIntern(qc, n_access, false);
+
+    if (rv && n_access < access) {
+        n_access = access;
+    }
+
+    return rv;
+}
+
 bool BCNode::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
     // sclass can be 0 if the class could not be found during parse initialization
     if (!sclass) {
@@ -3998,6 +4019,21 @@ bool BCNode::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
     }
 
     bool rv = sclass->priv->inHierarchyStrict(qc, n_access);
+
+    if (rv && n_access < access) {
+        n_access = access;
+    }
+
+    return rv;
+}
+
+bool BCNode::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+    // sclass can be 0 if the class could not be found during parse initialization
+    if (!sclass) {
+        return false;
+    }
+
+    bool rv = sclass->priv->inAccessHierarchy(qc, n_access);
 
     if (rv && n_access < access) {
         n_access = access;
@@ -4206,7 +4242,7 @@ static bool lookup_context_in_hierarchy(const BCList& list, const qore_class_pri
         return true;
     }
     for (auto& i : list.sml) {
-        if (qore_class_private::get(*i.first)->equal(*ctx)) {
+        if (qore_class_private::get(*i.first)->sameClass(*ctx)) {
             return true;
         }
     }
@@ -4321,7 +4357,8 @@ static LookupVisit runtime_context_method_visit(const qore_class_private& priv, 
         return LookupVisit::Found;
     }
     if (ma >= Internal) {
-        return priv.equal(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
+        // a private:internal method only for its own class, by identity (qore#7036)
+        return priv.sameClass(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
     }
     return priv.runtimeCheckPrivateClassAccess(class_ctx) ? LookupVisit::Found : LookupVisit::Skip;
 }
@@ -4573,9 +4610,21 @@ struct GetClassIdLookup : InternalEdgeCut {
     }
 };
 
-//! BCList::getClass(const qore_class_private&, ...) and BCList::parseGetClass(): as
-//! qore_class_private::getClassIntern() and parseGetClassIntern()
-template <bool Parse>
+//! how GetClassLookup compares the classes
+enum class GetClassMatch {
+    //! qore_class_private::equal(): the type compatibility of classes
+    Runtime,
+    //! qore_class_private::parseEqual(): the type compatibility of classes at parse time
+    Parse,
+    //! qore_class_private::sameClass(): the identity of classes for private access (qore#7036)
+    Access,
+    //! qore_class_private::strictEqual(): InHierarchyLookup only
+    Strict,
+};
+
+//! BCList::getClass(const qore_class_private&, ...), BCList::parseGetClass() and BCList::getAccessClass(): as
+//! qore_class_private::getClassIntern(), parseGetClassIntern() and getAccessClassIntern()
+template <GetClassMatch Match>
 struct GetClassLookup : InternalEdgeCut {
     static constexpr bool CheckValid = false;
     ClassAccess* access;
@@ -4587,7 +4636,8 @@ struct GetClassLookup : InternalEdgeCut {
     }
 
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
-        if (Parse ? priv.parseEqual(qc) : priv.equal(qc)) {
+        if (Match == GetClassMatch::Access ? priv.sameClass(qc)
+                : (Match == GetClassMatch::Parse ? priv.parseEqual(qc) : priv.equal(qc))) {
             rv = priv.cls;
             return LookupVisit::Found;
         }
@@ -4595,9 +4645,12 @@ struct GetClassLookup : InternalEdgeCut {
     }
 };
 
+//! the type checks of a hierarchy (equal(), or strictEqual() for a caller that may use every element of the classes:
+//! QoreReflectionCaller::canUseObjectElementClass()); never private access, which compares the classes with
+//! qore_class_private::sameClass() (qore#7036)
 //! BCList::inHierarchy() and BCList::inHierarchyStrict(): as qore_class_private::inHierarchy() and
 //! inHierarchyStrict(), which follow every edge
-template <bool Strict>
+template <GetClassMatch Match>
 struct InHierarchyLookup : NoEdgeCut {
     static constexpr bool CheckValid = false;
     ClassAccess* access;
@@ -4608,7 +4661,8 @@ struct InHierarchyLookup : NoEdgeCut {
     }
 
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
-        if (Strict ? priv.strictEqual(qc) : priv.equal(qc)) {
+        if (Match == GetClassMatch::Access ? priv.sameClass(qc)
+                : (Match == GetClassMatch::Strict ? priv.strictEqual(qc) : priv.equal(qc))) {
             rv = true;
             return LookupVisit::Found;
         }
@@ -4976,7 +5030,7 @@ const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, boo
 
 const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
     if (!diamond_free) {
-        return lookup_walk<GetClassLookup<false>, const qore_class_private&, ClassAccess&, bool>(*this,
+        return lookup_walk<GetClassLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
     for (auto& i : *this) {
@@ -4990,7 +5044,7 @@ const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_a
 
 const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
     if (!diamond_free) {
-        return lookup_walk<GetClassLookup<true>, const qore_class_private&, ClassAccess&, bool>(*this,
+        return lookup_walk<GetClassLookup<GetClassMatch::Parse>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
     for (auto& i : *this) {
@@ -5002,9 +5056,25 @@ const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess
     return nullptr;
 }
 
+const QoreClass* BCList::getAccessClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<GetClassLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&, bool>(
+            *this, qc, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreClass* rv = (*i).getAccessClass(qc, n_access, toplevel);
+        if (rv) {
+            return rv;
+        }
+    }
+
+    return nullptr;
+}
+
 bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
     if (!diamond_free) {
-        return lookup_walk<InHierarchyLookup<false>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
     }
     for (auto& i : *this) {
         bool b = (*i).inHierarchy(qc, n_access);
@@ -5018,12 +5088,27 @@ bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) co
 
 bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const {
     if (!diamond_free) {
-        return lookup_walk<InHierarchyLookup<true>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Strict>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
     }
     for (auto& i : *this) {
         bool b = (*i).inHierarchyStrict(qc, n_access);
         if (b) {
             return b;
+        }
+    }
+
+    return false;
+}
+
+bool BCList::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+    if (!diamond_free) {
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
+    }
+    for (auto& i : *this) {
+        if ((*i).inAccessHierarchy(qc, n_access)) {
+            return true;
         }
     }
 
@@ -6578,7 +6663,8 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
         if (mi) {
             // qore#6523: the same declaration reached through another path of the hierarchy is the same member, with
             // the least restrictive access of the paths
-            if (!mi->local() && mi->getClass()->equal(*i.second->getClass())) {
+            // the same declaration by identity, never by name and signature (qore#7036)
+            if (!mi->local() && mi->getClass()->sameClass(*i.second->getClass())) {
                 ClassAccess mi_access = (i.second->access == Internal)
                     ? Inaccessible
                     : QORE_MAX(i.second->access, access);
@@ -6616,7 +6702,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 mi->addContextAccess(*i.second);
                 continue;
             } else if (i.second->access == Inaccessible && mi->access < Internal
-                    && !mi->getClass()->equal(*i.second->getClass())) {
+                    && !mi->getClass()->sameClass(*i.second->getClass())) {
                 // issue #6614: the mirror of the swap above, for the members imported in the other order: the
                 // accessible member imported first is the member of this class, and the hidden member, a
                 // private:internal member of another declaration, which is separate from it, is reached from the
@@ -6632,7 +6718,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 "access: '%s' this access: '%s'\n", this, name.c_str(), qc.name.c_str(), i.first,
                 i.second->exp.getTypeName(), privpub(access), privpub(mi->access));
 
-            if (!mi->getClass()->equal(*i.second->getClass())
+            if (!mi->getClass()->sameClass(*i.second->getClass())
                     && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi, name.c_str())) {
                 // the declarations cannot be combined: the hierarchy is a parse error
                 continue;
@@ -9551,8 +9637,11 @@ bool qore_class_private::parseCheckPrivateClassAccess(const qore_class_private* 
     if (!opc)
         return false;
 
+    // the classes by identity, never by name and signature: a class with the name and the signature of another class
+    // has no private access to it (qore#7036)
+    const_cast<qore_class_private*>(opc)->parseResolveHierarchy();
     ClassAccess access = Public;
-    return opc->parseGetClass(*this, access) || (scl && scl->parseGetClass(*opc, access, true));
+    return opc->getAccessClassIntern(*this, access, true) || (scl && scl->getAccessClass(*opc, access, true));
 }
 
 bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private* qc) const {
@@ -9563,7 +9652,9 @@ bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private
 
     ClassAccess access = Public;
     //printd(5, "runtimeCheckPrivateClassAccess() qc: %p '%s' test: %p '%s' okl: %d okr: %d\n", qc, qc->name.c_str(), this, name.c_str(), qc->getClassIntern(*this, access, true), (scl && scl->getClass(*qc, access, true)));
-    return qc->getClassIntern(*this, access, true) || (scl && scl->getClass(*qc, access, true));
+    // the classes by identity, never by name and signature: a class with the name and the signature of another class
+    // has no private access to it (qore#7036)
+    return qc->getAccessClassIntern(*this, access, true) || (scl && scl->getAccessClass(*qc, access, true));
 }
 
 bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
@@ -9579,7 +9670,7 @@ bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, co
         return false;
     }
     // a private:internal variant only from the class that declares it (see IList::getFunction())
-    return va != Internal || METHV_const(v)->getClassPriv()->equal(*class_ctx);
+    return va != Internal || METHV_const(v)->getClassPriv()->sameClass(*class_ctx);
 }
 
 qore_type_result_e qore_class_private::parseCheckCompatibleClass(const qore_class_private& oc, bool& may_not_match) const {
@@ -9612,6 +9703,7 @@ qore_type_result_e qore_class_private::parseCheckCompatibleClassIntern(const qor
     printd(5, "qore_class_private::parseCheckCompatibleClass() %p '%s' (%d %s) == %p '%s' (%d %s)\n", this, name.c_str(), classID, h1.getBuffer(), &oc, oc.name.c_str(), oc.classID, h2.getBuffer());
 #endif
 
+    // the type compatibility of classes, as in runtimeCheckCompatibleClassIntern() (qore#7036)
     if (parseEqual(oc))
         return QTI_IDENT;
 
@@ -9650,6 +9742,8 @@ qore_type_result_e qore_class_private::runtimeCheckCompatibleClass(const qore_cl
 }
 
 qore_type_result_e qore_class_private::runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const {
+    // the type compatibility of classes: classes of different Programs with the same name and signature are the same
+    // type; the private inheritance below is checked with runtimeCheckPrivateClassAccess(), by identity (qore#7036)
     if (equal(oc)) {
         return QTI_IDENT;
     }
@@ -9927,6 +10021,7 @@ const char* QoreClass::getPath() const {
     return priv->path.c_str();
 }
 
+// the public API's type equality of classes (equal()); not private access (qore#7036)
 bool QoreClass::isEqual(const QoreClass& cls) const {
     return priv->equal(*cls.priv);
 }

@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Private Access Needs the Class Itself
+    Private access needs the class of the object's hierarchy itself: another declaration with the same name and
+    signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
+    no private access (see @ref private_access_class_identity;
+    <a href="https://github.com/qoretechnologies/qore/issues/7036">issue 7036</a>).
+
     @par A Datasource String With an Invalid Port Raises an Error
     A datasource string whose port is 0, larger than 65535, negative or not a number raises
     \c DATASOURCE-PARSE-ERROR instead of being parsed with that port or with the port in the host name, and an IPv6
@@ -2626,6 +2632,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
+      a class with only the same name and declarations as another class had the other class's private and
+      \c private:internal access to its objects (see @ref private_access_class_identity;
+      <a href="https://github.com/qoretechnologies/qore/issues/7036">issue 7036</a>)
     - a UNIX socket path that does not fit a socket address raises an error on connect and bind; it was shortened to
       fit, so that another socket file could be used than the one named
       (<a href="https://github.com/qoretechnologies/qore/issues/6910">issue 6910</a>)

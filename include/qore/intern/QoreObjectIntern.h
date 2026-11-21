@@ -60,15 +60,11 @@
 
 class LValueHelper;
 
-class lthash {
-public:
-    DLLLOCAL bool operator()(char* s1, char* s2) const {
-        return memcmp(s1, s2, SH_SIZE) < 0;
-    }
-};
-
-// per-class internal data
-typedef std::map<char*, QoreHashNode*, lthash> cdmap_t;
+//! the private:internal members of an object, per class, keyed by the class ID of the class that declares them
+/** The class ID is the identity of the class: the copies of a class imported into other Programs share it, and a class
+    with the same name and signature as another one (whose signature hash is the same) has its own (qore#7036)
+*/
+typedef std::map<qore_classid_t, QoreHashNode*> cdmap_t;
 
 /*
   Qore internal class data is stored against the object with this data structure
@@ -485,7 +481,7 @@ public:
     DLLLOCAL const QoreHashNode* getInternalData(const qore_class_private* class_ctx) const {
         if (!cdmap)
             return nullptr;
-        cdmap_t::const_iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::const_iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
@@ -493,7 +489,7 @@ public:
     DLLLOCAL QoreHashNode* getInternalData(const qore_class_private* class_ctx) {
         if (!cdmap)
             return nullptr;
-        cdmap_t::iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
