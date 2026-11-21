@@ -492,6 +492,8 @@ conn.checkSandboxAccess(True);
     #! Returns a native file location handler object for this connection
     /** @return an object inheriting \c FileLocationHandler::AbstractFileLocationHandler
 
+        A connection that reads its configured TLS files remains subject to the active sandbox's filesystem policy.
+
         @throw FILE-LOCATION-UNSUPPORTED this connection does not provide a native file location handler
 
         @note The return type is declared as @ref object_type "object" rather than as the concrete handler class
