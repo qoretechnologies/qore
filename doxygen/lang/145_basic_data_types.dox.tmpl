@@ -371,9 +371,12 @@ bool same = c'a' == "a";        # True
     value it was parsed from (ex: \c -567890123456789.0123456789n).  The display rounding of number strings removes a
     run of more than 16 \c 0 or \c 9 digits in the fraction, so a value with such a run prints rounded (ex:
     \c 1.00000000000000000001n prints as \c 1); @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()"
-    returns the exact value.  Numbers are compared by their binary values: a number computed in binary (ex: by
-    arithmetic) or rounded at another precision is equal to a number parsed from a decimal string only when their
-    binary values are the same.
+    returns the exact value.  The result of @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" or
+    @ref Qore::floor() "floor()" with digits after the decimal point is a decimal value, and has the precision
+    of the number parsed from its decimal string, so that it is the same number (ex:
+    <tt>round(123.45678901234567891n, 4) == 123.4568n</tt>).  Numbers are compared by their binary values: a number
+    computed in binary (ex: by arithmetic) is equal to a number parsed from a decimal string only when their binary
+    values are the same.
 
     @par Exact Decimal Value of a Number:
     @anchor number_exact_decimal A number written to a fixed-scale decimal value (an element of a
