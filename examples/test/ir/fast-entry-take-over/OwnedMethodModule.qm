@@ -13,9 +13,32 @@ public namespace OwnedMethodModule {
         private { int offset = 1; }
         int length(list<auto> a) { int n = a.size(); a = (); return offset + n; }
     }
+    public class Marker {
+        destructor() { printf("released\n"); }
+    }
+    public final class FinalBox {
+        replaceArg(list<auto> a) {
+            a = ();
+            printf("replaced\n");
+        }
+        static int forgetArg(*list<auto> a) {
+            a = NOTHING;
+            return 3;
+        }
+        int nested(int n) {
+            replaceArg((n, new Marker()));
+            try {
+                replaceArg((n, new Marker()));
+                return FinalBox::forgetArg((n, new Marker()));
+            } catch (hash<ExceptionInfo> e) {
+                rethrow;
+            }
+        }
+    }
     public int sub value(int n) {
         Box b();
-        try { return b.length((n, n + 1)); }
+        FinalBox other();
+        try { return b.length((n, n + 1)) + other.nested(n); }
         catch (hash<ExceptionInfo> e) { rethrow; }
     }
 }

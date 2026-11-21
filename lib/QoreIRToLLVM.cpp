@@ -13401,7 +13401,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
     llvm::AllocaInst* method_context = nullptr;
-    if (take_over && callee_info.guarded_method_entry && (object_base || !callee_info.implicit_self_method)) {
+    if (take_over && callee_info.guarded_method_entry) {
         auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
             llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
         auto leave = module.getOrInsertFunction("qore_rt_leave_native_method_v1",
@@ -23633,6 +23633,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
+                            && !(call_gives_args && it->second.local_method_takes_args)
                             && nargs <= static_cast<int>(it->second.num_params)
                             && (method_call
                                 ? isFastMethodCallEligible(variant,
@@ -27912,6 +27913,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             int nargs = static_cast<int>(inst->operands.size())
                 - (fused_string_consumer
                     ? direct_inst->aot_string_consumer_extra_operands : 0);
+            bool self_take_over = false;
             const BatchCalleeInfo* aot_self_getter = nullptr;
             const BatchCalleeInfo* aot_self_batch_callee = nullptr;
             llvm::Function* aot_self_batch_fn = nullptr;
@@ -27936,15 +27938,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "QORE_DISABLE_AOT_SELF_GETTER_IMPORT")) {
                     aot_self_getter = &it->second;
                 }
+                self_take_over = call_gives_args && it != batch_callees->end()
+                    && !fused_string_consumer && callCanTakeOverToFastEntry(inst, 0, direct_inst->variant, it->second);
                 if (!aot_self_getter && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
+                        && (!call_gives_args || self_take_over || !it->second.local_method_takes_args)
                         && it->second.implicit_self_method
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args && !self_take_over,
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
                     aot_self_batch_fn = module.getFunction(it->second.fast_name);
@@ -27973,10 +27978,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         *direct_inst, raw_args, raw_arg_ids, error)) {
                 return false;
             }
+            std::vector<llvm::Value*> given_slots;
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
                     nargs, has_arg_cleanups, static_cast<int>(
-                        direct_inst->aot_borrow_call_operand_count));
+                        direct_inst->aot_borrow_call_operand_count), self_take_over ? &given_slots : nullptr);
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
@@ -28024,12 +28030,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 
                 if (aot_self_batch_callee) {
+                    FastEntryTakeOver slots;
+                    if (self_take_over) {
+                        slots = fastEntryTakeOverSlots(direct_inst->variant, *aot_self_batch_callee, given_slots);
+                    }
                     call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
                         inst, slot, aot_self_batch_fn, *aot_self_batch_callee,
                         raw_args, raw_arg_ids, boxed_args, args_array, arg_cleanups,
                         nargs, has_arg_cleanups,
                         "qore_rt_call_method_fast_aot",
-                        "qore_rt_call_method_fast_aot_consume_args", error);
+                        "qore_rt_call_method_fast_aot_consume_args", error, nullptr, UINT32_MAX, nullptr, nullptr,
+                        false, nullptr, self_take_over ? &slots : nullptr);
                     if (!call_result) {
                         return false;
                     }
@@ -28175,6 +28186,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* invoke_inst = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
 
             int nargs = static_cast<int>(inst->operands.size());
+            bool self_take_over = false;
             const BatchCalleeInfo* aot_self_getter = nullptr;
             const BatchCalleeInfo* aot_self_batch_callee = nullptr;
             llvm::Function* aot_self_batch_fn = nullptr;
@@ -28197,15 +28209,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "QORE_DISABLE_AOT_SELF_GETTER_IMPORT")) {
                     aot_self_getter = &it->second;
                 }
+                self_take_over = call_gives_args && it != batch_callees->end()
+                    && callCanTakeOverToFastEntry(inst, 0, invoke_inst->variant, it->second);
                 if (!aot_self_getter && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
+                        && (!call_gives_args || self_take_over || !it->second.local_method_takes_args)
                         && it->second.implicit_self_method
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(invoke_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args && !self_take_over,
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
                     aot_self_batch_fn = module.getFunction(it->second.fast_name);
@@ -28229,9 +28244,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     error)) {
                 return false;
             }
+            std::vector<llvm::Value*> given_slots;
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
-                    nargs, has_arg_cleanups);
+                    nargs, has_arg_cleanups, 0, self_take_over ? &given_slots : nullptr);
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
@@ -28263,12 +28279,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 
                 if (aot_self_batch_callee) {
+                    FastEntryTakeOver slots;
+                    if (self_take_over) {
+                        slots = fastEntryTakeOverSlots(invoke_inst->variant, *aot_self_batch_callee, given_slots);
+                    }
                     call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
                         inst, slot, aot_self_batch_fn, *aot_self_batch_callee,
                         raw_args, raw_arg_ids, boxed_args, args_array, arg_cleanups,
                         nargs, has_arg_cleanups,
                         "qore_rt_call_method_fast_aot",
-                        "qore_rt_call_method_fast_aot_consume_args", error);
+                        "qore_rt_call_method_fast_aot_consume_args", error, nullptr, UINT32_MAX, nullptr, nullptr,
+                        false, nullptr, self_take_over ? &slots : nullptr);
                     if (!call_result) {
                         return false;
                     }

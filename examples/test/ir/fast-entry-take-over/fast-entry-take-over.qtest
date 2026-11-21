@@ -196,12 +196,22 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -m -o %s %s/OwnedMethodModule.qm "
             "2>%s", env, compiler, image, dir, dump), \rc);
         assertEq(0, rc, out);
-        assertTrue(ReadOnlyFile::readTextFile(dump) =~ /call [^@\n]*@"?[^ ("\n]*Box__length_[^ ("]*\.own\.1"?\(/,
+        string ir = ReadOnlyFile::readTextFile(dump);
+        assertTrue(ir =~ /call [^@\n]*@"?[^ ("\n]*Box__length_[^ ("]*\.own\.1"?\(/,
             "the call in the module hands its temporary to the method");
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?[^ ("\n]*FinalBox__nested_[^\n]*\n([\s\S]*?)^\}/gm;
+        assertTrue(bodies.size() > 0, "the module contains the caller");
+        foreach string body in (bodies) {
+            list<string> calls = body =~ x/\b(call [^@\n]*@"?[^ ("\n]*FinalBox__replaceArg_[^ ("]*\.own\.1"?\()/g;
+            assertEq(2, calls.size(), "the direct and invoking self calls both hand over their temporaries");
+            assertTrue(body =~ /call [^@\n]*@"?[^ ("\n]*FinalBox___static_forgetArg_[^ ("]*\.own\.1"?\(/,
+                "the static call keeps its ownership check in the try block");
+        }
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR_ONLY=1 "
             "QORE_MODULE_DIR=%s %s -b %s/module-owner.q", env, tmp.path, qore_bin, dir));
         assertEq(0, r.rc, r.out);
-        assertEq("3\n", r.stdout, "the compiled module runs the method with its receiver");
+        assertEq("released\nreplaced\nreleased\nreplaced\nreleased\n6\n", r.stdout,
+            "the compiled methods release their parameter at its assignment");
     }
 
     testOwnedEntry() {

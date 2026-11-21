@@ -14049,6 +14049,17 @@ extern "C" DLLEXPORT int qore_rt_try_enter_native_method_v1(void* storage, QoreA
             return 0;
         }
         obj = value.get<QoreObject>();
+    } else if (!target.method->isStatic()) {
+        if (!target.is_self_method) {
+            return 0;
+        }
+        RuntimeConfig& rc = rc_get_current_ref();
+        obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+        if (!obj) {
+            return 0;
+        }
+    }
+    if (obj) {
         if (!obj->isValid() || obj->getClass() != target.qc || qore_object_private::get(*obj)->sandbox_provenance
                 || target.method->getNameStr() == "copy") {
             return 0;
@@ -14057,8 +14068,6 @@ extern "C" DLLEXPORT int qore_rt_try_enter_native_method_v1(void* storage, QoreA
         if (QoreTypeInfo::getParameterizedClassType(receiver_ti)) {
             return 0;
         }
-    } else if (!target.method->isStatic()) {
-        return 0;
     }
     new (storage) QoreNativeMethodContext(obj, method, uvb, pgm, receiver_ti, xsink);
     return 1;
