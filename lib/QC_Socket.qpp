@@ -7472,7 +7472,7 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 */
 Socket::setMaxHeaderSize(int max_header_size) [flags=NAMED_ARGS] {
     if (max_header_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (" QLLD ")",
             max_header_size);
     }
     s->setMaxHeaderSize(static_cast<size_t>(max_header_size));
@@ -7503,7 +7503,7 @@ int Socket::getMaxHeaderSize() [flags=CONSTANT] {
 */
 Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
     if (max_line_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (" QLLD ")",
             max_line_size);
     }
     s->setMaxLineSize(static_cast<size_t>(max_line_size));
