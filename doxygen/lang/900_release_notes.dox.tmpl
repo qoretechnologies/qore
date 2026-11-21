@@ -2534,6 +2534,9 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - fixed a crash when the members of a deleted object are merged into another object with the
+      @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/7055">issue 7055</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

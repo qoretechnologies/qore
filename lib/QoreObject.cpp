@@ -710,7 +710,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     {
         QoreSafeVarRWReadLocker sl(o.rml);
 
-        if (status == OS_DELETED) {
+        // the source object's status: a deleted object has no member hash (qore#7055)
+        if (o.status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, o.theclass->getName());
             return;
         }
