@@ -120,15 +120,17 @@ class LiveProviderHelperTest inherits QUnit::Test {
     ambient() {
         # live-provider-optin: saves the variables, which the test sets to fake values, to restore them
         *hash<string, *string> saved = map {$1: getenv($1)}, ("AWS_ACCESS_KEY_ID", "AZURE_CLIENT_SECRET",
-            "AWS_EC2_METADATA_DISABLED");
+            "AWS_EC2_METADATA_DISABLED", "QORE_GCP_ADC_DISABLED");
         on_exit {
             map exists $1.value ? setenv($1.key, $1.value) : unsetenv($1.key), saved.pairIterator();
         }
         setenv("AWS_ACCESS_KEY_ID", Value);
         setenv("AZURE_CLIENT_SECRET", Value);
         unsetenv("AWS_EC2_METADATA_DISABLED");
+        unsetenv("QORE_GCP_ADC_DISABLED");
         setenv(LiveProvider::OptInVar, "azure");
         LiveProvider::clearAmbient();
+        assertEq("1", getenv("QORE_GCP_ADC_DISABLED"), "the implicit Google credentials are turned off");
         # live-provider-optin: checks that the fake value set above was removed
         assertEq(NOTHING, getenv("AWS_ACCESS_KEY_ID"), "removed: aws is not enabled");
         assertEq("true", getenv("AWS_EC2_METADATA_DISABLED"));

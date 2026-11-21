@@ -120,6 +120,10 @@ public class LiveProvider {
             if (i.key == "aws") {
                 # the AWS CLI and SDKs that a test runs do not query the instance metadata endpoint
                 setenv("AWS_EC2_METADATA_DISABLED", "true");
+            } else if (i.key == "google") {
+                # GcpAuth uses neither the ADC file of the gcloud configuration nor the default metadata server
+                # (qore#6972)
+                setenv("QORE_GCP_ADC_DISABLED", "1");
             }
         }
     }
