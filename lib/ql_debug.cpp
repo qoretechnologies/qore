@@ -3732,6 +3732,77 @@ static void ut_program_family_thread_data(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! the data that q_save_thread_local_data() replaces for a key (qore#7075)
+static int ut_tld_save_data[3];
+//! the number of times the destructor of each data ran
+static int ut_tld_save_destroyed[3];
+//! the key that the re-entrant destructor saves data for, or -1
+static int ut_tld_save_reenter_key = -1;
+
+static void ut_tld_save_destructor(void* data) {
+    ++ut_tld_save_destroyed[static_cast<int*>(data) - ut_tld_save_data];
+}
+
+//! a destructor that saves data for its own key once, as a module's destructor can
+static void ut_tld_save_reentrant_destructor(void* data) {
+    ut_tld_save_destructor(data);
+    int key = ut_tld_save_reenter_key;
+    if (key >= 0) {
+        ut_tld_save_reenter_key = -1;
+        q_save_thread_local_data(key, &ut_tld_save_data[2], ut_tld_save_destructor);
+    }
+}
+
+//! saving data for a key that has data replaces it: the old data's destructor runs once, and the new data and its
+//! destructor are stored (qore#7075)
+static void ut_tld_save_existing_key(UnitTestCounters& c) {
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = 0;
+    int key = q_get_unique_thread_local_data_key();
+    q_save_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_destructor);
+    q_save_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor);
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "q_save_thread_local_data(): the replaced data's destructor runs");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[1],
+        "q_save_thread_local_data(): the new data is stored");
+    q_user_tld data(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data, true), "q_remove_thread_local_data(): the key has data");
+    UT_ASSERT(c, data.data == &ut_tld_save_data[1], "q_remove_thread_local_data(): it is the new data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "the replaced data's destructor does not run again");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "the new data's destructor runs when it is removed");
+
+    // the destructor of the replaced data saves data for its key again: it runs after the new data is stored
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = ut_tld_save_destroyed[2] = 0;
+    key = q_get_unique_thread_local_data_key();
+    q_save_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_reentrant_destructor);
+    ut_tld_save_reenter_key = key;
+    q_save_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor);
+    ut_tld_save_reenter_key = -1;
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "re-entrant: the replaced data's destructor runs once");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "re-entrant: the data replaced by the destructor is destroyed");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[2],
+        "re-entrant: the data saved by the destructor is stored");
+    q_user_tld data2(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data2, true), "re-entrant: the key has data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[2], "re-entrant: the last data's destructor runs when it is removed");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "re-entrant: no destructor runs twice");
+
+    // q_swap_thread_local_data() returns the old data, runs its destructor only if asked, and stores the new data
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = ut_tld_save_destroyed[2] = 0;
+    key = q_get_unique_thread_local_data_key();
+    UT_ASSERT(c, !q_swap_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_destructor),
+        "swap: a key without data has no old data");
+    UT_ASSERT(c, q_swap_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor, false)
+        == &ut_tld_save_data[0], "swap: the old data is returned");
+    UT_ASSERT_EQ(c, 0, ut_tld_save_destroyed[0], "swap: the old data's destructor is not run when not asked");
+    UT_ASSERT(c, q_swap_thread_local_data(key, &ut_tld_save_data[2], ut_tld_save_destructor, true)
+        == &ut_tld_save_data[1], "swap: the replaced data is returned");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "swap: the replaced data's destructor runs when asked");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[2], "swap: the new data is stored");
+    q_user_tld data3(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data3, true), "swap: the key has data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[2], "swap: the last data's destructor runs when it is removed");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "swap: no destructor runs twice");
+}
+
 static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
@@ -22001,6 +22072,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_tld_save_existing_key(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
@@ -22406,6 +22478,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_tld_save_existing_key(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
