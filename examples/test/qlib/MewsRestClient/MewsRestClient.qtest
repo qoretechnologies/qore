@@ -166,7 +166,7 @@ public class Main inherits QUnit::Test {
     pollTest() {
         checkModule();
         if (!mrc) {
-            testSkip("no connection");
+            testSkip(LiveProvider::skipReason("mews", ()));
         }
 
         try {
@@ -242,7 +242,8 @@ public class Main inherits QUnit::Test {
                 error("connection %y is type %y; expecting \"MewsRestConnection\"", conn_name, conn.className());
             }
             mrc = conn;
-        } else {
+        } else if (LiveProvider::enabled("mews")) {
+            # the public demo environment is an external service (qore#6964)
             mrc = new MewsRestConnection({
                 "url": "https://api.mews-demo.com",
                 "name": "demo",
