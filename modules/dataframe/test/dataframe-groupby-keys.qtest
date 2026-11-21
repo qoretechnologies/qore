@@ -203,13 +203,14 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
     #! numbers are keyed by their exact values at any precision, up to the maximum, in groupBy(), nunique(),
     #! valueCounts() and pivot() (qore#6107)
     numberTest() {
-        # 0.1 at the default precision, widened to the maximum (an equal value), and at a higher precision (another
-        # value); 1e-1000 has more than 4096 bits, and is equal to itself widened
+        # 0.1 at the default precision, widened to the maximum (an equal value), and computed at another precision
+        # (another value: zeros at the end of a decimal string do not change its precision, qore#6976, so 1n / 10n,
+        # with the 128 bits of its operands); 1e-1000 has more than 4096 bits, and is equal to itself widened
         # a zero of the maximum precision: a number string has about 5 bits per character
         number zmax = number("0." + strmul("0", 1700));
         number a = 0.1n;
         number a2 = a + zmax;
-        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number hi = 1n / 10n;
         number t = number("1e-1000");
         number t2 = t + zmax;
         DataFrame::DataFrame df({
