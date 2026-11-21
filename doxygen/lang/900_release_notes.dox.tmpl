@@ -160,6 +160,18 @@
     @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
     configuration (issue #6961).
 
+    @par SqlUtil Datasource Descriptions Show No User Name or Database Name
+    The description of a datasource in @ref sqlutilintro "SqlUtil" messages, as given by
+    @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceDesc() "AbstractSqlUtilBase::makeDatasourceDesc()",
+    @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()" and
+    @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()", is the masked description of
+    @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" (ex:
+    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the database name;
+    so it no longer identifies a connection, and the names of the database data providers, which are the
+    description, are the same for all the connections of a driver to a host and port; the key of the
+    @ref SqlUtil::TableCache "SqlUtil table cache" is given by the new
+    @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" (issue #6988).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
@@ -1223,6 +1235,14 @@
     @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", and a trusted build that one
     tenant's code calls never runs another tenant's code or uses its %Program (see @ref sandbox_isolation_domains;
     <a href="https://github.com/qoretechnologies/qore/issues/6536">issue 6536</a>).
+
+    @par Masked Datasource Descriptions for Messages
+    @ref Qore::SQL::mask_datasource(string) "mask_datasource()" (for a datasource string or a
+    @ref datasource_hash "datasource hash") and
+    @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" (also in
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
+    of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
+    and database name masked as \c "****", for exception messages and logs (issue #6988).
 
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
@@ -2640,6 +2660,13 @@
       \c "_" and \c "-"), such as a datasource string given with other connection arguments, is no longer looked up
       or loaded as a module, and is rejected without being shown (issue #6961); also the debug output of URL parsing
       no longer shows the URL or its password
+    - @ref sqlutilintro "SqlUtil" and its driver modules showed the user name and database name of a datasource (and
+      a SQLite database file name) in exception messages and logs, such as the \c TABLE-ERROR raised for a table
+      whose description cannot be read and the option errors of a database object; they now show the masked
+      description of the datasource, as the core datasource errors do; the
+      @ref datasourceproviderintro "DatasourceProvider" module no longer shows a datasource string in its exceptions
+      or in the script path of the program of a provider module; also a datasource string with a port of \c 0 no
+      longer aborts a debug build when it is parsed (issue #6988)
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)

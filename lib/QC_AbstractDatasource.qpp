@@ -557,6 +557,55 @@ string driver = db.getDriverName();
  */
 abstract string AbstractDatasource::getDriverName();
 
+//! Returns a description of the datasource for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    the user name, the password and the database name are always replaced with \c "****", whether they are set or
+    not, so that the description shows none of them, and not whether they are set; the host and port are shown if
+    set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use
+    for a datasource in exception messages and logs
+
+    @return the masked description of the datasource, made from getDriverName(), getHostName() and getPort(); the
+    driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with \c "****"
+    otherwise
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = ds.getMaskedDescription();
+throw "TABLE-ERROR", sprintf("table %y does not exist in %s", name, desc);
+    @endcode
+
+    @throw any exception raised by getDriverName(), getHostName() or getPort() of a subclass; the implementations of
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" throw no exception
+
+    @see @ref Qore::SQL::mask_datasource(string) "mask_datasource()"
+
+    @since %Qore 3.0
+*/
+string AbstractDatasource::getMaskedDescription() [flags=RET_VALUE_ONLY] {
+    ValueHolder driver(self->evalMethod("getDriverName", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder host(self->evalMethod("getHostName", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder port(self->evalMethod("getPort", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the methods are declared to return these types; a value of any other type is ignored
+    const char* driver_str = driver->getType() == NT_STRING ? driver->get<const QoreStringNode>()->c_str() : nullptr;
+    const char* host_str = host->getType() == NT_STRING ? host->get<const QoreStringNode>()->c_str() : nullptr;
+    int64 port_val = port->getType() == NT_INT ? port->getAsBigInt() : 0;
+    QoreStringNodeHolder rv(new QoreStringNode);
+    q_ds_append_masked(**rv, driver_str, host_str,
+        (port_val > 0 && port_val <= 65535) ? static_cast<int>(port_val) : 0);
+    return rv.release();
+}
+
 //! Returns the driver-specific server version data for the current connection
 /** @return the driver-specific server version data for the current connection
 
