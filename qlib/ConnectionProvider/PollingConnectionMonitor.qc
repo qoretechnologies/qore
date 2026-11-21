@@ -536,7 +536,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                         rethrow;
                     }
                 }
-            }, "pcm:" + conn_name, cancel_cb);
+            # (no owner: the timer's callback is not tracked per owner, as before)
+            }, "", cancel_cb);
         } catch (hash<ExceptionInfo> ex) {
             task_cnt.dec();
             # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see

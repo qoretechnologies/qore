@@ -419,7 +419,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @param task the closure or call reference to execute on a thread pool worker
         @param cancel an optional closure or call reference to call if the task is canceled
-        (e.g., during controller shutdown)
+        (e.g., during controller shutdown), or if the end of the process refuses it, in which case it is called in
+        the calling thread before the \c ASYNC-IO-SHUTDOWN-ERROR exception is raised
 
         @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's;
         see @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()"

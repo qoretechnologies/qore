@@ -23,11 +23,27 @@ public namespace AcMonitorStop {
 class MonitorStopper {
     destructor() {
         if (Stopper::monitor) {
-            Stopper::monitor.stopClear();
+            # stopped in a thread of its own, so that a stopClear() that waits for ever fails the test instead of
+            # hanging it
+            Counter stopped(1);
+            PollingConnectionMonitor monitor = Stopper::monitor;
+            background stop_monitor(monitor, stopped);
+            if (stopped.waitForZero(30s)) {
+                printf("monitor stop hung\n");
+                flush();
+                # the process cannot end while the monitor waits
+                exit(1);
+            }
             printf("monitor stopped\n");
             flush();
         }
     }
+}
+
+#! stops the monitor and decrements the counter
+sub stop_monitor(PollingConnectionMonitor monitor, Counter stopped) {
+    monitor.stopClear();
+    stopped.dec();
 }
 
 #! the data of this module

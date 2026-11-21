@@ -1106,7 +1106,8 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 /** @param task the @ref closure "closure" or @ref call_reference "call reference" to execute
     @param cancel_callback an optional @ref closure "closure" or @ref call_reference "call reference"
     to execute if the pool is stopped before the task can be executed, or if the end of the process refuses the task
-    (see @ref asynciocontroller_module_cleanup)
+    (see @ref asynciocontroller_module_cleanup); in that case it is run in the calling thread before the
+    \c ASYNC-IO-SHUTDOWN-ERROR exception is raised
 
     @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller submitted code that is not its own
@@ -1130,20 +1131,21 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 */
 static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel_callback)
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
+            "schedule", xsink)
+        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::submitTask()", "schedule", xsink))) {
+        return QoreValue();
+    }
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submitTask", false, xsink)) {
-        // the task does not run: its owner is told with the cancel callback, so that an owner that counts its tasks
-        // balances its count (qore#7116)
+        // the task does not run: its owner is told with the cancel callback, run in this thread before the exception
+        // is raised, so that an owner that counts its tasks balances its count (qore#7116); an exception that the
+        // callback raises follows the ASYNC-IO-SHUTDOWN-ERROR exception
         if (cancel_callback) {
             ExceptionSink cancel_xsink;
             cancel_callback->execValue(nullptr, &cancel_xsink).discard(&cancel_xsink);
             xsink->assimilate(cancel_xsink);
         }
-        return QoreValue();
-    }
-    if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
-            "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::submitTask()", "schedule", xsink))) {
         return QoreValue();
     }
     QoreObject* obj;

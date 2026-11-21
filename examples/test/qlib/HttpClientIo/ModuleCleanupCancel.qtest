@@ -319,6 +319,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             + "ModuleCleanupCancel" + DirSep + "monitor-client.qr")), \status);
         assertEq(0, status, out);
         assertRegex("(?s)(^|\n)monitor started\n.*monitor stopped\n", out, "the monitor is stopped: " + out);
+        assertNRegex("monitor stop hung", out, "the monitor's stopClear() returns: " + out);
         assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
     }
 
@@ -424,6 +425,9 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         }
         if (!FollowUpDeadline{follow_up}) {
             assertNRegex("QORE_MODULE_CLEANUP_TIMEOUT", out, "the cleanup does not reach its deadline: " + out);
+        }
+        if (follow_up == "chain-task-cancel") {
+            assertEq(1, (out =~ x/(task cancel callback ran)/g).size(), "the cancel callback runs once: " + out);
         }
         if (follow_up =~ /^(chain|abort)/) {
             assertNRegex("resubmitted|timer added|task submitted", out, "no new work is accepted: " + out);

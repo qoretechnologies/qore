@@ -3984,6 +3984,9 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
 
 int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
         ExceptionSink* xsink) {
+    // the references that this method takes over are released if the task is not submitted
+    ReferenceHolder<ResolvedCallReferenceNode> task_holder(task, xsink);
+    ReferenceHolder<ResolvedCallReferenceNode> cancel_holder(cancel, xsink);
     if (checkForked("submitTask", xsink)) {
         return -1;
     }
@@ -4014,8 +4017,9 @@ int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedC
     }
     // Safe to use tp outside the lock: stopThreadPool() is only called from deref() when
     // ROdereference() returns true (last reference), so no concurrent submitTask() is possible
-    // a task that the module cleanup or its work submits is waited for by the cleanup (qore#7027)
-    return tp->submit(task, cancel, xsink, true);
+    // a task that the module cleanup or its work submits is waited for by the cleanup (qore#7027); the pool takes
+    // over the references
+    return tp->submit(task_holder.release(), cancel_holder.release(), xsink, true);
 }
 
 void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
@@ -7042,8 +7046,13 @@ bool AsyncIoControllerPriv::cancelTimerForModuleCleanup(int64_t id, ExceptionSin
         // the callback runs with the timer's own context: it is counted when it is queued (enqueue())
     }
     ensureCallDispatcher();
-    call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cancel_cb.get<ResolvedCallReferenceNode>(),
-        nullptr, owner, std::move(ctx), std::move(po));
+    try {
+        call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cancel_cb.get<ResolvedCallReferenceNode>(),
+            nullptr, owner, std::move(ctx), std::move(po));
+    } catch (std::bad_alloc&) {
+        // the callback is not run: its reference is released
+        cancel_cb.discard(xsink);
+    }
     return true;
 }
 
