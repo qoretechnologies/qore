@@ -667,9 +667,9 @@ fi
 #   not.  A file that the build makes nothing from that the tests use (a source under examples/ that a test compiles
 #   when it runs, a file of a binary module that CMake does not build here, a module in qlib that has no .qmod, which
 #   is loaded from its source, a file that is not a source) is not compared, and neither is a file that is gone.  A
-#   new file that git does not know of is not
-#   seen.  The times tell what a build has only as far as the build writes what the tests use again, so these cases
-#   are not seen, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs one that is refused wrongly:
+#   new file that git does not know of is not seen.  The times tell what a build has only as far as the build writes
+#   what the tests use again, so these cases are not seen, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs one that is
+#   refused wrongly:
 #   - a configure that is not followed by a build hides a change of a CMake file (CMakeCache.txt is written);
 #   - a file removed from libqore, a module in qlib, a binary module or the test programs and not built since;
 #   - a header of include/ counts as built when anything that includes such headers was built after it (libqore, qcc,
@@ -944,6 +944,44 @@ qlib_module_qmod() {
     done
 }
 
+# Sets LIBQORE_SOURCES to the C and C++ sources of lib/ (relative to the tree, one per line, between newlines) that
+# the compiler read for libqore, from the depfiles that it wrote next to libqore's objects (<build>/CMakeFiles/
+# libqore.dir/**/*.o.d, with CMake's Makefile generators), and LIBQORE_DEPFILES to 1; a source can be in libqore
+# without an object of its own: the single compilation unit, which is the default, includes most of them, and in a
+# build with an object for each source, a few are included by another one (the handlers of the expression
+# registries).  Where there are no depfiles (Ninja keeps them in .ninja_deps) or they cannot be read within the time
+# limit, LIBQORE_DEPFILES is 0, and every source is compared.  The paths in the depfiles start with the source
+# directory that CMake was configured with (build_source) or with the tree's physical path.
+read_libqore_sources() {
+    LIBQORE_SOURCES_READ=1
+    LIBQORE_DEPFILES=0
+    LIBQORE_SOURCES=""
+    if [ -z "`find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' 2>/dev/null | head -1`" ]; then
+        return
+    fi
+    libqore_sources=`run_build_check find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' -exec awk \
+        -v a="${build_source%/}/" -v b="$QORE_SOURCE_DIR/" '{
+            for (i = 1; i <= NF; ++i) {
+                t = $i
+                if (index(t, a) == 1) {
+                    t = substr(t, length(a) + 1)
+                } else if (index(t, b) == 1) {
+                    t = substr(t, length(b) + 1)
+                } else {
+                    continue
+                }
+                if (t ~ /^lib\/.*\.(c|cc|cpp)$/ && !(t in seen)) {
+                    seen[t] = 1
+                    print t
+                }
+            }
+        }' {} + 2>/dev/null` || return
+    LIBQORE_SOURCES="
+$libqore_sources
+"
+    LIBQORE_DEPFILES=1
+}
+
 # Sets BUILD_REFS to the files that the tests use that the build makes from the given changed file (relative to the
 # tree), one per line, whose times tell whether the build has the change (see above), or to nothing if the tests use
 # nothing that the build makes from it.  BUILD_REFS_ANY is 1 if the build has the change when the file is older than
@@ -956,8 +994,8 @@ qlib_module_qmod() {
 # - a source of a module in qlib (.qm, .qc; not its other files, which the .qmod does not hold): the module's .qmod
 #   (see qlib_module_qmod()), or nothing (it is loaded from its source);
 # - a source of libqore (lib/: C, C++, qpp, bison, flex, assembler and headers): libqore, but nothing for a C or C++
-#   source that a build of this tree with an object for each source (not one compilation unit) did not compile into
-#   it (a file of another platform, or a program's own);
+#   source that the compiler did not read for libqore in a build of this tree (a file of another platform, or a
+#   program's own; see read_libqore_sources());
 # - a header of include/: any of libqore, qcc, qore and the binary modules' files (BUILD_REFS_ANY): a header that only
 #   modules include is in a module that was built again, not in libqore;
 # - a source of a binary module (modules/<name>/: C, C++, qpp, headers, Qore): the module's file, or nothing if the
@@ -992,13 +1030,20 @@ build_references() {
             fi
             ;;
         lib/*.c|lib/*.cc|lib/*.cpp)
-            # In a build of this tree with an object for each source (not one compilation unit, CMakeCache.txt's
-            # SINGLE_COMPILATION_UNIT, which is on by default and keeps a few objects of their own), a source that
-            # has none is not in libqore (a file of another platform, or a program's own).  Another tree's build is
-            # compared for every source.
-            if [ "$same_tree" = 1 ] && [ "$BUILD_SCU" = 0 ] \
-                    && [ ! -e "$QORE_BUILD_DIR/CMakeFiles/libqore.dir/$1.o" ]; then
-                return
+            # in a build of this tree, a source that the compiler did not read for libqore is not in it; another
+            # tree's build is compared for every source
+            if [ "$same_tree" = 1 ]; then
+                if [ $LIBQORE_SOURCES_READ -eq 0 ]; then
+                    read_libqore_sources
+                fi
+                if [ $LIBQORE_DEPFILES -eq 1 ]; then
+                    case "$LIBQORE_SOURCES" in
+                        *"
+$1
+"*) ;;
+                        *) return ;;
+                    esac
+                fi
             fi
             add_build_refs "$LIBQORE"
             ;;
@@ -1041,7 +1086,7 @@ build_references() {
     esac
 }
 
-# Returns 0 if the build has the change of the given file (or directory, for a qlib file that is gone) by the times of the
+# Returns 0 if the build has the change of the given file by the times of the
 # files in BUILD_REFS (see build_references())
 build_has_change() {
     build_newer=0
@@ -1104,11 +1149,7 @@ check_build_matches_tree() {
         # a build configured from this tree: the files that it is newer than are in it
         build_source=`sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null`
         same_tree=0
-        BUILD_SCU=1
-        if grep -Eiq '^SINGLE_COMPILATION_UNIT:BOOL=(OFF|FALSE|NO|N|0)[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" \
-                2>/dev/null; then
-            BUILD_SCU=0
-        fi
+        LIBQORE_SOURCES_READ=0
         if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
             same_tree=1
         fi
