@@ -148,6 +148,16 @@ class BuildMatchTest(unittest.TestCase):
     def tearDown(self):
         self.directory.cleanup()
 
+    def depfile(self, obj, *sources):
+        """Writes the object file of libqore at the given path (relative to CMakeFiles/libqore.dir) and the depfile that
+        the compiler wrote next to it, which names the given sources of lib/ (and a header of the system)"""
+        path = self.build / "CMakeFiles/libqore.dir" / obj
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+        os.utime(path, (BUILD_TIME, BUILD_TIME))
+        (path.parent / (path.name + ".d")).write_text("CMakeFiles/libqore.dir/%s: \\\n %s \\\n /usr/include/stdio.h\n"
+                                                    % (obj, " \\\n ".join("%s/%s" % (self.tree, s) for s in sources)))
+
     def run_runner(self, tree=None, build=None, **variables):
         tree = tree or self.tree
         build = build or self.build
@@ -343,14 +353,12 @@ class BuildMatchTest(unittest.TestCase):
         # when it runs (no object of its own, though a directory above has objects of other sources), a source of lib/
         # that libqore does not have (a build with an object for each source has none for it), and an include/
         # header that only a module includes, whose module was built again
-        # a build with an object for each source (not one compilation unit)
-        with open(self.build / "CMakeCache.txt", "a") as f:
-            f.write("SINGLE_COMPILATION_UNIT:BOOL=OFF\n")
-        os.utime(self.build / "CMakeCache.txt", (BUILD_TIME, BUILD_TIME))
+        # a build with an object for each source (not one compilation unit), whose depfiles do not name lib/qpp.cpp
+        self.depfile("lib/a.cpp.o", "lib/a.cpp")
         (self.build / "modules/m").mkdir(parents=True)
         (self.build / "modules/m/m-api-1.0.qmod").touch()
         os.utime(self.build / "modules/m/m-api-1.0.qmod", (LATER + 10, LATER + 10))
-        for obj in ("CMakeFiles/libqore.dir/lib/a.cpp.o", "CMakeFiles/other-test.dir/examples/test/qore/misc/other.cpp.o"):
+        for obj in ("CMakeFiles/other-test.dir/examples/test/qore/misc/other.cpp.o",):
             (self.build / obj).parent.mkdir(parents=True, exist_ok=True)
             (self.build / obj).touch()
             os.utime(self.build / obj, (BUILD_TIME, BUILD_TIME))
@@ -534,19 +542,47 @@ class BuildMatchTest(unittest.TestCase):
     def test_libqore_s_sources_in_one_compilation_unit_are_compared_with_libqore(self):
         # the default build (SINGLE_COMPILATION_UNIT) compiles most of libqore's sources in one unit: libqore.dir/lib/
         # has single-compilation-unit.cpp.o and a few objects of sources that are compiled on their own, but none of a
-        # source that the unit includes
-        with open(self.build / "CMakeCache.txt", "a") as f:
-            f.write("SINGLE_COMPILATION_UNIT:BOOL=ON\n")
-        os.utime(self.build / "CMakeCache.txt", (BUILD_TIME, BUILD_TIME))
-        for obj in ("lib/single-compilation-unit.cpp.o", "lib/JITRuntimeTakeOver.cpp.o"):
-            (self.build / "CMakeFiles/libqore.dir" / obj).parent.mkdir(parents=True, exist_ok=True)
-            (self.build / "CMakeFiles/libqore.dir" / obj).touch()
-            os.utime(self.build / "CMakeFiles/libqore.dir" / obj, (BUILD_TIME, BUILD_TIME))
+        # source that the unit includes; the unit's depfile names it.  A source that no depfile names (a file of
+        # another platform, or one that nothing compiles) is not compared.
+        self.depfile("lib/single-compilation-unit.cpp.o", "lib/a.cpp", "lib/b.cpp")
+        self.depfile("lib/JITRuntimeTakeOver.cpp.o", "lib/JITRuntimeTakeOver.cpp")
+        self.add_dead_source()
         (self.tree / "lib/a.cpp").write_text("int a = 7;\n")
         os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
-        self.assert_refused(self.run_runner(), "    lib/a.cpp")
+        result = self.run_runner()
+        self.assert_refused(result, "    lib/a.cpp")
+        self.assertNotIn("lib/dead.cpp", result.output)
         os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
         self.assert_runs(self.run_runner())
+
+    def add_dead_source(self):
+        """Adds lib/dead.cpp, which nothing compiles, changed after the build"""
+        (self.tree / "lib/dead.cpp").write_text("// dead\n")
+        git(self.tree, "add", "lib/dead.cpp")
+        os.utime(self.tree / "lib/dead.cpp", (LATER, LATER))
+
+    def test_a_source_that_another_one_includes_is_compared_with_libqore(self):
+        # a build with an object for each source: a source that another one includes (the handlers of an expression
+        # registry) has no object of its own, but the including source's depfile names it
+        with open(self.build / "CMakeCache.txt", "a") as f:
+            f.write("SINGLE_COMPILATION_UNIT:BOOL=OFF\n")
+        os.utime(self.build / "CMakeCache.txt", (BUILD_TIME, BUILD_TIME))
+        self.depfile("lib/a.cpp.o", "lib/a.cpp", "lib/handlers.cpp")
+        self.depfile("lib/b.cpp.o", "lib/b.cpp")
+        self.add_dead_source()
+        (self.tree / "lib/handlers.cpp").write_text("// handlers, changed\n")
+        git(self.tree, "add", "lib/handlers.cpp")
+        os.utime(self.tree / "lib/handlers.cpp", (LATER, LATER))
+        result = self.run_runner()
+        self.assert_refused(result, "    lib/handlers.cpp")
+        self.assertNotIn("lib/dead.cpp", result.output)
+
+    def test_without_depfiles_every_source_of_libqore_is_compared(self):
+        # Ninja keeps the dependencies in .ninja_deps: a source cannot be told not to be in libqore
+        (self.build / "CMakeFiles/libqore.dir/lib").mkdir(parents=True)
+        (self.build / "CMakeFiles/libqore.dir/lib/a.cpp.o").touch()
+        self.add_dead_source()
+        self.assert_refused(self.run_runner(), "    lib/dead.cpp")
 
     def test_another_tree_s_build_is_compared_for_every_source_of_libqore(self):
         # a build of another tree with an object for each source, which has none for a source that differs: it is
