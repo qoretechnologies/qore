@@ -3238,6 +3238,12 @@ public:
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;
 
+    //! 1 if the class is SocketPollOperation or a subclass of it, 0 if not, -1 if not determined yet (qore#6839)
+    /** the objects of these classes keep the socket and goal of their operation with the operation; set when first
+        needed, by any thread, with the same value
+    */
+    mutable std::atomic<signed char> socket_poll_op_class{-1};
+
     qore_classid_t classID,          // class ID
         methodID;                    // for subclasses of builtin classes that will not have their own private data,
                                      // instead they will get the private data from this class
@@ -4242,6 +4248,23 @@ public:
         //printd(5, "qore_class_private::runtimeGetMemberContext() this: %p '%s' mem: '%s' info: %p member class: %p '%s' ctx(%p): %p (size: %d)\n", this, name.c_str(), mem, info, info ? info->getClass() : nullptr, info ? info->getClass()->name.c_str() : "n/a", class_ctx, info ? info->getClassContext(class_ctx) : nullptr, info ? info->getContextSize() : 0);
         return info ? info->getClassContext(class_ctx) : nullptr;
     }
+
+#ifdef DEBUG
+    //! returns true if an access to the member in the class context would miss a system class's internal member
+    /** this = the object's class; true if every declaration of the member is private:internal, the member is
+        declared by a system class, and the class context cannot reach it: such an access goes to the object's main
+        data, so C++ code that accesses a private:internal member of a system class by name must give the declaring
+        class (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
+        QoreObject::setInternalMemberValue()); used by the debug assertions of the accesses without a class, which
+        also check that the main data does not hold the name, as a member written from outside the class can
+        (qore#6839)
+    */
+    DLLLOCAL bool runtimeMissesInternalOnlyMember(const char* mem, const qore_class_private* class_ctx) const {
+        const QoreMemberInfo* info = members.find(mem);
+        return info && (info->access == Internal || info->access == Inaccessible) && info->getClass()
+            && info->getClass()->sys && !info->getClassContext(class_ctx);
+    }
+#endif
 
     DLLLOCAL bool runtimeIsMemberInternal(const char* mem) const {
         QoreMemberInfo* info = members.find(mem);

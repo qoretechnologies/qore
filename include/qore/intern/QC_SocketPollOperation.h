@@ -442,7 +442,7 @@ constexpr int SPS_ACCEPTING = 1;
 constexpr int SPS_ACCEPTING_SSL = 2;
 constexpr int SPS_ACCEPTED = 3;
 
-class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase {
+class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketAcceptPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
     }
@@ -1429,7 +1429,7 @@ private:
 
     @since %Qore 3.0
 */
-class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase {
+class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);

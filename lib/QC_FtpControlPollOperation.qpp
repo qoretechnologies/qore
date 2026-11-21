@@ -64,7 +64,7 @@ static QoreObject* ftp_ctrl_keep_sock_object(QoreObject* self) {
         return nullptr;
     }
     ExceptionSink xsink;
-    ValueHolder v(self->getReferencedMemberNoMethod("sock", &xsink), &xsink);
+    ValueHolder v(qore_poll_op_get_referenced_member(self, "sock", &xsink), &xsink);
     if (xsink) {
         xsink.clear();
         return nullptr;
@@ -631,7 +631,7 @@ QoreObject* FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink
     // Build SocketPollOperationInfo hash
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     // Get sock from our QoreObject members
-    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    ValueHolder sock_val(qore_poll_op_get_referenced_member((*self), "sock", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -677,7 +677,7 @@ QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    ValueHolder sock_val(qore_poll_op_get_referenced_member((*self), "sock", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -724,7 +724,6 @@ QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink
     @since %Qore 3.0
 */
 qclass FtpControlPollOperation [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=FtpControlPollOperationPriv* priv;
     vparent=SocketPollOperationBase<*hash<auto>>;
@@ -773,7 +772,7 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
 
     // Create QoreObject wrapper — consumes the initial ref from 'new'.
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
-    self->setMemberValue("sock", QC_FTPCONTROLPOLLOPERATION, sock_obj, xsink);
+    qore_poll_op_set_member(self, "sock", sock_obj, xsink);
     if (*xsink) {
         sock_obj->deref(xsink);
         connect_op->deref(xsink);
@@ -781,7 +780,7 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
     }
 
     // Set goal — setMemberValue takes ownership
-    self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-login"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-login"), xsink);
     if (*xsink) {
         connect_op->deref(xsink);
         return;
@@ -798,7 +797,7 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
 
     // Wire the self reference into the inner connect op so that
     // SocketPollOperationBase::getReferencedSocketObject() can fetch the
-    // "sock" member via `self->getReferencedMemberNoMethod("sock", ...)`
+    // "sock" member via `qore_poll_op_get_referenced_member(self, "sock", ...)`
     // when the first continuePoll() drives the connect.  Without this,
     // the assert(self) at SocketPollOperationBase.h:99 fires as SIGABRT
     // under Debug (seen in FtpClientIo.qtest::testControlPollOperationLogin
@@ -823,7 +822,7 @@ FtpControlPollOperation::destructor() {
 /** @return "ftp-login" for the initial connection or "ftp-command" for command execution
 */
 string FtpControlPollOperation::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state of the poll operation
@@ -870,7 +869,7 @@ nothing FtpControlPollOperation::submitCommand(string command, *string argument)
     priv->submitCommand(command->c_str(), argument ? argument->c_str() : nullptr, xsink);
     // Update goal
     if (!*xsink) {
-        self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-command"), xsink);
+        qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-command"), xsink);
     }
 }
 
@@ -883,7 +882,7 @@ nothing FtpControlPollOperation::submitCommand(string command, *string argument)
 nothing FtpControlPollOperation::submitRecvResponse() {
     priv->submitRecvResponse(xsink);
     if (!*xsink) {
-        self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-response"), xsink);
+        qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-response"), xsink);
     }
 }
 
@@ -1134,7 +1133,7 @@ QoreObject* FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xs
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    ValueHolder sock_val(qore_poll_op_get_referenced_member((*self), "sock", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1157,7 +1156,6 @@ QoreObject* FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xs
     @since %Qore 3.0
 */
 qclass FtpPortAcceptPollOperation [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=FtpPortAcceptPollOperationPriv* priv;
     vparent=SocketPollOperationBase<*Socket>;
@@ -1190,17 +1188,17 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket
     // Set sock member to listener (controller polls this fd)
     {
         // Get the Socket QoreObject from the accept_operation's sock member
-        ValueHolder sock_val(const_cast<QoreObject*>(accept_operation)->getReferencedMemberNoMethod("sock", xsink), xsink);
+        ValueHolder sock_val(qore_poll_op_get_referenced_member(const_cast<QoreObject*>(accept_operation), "sock",
+            xsink), xsink);
         if (!*xsink && sock_val->getType() == NT_OBJECT) {
-            self->setMemberValue("sock", QC_FTPPORTACCEPTPOLLOPERATION, sock_val.release(), xsink);
+            qore_poll_op_set_member(self, "sock", sock_val.release(), xsink);
         }
     }
     if (*xsink) {
         accept_base->deref(xsink);
         return;
     }
-    self->setMemberValue("goal", QC_FTPPORTACCEPTPOLLOPERATION,
-        new QoreStringNode("ftp-port-accept"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-port-accept"), xsink);
     if (*xsink) {
         accept_base->deref(xsink);
         return;
@@ -1227,7 +1225,7 @@ FtpPortAcceptPollOperation::destructor() {
 /** @return "ftp-port-accept"
 */
 string FtpPortAcceptPollOperation::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

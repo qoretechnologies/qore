@@ -631,6 +631,11 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
                 &xsink)) {
             return true;
         }
+        // qore#6839: a SocketPollOperation keeps a strong reference to its socket with the operation, where a member
+        // held it before
+        if (qore_socket_poll_op_scan_members(getScanPrivateData(CID_SOCKETPOLLOPERATION), *this, rsh)) {
+            return true;
+        }
         {
             // issue #5590: a Program's thread initialization code and thread entry and exit handlers
             ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(getScanPrivateData(CID_PROGRAM)), &xsink);
@@ -1726,11 +1731,14 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
     bool before;
     bool after = needs_scan(val);
 
+    // the value is consumed also if the object was deleted; it is released after the lock (qore#6839)
+    ValueHolder unused_val(xsink);
     {
         QoreSafeVarRWWriteLocker sl(rml);
 
         if (status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, key, theclass->getName());
+            unused_val = val;
             return;
         }
 
@@ -2749,6 +2757,24 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
     return *xsink ? -1 : 0;
 }
 
+QoreValue QoreObject::getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
+        ExceptionSink* xsink) const {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    return priv->getReferencedMemberNoMethodResolvedNoAccessor(key, class_ctx, xsink);
+}
+
+int QoreObject::setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink) {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    priv->setValueIntern(class_ctx, key, val, xsink);
+    return *xsink ? -1 : 0;
+}
+
 void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) {
     QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
@@ -2839,7 +2865,27 @@ QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* v
     return b->priv->getSlice(value_list, xsink);
 }
 
+#ifdef DEBUG
+//! returns true if an access without a class would miss a private:internal member of a system class (qore#6839)
+/** the access goes to the object's main data; a member of the name that is there (written from outside the class,
+    as a class without a member list allows) is what the access means
+*/
+static bool qore_object_misses_internal_member(const qore_object_private* priv, const char* key) {
+    if (!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(key, runtime_get_class())) {
+        return false;
+    }
+    QoreSafeVarRWReadLocker sl(priv->rml);
+    return priv->status != OS_DELETED && !priv->data->existsKey(key);
+}
+#endif
+
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
+    // a write without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would go to the object's main data, where nothing reads it
+    // (qore#6839)
+#ifdef DEBUG
+    assert(!qore_object_misses_internal_member(priv, key));
+#endif
     priv->setValue(key, val, xsink);
 }
 
@@ -2870,6 +2916,11 @@ int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink*
 }
 
 QoreValue QoreObject::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
+    // a read without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would read the object's main data and give no value (qore#6839)
+#ifdef DEBUG
+    assert(!qore_object_misses_internal_member(priv, mem));
+#endif
     return priv->getReferencedMemberNoMethod(mem, xsink);
 }
 

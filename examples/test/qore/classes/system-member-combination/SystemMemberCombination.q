@@ -25,7 +25,10 @@ hash<string, string> cases = {
     # the same with the user class's member declared as int: both orders
     "public int order 1": "class A { public { int path = 42; } } class X inherits FtpClient, A {}",
     "public int order 2": "class A { public { int path = 42; } } class X inherits A, FtpClient {}",
-    # a private member of a system class (PollPipeline::goal) and a private member of a user class: both orders
+    # the private:internal member goal of a system class (SocketPollOperationBase, inherited by PollPipeline;
+    # qore#6839) and a private member of a user class: accepted in both orders, as a private:internal member never
+    # reaches the check and the user class's member has storage of its own (see
+    # ../AbstractPollOperation/system-poll-member-access.qtest)
     "private order 1": "class U { private { string goal; } } class X inherits PollPipeline, U {}",
     "private order 2": "class U { private { string goal; } } class X inherits U, PollPipeline {}",
     # no member of the same name: accepted

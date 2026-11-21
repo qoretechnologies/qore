@@ -38,10 +38,12 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/AbstractPollState.h>
 #include <qore/ReferenceHolder.h>
+#include <qore/QoreThreadLock.h>
 #include <qore/AbstractQoreNode.h>
 #include <qore/QoreString.h>
 #include <qore/Transform.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -93,6 +95,64 @@ constexpr int SPS_CONNECTED = 3;
 
 struct qore_socket_private;
 
+//! The socket and the goal of a poll operation that the library keeps with the operation (qore#6839)
+/** The operations of the classes in this header (the operations of the synchronous Socket calls and of the
+    SocketPollOperation objects) keep the socket and the goal of their object here instead of as private:internal
+    members of the object, so that creating the object of an operation allocates no member storage.  The values are
+    released when the object is deleted (SocketPollOperation::destructor()), as its members were, and a strong
+    reference to the socket is reported to the scan for recursive references of the object, as a member was.  %Qore
+    code gets the goal with getGoal(), and the library gets the socket with
+    SocketPollOperationBase::getReferencedSocketObject().
+
+    @since %Qore 3.0
+*/
+class SocketPollOperationMembers {
+public:
+    DLLLOCAL SocketPollOperationMembers() = default;
+
+    //! releases any values left (an operation whose object was not deleted normally)
+    /** inline, as an operation that keeps no values (an operation that runs in the object of another class) is
+        created and destroyed for each step of an operation
+    */
+    DLLLOCAL ~SocketPollOperationMembers() {
+        if (poll_sock || poll_goal) {
+            releaseRemainingPollMembers();
+        }
+    }
+
+    //! sets the value of \c "sock" or \c "goal"; the reference of the value is consumed
+    DLLEXPORT void setPollMember(const char* key, QoreValue val, ExceptionSink* xsink);
+
+    //! returns a referenced value of \c "sock" or \c "goal", or no value if none is set
+    DLLEXPORT QoreValue getReferencedPollMember(const char* key) const;
+
+    //! releases the values; called when the object of the operation is deleted
+    DLLEXPORT void releasePollMembers(ExceptionSink* xsink);
+
+    //! reports the socket of the operation to the scan for recursive references of its object if it holds it strongly
+    /** a member was scanned with the object; see design/dgc.md Pattern B and qore_socket_poll_op_scan_members()
+    */
+    DLLEXPORT bool scanPollMembers(class RObject& obj, class RSetHelper& rsh);
+
+    //! the object of the operation, if it is registered for the scan of its private data (a strong socket reference)
+    /** a value that is given up is marked on it (RObject::edgesRemoved()), as for the other containers of
+        design/dgc.md
+    */
+    class RObject* poll_scan_holder = nullptr;
+
+private:
+    //! releases the values left when the operation is destroyed
+    DLLEXPORT void releaseRemainingPollMembers();
+
+    //! the lock of the values: the async I/O controller reads the socket while the object can be deleted
+    /** a spin lock, held only to copy a value: an operation is created for each synchronous Socket call, and a mutex
+        would cost its creation more than the member storage that the members save
+    */
+    mutable std::atomic_flag poll_member_lock = ATOMIC_FLAG_INIT;
+    QoreValue poll_sock;
+    QoreValue poll_goal;
+};
+
 //! Intermediate base class that owns a socket reference and an AbstractPollState
 /** Provides the abort() logic that clears non-blocking state and optionally
     closes the socket.  All concrete socket poll operations that work on a
@@ -100,7 +160,7 @@ struct qore_socket_private;
 
     @since %Qore 3.0
 */
-class SocketPollSocketOperationBase : public SocketPollOperationBase {
+class SocketPollSocketOperationBase : public SocketPollOperationBase, public SocketPollOperationMembers {
     friend class qore_socket_poll_socket_operation_base_ops;
 public:
     //! Creates the operation with a QoreObject self reference (for Qore-space ops)

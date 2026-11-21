@@ -2299,7 +2299,6 @@ void qore_poll_pipeline_ops::setErrorImpl(PollPipelinePriv* b, const char* err, 
     @since %Qore 3.0
 */
 qclass PollPipeline [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=PollPipelinePriv* priv;
     vparent=SocketPollOperationBase<auto>
@@ -2318,10 +2317,9 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_POLLPIPELINE, sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_POLLPIPELINE,
-        new QoreStringNode("poll_pipeline"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("poll_pipeline"), xsink);
 
     sock_ptr->ref();
     self->setPrivate(CID_POLLPIPELINE,
@@ -2337,7 +2335,7 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     @since %Qore 3.0
 */
 PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
-    self->setMemberValue("goal", QC_POLLPIPELINE,
+    qore_poll_op_set_member(self, "goal",
         goal ? new QoreStringNode(goal->c_str()) : new QoreStringNode("poll_pipeline"), xsink);
 
     self->setPrivate(CID_POLLPIPELINE,
@@ -3274,7 +3272,28 @@ nothing PollPipeline::setResultChannel(object channel) [flags=NAMED_ARGS] {
 /** @return the goal string ("poll_pipeline")
 */
 string PollPipeline::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
+}
+
+//! Sets the goal of the operation
+/** For subclasses that build a pipeline for a goal of their own; the goal is a private:internal member of the
+    system base class, which a subclass cannot write directly (qore#6839)
+
+    @param goal the goal returned by getGoal()
+
+    @par Example:
+    @code{.py}
+class MyPollOperation inherits PollPipeline {
+    constructor(Socket sock) : PollPipeline(sock) {
+        setGoal("my-goal");
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+private nothing PollPipeline::setGoal(string goal) [flags=NAMED_ARGS] {
+    qore_poll_op_set_member(self, "goal", goal->stringRefSelf(), xsink);
 }
 
 //! Returns the current state

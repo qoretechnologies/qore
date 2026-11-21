@@ -1124,7 +1124,6 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass Http2PollOperationBase [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=Http2PollOperationPriv* priv;
     vparent=SocketPollOperationBase<*hash<auto>>
@@ -1163,10 +1162,9 @@ Http2PollOperationBase::constructor(Socket[QoreSocketObject] socket, object init
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTP2POLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP2POLLOPERATIONBASE,
-        new QoreStringNode("http2_connection"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http2_connection"), xsink);
 
     // Ref the socket for the C++ priv
     QoreSocketObject* sock_ptr = *socket;
@@ -1202,7 +1200,7 @@ Http2PollOperationBase::copy() {
 /** @return "http2_connection"
 */
 string Http2PollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1373,7 +1371,7 @@ string Http2PollOperationBase::getH2State() [flags=RET_VALUE_ONLY] {
 /** @return the Socket object
 */
 Socket Http2PollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Returns True if headers-only mode is enabled

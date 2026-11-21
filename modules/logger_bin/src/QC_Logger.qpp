@@ -46,14 +46,14 @@ static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger&
     (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("additivity", l.additivity, xsink);
-    ValueHolder val(const_cast<QoreObject&>(self).getReferencedMemberNoMethod("currentLevel", xsink), xsink);
+    ValueHolder val(const_cast<QoreObject&>(self).getReferencedMemberNoMethod("currentLevel", QC_LOGGER, xsink), xsink);
     if (val) {
         rv->setKeyValue("currentLevel", context.serializeValue(*val, xsink), xsink);
     }
     if (l.name) {
         rv->setKeyValue("name", l.name->stringRefSelf(), xsink);
     }
-    val = const_cast<QoreObject&>(self).getReferencedMemberNoMethod("parent", xsink);
+    val = const_cast<QoreObject&>(self).getReferencedMemberNoMethod("parent", QC_LOGGER, xsink);
     if (val) {
         rv->setKeyValue("parent", context.serializeValue(*val, xsink), xsink);
     }
@@ -72,9 +72,17 @@ static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
         }
         bool additivity = val.getAsBool();
 
+        // the level and the parent are serialized with the serialization context, so they are deserialized with it
+        // (the level was not serialized before qore#6839 fixed the serializer's access to the member)
         const QoreObject* currentLevel = nullptr;
+        ValueHolder level_holder(xsink);
         val = sdata->getKeyValue("currentLevel");
         if (val) {
+            level_holder = context.deserializeValue(val, xsink);
+            if (*xsink) {
+                return;
+            }
+            val = *level_holder;
             if (val.getType() != NT_OBJECT) {
                 xsink->raiseException("DESERIALIZATION-ERROR", "Logger serialization key 'currentLevel' has type '%s'; "
                     "expecting 'object'", val.getTypeName());
@@ -109,8 +117,14 @@ static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
         }
 
         const QoreObject* parent = nullptr;
+        ValueHolder parent_holder(xsink);
         val = sdata->getKeyValue("parent");
         if (val) {
+            parent_holder = context.deserializeValue(val, xsink);
+            if (*xsink) {
+                return;
+            }
+            val = *parent_holder;
             if (val.getType() != NT_OBJECT) {
                 xsink->raiseException("DESERIALIZATION-ERROR", "Logger serialization key 'parent' has type '%s'; "
                     "expecting 'object'", val.getTypeName());

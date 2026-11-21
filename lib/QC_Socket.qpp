@@ -237,8 +237,8 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("send"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -781,8 +781,8 @@ static int socket_exec_connect_operation(QoreObject* self, QoreSocketObject* s,
 
     const char* goal = ssl ? "connect-ssl" : "connect";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return -1;
@@ -844,8 +844,8 @@ static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int ti
 
     const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return -1;
@@ -886,8 +886,8 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
 
     const char* goal = ssl ? "accept-ssl" : "accept";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -961,8 +961,8 @@ static QoreValue socket_exec_recv_poll(QoreObject* self, QoreSocketObject* s, So
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -1146,8 +1146,8 @@ static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObjec
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -1204,8 +1204,8 @@ static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObje
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("written"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("written"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -1265,8 +1265,8 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -1486,8 +1486,8 @@ static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, in
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(owner_name), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(owner_name), xsink);
     }
     if (*xsink) {
         return false;
@@ -1531,8 +1531,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("isDataAvailable"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("isDataAvailable"), xsink);
     }
     if (*xsink) {
         return false;
@@ -2566,8 +2566,8 @@ AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
     }
     return rv.release();
 }
@@ -2600,8 +2600,8 @@ AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NA
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect-ssl"), xsink);
     }
     return rv.release();
 }
@@ -2630,8 +2630,8 @@ AbstractPollOperation<auto> Socket::startPollSend(string data) [flags=NAMED_ARGS
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -2651,8 +2651,8 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -2742,8 +2742,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-http-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-http-response"), xsink);
     }
     return rv.release();
 }
@@ -2833,8 +2833,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -2945,8 +2945,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-stream-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3043,8 +3043,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3145,8 +3145,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-stream"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-stream"), xsink);
     }
     return rv.release();
 }
@@ -3233,8 +3233,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-chunked-stream"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-chunked-stream"), xsink);
     }
     return rv.release();
 }
@@ -3258,8 +3258,8 @@ AbstractPollOperation<auto> Socket::startPollAccept() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("accept"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("accept"), xsink);
     }
     return rv.release();
 }
@@ -3282,8 +3282,8 @@ AbstractPollOperation<auto> Socket::startPollRecvString(int size) [flags=NAMED_A
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -3306,8 +3306,8 @@ AbstractPollOperation<auto> Socket::startPollRecvBinary(int size) [flags=NAMED_A
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3329,8 +3329,8 @@ AbstractPollOperation<auto> Socket::startPollRecvData() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3395,8 +3395,8 @@ AbstractPollOperation<auto> Socket::startPollLingeringClose(int max_discard = 0)
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("closed"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("closed"), xsink);
     }
     return rv.release();
 }
@@ -3434,8 +3434,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttpBody(int content_length, bo
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("read-http-body"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("read-http-body"), xsink);
     }
     return rv.release();
 }
@@ -3458,8 +3458,8 @@ AbstractPollOperation<auto> Socket::startPollRecvUntilBytesString(string pattern
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3482,8 +3482,8 @@ AbstractPollOperation<auto> Socket::startPollRecvUntilBytesBinary(string pattern
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3521,8 +3521,8 @@ AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAME
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3554,8 +3554,8 @@ AbstractPollOperation<auto> Socket::startPollSendTo(
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("sent"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("sent"), xsink);
     }
     return rv.release();
 }
@@ -3597,8 +3597,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttpHeader() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3612,8 +3612,8 @@ AbstractPollOperation<auto> Socket::startPollReadServerSentEvent() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3642,8 +3642,8 @@ AbstractPollOperation<auto> Socket::startPollUpgradeClientToSSL() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("upgrade-client-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("upgrade-client-ssl"), xsink);
     }
     return rv.release();
 }
@@ -3671,8 +3671,8 @@ AbstractPollOperation<auto> Socket::startPollUpgradeServerToSSL() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("upgrade-server-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("upgrade-server-ssl"), xsink);
     }
     return rv.release();
 }
@@ -6972,8 +6972,8 @@ AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -7700,8 +7700,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> option
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-request"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-request"), xsink);
     }
     return rv.release();
 }
@@ -7762,8 +7762,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, in
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-response"), xsink);
     }
     return rv.release();
 }
@@ -7818,8 +7818,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-streaming-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-streaming-response"), xsink);
     }
     return rv.release();
 }
@@ -8001,8 +8001,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-connect-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-connect-response"), xsink);
     }
     return rv.release();
 }
@@ -8352,8 +8352,8 @@ AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-flush"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-flush"), xsink);
     }
     return rv.release();
 }
@@ -8400,8 +8400,8 @@ AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-client-multiplex"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-client-multiplex"), xsink);
     }
     return rv.release();
 }
@@ -8517,8 +8517,8 @@ AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, 
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-connect"), xsink);
     }
     return rv.release();
 }
@@ -8618,8 +8618,8 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-accept"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-accept"), xsink);
     }
     return rv.release();
 }
@@ -8679,8 +8679,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, in
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-response"), xsink);
     }
     return rv.release();
 }
@@ -9380,8 +9380,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-streaming-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-streaming-response"), xsink);
     }
     return rv.release();
 }

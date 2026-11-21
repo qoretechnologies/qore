@@ -17,8 +17,11 @@
 #! A member of a user class and a member of a system class of the same name are refused in both orders (#6772)
 /** A class hierarchy that combines a member of a user class with a member of a system class of the same name is
     refused, whatever the order of the parent classes, for a public and for a private member, and the error names the
-    class being parsed; a member of another name, and the members of the same name of two system classes, are
-    combined.  SystemMemberCombination.q gives the same output in every execution mode and compiled with qcc.
+    class being parsed; a private:internal member of a system class never reaches the check, as the member of the
+    user class has storage of its own (qore#6839: the system classes have no plain private member left; see
+    ../AbstractPollOperation/system-poll-member-access.qtest), and a member of another name, and the members of the
+    same name of two system classes, are combined.  SystemMemberCombination.q gives the same output in every execution
+    mode and compiled with qcc.
 */
 class SystemMemberCombinationTest inherits QUnit::Test {
     public {
@@ -27,16 +30,17 @@ class SystemMemberCombinationTest inherits QUnit::Test {
         const RefusedError = "PARSE-ERROR: class '%s' cannot be combined with class '%s' in the same hierarchy because "
             + "member '%s' is accessible from class 'X' from more than one declaration in the hierarchy";
 
-        #! the output of SystemMemberCombination.q, from the rule (qore#6772): a member of a system class and a member
-        #! of the same name of a user class are refused in both orders of the parent classes, for a public and for a
-        #! private member; a member of another name and the members of two system classes are combined
+        #! the output of SystemMemberCombination.q, from the rule (qore#6772): a public or private member of a system
+        #! class and a member of the same name of a user class are refused in both orders of the parent classes; a
+        #! private:internal member of a system class never reaches the check (qore#6839: the user class's member has
+        #! storage of its own), and a member of another name and the members of two system classes are combined
         const Expected = {
             "public order 1": sprintf(RefusedError, "FtpClient", "U", "path"),
             "public order 2": sprintf(RefusedError, "U", "FtpClient", "path"),
             "public int order 1": sprintf(RefusedError, "FtpClient", "A", "path"),
             "public int order 2": sprintf(RefusedError, "A", "FtpClient", "path"),
-            "private order 1": sprintf(RefusedError, "PollPipeline", "U", "goal"),
-            "private order 2": sprintf(RefusedError, "U", "PollPipeline", "goal"),
+            "private order 1": "ok",
+            "private order 2": "ok",
             "other member": "ok",
             "two system classes": "ok",
         };
@@ -44,11 +48,10 @@ class SystemMemberCombinationTest inherits QUnit::Test {
         #! the cases that are refused
         const Refused = (
             "public order 1", "public order 2", "public int order 1", "public int order 2",
-            "private order 1", "private order 2",
         );
 
         #! the cases that are accepted
-        const Accepted = ("other member", "two system classes");
+        const Accepted = ("private order 1", "private order 2", "other member", "two system classes");
 
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
