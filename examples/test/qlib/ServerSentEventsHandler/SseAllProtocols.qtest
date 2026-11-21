@@ -249,6 +249,25 @@ class RecordingSseObserver inherits DataProvider::Observer {
         return True;
     }
 
+    #! Waits for an event with the given ID (such as the closed event of the stream)
+    bool waitForEventId(string event_id, timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (True) {
+            foreach hash<auto> evt in (events) {
+                if (evt.event_id == event_id) {
+                    return True;
+                }
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+    }
+
     bool waitForDataEvent(string event_name, timeout t = SseTestTimeout) {
         AutoLock al(m);
         date end_time = now_us() + t;
@@ -1019,13 +1038,15 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
                 label, observer2.describeEvents(), callback_handler.describeActions()));
 
-        assertTrue(observer1.waitForCount(10, SseTestTimeout),
+        # the streams are timer driven (a progress event every tick), so how many events precede the terminal ready
+        # event is not fixed: the closed event is waited for itself, and nothing follows it
+        assertTrue(observer1.waitForEventId(HttpClientStreamingIo::EVENT_SSE_CLOSED, SseTestTimeout),
             label + ": first stream receives closed event");
         assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
             observer1.events[observer1.events.size() - 1].event_id,
             label + ": first stream closes after delayed ready");
 
-        assertTrue(observer2.waitForCount(4, SseTestTimeout),
+        assertTrue(observer2.waitForEventId(HttpClientStreamingIo::EVENT_SSE_CLOSED, SseTestTimeout),
             label + ": second stream receives closed event");
         assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
             observer2.events[observer2.events.size() - 1].event_id,
