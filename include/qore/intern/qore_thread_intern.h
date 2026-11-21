@@ -941,6 +941,79 @@ DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
+//! Counts a piece of work that the module cleanup has handed over and that has not ended yet (qore#6928)
+/** See QoreModuleCleanupWorkFlag and qore_module_cleanup_drain_work()
+*/
+DLLLOCAL void qore_module_cleanup_work_begin();
+
+//! Ends a piece of work counted with qore_module_cleanup_work_begin()
+DLLLOCAL void qore_module_cleanup_work_end();
+
+//! A flag that marks work that the module cleanup hands over to the asynchronous I/O controller, and counts it
+/** Set, the flag counts the work it belongs to until it is cleared or destroyed (qore_module_cleanup_work_begin(),
+    qore_module_cleanup_work_end()): the module cleanup waits for that work to end before it waits for the threads of
+    the next module Program and deletes it (qore_module_cleanup_drain_work()), as a canceled operation's onComplete()
+    and the release of its references enter the Program of the operation's class (qore#6928).  A copy counts the work
+    again, a move transfers it; a flag that is not set costs nothing.
+*/
+class QoreModuleCleanupWorkFlag {
+public:
+    DLLLOCAL QoreModuleCleanupWorkFlag() = default;
+
+    DLLLOCAL QoreModuleCleanupWorkFlag(bool work) : work(work) {
+        if (work) {
+            qore_module_cleanup_work_begin();
+        }
+    }
+
+    DLLLOCAL QoreModuleCleanupWorkFlag(const QoreModuleCleanupWorkFlag& old) : QoreModuleCleanupWorkFlag(old.work) {
+    }
+
+    DLLLOCAL QoreModuleCleanupWorkFlag(QoreModuleCleanupWorkFlag&& old) noexcept : work(old.work) {
+        old.work = false;
+    }
+
+    DLLLOCAL ~QoreModuleCleanupWorkFlag() {
+        if (work) {
+            qore_module_cleanup_work_end();
+        }
+    }
+
+    DLLLOCAL QoreModuleCleanupWorkFlag& operator=(bool new_work) {
+        if (new_work != work) {
+            if (new_work) {
+                qore_module_cleanup_work_begin();
+            } else {
+                qore_module_cleanup_work_end();
+            }
+            work = new_work;
+        }
+        return *this;
+    }
+
+    DLLLOCAL QoreModuleCleanupWorkFlag& operator=(const QoreModuleCleanupWorkFlag& old) {
+        return *this = old.work;
+    }
+
+    DLLLOCAL QoreModuleCleanupWorkFlag& operator=(QoreModuleCleanupWorkFlag&& old) noexcept {
+        if (this != &old) {
+            if (work) {
+                qore_module_cleanup_work_end();
+            }
+            work = old.work;
+            old.work = false;
+        }
+        return *this;
+    }
+
+    DLLLOCAL operator bool() const {
+        return work;
+    }
+
+private:
+    bool work = false;
+};
+
 //! The sandbox managers that govern the current thread, captured to continue an operation on another thread
 /** An operation started by sandboxed code (possibly through module code running in an unsandboxed Program) and
     continued on a callback worker must be governed by the sandbox of the thread that started it: the worker's own
@@ -1004,6 +1077,11 @@ public:
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
     bool module_cleanup_delegate = false;
+    //! Counts the context while it exists, if it was created for an operation that the module cleanup cancels
+    /** Set by QoreSandboxContext(const QoreSandboxContext*, bool): the operation's work items and references share the
+        context, so it exists until the last of them has ended, which the module cleanup waits for (qore#6928)
+    */
+    QoreModuleCleanupWorkFlag module_cleanup_work;
     //! True if only the sandbox that the capturing thread inherited from the code that started it governed the
     //! capture (no sandboxed Program, continued operation or provenance of its own): host code that ran in a thread
     //! that sandboxed code started.  Such a context does not count for qore_scope_creator_is_sandboxed(),
@@ -2038,6 +2116,27 @@ DLLLOCAL void qore_stop_module_uncounted_entries();
     any other thread is refused
 */
 DLLLOCAL void qore_close_module_programs();
+
+//! Waits until the work that the module cleanup has handed over to the asynchronous I/O controller has ended
+/** Called by the module cleanup before it waits for the threads of a module's Program and deletes it, and after each
+    stage that can hand over work (destructors that cancel asynchronous I/O operations): such work, counted with
+    QoreModuleCleanupWorkFlag, can enter the Program of any module, also one whose teardown barrier
+    (AsyncIoControllerPriv::cancelByProgram()) has passed, as the operation is canceled for the cleanup on an I/O
+    thread and its onComplete() runs on a callback worker later (qore#6928)
+*/
+DLLLOCAL void qore_module_cleanup_drain_work();
+
+#ifdef DEBUG
+//! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held
+/** \a by names the stage of the module cleanup that releases them, which is written on stderr with their number if
+    there are any; with \a end_hold, the hook holds no more items
+*/
+DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
+
+//! Debug-only: the test hook has held a work item: wakes the module cleanup if it waits for its work, which releases
+//! it (see qore_module_cleanup_drain_work())
+DLLLOCAL void qore_dbg_module_cleanup_work_held();
+#endif
 
 //! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
 //! can still enter them: it runs the module cleanup, or work that the cleanup handed over

@@ -6731,8 +6731,13 @@ void QoreModuleManager::delUser() {
                 continue;
             }
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+            // the destructors of the module's data can cancel asynchronous I/O operations for the cleanup, whose
+            // onComplete() and references enter the Programs of other modules, also of those whose teardown barrier
+            // has passed: that work ends before the next module's Program is waited for (qore#6928)
+            qore_module_cleanup_drain_work();
         }
         qore_aot_clear_all_module_namespace_data(xsink);
+        qore_module_cleanup_drain_work();
 
         // break the cycles held up by opaque references ('@=') that user module programs own while all module
         // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
@@ -6748,6 +6753,7 @@ void QoreModuleManager::delUser() {
         }
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
+        qore_module_cleanup_drain_work();
     }
 
     // Phase 2 - delete the user modules and the native binary modules in dependency order
@@ -6764,6 +6770,9 @@ void QoreModuleManager::delUser() {
     //   binary modules that AOT modules require
     strset_t left;
     while (true) {
+        // the work that the deletion of the last module handed over ends before the next module is deleted
+        // (qore#6928)
+        qore_module_cleanup_drain_work();
         if (deleteUnrequiredNativeModule()) {
             continue;
         }
@@ -6804,8 +6813,13 @@ void QoreModuleManager::delUser() {
         printd(5, "QoreModuleManager::delUser() breaking a dependency cycle at '%s'\n", i->first);
         deleteUserModule(i);
     }
+    // the work that the deletion of the last module handed over
+    qore_module_cleanup_drain_work();
 
 #ifdef DEBUG
+    // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)
+    qore_dbg_release_held_module_cleanup_work("the user modules have been deleted", true);
+
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
         if (i->second->isUser() && left.find(i->first) == left.end()) {
             printd(0, "QoreModuleManager::delUser() '%s' %p not yet removed\n", i->second->getName(), i->second);
