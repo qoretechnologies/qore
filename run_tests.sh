@@ -59,6 +59,9 @@ print_usage () {
   echo "  QORE_TEST_PLATFORM_SUBSET"
   echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
+  echo "  QCC                      The qcc that the tests use (default: the build's; a build without qcc gives the"
+  echo "                           tests none).  On macOS, a run with a build refuses a qore or a qcc that loads"
+  echo "                           a libqore other than the build's (#7029)."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
@@ -715,6 +718,80 @@ else
             esac
             ;;
     esac
+fi
+
+# The children of the tests run the interpreter of the run (QORE_BINARY): QORE_BIN, which TestInterpreter.qm takes
+# first, is for a test run without this script, and one left in the environment would run another qore (#7029)
+unset QORE_BIN
+
+# On macOS the dynamic loader ignores LD_LIBRARY_PATH: a program finds libqore through the directories recorded in it
+# (LC_RPATH), and a program that qcc compiles records the directory of the libqore that qcc loaded.  DYLD_LIBRARY_PATH
+# would not help, as macOS removes it from the environment of a protected program (/bin/sh, /usr/bin/env, perl), which
+# its children then do not get.  So the qore and the qcc that the tests use must load the build's libqore by
+# themselves: one from a build directory copied from another tree loads the other tree's, and a qcc from another
+# build or installation (QCC in the environment) compiles programs that load its own.  A run with a build refuses them
+# (#7029); a command that the loader does not report on (a script, such as a stand-in for qore) is not checked.
+
+# Prints the path of the given file with its directories and its own symbolic links resolved
+physical_file() {
+    (
+        file_name=$1
+        while :; do
+            cd "`dirname "$file_name"`" 2>/dev/null || exit 1
+            file_name=`basename "$file_name"`
+            if [ ! -L "$file_name" ]; then
+                break
+            fi
+            file_name=`readlink "$file_name"`
+        done
+        echo "`pwd -P`/$file_name"
+    )
+}
+
+# Prints the paths, symbolic links resolved, of the libqore images that the loader reports for the command given
+loaded_libqore() {
+    DYLD_PRINT_LIBRARIES=1 "$@" 2>&1 >/dev/null </dev/null \
+        | sed -n 's/^dyld.* \(\/.*\/libqore\.[^/]*dylib\)$/\1/p' | while IFS= read -r loaded_lib; do
+            physical_file "$loaded_lib" || echo "$loaded_lib"
+        done
+}
+
+# Fails the run if the command given (a description, then the command) loads a libqore other than the build's
+check_loaded_libqore() {
+    check_what=$1
+    shift
+    check_loaded=`loaded_libqore "$@"`
+    while IFS= read -r check_lib; do
+        if [ -n "$check_lib" ] && [ "$check_lib" != "$EXPECTED_LIBQORE" ]; then
+            echo "ERROR: $check_what loads $check_lib, not the libqore of the run ($LIBQORE, $EXPECTED_LIBQORE);" \
+                "the tests would run on another libqore (#7029). Exiting." >&2
+            exit 1
+        fi
+    done <<EOF
+$check_loaded
+EOF
+}
+
+if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ]; then
+    EXPECTED_LIBQORE=`physical_file "$LIBQORE" || echo "$LIBQORE"`
+    check_loaded_libqore "the qore of the run ($QORE)" "$QORE" --version
+    # the qcc that the tests use (TestInterpreter::qcc_compiler()): the one in the environment, else the build's (a
+    # build without qcc has none)
+    TEST_QCC=""
+    for check_qcc in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE" "$QORE_DIR/qcc"; do
+        if [ -n "$check_qcc" ]; then
+            TEST_QCC=$check_qcc
+            break
+        fi
+    done
+    case "$TEST_QCC" in
+        */*) ;;
+        *) TEST_QCC=`command -v "$TEST_QCC" 2>/dev/null` ;;
+    esac
+    if [ -f "$TEST_QCC" ]; then
+        check_loaded_libqore "the qcc that the tests use ($TEST_QCC)" "$TEST_QCC" --version
+    fi
+    unset TEST_QCC check_qcc
 fi
 
 # Enable core dumps for crash diagnostics
