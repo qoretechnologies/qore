@@ -5140,9 +5140,13 @@ class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
     //! \a call_name must outlive the location: the variant's name (UserVariantBase::getCallName()), which is built
     //! once, so that a call does not build or copy it (qore#6623)
+    /** @param caller_pgm the Program of the code that makes the call, which the frame records as a call frame does
+        (see update_get_runtime_stack_location()), for a location pushed once the thread has entered the callee's
+        Program; nullptr for one pushed in the caller's Program (qore#7079)
+    */
     DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, const std::string& call_name,
-            qore_call_t call_type)
-            : loc(loc), call_name(&call_name), call_type(call_type) {
+            qore_call_t call_type, QoreProgram* caller_pgm = nullptr)
+            : loc(loc), call_name(&call_name), call_type(call_type), caller_pgm(caller_pgm) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -5173,8 +5177,10 @@ private:
     // written by stack_helper through its constructor's output references, so they take no initializers
     const AbstractStatement* stmt;
     QoreProgram* pgm;
+    //! the Program of the caller, recorded for the frame, or nullptr for the current Program
+    QoreProgram* caller_pgm;
     // last: pushes this location once it is fully constructed and pops it before any member is destroyed
-    QoreProgramStackLocationHelper stack_helper{this, stmt, pgm};
+    QoreProgramStackLocationHelper stack_helper{this, stmt, pgm, caller_pgm};
 };
 
 //! Returns the location of the call stack frame of an inline call: the call site, as for an AST call
@@ -6654,8 +6660,9 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
+    // the frame records the caller's Program, as a call frame does (qore#7079)
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER, caller_pgm);
     // the inlined body runs with the callee's runtime parse options, as a call of the function does
     QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
     if (xsink && *xsink) {
@@ -6777,8 +6784,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
+    // the frame records the caller's Program, as a call frame does (qore#7079)
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER, method_caller_pgm);
     // the inlined body runs with the method's runtime parse options and restrictions, as a call of the method does
     QoreIRInlineCalleeParseOptionsHelper callee_po(QoreIRInlineCalleeParseOptionsHelper::HotInline(), xsink,
         exec_pgm, uvb, method_caller_pgm);
@@ -6798,6 +6806,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const qore_class_private* method_ctx = eval_variant
         ? METHV_const(eval_variant)->getClassPriv() : qore_class_private::get(*method->getClass());
     ObjectSubstitutionHelper osh(self, method_ctx);
+    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
+    MethodCallProgramContextHelper mpch(method_ctx, self, xsink);
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
 
@@ -7107,8 +7117,9 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
+    // the frame records the caller's Program, as a call frame does (qore#7079)
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER, caller_pgm);
     // the inlined body runs with the static method's runtime parse options and restrictions, as a call of the
     // method does: module code also with the restrictions of its caller
     QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
@@ -7149,6 +7160,9 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         // so is the check of its return value, before the parameters are released
         CalleeContextHelper method_context(thread_data,
             METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv());
+        // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
+        MethodCallProgramContextHelper mpch(METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv(), nullptr,
+            xsink);
         ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
             nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
             nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
@@ -7465,6 +7479,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     if (!self) {
         closure_context.emplace(get_thread_data_for_native_calls(), cb->getClassCtx());
     }
+    // the call Program context of the closure's frame, as a call of the closure sets it (qore#7079)
+    MethodCallProgramContextHelper mpch(cb->getClassCtx(), self, xsink);
 
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
