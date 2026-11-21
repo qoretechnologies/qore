@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import unittest
 
@@ -500,20 +501,32 @@ class LinuxScanAndHelperTest(StacksCase):
         # gdb prints the process's status while it is stopped (where it cannot execute another program): a user ID that
         # is not the runner's, or group IDs that differ, keep its stacks from being sent; the status lines are not sent
         uid = os.geteuid()
-        gid = os.getegid()
-        for name, uids, gids, sent in (
-                ("runner", (uid,) * 4, (gid,) * 4, True),
-                ("root", (0,) * 4, (gid,) * 4, False),
-                ("set-user-ID", (uid, 0, 0, 0), (gid,) * 4, False),
-                ("set-group-ID", (uid,) * 4, (gid, 0, 0, 0), False),
-                ("no status", None, None, False)):
+        # the runner's group: the primary group of its user, which the helper takes (id -g)
+        gid = int(subprocess.run(["id", "-g"], capture_output=True, text=True).stdout)
+        none = "0000000000000000"
+        some = "0000000000000400"
+        for name, uids, gids, caps, sent in (
+                ("runner", (uid,) * 4, (gid,) * 4, (none,) * 3, True),
+                ("root", (0,) * 4, (gid,) * 4, (none,) * 3, False),
+                ("set-user-ID", (uid, 0, 0, 0), (gid,) * 4, (none,) * 3, False),
+                ("set-group-ID", (uid,) * 4, (gid, 0, 0, 0), (none,) * 3, False),
+                ("another group", (uid,) * 4, (gid + 1,) * 4, (none,) * 3, False),
+                ("permitted capabilities", (uid,) * 4, (gid,) * 4, (some, none, none), False),
+                ("effective capabilities", (uid,) * 4, (gid,) * 4, (none, some, none), False),
+                ("ambient capabilities", (uid,) * 4, (gid,) * 4, (none, none, some), False),
+                ("no capabilities", (uid,) * 4, (gid,) * 4, None, False),
+                ("no status", None, None, None, False)):
             with self.subTest(status=name), tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
                 fifo = self.start_helper(directory)
                 # gdb's "info proc status": "process <pid>", then the lines of /proc/<pid>/status
                 status = ""
                 if uids is not None:
-                    status = ("printf 'process %%s\\nName:\\tsh\\nUid:\\t%s\\nGid:\\t%s\\n' \"$2\"\n"
-                              % ("\\t".join(map(str, uids)), "\\t".join(map(str, gids))))
+                    # keys with digits too, as the kernel prints them (x86_Thread_features:)
+                    status = ("printf 'process %%s\\nName:\\tsh\\nUid:\\t%s\\nGid:\\t%s\\n"
+                              "x86_Thread_features:\\tshstk\\n%s' \"$2\"\n"
+                              % ("\\t".join(map(str, uids)), "\\t".join(map(str, gids)),
+                                 "" if caps is None else "CapInh:\\t%s\\nCapPrm:\\t%s\\nCapEff:\\t%s\\nCapAmb:\\t%s\\n"
+                                 % ((none,) + caps)))
                 gdb = Path(directory) / "helper-bin" / "gdb"
                 gdb.write_text('#!/bin/sh\nwhile [ "$1" != -p ]; do shift; done\n' + status
                                + 'echo "#0  0x0000 in read () from libc"\n')
@@ -528,8 +541,8 @@ class LinuxScanAndHelperTest(StacksCase):
                     self.assertEqual("#0  0x0000 in read () from libc\nqore-stack-capture-status: 0\n", answer)
                 else:
                     self.assertEqual("qore-stack-capture: refused: process %d was not a process of the runner's user "
-                                     "while it was stopped for the capture\nqore-stack-capture-status: 126\n"
-                                     % target.pid, answer)
+                                     "and group without capabilities while it was stopped for the capture\n"
+                                     "qore-stack-capture-status: 126\n" % target.pid, answer)
 
     def test_the_helper_sends_nothing_of_a_process_that_changed_during_the_capture(self):
         # The process executes another program during the attach (as one that executes a set-user-ID program would):
@@ -695,6 +708,54 @@ class LinuxScanAndHelperTest(StacksCase):
             self.assertIn("*** process %d has ended ***" % child, output)
             self.assertNotIn("ptrace restricted", output)
             self.assertEqual(["attached to %d" % child], (tree.root / "calls").read_text().splitlines())
+
+    def test_a_process_whose_main_thread_has_ended_is_captured(self):
+        # A process whose main thread has ended (pthread_exit()) while another thread runs shows that thread as a
+        # zombie (state Z): it was reported as ended, without its stacks.  The child ends its main thread once a
+        # process of its own, which the kernel sends SIGTERM when the thread that started it ends (PR_SET_PDEATHSIG),
+        # is ready; that process then reports that the main thread has ended.
+        child = textwrap.dedent("""\
+            import ctypes
+            import os
+            import subprocess
+            import sys
+            import threading
+            r, w = os.pipe()
+            threading.Thread(target=os.read, args=(r, 1)).start()
+            ready_r, ready_w = os.pipe()
+            watcher = subprocess.Popen(
+                [sys.executable, "-c", "import os, signal, sys\\n"
+                 "signal.signal(signal.SIGTERM, lambda *a: print('main thread ended', flush=True))\\n"
+                 "os.write(int(sys.argv[1]), b'x')\\n"
+                 "r, w = os.pipe()\\n"
+                 "os.read(r, 1)\\n", str(ready_w)],
+                pass_fds=(ready_w,), preexec_fn=lambda: ctypes.CDLL(None).prctl(1, 15))
+            os.close(ready_w)
+            os.read(ready_r, 1)
+            print("child %d started" % os.getpid(), flush=True)
+            ctypes.CDLL(None).pthread_exit(None)
+            """)
+        with tempfile.TemporaryDirectory(prefix="qore-runner-stacks-") as directory:
+            tree = RunnerTree(directory)
+            (tree.tests / "tests").mkdir(parents=True)
+            (tree.tests / "tests" / "threads_child.py").write_text(child)
+            latch = tree.root / "latch"
+            os.mkfifo(latch)
+            tree.add_test("threads.qtest", f"""\
+                # test-timeout: {LIMIT}
+                import os
+                import subprocess
+                import sys
+                subprocess.Popen([sys.executable, "-B", os.path.join(os.path.dirname(sys.argv[0]), "threads_child.py")])
+                os.read(os.open({str(latch)!r}, os.O_RDWR), 1)
+                """)
+            tree.write_script("printing-tool", '#!/bin/sh\necho "stacks of $1 from a stand-in"\n')
+            result = tree.run(QORE_TEST_STACK_TOOLS="printing-tool")
+            output = RunnerTree.sections(result.output)["threads.qtest"]
+            pid = int(re.search(r"^child (\d+) started$", output, re.M).group(1))
+            self.assertIn("main thread ended", output)
+            self.assertIn("stacks of %d from a stand-in" % pid, output)
+            self.assertNotIn("*** process %d has ended ***" % pid, output)
 
     def test_a_scan_of_proc_that_blocks_is_bounded(self):
         # A read of /proc/<pid>/environ waits while the process holds the lock of its memory map (D state); the scan

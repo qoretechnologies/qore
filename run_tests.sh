@@ -1693,14 +1693,20 @@ process_command_line() {
 }
 
 # Returns 0 if the given process has ended: it is gone, or a zombie (or dead) that its parent has not reaped yet, to
-# which a debugger cannot attach either (gdb then prints the same notice as for a refused attach)
+# which a debugger cannot attach either (gdb then prints the same notice as for a refused attach).  On Linux, a
+# process whose main thread has ended while its other threads run shows that thread as a zombie: it has not ended if
+# it has another thread (the 20th field of its stat, the 18th after the command name).
 process_ended() {
     if [ -r /proc/self/stat ]; then
         # the file is an argument, so that its open is limited too; the state follows the command name, which is in
         # parentheses and may contain either
         stack_stat=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat /proc/$1/stat 2>/dev/null`
         stack_state=${stack_stat##*) }
+        stack_threads=`printf '%s\n' "$stack_state" | awk '{ print $18 }'`
         stack_state=${stack_state%% *}
+        if [ "$stack_state" = Z ] && [ "${stack_threads:-1}" -gt 1 ] 2>/dev/null; then
+            return 1
+        fi
     else
         stack_state=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -o stat= -p $1 2>/dev/null`
         stack_state=`printf '%s' "$stack_state" | tr -d ' '`

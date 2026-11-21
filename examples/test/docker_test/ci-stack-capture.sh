@@ -18,24 +18,32 @@
 # - <reply> is the absolute path of the FIFO where the runner reads the answer; it is opened by a process of the
 #   runner's user (gosu), never by root, so the request can only reach files that the runner's user could write
 #   itself, and no file in the runner's directories is owned by root;
-# - <pid> must be a process of the runner's user (its effective user ID, the owner of /proc/<pid>) that carries
-#   QORE_TEST_PROCESS_MARK=<mark> in its environment, or that is in the process group of such a process (a test leads
-#   its group).  The mark keeps a capture from reaching a process outside the tests by accident (a stale or mistaken
-#   request); it is no barrier against a hostile process of the runner's user, which can give itself any mark, but such
-#   a process can only have processes of the runner's user captured, which it could debug itself.
+# - <pid> must be a process of the runner's user (its effective user ID, the owner of /proc/<pid>) without
+#   capabilities that carries QORE_TEST_PROCESS_MARK=<mark> in its environment, or that is in the process group of such
+#   a process (a test leads its group).  The mark keeps a capture from reaching a process outside the tests by accident
+#   (a stale or mistaken request); it is no barrier against a hostile process of the runner's user, which can give
+#   itself any mark, but such a process can only have processes of the runner's user without capabilities captured,
+#   which it could debug itself.
 # What is guaranteed about the process whose stacks are sent: the tool's output is kept in a file that only root can
 # read until these checks have passed, and nothing of it is sent otherwise.
 # - Its identity (/proc/<pid>/stat's start time, start of its stack and of its arguments and environment, which every
-#   execution of a program places anew, its user ID and its executable) is read first, before every other check, and
-#   its user ID must be the runner's; it is read again after the capture and must be unchanged ("process <pid> changed
-#   during the capture"), so a process that executed another program, or whose ID another process took, in between is
-#   not sent.
-# - gdb also prints the process's /proc/<pid>/status while it is stopped for the capture (a stopped process cannot
-#   execute a program), and every user ID in it must be the runner's and its group IDs one and the same: the stacks are
-#   those of a process of the runner's user even if it executed a set-user-ID program and then its own program again
-#   between the checks (which the identity alone would not show).  eu-stack has no such step: with it, a process that
-#   did that within the instant of the capture, and placed its stack and arguments where they were, would not be told
-#   apart.  The status lines are not sent.
+#   execution of a program places anew, as address space layout randomization places them anew; its user ID; its
+#   permitted, effective and ambient capabilities from /proc/<pid>/status; and its executable) is read first, before
+#   every other check: its user ID must be the runner's, and it must have no capabilities (a program with file
+#   capabilities, which the runner's user could not debug itself).  It is read again after the capture and must be
+#   unchanged ("process <pid> changed during the capture"), so a process that executed another program, or whose ID
+#   another process took, in between is not sent.
+# - gdb also prints the process's /proc/<pid>/status while it is stopped for the capture: gdb stops every thread of
+#   the process before it reads the stacks, and a stopped process cannot execute a program.  Every user ID and group
+#   ID in it must be the runner's, and it must have no permitted, effective or ambient capability: the stacks are those
+#   of a process of the runner's user even if it executed a set-user-ID program and then its own program again
+#   between the checks (which the identity alone would not show, if the second execution placed its stack and
+#   arguments where they were).  eu-stack has no such step: it attaches to, unwinds and detaches from one thread at a
+#   time, so the process as a whole is never stopped, and a process that did that within the instant of the capture
+#   would not be told apart.  The status (gdb's "process <pid>" line and the "<key>:<tab>" lines after it) is not
+#   sent.
+# - A process whose main thread has ended while its other threads run shows that thread as a zombie: it is taken for
+#   one that has ended only if it has no other thread.
 # Root's debugger may still have attached to a process that fails these checks, for the instant of the capture.
 # A request that fails the checks is answered with the reason (or not at all, if <reply> is not an absolute path of
 # plain characters).  A request that ptrace's access rules refuse (the helper has no CAP_SYS_PTRACE) is answered with
@@ -166,37 +174,49 @@ qore_ci_stack_capture_stat() {
 qore_ci_stack_capture_ended() {
     set -- $(qore_ci_stack_capture_stat "$1")
     case "$1" in
-        ''|Z|X|x) return 0 ;;
+        ''|X|x) return 0 ;;
+        # a process whose main thread has ended while others run shows that thread as a zombie: the 20th field, the
+        # 18th after the command name, is the number of its threads
+        Z) [ "${18:-1}" -le 1 ] && return 0 ;;
     esac
     return 1
 }
 
-# Prints the identity of the given process (see above): its user ID (the owner of /proc/<pid>), the fields of its
-# stat that every execution of a program sets anew (22: start time, 28: start of the stack, 48 to 50: start and end of
-# the arguments, start of the environment; field N is argument N - 1 below, the state, field 3, being the 2nd) and
-# its executable; nothing if it has ended
+# Prints the identity of the given process (see above): its user ID (the owner of /proc/<pid>), its permitted,
+# effective and ambient capabilities (the CapPrm:, CapEff: and CapAmb: lines of /proc/<pid>/status, as
+# <prm>,<eff>,<amb>), the fields of its stat that every execution of a program sets anew (22: start time, 28: start of
+# the stack, 48 to 50: start and end of the arguments, start of the environment; field N is argument N - 1 below, the
+# state, field 3, being the 2nd) and its executable; nothing if it has ended
 qore_ci_stack_capture_identity() {
+    _qore_ci_sc_caps=$(timeout -s KILL 5 cat "/proc/$1/status" 2>/dev/null | awk -F '\t' '
+        $1 == "CapPrm:" { prm = $2 } $1 == "CapEff:" { eff = $2 } $1 == "CapAmb:" { amb = $2 }
+        END { if (prm != "" && eff != "" && amb != "") print prm "," eff "," amb }')
     set -- "$1" $(qore_ci_stack_capture_stat "$1")
-    if [ $# -lt 49 ]; then
+    if [ $# -lt 49 ] || [ -z "${_qore_ci_sc_caps}" ]; then
         return
     fi
     eval "_qore_ci_sc_fields=\"\${21} \${27} \${47} \${48} \${49}\""
-    printf '%s %s %s\n' "$(stat -c %u "/proc/$1" 2>/dev/null)" "${_qore_ci_sc_fields}" \
+    printf '%s %s %s %s\n' "$(stat -c %u "/proc/$1" 2>/dev/null)" "${_qore_ci_sc_caps}" "${_qore_ci_sc_fields}" \
         "$(readlink "/proc/$1/exe" 2>/dev/null)"
 }
 
-# Returns 0 if the given gdb output (a file) shows the process, while it was stopped, with every user ID the given one
-# and one group ID (the "Uid:" and "Gid:" lines of "info proc status"), or shows no stack at all (an attach that
-# failed); prints the output without the status lines
+# Returns 0 if the given gdb output (a file) shows the process, while it was stopped, with every user ID the given one,
+# every group ID the given one, and no permitted, effective or ambient capability (the "Uid:", "Gid:", "CapPrm:",
+# "CapEff:" and "CapAmb:" lines of "info proc status"), or shows no stack at all (an attach that failed); writes the
+# output without the status (its "process <pid>" line and the "<key>:<tab>" lines that follow it) to the file given
 qore_ci_stack_capture_gdb_status() {
-    awk -F '\t' -v uid="$2" -v out="$3" '
-        /^process [0-9]+$/ { next }
-        /^Uid:\t/ { uids = 1; for (i = 2; i <= NF; ++i) if ($i != uid) bad = 1; next }
-        /^Gid:\t/ { gids = 1; for (i = 3; i <= NF; ++i) if ($i != $2) bad = 1; next }
-        /^[A-Za-z_]+:\t/ { next }
+    awk -F '\t' -v uid="$2" -v gid="$3" -v out="$4" '
+        /^process [0-9]+$/ { status = 1; next }
+        status && /^[A-Za-z0-9_]+:\t/ {
+            if ($1 == "Uid:") { uids = 1; for (i = 2; i <= NF; ++i) if ($i != uid) bad = 1 }
+            if ($1 == "Gid:") { gids = 1; for (i = 2; i <= NF; ++i) if ($i != gid) bad = 1 }
+            if ($1 == "CapPrm:" || $1 == "CapEff:" || $1 == "CapAmb:") { ++caps; if ($2 !~ /^0+$/) bad = 1 }
+            next
+        }
+        { status = 0 }
         /^#[0-9]/ { stacks = 1 }
         { print > out }
-        END { exit !(!bad && (uids && gids || !stacks)) }' "$1"
+        END { exit !(!bad && (uids && gids && caps == 3 || !stacks)) }' "$1"
 }
 
 # Returns 0 if the given process (/proc/<pid>) carries QORE_TEST_PROCESS_MARK=<mark> (the second argument); the read
@@ -316,6 +336,15 @@ qore_ci_stack_capture_request() {
             _qore_ci_sc_why="process $1 has ended"
         elif [ "${_qore_ci_sc_before%% *}" != "${_qore_ci_sc_uid}" ]; then
             _qore_ci_sc_why="process $1 is not a process of the runner's user"
+        else
+            # a program with file capabilities, which the runner's user could not debug itself
+            set -f
+            set -- "$@" ${_qore_ci_sc_before}
+            set +f
+            case "$7" in
+                *[!0,]*) _qore_ci_sc_why="process $1 has capabilities" ;;
+            esac
+            set -- "$1" "$2" "$3" "$4" "$5"
         fi
     fi
     if [ -z "${_qore_ci_sc_why}" ]; then
@@ -339,8 +368,9 @@ qore_ci_stack_capture_request() {
         elif [ "${_qore_ci_sc_before}" != "${_qore_ci_sc_after}" ]; then
             _qore_ci_sc_why="process $1 changed during the capture"
         elif [ "$4" = gdb ] && ! qore_ci_stack_capture_gdb_status "${_qore_ci_sc_output}" "${_qore_ci_sc_uid}" \
-                "${_qore_ci_sc_answer}"; then
-            _qore_ci_sc_why="process $1 was not a process of the runner's user while it was stopped for the capture"
+                "${_qore_ci_sc_gid}" "${_qore_ci_sc_answer}"; then
+            _qore_ci_sc_why="process $1 was not a process of the runner's user and group without capabilities while it"
+            _qore_ci_sc_why="${_qore_ci_sc_why} was stopped for the capture"
         else
             if [ "$4" != gdb ]; then
                 cat "${_qore_ci_sc_output}" > "${_qore_ci_sc_answer}"
@@ -361,6 +391,7 @@ qore_ci_stack_capture_request() {
 # its own, at most QORE_CI_STACK_CAPTURE_MAX_JOBS at once
 qore_ci_stack_capture_serve() {
     _qore_ci_sc_uid=$(id -u "$1") || exit 1
+    _qore_ci_sc_gid=$(id -g "$1") || exit 1
     # open for reading and writing, so that the FIFO never ends while the helper runs
     exec 3<> "$2/requests" || exit 1
     _qore_ci_sc_jobs=""
