@@ -53,6 +53,8 @@
 %requires Logger
 %requires HttpServerUtil
 %requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
 %requires ../../TestCertificates.qm
 %requires ../../TestInterpreter.qm
 
@@ -63,6 +65,23 @@ class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+#! sends every message back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! the WebSocket echo server of the heartbeat case
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
     }
 }
 
@@ -151,6 +170,9 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         string qore_bin;
         string module_dir;
         *HttpServer server;
+        #! the WebSocket echo server of the heartbeat case and its port
+        *HttpServer ws_server;
+        int ws_port;
         #! the port of the HTTPS listener (HTTP/1.1 and HTTP/2)
         int tls_port;
         #! the port of the QUIC listener (HTTP/3)
@@ -197,6 +219,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         }
         addTestCase("the deadline of the module cleanup is validated", \runDeadlineValidationCase());
         foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: a WebSocket client connected after the deadline of the module cleanup stops its "
+                "heartbeat quietly", mode), sub () { runWsHeartbeatCase(m); });
+        }
+        foreach string mode in (ExecModes) {
             foreach string follow_up in (FollowUpExpected.keyIterator()) {
                 string m = mode;
                 string f = follow_up;
@@ -206,6 +233,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         }
         on_exit {
             delete server;
+            delete ws_server;
         }
         set_return_value(main());
     }
@@ -228,6 +256,40 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
         }).port;
+    }
+
+    #! a destructor that the module cleanup runs after its deadline connects a WebSocket client with a heartbeat: the
+    #! echo of its message arrives in work that the cleanup handed over, whose re-arm of the heartbeat timer is
+    #! refused, which the client logs at the debug level and does not report as an exception (qore#7027)
+    private runWsHeartbeatCase(string mode) {
+        if (!ws_server) {
+            ws_server = new HttpServer(<HttpServerOptionInfo>{
+                "logger": new Logger("module-cleanup-ws", LoggerLevel::getLevelError()),
+            });
+            ws_server.setDefaultHandler("ws", new EchoWsHandler());
+            # HTTP/2: its WebSocket connections re-arm a heartbeat timer of the controller (HTTP/1.1 connections
+            # have a heartbeat of their C++ operation)
+            ws_port = ws_server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+            }).port;
+            ws_server.waitForAsyncIo();
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=200 QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s "
+            "2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "ws-heartbeat-client.qr"), shellQuote(sprintf("wss://127.0.0.1:%d",
+            ws_port))), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the modules are loaded: " + out);
+        assertRegex("(^|\n)echo received: hello\n", out, "the echo is received: " + out);
+        assertRegex("(^|\n)client log: [^\n]*heartbeat timer not re-armed at the end of the process: "
+            "ASYNC-IO-SHUTDOWN-ERROR", out, "the refused re-arm is logged at the debug level: " + out);
+        assertRegex("(^|\n)client done\n", out, "the client disconnects: " + out);
+        assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
     }
 
     #! quotes \a arg for a regular expression

@@ -1233,11 +1233,11 @@ public:
 
     //! Raises ASYNC-IO-SHUTDOWN-ERROR and returns -1 if the current thread cannot start new asynchronous work
     /** Called by the %Qore-language entry points that start asynchronous work (AsyncIoController::submit(),
-        addTimer*(), submitTask()): the work of an operation that the module cleanup canceled cannot start any, nor
-        can any work that the cleanup handed over after its deadline, as the cleanup would wait for it in turn;
-        synchronous I/O and AsyncIoController::exec() are not refused (qore#7027)
+        addTimer*(), submitTask()): the work of an operation that the module cleanup canceled cannot start any, as the
+        cleanup would wait for it in turn; nor can the work that the cleanup handed over add a timer (\a timer) after
+        its deadline; synchronous I/O and AsyncIoController::exec() are not refused (qore#7027)
     */
-    DLLLOCAL static int checkModuleCleanupNewWork(const char* method, ExceptionSink* xsink);
+    DLLLOCAL static int checkModuleCleanupNewWork(const char* method, bool timer, ExceptionSink* xsink);
 
 
     //! Custom deref with ExceptionSink

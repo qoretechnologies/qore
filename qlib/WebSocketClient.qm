@@ -9153,9 +9153,19 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection goes on without
+            # its heartbeat
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            logDebug("heartbeat timer not re-armed at the end of the process: %s: %s", ex.err, ex.desc);
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

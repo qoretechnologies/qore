@@ -5679,14 +5679,15 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     return count;
 }
 
-int AsyncIoControllerPriv::checkModuleCleanupNewWork(const char* method, ExceptionSink* xsink) {
+int AsyncIoControllerPriv::checkModuleCleanupNewWork(const char* method, bool timer, ExceptionSink* xsink) {
     // the work of an operation that the module cleanup canceled cannot start new asynchronous work: the cleanup would
     // cancel it in turn, and an onComplete() that submits its operation again or a timer that re-arms itself would
-    // make the end of the process wait forever; nor can any work that the cleanup handed over after its deadline (a
-    // timer callback, a task, the onComplete() of an operation that ended), which would do so as well; the cleanup
-    // itself can (a destructor of the data of a module that it deletes after its deadline): its operations are
-    // canceled when it waits for its work (qore#7027)
-    if (!module_cleanup_async_callback && !(qore_module_cleanup_deadline_passed()
+    // make the end of the process wait forever; nor can the work that the cleanup handed over add a timer after its
+    // deadline (a timer callback that re-arms itself, a heartbeat), which would keep the cleanup waiting for its
+    // callbacks; its operations are canceled when they are admitted after the deadline, and its tasks are waited for
+    // (the delivery of a message that a connection received), and the cleanup itself can do all of it (a destructor
+    // of the data of a module that it deletes after its deadline) (qore#7027)
+    if (!module_cleanup_async_callback && !(timer && qore_module_cleanup_deadline_passed()
             && qore_module_cleanup_handed_over_work())) [[likely]] {
         return 0;
     }
