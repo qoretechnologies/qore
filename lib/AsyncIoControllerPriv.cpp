@@ -1332,7 +1332,21 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
             state.hold.store(false, std::memory_order_release);
             hold_ended = true;
         }
-        held.swap(state.held);
+        if (end_hold) {
+            held.swap(state.held);
+        } else {
+            // the cleanup waits only for the work that it counts: work whose context is delegated but not counted
+            // (an operation that work of the cleanup submitted) stays held until the hold ends (qore#7027)
+            auto it = state.held.begin();
+            while (it != state.held.end()) {
+                if (it->second.sandbox_ctx && it->second.sandbox_ctx->module_cleanup_work) {
+                    held.push_back(std::move(*it));
+                    it = state.held.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
     }
     if (hold_ended) {
         fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);

@@ -1,0 +1,12 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# an operation that the module cleanup cancels submits a follow-up operation from its onComplete(), which ends on its
+# own ("done") or never ("pending"); the onComplete() items of the cleanup's work are held with a test hook of a debug
+# build until the cleanup releases them (qore#7027)
+# arguments: "done" or "pending"
+
+%requires CleanupFollowUp
+
+Holder::start(ARGV[0] == "done");
+printf("started\n");
+call_function("dbg_async_io_hold_module_cleanup_work", True);

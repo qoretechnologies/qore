@@ -111,6 +111,14 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                     "is deleted", mode, protocol), sub () { runHoldCase(m, p); });
             }
         }
+        foreach string mode in (ExecModes) {
+            foreach string follow_up in ("done", "pending") {
+                string m = mode;
+                string f = follow_up;
+                addTestCase(sprintf("%s: an operation that work of the module cleanup submits (%s) ends before a module's "
+                    "Program is deleted", mode, follow_up), sub () { runFollowUpCase(m, f); });
+            }
+        }
         on_exit {
             delete server;
         }
@@ -180,6 +188,27 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(?s)(^|\n)held module cleanup work: [1-9][0-9]* released \\(the module cleanup waits for its "
             "work\\)\n.*held module cleanup work: an item ran and ended\n.*held module cleanup work: the hold ends "
             "\\(the user modules have been deleted\\)\n", out, "the cleanup waits for the work held: " + out);
+        assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! the onComplete() of an operation that the cleanup cancels submits a follow-up operation, which reaches its goal
+    #! on its own (done) or never (pending): the cleanup waits for its onComplete() too, which runs before the user
+    #! modules have been deleted, or the cleanup cancels it (qore#7027)
+    private runFollowUpCase(string mode, string follow_up) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the work is held with a test hook of a debug build");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", shellQuote(module_dir),
+            shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
+            + "followup-client.qr"), follow_up), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the first operation is submitted: " + out);
+        assertRegex("(?s)\nfirst onComplete: canceled: True\n.*\nfollow-up onComplete: canceled: "
+            + (follow_up == "done" ? "null" : "True") + "\n.*held module cleanup work: the hold ends \\(the user modules "
+            "have been deleted\\)\n", out, "the follow-up operation ends before the user modules have been deleted: "
+            + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
