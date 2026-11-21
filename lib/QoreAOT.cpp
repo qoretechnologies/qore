@@ -2295,8 +2295,10 @@ std::string qore_aot_get_compile_runtime_identity() {
     produces the same bytes, whatever the source file's modification time (a checkout or a rebase rewrites files
     with unchanged content).  Nor is the git revision of the compiling Qore: a commit that changes nothing qcc
     compiles with would otherwise change every artifact, so that a build cache (design/qmod-build-cache.md) could
-    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  Apart from the AOT runtime identity, which the host API qore_aot_script_register() reads to check a script object (issue #6898), no runtime reads such data from an artifact; the loader checks the sources of a module
-    linked into a source tree with the fingerprints file beside the module (see --depfile). */
+    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  Apart from the AOT
+    runtime identity, which the host API qore_aot_script_register() reads to check a script object (issue #6898), no
+    runtime reads such data from an artifact; the loader checks the sources of a module linked into a source tree
+    with the fingerprints file beside the module (see --depfile). */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
         const char* target_triple, int opt_level, bool include_source) {
     std::vector<std::pair<std::string, std::string>> info;

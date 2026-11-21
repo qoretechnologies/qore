@@ -175,7 +175,7 @@ struct QoreAOTFunc;
     @endcode
 
     An object compiled by a qcc whose libqore has another AOT runtime identity than the libqore that runs it (as
-    its image records) is refused before anything of it is read or registered: the error
+    its image records) is refused before anything of it is registered: the error
     <tt>AOT-RUNTIME-MISMATCH</tt>, naming both identities, is printed to stderr, the function returns 14, and an active
     batch on @p tpgm then fails in <tt>qore_aot_script_end_batch()</tt> before anything of the batch runs.  The
     per-object register functions that \c qcc emits return nothing, so a host that registers objects without a batch

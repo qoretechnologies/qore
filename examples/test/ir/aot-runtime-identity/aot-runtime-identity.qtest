@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - the checks run qcc and the programs it compiles in child processes
-# test-platform: macos - AOT code generation and linking of executables and script objects, and the weak linking of libqore on macOS
+# test-platform: macos - AOT linking of executables and script objects and the weak linking of libqore
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: LGPL-2.1-or-later
 

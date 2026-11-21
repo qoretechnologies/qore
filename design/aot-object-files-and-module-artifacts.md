@@ -410,21 +410,41 @@ entry points of executables (`qore_aot_run()`, `qore_aot_run_v2()`,
 `qore_aot_run_v3()`) only refuse: an executable that calls one was compiled
 before the check, so it records another identity than a runtime whose
 fingerprinted sources define `qore_aot_run_v4()`. The public host API
-`qore_aot_script_register()` reads the identity from the image's `BUILD_INFO`.
+`qore_aot_script_register()` reads the identity from the image's `BUILD_INFO`,
+which opens the image once more before it is registered (the registration
+already opens it once for each of its steps; the generated code never takes this
+path).
 
 The executable references `qore_aot_run_v4()` weakly and reports the mismatch
 itself (with `write(2)`) when it does not resolve: the library could not be
 loaded or predates the check. On macOS, `qcc` links executables with
 `-weak-lqore`, so that dyld does not end an executable run with a libqore that
-lacks a helper it imports (`Symbol not found`) before `main()` can refuse it;
-on Linux, glibc binds functions lazily, while a loader that binds every symbol
-at load (musl, `-z now`) still reports a missing helper itself. An executable
-linked statically (`qcc -S`) references the entry strongly, as a weak reference
-would not pull it out of `libqore_static.a`. The host that `qcc -o` writes for
-script objects links libqore normally, so there a libqore that lacks a symbol
-the objects import is still reported by the dynamic loader. A host that calls
-the register functions of script objects without a batch only gets the error
-on stderr (they return nothing); the refused object registers nothing. Tests: `examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest`.
+lacks a helper it imports (`Symbol not found`) before `main()` can refuse it.
+On Linux the executables that `qcc` links bind every symbol at load (the
+default toolchains of Ubuntu and of hardened Fedora builds link PIE executables
+with `BIND_NOW`, and musl always binds at load), so a libqore that lacks a
+helper the executable imports is reported by the dynamic loader before `main()`
+runs; a libqore that has every helper but another identity, or lacks only
+`qore_aot_run_v4()`, is refused by the check. Lazy binding (`-z lazy`) is not
+used to extend this, as it would weaken RELRO. An executable linked statically
+(`qcc -S`) references the entry strongly, as a weak reference would not pull it
+out of `libqore_static.a`. The host that `qcc -o` writes for script objects
+links libqore normally, so there a libqore that lacks a symbol the objects
+import is still reported by the dynamic loader. A host that calls the register
+functions of script objects without a batch only gets the error on stderr (they
+return nothing); the refused object registers nothing. Tests:
+`examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest`.
+
+The definitions of the runtime helpers (`lib/JITRuntime.cpp` and the other
+files that define `qore_rt_*` functions) are not identity sources: their
+declarations are (`JITRuntime.h`, and the declarations that `QoreIRToLLVM.cpp`
+and `QoreAOT.cpp` emit), so a change to a helper's contract changes the
+identity, while a fix in a helper's body keeps every compiled artifact
+loadable, as intended for runtime-only fixes. A libqore built without the
+definition of a declared helper therefore keeps its identity; on macOS, where
+executables link libqore weakly, such an executable fails at its first call of
+the helper instead of in dyld. Such a library is a broken build, not a library
+of another runtime contract, which the identity does not cover.
 
 Outside the Qore tree, `QORE_USER_MODULE_AOT_RULES()` (cmake/QoreMacros.cmake)
 makes every `.qmod` depend on a build-local `qcc-format.stamp` that

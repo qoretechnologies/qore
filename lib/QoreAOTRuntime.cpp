@@ -16348,7 +16348,13 @@ static std::string qore_aot_script_image_identity(const uint8_t* metadata, int m
 */
 extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm, const uint8_t* metadata, int metadata_len,
         const char* label, const QoreAOTFunc* functions, int num_functions) {
-    std::string identity = qore_aot_script_image_identity(metadata, metadata_len);
+    std::string identity;
+    try {
+        identity = qore_aot_script_image_identity(metadata, metadata_len);
+    } catch (const std::bad_alloc&) {
+        // no exception leaves the C function: the object is refused
+        return qore_aot_script_refuse(tpgm, "<unknown: out of memory reading the image>", label);
+    }
     return qore_aot_script_register_v2(identity.empty() ? nullptr : identity.c_str(), tpgm, metadata, metadata_len,
         label, functions, num_functions);
 }
@@ -16357,7 +16363,13 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm, const uint8
 /** see qore_aot_script_register() */
 extern "C" DLLEXPORT int qore_aot_script_register_native(QoreProgram* tpgm, const uint8_t* metadata,
         int metadata_len, const char* label, const QoreAOTFunc* functions, int num_functions) {
-    std::string identity = qore_aot_script_image_identity(metadata, metadata_len);
+    std::string identity;
+    try {
+        identity = qore_aot_script_image_identity(metadata, metadata_len);
+    } catch (const std::bad_alloc&) {
+        // no exception leaves the C function: the object is refused
+        return qore_aot_script_refuse(tpgm, "<unknown: out of memory reading the image>", label);
+    }
     return qore_aot_script_register_native_v2(identity.empty() ? nullptr : identity.c_str(), tpgm, metadata,
         metadata_len, label, functions, num_functions);
 }
