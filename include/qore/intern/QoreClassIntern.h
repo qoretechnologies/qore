@@ -109,6 +109,22 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 
 // forward reference to private class implementation
 class qore_class_private;
+
+//! the class context given for a method call that has none, unlike nullptr, with which the call takes the class context
+//! of the code that makes it (see CodeEvaluationHelper::findVariantImpl())
+/** A call reference created with no class context passes it, so that a call of it selects only the public variants of
+    its method wherever it is called.  It is never dereferenced: the functions that take a class context for a method
+    call convert it to nullptr with qore_given_class_ctx() where they use the class context
+*/
+DLLLOCAL inline const qore_class_private* qore_no_class_ctx() {
+    return reinterpret_cast<const qore_class_private*>(static_cast<uintptr_t>(1));
+}
+
+//! returns the class context given for a method call, or nullptr for qore_no_class_ctx()
+DLLLOCAL inline const qore_class_private* qore_given_class_ctx(const qore_class_private* cctx) {
+    return cctx == qore_no_class_ctx() ? nullptr : cctx;
+}
+
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 

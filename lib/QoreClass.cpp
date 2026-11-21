@@ -11646,7 +11646,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(Lexical
         return QoreValue();
     }
     // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, cctx);
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
     if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
     else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
@@ -11681,7 +11681,7 @@ QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
         return QoreValue();
     }
     // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, cctx);
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -11815,7 +11815,7 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
         return QoreValue();
     }
     // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, cctx);
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
     // a legacy AST call runs a builtin variant with its own semantic policy
     return policy.isDefault() ? METHV_const(variant)->evalMethod(nullptr, ceh, xsink)
         : METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);

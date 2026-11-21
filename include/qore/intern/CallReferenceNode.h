@@ -605,6 +605,12 @@ public:
 private:
     QoreObject* obj;
     std::string method;
+    //! the class context of the code that created the reference, if any, which a call looks the method up and selects
+    //! its variants with
+    /** Referenced as long as the reference exists: it can be a class of another Program than the object's, which
+        releases it when it is deleted, while the reference can be called afterwards.  A call of a reference created
+        with no class context is made with none (see evalInContext())
+    */
     const qore_class_private* qc;
     //! true if the reference was made for a method that the object's class does not have (issue #995)
     bool missing;
@@ -622,7 +628,9 @@ private:
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 
     //! evaluates \a f in the class context of the code that made the reference if it was made for a method that the
-    //! object's class does not have, where a pseudo-method that depends on the class context runs (issue #995)
+    //! object's class does not have, where a pseudo-method that depends on the class context runs (issue #995), or
+    //! if that code had no class context, so that the call does not select the variants of the method with the class
+    //! context of the code that calls the reference
     template <typename F>
     DLLLOCAL QoreValue evalInContext(F f) const;
 };
@@ -748,6 +756,12 @@ public:
 private:
     QoreObject* obj;
     const QoreMethod* method;
+    //! the class context that a call of the reference selects the variants of the method with
+    /** The class context of the code that created the reference, or qore_no_class_ctx() if it had none, so that a
+        call selects only the public variants wherever it is made, never with the class context of the caller.  A
+        class is referenced as long as the reference exists: it can be a class of another Program than the object's,
+        such as a subclass of the object's class, which is released with its Program (see init())
+    */
     const qore_class_private* qc;
     //! the Program of the reference, with PGM_CREATOR set if it is the Program of the code that created it
     /** Without PGM_CREATOR (a user method, or a builtin method of an object of the Program that creates the

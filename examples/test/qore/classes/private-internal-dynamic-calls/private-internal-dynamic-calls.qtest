@@ -25,7 +25,11 @@
     a method that the code that creates it can call, that call_object_method() and call_object_method_args() still
     refuse a private method, also one of the inheriting class in its own code, and that the code of the subclass, code
     outside the hierarchy, the code of an unrelated class (also when the code of the inheriting class calls it) and the
-    code of a look-alike of the inheriting class (qore#7036) cannot call these methods in any of these forms; its
+    code of a look-alike of the inheriting class (qore#7036) cannot call these methods in any of these forms.  It also
+    checks that a call reference created with no class context (by getCallReference() and in the parse-time forms, of
+    a normal and a static method) calls only the public variant of its method, also when the code of the class or of
+    its subclass calls it, and that a call reference that the code of a subclass in a child Program created is called
+    with the access of its creator after that Program has been deleted; its
     output must be the one in PrivateInternalDynamicCalls.expected in every execution mode, on the IR tier and in
     programs compiled with qcc -O0 and -O3.
 */
@@ -79,6 +83,16 @@ class PrivateInternalDynamicCallsTest inherits QUnit::Test {
             } else if (line =~
                     /^(sub on sub|outside( on subh)?|(other (from mid )?|look-alike )on (sub|mid)|sub direct): /) {
                 assertTrue(line =~ /: ([A-Z][-A-Z]+|False)$/, "the call is refused: " + line);
+            } else if (line =~ /^context-less reference: /) {
+                # a reference made with no class context: only the public variant, wherever it is called
+                if (line =~ / integer: /) {
+                    assertTrue(line =~ /: "CV::(mv|sv)\(int\)"$/, "the public variant is called: " + line);
+                } else {
+                    assertTrue(line =~ /: [A-Z][-A-Z]+$/, "a private variant is refused: " + line);
+                }
+            } else if (line =~ /^deleted creator: /) {
+                # the reference keeps the class context of its creator after the creator's Program is deleted
+                assertTrue(line =~ /: "PB::m\((int|string)\)"$/, "the reference is called: " + line);
             }
         }
         assertEq(expected, output);

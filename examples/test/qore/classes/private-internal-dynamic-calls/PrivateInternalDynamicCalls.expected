@@ -252,3 +252,48 @@ midh on subh: getCallReference mixed private:internal: RUNTIME-OVERLOAD-ERROR
 outside on subh: call_object_method: BASE-CLASS-IS-PRIVATE
 outside on subh: getCallReference: CALL-REFERENCE-ERROR
 sub direct: METHOD-DOES-NOT-EXIST
+context-less reference: outside getCallReference integer: "CV::mv(int)"
+context-less reference: in class getCallReference integer: "CV::mv(int)"
+context-less reference: in subclass getCallReference integer: "CV::mv(int)"
+context-less reference: outside getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside getCallReference float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class getCallReference float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass getCallReference float: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside parse-time integer: "CV::mv(int)"
+context-less reference: in class parse-time integer: "CV::mv(int)"
+context-less reference: in subclass parse-time integer: "CV::mv(int)"
+context-less reference: outside parse-time string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class parse-time string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass parse-time string: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside parse-time float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class parse-time float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass parse-time float: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside parse-time on subclass object integer: "CV::mv(int)"
+context-less reference: in class parse-time on subclass object integer: "CV::mv(int)"
+context-less reference: in subclass parse-time on subclass object integer: "CV::mv(int)"
+context-less reference: outside parse-time on subclass object string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class parse-time on subclass object string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass parse-time on subclass object string: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside parse-time on subclass object float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class parse-time on subclass object float: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass parse-time on subclass object float: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside static getCallReference integer: "CV::sv(int)"
+context-less reference: in class static getCallReference integer: "CV::sv(int)"
+context-less reference: in subclass static getCallReference integer: "CV::sv(int)"
+context-less reference: outside static getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class static getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass static getCallReference string: RUNTIME-OVERLOAD-ERROR
+context-less reference: outside static parse-time integer: "CV::sv(int)"
+context-less reference: in class static parse-time integer: "CV::sv(int)"
+context-less reference: in subclass static parse-time integer: "CV::sv(int)"
+context-less reference: outside static parse-time string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in class static parse-time string: RUNTIME-OVERLOAD-ERROR
+context-less reference: in subclass static parse-time string: RUNTIME-OVERLOAD-ERROR
+deleted creator: getCallReference int: "PB::m(int)"
+deleted creator: getCallReference string: "PB::m(string)"
+deleted creator: parse-time int: "PB::m(int)"
+deleted creator: parse-time string: "PB::m(string)"
+deleted creator: parse-time on subclass object int: "PB::m(int)"
+deleted creator: parse-time on subclass object string: "PB::m(string)"
