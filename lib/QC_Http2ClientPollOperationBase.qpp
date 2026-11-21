@@ -2182,6 +2182,7 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
 */
 qclass Http2ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http2ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];

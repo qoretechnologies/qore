@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the builtin HTTP/1, HTTP/2 and HTTP/3 client poll-operation classes and SocketPollOperation are in the NETWORK
+# functional domain (qore#7132): their constructors connect a Socket to a target that the caller names
+# (SocketPollOperation with its connect goals), so code restricted from NETWORK, which cannot
+# create a Socket or connect one, cannot connect a Socket that other code gives it through them either: it cannot
+# create them (nor the HttpClientIo classes that inherit them), neither in code nor by a name given at run time, nor
+# call their methods; code that may use the network can
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+# loaded by the test, so that the restricted Programs import it (a Program restricted from NETWORK cannot load it
+# itself, as the modules that it requires create NETWORK classes)
+%requires HttpClientIo
+
+%exec-class ClientPollOpNetworkDomainTest
+
+class ClientPollOpNetworkDomainTest inherits QUnit::Test {
+    public {
+        const Restricted = PO_MODERN | PO_NO_NETWORK;
+        const Plain = PO_MODERN;
+
+        #! the creation of each builtin class in code, with a Socket and a connection that the code is given
+        const News = {
+            "Http1ClientPollOperationBase": "object sub f(Socket s, AbstractHttpPollConnection c, int port) { "
+                "return new Http1ClientPollOperationBase(s, \"127.0.0.1:\" + port, \"127.0.0.1\", port, False, False, "
+                "False, c); }",
+            "Http2ClientPollOperationBase": "object sub f(Socket s, AbstractHttpPollConnection c, int port) { "
+                "return new Http2ClientPollOperationBase(s, \"127.0.0.1:\" + port, \"127.0.0.1\", port, False, False, "
+                "c); }",
+            "Http3ClientPollOperationBase": "object sub f(Socket s, AbstractHttpPollConnection c, int port) { "
+                "return new Http3ClientPollOperationBase(s, \"127.0.0.1\", port, c); }",
+            "SocketPollOperation": "object sub f(Socket s, AbstractHttpPollConnection c, int port) { "
+                "return new SocketPollOperation(s, \"connect\", {\"url\": \"127.0.0.1:\" + port}); }",
+        };
+
+        #! a method call on an object of each builtin class that the code is given
+        const Methods = {
+            "Http1ClientPollOperationBase": "string sub f(Http1ClientPollOperationBase o) { return o.getState(); }",
+            "Http2ClientPollOperationBase": "string sub f(Http2ClientPollOperationBase o) { return o.getState(); }",
+            "Http3ClientPollOperationBase": "string sub f(Http3ClientPollOperationBase o) { return o.getState(); }",
+            "SocketPollOperation": "*hash<auto> sub f(SocketPollOperation o) { return o.continuePoll(); }",
+        };
+    }
+
+    private {
+        #! a listener that no connection of the restricted code may reach
+        Socket listener();
+        int port;
+    }
+
+    constructor() : QUnit::Test("ClientPollOpNetworkDomainTest", "1.0") {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        addTestCase("parse", \parseTest());
+        addTestCase("HttpClientIo classes", \httpClientIoTest());
+        addTestCase("runtime", \runtimeTest());
+        addTestCase("unrestricted", \unrestrictedTest());
+        set_return_value(main());
+        listener.close();
+    }
+
+    #! the error of parsing \a code in a new Program with \a po, or "parsed"
+    private static string parseErr(int po, string code) {
+        Program p(po);
+        try {
+            p.parse(code, "probe");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    parseTest() {
+        foreach hash<auto> i in (News.pairIterator()) {
+            assertEq("ILLEGAL-CLASS-INSTANTIATION", parseErr(Restricted, i.value), "new " + i.key);
+        }
+        foreach hash<auto> i in (Methods.pairIterator()) {
+            assertEq("PARSE-EXCEPTION", parseErr(Restricted, i.value), "method of " + i.key);
+        }
+    }
+
+    #! the HttpClientIo poll-operation classes inherit the domain
+    httpClientIoTest() {
+        foreach string cls in (("Http1ClientPollOperation", "Http2ClientPollOperation", "Http3ClientPollOperation")) {
+            assertEq("ILLEGAL-CLASS-INSTANTIATION", parseErr(Restricted, sprintf("%%requires HttpClientIo\n"
+                "object sub f(hash<UrlInfo> url, HttpClientIo::HttpClientConnection conn) { return new "
+                "HttpClientIo::%s(url, 2s, NOTHING, NOTHING, False, NOTHING, conn); }", cls)), cls);
+        }
+    }
+
+    #! by a name given at run time, with a Socket and a connection that the host gives the code
+    runtimeTest() {
+        Program p(Restricted);
+        p.parse("auto sub f(string cls, list<auto> args) { return create_object_args(cls, args); }", "probe");
+        foreach string cls in (keys News) {
+            Socket s();
+            AbstractHttpPollConnection c();
+            list<auto> args;
+            switch (cls) {
+                case "Http1ClientPollOperationBase":
+                    args = (s, "127.0.0.1:" + port, "127.0.0.1", port, False, False, False, c);
+                    break;
+                case "Http2ClientPollOperationBase":
+                    args = (s, "127.0.0.1:" + port, "127.0.0.1", port, False, False, c);
+                    break;
+                case "SocketPollOperation":
+                    args = (s, "connect", {"url": "127.0.0.1:" + port});
+                    break;
+                case "Http3ClientPollOperationBase":
+                    args = (s, "127.0.0.1", port, c);
+                    break;
+            }
+            string err;
+            try {
+                p.callFunction("f", cls, args);
+                err = "created";
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq("CREATE-OBJECT-ERROR", err, cls);
+            assertFalse(s.isOpen(), cls + ": the socket was not connected");
+        }
+        # no connection was made
+        assertEq(NOTHING, listener.accept(0));
+    }
+
+    unrestrictedTest() {
+        foreach hash<auto> i in (News.pairIterator()) {
+            assertEq("parsed", parseErr(Plain, i.value), "new " + i.key);
+        }
+        foreach hash<auto> i in (Methods.pairIterator()) {
+            assertEq("parsed", parseErr(Plain, i.value), "method of " + i.key);
+        }
+    }
+}

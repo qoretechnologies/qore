@@ -3711,6 +3711,7 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
 */
 qclass Http1ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http1ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];

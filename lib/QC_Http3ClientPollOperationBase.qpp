@@ -1827,6 +1827,7 @@ void Http3ClientPollOperationPriv::failMigrations() {
 */
 qclass Http3ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
