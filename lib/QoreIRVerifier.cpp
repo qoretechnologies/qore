@@ -1966,7 +1966,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         const QoreIRInstruction* last = block->instructions.back().get();
         if (!isTerminator(last->opcode)) {
             error = "basic block '" + block->name + "' missing terminator";
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "VERIFIER: block '%s' has %zu instructions, last opcode=%d\n",
                     block->name.c_str(), block->instructions.size(), static_cast<int>(last->opcode));
                 for (size_t i = 0; i < block->instructions.size(); ++i) {
@@ -4941,7 +4941,7 @@ struct QoreIRUnrecordedWrites {
             std::unordered_set<const QoreIRFunction*> visited;
             addHandlerWrites(ir_func, false, visited);
         }
-        if (handler_scans && q_env_is_set("QORE_IR_OPT_STATS")) {
+        if (handler_scans && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
             fprintf(stderr, "IR-OPT-HANDLER-WRITES: %s: scans=%zu\n", ir_func.getDisplayName().c_str(), handler_scans);
         }
     }

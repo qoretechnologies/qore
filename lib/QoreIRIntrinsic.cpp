@@ -26,7 +26,7 @@ static void qore_ir_report_pseudo_intrinsic_resolutions() {
 }
 
 static bool qore_ir_pseudo_intrinsic_stats() {
-    if (!q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (!QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         return false;
     }
     atexit(qore_ir_report_pseudo_intrinsic_resolutions);

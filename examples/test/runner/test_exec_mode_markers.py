@@ -405,6 +405,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
+                                 "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
