@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires dbitest
+%exec-class DatasourceSensitiveOptionsTest
+
+#! DBI driver option information declares which options are sensitive (qore#7070)
+/** The "dbitest" mock driver declares its "secret" option sensitive with QDBI_OPT_SENSITIVE; its other options are not
+    sensitive.
+*/
+class DatasourceSensitiveOptionsTest inherits QUnit::Test {
+    constructor() : Test("DBI sensitive driver options", "1.0", \ARGV) {
+        addTestCase("the parse define", \parseDefine());
+        addTestCase("the driver option information", \driverOptions());
+        addTestCase("the option information of a Datasource", \datasourceOptions());
+        addTestCase("the option information of a DatasourcePool", \poolOptions());
+        set_return_value(main());
+    }
+
+    parseDefine() {
+%ifdef QoreHasDbiSensitiveOptions
+        assertTrue(True);
+%else
+        fail("QoreHasDbiSensitiveOptions is not defined");
+%endif
+    }
+
+    driverOptions() {
+        hash<auto> h = dbi_get_driver_options("dbitest");
+        assertTrue(h.secret.sensitive, "the secret option is sensitive");
+        foreach hash<auto> i in (h.pairIterator()) {
+            assertEq(Type::Boolean, i.value.sensitive.type(), i.key + ": the key is a bool");
+            if (i.key != "secret") {
+                assertFalse(i.value.sensitive, i.key + ": not sensitive");
+            }
+        }
+    }
+
+    datasourceOptions() {
+        Datasource ds({"type": "dbitest", "db": "test", "options": {"secret": "s3cr3t", "rows": 3}});
+        ds.open();
+        on_exit ds.close();
+        hash<auto> h = ds.getOptionHash();
+        assertTrue(h.secret.sensitive);
+        assertFalse(h.rows.sensitive);
+        # the option information gives the value to the code that owns the datasource
+        assertEq("s3cr3t", h.secret.value);
+        assertEq(3, h.rows.value);
+    }
+
+    poolOptions() {
+        DatasourcePool pool({"type": "dbitest", "db": "test", "options": {"secret": "s3cr3t", "min": 1, "max": 2}});
+        hash<auto> h = pool.getOptionHash();
+        assertTrue(h.secret.sensitive);
+        assertFalse(h.rows.sensitive);
+    }
+}

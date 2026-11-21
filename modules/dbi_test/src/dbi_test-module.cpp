@@ -73,6 +73,8 @@
 //! driver option: if True, its value is the identifier of the connection, which is unique in the process and in its
 //! children; otherwise it has no value, so that the configuration of a datasource does not depend on its connection
 #define DBITEST_OPT_SESSION "session"
+//! driver option declared sensitive (QDBI_OPT_SENSITIVE): a string kept on the connection, as a credential would be
+#define DBITEST_OPT_SECRET "secret"
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -185,6 +187,8 @@ public:
 
     //! the currently armed faults, separated by commas; sticky until changed with the "fault" option
     std::string fault;
+    //! the value of the sensitive "secret" option; see DBITEST_OPT_SECRET
+    std::string secret;
     //! rows reported as affected by exec operations
     int64 rows = 1;
     //! chunk size for the simulated bounded stream
@@ -673,6 +677,11 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->rows = val.getAsBigInt();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_SECRET)) {
+        QoreStringNodeValueHelper str(val);
+        conn->secret = str->c_str();
+        return 0;
+    }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         conn->report_session = val.getAsBool();
         return 0;
@@ -713,6 +722,9 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     }
     if (!strcmp(opt, DBITEST_OPT_FAULT)) {
         return new QoreStringNode(conn->fault);
+    }
+    if (!strcmp(opt, DBITEST_OPT_SECRET)) {
+        return new QoreStringNode(conn->secret);
     }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         return conn->report_session ? QoreValue(conn->id) : QoreValue();
@@ -933,6 +945,8 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
         "\"commit\", \"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
         "\"bulk-unavailable\", \"bulk-rows\", \"close\" (closing the connection reports an error), or \"stmt-close\" "
         "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo);
+    methods.registerOption(DBITEST_OPT_SECRET, "a string kept on the connection, declared sensitive as a credential "
+        "would be", stringTypeInfo, QDBI_OPT_SENSITIVE);
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",

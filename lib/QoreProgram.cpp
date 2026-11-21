@@ -2323,6 +2323,9 @@ void qore_program_private_base::newProgram() {
         dmap["QoreHasUserModuleLicense"] = true;
     }
 
+    // DBI driver option information declares the options whose values are sensitive (qore#7070)
+    dmap["QoreHasDbiSensitiveOptions"] = true;
+
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
     // below or QoreDebug, which depend on the build configuration of the library (a qmod compiled by one build of the

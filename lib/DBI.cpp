@@ -90,9 +90,10 @@ struct qore_dbi_mlist_private {
     dbi_method_list_t l;
     dbi_opt_map_t omap;
 
-    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0) {
+    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0, int flags = 0) {
         assert(omap.find(name) == omap.end());
-        omap[name] = DbiOptInfo(desc, type);
+        // only the flags known to this library are kept
+        omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE);
     }
 
     DLLLOCAL static qore_dbi_mlist_private* get(const qore_dbi_method_list& ml) {
@@ -289,6 +290,10 @@ void qore_dbi_method_list::add(int code, q_dbi_option_get_t method) {
 
 void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type) {
     priv->registerOption(name, desc, type);
+}
+
+void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags) {
+    priv->registerOption(name, desc, type, flags);
 }
 
 DbiArgHelper::DbiArgHelper(const QoreListNode* ol, bool numeric, ExceptionSink* xs) : orig(ol), nl(0), xsink(xs) {

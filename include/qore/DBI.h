@@ -75,6 +75,35 @@
 */
 #define DBI_CAP_LOCAL_ONLY               (1 << 22)
 
+//! DBI option flag: the value of the option is sensitive
+/** Given in qore_dbi_method_list::registerOption(const char*, const char*, const QoreTypeInfo*, int) for an option
+    whose value can hold a credential (a password, a key, a passphrase or a token) or a connection string or URL that
+    can embed one.  The \c "sensitive" key of the option information (DBIDriver::getOptionHash()) gives the flag to
+    %Qore code, and the value of a sensitive option is masked where %Qore shows the options of a datasource.  An
+    option that a driver does not declare (such as an option of a driver with @ref DBI_CAP_OPTION_PASSTHRU) is treated
+    as sensitive there.
+
+    @since %Qore 3.0 (qore#7070)
+*/
+#define QDBI_OPT_SENSITIVE (1 << 0)
+
+//! defined when DBI drivers can declare sensitive options with @ref QDBI_OPT_SENSITIVE
+/** A driver that can be built with an older %Qore library declares its sensitive options only if this macro is
+    defined, for example:
+    @code
+#ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
+    methods.registerOption("conn", "the connection string", stringTypeInfo, QDBI_OPT_SENSITIVE);
+#else
+    methods.registerOption("conn", "the connection string", stringTypeInfo);
+#endif
+    @endcode
+
+    %Qore code tests the parse define \c QoreHasDbiSensitiveOptions.
+
+    @since %Qore 3.0 (qore#7070)
+*/
+#define QORE_HAVE_DBI_SENSITIVE_OPTIONS 1
+
 #define BN_PLACEHOLDER  0
 #define BN_VALUE        1
 
@@ -641,6 +670,21 @@ public:
 
     // for registering valid options
     DLLEXPORT void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0);
+
+    //! registers a valid option with option flags
+    /** @param name the name of the option
+        @param desc the description of the option
+        @param type the type of the option's value, or nullptr for any type
+        @param flags the option flags: @ref QDBI_OPT_SENSITIVE for an option whose value can hold a credential (a
+        password, a key or a token) or a connection string or URL that can embed one; flags unknown to the library are
+        ignored
+
+        A driver that can be built with an older %Qore library uses this variant only if
+        @ref QORE_HAVE_DBI_SENSITIVE_OPTIONS is defined.
+
+        @since %Qore 3.0 (qore#7070)
+    */
+    DLLEXPORT void registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags);
 };
 
 //! this class provides the internal link to the database driver for Qore's DBI layer
@@ -675,6 +719,8 @@ public:
     /** @return a hash where the keys are valid option names, and the values are hashes with the following keys:
         - \c "desc": a string description of the option
         - \c "type": a string giving the data type restriction for the option
+        - \c "sensitive": @ref True if the driver declares the option's value sensitive with @ref QDBI_OPT_SENSITIVE
+          (since %Qore 3.0)
 
         The caller owns the reference count for the hash returned
     */

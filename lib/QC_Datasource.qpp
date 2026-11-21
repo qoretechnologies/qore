@@ -2237,6 +2237,9 @@ int Datasource::transactionTid() [flags=CONSTANT] {
 /** @return a hash where the keys are valid option names, and the values are hashes with the following keys:
     - \c "desc": a string description of the option
     - \c "type": a string giving the data type restriction for the option
+    - \c "sensitive": @ref True if the driver declares the value of the option sensitive (a credential, or a
+      connection string or URL that can embed one); such a value is masked where %Qore shows the options of a
+      datasource (since %Qore 3.0)
     - \c "value": the current value of the option
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread

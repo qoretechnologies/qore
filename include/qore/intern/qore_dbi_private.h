@@ -41,11 +41,18 @@ typedef std::map<int, void*> dbi_method_list_t;
 struct DbiOptInfo {
     const char* desc = nullptr;
     const QoreTypeInfo *typeInfo = nullptr;
+    //! the option flags (QDBI_OPT_SENSITIVE)
+    int flags = 0;
 
     DLLLOCAL DbiOptInfo() {
     }
 
-    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t) : desc(d), typeInfo(t) {
+    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t, int f = 0) : desc(d), typeInfo(t), flags(f) {
+    }
+
+    //! returns true if the value of the option is sensitive (qore#7070)
+    DLLLOCAL bool isSensitive() const {
+        return flags & QDBI_OPT_SENSITIVE;
     }
 };
 typedef std::map<const char*, DbiOptInfo, ltcstrcase> dbi_opt_map_t;
@@ -524,6 +531,7 @@ struct qore_dbi_private {
             QoreHashNode* h = new QoreHashNode(autoTypeInfo);
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
+            h->setKeyValue("sensitive", i->second.isSensitive(), 0);
             h->setKeyValue("value", f.opt.get(ds, i->first), 0);
 
             rv->setKeyValue(i->first, h, 0);
@@ -538,10 +546,21 @@ struct qore_dbi_private {
             QoreHashNode* h = new QoreHashNode(autoTypeInfo);
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
+            h->setKeyValue("sensitive", i->second.isSensitive(), 0);
 
             rv->setKeyValue(i->first, h, 0);
         }
         return rv;
+    }
+
+    //! returns true if the value of the option can be shown in a masked description of a datasource
+    /** Fail-closed: only an option that the driver declares and does not declare sensitive with
+        @ref QDBI_OPT_SENSITIVE can be shown; an option that the driver does not declare (such as an option of a driver
+        with @ref DBI_CAP_OPTION_PASSTHRU) is treated as sensitive (qore#7070)
+    */
+    DLLLOCAL bool isOptionShowable(const char* opt) const {
+        dbi_opt_map_t::const_iterator i = omap.find(opt);
+        return i != omap.end() && !i->second.isSensitive();
     }
 
     DLLLOCAL static qore_dbi_private* get(const DBIDriver& d) {
