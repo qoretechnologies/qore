@@ -24,8 +24,8 @@
           "message": "ファイルが FTP サーバーにアップロードされます"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "FTP サーバーにアップロードされたファイルに反応します。アクション設定によって、イベントにファイルデータ自体が含まれるか、ローカルファイルシステム上のファイル場所へのリンクが含まれるかが決定されます。いずれの場合も、イベントはファイルデータがすでにダウンロードされ、ローカルで利用可能であることを示します"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "FTP サーバーにアップロードされたファイルに反応します。アクション設定によって、イベントにファイルデータ自体が含まれるか、ローカルファイルシステム上のファイル場所へのリンクが含まれるかが決定されます。いずれの場合も、イベントはファイルデータがすでにダウンロードされ、ローカルで利用可能であることを示します。 処理後にリモートファイルを削除または移動するには、remote_file_disposition を DELETE または MOVE に設定します。NONE の場合は次のとおりです。 ハンドラーでファイルを移動、改名、または削除してください。そのまま残すと、次のポーリングで再び配信されます。"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

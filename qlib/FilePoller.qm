@@ -61,8 +61,9 @@ module FilePoller {
             "action": "file-received",
             "subtype": "filepoller",
             "display_name": "New File Created",
-            "short_desc": "A file is created in a server directory",
-            "desc": "React to files created in a server directory",
+            "short_desc": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+            "desc": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. "
+                "Move it outside the watched directory or rename it so that it no longer matches the file mask.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_FILE,
             "output_type": FilePollerFileEventInfoDataType,
@@ -91,6 +92,10 @@ module FilePoller {
     @section filepollerintro FilePoller Module Introduction
 
     The %FilePoller module provides a high level API for file polling.
+
+    Each poll delivers every matching file, including files that have already been handled.
+    The handler must move, rename or delete the file, or it will be delivered again on the next poll.
+    Move it outside the watched directory or rename it so that it no longer matches the file mask.
 
     Available classes:
     - @ref FilePoller::FileDelayedPollerDataProvider "FileDelayedPollerDataProvider"
@@ -961,9 +966,8 @@ public class FilePoller {
 }
 
 #! Event-based data provider for file events
-/** Note that this class will continue to output all matching files in the given folder until they are removed.
-
-    In the assumed scenario, matches files are removed by a single observer in the first notification event
+/** Each poll delivers every file that still matches the mask.
+    The handler must move, rename or delete the file, or it will be delivered again on the next poll.
 */
 public class FilePollerDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
@@ -1121,7 +1125,7 @@ public class FilePollerDataProviderBase inherits DataProvider::AbstractDataProvi
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {
             EVENT_FILE: <DataProviderMessageInfo>{
-                "desc": "File polled event",
+                "desc": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
                 "type": FilePollerFileEventInfoDataType,
             },
         };
@@ -1129,9 +1133,8 @@ public class FilePollerDataProviderBase inherits DataProvider::AbstractDataProvi
 }
 
 #! Event-based data provider for file polling events
-/** Note that this class will continue to output all matching files in the given folder until they are removed.
-
-    In the assumed scenario, matches files are removed by a single observer in the first notification event
+/** Each poll delivers every file that still matches the mask.
+    The handler must move, rename or delete the file, or it will be delivered again on the next poll.
 
     The event ID raised for file events is \c "file-event" (see @ref EVENT_FILE)
 */
@@ -1156,9 +1159,8 @@ public class FilePollerDataProvider inherits FilePollerDataProviderBase, DataPro
 }
 
 #! Event-based data provider for file polling events
-/** Note that this class will continue to output all matching files in the given folder until they are removed.
-
-    In the assumed scenario, matches files are removed by a single observer in the first notification event
+/** Each poll delivers every file that still matches the mask.
+    The handler must move, rename or delete the file, or it will be delivered again on the next poll.
 
     The event ID raised for file events is \c "file-event" (see @ref EVENT_FILE)
 */

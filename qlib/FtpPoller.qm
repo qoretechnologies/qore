@@ -68,7 +68,9 @@ module FtpPoller {
             "short_desc": "A file is uploaded to an FTP server",
             "desc": "React to files uploaded to an FTP server; the action configuration determines if the event "
                 "contains the file data itself or a link to the location of the file on the local filesystem. In any "
-                "case, the event indicates that the file data has already been downloaded and is available locally",
+                "case, the event indicates that the file data has already been downloaded and is available locally. "
+                "Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, "
+                "the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_FTP_FILE,
             "output_type": FtpPollerFileEventInfoDataType,
@@ -1829,7 +1831,8 @@ public class FtpPollerDataProviderBase inherits DataProvider::AbstractDataProvid
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {
             EVENT_FTP_FILE: <DataProviderMessageInfo>{
-                "desc": "FTP file polled event",
+                "desc": "Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, "
+                    "the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
                 "type": FtpPollerFileEventInfoDataType,
             },
         };

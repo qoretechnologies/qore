@@ -20,12 +20,12 @@
           "message": "Vytvorený nový súbor"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
-          "source": "A file is created in a server directory",
-          "message": "V adresári servera je vytvorený súbor"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Obsluha udalosti musí súbor presunúť, premenovať alebo odstrániť, inak sa pri ďalšej kontrole doručí znova."
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
-          "source": "React to files created in a server directory",
-          "message": "Reagovať na súbory vytvorené v adresári servera"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. Move it outside the watched directory or rename it so that it no longer matches the file mask.",
+          "message": "Obsluha udalosti musí súbor presunúť, premenovať alebo odstrániť, inak sa pri ďalšej kontrole doručí znova. Presuňte ho mimo sledovaného adresára alebo ho premenujte tak, aby už nezodpovedal maske súborov."
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
           "source": "Polling Mask",
