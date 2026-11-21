@@ -515,8 +515,12 @@ public class DataProvider {
         (getModuleHostHooks()).
 
         The hooks are set once per module: a second set raises an error, so code that runs later cannot replace them.
-        They are host code, created by the trusted code that sets them, and run as such.  Without hooks a module that
-        needs them refuses the calls of sandboxed callers.
+        Set them at startup before any user code is loaded, not only before the module: until they are set, any code
+        that is neither sandboxed nor denied @ref Qore::PO_NO_PROCESS_CONTROL "process control" could take the module's
+        slot first.  Give closures or call references, not objects: the registry keeps what it is given, and an object
+        is shared by reference, so code holding it could change what the module calls.  The hooks are host code,
+        created by the trusted code that sets them, and run as such.  Without hooks a module that needs them refuses
+        the calls of sandboxed callers.
 
         @param module the name of the module the hooks are for
         @param hooks the hooks; the module documents their keys and signatures
