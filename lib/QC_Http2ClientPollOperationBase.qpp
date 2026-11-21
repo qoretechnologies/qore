@@ -77,6 +77,7 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
       ssl_required(ssl_required), proxy_tunnel(proxy_tunnel), proxy_ssl(proxy_ssl && proxy_tunnel),
       target_host(std::move(target_host)), target_port(target_port),
       connection_priv(conn_priv) {
+    credential_connection_id = my_socket_priv::getPriv(*sock)->takeHttpHandshakeCredentials(client_cert, client_pk);
     // sock and connect_op are ref'd by the caller; ownership transferred
     // connection_priv is a raw (unrefed) pointer to the C++ priv data;
     // the strong QoreObject ref (for DGC cycle detection) is held in the
@@ -538,8 +539,9 @@ void Http2ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
-    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
-        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal);
+    SocketPollOperationBase* op = qore_http_client_ssl_upgrade(xsink, sock_obj,
+        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal,
+        *client_cert, *client_pk, credential_connection_id);
     if (*xsink) {
         op->deref(xsink);
         return;

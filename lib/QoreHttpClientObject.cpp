@@ -1256,6 +1256,30 @@ struct qore_httpclient_priv {
 
     con_info connection, proxy_connection;
 
+    // Only HTTP handshakes at the original origin receive these objects. In particular, the raw Socket
+    // methods inherited by HTTPClient must never inherit them as reusable socket credentials.
+    SimpleRefHolder<QoreSSLCertificate> owned_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> owned_key;
+    std::unique_ptr<const con_info> owned_origin;
+
+    DLLLOCAL QoreSSLCertificate* httpCertificate() {
+        return msock->opaque_cert ? *owned_cert : msock->cert;
+    }
+
+    DLLLOCAL QoreSSLPrivateKey* httpKey() {
+        return msock->opaque_key ? *owned_key : msock->pk;
+    }
+
+    DLLLOCAL int checkCredentialOrigin(const con_info& target, const char* scheme, ExceptionSink* xsink) const {
+        if (owned_origin && (!target.has_url() || !is_same_origin(*owned_origin, target)
+                || !scheme || strcasecmp(scheme, owned_origin->ssl ? "https" : "http"))) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+                "TLS client credentials are restricted to the originally configured origin");
+            return -1;
+        }
+        return 0;
+    }
+
     // issue #3978: default output encoding
     const QoreEncoding* enc = nullptr;
 
@@ -1611,8 +1635,8 @@ struct qore_httpclient_priv {
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.ssl_ca_file != msock->socket->priv->ssl_ca_file
                         || opts.ssl_ca_path != msock->socket->priv->ssl_ca_path
-                        || opts.client_cert != msock->cert
-                        || opts.client_key != msock->pk) {
+                        || opts.client_cert != httpCertificate()
+                        || opts.client_key != httpKey()) {
                     old_mgr = std::move(conn_mgr);
                     conn_mgr.reset();
                 }
@@ -1636,8 +1660,8 @@ struct qore_httpclient_priv {
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
                 opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
                 opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-                opts.client_cert = msock->cert;
-                opts.client_key = msock->pk;
+                opts.client_cert = httpCertificate();
+                opts.client_key = httpKey();
                 // Proxy URL from the existing connection info
                 opts.proxy_url = getConnMgrProxyUrl();
                 opts.proxy_authorization = getConnMgrProxyAuthorization();
@@ -2427,6 +2451,9 @@ struct qore_httpclient_priv {
                 return -1;
             }
         }
+        if (checkCredentialOrigin(conn, resolved.scheme.c_str(), xsink)) {
+            return -1;
+        }
         // octets that cannot appear in a request target are percent-encoded; everything else is sent as received
         target.clear();
         QoreUriReference::appendEncoded(target, resolved.getRequestTarget(), xsink);
@@ -2561,8 +2588,9 @@ struct qore_httpclient_priv {
             return -1;
         }
 
+        con_info next;
         bool port_set = false;
-        if (connection.set_url(url, port_set, xsink)) {
+        if (next.set_url(url, port_set, xsink)) {
             return -1;
         }
 
@@ -2576,19 +2604,34 @@ struct qore_httpclient_priv {
             }
 
             // set port only if it wasn't overridden in the URL
-            if (!port_set && !connection.is_unix) {
-                connection.port = get_port(i->second);
+            if (!port_set && !next.is_unix) {
+                next.port = get_port(i->second);
             }
 
             // set SSL setting from protocol default
-            connection.ssl = get_ssl(i->second);
+            next.ssl = get_ssl(i->second);
         } else {
-            connection.ssl = false;
-            if (!port_set && !connection.is_unix) {
-                connection.port = default_port;
+            next.ssl = false;
+            if (!port_set && !next.is_unix) {
+                next.port = default_port;
             }
         }
 
+        if (checkCredentialOrigin(next, tmp ? tmp->c_str() : nullptr, xsink)) {
+            return -1;
+        }
+        // The original URL of connection-owned credentials is an HTTP(S) URL. Constructor protocol overrides
+        // must not reinterpret its scheme or implicit port when establishing the binding.
+        if (!owned_origin && (owned_cert || owned_key)) {
+            bool https = tmp && !strcasecmp(tmp->c_str(), "https");
+            if (!tmp || (!https && strcasecmp(tmp->c_str(), "http")) || https != next.ssl
+                    || (!next.is_unix && !url.getPort() && next.port != (https ? 443 : 80))) {
+                xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+                    "TLS client credentials require an unambiguous HTTP or HTTPS origin");
+                return -1;
+            }
+        }
+        connection = next;
         return 0;
     }
 
@@ -3710,13 +3753,39 @@ const char* QoreHttpClientObject::getConnectionPath() const {
     return http_priv->connection.path.empty() ? getDefaultPath() : http_priv->connection.path.c_str();
 }
 
-void QoreHttpClientObject::setConnectionPath(const char* path) {
-    SafeLocker sl(priv->m);
-    if (path && path[0]) {
-        http_priv->connection.path = path;
-    } else {
-        http_priv->connection.path.clear();
+void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* key) {
+    auto* http = qore_httpclient_priv::get(client);
+    http->owned_cert = cert;
+    http->owned_key = key;
+    http->msock->opaque_cert = cert != nullptr;
+    http->msock->opaque_key = key != nullptr;
+}
+
+void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink) {
+    auto* http = qore_httpclient_priv::get(client);
+    SafeLocker sl(http->msock->m);
+    if (http->owned_origin && path && *path) {
+        QoreUriReference ref;
+        ref.parse(path, strlen(path), xsink);
+        if (*xsink) {
+            return;
+        }
+        if (ref.has_scheme || ref.has_authority) {
+            HttpRequestTarget target;
+            QoreString url(path);
+            if (!http->resolveRequestUrlUnlocked(xsink, url, target)) {
+                http->connection.path = target.target;
+            }
+            return;
+        }
     }
+    http->connection.path = path ? path : "";
+}
+
+void QoreHttpClientObject::setConnectionPath(const char* path) {
+    ExceptionSink xsink;
+    qore_httpclient_set_connection_path(*this, path, &xsink);
 }
 
 void QoreHttpClientObject::setDefaultPath(const char* def_path) {
@@ -3988,8 +4057,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
-                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
-                    "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_cert_path option requires filesystem access "
+                    "in the current Program and its caller");
                 return -1;
             }
 
@@ -4064,8 +4133,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
-                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
-                    "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_key_path option requires filesystem access "
+                    "in the current Program and its caller");
                 return -1;
             }
 
@@ -4194,6 +4263,13 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         http_priv->enc = enc;
     }
 
+    if ((http_priv->owned_cert || http_priv->owned_key) && !http_priv->owned_origin) {
+        auto origin = std::make_unique<con_info>(http_priv->connection.port);
+        origin->host = http_priv->connection.host;
+        origin->is_unix = http_priv->connection.is_unix;
+        origin->ssl = http_priv->connection.ssl;
+        http_priv->owned_origin = std::move(origin);
+    }
     return 0;
 }
 
@@ -4221,11 +4297,10 @@ int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
     int rc;
     {
         SafeLocker sl(priv->m);
-        // disconnect immediately if not using a proxy
-        if (!http_priv->proxy_connection.has_url()) {
+        rc = http_priv->setUrlUnlocked(str, xsink);
+        if (!rc && !http_priv->proxy_connection.has_url()) {
             close_priv = http_priv->disconnect_unlocked_prepare_close();
         }
-        rc = http_priv->setUrlUnlocked(str, xsink);
     }
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     return rc;
@@ -5290,10 +5365,20 @@ QoreStringNode* QoreHttpClientObject::getProxyPassword() const {
     return nullptr;
 }
 
+void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink) {
+    auto* http = qore_httpclient_priv::get(client);
+    SafeLocker sl(http->msock->m);
+    if (http->owned_origin && secure != http->owned_origin->ssl) {
+        xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+            "TLS client credentials are restricted to the originally configured scheme");
+        return;
+    }
+    http->connection.ssl = secure;
+}
+
 void QoreHttpClientObject::setSecure(bool is_secure) {
-    lock();
-    http_priv->connection.ssl = is_secure;
-    unlock();
+    ExceptionSink xsink;
+    qore_httpclient_set_secure(*this, is_secure, &xsink);
 }
 
 bool QoreHttpClientObject::isSecure() const {
@@ -7328,8 +7413,8 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
     opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
     opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-    opts.client_cert = msock->cert;
-    opts.client_key = msock->pk;
+    opts.client_cert = httpCertificate();
+    opts.client_key = httpKey();
     opts.proxy_url = getConnMgrProxyUrl();
     opts.proxy_authorization = getConnMgrProxyAuthorization();
 

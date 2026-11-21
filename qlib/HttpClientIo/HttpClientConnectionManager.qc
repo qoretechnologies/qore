@@ -421,6 +421,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! Credentials for target TLS handshakes, omitted from the subclass-visible options
+        transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
+
+        #! Normalized origin of the bound credentials
+        *string client_credential_origin;
+
         #! Lock for manager id allocation.
         static Mutex manager_id_lock();
 
@@ -442,6 +448,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
         self.logger = self.opts.logger;
+        origin_tls_credentials = remove self.opts.origin_tls_credentials;
+        if (origin_tls_credentials) {
+            client_credential_origin = HttpRedirectFollower::getOriginKey(
+                HttpRedirectFollower::parseOrigin(origin_tls_credentials.url));
+        }
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
             throw "HTTPCLIENT-OPTION-ERROR",
                 sprintf("invalid protocol %y: must be one of %y",
@@ -2237,6 +2248,16 @@ printf("%d connection(s) migrated\n", migrated);
         return !url_info.port && url_info.host =~ /^\//;
     }
 
+    #! Checks that the URL can be used with this manager's connection-owned TLS credentials
+    nothing checkTlsCredentialOrigin(string url) {
+        if (client_credential_origin) {
+            hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(url);
+            if (HttpRedirectFollower::getOriginKey(target) != client_credential_origin) {
+                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+            }
+        }
+    }
+
     #! Parses a request URL and applies the default scheme and port
     /** A UNIX domain socket target keeps port 0 and defaults to \c http; plain HTTP/1.1 is the only transport
         available for it.
@@ -2250,6 +2271,7 @@ printf("%d connection(s) migrated\n", migrated);
         @throw HTTPCLIENT-PROXY-ERROR a UNIX domain socket target was requested with a proxy configured
     */
     private hash<UrlInfo> parseRequestUrl(string url) {
+        HttpClientConnectionManager::checkTlsCredentialOrigin(url);
         hash<UrlInfo> url_info;
         try {
             url_info = parse_url(url);
@@ -2775,7 +2797,7 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        if (alt_svc_port_map.hasKey(key)) {
+        if (!client_credential_origin && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
@@ -2854,15 +2876,30 @@ printf("%d connection(s) migrated\n", migrated);
         h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
+    #! Marks the individual credentials that belong only to the target TLS handshake
+    private:internal hash<auto> getTlsTarget(hash<auto> url_info) {
+        if (!origin_tls_credentials) {
+            return url_info;
+        }
+        hash<UrlInfo> target = url_info;
+        if (HttpRedirectFollower::getOriginKey(target) != client_credential_origin) {
+            throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+        }
+        return target + {"bound_tls_cert": exists origin_tls_credentials.cert,
+            "bound_tls_key": exists origin_tls_credentials.key};
+    }
+
     #! Internal: creates an HTTP/1.1 connection with the exemption of the manager's own creations (qore#6981)
     /** The caller evaluates everything that the connection is given (such as the proxy authorization, which can run
         code of the manager's creator), so no other code runs while the exemption is held; see
         HttpClientCallerExemption
     */
     private:internal Http1ClientConnection newHttp1Connection(hash<auto> url_info, *hash<auto> proxy_info) {
+        hash<auto> target = getTlsTarget(url_info);
         HttpClientCallerExemption exemption = getExemption();
-        return new Http1ClientConnection(url_info, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
-            opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+        return new Http1ClientConnection(target, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
+            opts.accept_all_certs, proxy_info, origin_tls_credentials.cert ?? opts.client_cert,
+            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
     }
 
     #! Internal: creates an HTTP/2 connection with the exemption of the manager's own creations (qore#6981)
@@ -2870,9 +2907,11 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private:internal Http2ClientConnection newHttp2Connection(hash<auto> url_info, *hash<auto> proxy_info,
             bool offer_http11) {
+        hash<auto> target = getTlsTarget(url_info);
         HttpClientCallerExemption exemption = getExemption();
-        return new Http2ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
-            opts.ssl_verify_mode, opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk,
+        return new Http2ClientConnection(target, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
+            origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
             opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
     }
 
@@ -2880,10 +2919,12 @@ printf("%d connection(s) migrated\n", migrated);
     /** See newHttp1Connection()
     */
     private:internal Http3ClientConnection newHttp3Connection(hash<auto> url_info, *list<int> avoid_families) {
+        hash<auto> target = getTlsTarget(url_info);
         HttpClientCallerExemption exemption = getExemption();
-        return new Http3ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
-            opts.ssl_verify_mode, opts.accept_all_certs, opts.client_cert, opts.client_pk, opts.ssl_ca_file,
-            opts.ssl_ca_path, NOTHING, avoid_families);
+        return new Http3ClientConnection(target, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+            origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
+            opts.ssl_ca_file, opts.ssl_ca_path, NOTHING, avoid_families);
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol

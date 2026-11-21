@@ -16689,6 +16689,52 @@ void SocketUpgradeClientSslPollOperation::init(ExceptionSink* xsink, bool defer_
     initLocked(xsink);
 }
 
+// Both raw sockets and HTTP operations use the same TLS state machine. An HTTP credential is passed directly
+// to that handshake so the Socket returned to the caller cannot use it for another connection.
+static AbstractPollState* qore_start_client_tls_locked(my_socket_priv& priv, ExceptionSink* xsink,
+        SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key) {
+    assert(priv.m.trylock());
+    switch (mode) {
+        case SslUpgradeMode::Normal:
+            return priv.socket->startSslConnect(xsink, certificate, private_key);
+        case SslUpgradeMode::Proxy:
+            return priv.socket->startProxySslConnect(xsink);
+        case SslUpgradeMode::Layered:
+            return priv.socket->startLayeredSslConnect(xsink, certificate, private_key);
+    }
+    assert(false);
+    return nullptr;
+}
+
+class HttpClientSslUpgradePollOperation final : public SocketUpgradeClientSslPollOperation {
+public:
+    HttpClientSslUpgradePollOperation(ExceptionSink* xsink, QoreSocketObject* socket, SslUpgradeMode mode,
+            QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key, int64 credential_connection_id)
+            : SocketUpgradeClientSslPollOperation(xsink, socket, true, mode) {
+        my_socket_priv& priv = *my_socket_priv::getPriv(*socket);
+        AutoLocker al(priv.m);
+        if (credential_connection_id != priv.socket->getConnectionId()) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "the connection selected for TLS was replaced");
+            return;
+        }
+        if (priv.checkOpen(xsink) || priv.setNonBlock(xsink)) {
+            return;
+        }
+        set_non_block = true;
+        poll_state.reset(qore_start_client_tls_locked(priv, xsink, mode,
+            certificate ? certificate : priv.cert, private_key ? private_key : priv.pk));
+    }
+};
+
+SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
+        QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
+        int64 credential_connection_id) {
+    if (credential_connection_id < 0) {
+        return new SocketUpgradeClientSslPollOperation(xsink, sock, false, mode);
+    }
+    return new HttpClientSslUpgradePollOperation(xsink, sock, mode, certificate, private_key, credential_connection_id);
+}
+
 void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     // socket lock must be held here
     assert(sock->priv->m.trylock());
@@ -16714,18 +16760,7 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (!rc) {
         set_non_block = true;
 
-        switch (mode) {
-            case SslUpgradeMode::Normal:
-                poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
-                break;
-            case SslUpgradeMode::Proxy:
-                poll_state.reset(sock->priv->socket->startProxySslConnect(xsink));
-                break;
-            case SslUpgradeMode::Layered:
-                poll_state.reset(sock->priv->socket->startLayeredSslConnect(xsink, sock->priv->cert,
-                    sock->priv->pk));
-                break;
-        }
+        poll_state.reset(qore_start_client_tls_locked(*sock->priv, xsink, mode, sock->priv->cert, sock->priv->pk));
         if (*xsink) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -16741,9 +16776,14 @@ QoreHashNode* SocketUpgradeClientSslPollOperation::continuePoll(ExceptionSink* x
     }
 
     if (!initialized) {
-        initLocked(xsink);
-        if (*xsink || done) {
-            return nullptr;
+        if (poll_state) {
+            // The HTTP handshake was initialized with its operation-owned credentials under the socket lock.
+            initialized = true;
+        } else {
+            initLocked(xsink);
+            if (*xsink || done) {
+                return nullptr;
+            }
         }
     }
 

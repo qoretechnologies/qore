@@ -57,6 +57,11 @@ class QoreEventNotifier;
 //! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
 constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
 
+//! Creates the target TLS handshake of an HTTP operation, using credentials private to that operation.
+DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
+        QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
+        int64 credential_connection_id);
+
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
@@ -1904,7 +1909,8 @@ public:
                                            int64_t handshake_timeout_ns = 0,
                                            int64_t not_before_ns_abs = 0,
                                            bool bind_unbound = false,
-                                           std::vector<int> avoid_families = std::vector<int>());
+                                           std::vector<int> avoid_families = std::vector<int>(),
+                                           bool http_client = false);
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -2062,6 +2068,8 @@ private:
     DLLLOCAL int initializeResolved(ExceptionSink* xsink);
 
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    SimpleRefHolder<QoreSSLCertificate> client_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> client_pk;
     std::string host;
     std::string service;
     //! the session is set and released by the I/O thread (setSession(), resetSession()) and read by any thread

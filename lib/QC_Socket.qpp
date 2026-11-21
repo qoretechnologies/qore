@@ -2517,6 +2517,22 @@ Socket::constructor() {
     self->setPrivate(CID_SOCKET, new QoreSocketObject);
 }
 
+//! Creates a socket with client credentials for its first HTTP client poll operation
+/** The operation takes the references on construction. Raw socket TLS methods never use them.
+    @param certificate the client certificate for the target TLS handshake
+    @param private_key the client private key for the target TLS handshake
+
+    @since %Qore 3.0
+*/
+static Socket Socket::forHttpClientHandshake(*SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, xsink);
+    my_socket_priv* priv = my_socket_priv::getPriv(**sock);
+    priv->http_handshake_cert = certificate.release();
+    priv->http_handshake_key = private_key.release();
+    return new QoreObject(QC_SOCKET, getProgram(), sock.release());
+}
+
 //! Creates a new Socket object, not based on the source being copied
 /** @par Example:
     @code{.py} Socket newsock = sock.copy(); @endcode

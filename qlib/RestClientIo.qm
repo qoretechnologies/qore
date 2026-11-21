@@ -1628,6 +1628,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 remains caller-owned.
         */
         RestClient::AbstractRestClient copyWithUrl(string new_url) {
+            mgr.checkTlsCredentialOrigin(new_url);
             # values of any type are added below, so the hash is not narrowed to the type of the saved options
             hash<auto!> opts = saved_opts + {
                 "url": new_url,
@@ -5295,9 +5296,13 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (exists opts.enable_http3 && !opts.enable_http3) {
                 mgr_opts.enable_http3 = False;
             }
-            # Load TLS client cert + private key for mutual TLS (mTLS)
-            *SSLCertificate client_cert = credentials.cert ?? RestClientIo::loadSslCertificate(opts);
-            *SSLPrivateKey client_pk = credentials.key ?? RestClientIo::loadSslPrivateKey(opts);
+            if (credentials.cert || credentials.key) {
+                mgr_opts.origin_tls_credentials = <HttpClientIo::HttpClientOriginTlsCredentials>{
+                    "url": opts.url, "cert": credentials.cert, "key": credentials.key};
+            }
+            # Explicit options remain ordinary socket credentials when paired with a connection-owned credential.
+            *SSLCertificate client_cert = credentials.cert ? NOTHING : RestClientIo::loadSslCertificate(opts);
+            *SSLPrivateKey client_pk = credentials.key ? NOTHING : RestClientIo::loadSslPrivateKey(opts);
             if (client_cert) {
                 mgr_opts.client_cert = client_cert;
             }

@@ -35,6 +35,7 @@
 %allow-weak-references
 
 %requires Mime >= 1.7
+%requires HttpUtil
 %requires(reexport) ConnectionProvider >= 1.10
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
@@ -1426,6 +1427,15 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         };
     }
 
+    private:internal {
+        #! TLS objects for same-origin siblings. Serializable omits transient members.
+        transient *hash<RestConnectionTlsCredentials> connection_tls_credentials;
+        #! The original native target of the connection-owned credentials
+        *hash<UrlInfo> connection_tls_origin;
+        #! Paths that must be omitted when reconstructing a sibling after serialization dropped its TLS objects
+        *list<string> connection_tls_paths;
+    }
+
     private {
         #! Explicit path override for the additive target API, including an explicitly cleared root
         transient Mutex target_path_lock();
@@ -1717,6 +1727,18 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
                 + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()}),
                 credentials.cert, credentials.key) {
+        if (credentials.cert || credentials.key) {
+            connection_tls_credentials = credentials;
+            if (*string origin = opts.url ?: HTTPClient::getURL(UC_TARGET)) {
+                connection_tls_origin = HttpRedirectFollower::parseOrigin(origin);
+            }
+            if (credentials.cert && exists opts.ssl_cert_path) {
+                push connection_tls_paths, "ssl_cert_path";
+            }
+            if (credentials.key && exists opts.ssl_key_path) {
+                push connection_tls_paths, "ssl_key_path";
+            }
+        }
         initRestClient(opts, do_not_connect);
     }
 
@@ -2707,6 +2729,23 @@ hash<auto> ans = rest.del("/orders/1");
             if (refresh_token.val()) {
                 opts.oauth2_refresh_token = refresh_token;
             }
+        }
+        if (connection_tls_credentials || connection_tls_origin || connection_tls_paths) {
+            if (connection_tls_paths && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+                throw "ILLEGAL-FILESYSTEM-ACCESS",
+                    "copying a REST client with TLS credential paths requires filesystem access";
+            }
+            hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(new_url);
+            if (!connection_tls_origin || target.protocol != connection_tls_origin.protocol
+                    || HttpRedirectFollower::getOriginKey(target)
+                        != HttpRedirectFollower::getOriginKey(connection_tls_origin)) {
+                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+            }
+            if (connection_tls_credentials) {
+                return cast<AbstractRestClient>(Class::getClass(self).newObject(opts, True, connection_tls_credentials));
+            }
+            # Serialization drops the TLS objects. The saved paths are informational and must not restore them.
+            opts -= connection_tls_paths;
         }
         return copySelf(opts);
     }
@@ -4616,6 +4655,11 @@ public hashdecl RestConnectionTlsCredentials {
     behavior.  Its @ref get() method still creates a @ref RestClient::RestClient "RestClient" by default.
 
     The options are those of @ref RestClient::RestConnection "RestConnection" (see @ref ConnectionScheme).
+    Both get() and getAsync() bind certificates and private keys read from the connection's original files to
+    its HTTP origin. Configuration exports and serialization omit the file contents even for trusted callers.
+    Restoring an exported client requires supplying its credentials again for mutual TLS. Credentials supplied
+    directly as option data, including \c ssl_key_data, retain their ordinary export behavior.
+    Reading credential paths supplied by the caller requires filesystem access.
 
     @note The poll operations use getPollImpl(), which uses getImpl() and so the default
     @ref RestClient::RestClient "RestClient", and the ping uses getAsync() (a \c RestClientIo client), so they keep
@@ -6288,6 +6332,12 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
                 credentials.key = new SSLPrivateKey(key, opts.ssl_key_password);
             }
         }
+        if ((exists rtopts.ssl_cert_path || exists rtopts.ssl_key_path
+                    || (exists opts.ssl_cert_path && !exists opts.ssl_cert_data && !credentials.cert)
+                    || (exists opts.ssl_key_path && !exists opts.ssl_key_data && !credentials.key))
+                && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
+        }
         return credentials;
     }
 
@@ -6302,17 +6352,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     */
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
         hash<auto> opts = getConnectionOptions(rtopts);
-        if (!exists opts.ssl_cert_path && !exists opts.ssl_key_path
-                && !exists rtopts.ssl_cert_path && !exists rtopts.ssl_key_path) {
-            return new RestClient(opts, !connect);
-        }
         hash<RestConnectionTlsCredentials> credentials = readBoundCredentials(opts, rtopts);
-        if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)
-                && (exists rtopts.ssl_cert_path || exists rtopts.ssl_key_path
-                    || (exists opts.ssl_cert_path && !exists opts.ssl_cert_data && !credentials.cert)
-                    || (exists opts.ssl_key_path && !exists opts.ssl_key_data && !credentials.key))) {
-            throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
-        }
         if (credentials.cert || credentials.key) {
             return new RestClient(opts, !connect, credentials);
         }
@@ -6340,11 +6380,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         load_module("RestClientIo");
         # RestClientIo supports the same options, including the URL encoding options
         hash<auto> opts = getConnectionOptions(rtopts);
-        if ((cert_reader || key_reader) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
-            hash<RestConnectionTlsCredentials> credentials = readBoundCredentials(opts, rtopts);
-            if (credentials.cert || credentials.key) {
-                return create_object("RestClientIo::RestClientIo", opts, NOTHING, credentials);
-            }
+        hash<RestConnectionTlsCredentials> credentials = readBoundCredentials(opts, rtopts);
+        if (credentials.cert || credentials.key) {
+            return create_object("RestClientIo::RestClientIo", opts, NOTHING, credentials);
         }
         return create_object("RestClientIo::RestClientIo", opts);
     }
