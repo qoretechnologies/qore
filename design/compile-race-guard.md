@@ -45,8 +45,8 @@ For each compile with `-o <object>`, the launcher:
 3. after a successful compile, when any input named in the compiler's dependency
    file (`-MF`; CMake passes `-MD -MT <object> -MF <object>.d` to GCC and Clang with
    both generators from CMake 3.20; without one, the `-c` source) has a modification
-   time at or after `T0`, or no longer exists, sets the object's modification time to
-   the last nanosecond of the second before `T0`.
+   time at or after `T0`, sets the object's modification time to the last nanosecond
+   of the second before `T0`.
 
 The object is then older than the edited input, also for a tool that compares whole
 seconds, and the next build compiles it again. An object whose inputs did not change
@@ -57,6 +57,19 @@ at most one extra compile, while `>` could miss an edit made in the tick of `T0`
 The backdated object may be older than the output linked from it in an earlier build;
 then the build that compiled it does not link again, but the next build compiles and
 links. That build's output was stale in any case, as the edit came during it.
+
+The launcher never changes a build's result. When it fails itself, before the
+compile (it cannot take `T0`, set its signal handlers or fork) it runs the compile
+plainly (`exec`); after the compile (an unreadable, missing or malformed dependency
+file, an input it cannot `stat()`, a failing `utime()`), it leaves the object as the
+compiler wrote it. Either way the output and the exit status are the compiler's, and
+the launcher prints nothing of its own; the worst case is the race it guards against.
+A compiler that cannot be started ends it with status 127, as a shell would. An
+ignored `SIGCHLD` inherited from the build is restored for the compiler. The test hook
+`QORE_COMPILE_RACE_GUARD_TEST_FAULT=<point>` (`start`, `signals`, `fork`, `check`,
+`utime`) raises an error at that point, for the tests of this fallback. One failure
+it cannot cover is its interpreter: a Python 3 removed after the configure fails the
+compile until the build is configured again.
 
 ccache: an edit during the compile changes the input's content, so the next compile
 is a cache miss and compiles the new content.
