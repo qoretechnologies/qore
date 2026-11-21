@@ -358,7 +358,9 @@ AsyncIoController::copy() {
       @ref Qore::AbstractPollOperation::onComplete() "onComplete()" that submits its operation again (a reader that
       re-arms itself, a retry), adds a timer or submits a task gets an \c ASYNC-IO-SHUTDOWN-ERROR exception, so that
       the process ends; nor can the work that the cleanup handed over after its deadline.  Synchronous I/O and
-      @ref exec() are not refused
+      @ref exec() are not refused: in the work that the cleanup handed over (a callback worker), an operation that
+      they start after the deadline gets a canceled result at once, while in a destructor that the cleanup runs it
+      keeps its own timeout
 
     @note The steps of the operation that run on callback workers, such as
     @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" and

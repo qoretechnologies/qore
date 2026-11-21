@@ -1355,6 +1355,13 @@ void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     AutoLocker al(state.lock);
     state.hold.store(hold, std::memory_order_release);
+    if (!hold && (state.held_counted_tasks || state.held_uncounted_tasks)) {
+        // the tasks held run now
+        ++state.counted_task_release_gen;
+        ++state.task_hold_end_gen;
+        state.held_counted_tasks = state.held_uncounted_tasks = 0;
+        state.task_cond.broadcast();
+    }
 }
 
 //! Holds @a item if it is an onComplete() that the module cleanup hands over while the test hook holds them
@@ -4191,6 +4198,10 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // log at the end of the process) is waited for by the cleanup until its deadline, whatever the operation's own
     // timeout; then it is canceled (see qore_module_cleanup_drain_work()); after the deadline, it is canceled when
     // the cleanup waits for its work (qore#7027)
+    // a synchronous caller that runs work that the cleanup handed over (see cancelAdmittedAfterModuleCleanupDeadline())
+    if (sync_release && async_io_module_cleanup_delegate(sandbox_ctx)) [[unlikely]] {
+        sync_release->module_cleanup_handed_over = qore_module_cleanup_handed_over_work();
+    }
     if (async_io_module_cleanup_uncounted(sandbox_ctx) && !qore_module_cleanup_deadline_passed()) {
         try {
             sandbox_ctx = std::make_shared<const QoreSandboxContext>(sandbox_ctx.get(),
@@ -10126,7 +10137,10 @@ void AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline(IoThreadCon
         return;
     }
     auto it = t.cache.find(key);
-    if (it == t.cache.end() || !async_io_module_cleanup_cancel_match(it->second.sandbox_ctx, true)) {
+    if (it == t.cache.end() || !async_io_module_cleanup_cancel_match(it->second.sandbox_ctx, true)
+            // a synchronous wait of the cleanup itself (a destructor that logs out) does not keep the cleanup from
+            // ending: it is bounded by the operation's own timeout
+            || (it->second.sync_release && !it->second.sync_release->module_cleanup_handed_over)) {
         return;
     }
     PollInfo pinfo_copy = retireOp(t, it, xsink);

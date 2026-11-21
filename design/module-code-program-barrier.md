@@ -278,7 +278,9 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     canceled at once (`cancelAdmittedAfterModuleCleanupDeadline()`, where the operation enters the cache: the flag is
     set before the round sends its commands, so an operation that an I/O thread admits after the round's command, or
     while it does not read commands yet, sees it; a later round alone would run only when the drain's untimed wait
-    ends, which a synchronous wait for that operation in counted work would prevent); the operations canceled at or
+    ends, which a synchronous wait for that operation in counted work would prevent; a synchronous operation of the
+    cleanup thread itself, which blocks only its own destructor, keeps its own timeout:
+    `AsyncIoSyncRelease::module_cleanup_handed_over`); the operations canceled at or
     after the deadline are named in a warning on stderr (`qore_module_cleanup_report_canceled()`).  An
     operation whose own timeout is renewed as it makes progress (`renewsTimeout()`) does not extend the deadline
   - a timer that such work adds, and an operation that the controller starts for it without `submit()`, have a

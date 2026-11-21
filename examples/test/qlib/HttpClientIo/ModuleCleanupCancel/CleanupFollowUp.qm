@@ -62,12 +62,15 @@ public class Canceller {
                 break;
             case "window-a":
             case "window-b":
+            case "window-b-exec":
                 # the step of the operation is held in flight; the cleanup, at its deadline, releases it after (a) or
                 # before (b) its cancel round
                 call_function("dbg_async_io_hold_step_results", True);
                 # (b): its onComplete() runs after the deadline, and cannot add a timer then
-                submit_operation(notifier, mode, mode == "window-b" ? FollowUpGoal::AtOnce : FollowUpGoal::Never,
-                    mode == "window-b" ? FollowUpAction::Timer : FollowUpAction::None);
+                # (b-exec): its onComplete() runs an operation synchronously after the deadline, which is canceled at
+                # once, as its wait would keep the cleanup from ending
+                submit_operation(notifier, mode, mode == "window-a" ? FollowUpGoal::Never : FollowUpGoal::AtOnce,
+                    WindowActions{mode} ?? FollowUpAction::None);
                 call_function("dbg_async_io_wait_held_step_results", 1, 20s);
                 call_function("dbg_async_io_hold_step_results", False);
                 break;
@@ -84,6 +87,12 @@ public class Canceller {
         }
     }
 }
+
+#! what the onComplete() of the operation of the window modes does
+const WindowActions = {
+    "window-b": FollowUpAction::Timer,
+    "window-b-exec": FollowUpAction::ExecNever,
+};
 
 #! what the onComplete() of the first operation of the chain modes does
 const ChainActions = {

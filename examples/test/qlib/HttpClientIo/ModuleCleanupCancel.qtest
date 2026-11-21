@@ -112,6 +112,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             # (b) it reaches its goal after the cleanup's wait and before its cancel round; its onComplete(), work that
             # the cleanup handed over, runs after the deadline and cannot add a timer
             "window-b": ("window-b onComplete: canceled: null\nwindow-b timer refused: " + Refused,),
+            # and an operation that it runs synchronously gets a canceled result at once, as its wait would keep the
+            # cleanup from ending
+            "window-b-exec": ("window-b-exec onComplete: canceled: null", "window-b-exec exec: canceled: True",
+                sprintf(SubmittedAfterWarning, 0) + " ExecOperation \\(owner "
+                "'module-cleanup-follow-up-window-b-exec-exec'\\)"),
             # (c) a timer fires after the cleanup's scan of the timers: its callback is held, and released when the
             # cleanup waits for it
             "window-c": ("held module cleanup work: 1 released \\(the module cleanup waits for its work\\)\n"
@@ -132,6 +137,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "deadline": "QORE_MODULE_CLEANUP_TIMEOUT=600000 %s --module-cleanup-timeout=300",
             "window-a": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
             "window-b": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
+            "window-b-exec": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
         };
 
         #! the deadline in milliseconds of the case of several modules

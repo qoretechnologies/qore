@@ -217,6 +217,15 @@ public:
         assert(refs.empty());
     }
 
+    //! True if work that the module cleanup handed over submitted the operation (a worker that runs its work), not
+    //! the cleanup itself (qore#7027)
+    /** Set by AsyncIoControllerPriv::submit() before the operation is queued and read on the I/O thread that admits
+        it: after the deadline of the cleanup, such a synchronous wait would keep the cleanup from ending, so its
+        operation is canceled when it is admitted (AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline()),
+        while one of the cleanup itself keeps its own timeout
+    */
+    bool module_cleanup_handed_over = false;
+
     //! Takes references for the caller
     /** @param r the references; cleared if they were taken
 

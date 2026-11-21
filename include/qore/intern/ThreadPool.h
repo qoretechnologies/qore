@@ -65,7 +65,7 @@ public:
         cleanup waits for it before it deletes the next module (an asynchronous I/O controller task, qore#7027)
     */
     DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, bool count_module_cleanup = false)
-            : code(c), cancelCode(cc),
+            : code(c), cancelCode(cc), count_module_cleanup(count_module_cleanup),
             module_cleanup_work(count_module_cleanup && sandbox_context.module_cleanup_delegate) {
     }
 
@@ -93,9 +93,9 @@ public:
         // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
 #ifdef DEBUG
-        // a task of the module cleanup is held by the test hook until the cleanup waits for it (qore#7027); before it
-        // enters its Program, whose teardown would wait for it
-        if (sandbox_context.module_cleanup_delegate) {
+        // a task of the module cleanup that the controller runs is held by the test hook until the cleanup waits for
+        // it (qore#7027); before it enters its Program, whose teardown would wait for it
+        if (count_module_cleanup && sandbox_context.module_cleanup_delegate) {
             qore_dbg_hold_module_cleanup_task(module_cleanup_work);
         }
 #endif
@@ -134,6 +134,8 @@ protected:
     const QoreSandboxContext sandbox_context;
     //! The run-time parse options of the submitting code (qore#6208)
     const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
+    //! True for a task of the asynchronous I/O controller, which the module cleanup counts (qore#7027)
+    const bool count_module_cleanup;
     //! Counts the task as work of the module cleanup until it is deleted, if it was created for it (qore#7027)
     QoreModuleCleanupWorkFlag module_cleanup_work;
 
