@@ -41,6 +41,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include "qore/intern/QoreMiscMembersOps.h"
+
 #include <limits>
 #include <new>
 #include <string>
@@ -434,7 +436,7 @@ static void qore_buffer_aligned_free(void* ptr) {
 }
 
 QoreBufferNode::AlignedByteBuffer::AlignedByteBuffer(const AlignedByteBuffer& old) {
-    resize(old.len);
+    qore_aligned_byte_buffer_ops(this).resize(old.len);
     if (len) {
         memcpy(ptr, old.ptr, len);
     }
@@ -444,7 +446,7 @@ QoreBufferNode::AlignedByteBuffer& QoreBufferNode::AlignedByteBuffer::operator=(
     if (this == &old) {
         return *this;
     }
-    resize(old.len);
+    qore_aligned_byte_buffer_ops(this).resize(old.len);
     if (len) {
         memcpy(ptr, old.ptr, len);
     }
@@ -452,10 +454,12 @@ QoreBufferNode::AlignedByteBuffer& QoreBufferNode::AlignedByteBuffer::operator=(
 }
 
 QoreBufferNode::AlignedByteBuffer::~AlignedByteBuffer() {
-    clear();
+    qore_aligned_byte_buffer_ops(this).clear();
 }
 
-void QoreBufferNode::AlignedByteBuffer::resize(size_t n_size, bool clear_data) {
+void qore_aligned_byte_buffer_ops::resizeImpl(QoreBufferNode::AlignedByteBuffer* b, size_t n_size, bool clear_data) {
+    uint8_t*& ptr = b->ptr;
+    size_t& len = b->len;
     if (n_size == len) {
         if (clear_data && ptr) {
             memset(ptr, 0, len);
@@ -483,7 +487,9 @@ void QoreBufferNode::AlignedByteBuffer::resize(size_t n_size, bool clear_data) {
     qore_buffer_aligned_free(old_ptr);
 }
 
-void QoreBufferNode::AlignedByteBuffer::clear() {
+void qore_aligned_byte_buffer_ops::clearImpl(QoreBufferNode::AlignedByteBuffer* b) {
+    uint8_t*& ptr = b->ptr;
+    size_t& len = b->len;
     if (ptr) {
         qore_buffer_aligned_free(ptr);
         ptr = nullptr;
@@ -1654,12 +1660,12 @@ void qore_buffer_node_private::resizeStorageImpl(QoreBufferNode* b, size_t n_len
     b->external_device_info = QoreBufferDeviceInfo();
     b->external_device_copy_to_host = nullptr;
     b->length = n_length;
-    b->data_buffer.resize(qore_buffer_node_private(b).dataByteSize(b->length), true);
+    qore_aligned_byte_buffer_ops(b->data_buffer).resize(qore_buffer_node_private(b).dataByteSize(b->length), true);
     if (b->nullable_elements) {
-        b->validity_buffer.resize(qore_buffer_bitmap_bytes(b->length), true);
+        qore_aligned_byte_buffer_ops(b->validity_buffer).resize(qore_buffer_bitmap_bytes(b->length), true);
         b->null_count = b->length ? static_cast<int64>(b->length) : 0;
     } else {
-        b->validity_buffer.clear();
+        qore_aligned_byte_buffer_ops(b->validity_buffer).clear();
         b->null_count = 0;
     }
 }
@@ -1684,10 +1690,10 @@ int qore_buffer_node_private::materializeDeviceStorageSlowImpl(QoreBufferNode* b
         return 0;
     }
 
-    b->data_buffer.resize(data_size, false);
+    qore_aligned_byte_buffer_ops(b->data_buffer).resize(data_size, false);
     uint8_t* validity_dest = nullptr;
     if (b->nullable_elements) {
-        b->validity_buffer.resize(validity_size, false);
+        qore_aligned_byte_buffer_ops(b->validity_buffer).resize(validity_size, false);
         if (b->external_device_validity) {
             validity_dest = b->validity_buffer.data();
         } else if (validity_size) {
@@ -1695,15 +1701,15 @@ int qore_buffer_node_private::materializeDeviceStorageSlowImpl(QoreBufferNode* b
             b->null_count = 0;
         }
     } else {
-        b->validity_buffer.clear();
+        qore_aligned_byte_buffer_ops(b->validity_buffer).clear();
         b->null_count = 0;
     }
 
     int rc = b->external_device_copy_to_host(b->data_buffer.data(), validity_dest, b->length,
         b->external_device_data, b->external_device_validity, b->external_device_info, b->external_device_owner.get(), xsink);
     if (rc) {
-        b->data_buffer.clear();
-        b->validity_buffer.clear();
+        qore_aligned_byte_buffer_ops(b->data_buffer).clear();
+        qore_aligned_byte_buffer_ops(b->validity_buffer).clear();
         if (!*xsink) {
             xsink->raiseException("BUFFER-DEVICE-STORAGE-ERROR",
                 "copy-to-host callback failed while materializing external device buffer<%s> storage",
@@ -1750,14 +1756,14 @@ int qore_buffer_node_private::detachExternalStorageImpl(QoreBufferNode* b, Excep
     }
 
     size_t data_size = qore_buffer_node_private(root).dataByteSize(root->length);
-    root->data_buffer.resize(data_size, false);
+    qore_aligned_byte_buffer_ops(root->data_buffer).resize(data_size, false);
     if (data_size) {
         memcpy(root->data_buffer.data(), root->external_data, data_size);
     }
 
     if (root->nullable_elements) {
         size_t validity_size = qore_buffer_bitmap_bytes(root->length);
-        root->validity_buffer.resize(validity_size, false);
+        qore_aligned_byte_buffer_ops(root->validity_buffer).resize(validity_size, false);
         if (validity_size) {
             if (root->external_validity) {
                 memcpy(root->validity_buffer.data(), root->external_validity, validity_size);
@@ -1767,7 +1773,7 @@ int qore_buffer_node_private::detachExternalStorageImpl(QoreBufferNode* b, Excep
             }
         }
     } else {
-        root->validity_buffer.clear();
+        qore_aligned_byte_buffer_ops(root->validity_buffer).clear();
         root->null_count = 0;
     }
 
@@ -1804,7 +1810,7 @@ int qore_buffer_node_private::assignStringStorageImpl(QoreBufferNode* b, const s
         xsink->raiseException("BUFFER-RANGE-ERROR", "buffer<string> storage size overflow");
         return -1;
     }
-    b->data_buffer.resize(offsets_size + total, true);
+    qore_aligned_byte_buffer_ops(b->data_buffer).resize(offsets_size + total, true);
 
     uint64_t* offsets = qore_buffer_node_private(b).stringOffsets();
     offsets[0] = 0;

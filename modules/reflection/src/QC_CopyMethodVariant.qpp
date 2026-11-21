@@ -54,7 +54,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue CopyMethodVariant_call_impl(Lexi
     // a confusing exception
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreMethod* m = mv->getMethod();
-    if (check_variant_call(v->variant, obj, *m, xsink)) {
+    if (check_variant_call(caller, v->variant, obj, *m, xsink)) {
         return QoreValue();
     }
 

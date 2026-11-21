@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires BulkSqlUtil
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -142,6 +143,8 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
             ds.setAutoCommit(False);
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
+            # a database that cannot be connected to fails the test case (qore#6934)
+            TestRun::rethrowPrecondition(ex);
             testSkip("no DB connection: " + ex.err + ": " + ex.desc);
         }
         return ds;

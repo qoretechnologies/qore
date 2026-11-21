@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc AOT code generation and JIT native code of inline strings passed to the dataframe module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../../examples/test/TestInterpreter.qm
+
+%include ../../../examples/test/ShortStringProbeTest.qc
+
+%exec-class DataFrameShortStringAccessTest
+
+#! the dataframe module reads the strings returned by Qore code in both of their representations (qore#7062)
+/** A value holds a string of up to 6 bytes inline, with no QoreStringNode behind it; DataFrame::toTable() read the
+    SQL names that SqlUtil returns for a table that SqlUtil does not see as QoreStringNodes after checking only their
+    type, which dereferenced a null pointer for such a value (and a debug build aborted on an assertion).  The probes
+    (short-string-access/probes.q) run in each execution mode and as qcc-compiled executables.
+*/
+class DataFrameShortStringAccessTest inherits ShortStringProbeTest {
+    constructor() : ShortStringProbeTest("dataframe short string access",
+            get_script_dir() + DirSep + "short-string-access" + DirSep + "probes.q",
+            "toTable column names: [\"INSERT INTO t (a, \\\"in\\\", \\\"by\\\") VALUES (%v, %v, %v)\"] [[1, 2, 3]]\n") {
+        set_return_value(main());
+    }
+}

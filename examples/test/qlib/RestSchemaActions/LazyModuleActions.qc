@@ -1,23 +1,17 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
+# The cases of the LazyModuleActions-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase())
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires DataProvider
-%requires RestSchemaActions
-
-%exec-class LazyModuleActionsTest
 
 #! Verifies that the provider modules generating actions from REST schemas build them on first use
 /** Loading such a module registers its apps and builds no action set, and no type built from its schema; the first
     read of an app's actions builds them, once, even when several threads read them at once.  See
     @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions() "registerLazyAppActions()".
 */
-class LazyModuleActionsTest inherits QUnit::Test {
+class LazyModuleActionsBase inherits QUnit::Test {
     public {
         #! The modules registering their actions lazily, and their apps
         const Modules = {
@@ -63,6 +57,27 @@ class LazyModuleActionsTest inherits QUnit::Test {
 
         #! The module whose actions are read by concurrent threads
         const ConcurrentModule = "ExaDataProvider";
+
+        #! The modules whose cases are in part 2; the others are in part 1 (see addPartCase())
+        /** The parts take about the same time: the modules are assigned by the time that building their actions
+            takes
+        */
+        const Part2Modules = {
+            "AssemblyAiDataProvider": True,
+            "AwsTextractDataProvider": True,
+            "AzureDocumentIntelligenceDataProvider": True,
+            "AzureOpenAiDataProvider": True,
+            "BedrockDataProvider": True,
+            "CohereDataProvider": True,
+            "EasyPostDataProvider": True,
+            "GitLabDataProvider": True,
+            "IntercomDataProvider": True,
+            "JinaDataProvider": True,
+            "KlaviyoDataProvider": True,
+            "LlamaParseDataProvider": True,
+            "MistralDataProvider": True,
+            "XeroDataProvider": True,
+        };
     }
 
     private {
@@ -71,12 +86,18 @@ class LazyModuleActionsTest inherits QUnit::Test {
 
         #! the number of action sets constructed by loading each module
         hash<string, int> load_sets = {};
+
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : Test("REST-schema provider modules build their actions on first use", "1.0") {
-        addTestCase("the module list names every module with a lazy action registration", \moduleListTest());
-        addTestCase("concurrent first reads build the action sets once", \concurrentTest());
-        # every other module is loaded before any app is read, so that a read cannot load a module
+    constructor(string name, int part) : Test(name, "1.0") {
+        self.part = part;
+        addPartCase(1, "the module list names every module with a lazy action registration", \moduleListTest());
+        addPartCase(1, "the modules of part 2 have lazy action registrations", \partModulesTest());
+        addPartCase(1, "concurrent first reads build the action sets once", \concurrentTest());
+        # every other module is loaded before any app is read, so that a read cannot load a module; each part
+        # loads them all
         foreach string mod in (keys Modules) {
             if (mod == ConcurrentModule) {
                 continue;
@@ -84,9 +105,24 @@ class LazyModuleActionsTest inherits QUnit::Test {
             int before = RestSchemaActionSet::getConstructionCount();
             load_module(mod);
             load_sets{mod} = RestSchemaActionSet::getConstructionCount() - before;
-            addTestCase(mod, \moduleTest(), mod);
+            if (Part2Modules{mod}) {
+                addPartCase(2, mod, \moduleTest(), mod);
+            } else {
+                addPartCase(1, mod, \moduleTest(), mod);
+            }
         }
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! every module of part 2 is a module of the list, so that every module's case runs in one part
+    partModulesTest() {
+        assertEq((), keys (Part2Modules - keys Modules));
     }
 
     moduleListTest() {
@@ -118,7 +154,7 @@ class LazyModuleActionsTest inherits QUnit::Test {
         Counter done(threads);
         Queue results();
         for (int i = 0; i < threads; ++i) {
-            background LazyModuleActionsTest::readActions(app, ready, go, done, results);
+            background LazyModuleActionsBase::readActions(app, ready, go, done, results);
         }
         ready.waitForZero();
         go.dec();

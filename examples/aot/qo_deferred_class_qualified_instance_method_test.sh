@@ -95,8 +95,8 @@ if grep -q 'Qore::call_static_method(string,string)' "${TMP}/consumer.idx.json";
     echo "unexpected dynamic static-method fallback for deferred class-qualified instance call" >&2
     exit 1
 fi
-strings "${TMP}/qo/consumer.qo" | grep -q '@qore-aot-static-call-arg-types-v1'
-strings "${TMP}/qo/consumer.qo" | grep -q '(string,hash<auto>)'
+strings "${TMP}/qo/consumer.qo" | grep '@qore-aot-static-call-arg-types-v1' >/dev/null
+strings "${TMP}/qo/consumer.qo" | grep '(string,hash<auto>)' >/dev/null
 
 echo ""
 echo "=== Step 4: link separate .qo files and run ==="

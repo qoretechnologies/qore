@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the stack guard of small thread stacks and AOT code generation and linking
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../TestInterpreter.qm
+%requires ../../../../../qlib/FsUtil.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DestructorAtStackLimitTest
+
+#! checks that the destructor of an object released at the stack limit runs (qore#6861)
+/** The destructor runs on a slice of the stack guard: the objects released while the stack unwinds from
+    STACK-LIMIT-EXCEEDED are destroyed, also those whose destructors do I/O, on a small thread stack; a destructor
+    that recurses raises STACK-LIMIT-EXCEEDED at the floor of the slice, and when the slice is used up, the destructors
+    fail as they did without it; a sandbox's stack budget is never extended.  The script runs in every execution mode
+    and as a qcc executable (-O0 and -O3).
+*/
+class DestructorAtStackLimitTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string timeout_cmd;
+        string script;
+        TmpDir tmp("qore-destructor-at-stack-limit-");
+    }
+
+    constructor() : QUnit::Test("DestructorAtStackLimitTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        script = get_script_dir() + "destructor-at-stack-limit-script.q";
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s mode", m), sub () { testMode(m); });
+        }
+        foreach int opt in ((0, 3)) {
+            int o = opt;
+            addTestCase(sprintf("qcc -O%d executable", o), sub () { testAot(o); });
+        }
+
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        # the slice of the stack guard has been measured on these CPUs only (64-bit ARM is "arm64" on macOS); elsewhere
+        # it is not used
+        if (PlatformCPU != "x86_64" && PlatformCPU != "aarch64" && PlatformCPU != "arm64") {
+            testSkip(sprintf("no slice of the stack guard for destructors on %s", PlatformCPU));
+        }
+    }
+
+    private string prefix() {
+        return timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "120") : "";
+    }
+
+    private testMode(string mode) {
+        foreach string scenarios in (("small", "big")) {
+            string out = ExecModeHarness::run(sprintf("%s%s --enable-debug --exec-mode=%s %s %s/io-%s.txt %s; "
+                "echo EXIT=$?", prefix(), qore_bin, mode, script, tmp.path, mode, scenarios),
+                ExecModeHarness::NativeCheck::Jit);
+            check(out, mode, scenarios);
+        }
+    }
+
+    private testAot(int opt) {
+        if (!is_file(qcc_bin) && !strlen(backquote("command -v qcc 2>/dev/null || true"))) {
+            testSkip("qcc is not available");
+        }
+        string exe = sprintf("%s/destructor-at-stack-limit-O%d", tmp.path, opt);
+        string compile_out = backquote(sprintf("env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1; "
+            "echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, opt, exe, script));
+        assertRegex("EXIT=0", compile_out, "AOT compile: " + compile_out);
+        foreach string scenarios in (("small", "big")) {
+            string out = ExecModeHarness::run_any(sprintf("%senv LD_LIBRARY_PATH=%s %s %s/io-O%d.txt %s 2>&1; "
+                "echo EXIT=$?", prefix(), libqore_dir, exe, tmp.path, opt, scenarios));
+            check(out, sprintf("qcc -O%d", opt), scenarios);
+        }
+    }
+
+    #! returns the line of a scenario
+    private string getLine(string out, string name, string label) {
+        list<string> found = select out.split("\n"), $1.equalPartial(name + ": ");
+        assertEq(1, found.size(), sprintf("%s: one line for %y: %s", label, name, out));
+        return found[0] ?? "";
+    }
+
+    #! returns the groups of the regular expression in the line of a scenario
+    private list<auto> checkLine(string out, string name, string label, string rx) {
+        string line = getLine(out, name, label);
+        *list<auto> m = regex_extract(line, rx);
+        assertTrue(exists m, sprintf("%s: %s: %y does not match %y", label, name, line, rx));
+        return m ?? ();
+    }
+
+    private check(string out, string mode, string scenarios) {
+        string label = sprintf("%s (%s)", mode, scenarios);
+        assertRegex("\nDONE\n", "\n" + out, label + ": the script ran to its end: " + out);
+        assertRegex("EXIT=0\n", out, label + ": exit status: " + out);
+
+        if (scenarios == "small") {
+            # the destructors that write a file and close it ran, each once, on a small thread stack
+            list<auto> m = checkLine(out, "io", label,
+                "^io: STACK-LIMIT-EXCEEDED dtor=0 stack=[0-9]+ F=([0-9]+)/([0-9]+) file=([0-9]+)$");
+            assertGt(0, m[0].toInt(), label + ": io: objects were made");
+            assertEq(m[0], m[1], label + ": io: every destructor ran");
+            assertEq(m[0], m[2], label + ": io: every destructor wrote the file");
+            # the destructor released at the limit recursed to the floor and wrote the file there
+            m = checkLine(out, "floor", label, "^floor: STACK-LIMIT-EXCEEDED dtor=0 stack=[0-9]+ X=([0-9]+)/([0-9]+) "
+                "R=1/1 floor_io=1 file=5$");
+            assertEq(m[0], m[1], label + ": floor: every destructor ran");
+            return;
+        }
+
+        # the objects released while the stack unwinds from the limit are destroyed, and no destructor fails
+        list<auto> m = checkLine(out, "objects", label,
+            "^objects: STACK-LIMIT-EXCEEDED dtor=0 stack=[0-9]+ X=([0-9]+)/([0-9]+)$");
+        assertGt(0, m[0].toInt(), label + ": objects: objects were made");
+        assertEq(m[0], m[1], label + ": objects: every destructor ran");
+        # twice on one thread: the floor is reset when the destructors return
+        foreach int i in (0, 1) {
+            m = checkLine(out, "twice " + i, label,
+                sprintf("^twice %d: STACK-LIMIT-EXCEEDED dtor=0 X=([0-9]+)/([0-9]+)$", i));
+            assertEq(m[0], m[1], sprintf("%s: twice %d: every destructor ran", label, i));
+        }
+        # a destructor that recurses raises STACK-LIMIT-EXCEEDED at the floor, after it used the slice
+        foreach string name in (("recursion", "host after")) {
+            m = checkLine(out, name, label, sprintf("^%s: STACK-LIMIT-EXCEEDED dtor=0 stack=[0-9]+ X=([0-9]+)/([0-9]+) "
+                "D=1/1 depth=([0-9]+) err=STACK-LIMIT-EXCEEDED$", name));
+            assertEq(m[0], m[1], sprintf("%s: %s: every destructor ran", label, name));
+            assertGt(0, m[2].toInt(), sprintf("%s: %s: the destructor recursed on the slice", label, name));
+        }
+        # a chain of destructors released at the limit uses up the slice: the rest fail as without it, with their
+        # exceptions chained
+        m = checkLine(out, "chain", label,
+            "^chain: STACK-LIMIT-EXCEEDED dtor=([0-9]+) stack=[0-9]+ X=([0-9]+)/([0-9]+) N=300/([0-9]+)$");
+        assertGt(0, m[0].toInt(), label + ": chain: the destructors that failed raised exceptions");
+        assertEq(m[1], m[2], label + ": chain: the objects of the frames were destroyed");
+        assertGt(0, m[3].toInt(), label + ": chain: the destructors at the start of the chain ran");
+        assertLt(300, m[3].toInt(), label + ": chain: the slice was used up");
+        # a sandbox's stack budget is not extended: its destructor does not get the slice, nor does the destructor of a
+        # host object that the sandboxed code releases; whether the destructor can run depends on how the execution
+        # mode and the build use the stack, but its failure is reported when it cannot
+        foreach string name in (("sandbox", "host object in sandbox")) {
+            m = checkLine(out, name, label, sprintf("^%s: STACK-LIMIT-EXCEEDED dtor=[0-9]+ stack=[0-9]+ depth=[0-9]+ "
+                "err=(STACK-LIMIT-EXCEEDED)? released=(yes|no) dtor_failure=(yes|no)$", name));
+            checkDestructorFailure(label + ": " + name, m[0], m[1], m[2]);
+        }
+    }
+
+    #! checks that a destructor that the sandboxed code called and that did not run to its end reported its failure
+    /** The destructor's STACK-LIMIT-EXCEEDED is in the exception chain of the scenario in every execution mode (see
+        dtor_failure() in the script, qore#6927); whether the destructor can run, and so whether this applies,
+        depends on the stack layout of the execution mode and the build.  The destructor's recursion never returns, so
+        the destructor ran to its end only if it caught the recursion's failure.
+    */
+    private checkDestructorFailure(string label, *string err, string released, string dtor_failure) {
+        if (released == "yes" && !err) {
+            assertEq("yes", dtor_failure, label + ": the failure of the destructor that did not run to its end");
+        }
+    }
+}

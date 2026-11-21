@@ -4237,7 +4237,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         if (exists on.schema) {
             schema = on.schema;
         } else if (template) {
-            schema = template.getConnectionValue("PgsqlSqlUtilBase default schema " + dsdesc,
+            # the key identifies the connection; dsdesc, the masked description, does not (issue #6988)
+            schema = template.getConnectionValue("PgsqlSqlUtilBase default schema "
+                + AbstractSqlUtilBase::makeDatasourceKey(nds),
                 string sub () { return get_pgsql_default_schema(nds); });
         } else {
             schema = get_pgsql_default_schema(nds);

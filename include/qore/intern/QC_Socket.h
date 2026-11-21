@@ -85,6 +85,7 @@ DLLLOCAL int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int6
 #include <atomic>
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 class my_socket_priv {
 public:
@@ -537,7 +538,7 @@ public:
 
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
     DLLLOCAL void setAccept(QoreObject* o) {
-        socket->setAccept(o);
+        qore_socket_ops(socket).setAccept(o);
     }
 
     //! sets the backwards-compatible \c source and \c source_host members of an accepted socket's object

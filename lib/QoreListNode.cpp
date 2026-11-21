@@ -463,7 +463,7 @@ int qore_list_private::acceptConstructorArg(const QoreTypeInfo* vti, size_t inde
     // a value of a type that the element type does not accept raises the error that the parse raises for an argument
     // of such a type (issue #6172); another error (of the conversion of an accepted value) is raised as it is
     QoreValue err = arg_xsink.getExceptionErr();
-    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
+    if (QoreStringDataHelper(err) == "RUNTIME-TYPE-ERROR") {
         arg_xsink.clear();
         xsink->raiseException("RUNTIME-TYPE-ERROR", getConstructorArgErrorDesc(vti, index, arg_ti));
         return -1;
@@ -1645,7 +1645,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     }
 
     if (!size()) {
-        qore_string_private::get(str)->concat(&EmptyListString);
+        qore_string_private::get(str)->concatAsciiName(EmptyListString);
         return 0;
     }
     str.concat("list: (");

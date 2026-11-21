@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -118,7 +119,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("DeepSeekDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.DEEPSEEK_CONNECTION;
+        conn_name = LiveProvider::get("deepseek", "DEEPSEEK_CONNECTION", m_options.conn);
 
         addTestCase("factory registered with DataProvider", \factoryTest());
         addTestCase("app registered with action catalog",   \appCatalogTest());
@@ -147,10 +148,10 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         addTestCase("constructor injection and client isolation", \constructorTest());
         addTestCase("API failures are not replayed", \errorTest());
         addTestCase("HTTP JSON and multipart wire contracts", \wireTest());
-        if (ENV.DEEPSEEK_APIKEY) {
+        if (LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")) {
             addTestCase("live model and balance lookup", \liveAccountTest());
         }
-        if (ENV.DEEPSEEK_INFERENCE) {
+        if (LiveProvider::get("deepseek", "DEEPSEEK_INFERENCE")) {
             addTestCase("live chat, Responses, FIM, and image file lifecycle", \liveApiTest());
             addTestCase("live JSON, reasoning, and strict tools", \liveAdvancedTest());
             addTestCase("live empty Responses JSON Schema", \liveEmptySchemaTest());
@@ -297,6 +298,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         run (capped via max_tokens=16).
     */
     private liveDeepSeekTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("DeepSeek connection ping failed: %s",
@@ -682,7 +684,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
 
     private liveAccountTest() {
         DeepSeekRestConnection conn("live", "Live account verification", DeepSeekRestConnection::DefaultUrl, {},
-            {"apikey": ENV.DEEPSEEK_APIKEY});
+            {"apikey": LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")});
         assertTrue(conn.ping(True).ok);
         AbstractDataProvider root = conn.getDataProvider();
         auto models = root.getChildProvider("list-models").doRequest();
@@ -697,7 +699,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
     }
 
     private liveApiTest() {
-        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": ENV.DEEPSEEK_APIKEY});
+        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")});
         auto chat = root.getChildProvider("chat-completion").doRequest(chatRequest() + {
             "thinking": {"type": "disabled"}, "max_tokens": 32});
         assertTrue(chat.choices[0].message.content.val());
@@ -782,7 +784,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
     }
 
     private liveEmptySchemaTest() {
-        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": ENV.DEEPSEEK_APIKEY});
+        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")});
         auto response = root.getChildProvider("create-response").doRequest({"model": "deepseek-v4-flash",
             "input": "Reply with the JSON object {\"ok\":true}.", "reasoning": {"effort": "none"},
             "text": {"format": {"type": "json_schema", "name": "", "schema": {}}},
@@ -793,7 +795,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
     }
 
     private liveAdvancedTest() {
-        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": ENV.DEEPSEEK_APIKEY});
+        DeepSeekDataProvider::DeepSeekDataProvider root({"apikey": LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")});
         AbstractDataProvider chat = root.getChildProvider("chat-completion");
         auto json_reply = chat.doRequest({"model": "deepseek-v4-flash", "messages": (
             {"role": "user", "content": "Return JSON with exactly one key, total, set to 42."},),

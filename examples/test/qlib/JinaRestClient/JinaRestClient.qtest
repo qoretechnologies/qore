@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires ConnectionProvider
 %requires DataProvider
 %requires QoreRagTypes
@@ -94,7 +95,7 @@ public class JinaRestClientTest inherits QUnit::Test {
     }
 
     constructor() : Test("JinaRestClient Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.JINA_CONNECTION;
+        conn_name = LiveProvider::get("jina", "JINA_CONNECTION", m_options.conn);
 
         addTestCase("connection scheme registered",     \connectionSchemeTest());
         addTestCase("embedder factory registered",      \embedderFactoryTest());
@@ -111,7 +112,7 @@ public class JinaRestClientTest inherits QUnit::Test {
         addTestCase("polling pings retain their originating connection", \pollLifetimeTest());
         addTestCase("ping rejects malformed responses and HTTP errors", \pingFailureTest());
         addTestCase("stored connection migration and required secrets", \connectionMigrationTest());
-        if (ENV.JINAAI_APIKEY) {
+        if (LiveProvider::get("jina", "JINAAI_APIKEY")) {
             addTestCase("live valid and invalid API key pings", \livePingTest());
         }
         set_return_value(main());
@@ -241,13 +242,15 @@ public class JinaRestClientTest inherits QUnit::Test {
         scheme defaults when the connection does not set them
     */
     private liveConnectionTest() {
-        if (!conn_name && !ENV.JINAAI_APIKEY) {
+        if (!conn_name && !LiveProvider::get("jina", "JINAAI_APIKEY")) {
             testSkip("no Jina AI connection given; use -c/--connection or set "
                 "JINA_CONNECTION");
         }
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = conn_name ? get_connection(conn_name)
             : new JinaRestClient::JinaRestConnection("live-jina", "live test",
-                JinaRestClient::JinaRestConnection::DefaultUrl, {}, {"apikey": ENV.JINAAI_APIKEY});
+                JinaRestClient::JinaRestConnection::DefaultUrl, {}, {"apikey":
+                    LiveProvider::get("jina", "JINAAI_APIKEY")});
         hash<PingInfo> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("connection %y ping failed: %s", conn_name,
             ping.info ?? "no info"));
@@ -442,11 +445,12 @@ public class JinaRestClientTest inherits QUnit::Test {
     }
 
     private livePingTest() {
-        if (!ENV.JINAAI_APIKEY) {
-            testSkip("set JINAAI_APIKEY to run live authentication checks");
+        if (!LiveProvider::get("jina", "JINAAI_APIKEY")) {
+            testSkip(LiveProvider::enabled("jina") ? "set JINAAI_APIKEY to run live authentication checks"
+                : LiveProvider::skipReason("jina", "JINAAI_APIKEY"));
         }
         JinaRestClient::JinaRestConnection conn("live-jina", "live trial key",
-            JinaRestClient::JinaRestConnection::DefaultUrl, {}, {"apikey": ENV.JINAAI_APIKEY});
+            JinaRestClient::JinaRestConnection::DefaultUrl, {}, {"apikey": LiveProvider::get("jina", "JINAAI_APIKEY")});
         assertTrue(conn.ping(True).ok);
         drivePing(conn.startPollConnect());
         JinaRestClient::JinaRestConnection invalid("invalid-jina", "invalid key",

@@ -217,7 +217,7 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 
         #! the output of the case of the SqlUtil table cache and the datasource of restricted code
         const ExpectedSqlIdentity = "trusted cached: True
-same description: True
+same key: True
 cached table: \"own datasource\"
 resolver table: \"own datasource\"
 resolved table: \"own datasource\"

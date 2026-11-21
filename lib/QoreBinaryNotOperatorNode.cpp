@@ -57,7 +57,7 @@ QoreString *QoreBinaryNotOperatorNode::getAsString(bool& del, int foff, Exceptio
 }
 
 int QoreBinaryNotOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&BinaryNot_str);
+    qore_string_private::get(str)->concatAsciiName(BinaryNot_str);
     return 0;
 }
 

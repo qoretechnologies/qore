@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -93,9 +94,9 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Smartsheet client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.SMARTSHEET_CONNECTION;
+        *string conn_name = LiveProvider::get("smartsheet", "SMARTSHEET_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("smartsheet", "SMARTSHEET_CONNECTION", m_options.conn);
             if (conn instanceof SmartSheetRestClient::SmartSheetRestConnection) {
                 client = (cast<SmartSheetRestClient::SmartSheetRestConnection>(conn))
                     .getAsync(True);
@@ -104,7 +105,7 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         }
 
         # Allow direct token for testing without Qorus (matching Gorgias pattern)
-        *string token = ENV.SMARTSHEET_TOKEN;
+        *string token = LiveProvider::get("smartsheet", "SMARTSHEET_TOKEN");
         if (token) {
             client = new SmartSheetRestClient::SmartSheetRestClientIo({
                 "headers": {
@@ -304,11 +305,11 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
     # ========== INTEGRATION TESTS ==========
 
     connectionPingTests() {
-        *string conn_name = m_options.conn ?? ENV.SMARTSHEET_CONNECTION;
+        *string conn_name = LiveProvider::get("smartsheet", "SMARTSHEET_CONNECTION", m_options.conn);
         if (!conn_name) {
             testSkip("no connection name available for ping test");
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("smartsheet", "SMARTSHEET_CONNECTION", m_options.conn);
         hash<auto> ping_result = conn.ping(True);
         assertEq(True, ping_result.ok, "connection ping succeeded");
     }

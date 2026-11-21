@@ -427,6 +427,10 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - the exception that a REST method raises is given to the client without its location in the server's code or
       its call stack unless debugging is enabled (see @ref restexceptions; issue #6780)
     - fixed logging sensitive data: request arguments dispatched to subclasses were logged without masking, and the
@@ -1073,7 +1077,7 @@ public namespace RestHandler {
                 if (ex.err == "METHOD-DOES-NOT-EXIST") {
                     bool found = (ex.desc.find(sn) != -1);
                     if (found) {
-                        if (cx.hdr."transfer-encoding" == "chunked") {
+                        if (http_get_field(cx.hdr, "transfer-encoding") == "chunked") {
                             *hash<auto> trailers;
                             *data body = rh.getMessageBody(s, cx.hdr, NOTHING, True, listener, \trailers);
                             # trailers received after the chunked request body
@@ -1380,11 +1384,11 @@ public namespace RestHandler {
                 return False;
             }
             # For Connect or DataStream content types, read body data incrementally
-            *string ct = hdr."content-type";
+            *string ct = http_get_field(hdr, "content-type");
             if (ct =~ /^application\/connect\+/) {
                 return True;
             }
-            if (hdr."datastream-content-type".val()) {
+            if (http_get_field(hdr, "datastream-content-type").val()) {
                 return True;
             }
             return False;
@@ -1602,7 +1606,7 @@ public namespace RestHandler {
             # for deserialization — the REST validator doesn't know how to parse Connect frames.
             # This is analogous to HTTP/1.x chunked streams where the body is not pre-read.
             *data stream_body;
-            if (b && hdr."content-type" =~ /^application\/connect\+/) {
+            if (b && http_get_field(hdr, "content-type") =~ /^application\/connect\+/) {
                 stream_body = b;
                 body = NOTHING;
             }
@@ -1723,8 +1727,8 @@ public namespace RestHandler {
 
             # make a hash of "accept" values
             hash<auto> aih;
-            if (hdr.accept) {
-                foreach string astr in (hdr.accept) {
+            if (auto accept = http_get_field(hdr, "accept")) {
+                foreach string astr in (accept) {
                     # a value that is not valid in its encoding (request data) names no media type; it is skipped, as the
                     # substitution below cannot remove its parameters (qore#6553)
                     if (!astr.isEncodingValid()) {

@@ -87,6 +87,7 @@ examples/test/qore/misc/fork-leaf-locks.qtest
 examples/test/qore/misc/fork-thread-wait-lock.qtest
 examples/test/qore/misc/libqore-dlopen/libqore-dlopen.qtest
 examples/test/qore/misc/module-loader/aot-binary-symbol-resolution.qtest
+examples/test/qore/misc/reflection-legacy-type-vec/reflection-legacy-type-vec.qtest
 examples/test/qore/parser/modern-option-consistency/modern-option-consistency.qtest
 examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-1.qtest
 examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest

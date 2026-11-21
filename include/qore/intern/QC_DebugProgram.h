@@ -116,17 +116,16 @@ private:
       // the thread is then requested as a cancellation of the thread scoped to the program, which the next
       // cancellation point of the thread raises, whatever the order of the debugger's commands (qore#5987)
       if (xsink && xsink2.isException()) {
-         QoreValue err = xsink2.getExceptionErr();
-         if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+         // the error code and description can be inline short strings, which have no node (issue #7038)
+         if (QoreStringDataHelper(xsink2.getExceptionErr()) == "THREAD-CANCELLED") {
             if (!*xsink) {
                xsink->assimilate(xsink2);
             } else {
                // a pending request (as the one with which terminateProgram() cancels the threads, or one of the host
                // code, which is not scoped to the program) is kept as it is
                if (!qore_is_thread_cancel_requested()) {
-                  QoreValue desc = xsink2.getExceptionDesc();
-                  qore_request_current_thread_cancel(desc.getType() == NT_STRING
-                     ? desc.get<const QoreStringNode>()->c_str() : nullptr, pgm->getProgramId());
+                  QoreStringDataHelper desc(xsink2.getExceptionDesc());
+                  qore_request_current_thread_cancel(desc.c_str(), pgm->getProgramId());
                }
                // handled here: not reported as an unhandled exception of the thread
                xsink2.clear();

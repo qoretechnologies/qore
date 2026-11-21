@@ -144,6 +144,11 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - the server-side request validation reads the fields of a request, including the header parameters, which it
+      checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
+      level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
+      the HttpServer option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - a path template with a parameter is checked and its pattern compiled when the schema is loaded: one that is not
       valid (such as \c "/c/{a}/{b") raises \c INVALID-PATH-COMPONENT then (or the path is left out with
       @ref Swagger::LM_IGNORE_INVALID_PATHS "LM_IGNORE_INVALID_PATHS"), instead of failing each request to it; the
@@ -1501,10 +1506,12 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type")) {
+            # the fields of a request received are read from its "headers" key (qore#6851)
+            auto ct_field = http_get_field(headers, "content-type");
+            if (!exists ct_field) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
             }
-            string ct = headers."content-type";
+            string ct = ct_field;
             if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
                     MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
@@ -1606,7 +1613,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             "hdr": hdr,
         ));
 
-        auto content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = http_get_field(hdr, "content-type") ?? hdr."Content-Type";
         if (content.typeCode() == NT_LIST) {
             content = content[0];
         }
@@ -1617,7 +1624,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (exists response_body && content) {
             if (content =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(hdr."content-type", response_body.toString());
+                    MultiPartFormDataMessage::parseMessage(http_get_field(hdr, "content-type"),
+                        response_body.toString());
                 rv.body = map {$1.key: $1.value.body}, h.pairIterator();
                 content = MimeTypeMultipartFormData;
             } else {
@@ -3037,8 +3045,10 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
             h.params = remove h.params{query_obj};
         }
 
-        # check header parameters
-        foreach string key in (keys headers) {
+        # check header parameters; the fields of a request received are under its "headers" key, and also at its
+        # top level if they are given there (deprecated; qore#6851)
+        bool msg_fields = headers.headers.typeCode() == NT_HASH;
+        foreach string key in (keys (msg_fields ? headers.headers : headers)) {
             # find URI parameter object
             *AbstractSwaggerParameterObject po = parameters{key} ?? pio.parameters{key};
             # extra headers are OK
@@ -3046,7 +3056,14 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
                 continue;
             }
 
-            po.check(serialize, True, path, method, key, \headers{key});
+            if (msg_fields) {
+                po.check(serialize, True, path, method, key, \headers.headers{key});
+                if (headers.hasKey(key) && !HttpUtil::HttpReservedFieldNames{key}) {
+                    headers{key} = headers.headers{key};
+                }
+            } else {
+                po.check(serialize, True, path, method, key, \headers{key});
+            }
         }
         # check body parameters
         {
@@ -3138,7 +3155,7 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
 
         # check content-type
         if (exists body && mime_types) {
-            string content = headers."content-type" ?? headers."Content-Type";
+            string content = http_get_field(headers, "content-type") ?? headers."Content-Type";
             int pos = content.find(";");
             if (pos != -1)
                 content = content.substr(0, pos);
@@ -3340,8 +3357,9 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
                             h.params{ph.key} = val;
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
-                            headers{ph.key} = val;
+                        # the fields of a request received are under its "headers" key (qore#6851)
+                        if (!exists http_get_field(headers, ph.key))
+                            http_set_field(\headers, ph.key, val);
                         break;
                     case "formData":
                         if (!exists body{ph.key})
@@ -3368,7 +3386,7 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
                                 ph.key);
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
+                        if (!exists http_get_field(headers, ph.key))
                             error("SCHEMA-VALIDATION-ERROR", "request is missing required header parameter %y",
                                 ph.key);
                         break;

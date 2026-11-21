@@ -43,7 +43,7 @@ QoreString* QoreChompOperatorNode::getAsString(bool& del, int foff, ExceptionSin
 }
 
 int QoreChompOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&chomp_str);
+    qore_string_private::get(str)->concatAsciiName(chomp_str);
     return 0;
 }
 

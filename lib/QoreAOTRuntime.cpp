@@ -11119,10 +11119,13 @@ static thread_local std::string aot_module_init_context_path;
 // QoreAOTModuleInitLoaderHelper)
 static thread_local QoreProgram* aot_module_init_loader_pgm = nullptr;
 
-//! The error code of an AOT module initialization error that is not \c MODULE-LOAD-ERROR
+//! The error code of an AOT module initialization error that is not \c MODULE-LOAD-ERROR, or its argument
 /** qore_aot_module_init_v3() returns only the description of an error, which the init adapter that qcc generates in
     every module passes to qore_aot_raise_init_error() in the same thread; an error with another code records its
-    description and its code here, and qore_aot_raise_init_error() raises that description with the code.
+    description and its code here, and qore_aot_raise_init_error() raises that description with the code.  An error
+    for a module that the module requires and that cannot be loaded records the name of that module, which
+    qore_aot_raise_init_error() raises as the argument of the exception, so that the module loader can name the
+    missing module when it loads the source module instead (qore#7004).
 
     The codes:
     - \c AOT-MODULE-RESTRICTED: the module uses functionality that the restrictions inherited from the Program loading
@@ -11135,8 +11138,21 @@ struct QoreAOTModuleInitError {
     const QoreStringNode* desc = nullptr;
     //! the error code
     const char* err = nullptr;
+    //! the module that the module requires and that could not be loaded, if that is the error (qore#7004)
+    std::string dep;
 };
 static thread_local QoreAOTModuleInitError aot_module_init_error;
+
+//! Returns the description of the error for a module that the module requires and that could not be loaded
+/** Records the name of the module for qore_aot_raise_init_error(), which raises it as the argument of the
+    \c MODULE-LOAD-ERROR exception (see QoreAOTModuleInitError; qore#7004)
+*/
+static QoreStringNode* aotMissingDependencyInitError(QoreStringNode* err, const std::string& dep) {
+    aot_module_init_error.desc = err;
+    aot_module_init_error.err = "MODULE-LOAD-ERROR";
+    aot_module_init_error.dep = dep;
+    return err;
+}
 
 //! Returns the description of an initialization error that depends on the stack of this thread, with its code
 /** The code is recorded for qore_aot_raise_init_error() (see QoreAOTModuleInitError); the description starts with the
@@ -13015,6 +13031,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // loaded and their initialization runs, as in the interpreter, which loads the other modules that a module
     // requires (qore#6217)
     SimpleRefHolder<QoreStringNode> dep_err;
+    // the module of dep_err if it could not be loaded (qore#7004)
+    std::string missing_dep;
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
@@ -13052,6 +13070,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                         "and cannot be loaded without it",
                         mod_name ? mod_name : "<unknown>",
                         (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                    missing_dep = dep;
                 }
                 continue;
             }
@@ -13061,7 +13080,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     }
     if (dep_err) {
         local_pgm->waitForTerminationAndDeref(nullptr);
-        return dep_err.release();
+        return missing_dep.empty() ? dep_err.release() : aotMissingDependencyInitError(dep_err.release(),
+            missing_dep);
     }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
@@ -13935,12 +13955,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
                 "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
                 load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
-            err = new QoreStringNodeMaker(
+            err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
                 mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
-                load_result.dependency.c_str(), load_result.dependency.c_str());
+                load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
@@ -16041,12 +16061,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 "failed (%s)", mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
                 load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
-            err = new QoreStringNodeMaker(
+            err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
-                load_result.dependency.c_str(), load_result.dependency.c_str());
+                load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
@@ -16339,10 +16359,17 @@ extern "C" DLLEXPORT void qore_aot_fill_module_children(QoreModuleInfo* mod_info
     (see QoreAOTModuleInitError).
 */
 extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err) {
-    const char* code = err && err == aot_module_init_error.desc ? aot_module_init_error.err : "MODULE-LOAD-ERROR";
+    bool recorded = err && err == aot_module_init_error.desc;
+    const char* code = recorded ? aot_module_init_error.err : "MODULE-LOAD-ERROR";
+    // the module that could not be loaded is the argument of the exception (qore#7004)
+    std::string dep = recorded ? std::move(aot_module_init_error.dep) : std::string();
     aot_module_init_error = QoreAOTModuleInitError();
     if (err) {
-        xsink->raiseException(code, err);
+        if (dep.empty()) {
+            xsink->raiseException(code, err);
+        } else {
+            xsink->raiseExceptionArg(code, new QoreStringNode(dep), err);
+        }
     }
 }
 

@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires reflection
+%requires ProviderIndexUtil
+%requires ProviderIndex
+
+%exec-class ProviderIndexRestrictedSubclassTest
+
+#! Tests that the internal helpers and state of the index classes are not visible to subclasses (qore#7044)
+class ProviderIndexRestrictedSubclassTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the restrictions of the code that declares the subclasses
+        const Restrictions = PO_NO_PROCESS_CONTROL | PO_NO_FILESYSTEM | PO_NO_THREAD_CONTROL | PO_NO_EXTERNAL_INFO;
+
+        #! the classes that are checked
+        const Classes = ("ProviderIndexUtil::ProviderIndexUtil", "ProviderIndex::ProviderIndex");
+
+        #! the only methods of the classes that are visible to subclasses without being public: those that the
+        #! ProviderIndex module and the tests of the index format use
+        const SubclassHelpers = {
+            "ProviderIndexUtil::ProviderIndexUtil": ("addTypeRefs", "getStoredAppActions", "packIndexData",
+                "packStoredMetadataCacheChunk", "refersToTypeGraph", "restoreIndexedAction", "unpackIndexData",
+                "unpackMetadataCacheChunk", "writeFileAtomic"),
+            "ProviderIndex::ProviderIndex": (),
+        };
+
+        #! members that must be private:internal (methods and static members)
+        const InternalMembers = ("removeIndexFile", "removeStagingDir", "loadIndexModule", "getFileTail",
+            "setWorkerEnvironment", "installIndexState", "createMetadataDeserializeContext", "getIndexedAction",
+            "readIndexFileText", "readIndexFileBinary", "statIndexFile", "resetIndexState", "getCancelGeneration",
+            "writeWorkerFragments", "logger", "index_file_reader", "worker_processes", "cancel_generation", "index",
+            "build_mode");
+
+        #! the class and the use of each member that a subclass cannot reach (given the path "p")
+        const Members = {
+            "ProviderIndex::getCancelGeneration": ("ProviderIndex::ProviderIndex", "getCancelGeneration();"),
+            "ProviderIndex::writeWorkerFragments": ("ProviderIndex::ProviderIndex",
+                "writeWorkerFragments(<DataProviderIndexInfo>{}, {\"staging_dir\": p, \"prefix\": \"x\"});"),
+            "ProviderIndexUtil::readIndexFileText": ("ProviderIndexUtil::ProviderIndexUtil", "readIndexFileText(p);"),
+            "ProviderIndexUtil::readIndexFileBinary": ("ProviderIndexUtil::ProviderIndexUtil",
+                "readIndexFileBinary(p);"),
+            "ProviderIndexUtil::statIndexFile": ("ProviderIndexUtil::ProviderIndexUtil", "statIndexFile(p);"),
+            "ProviderIndexUtil::resetIndexState": ("ProviderIndexUtil::ProviderIndexUtil", "resetIndexState();"),
+            "ProviderIndexUtil::createMetadataDeserializeContext": ("ProviderIndexUtil::ProviderIndexUtil",
+                "createMetadataDeserializeContext();"),
+            "ProviderIndexUtil::getIndexedAction": ("ProviderIndexUtil::ProviderIndexUtil",
+                "getIndexedAction({}, <MetadataDeserializeContext>{});"),
+            "ProviderIndexUtil::index": ("ProviderIndexUtil::ProviderIndexUtil", "index = {};"),
+            "ProviderIndexUtil::build_mode": ("ProviderIndexUtil::ProviderIndexUtil", "build_mode = True;"),
+        };
+    }
+
+    private {
+        TmpDir tmp("provider-index-restricted-subclass-");
+        #! True if the process module is available, so that ProviderIndex has its worker runner
+        bool have_process;
+    }
+
+    constructor() : Test("ProviderIndexRestrictedSubclassTest", "1.0", \ARGV) {
+        try {
+            Class c = Class::forName("ProviderIndex::ProviderIndex");
+            c.getStaticMethod("runWorker");
+            have_process = True;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        addTestCase("visibility of the members", \testStructure());
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("members, " + m, sub () { testMembers(m); });
+            addTestCase("worker runner, " + m, sub () { testWorkerRunner(m); });
+            addTestCase("members at run time, " + m, sub () { testRuntime(m); });
+            addTestCase("writeFileAtomic, " + m, sub () { testWriteFileAtomic(m); });
+            addTestCase("restoreIndexedAction, " + m, sub () { testRestore(m); });
+            addTestCase("public API, " + m, sub () { testPublic(m); });
+        }
+        addTestCase("unrestricted subclasses", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! only the allowlisted helpers are visible to subclasses without being public, and no static member is
+    private testStructure() {
+        hash<string, string> access;
+        foreach string cn in (Classes) {
+            Class c = Class::forName(cn);
+            hash<string, bool> visible;
+            foreach AbstractMethodVariant v in (c.getNormalVariants() + c.getStaticVariants()
+                    + c.getConstructorVariants()) {
+                string a = v.getAccessModifierString();
+                string name = v.getMethod().getName();
+                if (a != "public" && a != "private:internal") {
+                    visible{name} = True;
+                }
+                access{name} = a;
+            }
+            assertEq(sort(SubclassHelpers{cn}), sort(keys visible) ?? (), cn + " methods visible to subclasses");
+            list<string> members = ();
+            foreach AbstractClassMember m in (c.getMembers()) {
+                string a = m.getAccessModifierString();
+                if (a != "public" && a != "private:internal") {
+                    push members, m.getName();
+                }
+                access{m.getName()} = a;
+            }
+            assertEq((), members, cn + " members visible to subclasses");
+        }
+        foreach string name in (InternalMembers) {
+            if (!have_process && !exists access{name}) {
+                continue;
+            }
+            assertEq("private:internal", access{name}, name);
+        }
+    }
+
+    #! a subclass that restricted code declares cannot reach the members, when it is parsed
+    private testMembers(string mode) {
+        string p = tmp.path + "/members-" + mode;
+        mkdir(p);
+        foreach hash<auto> i in (Members.pairIterator()) {
+            assertEq("refused", parseSubclass(mode, i.value[0], i.value[1], (i.key =~ x/::([A-Za-z_]+)$/)[0]),
+                sprintf("%s, %s", i.key, mode));
+        }
+        assertEq((), ls(p), "nothing was created, " + mode);
+    }
+
+    #! a subclass that restricted code declares cannot run the workers of an index build
+    private testWorkerRunner(string mode) {
+        if (!have_process) {
+            testSkip("the process module is not available, so ProviderIndex has no worker runner");
+        }
+        string p = tmp.path + "/worker-" + mode;
+        mkdir(p);
+        assertEq("refused", parseSubclass(mode, "ProviderIndex::ProviderIndex",
+            "runWorker({\"id\": \"x\"}, (\"/bin/sh\", \"-c\", \"touch \" + p + \"/marker\"), p, 5000, 0);",
+            "runWorker"), "runWorker, " + mode);
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndex\nclass X inherits ProviderIndex::ProviderIndex {\n"
+            "    static string t(string p) { try { call_static_method_args(\"ProviderIndex::ProviderIndex\", "
+            "\"runWorker\", ({\"id\": \"x\"}, (\"/bin/sh\", \"-c\", \"touch \" + p + \"/marker\"), p, 5000, 0)); "
+            "return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n}\n"
+            "string sub t(string p) { return X::t(p); }", "runtime");
+        string rv = pgm.callFunction("t", p);
+        assertRegex("runWorker", rv, "runWorker at run time, " + mode);
+        assertTrue(rv != "called", "runWorker refused at run time, " + mode);
+        # the worker runner writes its batch in the directory and the command creates the marker
+        assertEq((), ls(p), "nothing was created, " + mode);
+    }
+
+    #! a subclass that restricted code declares cannot reach a member resolved at run time
+    private testRuntime(string mode) {
+        string p = tmp.path + "/runtime-" + mode;
+        mkdir(p);
+        string f = p + "/file";
+        File file();
+        file.open2(f, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write("secret");
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndexUtil\nclass X inherits ProviderIndexUtil::ProviderIndexUtil {\n"
+            "    static string t(string f) { try { return call_static_method_args("
+            "\"ProviderIndexUtil::ProviderIndexUtil\", \"readIndexFileText\", (f,)); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n}\n"
+            "string sub t(string f) { return X::t(f); }", "runtime");
+        string rv = pgm.callFunction("t", f);
+        assertRegex("readIndexFileText", rv, "readIndexFileText at run time, " + mode);
+        assertTrue(rv != "secret", "the file was not read, " + mode);
+    }
+
+    #! writeFileAtomic(), which ProviderIndex uses, refuses a caller restricted from the file system
+    private testWriteFileAtomic(string mode) {
+        string p = tmp.path + "/written-" + mode;
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndex\nclass X inherits ProviderIndexUtil::ProviderIndexUtil {\n"
+            "    static string t(string p) { try { writeFileAtomic(p, \"x\"); return \"written\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n}\n"
+            "class Y inherits ProviderIndex::ProviderIndex {\n"
+            "    static string t(string p) { try { writeFileAtomic(p, \"x\"); return \"written\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n}\n"
+            "string sub x(string p) { return X::t(p); }\nstring sub y(string p) { return Y::t(p); }", "write");
+        assertEq("PERMISSION-DENIED", pgm.callFunction("x", p), "ProviderIndexUtil subclass, " + mode);
+        assertEq("PERMISSION-DENIED", pgm.callFunction("y", p), "ProviderIndex subclass, " + mode);
+        assertFalse(is_file(p), "nothing was written, " + mode);
+    }
+
+    #! restoreIndexedAction(), which the tests of the index format use, refuses code restricted from loading modules
+    #! or from reflection
+    private testRestore(string mode) {
+        Program pgm(PO_NEW_STYLE);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndexUtil\n%no-modules\n%no-reflection\n"
+            "class X inherits ProviderIndexUtil::ProviderIndexUtil {\n"
+            "    static string t() { try { restoreIndexedAction({\"app\": \"a\", \"action\": \"b\"}); "
+            "return \"restored\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n}\n"
+            "string sub t() { return X::t(); }", "restore");
+        assertEq("PERMISSION-DENIED", pgm.callFunction("t"), "restoreIndexedAction, " + mode);
+    }
+
+    #! restricted code still uses the public API of the classes
+    private testPublic(string mode) {
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndexUtil\n"
+            "bool sub t() { return ProviderIndexUtil::ProviderIndexUtil::inBuildMode(); }\n"
+            "*string sub e() { return ProviderIndexUtil::ProviderIndexUtil::getIndexReadError(); }", "public");
+        assertEq(ProviderIndexUtil::inBuildMode(), pgm.callFunction("t"), "inBuildMode(), " + mode);
+        assertEq(ProviderIndexUtil::getIndexReadError(), pgm.callFunction("e"), "getIndexReadError(), " + mode);
+    }
+
+    #! unrestricted subclasses use the helpers that stay visible, as ProviderIndex does
+    private testUnrestricted() {
+        string p = tmp.path + "/trusted";
+        UnrestrictedAccess::write(p, "trusted");
+        assertEq("trusted", File::readTextFile(p));
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("MessagePack support is not available");
+        }
+        assertEq({"a": 1}, UnrestrictedAccess::roundTrip({"a": 1}));
+    }
+
+    #! returns "refused" if restricted code cannot parse a subclass that uses the member, else the result
+    private string parseSubclass(string mode, string cls, string use, string name) {
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        try {
+            pgm.parse(sprintf("%%modern\n%%requires ProviderIndex\nclass X inherits %s {\n"
+                "    static t(string p) { %s }\n}\n", cls, use), "member");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return (ex.err == "PARSE-EXCEPTION" && regex(ex.desc, name)) ? "refused" : ex.err + ": " + ex.desc;
+        }
+    }
+
+    #! returns the names of the files in a directory
+    private static list<string> ls(string dir) {
+        Dir d();
+        d.chdir(dir);
+        return d.list() ?? ();
+    }
+}
+
+#! Gives the test access to the helpers that ProviderIndex uses
+class UnrestrictedAccess inherits ProviderIndexUtil {
+    #! Writes a file as ProviderIndex does
+    static write(string path, string contents) {
+        writeFileAtomic(path, contents);
+    }
+
+    #! Packs and unpacks index data as the workers of ProviderIndex do
+    static hash<auto> roundTrip(hash<auto> h) {
+        return unpackIndexData(packIndexData(h));
+    }
+}

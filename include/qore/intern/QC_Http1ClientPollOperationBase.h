@@ -530,6 +530,10 @@ private:
 
     std::atomic<ReqState> req_state {ReqState::IDLE};
 
+    //! The size in bytes of the part of the trailer section of the response that was read, which counts against the
+    //! maximum header size of the socket (I/O thread only; qore#6867)
+    size_t trailer_bytes = 0;
+
     //! Request-body send sub-state for full-duplex streaming (I/O thread only)
     SendState send_state = SendState::INACTIVE;
 

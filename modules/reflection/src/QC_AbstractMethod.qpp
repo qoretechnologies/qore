@@ -36,8 +36,9 @@
 #include "QC_Type.h"
 #include "QC_AbstractClass.h"
 
-int check_call(QoreObject* obj, const QoreMethod& m, ExceptionSink* xsink) {
-    if (!obj->validInstanceOf(*m.getClass())) {
+int check_call(const QoreReflectionCaller& caller, QoreObject* obj, const QoreMethod& m, ExceptionSink* xsink) {
+    // also a class inherited with private:internal, as the caller may use it (issue #6644)
+    if (!caller.canUseObjectElementClass(*obj, *m.getClass())) {
         xsink->raiseException("METHOD-ERROR", "object is of class '%s' which is not compatible with method '%s()' of class '%s'", obj->getClassName(), m.getName(), m.getClassName());
         return -1;
     }

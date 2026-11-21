@@ -67,9 +67,9 @@ echo ""
 echo "=== Step 3: verify deferred fallback kind ==="
 # The index lists only the deferred provider as a requirement; the builtin the
 # fallback dispatches through is named in the object itself.
-strings "${TMP}/qo/consumer.qo" | grep -qx 'Qore::call_function'
+strings "${TMP}/qo/consumer.qo" | grep -x 'Qore::call_function' >/dev/null
 grep -q '"kind": "function".*"qore_path": "OMQ::get_option_name"' "${TMP}/consumer.idx.json"
-if strings "${TMP}/qo/consumer.qo" | grep -qx 'Qore::call_static_method'; then
+if strings "${TMP}/qo/consumer.qo" | grep -x 'Qore::call_static_method' >/dev/null; then
     echo "unexpected static-method fallback for namespace function" >&2
     exit 1
 fi

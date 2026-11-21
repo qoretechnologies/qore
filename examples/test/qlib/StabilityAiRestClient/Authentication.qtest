@@ -4,6 +4,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires StabilityAiRestClient
 %requires HttpServer
 %requires HttpServerUtil
@@ -191,14 +192,16 @@ class StabilityAuthenticationTest inherits QUnit::Test {
     }
 
     private liveTest() {
-        if (getenv("QORE_STABILITYAI_LIVE_AUTH") != "1") {
-            testSkip("set QORE_STABILITYAI_LIVE_AUTH=1 for read-only live authentication");
+        if (LiveProvider::get("stabilityai", "QORE_STABILITYAI_LIVE_AUTH") != "1") {
+            testSkip(LiveProvider::enabled("stabilityai") ?
+                "set QORE_STABILITYAI_LIVE_AUTH=1 for read-only live authentication"
+                    : LiveProvider::skipReason("stabilityai", "QORE_STABILITYAI_LIVE_AUTH"));
         }
-        *string key = getenv("STABILITYAI_APIKEY");
+        *string key = LiveProvider::get("stabilityai", "STABILITYAI_APIKEY");
         assertTrue(key.val().toBool(), "STABILITYAI_APIKEY must be set in the private child environment");
         hash<auto> opts = {"apikey": key, "timeout": 30s, "connect_timeout": 10s};
-        if (getenv("QORE_STABILITYAI_LIVE_ORGANIZATION").val()) {
-            opts.organization = getenv("QORE_STABILITYAI_LIVE_ORGANIZATION");
+        if (LiveProvider::get("stabilityai", "QORE_STABILITYAI_LIVE_ORGANIZATION").val()) {
+            opts.organization = LiveProvider::get("stabilityai", "QORE_STABILITYAI_LIVE_ORGANIZATION");
         }
         StabilityAiRestConnection conn({"name": "5422-live", "opts": opts});
         assertTrue(conn.ping(False).ok, "real Qore connection ping authenticates");

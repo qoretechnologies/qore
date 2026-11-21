@@ -66,7 +66,7 @@ QoreString* QoreMapOperatorNode::getAsString(bool &del, int foff, ExceptionSink 
 }
 
 int QoreMapOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&map_str);
+    qore_string_private::get(str)->concatAsciiName(map_str);
     return 0;
 }
 

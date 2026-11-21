@@ -6,6 +6,7 @@
 %exec-class GeminiDataProviderTest
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires GeminiDataProvider
 %requires GeminiRestClient
 %requires RestClientIo
@@ -502,9 +503,10 @@ class GeminiDataProviderTest inherits QUnit::Test {
     }
 
     integrationTest() {
-        *string api_key = ENV.GEMINI_API_KEY;
+        *string api_key = LiveProvider::get("gemini", "GEMINI_API_KEY");
         if (!api_key) {
-            testSkip("GEMINI_API_KEY not set");
+            testSkip(LiveProvider::enabled("gemini") ? "GEMINI_API_KEY not set"
+                : LiveProvider::skipReason("gemini", "GEMINI_API_KEY"));
         }
 
         GeminiDataProvider::GeminiDataProvider live_dp({"apikey": api_key});

@@ -5,6 +5,7 @@
 %require-types
 
 %requires mongodb
+%requires ../../../examples/test/LiveProviderTest.qm
 
 # Test ObjectId creation and destruction
 printf("Testing ObjectId...\n");
@@ -17,7 +18,7 @@ printf("ObjectId test passed\n");
 
 # Test client connection
 printf("Testing connection...\n");
-string url = ENV.MONGODB_URL ?? "mongodb://localhost:27017";
+string url = LiveProvider::getService("mongodb", "MONGODB_URL") ?? "mongodb://localhost:27017";
 MongoClient client(url);
 if (!client.ping()) {
     printf("Could not connect to MongoDB\n");

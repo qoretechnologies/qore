@@ -48,7 +48,7 @@ def main():
     if config.get('name') != 'stabilityai' or config.get('type') != 'stability-ai' or \
             config['opts'].get('apikey', config['opts'].get('token')) != key:
         raise RuntimeError('named connection and private profile do not match')
-    env = dict(os.environ, QORE_STABILITYAI_LIVE_MEDIA='1', QORE_MODULE_DIR_ONLY='1',
+    env = dict(os.environ, QORE_STABILITYAI_LIVE_MEDIA='1', QORE_TEST_LIVE_PROVIDERS='stabilityai', QORE_MODULE_DIR_ONLY='1',
                QORE_STABILITYAI_LIVE_ORGANIZATION=config['opts'].get('organization', ''),
                QORE_MODULE_DIR=':'.join(str(root / path) for path in
                    ['build/qlib-qmod', 'build/modules/json', 'build/modules/i18n', 'build/modules/logger_bin',

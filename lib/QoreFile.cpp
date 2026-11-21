@@ -36,6 +36,7 @@
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <cerrno>
 #include <chrono>
@@ -798,18 +799,18 @@ int QoreFile::sync(ExceptionSink* xsink) {
     return -1;
 }
 
-void QoreFile::makeSpecial(int sfd) {
-    priv->is_open = true;
-    priv->filename.clear();
-    priv->charset = QCS_DEFAULT;
-    priv->resetDecoder();
-    priv->special_file = true;
-    priv->fd = sfd;
+void qore_file_ops::makeSpecialImpl(QoreFile* b, int sfd) {
+    b->priv->is_open = true;
+    b->priv->filename.clear();
+    b->priv->charset = QCS_DEFAULT;
+    b->priv->resetDecoder();
+    b->priv->special_file = true;
+    b->priv->fd = sfd;
 }
 
-void QoreFile::makeOwnedSpecial(int fd) {
-    makeSpecial(fd);
-    priv->owned_special = true;
+void qore_file_ops::makeOwnedSpecialImpl(QoreFile* b, int fd) {
+    qore_file_ops(b).makeSpecial(fd);
+    b->priv->owned_special = true;
 }
 
 int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink) {
@@ -845,11 +846,11 @@ int QoreFile::open(const char *fn, int flags, int mode, const QoreEncoding *cs) 
     return priv->open(fn, flags, mode, cs);
 }
 
-int QoreFile::openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs) {
+int qore_file_ops::openCheckAccessImpl(QoreFile* b, ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs) {
     if (fn && qore_qf_private::checkOpenAccess(fn, flags, xsink)) {
         return -1;
     }
-    return priv->open(fn, flags, mode, cs);
+    return b->priv->open(fn, flags, mode, cs);
 }
 
 int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, const QoreEncoding *cs) {
@@ -910,8 +911,8 @@ QoreStringNode* QoreFile::readUntil(const char* bytes, bool incl_bytes, Exceptio
     return priv->readUntil(bytes, incl_bytes, xsink);
 }
 
-QoreStringNode* QoreFile::readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
-    return priv->readUntilText(eol, incl_eol, xsink);
+QoreStringNode* qore_file_ops::readUntilTextImpl(QoreFile* b, const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
+    return b->priv->readUntilText(eol, incl_eol, xsink);
 }
 
 int QoreFile::readUntil(char byte, QoreString& str, bool incl_byte) {
@@ -1439,21 +1440,21 @@ int QoreFile::getFD() const {
 }
 
 #ifdef HAVE_TERMIOS_H
-int QoreFile::setTerminalAttributes(int action, QoreTermIOS *ios, ExceptionSink* xsink) const {
-    return priv->setTerminalAttributes(action, ios, xsink);
+int qore_file_ops::setTerminalAttributesImpl(QoreFile* b, int action, QoreTermIOS *ios, ExceptionSink* xsink) {
+    return b->priv->setTerminalAttributes(action, ios, xsink);
 }
 
-int QoreFile::getTerminalAttributes(QoreTermIOS *ios, ExceptionSink* xsink) const {
-    return priv->getTerminalAttributes(ios, xsink);
+int qore_file_ops::getTerminalAttributesImpl(QoreFile* b, QoreTermIOS *ios, ExceptionSink* xsink) {
+    return b->priv->getTerminalAttributes(ios, xsink);
 }
 #endif
 
-void QoreFile::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, with_data);
+void qore_file_ops::setEventQueueImpl(QoreFile* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFile::cleanup(ExceptionSink* xsink) {
-    priv->cleanup(xsink);
+void qore_file_ops::cleanupImpl(QoreFile* b, ExceptionSink* xsink) {
+    b->priv->cleanup(xsink);
 }
 
 QoreListNode* QoreFile::stat(ExceptionSink* xsink) const {
@@ -1491,8 +1492,8 @@ QoreObject* File::startPollRead(ExceptionSink* xsink, QoreObject* self, const ch
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_FILEPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("read-done"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("read-done"), xsink);
     }
     return rv.release();
 }
@@ -1505,7 +1506,7 @@ File::~File() {
 
 void File::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        cleanup(xsink);
+        qore_file_ops(this).cleanup(xsink);
         delete this;
     }
 }
@@ -1513,7 +1514,7 @@ void File::deref(ExceptionSink* xsink) {
 void File::deref() {
     if (ROdereference()) {
         ExceptionSink xsink;
-        cleanup(&xsink);
+        qore_file_ops(this).cleanup(&xsink);
         delete this;
     }
 }

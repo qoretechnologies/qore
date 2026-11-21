@@ -156,6 +156,17 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - the description of a datasource in messages
+      (@ref SqlUtil::AbstractSqlUtilBase::makeDatasourceDesc() "AbstractSqlUtilBase::makeDatasourceDesc()",
+      @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()",
+      @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()"), used in the \c TABLE-ERROR exceptions of the
+      driver modules and in other exceptions and logs, shows the driver, host and port of the datasource and no
+      longer its user name or database name (see
+      @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()"); the
+      option errors of a database object are tagged with it, where they were tagged with the database name; added
+      @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" for the key of
+      a connection, which keys the @ref SqlUtil::TableCache "table cache"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>)
     - added the @ref select_option_lock_wait "lock_wait" select option (\c NOWAIT, \c SKIP \c LOCKED and
       \c WAIT \c n of a locking select) with
       @ref SqlUtil::AbstractSqlUtilBase::supportsLockWait() "supportsLockWait()",
@@ -8584,41 +8595,48 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             static Mutex lck();
         }
 
-        #! Returns the cached table for the given connection description and table name, if any
+        #! Returns the cached table for the given connection key and table name, if any
         /** Declares the \c PROCESS_CONTROL domain as put() does: the table holds the connection of the code that
             cached it, and a description can be given for any connection; code restricted from the domain gets cached
             tables only through getCached(), for its own datasource (qore#6337)
+
+            @param dskey the key of the connection, as returned by
+            @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" (since
+            %SqlUtil 3.11.0; before, the description of the connection, which no longer identifies it, issue #6988)
+            @param name the table name
         */
-        static *AbstractTable get(string dsdesc, string name) [dom=PROCESS_CONTROL] {
+        static *AbstractTable get(string dskey, string name) [dom=PROCESS_CONTROL] {
             # a table cached by other code holds its connection: sandboxed code gets cached tables only through
             # getCached(), for its own datasource (qore#6747)
             if (!DataProvider::mayRegisterShared()) {
-                throw "PERMISSION-DENIED", sprintf("sandboxed code cannot read table %y of connection %y from the "
-                    "process-wide table cache; use sqlutil_get_cached_table() with its own datasource", name, dsdesc);
+                # the key is not shown, as it has the user name and the database name of the connection (issue #6988)
+                throw "PERMISSION-DENIED", sprintf("sandboxed code cannot read table %y of a connection from the "
+                    "process-wide table cache; use sqlutil_get_cached_table() with its own datasource", name);
             }
-            return TableCache::getIntern(dsdesc, name);
+            return TableCache::getIntern(dskey, name);
         }
 
-        #! Returns the cached table for the given connection description and table name, if any
-        private:internal static *AbstractTable getIntern(string dsdesc, string name) {
+        #! Returns the cached table for the given connection key and table name, if any
+        private:internal static *AbstractTable getIntern(string dskey, string name) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
-            return TableCache::cache{dsdesc}{name};
+            return TableCache::cache{dskey}{name};
         }
 
         #! Returns the cached table for the given connection, resolving and caching it first if needed
-        /** The key is the description of the connection given; used by
+        /** The key is the key of the connection given (see
+            @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()"); used by
             @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()", which resolves tables for the code
             that generates SQL, also for code restricted from the \c PROCESS_CONTROL domain of put(): such code
             gets a table from the cache only if its datasource is the one given, and a table that it resolves is
-            not cached, as the key is the description that the datasource gives (qore#6337)
+            not cached, as the key is the one that the datasource gives (qore#6337)
 
             @since %SqlUtil 3.2.0
         */
         static AbstractTable getCached(AbstractDatasource ds, string name) {
-            string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
-            *AbstractTable cached = TableCache::getIntern(dsdesc, name);
-            # the key is the description that the datasource gives, which a subclass of AbstractDatasource chooses:
+            string dskey = AbstractSqlUtilBase::makeDatasourceKey(ds);
+            *AbstractTable cached = TableCache::getIntern(dskey, name);
+            # the key is the one that the datasource gives, which a subclass of AbstractDatasource chooses:
             # code restricted from the PROCESS_CONTROL domain of put() gets only a table of its own datasource from
             # the cache, and does not fill it (qore#6337)
             # sandboxed code likewise (qore#6747)
@@ -8631,35 +8649,35 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             # resolve outside the lock; this loads the driver-specific module and can contact the server, and
             # another thread resolving the same name at the same time is resolved by putIntern()
             AbstractTable t = new Table(ds, name).getTable();
-            return restricted ? t : TableCache::putIntern(dsdesc, name, t);
+            return restricted ? t : TableCache::putIntern(dskey, name, t);
         }
 
         #! Caches the given table unless another thread cached one first; returns the table in the cache
-        static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
+        static AbstractTable put(string dskey, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
             # a table placed by sandboxed code would be given to other callers (qore#6747)
             DataProvider::checkSharedRegistration("SqlUtil table cache", "table", name);
-            return TableCache::putIntern(dsdesc, name, t);
+            return TableCache::putIntern(dskey, name, t);
         }
 
         #! Caches the given table unless another thread cached one first; returns the table in the cache
-        private:internal static AbstractTable putIntern(string dsdesc, string name, AbstractTable t) {
+        private:internal static AbstractTable putIntern(string dskey, string name, AbstractTable t) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
-            *AbstractTable cached = TableCache::cache{dsdesc}{name};
+            *AbstractTable cached = TableCache::cache{dskey}{name};
             if (cached) {
                 return cached;
             }
-            return TableCache::cache{dsdesc}{name} = t;
+            return TableCache::cache{dskey}{name} = t;
         }
 
         #! Discards cached tables; see @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()"
-        static clear(*string dsdesc, *string name) [dom=PROCESS_CONTROL] {
+        static clear(*string dskey, *string name) [dom=PROCESS_CONTROL] {
             # the cache is process-wide (qore#6747)
             DataProvider::checkSharedRegistration("SqlUtil table cache", "table", name ?? "*", True);
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
 
-            if (!exists dsdesc) {
+            if (!exists dskey) {
                 if (!name) {
                     TableCache::cache = {};
                 } else {
@@ -8670,9 +8688,9 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
                 return;
             }
             if (name) {
-                remove TableCache::cache{dsdesc}{name};
+                remove TableCache::cache{dskey}{name};
             } else {
-                remove TableCache::cache{dsdesc};
+                remove TableCache::cache{dskey};
             }
         }
     }
@@ -8784,7 +8802,7 @@ sqlutil_clear_table_cache(ds, "my_table");
         @since %SqlUtil 3.2.0
     */
     public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) [dom=PROCESS_CONTROL] {
-        TableCache::clear(ds ? AbstractSqlUtilBase::makeDatasourceDesc(ds) : NOTHING, name);
+        TableCache::clear(ds ? AbstractSqlUtilBase::makeDatasourceKey(ds) : NOTHING, name);
     }
 
     # private function used to resolve a table name to a table object
@@ -9267,8 +9285,11 @@ int num = l.size();
             The values are kept until the cache is populated again.  Like the rest of the container, the values are not
             synchronized: a cache is populated and used by one thread at a time.
 
-            @param key the key of the value; it must identify the connection (for example, by including
-            @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "the datasource description")
+            @param key the key of the value; it must identify the connection (for example, by including the key
+            given by @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()";
+            not the description given by
+            @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "AbstractSqlUtilBase::getDatasourceDesc()", which
+            is the same for all the connections of a driver to a host and port)
             @param get returns the value; called only if the cache has no value for \a key yet
 
             @return the value

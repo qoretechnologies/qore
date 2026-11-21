@@ -23,4 +23,18 @@
 
     An appender references its layout and filters, and an event its level, arguments and exception information, where
     the garbage collector can follow the references, so a cycle through any of them is collected.
+
+    A message can be logged as it is, with no formatting, with
+    @ref Qore::Logger::Logger::logPreformatted() "Logger::logPreformatted()" and
+    @ref Qore::Logger::LoggerInterface::logPreformatted() "LoggerInterface::logPreformatted()": the other logging
+    methods use the message as a format, so that a message with format characters lost them
+    (<a href="https://github.com/qoretechnologies/qore/issues/3420">issue 3420</a>).
+
+    A @ref Qore::Logger::Logger "Logger" is serialized with its level and parent: they were left out, so a
+    deserialized logger had no level of its own (qore#6839).
+
+    The file, file name and encoding of a @ref Qore::Logger::LoggerAppenderFile "LoggerAppenderFile" are
+    \c private:internal: a subclass uses @ref Qore::Logger::LoggerAppenderFile::getFile() "getFile()",
+    @ref Qore::Logger::LoggerAppenderFile::getFileName() "getFileName()" and
+    @ref Qore::Logger::LoggerAppenderFile::setFileName() "setFileName()" instead of the members (qore#6839).
 */

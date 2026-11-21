@@ -43,7 +43,7 @@ QoreString* QoreTrimOperatorNode::getAsString(bool& del, int foff, ExceptionSink
 }
 
 int QoreTrimOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-   qore_string_private::get(str)->concat(&trim_str);
+   qore_string_private::get(str)->concatAsciiName(trim_str);
    return 0;
 }
 

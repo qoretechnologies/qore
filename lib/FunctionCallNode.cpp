@@ -1255,8 +1255,10 @@ QoreValue SelfFunctionCallNode::evalUnresolvedQualified(LexicalSemanticPolicy po
     // the call is non-virtual: it calls the method of the class that it names (qc; see the deferred self calls in
     // QoreAOTRuntime.cpp), or of a class that the named class inherits
     const char* name = ns.getIdentifier();
+    // by identity: a class with the same name and signature as a class of the object's hierarchy is another class
+    // (qore#7036)
     bool priv;
-    if (!qc || !self->getClass()->getClass(*qc, priv)) {
+    if (!qc || !qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
         xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
             "not inherit the class of the call", ns.ostr, self->getClassName());
         return QoreValue();
@@ -2227,23 +2229,34 @@ QoreValue MethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject* o, Exce
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n,
+        qore_type_t t, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
    // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
    RuntimeConfig& rc = rc_get_current_ref();
    QoreRcCallSiteHelper call_site(rc, loc);
-   if (n.isNothing() && qc != QC_PSEUDONOTHING)
+   // the type is the caller's (QoreDotEvalOperatorNode::evalWithBase())
+   if (t == NT_NOTHING && qc != QC_PSEUDONOTHING)
       return qore_class_private::get(*QC_PSEUDONOTHING)->evalPseudoMethodWithPolicy<Lexical>(policy, n, method->getName(), args, rc, xsink);
    else
       return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<Lexical>(policy, method, variant, n, args, rc, xsink);
 }
 
-QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
-    return execPseudoImpl<false>({}, n, xsink);
+bool MethodCallNode::pseudoAcceptsTypeSlow(qore_type_t t) const {
+    if (!qore_pseudo_class_accepts_type(qc, t)) {
+        return false;
+    }
+    pseudo_accepted_type.store(t, std::memory_order_relaxed);
+    return true;
 }
 
-QoreValue MethodCallNode::execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
-    return execPseudoImpl<true>(policy, n, xsink);
+QoreValue MethodCallNode::execPseudo(const QoreValue n, qore_type_t t, ExceptionSink* xsink) const {
+    return execPseudoImpl<false>({}, n, t, xsink);
+}
+
+QoreValue MethodCallNode::execPseudo(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
+        ExceptionSink* xsink) const {
+    return execPseudoImpl<true>(policy, n, t, xsink);
 }
 
 AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {

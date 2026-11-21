@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -97,13 +98,14 @@ public class SegmentDataProviderTest inherits QUnit::Test {
     #! Sets up the Segment client for integration tests
     private setupConnection() {
         if (m_options.conn) {
+            # live-provider-optin: the connection name comes only from the test's own command line (-c)
             AbstractConnection conn = get_connection(m_options.conn);
             client = conn.getAsync();
             return;
         }
 
-        *string token = m_options.token ?? ENV.SEGMENT_API_TOKEN;
-        *string region = m_options.region ?? ENV.SEGMENT_REGION ?? "us";
+        *string token = LiveProvider::get("segment", "SEGMENT_API_TOKEN", m_options.token);
+        *string region = m_options.region ?? LiveProvider::get("segment", "SEGMENT_REGION") ?? "us";
 
         if (!token) {
             if (m_options.verbose) {
