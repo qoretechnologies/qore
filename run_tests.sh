@@ -1498,13 +1498,13 @@ TEST_STACK_CAPTURE_TOTAL=${QORE_TEST_STACK_CAPTURE_TOTAL:-120}
 # the watchdog, which then never ended the test, and the timeout command takes 0 for no limit
 if ! stack_number=`expr "x$TEST_STACK_CAPTURE_WAIT" : 'x0*\([1-9][0-9]\{0,8\}\)$'`; then
     echo "run_tests.sh: QORE_TEST_STACK_CAPTURE_WAIT=$TEST_STACK_CAPTURE_WAIT is not a whole number of" \
-        "seconds of at least 1: 30 is used" >&2
+        "seconds from 1 to 999999999: 30 is used" >&2
     stack_number=30
 fi
 TEST_STACK_CAPTURE_WAIT=$stack_number
 if ! stack_number=`expr "x$TEST_STACK_CAPTURE_TOTAL" : 'x0*\([1-9][0-9]\{0,8\}\)$'`; then
     echo "run_tests.sh: QORE_TEST_STACK_CAPTURE_TOTAL=$TEST_STACK_CAPTURE_TOTAL is not a whole number of" \
-        "seconds of at least 1: 120 is used" >&2
+        "seconds from 1 to 999999999: 120 is used" >&2
     stack_number=120
 fi
 TEST_STACK_CAPTURE_TOTAL=$stack_number
@@ -1686,19 +1686,29 @@ $2
 # Linux, where BusyBox ps has no -p
 process_command_line() {
     if [ -r /proc/self/cmdline ]; then
-        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat 2>/dev/null < /proc/$1/cmdline | tr '\0' ' ' | sed 's/ $//'
+        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat /proc/$1/cmdline 2>/dev/null | tr '\0' ' ' | sed 's/ $//'
     else
         $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -ww -o command= -p $1 2>/dev/null
     fi
 }
 
-# Returns 0 if the given process exists (a zombie too)
-process_exists() {
+# Returns 0 if the given process has ended: it is gone, or a zombie (or dead) that its parent has not reaped yet, to
+# which a debugger cannot attach either (gdb then prints the same notice as for a refused attach)
+process_ended() {
     if [ -r /proc/self/stat ]; then
-        [ -d /proc/$1 ]
+        # the file is an argument, so that its open is limited too; the state follows the command name, which is in
+        # parentheses and may contain either
+        stack_stat=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat /proc/$1/stat 2>/dev/null`
+        stack_state=${stack_stat##*) }
+        stack_state=${stack_state%% *}
     else
-        [ -n "`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -o pid= -p $1 2>/dev/null`" ]
+        stack_state=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -o stat= -p $1 2>/dev/null`
+        stack_state=`printf '%s' "$stack_state" | tr -d ' '`
     fi
+    case "$stack_state" in
+        ''|Z*|X*|x*) return 0 ;;
+    esac
+    return 1
 }
 
 # Runs gdb or eu-stack (the first argument) on the given process with the given time limit in seconds through the CI
@@ -1707,6 +1717,10 @@ process_exists() {
 # runner's user).  The answer comes through a FIFO in the runner's own directory, which the helper opens as the
 # runner's user.
 runs_stack_helper() {
+    # the helper takes a limit of at most 300 s (see ci-stack-capture.sh)
+    if [ $3 -gt 300 ]; then
+        set -- $1 $2 300
+    fi
     stack_reply="${TEST_EVENT_DIR:-${TMPDIR:-/tmp}}/stack-reply.$$"
     rm -f "$stack_reply" "$stack_reply.out"
     if ! mkfifo -m 600 "$stack_reply" 2>/dev/null; then
@@ -1721,14 +1735,14 @@ runs_stack_helper() {
             "as the runner's user ***"
         return 125
     fi
-    $TIMEOUT_CMD -s KILL $(($3 + 15)) cat "$stack_reply" > "$stack_reply.out" 2>/dev/null
+    $TIMEOUT_CMD -s KILL $(($3 + 30)) cat "$stack_reply" > "$stack_reply.out" 2>/dev/null
     rm -f "$stack_reply"
     grep -v '^qore-stack-capture-status: ' "$stack_reply.out" 2>/dev/null
     stack_status=`sed -n 's/^qore-stack-capture-status: \([0-9][0-9]*\)$/\1/p' "$stack_reply.out" 2>/dev/null | \
         tail -1`
     rm -f "$stack_reply.out"
     if [ -z "$stack_status" ]; then
-        echo "*** the stack capture helper did not answer within $(($3 + 15))s ***"
+        echo "*** the stack capture helper did not answer within $(($3 + 30))s ***"
         return 137
     fi
     return $stack_status
@@ -1759,20 +1773,30 @@ runs_stack_tool() {
     esac
 }
 
-# Returns 0 if the given output of a stack tool shows that the system refused to let it attach to the given process,
-# and then prints why, in one line, with the processes given after it, which are not captured (see above): on Linux,
-# ptrace's EPERM ("ptrace: Operation not permitted." from gdb, "Operation not permitted" from eu-stack), which yama's
-# ptrace_scope, or the container's seccomp profile or capabilities, decide for every process alike; on macOS, lldb's
-# "Not allowed to attach to process", which the system decides for the debugger (developer tools access) and for the
-# process (a system binary, or one built with the hardened runtime)
-stack_attach_refused() {
-    stack_refused_out=$1
-    stack_refused_pid=$2
-    shift 2
+# Returns 0 if the given output of a stack tool shows that the system refused to let it attach, whatever the tool's
+# exit code (gdb 17 prints "Could not attach to process.  ..." and "ptrace: <error>." and exits with 0): on Linux,
+# gdb's "ptrace: " and "Could not attach to process" lines, eu-stack's error for its attach, or the CI job's helper's
+# "ptrace restricted" refusal (see runs_stack_helper()); on macOS, lldb's "error: attach failed: ... Not allowed to
+# attach to process".  The patterns are anchored at the start of a line, so that a stack does not match them.  A
+# process that has ended gives the same lines ("ptrace: No such process."): the caller checks that first.
+stack_attach_failed() {
     if [ -r /proc/self/stat ]; then
-        # (or the CI job's helper's refusal for the same reason; see runs_stack_helper())
-        grep -q -e "Operation not permitted" -e "^qore-stack-capture: refused: ptrace restricted" \
-            "$stack_refused_out" 2>/dev/null || return 1
+        grep -q -E '^(ptrace: |Could not attach to process|eu-stack: .*(Operation not permitted|Permission denied))' \
+            "$1" 2>/dev/null \
+            || grep -q '^qore-stack-capture: refused: ptrace restricted' "$1" 2>/dev/null
+    else
+        grep -q -E '^error: attach failed: .*Not allowed to attach to process' "$1" 2>/dev/null
+    fi
+}
+
+# Prints why the system refused to let a stack tool attach to the given process, in one line, with the processes given
+# after it, which are not captured (see above): on Linux, yama's ptrace_scope, or the container's seccomp profile or
+# capabilities, decide for every process alike; on macOS, the system decides for the debugger (developer tools access)
+# and for the process (a system binary, or one built with the hardened runtime)
+stack_attach_refused() {
+    stack_refused_pid=$1
+    shift
+    if [ -r /proc/self/stat ]; then
         stack_scope=`cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null`
         case "$stack_scope" in
             1)
@@ -1786,12 +1810,10 @@ stack_attach_refused() {
         echo "*** ptrace restricted: yama ptrace_scope=${stack_scope:-unset}, no stacks captured (processes $*):" \
             "$stack_why ***"
     else
-        grep -q "Not allowed to attach to process" "$stack_refused_out" 2>/dev/null || return 1
         echo "*** ptrace restricted: the system does not allow lldb to attach to process $stack_refused_pid, no" \
             "stacks captured (processes $*): it allows a debugger to attach only with developer tools access" \
             "(DevToolsSecurity), and never to a system binary or a program built with the hardened runtime ***"
     fi
-    return 0
 }
 
 # Prints the native call stacks of every process of the given test process (see above).  It cannot fail the watchdog,
@@ -1827,7 +1849,7 @@ capture_descendant_stacks() {
     stack_refused=0
     for pid in $stack_pids; do
         printf '%s\n' "*** native call stacks of process $pid (a process of test $1): `process_command_line $pid` ***"
-        if ! process_exists $pid; then
+        if process_ended $pid; then
             echo "*** process $pid has ended ***"
             stack_secs=""
             continue
@@ -1859,21 +1881,27 @@ capture_descendant_stacks() {
             stack_limit=$stack_secs
             stack_secs=""
             case $stack_rc in
-                0)
-                    stack_done=1
-                    break
-                    ;;
                 124|137)
                     echo "*** process $pid: $tool did not end within ${stack_limit}s and was killed ***"
                     stack_done=1
                     break
                     ;;
             esac
-            # an attach that the system refuses is refused for the other processes and tools too: one line says so,
-            # and no other is tried, so a test whose stacks cannot be read does not report it for each of them
-            if stack_attach_refused "$stack_out" $pid `printf '%s\n' $stack_pids | awk -v pid=$pid '
-                    $1 == pid { found = 1 } found'`; then
+            # An attach that the system refuses, whatever the tool's exit code, is refused for the other processes and
+            # tools too: one line says so, and no other is tried, so a test whose stacks cannot be read does not report
+            # it for each of them.  A process that ended meanwhile gives the same notice, and is reported as ended.
+            if stack_attach_failed "$stack_out"; then
+                if process_ended $pid; then
+                    echo "*** process $pid has ended ***"
+                    stack_done=1
+                    break
+                fi
+                stack_attach_refused $pid `printf '%s\n' $stack_pids | awk -v pid=$pid '$1 == pid { found = 1 } found'`
                 stack_refused=1
+                break
+            fi
+            if [ $stack_rc -eq 0 ]; then
+                stack_done=1
                 break
             fi
             echo "*** process $pid: $tool failed (exit code $stack_rc) ***"

@@ -71,6 +71,13 @@ for child in children:
     child.wait()
 """
 
+# gdb 17's notice of an attach that ptrace refused (Ubuntu's GNU gdb 17.1, as the CI images have it), after which it
+# exits with 0
+GDB17_REFUSED = ("Could not attach to process.  If your uid matches the uid of the target\n"
+                 "process, check the setting of /proc/sys/kernel/yama/ptrace_scope, or try\n"
+                 "again as the root user.  For more details, see /etc/sysctl.d/10-ptrace.conf\n"
+                 "ptrace: Inappropriate ioctl for device.")
+
 # the frame of a read(): gdb's "read ()" or "__GI___libc_read", eu-stack's "read", lldb's "`read + 8", sample's
 # "read  (in libsystem_kernel.dylib)" or "__read_nocancel"; not "Thread" or "pthread_..."
 READ_FRAME = re.compile(r"(?<![A-Za-z])read(_nocancel)?\b")
@@ -97,8 +104,9 @@ class StacksCase(unittest.TestCase):
     """What the cases have in common: a run of TEST, and the parts of its output"""
 
     def run_test(self, children=1, jobs=1, scripts=None, harness_limit=120, detached=False, **variables):
-        """Runs TEST with the given number of children (detached: adopted by another process); returns the test's output, the children's process IDs, the
-        runner's result, the seconds the run took and the tree's root (for the files of the stand-ins)
+        """Runs TEST with the given number of children (detached: adopted by another process); returns the test's
+        output, the children's process IDs, the runner's result, the seconds the run took and the tree's root (for the
+        files of the stand-ins)
 
         scripts: stand-in commands put on PATH, {name: source}, with {latch} for a FIFO that nobody writes and {calls}
         for a file to which a stand-in may append
@@ -207,12 +215,13 @@ class DescendantStacksTest(StacksCase):
         # ended; "30s" dropped the limit of each capture
         blocks = '#!/bin/sh\necho "$0 $$" >> "{calls}"\nread line < "{latch}"\n'
         for wait, total, limit, messages in (
-                ("30s", "2m", 30, ("QORE_TEST_STACK_CAPTURE_WAIT=30s is not a whole number of seconds of at least 1: "
-                                   "30 is used",
-                                   "QORE_TEST_STACK_CAPTURE_TOTAL=2m is not a whole number of seconds of at least 1: "
-                                   "120 is used")),
-                ("2", "1.5", 2, ("QORE_TEST_STACK_CAPTURE_TOTAL=1.5 is not a whole number of seconds of at least 1: "
-                                 "120 is used",)),
+                ("30s", "2m", 30, ("QORE_TEST_STACK_CAPTURE_WAIT=30s is not a whole number of seconds from 1 to "
+                                   "999999999: 30 is used",
+                                   "QORE_TEST_STACK_CAPTURE_TOTAL=2m is not a whole number of seconds from 1 to "
+                                   "999999999: 120 is used")),
+                ("2", "1.5", 2, ("QORE_TEST_STACK_CAPTURE_TOTAL=1.5 is not a whole number of seconds from 1 to "
+                                 "999999999: 120 is used",)),
+                ("1000000000", "3", 3, ("QORE_TEST_STACK_CAPTURE_WAIT=1000000000 is not a whole number of seconds",)),
                 ("0", "3", 3, ("QORE_TEST_STACK_CAPTURE_WAIT=0 is not",)),
                 ("x", "03", 3, ("QORE_TEST_STACK_CAPTURE_WAIT=x is not",)),
                 ("02", "-1", 2, ("QORE_TEST_STACK_CAPTURE_TOTAL=-1 is not",))):
@@ -291,7 +300,8 @@ class DescendantStacksTest(StacksCase):
         # no other process or tool is tried, and the test is ended as usual.  The stand-ins are the default tools: on
         # Linux, gdb reports EPERM as gdb does; on macOS, sample fails and lldb reports its refusal as lldb does.  A
         # debugger run on a core (no -p; see test_a_capture_that_hangs_is_killed_at_its_limit) does nothing.
-        record = '#!/bin/sh\ncase "$0 $*" in *sample*|*" -p "*) ;; *) exit 0 ;; esac\necho "${{0##*/}} $*" >> "{calls}"\n'
+        record = ('#!/bin/sh\ncase "$0 $*" in *sample*|*" -p "*) ;; *) exit 0 ;; esac\n'
+                  'echo "${{0##*/}} $*" >> "{calls}"\n')
         if sys.platform == "darwin":
             scripts = {
                 "sample": record + 'echo "sample cannot examine process $1"\nexit 1\n',
@@ -301,7 +311,8 @@ class DescendantStacksTest(StacksCase):
             refusing = ["sample", "lldb"]
         else:
             scripts = {
-                "gdb": record + 'echo "ptrace: Operation not permitted."\nexit 1\n',
+                # gdb 17's notice and exit code: 0
+                "gdb": record + "printf '%s\\n' '" + GDB17_REFUSED + "'\nexit 0\n",
                 "eu-stack": record + 'echo "stacks from eu-stack"\n',
             }
             refusing = ["gdb"]
@@ -376,22 +387,34 @@ class LinuxScanAndHelperTest(StacksCase):
             path.chmod(0o755)
         fifo = directory / "requests"
         os.mkfifo(fifo, 0o600)
+        (directory / "work").mkdir(mode=0o700)
         helper_env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ.get("PATH", os.defpath))
         helper_env.update(env or {})
         self.helper_log = open(directory / "helper.log", "w+")
         self.addCleanup(self.helper_log.close)
         helper = start_in_session(["sh", str(HELPER), "serve", subprocess.run(
-            ["id", "-un"], capture_output=True, text=True).stdout.strip(), str(fifo)], env=helper_env,
+            ["id", "-un"], capture_output=True, text=True).stdout.strip(), str(directory)], env=helper_env,
             stdin=subprocess.DEVNULL, stdout=self.helper_log, stderr=subprocess.STDOUT)
         self.addCleanup(end_session, helper)
+        # an open for writing returns once the helper has opened its FIFO (it holds it open from then on, so the writes
+        # of send() never meet a FIFO without a reader); limited, for a helper that does not start
+        subprocess.run(["timeout", "30", "sh", "-c", ': > "$1"', "sh", str(fifo)], check=True)
         return fifo
+
+    def send(self, fifo, line):
+        """Writes a line to the helper's FIFO; fails at once (ENXIO) if no helper reads it, as when a helper did not
+        start, rather than block: a blocked write left the case and the processes it started running"""
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            os.write(fd, (line + "\n").encode())
+        finally:
+            os.close(fd)
 
     def ask(self, fifo, request, directory):
         """Sends the helper a request whose reply is a FIFO in the given directory; returns the answer"""
         reply = Path(directory) / ("reply%d" % time.monotonic_ns())
         os.mkfifo(reply, 0o600)
-        with open(fifo, "w") as f:
-            f.write(request.replace("{reply}", str(reply)) + "\n")
+        self.send(fifo, request.replace("{reply}", str(reply)))
         # the helper opens the reply for writing once it answers; the read ends when it has written all of it
         result = subprocess.run(["timeout", "30", "cat", str(reply)], capture_output=True, text=True)
         return result.stdout
@@ -411,14 +434,79 @@ class LinuxScanAndHelperTest(StacksCase):
             # the answers' FIFOs are gone
             self.assertEqual([], list(root.glob("tmp/qore-test-events.*/stack-reply*")))
 
+    @staticmethod
+    def owner(pid):
+        try:
+            return os.stat("/proc/%d" % pid).st_uid
+        except OSError:
+            return None
+
+    def test_the_helper_captures_a_process_in_the_group_of_a_marked_one(self):
+        # a test leads its process group; a process it started with an environment of its own (env -i) has no mark
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            fifo = self.start_helper(directory)
+            latch = Path(directory) / "latch"
+            os.mkfifo(latch)
+            # the leader carries the mark and starts an unmarked child in its group, then both block on the latch
+            leader = start_in_session(["sh", "-c", 'env -i sh -c "echo \\$\\$; exec 3<>$1; read x <&3" sh "$1" & '
+                                       'wait', "sh", str(latch)],
+                                      env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.7"), stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, text=True)
+            self.addCleanup(end_session, leader)
+            child = int(leader.stdout.readline())
+            self.assertEqual(os.getpgid(leader.pid), os.getpgid(child))
+            answer = self.ask(fifo, "%d 5 77.7 gdb {reply}" % child, directory)
+            self.assertIn("the helper ran gdb ", answer)
+            self.assertIn(" -p %d " % child, answer)
+            self.assertTrue(answer.endswith("qore-stack-capture-status: 0\n"), answer)
+            # another mark: refused
+            answer = self.ask(fifo, "%d 5 77.8 gdb {reply}" % child, directory)
+            self.assertIn("refused: process %d is not a process of the test with mark 77.8" % child, answer)
+
+    def test_the_helper_sends_nothing_of_a_process_that_changed_during_the_capture(self):
+        # The process executes another program during the attach (as one that executes a set-user-ID program would):
+        # the helper's stand-in gdb releases it from its first latch, and returns once the new program has opened the
+        # second one; the output, which would be the new program's, is not sent
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            first = Path(directory) / "first"
+            second = Path(directory) / "second"
+            os.mkfifo(first)
+            os.mkfifo(second)
+            fifo = self.start_helper(directory)
+            (Path(directory) / "helper-bin" / "gdb").write_text(
+                '#!/bin/sh\necho released > "%s"\nexec 3> "%s"\necho "stacks of the other program"\n'
+                % (first, second))
+            target = start_in_session(["sh", "-c", 'read x < "$1"; exec cat "$2"', "sh", str(first), str(second)],
+                                      env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.9"),
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.addCleanup(end_session, target)
+            answer = self.ask(fifo, "%d 5 77.9 gdb {reply}" % target.pid, directory)
+            self.assertEqual("qore-stack-capture: refused: process %d changed during the capture\n"
+                             "qore-stack-capture-status: 126\n" % target.pid, answer)
+
     def test_the_helper_refuses_any_request_but_a_test_s_process(self):
         with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
             fifo = self.start_helper(directory)
             # a process of the user without a test's mark: this harness
             me = os.getpid()
-            for request, why in (
-                    ("%d 5 1.1 gdb {reply}" % me, "process %d is not a process of the test with mark 1.1" % me),
-                    ("1 5 1.1 gdb {reply}", "process 1 is not a process of the runner's user"),
+            # a process that has ended (and been reaped), and a zombie, which are no restriction of ptrace
+            ended = subprocess.Popen(["true"])
+            ended.wait()
+            zombie = subprocess.Popen(["true"])
+            self.addCleanup(zombie.wait)
+            os.waitid(os.P_PID, zombie.pid, os.WEXITED | os.WNOWAIT)
+            cases = [
+                ("%d 5 1.1 gdb {reply}" % me, "process %d is not a process of the test with mark 1.1" % me),
+                ("%d 5 1.1 gdb {reply}" % ended.pid, "process %d has ended" % ended.pid),
+                ("%d 5 1.1 gdb {reply}" % zombie.pid, "process %d has ended" % zombie.pid),
+            ]
+            # a process of another user, if there is one
+            other = next((pid for pid in sorted(int(e) for e in os.listdir("/proc") if e.isdigit())
+                          if self.owner(pid) not in (None, os.geteuid())), None)
+            if other is not None:
+                cases.append(("%d 5 1.1 gdb {reply}" % other,
+                              "process %d is not a process of the runner's user" % other))
+            for request, why in cases + [
                     ("x 5 1.1 gdb {reply}", "the process ID is not a number"),
                     ("01 5 1.1 gdb {reply}", "the process ID is not a number"),
                     ("1234567890 5 1.1 gdb {reply}", "the process ID is not a number"),
@@ -426,15 +514,14 @@ class LinuxScanAndHelperTest(StacksCase):
                     ("%d 301 1.1 gdb {reply}" % me, "the time limit is not 1 to 300 seconds"),
                     ("%d 5 a.1 gdb {reply}" % me, "the mark is not a test's"),
                     ("%d 5 1.1 sh {reply}" % me, "the tool is neither gdb nor eu-stack"),
-                    ("%d 5 1.1 /bin/sh {reply}" % me, "the tool is neither gdb nor eu-stack")):
+                    ("%d 5 1.1 /bin/sh {reply}" % me, "the tool is neither gdb nor eu-stack")]:
                 with self.subTest(request=request):
                     answer = self.ask(fifo, request, directory)
                     self.assertEqual("qore-stack-capture: refused: %s\nqore-stack-capture-status: 126\n" % why,
                                      answer)
             # a request it cannot answer: logged, and the helper goes on
             for request in ("%d 5 1.1 gdb relative/reply" % me, "%d 5 1.1 gdb /tmp/a;b" % me, "%d 5 1.1 gdb" % me):
-                with open(fifo, "w") as f:
-                    f.write(request + "\n")
+                self.send(fifo, request)
             answer = self.ask(fifo, "%d 5 1.1 sh {reply}" % me, directory)
             self.assertIn("refused", answer)
             self.helper_log.seek(0)
@@ -458,7 +545,8 @@ class LinuxScanAndHelperTest(StacksCase):
                     printf 'qore-stack-capture: refused: ptrace restricted: the helper may not read %s\\n%s\\n' \
                         "the environment of process $pid (it has no CAP_SYS_PTRACE)" \
                         "qore-stack-capture-status: 126" > "$reply"
-                done""", "sh", str(fifo), str(requests)], stdin=subprocess.DEVNULL)
+                done""", "sh", str(fifo), str(requests)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
             self.addCleanup(end_session, helper)
             output, pids, result, elapsed, root = self.run_test(
                 children=2, scripts={"gdb": '#!/bin/sh\necho "the runner ran gdb $*"\n'},
@@ -484,6 +572,59 @@ class LinuxScanAndHelperTest(StacksCase):
                           % fifo, stacks)
             self.assertIn("the runner ran gdb", stacks)
             self.assertLess(elapsed, LIMIT + 25, output)
+
+    def test_a_zombie_is_reported_as_ended_and_not_as_a_refused_attach(self):
+        # gdb 17 prints the same notice for a zombie as for a refused attach ("Could not attach to process", exit 0):
+        # a child that the test has not reaped is reported as ended, and the next process is still captured
+        with tempfile.TemporaryDirectory(prefix="qore-runner-stacks-") as directory:
+            tree = RunnerTree(directory)
+            latch = tree.root / "latch"
+            os.mkfifo(latch)
+            tree.add_test("zombie.qtest", f"""\
+                # test-timeout: {LIMIT}
+                import os
+                import subprocess
+                import sys
+                zombie = subprocess.Popen(["true"])
+                os.waitid(os.P_PID, zombie.pid, os.WEXITED | os.WNOWAIT)
+                print("zombie %d" % zombie.pid, flush=True)
+                child = subprocess.Popen([sys.executable, "-c",
+                                          "import os, sys; os.read(os.open(sys.argv[1], os.O_RDWR), 1)",
+                                          {str(latch)!r}])
+                print("child %d" % child.pid, flush=True)
+                child.wait()
+                """)
+            # A gdb that ends the process during its attach, and then prints gdb 17's notice, as for a refused attach.
+            # It prints the notice only once the process has exited (its pidfd is readable): kill() only queues the
+            # signal, and a stand-in that printed at once let the runner find the process still running (seen once in
+            # about 35 runs on a loaded host; right after kill -KILL a blocked Python process was still running in
+            # 1 of 200 trials), which it then took for a refused attach.
+            tree.write_script("gdb", f"""\
+                #!{sys.executable}
+                import os
+                import select
+                import signal
+                import sys
+                args = sys.argv[1:]
+                if "-p" not in args:
+                    sys.exit(0)
+                pid = int(args[args.index("-p") + 1])
+                with open({str(tree.root / "calls")!r}, "a") as f:
+                    f.write("attached to %d\\n" % pid)
+                fd = os.pidfd_open(pid)
+                os.kill(pid, signal.SIGKILL)
+                select.select([fd], [], [])
+                print({GDB17_REFUSED!r})
+                """)
+            result = tree.run(QORE_TEST_STACK_TOOLS="gdb")
+            output = RunnerTree.sections(result.output)["zombie.qtest"]
+            zombie = int(re.search(r"^zombie (\d+)$", output, re.M).group(1))
+            child = int(re.search(r"^child (\d+)$", output, re.M).group(1))
+            # the zombie is found before any attach; the process that ended during the attach after it
+            self.assertIn("*** process %d has ended ***" % zombie, output)
+            self.assertIn("*** process %d has ended ***" % child, output)
+            self.assertNotIn("ptrace restricted", output)
+            self.assertEqual(["attached to %d" % child], (tree.root / "calls").read_text().splitlines())
 
     def test_a_scan_of_proc_that_blocks_is_bounded(self):
         # A read of /proc/<pid>/environ waits while the process holds the lock of its memory map (D state); the scan

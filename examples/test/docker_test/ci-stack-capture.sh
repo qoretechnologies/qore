@@ -12,32 +12,42 @@
 # Trust boundary: the helper runs as root and reads requests from a FIFO that only root and the runner's group can
 # write (mode 0620 in a directory of root's own, mode 0711).  A request is one line, "<pid> <seconds> <mark> <tool>
 # <reply>", and nothing in it is ever run or used as a path by root:
-# - <pid> must be a process of the runner's user that carries QORE_TEST_PROCESS_MARK=<mark> in its environment, or
-#   that is in the process group of such a process (a test leads its group): a process of a test, never root's or
-#   another user's, nor any process of the runner's user outside the tests;
 # - <seconds> is the capture's time limit (1 to 300), <mark> has the runner's form (<runner pid>.<test number>), and
-#   <tool> names one of the fixed commands below (gdb or eu-stack, with fixed options), which root runs under
-#   "timeout -s KILL <seconds>";
+#   <tool> names one of the fixed commands below (gdb or eu-stack, with fixed options and gdb's auto-loading off),
+#   which root runs under "timeout -s KILL <seconds>";
 # - <reply> is the absolute path of the FIFO where the runner reads the answer; it is opened by a process of the
 #   runner's user (gosu), never by root, so the request can only reach files that the runner's user could write
-#   itself, and no file in the runner's directories is owned by root.
-# A request that fails these checks is answered with the reason (or not at all, if <reply> is not an absolute path
-# of plain characters).  What remains open: the process ID is checked just before the attach, and a process that took
-# the ID of a process of the test in that instant would be attached to, if it is a process of the runner's user with
-# the test's mark or in its group.  A request that ptrace's access rules refuse (the helper has no CAP_SYS_PTRACE)
-# is answered with "refused: ptrace restricted: ...", which run_tests.sh reports once for the test.  Each answer ends
-# with "qore-stack-capture-status: <exit code of the tool>", or 126 for a refused request; the runner waits for it with
-# a limit of its own.
+#   itself, and no file in the runner's directories is owned by root;
+# - <pid> must be a process of the runner's user (its effective user ID, the owner of /proc/<pid>) that carries
+#   QORE_TEST_PROCESS_MARK=<mark> in its environment, or that is in the process group of such a process (a test leads
+#   its group).  The mark keeps a capture from reaching a process outside the tests by accident (a stale or mistaken
+#   request); it is no barrier against a hostile process of the runner's user, which can give itself any mark, but such
+#   a process can only have processes of the runner's user captured, which it could debug itself.
+# What is guaranteed about the process: its user ID, its start time (field 22 of /proc/<pid>/stat) and its executable
+# (/proc/<pid>/exe) are read before the attach and again after it, and the tool's output, which is kept in a file
+# only root can read meanwhile, is sent only if they are unchanged; otherwise the answer is "process <pid> changed
+# during the capture".  So a process that executes a set-user-ID program after the check (its user ID and executable
+# change), or whose ID another process took (its start time changes), never has its stacks sent; root's debugger may
+# still have attached to it for the instant of the capture.
+# A request that fails the checks is answered with the reason (or not at all, if <reply> is not an absolute path of
+# plain characters).  A request that ptrace's access rules refuse (the helper has no CAP_SYS_PTRACE) is answered with
+# "refused: ptrace restricted: ...", which run_tests.sh reports once for the test.  Each answer ends with
+# "qore-stack-capture-status: <exit code of the tool>", or 126 for a refused request; the runner waits for it with a
+# limit of its own, and the helper's own write of the answer is limited once the capture has ended.  At most
+# QORE_CI_STACK_CAPTURE_MAX_JOBS requests are answered at once; another one waits until the helper has answered it.
 #
 # Sourced by test-ubuntu.sh and test-alpine.sh, which run with "set -e": its functions do not fail; run as
-# "sh ci-stack-capture.sh serve <user> <fifo>" by qore_ci_start_stack_capture().
+# "sh ci-stack-capture.sh serve <user> <directory>" by qore_ci_start_stack_capture().
 
 # the longest capture that a request may ask for (seconds)
 QORE_CI_STACK_CAPTURE_MAX_SECS=300
+# the requests answered at once
+QORE_CI_STACK_CAPTURE_MAX_JOBS=8
 
 # Starts the helper for the given user (the runner's), if this script runs as root, and exports
 # QORE_TEST_STACK_CAPTURE_HELPER, the FIFO of its requests, for run_tests.sh; otherwise does nothing.  The helper runs
-# in a session of its own, so qore_ci_stop_stack_capture() ends it with the captures it runs.
+# in a session of its own, which qore_ci_stop_stack_capture() ends with every capture in it.  Its messages go to a log
+# of its own, which qore_ci_stop_stack_capture() prints: the job's output must not be held by a process of the helper.
 qore_ci_start_stack_capture() {
     QORE_CI_STACK_CAPTURE_PID=""
     QORE_CI_STACK_CAPTURE_DIR=""
@@ -47,30 +57,77 @@ qore_ci_start_stack_capture() {
     fi
     QORE_CI_STACK_CAPTURE_DIR=$(mktemp -d /tmp/qore-stack-capture.XXXXXX) || return 0
     chmod 0711 "${QORE_CI_STACK_CAPTURE_DIR}" || true
-    if ! mkfifo -m 0620 "${QORE_CI_STACK_CAPTURE_DIR}/requests" \
+    # the outputs of the captures, which only root may read until they are sent
+    if ! mkdir -m 0700 "${QORE_CI_STACK_CAPTURE_DIR}/work" \
+            || ! mkfifo -m 0620 "${QORE_CI_STACK_CAPTURE_DIR}/requests" \
             || ! chgrp "$(id -g "$1")" "${QORE_CI_STACK_CAPTURE_DIR}/requests"; then
-        rm -rf "${QORE_CI_STACK_CAPTURE_DIR}"
+        rm -rf "${QORE_CI_STACK_CAPTURE_DIR}" || true
         QORE_CI_STACK_CAPTURE_DIR=""
-        echo "-- no stack capture helper: its FIFO cannot be made --"
+        echo "-- no stack capture helper: its directory cannot be made --"
         return 0
     fi
-    # setsid in a background command is not a group leader, so it does not fork: its process ID is the helper's
-    setsid sh "${QORE_SRC_DIR}/test/docker_test/ci-stack-capture.sh" serve "$1" \
-        "${QORE_CI_STACK_CAPTURE_DIR}/requests" < /dev/null > /dev/null &
+    # setsid in a background command is not a group leader, so it does not fork: its process ID is the helper's, and
+    # the ID of its session
+    setsid sh "${QORE_SRC_DIR}/test/docker_test/ci-stack-capture.sh" serve "$1" "${QORE_CI_STACK_CAPTURE_DIR}" \
+        < /dev/null > "${QORE_CI_STACK_CAPTURE_DIR}/work/helper.log" 2>&1 &
     QORE_CI_STACK_CAPTURE_PID=$!
     QORE_TEST_STACK_CAPTURE_HELPER="${QORE_CI_STACK_CAPTURE_DIR}/requests"
     export QORE_TEST_STACK_CAPTURE_HELPER
     echo "-- stack capture helper ${QORE_CI_STACK_CAPTURE_PID}: ${QORE_TEST_STACK_CAPTURE_HELPER} --"
 }
 
-# Ends the helper started by qore_ci_start_stack_capture() and every capture it runs, and removes its FIFO
+# Prints the IDs of the processes of the given session that have not ended (the 6th field of /proc/<pid>/stat; the
+# state is the 3rd, both after the command name in parentheses)
+qore_ci_stack_capture_session() {
+    awk -v sid="$1" 'BEGIN {
+        for (i = 1; i < ARGC; ++i) {
+            f = ARGV[i]
+            if ((getline line < f) > 0) {
+                last = 0
+                while ((j = index(substr(line, last + 1), ")")) > 0) {
+                    last += j
+                }
+                split(substr(line, last + 2), field, " ")
+                if (field[4] == sid && field[1] != "Z" && field[1] != "X") {
+                    pid = f
+                    sub(/^\/proc\//, "", pid)
+                    sub(/\/stat$/, "", pid)
+                    print pid
+                }
+            }
+            close(f)
+        }
+        exit
+    }' /proc/[0-9]*/stat 2>/dev/null
+}
+
+# Ends the helper started by qore_ci_start_stack_capture() and every capture it runs, prints its log and removes its
+# directory.  Every process of the helper's session is killed, not its process group: timeout (uutils on Ubuntu) moves
+# itself into a group of its own.  A process is listed again after the kill until none is left (a capture that forked
+# meanwhile), at most 100 times.
 qore_ci_stop_stack_capture() {
     if [ -n "${QORE_CI_STACK_CAPTURE_PID}" ]; then
-        kill -KILL -"${QORE_CI_STACK_CAPTURE_PID}" 2>/dev/null || true
+        _qore_ci_sc_rounds=0
+        while [ ${_qore_ci_sc_rounds} -lt 100 ]; do
+            _qore_ci_sc_left=$(qore_ci_stack_capture_session "${QORE_CI_STACK_CAPTURE_PID}")
+            if [ -z "${_qore_ci_sc_left}" ]; then
+                break
+            fi
+            kill -KILL ${_qore_ci_sc_left} 2>/dev/null || true
+            _qore_ci_sc_rounds=$((_qore_ci_sc_rounds + 1))
+        done
         wait "${QORE_CI_STACK_CAPTURE_PID}" 2>/dev/null || true
+        _qore_ci_sc_left=$(qore_ci_stack_capture_session "${QORE_CI_STACK_CAPTURE_PID}")
+        if [ -n "${_qore_ci_sc_left}" ]; then
+            echo "-- the stack capture helper left processes: ${_qore_ci_sc_left} --"
+        fi
         QORE_CI_STACK_CAPTURE_PID=""
     fi
     if [ -n "${QORE_CI_STACK_CAPTURE_DIR}" ]; then
+        if [ -s "${QORE_CI_STACK_CAPTURE_DIR}/work/helper.log" ]; then
+            echo "-- the stack capture helper's log --"
+            cat "${QORE_CI_STACK_CAPTURE_DIR}/work/helper.log" || true
+        fi
         rm -rf "${QORE_CI_STACK_CAPTURE_DIR}" || true
         QORE_CI_STACK_CAPTURE_DIR=""
     fi
@@ -86,21 +143,56 @@ qore_ci_stack_capture_number() {
     [ ${#1} -le $2 ]
 }
 
+# Prints the fields of /proc/<pid>/stat after the command name (in parentheses, which it may contain): the state
+# first; the file is an argument of the limited command, so that its open is limited too
+qore_ci_stack_capture_stat() {
+    _qore_ci_sc_s=$(timeout -s KILL 5 cat "/proc/$1/stat" 2>/dev/null)
+    if [ -n "${_qore_ci_sc_s}" ]; then
+        printf '%s\n' "${_qore_ci_sc_s##*) }"
+    fi
+}
+
+# Returns 0 if the given process has ended (it is gone, or a zombie)
+qore_ci_stack_capture_ended() {
+    set -- $(qore_ci_stack_capture_stat "$1")
+    case "$1" in
+        ''|Z|X|x) return 0 ;;
+    esac
+    return 1
+}
+
+# Prints the identity of the given process: its user ID (the owner of /proc/<pid>), its start time (field 22 of its
+# stat, the 20th after the command name) and its executable; nothing if it has ended
+qore_ci_stack_capture_identity() {
+    set -- "$1" $(qore_ci_stack_capture_stat "$1")
+    if [ $# -lt 21 ]; then
+        return
+    fi
+    _qore_ci_sc_start=$(eval echo "\${21}")
+    printf '%s %s %s\n' "$(stat -c %u "/proc/$1" 2>/dev/null)" "${_qore_ci_sc_start}" \
+        "$(readlink "/proc/$1/exe" 2>/dev/null)"
+}
+
 # Returns 0 if the given process (/proc/<pid>) carries QORE_TEST_PROCESS_MARK=<mark> (the second argument); the read
 # of its environment is limited, as it waits for a process that holds its memory map's lock (a fault stuck in D state)
 qore_ci_stack_capture_has_mark() {
-    timeout -s KILL 5 tr '\0' '\n' 2>/dev/null < "/proc/$1/environ" | grep -qxF "QORE_TEST_PROCESS_MARK=$2"
+    timeout -s KILL 5 cat "/proc/$1/environ" 2>/dev/null | tr '\0' '\n' | grep -qxF "QORE_TEST_PROCESS_MARK=$2"
 }
 
 # Prints why the given process may not be captured for the given user ID and mark, or nothing if it may (see above)
 qore_ci_stack_capture_check() {
-    if [ ! -d "/proc/$1" ] || [ "$(stat -c %u "/proc/$1" 2>/dev/null)" != "$2" ]; then
+    if qore_ci_stack_capture_ended "$1"; then
+        echo "process $1 has ended"
+        return
+    fi
+    if [ "$(stat -c %u "/proc/$1" 2>/dev/null)" != "$2" ]; then
         echo "process $1 is not a process of the runner's user"
         return
     fi
     # a process of another user's environment can be read only with ptrace's access (CAP_SYS_PTRACE), which a
-    # debugger needs as well: without it, run_tests.sh reports the restriction once, as for a refused attach
-    timeout -s KILL 5 head -c 1 2>/dev/null < "/proc/$1/environ" > /dev/null
+    # debugger needs as well: without it, run_tests.sh reports the restriction once, as for a refused attach; a
+    # process that ended meanwhile is no restriction
+    _qore_ci_sc_err=$(timeout -s KILL 5 head -c 1 "/proc/$1/environ" 2>&1 > /dev/null)
     case $? in
         0) ;;
         124|137)
@@ -108,17 +200,25 @@ qore_ci_stack_capture_check() {
             return
             ;;
         *)
-            echo "ptrace restricted: the helper may not read the environment of process $1 (it has no CAP_SYS_PTRACE)"
+            if qore_ci_stack_capture_ended "$1"; then
+                echo "process $1 has ended"
+                return
+            fi
+            case "${_qore_ci_sc_err}" in
+                *"Permission denied"*|*"Operation not permitted"*)
+                    echo "ptrace restricted: the helper may not read the environment of process $1 (it has no" \
+                        "CAP_SYS_PTRACE)"
+                    ;;
+                *) echo "the environment of process $1 cannot be read: ${_qore_ci_sc_err}" ;;
+            esac
             return
             ;;
     esac
     if qore_ci_stack_capture_has_mark "$1" "$3"; then
         return
     fi
-    # the process group: the 5th field of /proc/<pid>/stat, after the command name in parentheses
-    _qore_ci_sc_stat=$(timeout -s KILL 5 cat 2>/dev/null < "/proc/$1/stat")
-    _qore_ci_sc_stat=${_qore_ci_sc_stat##*) }
-    set -- "$@" $_qore_ci_sc_stat
+    # the process group: the 3rd field after the command name
+    set -- "$@" $(qore_ci_stack_capture_stat "$1")
     _qore_ci_sc_group=$6
     if qore_ci_stack_capture_number "${_qore_ci_sc_group}" 9 && [ "${_qore_ci_sc_group}" != "$1" ] \
             && [ "$(stat -c %u "/proc/${_qore_ci_sc_group}" 2>/dev/null)" = "$2" ] \
@@ -128,12 +228,23 @@ qore_ci_stack_capture_check() {
     echo "process $1 is not a process of the test with mark $3"
 }
 
-# Answers one request (the user, the user's ID and the request's line; see above)
+# Writes the answer (the file given) to the reply FIFO as the given user (name and ID), for at most 15 seconds: the
+# runner may have stopped waiting, and an open of a FIFO without a reader would block
+qore_ci_stack_capture_reply() {
+    if [ "$(id -u)" = "$2" ]; then
+        timeout -s KILL 15 sh -c 'exec cat > "$1"' sh "$3" < "$4"
+    else
+        timeout -s KILL 15 gosu "$1" sh -c 'exec cat > "$1"' sh "$3" < "$4"
+    fi
+}
+
+# Answers one request (the user, the user's ID, the work directory and the request's line; see above)
 qore_ci_stack_capture_request() {
     _qore_ci_sc_user=$1
     _qore_ci_sc_uid=$2
+    _qore_ci_sc_work=$3
     set -f
-    set -- $3
+    set -- $4
     set +f
     if [ $# -ne 5 ]; then
         echo "ci-stack-capture: a request that is not five fields is ignored" >&2
@@ -152,67 +263,85 @@ qore_ci_stack_capture_request() {
             return
             ;;
     esac
-    _qore_ci_sc_reply=$5
-    # the reply waits for the capture's time limit and then some, or a short time if that is not valid
-    _qore_ci_sc_reply_secs=10
-    if qore_ci_stack_capture_number "$2" 3 && [ "$2" -le ${QORE_CI_STACK_CAPTURE_MAX_SECS} ]; then
-        _qore_ci_sc_reply_secs=$(($2 + 10))
-    fi
-    {
-        _qore_ci_sc_why=""
-        if ! qore_ci_stack_capture_number "$1" 9; then
-            _qore_ci_sc_why="the process ID is not a number"
-        elif ! qore_ci_stack_capture_number "$2" 3 || [ "$2" -gt ${QORE_CI_STACK_CAPTURE_MAX_SECS} ]; then
-            _qore_ci_sc_why="the time limit is not 1 to ${QORE_CI_STACK_CAPTURE_MAX_SECS} seconds"
-        elif ! expr "x$3" : 'x[1-9][0-9]\{0,8\}\.[0-9]\{1,9\}$' > /dev/null; then
-            _qore_ci_sc_why="the mark is not a test's"
-        else
-            case "$4" in
-                gdb|eu-stack)
-                    if ! command -v "$4" > /dev/null 2>&1; then
-                        _qore_ci_sc_why="$4 is not installed"
-                    fi
-                    ;;
-                *) _qore_ci_sc_why="the tool is neither gdb nor eu-stack" ;;
-            esac
-        fi
-        if [ -z "${_qore_ci_sc_why}" ]; then
-            _qore_ci_sc_why=$(qore_ci_stack_capture_check "$1" "${_qore_ci_sc_uid}" "$3")
-        fi
-        if [ -n "${_qore_ci_sc_why}" ]; then
-            echo "qore-stack-capture: refused: ${_qore_ci_sc_why}"
-            echo "qore-stack-capture-status: 126"
-        else
-            case "$4" in
-                gdb)
-                    DEBUGINFOD_URLS= timeout -s KILL "$2" gdb -nx -batch -iex "set debuginfod enabled off" -p "$1" \
-                        -ex "thread apply all bt" < /dev/null
-                    ;;
-                eu-stack) DEBUGINFOD_URLS= timeout -s KILL "$2" eu-stack -p "$1" < /dev/null ;;
-            esac
-            echo "qore-stack-capture-status: $?"
-        fi
-    } 2>&1 | qore_ci_stack_capture_reply "${_qore_ci_sc_user}" "${_qore_ci_sc_uid}" "${_qore_ci_sc_reply}" \
-        "${_qore_ci_sc_reply_secs}"
-}
-
-# Copies its input to the reply FIFO (the third argument) as the given user (name and ID), for at most the given
-# number of seconds: the runner may have stopped waiting, and an open of a FIFO without a reader would block
-qore_ci_stack_capture_reply() {
-    if [ "$(id -u)" = "$2" ]; then
-        timeout -s KILL "$4" sh -c 'exec cat > "$1"' sh "$3"
+    # the answer, and the tool's output until it is checked, in files that only root can read
+    _qore_ci_sc_answer=$(mktemp "${_qore_ci_sc_work}/answer.XXXXXX") || return
+    _qore_ci_sc_output=$(mktemp "${_qore_ci_sc_work}/output.XXXXXX") || { rm -f "${_qore_ci_sc_answer}"; return; }
+    _qore_ci_sc_why=""
+    if ! qore_ci_stack_capture_number "$1" 9; then
+        _qore_ci_sc_why="the process ID is not a number"
+    elif ! qore_ci_stack_capture_number "$2" 3 || [ "$2" -gt ${QORE_CI_STACK_CAPTURE_MAX_SECS} ]; then
+        _qore_ci_sc_why="the time limit is not 1 to ${QORE_CI_STACK_CAPTURE_MAX_SECS} seconds"
+    elif ! expr "x$3" : 'x[1-9][0-9]\{0,8\}\.[0-9]\{1,9\}$' > /dev/null; then
+        _qore_ci_sc_why="the mark is not a test's"
     else
-        timeout -s KILL "$4" gosu "$1" sh -c 'exec cat > "$1"' sh "$3"
+        case "$4" in
+            gdb|eu-stack)
+                if ! command -v "$4" > /dev/null 2>&1; then
+                    _qore_ci_sc_why="$4 is not installed"
+                fi
+                ;;
+            *) _qore_ci_sc_why="the tool is neither gdb nor eu-stack" ;;
+        esac
     fi
+    if [ -z "${_qore_ci_sc_why}" ]; then
+        _qore_ci_sc_why=$(qore_ci_stack_capture_check "$1" "${_qore_ci_sc_uid}" "$3")
+    fi
+    if [ -z "${_qore_ci_sc_why}" ]; then
+        _qore_ci_sc_before=$(qore_ci_stack_capture_identity "$1")
+        case "$4" in
+            gdb)
+                DEBUGINFOD_URLS= timeout -s KILL "$2" gdb -nx -batch -iex "set auto-load off" \
+                    -iex "set debuginfod enabled off" -p "$1" -ex "thread apply all bt" < /dev/null \
+                    > "${_qore_ci_sc_output}" 2>&1
+                ;;
+            eu-stack)
+                DEBUGINFOD_URLS= timeout -s KILL "$2" eu-stack -p "$1" < /dev/null > "${_qore_ci_sc_output}" 2>&1
+                ;;
+        esac
+        _qore_ci_sc_rc=$?
+        _qore_ci_sc_after=$(qore_ci_stack_capture_identity "$1")
+        if [ -z "${_qore_ci_sc_before}" ] || [ "${_qore_ci_sc_before}" != "${_qore_ci_sc_after}" ]; then
+            _qore_ci_sc_why="process $1 changed during the capture"
+        else
+            {
+                cat "${_qore_ci_sc_output}"
+                echo "qore-stack-capture-status: ${_qore_ci_sc_rc}"
+            } > "${_qore_ci_sc_answer}"
+        fi
+    fi
+    if [ -n "${_qore_ci_sc_why}" ]; then
+        printf 'qore-stack-capture: refused: %s\nqore-stack-capture-status: 126\n' "${_qore_ci_sc_why}" \
+            > "${_qore_ci_sc_answer}"
+    fi
+    rm -f "${_qore_ci_sc_output}"
+    qore_ci_stack_capture_reply "${_qore_ci_sc_user}" "${_qore_ci_sc_uid}" "$5" "${_qore_ci_sc_answer}"
+    rm -f "${_qore_ci_sc_answer}"
 }
 
-# Reads the requests from the FIFO (the user and the FIFO), each answered in a process of its own
+# Reads the requests from the FIFO in the given directory (the user and the directory), each answered in a process of
+# its own, at most QORE_CI_STACK_CAPTURE_MAX_JOBS at once
 qore_ci_stack_capture_serve() {
     _qore_ci_sc_uid=$(id -u "$1") || exit 1
     # open for reading and writing, so that the FIFO never ends while the helper runs
-    exec 3<> "$2" || exit 1
+    exec 3<> "$2/requests" || exit 1
+    _qore_ci_sc_jobs=""
     while IFS= read -r _qore_ci_sc_line <&3; do
-        qore_ci_stack_capture_request "$1" "${_qore_ci_sc_uid}" "${_qore_ci_sc_line}" &
+        # the requests still being answered
+        _qore_ci_sc_running=""
+        _qore_ci_sc_count=0
+        for _qore_ci_sc_job in ${_qore_ci_sc_jobs}; do
+            if kill -0 "${_qore_ci_sc_job}" 2>/dev/null; then
+                _qore_ci_sc_running="${_qore_ci_sc_running} ${_qore_ci_sc_job}"
+                _qore_ci_sc_count=$((_qore_ci_sc_count + 1))
+            fi
+        done
+        _qore_ci_sc_jobs=${_qore_ci_sc_running}
+        if [ ${_qore_ci_sc_count} -ge ${QORE_CI_STACK_CAPTURE_MAX_JOBS} ]; then
+            qore_ci_stack_capture_request "$1" "${_qore_ci_sc_uid}" "$2/work" "${_qore_ci_sc_line}"
+        else
+            qore_ci_stack_capture_request "$1" "${_qore_ci_sc_uid}" "$2/work" "${_qore_ci_sc_line}" &
+            _qore_ci_sc_jobs="${_qore_ci_sc_jobs} $!"
+        fi
     done
 }
 

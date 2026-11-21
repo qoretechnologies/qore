@@ -708,7 +708,7 @@ def watchdog_functions():
     # the watchdog prints the native call stacks of the test's other processes (#6888), with the functions that the
     # runner has of these
     names[:0] = [name for name in ("capture_descendant_stacks", "test_stack_processes", "process_command_line",
-                                   "process_exists", "runs_stack_tool", "stack_attach_refused",
+                                   "process_ended", "runs_stack_tool", "stack_attach_refused", "stack_attach_failed",
                                    "test_stack_process_check", "runs_stack_helper")
                  if re.search(r"^" + name + r"\(\) \{", source, re.M)]
     if re.search(r"^exec_in_test_group\(\) \{", source, re.M):
