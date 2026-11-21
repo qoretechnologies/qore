@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ProviderIndexUtil
+%requires ProviderIndex
+
+%exec-class ProviderIndexRestrictedSubclassTest
+
+#! Tests that a subclass that restricted code declares cannot use the helpers of the index classes (qore#7044)
+/** ProviderIndexUtil::ProviderIndexUtil and ProviderIndex::ProviderIndex are public classes, so code restricted from
+    the functional domains that their own code uses can inherit them.  Their helpers and the index state are
+    \c private:internal, which a subclass cannot reach: the helpers that run the workers of an index build (a
+    process), write and read files at a path that they are given and change the index state of the process; the
+    helpers that ProviderIndex uses stay visible to subclasses and use no functional domain, except
+    \c writeFileAtomic(), which refuses a caller restricted from the file system.  A use is refused when it is parsed
+    and when it is resolved at run time, and unrestricted code still uses the classes as before.
+*/
+class ProviderIndexRestrictedSubclassTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the restrictions of the code that declares the subclasses
+        const Restrictions = PO_NO_PROCESS_CONTROL | PO_NO_FILESYSTEM | PO_NO_THREAD_CONTROL | PO_NO_EXTERNAL_INFO;
+
+        #! the class and the use of each member that a subclass cannot reach (given the path "p")
+        const Members = {
+            "ProviderIndex::runWorker": ("ProviderIndex::ProviderIndex",
+                "runWorker({\"id\": \"x\"}, (\"/bin/sh\", \"-c\", \"touch \" + p), p, 5000, 0);"),
+            "ProviderIndex::getCancelGeneration": ("ProviderIndex::ProviderIndex", "getCancelGeneration();"),
+            "ProviderIndex::writeWorkerFragments": ("ProviderIndex::ProviderIndex",
+                "writeWorkerFragments(<DataProviderIndexInfo>{}, {\"staging_dir\": p, \"prefix\": \"x\"});"),
+            "ProviderIndexUtil::readIndexFileText": ("ProviderIndexUtil::ProviderIndexUtil", "readIndexFileText(p);"),
+            "ProviderIndexUtil::readIndexFileBinary": ("ProviderIndexUtil::ProviderIndexUtil",
+                "readIndexFileBinary(p);"),
+            "ProviderIndexUtil::statIndexFile": ("ProviderIndexUtil::ProviderIndexUtil", "statIndexFile(p);"),
+            "ProviderIndexUtil::resetIndexState": ("ProviderIndexUtil::ProviderIndexUtil", "resetIndexState();"),
+            "ProviderIndexUtil::index": ("ProviderIndexUtil::ProviderIndexUtil", "index = {};"),
+            "ProviderIndexUtil::build_mode": ("ProviderIndexUtil::ProviderIndexUtil", "build_mode = True;"),
+        };
+
+        #! the members that are resolved at run time (class, method, arguments given the path "p")
+        const RuntimeMembers = {
+            "ProviderIndex::runWorker": ("ProviderIndex::ProviderIndex", "runWorker",
+                "({\"id\": \"x\"}, (\"/bin/sh\", \"-c\", \"touch \" + p), p, 5000, 0)"),
+            "ProviderIndexUtil::readIndexFileText": ("ProviderIndexUtil::ProviderIndexUtil", "readIndexFileText",
+                "(p,)"),
+        };
+    }
+
+    private {
+        TmpDir tmp("provider-index-restricted-subclass-");
+    }
+
+    constructor() : Test("ProviderIndexRestrictedSubclassTest", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("members, " + m, sub () { testMembers(m); });
+            addTestCase("members at run time, " + m, sub () { testRuntime(m); });
+            addTestCase("writeFileAtomic, " + m, sub () { testWriteFileAtomic(m); });
+            addTestCase("public API, " + m, sub () { testPublic(m); });
+        }
+        addTestCase("unrestricted subclasses", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! a subclass that restricted code declares cannot reach the members, when it is parsed
+    private testMembers(string mode) {
+        string p = tmp.path + "/members";
+        foreach hash<auto> i in (Members.pairIterator()) {
+            Program pgm(PO_NEW_STYLE | Restrictions);
+            pgm.setExecMode(Modes{mode});
+            string result;
+            try {
+                pgm.parse(sprintf("%%modern\n%%requires ProviderIndex\nclass X inherits %s {\n"
+                    "    static t(string p) { %s }\n}\n", i.value[0], i.value[1]), "member");
+                result = "parsed";
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err + ": " + ex.desc;
+            }
+            string name = (i.key =~ x/::([A-Za-z_]+)$/)[0];
+            assertRegex("^PARSE-EXCEPTION: .*" + name, result, sprintf("%s, %s", i.key, mode));
+        }
+        assertFalse(is_file(p), "nothing was created, " + mode);
+    }
+
+    #! a subclass that restricted code declares cannot reach the members, when they are resolved at run time
+    private testRuntime(string mode) {
+        string p = tmp.path + "/runtime";
+        foreach hash<auto> i in (RuntimeMembers.pairIterator()) {
+            Program pgm(PO_NEW_STYLE | Restrictions);
+            pgm.setExecMode(Modes{mode});
+            pgm.parse(sprintf("%%modern\n%%requires ProviderIndex\nclass X inherits %s {\n"
+                "    static string t(string p) { try { call_static_method_args(%y, %y, %s); return \"called\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n}\n"
+                "string sub t(string p) { return X::t(p); }", i.value[0], i.value[0], i.value[1], i.value[2]),
+                "runtime");
+            string rv = pgm.callFunction("t", p);
+            assertRegex(i.value[1], rv, sprintf("%s, %s", i.key, mode));
+            assertTrue(rv != "called", sprintf("%s refused, %s", i.key, mode));
+        }
+        assertFalse(is_file(p), "nothing was created, " + mode);
+    }
+
+    #! writeFileAtomic(), which ProviderIndex uses, refuses a caller restricted from the file system
+    private testWriteFileAtomic(string mode) {
+        string p = tmp.path + "/written-" + mode;
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndex\nclass X inherits ProviderIndexUtil::ProviderIndexUtil {\n"
+            "    static string t(string p) { try { writeFileAtomic(p, \"x\"); return \"written\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n}\n"
+            "class Y inherits ProviderIndex::ProviderIndex {\n"
+            "    static string t(string p) { try { writeFileAtomic(p, \"x\"); return \"written\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n}\n"
+            "string sub x(string p) { return X::t(p); }\nstring sub y(string p) { return Y::t(p); }", "write");
+        assertEq("PERMISSION-DENIED", pgm.callFunction("x", p), "ProviderIndexUtil subclass, " + mode);
+        assertEq("PERMISSION-DENIED", pgm.callFunction("y", p), "ProviderIndex subclass, " + mode);
+        assertFalse(is_file(p), "nothing was written, " + mode);
+    }
+
+    #! restricted code still uses the public API of the classes
+    private testPublic(string mode) {
+        Program pgm(PO_NEW_STYLE | Restrictions);
+        pgm.setExecMode(Modes{mode});
+        pgm.parse("%modern\n%requires ProviderIndexUtil\n"
+            "bool sub t() { return ProviderIndexUtil::ProviderIndexUtil::inBuildMode(); }\n"
+            "*string sub e() { return ProviderIndexUtil::ProviderIndexUtil::getIndexReadError(); }", "public");
+        assertEq(ProviderIndexUtil::inBuildMode(), pgm.callFunction("t"), "inBuildMode(), " + mode);
+        assertEq(ProviderIndexUtil::getIndexReadError(), pgm.callFunction("e"), "getIndexReadError(), " + mode);
+    }
+
+    #! unrestricted subclasses use the helpers that stay visible, as ProviderIndex does
+    private testUnrestricted() {
+        string p = tmp.path + "/trusted";
+        UnrestrictedAccess::write(p, "trusted");
+        assertEq("trusted", File::readTextFile(p));
+        assertEq({"a": 1}, UnrestrictedAccess::roundTrip({"a": 1}));
+    }
+}
+
+#! Gives the test access to the helpers that ProviderIndex uses
+class UnrestrictedAccess inherits ProviderIndexUtil {
+    #! Writes a file as ProviderIndex does
+    static write(string path, string contents) {
+        writeFileAtomic(path, contents);
+    }
+
+    #! Packs and unpacks index data as the workers of ProviderIndex do
+    static hash<auto> roundTrip(hash<auto> h) {
+        return unpackIndexData(packIndexData(h));
+    }
+}
