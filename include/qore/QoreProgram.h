@@ -570,6 +570,7 @@ public:
     //! sets the parse options and adds Qore-language exception information if an error occurs
     /**
         @param po the parse options to add to the parse option mask
+        @throw PROGRAM-OPTION-ERROR the mask contains a system-owned option
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink);
@@ -577,13 +578,15 @@ public:
     //! turns off the parse options given in the passed mask and adds Qore-language exception information if an error occurs
     /**
         @param po the parse options to subtract from the parse option mask
+        @throw PROGRAM-OPTION-ERROR the mask contains a system-owned option
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink);
 
     //! replaces the parse options in the program with those given by the argument; adds Qore-language exception information if an error occurs
     /** An exception will be raised if the calling program does not have PO_NO_CHILD_PO_RESTRICTIONS set
-        @param po the parse options to add to the parse option mask
+        @param po the replacement parse option mask
+        @throw PROGRAM-OPTION-ERROR the replacement would change a system-owned option
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void replaceParseOptions(const QoreParseOptions& po, ExceptionSink* xsink);

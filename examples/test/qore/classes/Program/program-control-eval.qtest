@@ -176,7 +176,7 @@ auto sub e6() { return acct; }
         Program pgm = getProgram();
         ProgramControl pc = pgm.getProgram();
         # negative: options that only the system can set
-        assertThrows("PROGRAM-OPTION-ERROR", \pc.createEvalProgram(), (PO_IN_MODULE,));
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pc.createEvalProgram(), (PO_IN_MODULE,));
         # a name that does not exist in either Program
         Program epgm = pc.createEvalProgram(PO_NEW_STYLE | PO_ALLOW_REPARSE);
         assertThrows("PARSE-EXCEPTION", \epgm.parse(), ("auto sub e() { return no_such_function(); }", "eval"));
