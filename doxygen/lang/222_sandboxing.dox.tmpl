@@ -230,6 +230,29 @@ p.parse(user_code, "user_script");
 auto result = p.callFunction("main");
     @endcode
 
+    @subsection sandbox_enforcement_level Enforcement Levels: Tenant Isolation and Code Safety
+
+    A sandbox has an enforcement level (@ref Qore::SandboxManager::setEnforcementLevel()
+    "SandboxManager::setEnforcementLevel()"), which decides what it keeps apart besides the functional domains of the
+    code that it governs:
+
+    |!Level|!Enforces|!For
+    |@ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION" (the default)|the policy, limits and functional-domain checks of the sandbox, and the owner rules: the code that the sandbox governs cannot change or read the state of objects that its sandbox did not create|the code of a tenant, which must be isolated from the host and from other tenants
+    |@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY"|the policy, limits and functional-domain checks of the sandbox only|code that the host trusts and runs in a sandbox to keep it from mistakes, or for interrupts and limits
+
+    A new sandbox manager has the level @ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION", so a sandbox
+    isolates its code unless its creator decides otherwise.  Only the creator of the manager can lower the level to
+    @ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY": trusted code, or the code of the %Program whose code created the
+    manager; never code that the manager governs.  Raising the level to
+    @ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION" is always allowed and fixes it, so that nobody can lower
+    it again.
+
+    When more than one sandbox governs code (the sandbox of a %Program and the sandbox of the code that created it, of
+    a caller, of an object or callback that the code runs, or of the code that started the thread), the strictest level
+    of them applies: the owner rules apply if any of them isolates tenants.
+    @ref Qore::SandboxManager::isTenantIsolated() "SandboxManager::isTenantIsolated()", and
+    \c qore_caller_tenant_isolated() in C++, tell library code whether the owner rules apply to its caller.
+
     @subsection sandbox_provenance Objects, Callbacks, and Trusted Resources
 
     An object or runtime call reference created under a sandbox retains that context. Calling its methods or
@@ -1668,6 +1691,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-ENFORCEMENT-LEVEL-ERROR|SandboxManager|An invalid @ref sandbox_enforcement_level "enforcement level"
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality

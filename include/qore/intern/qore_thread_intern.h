@@ -891,6 +891,12 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 */
 DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
 
+//! Returns true if \a sm, or a composition that it is a member of, governs the code running on the current thread
+/** The governing sandboxes are resolved as for QoreSandboxManagerHelper::All (see qore_caller_tenant_isolated());
+    used to refuse a change that lifts a restriction of a manager to the code that it governs
+*/
+DLLLOCAL bool qore_thread_sandbox_governed_by(const QoreSandboxManager* sm);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 

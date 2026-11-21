@@ -98,6 +98,11 @@ struct qore_fs_security_private {
     //! state of the whole manager, kept here as the composition is, so that the layout of QoreSandboxManager, which is
     //! part of the C++ API, does not change
     std::atomic<bool> uncontrolled_api_allowed{false};
+    //! the enforcement level of the QoreSandboxManager (see QoreSandboxManager::setEnforcementLevel()); kept here for
+    //! the same reason
+    std::atomic<int> enforcement_level{QSEL_TENANT_ISOLATION};
+    //! true once the enforcement level was raised explicitly: it can no longer be lowered
+    std::atomic<bool> enforcement_level_fixed{false};
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -1244,6 +1249,79 @@ bool QoreSandboxManager::trustsUncontrolledApis() const {
     return getUncontrolledApiPolicy();
 }
 
+namespace {
+//! serializes the changes of the enforcement level of the managers, which are rare, so that a lowering that found the
+//! level not fixed cannot be stored after a concurrent raise fixed it
+std::mutex enforcement_level_lock;
+}
+
+int QoreSandboxManager::setEnforcementLevel(QoreSandboxEnforcementLevel level, ExceptionSink* xsink) {
+    assert(xsink);
+    if (level != QSEL_CODE_SAFETY && level != QSEL_TENANT_ISOLATION) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "invalid sandbox enforcement level %d; expecting "
+            "QSEL_CODE_SAFETY (%d) or QSEL_TENANT_ISOLATION (%d)", static_cast<int>(level), QSEL_CODE_SAFETY,
+            QSEL_TENANT_ISOLATION);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(this)) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "the enforcement level of a composition of "
+            "sandboxes cannot be set: it is the strictest level of its members");
+        return -1;
+    }
+    qore_fs_security_private* p = fs_mgr.priv;
+    if (level == QSEL_TENANT_ISOLATION) {
+        // raising the level only adds restrictions, and fixes it
+        std::lock_guard<std::mutex> lck(enforcement_level_lock);
+        p->enforcement_level.store(QSEL_TENANT_ISOLATION, std::memory_order_release);
+        p->enforcement_level_fixed.store(true, std::memory_order_release);
+        return 0;
+    }
+    // lowering the level lifts the owner rules: never by the code that the manager governs, which is decided from the
+    // thread's sandboxes (without the lock: the walk can take the locks of Programs)
+    if (qore_thread_sandbox_governed_by(this)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setEnforcementLevel(): code that a sandbox "
+            "governs cannot lower its enforcement level");
+        return -1;
+    }
+    // only by the creator of the manager: trusted code, or the code of the Program that created it
+    if (qore_sandbox_manager_check_change(this, "SandboxManager::setEnforcementLevel()", xsink)) {
+        return -1;
+    }
+    std::lock_guard<std::mutex> lck(enforcement_level_lock);
+    if (p->enforcement_level_fixed.load(std::memory_order_acquire)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setEnforcementLevel(): the enforcement level "
+            "of the sandbox was raised to tenant isolation and can no longer be lowered");
+        return -1;
+    }
+    p->enforcement_level.store(QSEL_CODE_SAFETY, std::memory_order_release);
+    return 0;
+}
+
+QoreSandboxEnforcementLevel QoreSandboxManager::getEnforcementLevel() const {
+    // a composition: the strictest level of its members
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (member->getEnforcementLevel() == QSEL_TENANT_ISOLATION) {
+                return QSEL_TENANT_ISOLATION;
+            }
+        }
+        return members->empty() ? QSEL_TENANT_ISOLATION : QSEL_CODE_SAFETY;
+    }
+    return static_cast<QoreSandboxEnforcementLevel>(fs_mgr.priv->enforcement_level.load(std::memory_order_acquire));
+}
+
+bool QoreSandboxManager::isEnforcementLevelFixed() const {
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (member->isEnforcementLevelFixed()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return fs_mgr.priv->enforcement_level_fixed.load(std::memory_order_acquire);
+}
+
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
@@ -1569,6 +1647,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
     config->setKeyValue("uncontrolled_api_policy", getUncontrolledApiPolicy(), xsink);
+    config->setKeyValue("enforcement_level", static_cast<int64>(getEnforcementLevel()), xsink);
 
     return config.release();
 }
@@ -1656,6 +1735,9 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->mem_account->limit.store(mem_account->limit.load());
     // the effective policy: a copy of a composition allows them only if every member does
     result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
+    // the effective enforcement level, fixed if this manager's is: a copy is never looser
+    result->fs_mgr.priv->enforcement_level.store(getEnforcementLevel(), std::memory_order_release);
+    result->fs_mgr.priv->enforcement_level_fixed.store(isEnforcementLevelFixed(), std::memory_order_release);
     // Don't copy interrupt state
 
     return result;

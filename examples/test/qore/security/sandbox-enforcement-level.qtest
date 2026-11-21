@@ -1,0 +1,275 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxEnforcementLevelTest
+
+#! a function of the host that the tenants call: trusted code acting for a sandboxed caller
+hash<auto> sub host_query() {
+    return {
+        "isolated": SandboxManager::isTenantIsolated(),
+    };
+}
+
+#! a function of the host that lowers the level of a manager, for a sandboxed caller
+string sub host_lower(SandboxManager sm) {
+    try {
+        sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! a function of the host that starts a thread, which inherits the sandbox of the code that calls it
+bool sub host_background() {
+    Queue q();
+    background q.push(SandboxManager::isTenantIsolated());
+    return q.get();
+}
+
+#! Tests the enforcement level of a sandbox (tenant isolation, code safety)
+/** A new manager isolates tenants; only its creator, and never the code that it governs, lowers it to code safety,
+    and only until the level is fixed by a raise; the strictest level of the governing sandboxes decides whether the
+    owner rules apply to code (SandboxManager::isTenantIsolated())
+*/
+public class SandboxEnforcementLevelTest inherits QUnit::Test {
+    public {
+        #! The code of a tenant
+        const TenantSource = "
+bool sub isolated() {
+    return SandboxManager::isTenantIsolated();
+}
+
+# changes the level of a manager
+string sub set_level(SandboxManager sm, int level) {
+    try {
+        sm.setEnforcementLevel(level);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# creates a manager and lowers its level: the tenant's Program is its creator
+int sub own_manager() {
+    SandboxManager sm();
+    sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+    return sm.getEnforcementLevel();
+}
+
+SandboxManager sub make_manager() {
+    return new SandboxManager();
+}
+
+# calls into another Program for the tenant
+auto sub call_program(Program p, string func) {
+    return p.callFunction(func);
+}
+
+auto sub call(code c) {
+    return c();
+}
+
+# a Program that the tenant creates with a code-safety sandbox of its own: it keeps the tenant's sandbox too
+bool sub child_isolated() {
+    SandboxManager sm();
+    sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(sm);
+    p.parse(\"bool sub isolated() { return SandboxManager::isTenantIsolated(); }\", \"child\");
+    return p.callFunction(\"isolated\");
+}
+
+bool sub background_isolated() {
+    Queue q();
+    background q.push(SandboxManager::isTenantIsolated());
+    return q.get();
+}
+";
+
+        #! The code of a Program that only asks
+        const QuerySource = "
+bool sub isolated() {
+    return SandboxManager::isTenantIsolated();
+}
+";
+    }
+
+    constructor() : QUnit::Test("sandbox enforcement level", "1.0", \ARGV) {
+        addTestCase("default", \defaultTest());
+        addTestCase("tighten only", \tightenOnlyTest());
+        addTestCase("creator", \creatorTest());
+        addTestCase("managed code", \managedCodeTest());
+        addTestCase("owner rules", \ownerRulesTest());
+        addTestCase("strictest level", \strictestTest());
+        addTestCase("copy", \copyTest());
+        set_return_value(main());
+    }
+
+    #! creates a tenant whose code a manager with the given level governs
+    private static Program tenant(SandboxManager sm = new SandboxManager()) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("host_query");
+        p.importFunction("host_lower");
+        p.importFunction("host_background");
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! creates a Program that only asks, governed by the given manager
+    private static Program query(SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(QuerySource, "query");
+        return p;
+    }
+
+    defaultTest() {
+        SandboxManager sm();
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel(), "a new manager isolates tenants");
+        assertFalse(sm.isEnforcementLevelFixed(), "the default is not fixed");
+        assertEq(QSEL_TENANT_ISOLATION, sm.getConfiguration().enforcement_level, "in the configuration");
+        assertEq(QSEL_TENANT_ISOLATION, SandboxManager::createLockdown().getEnforcementLevel(), "lockdown preset");
+        assertEq(QSEL_TENANT_ISOLATION, SandboxManager::createWebSafe().getEnforcementLevel(), "web-safe preset");
+        assertThrows("SANDBOX-ENFORCEMENT-LEVEL-ERROR", \sm.setEnforcementLevel(), 2);
+        assertThrows("SANDBOX-ENFORCEMENT-LEVEL-ERROR", \sm.setEnforcementLevel(), -1);
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel(), "an invalid level changes nothing");
+    }
+
+    tightenOnlyTest() {
+        SandboxManager sm();
+        # the creator lowers and raises it again
+        sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        assertEq(QSEL_CODE_SAFETY, sm.getEnforcementLevel());
+        assertEq(QSEL_CODE_SAFETY, sm.getConfiguration().enforcement_level, "in the configuration");
+        assertFalse(sm.isEnforcementLevelFixed());
+        sm.setEnforcementLevel(QSEL_TENANT_ISOLATION);
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel());
+        assertTrue(sm.isEnforcementLevelFixed(), "a raise fixes the level");
+        # nobody lowers a fixed level, not even its trusted creator
+        assertThrows("SANDBOX-ACCESS-ERROR", "can no longer be lowered", \sm.setEnforcementLevel(),
+            QSEL_CODE_SAFETY);
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel());
+        # raising it again is allowed
+        sm.setEnforcementLevel(QSEL_TENANT_ISOLATION);
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel());
+
+        # an explicit raise of the default fixes it too
+        SandboxManager sm2();
+        sm2.setEnforcementLevel(QSEL_TENANT_ISOLATION);
+        assertThrows("SANDBOX-ACCESS-ERROR", \sm2.setEnforcementLevel(), QSEL_CODE_SAFETY);
+    }
+
+    creatorTest() {
+        Program a = tenant();
+        Program b = tenant();
+
+        # a manager that trusted code created: a tenant is not its creator
+        SandboxManager host_sm();
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("set_level", host_sm, QSEL_CODE_SAFETY),
+            "a tenant cannot lower the level of a manager that the host created");
+        assertEq(QSEL_TENANT_ISOLATION, host_sm.getEnforcementLevel());
+        assertEq("ok", a.callFunction("set_level", host_sm, QSEL_TENANT_ISOLATION), "a tenant can raise it");
+        assertTrue(host_sm.isEnforcementLevelFixed());
+
+        # a manager that a tenant created: the tenant's Program is its creator, not another tenant
+        assertEq(QSEL_CODE_SAFETY, a.callFunction("own_manager"), "a tenant lowers the level of its own manager");
+        SandboxManager a_sm = a.callFunction("make_manager");
+        assertEq("SANDBOX-ACCESS-ERROR", b.callFunction("set_level", a_sm, QSEL_CODE_SAFETY),
+            "another tenant cannot lower it");
+        assertEq(QSEL_TENANT_ISOLATION, a_sm.getEnforcementLevel());
+        assertEq("ok", a.callFunction("set_level", a_sm, QSEL_CODE_SAFETY), "its creator can");
+        assertEq(QSEL_CODE_SAFETY, a_sm.getEnforcementLevel());
+    }
+
+    managedCodeTest() {
+        SandboxManager sm();
+        Program p = tenant(sm);
+        # the code that the manager governs cannot lower its level, also through trusted code that it calls
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("set_level", sm, QSEL_CODE_SAFETY), "the governed code");
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("host_lower", sm), "trusted code acting for it");
+        assertEq(QSEL_TENANT_ISOLATION, sm.getEnforcementLevel());
+        assertFalse(sm.isEnforcementLevelFixed());
+        # its trusted creator, which it does not govern, can
+        sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        assertEq(QSEL_CODE_SAFETY, sm.getEnforcementLevel());
+    }
+
+    ownerRulesTest() {
+        assertFalse(SandboxManager::isTenantIsolated(), "trusted code");
+
+        # tenant isolation: the owner rules apply to the code and to trusted code acting for it
+        Program iso = tenant();
+        assertTrue(iso.callFunction("isolated"), "tenant isolation");
+        assertTrue(iso.callFunction("host_query").isolated, "trusted code called by an isolated tenant");
+        assertTrue(iso.callFunction("background_isolated"), "a thread that an isolated tenant starts");
+        assertTrue(iso.callFunction("host_background"), "a thread that trusted code starts for an isolated tenant");
+        assertTrue(iso.callFunction("call", \host_query()).isolated, "a call reference called by an isolated tenant");
+
+        # code safety: they do not
+        SandboxManager safe_sm();
+        safe_sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        Program safe = tenant(safe_sm);
+        assertFalse(safe.callFunction("isolated"), "code safety");
+        assertFalse(safe.callFunction("host_query").isolated, "trusted code called by code-safety code");
+        assertFalse(safe.callFunction("background_isolated"), "a thread that code-safety code starts");
+
+        # the level is decided when the code runs
+        safe_sm.setEnforcementLevel(QSEL_TENANT_ISOLATION);
+        assertTrue(safe.callFunction("isolated"), "after the level was raised");
+    }
+
+    strictestTest() {
+        # a Program that a tenant creates with a code-safety sandbox: the tenant's sandbox, which the Program keeps,
+        # governs its code too
+        Program iso = tenant();
+        assertTrue(iso.callFunction("child_isolated"), "the code-safety child of an isolated tenant");
+        SandboxManager safe_tenant_sm();
+        safe_tenant_sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        assertFalse(tenant(safe_tenant_sm).callFunction("child_isolated"), "the code-safety child of code-safety code");
+
+        # a Program with a code-safety sandbox that the host set governs its code alone, as for the functional-domain
+        # checks, also when an isolated tenant that holds the Program object calls it
+        SandboxManager safe_sm();
+        safe_sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        Program safe = query(safe_sm);
+        assertFalse(safe.callFunction("isolated"), "called by trusted code");
+        assertFalse(iso.callFunction("call_program", safe, "isolated"), "called by an isolated tenant");
+
+        # the reverse: an isolated Program called by code-safety code
+        SandboxManager iso_sm();
+        Program iso_q = query(iso_sm);
+        SandboxManager safe2_sm();
+        safe2_sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        Program safe_tenant = tenant(safe2_sm);
+        assertTrue(safe_tenant.callFunction("call_program", iso_q, "isolated"), "an isolated Program");
+
+        # two code-safety sandboxes: no owner rules
+        Program safe_tenant2 = tenant(safe2_sm);
+        assertFalse(safe_tenant2.callFunction("call_program", safe, "isolated"), "only code-safety sandboxes");
+    }
+
+    copyTest() {
+        SandboxManager safe_sm();
+        safe_sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        SandboxManager c1 = safe_sm.copy();
+        assertEq(QSEL_CODE_SAFETY, c1.getEnforcementLevel(), "a copy keeps the level");
+        assertFalse(c1.isEnforcementLevelFixed());
+
+        SandboxManager fixed_sm();
+        fixed_sm.setEnforcementLevel(QSEL_TENANT_ISOLATION);
+        SandboxManager c2 = fixed_sm.copy();
+        assertEq(QSEL_TENANT_ISOLATION, c2.getEnforcementLevel());
+        assertTrue(c2.isEnforcementLevelFixed(), "a copy of a fixed level is fixed");
+        assertThrows("SANDBOX-ACCESS-ERROR", \c2.setEnforcementLevel(), QSEL_CODE_SAFETY);
+    }
+}

@@ -6502,6 +6502,51 @@ bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy) {
         && visit_thread_provenance(td, policy, false, allows);
 }
 
+bool qore_thread_sandbox_governed_by(const QoreSandboxManager* sm) {
+    assert(sm);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the manager, or a composition that it is a member of, governs the code
+    auto other = [sm](QoreSandboxManager* governing) -> bool {
+        if (governing == sm) {
+            return false;
+        }
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(governing)) {
+            return std::find(members->begin(), members->end(), sm) == members->end();
+        }
+        return true;
+    };
+    return !(visit_thread_sandbox_stack(td, nullptr, false, false, other)
+        && visit_thread_provenance(td, false, false, other));
+}
+
+bool qore_caller_tenant_isolated() {
+    // trusted code, also under a module initialization barrier for the code that loads library code; fails closed
+    // if the governing sandbox cannot be resolved
+    if (!qore_caller_is_sandboxed()) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // the strictest level of the governing sandboxes, as qore_thread_sandbox_allows_uncontrolled_apis() resolves them
+    // for QoreSandboxManagerHelper::All: the first manager with tenant isolation ends the walk
+    bool governed = false;
+    auto code_safety = [&governed](QoreSandboxManager* sm) -> bool {
+        governed = true;
+        return sm->getEnforcementLevel() == QSEL_CODE_SAFETY;
+    };
+    if (!visit_thread_sandbox_stack(td, nullptr, false, false, code_safety)
+            || !visit_thread_provenance(td, false, false, code_safety)) {
+        return true;
+    }
+    // sandboxed code that no sandbox manager governs: fails closed
+    return !governed;
+}
+
 static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_id_t* pgm_id = nullptr,
         bool policy = false) {
     ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);

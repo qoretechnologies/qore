@@ -138,6 +138,12 @@ hashdecl SandboxConfigInfo {
     /** @since %Qore 3.0
     */
     bool uncontrolled_api_policy;
+    //! The enforcement level of the sandbox (see SandboxManager::setEnforcementLevel())
+    /** @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+        @since %Qore 3.0
+    */
+    int enforcement_level;
 }
 
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
@@ -178,6 +184,20 @@ const QSEC_NET_UNIX = QSEC_NET_UNIX;
 
 //! All network protocols
 const QSEC_NET_ALL = QSEC_NET_ALL;
+///@}
+
+/** @defgroup sandbox_enforcement_levels Sandbox Enforcement Level Constants
+    The enforcement levels of a sandbox (see @ref Qore::SandboxManager::setEnforcementLevel()
+    "SandboxManager::setEnforcementLevel()" and @ref sandbox_enforcement_level)
+
+    @since %Qore 3.0
+*/
+///@{
+//! Code safety: the policy, limits and functional-domain checks of the sandbox only (no owner rules)
+const QSEL_CODE_SAFETY = QSEL_CODE_SAFETY;
+
+//! Tenant isolation (the default): the checks of @ref QSEL_CODE_SAFETY and the owner rules of the sandbox
+const QSEL_TENANT_ISOLATION = QSEL_TENANT_ISOLATION;
 ///@}
 
 //! Unified sandbox manager combining filesystem, network, and resource controls
@@ -864,6 +884,77 @@ bool SandboxManager::getUncontrolledApiPolicy() [flags=RET_VALUE_ONLY] {
     return sm->getUncontrolledApiPolicy();
 }
 
+//! Sets the enforcement level of the sandbox
+/** The enforcement level decides what the sandbox keeps apart besides the functional domains of the code that it
+    governs (see @ref sandbox_enforcement_level):
+    - @ref QSEL_TENANT_ISOLATION (the default of a new manager): the policy, limits and functional-domain checks of the
+      sandbox, and the owner rules, which keep the code that the sandbox governs from changing or reading the state of
+      objects that its sandbox did not create, for the code of a tenant that must be isolated from the host and from
+      other tenants;
+    - @ref QSEL_CODE_SAFETY: the policy, limits and functional-domain checks only, for code that the host trusts and
+      runs in a sandbox to keep it from mistakes, or for interrupts and limits.
+
+    When more than one sandbox governs code, the strictest level of them applies.
+
+    Raising the level to @ref QSEL_TENANT_ISOLATION is always allowed, and fixes it: the level can never be lowered
+    again.  Lowering it to @ref QSEL_CODE_SAFETY is allowed only to the creator of the manager: trusted code, or the
+    code of the %Program whose code created the manager (as for the other changes that lift a restriction, see
+    @ref Qore::SandboxManager "SandboxManager"); never to code that the manager governs, and only while the level has
+    not been fixed.
+
+    @param level @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+# a sandbox for interrupting and limiting code that the host trusts
+SandboxManager sm();
+sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR the level was lowered by code that the manager governs, by code that is not trusted
+    and whose %Program did not create the manager, or after the level was fixed
+    @throw SANDBOX-ENFORCEMENT-LEVEL-ERROR invalid level
+
+    @see
+    - getEnforcementLevel()
+    - isEnforcementLevelFixed()
+    - isTenantIsolated()
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setEnforcementLevel(int level) [flags=NAMED_ARGS] {
+    if (level != QSEL_CODE_SAFETY && level != QSEL_TENANT_ISOLATION) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "invalid sandbox enforcement level " QLLD
+            "; expecting QSEL_CODE_SAFETY (%d) or QSEL_TENANT_ISOLATION (%d)", level, QSEL_CODE_SAFETY,
+            QSEL_TENANT_ISOLATION);
+        return QoreValue();
+    }
+    sm->setEnforcementLevel(static_cast<QoreSandboxEnforcementLevel>(level), xsink);
+}
+
+//! Returns the enforcement level of the sandbox
+/** @return @ref QSEL_TENANT_ISOLATION (the default) or @ref QSEL_CODE_SAFETY
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getEnforcementLevel() [flags=RET_VALUE_ONLY] {
+    return static_cast<int64>(sm->getEnforcementLevel());
+}
+
+//! Returns @ref True if the enforcement level of the sandbox can no longer be lowered
+/** @return @ref True once the level was raised to @ref QSEL_TENANT_ISOLATION with setEnforcementLevel()
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::isEnforcementLevelFixed() [flags=RET_VALUE_ONLY] {
+    return sm->isEnforcementLevelFixed();
+}
+
 //! Returns the filesystem security configuration
 /** @return a @ref FilesystemSecurityConfigInfo hash with the current filesystem security configuration
 
@@ -1474,6 +1565,38 @@ if (SandboxManager::isSandboxed()) {
 static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     return static_cast<bool>(governing);
+}
+
+//! Returns @ref True if the owner rules apply to the calling code
+/** The owner rules keep the code of a sandbox at the enforcement level @ref QSEL_TENANT_ISOLATION from changing or
+    reading the state of objects that its sandbox did not create (see @ref sandbox_enforcement_level).  They apply if
+    the calling code is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") and a sandbox that governs it has the level
+    @ref QSEL_TENANT_ISOLATION: the strictest level of the governing sandboxes (of the call stack, of the objects and
+    callbacks that the code runs, of the thread's start and of a sandboxed caller that the code acts for) decides.  It
+    fails closed: sandboxed code that no sandbox manager governs is isolated.
+
+    Library code uses it to apply a rule that only isolates tenants from each other, and that code that the host
+    trusts and runs in a sandbox only for code safety must not be subject to.
+
+    It reveals only whether the calling code is isolated, so it is not restricted itself.
+
+    @return @ref True if the owner rules apply to the calling code, @ref False if it is trusted or every sandbox that
+    governs it has the level @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+if (SandboxManager::isTenantIsolated()) {
+    throw "TENANT-ERROR", "tenant code cannot share this object";
+}
+    @endcode
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isTenantIsolated() [flags=RET_VALUE_ONLY] {
+    return qore_caller_tenant_isolated();
 }
 
 //! Refuses a change to a process-wide registry of callbacks, hooks, handlers or listeners by sandboxed code
