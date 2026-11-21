@@ -302,9 +302,33 @@ private:
 };
 }
 
+//! true while the current thread creates the context of an I/O thread, whose command queue keeps a placeholder
+//! command (MpscQueue's sentinel node) for as long as it exists: it is not work of the module cleanup, which would
+//! wait for it forever when it creates the controller itself (a destructor that submits the first operation of the
+//! process at its end) or sets the number of I/O threads
+static thread_local bool io_command_placeholder = false;
+
+namespace {
+//! sets io_command_placeholder while the context of an I/O thread is created
+class IoCommandPlaceholderHelper {
+public:
+    DLLLOCAL IoCommandPlaceholderHelper() : prev(io_command_placeholder) {
+        io_command_placeholder = true;
+    }
+
+    DLLLOCAL ~IoCommandPlaceholderHelper() {
+        io_command_placeholder = prev;
+    }
+
+private:
+    bool prev;
+};
+}
+
 bool AsyncIoControllerPriv::commandModuleCleanupDelegation() {
-    // also a command that an I/O thread creates while it processes a command of the cleanup (qore#6928)
-    return io_command_module_cleanup_delegate || qore_module_cleanup_delegation();
+    // also a command that an I/O thread creates while it processes a command of the cleanup (qore#6928); not the
+    // placeholder of a command queue (see io_command_placeholder)
+    return !io_command_placeholder && (io_command_module_cleanup_delegate || qore_module_cleanup_delegation());
 }
 
 //! Thread-local pointer to the controller that owns the current I/O thread; nullptr when not on an I/O thread.
@@ -3710,7 +3734,11 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
     // Initialize I/O thread contexts
     io_threads.reserve(num_io_threads);
     for (int i = 0; i < num_io_threads; ++i) {
-        io_threads.push_back(std::make_unique<IoThreadContext>());
+        {
+            // the command queue's placeholder is not work of the module cleanup
+            IoCommandPlaceholderHelper placeholder;
+            io_threads.push_back(std::make_unique<IoThreadContext>());
+        }
         auto& t = *io_threads.back();
         t.thread_idx = i;
         t.loop = new QoreEventLoop(xsink);
@@ -6666,7 +6694,12 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
     std::vector<std::unique_ptr<IoThreadContext>> new_threads;
     new_threads.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
-        auto tp = std::make_unique<IoThreadContext>();
+        std::unique_ptr<IoThreadContext> tp;
+        {
+            // the command queue's placeholder is not work of the module cleanup
+            IoCommandPlaceholderHelper placeholder;
+            tp = std::make_unique<IoThreadContext>();
+        }
         tp->thread_idx = i;
         tp->loop = new QoreEventLoop(xsink);
         if (*xsink) {

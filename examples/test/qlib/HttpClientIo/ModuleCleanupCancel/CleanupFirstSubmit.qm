@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # a module whose destructor submits the first asynchronous I/O operation of the process at its end, so that the module
-# cleanup starts the I/O threads; see ModuleCleanupCancel.qtest
+# cleanup creates the asynchronous I/O controller and its I/O threads; see ModuleCleanupCancel.qtest
 
 %modern
 
