@@ -1361,7 +1361,9 @@ DLLEXPORT int qore_check_caller_owns_object(const QoreObject& obj, const char* w
 
     It is refused (\c SANDBOX-ACCESS-ERROR) for sandboxed code, for an object that a sandbox owns already, when no
     sandboxed caller is served, and for an object that was not created while the caller was served (its provenance
-    does not name the caller's sandbox).
+    does not name the caller's sandbox): so that an object that exists already, such as a shared object, is never
+    handed to a sandbox by mistake.  To give the caller such an object, create a new one while serving the caller (a
+    copy, for example) and transfer that.
 
     @param obj the object to hand over
     @param xsink raises \c SANDBOX-ACCESS-ERROR if the transfer is refused
