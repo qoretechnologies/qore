@@ -2794,6 +2794,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->close_frame_streams.erase(stream_id);
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
+    h2->stream_taken_total.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2879,12 +2880,20 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     }
 
     BodyData& bd = it->second;
+#ifdef DEBUG
+    // tests hold the buffered data back, as a peer that grants no flow-control credit does: it stays buffered, and
+    // the next send on the stream resumes the stream once the hold is released
+    if (qore_dbg_h2_stream_data_held(stream_id)) {
+        return NGHTTP2_ERR_DEFERRED;
+    }
+#endif
     size_t remaining = bd.data.size() - bd.offset;
     size_t to_copy = std::min(remaining, length);
 
     if (to_copy > 0) {
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
+        h2->stream_taken_total[stream_id] += to_copy;
     }
 
     // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
@@ -3637,6 +3646,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
         return (!pending || pending + refused <= lit->second) ? 0 : 1;
     }
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int64_t Http2Session::streamTakenBytes(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return -1;
+    }
+    auto it = stream_taken_total.find(stream_id);
+    int64_t taken = it == stream_taken_total.end() ? 0 : static_cast<int64_t>(it->second);
+#ifdef DEBUG
+    // tests simulate a peer that takes the data of a stream a little at a time
+    taken += qore_dbg_quic_simulated_stream_progress(stream_id);
+#endif
+    return taken;
 }
 
 int Http2Session::streamSendFlushed(int32_t stream_id) {

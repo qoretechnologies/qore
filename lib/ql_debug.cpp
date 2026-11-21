@@ -26196,6 +26196,42 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
 }
 
 namespace {
+//! the HTTP/2 stream whose buffered data is held back, set by dbg_http2_hold_stream_data(); -1: none
+std::atomic<int64_t> dbg_h2_hold_stream{-1};
+}
+
+bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
+    return dbg_h2_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the buffered data of an HTTP/2 stream back from the transport, as when its peer grants no flow-control credit
+/** The data that is sent on the stream stays buffered in the session, so that tests can fill the stream's send
+    buffer deterministically.  Only one stream is held at a time (the stream ID is that of both ends of a connection
+    within a process: a test holds the stream of a request that its server never answers).
+
+    @param stream_id the HTTP/2 stream ID
+*/
+static QoreValue f_dbg_http2_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    if (stream_id <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_hold_stream_data(): invalid stream ID %lld",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    dbg_h2_hold_stream.store(stream_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the buffered data of the HTTP/2 stream held with dbg_http2_hold_stream_data()
+/** The next send on the stream resumes it.
+*/
+static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_h2_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
 //! count that still advance it, and the progress added so far
 std::atomic<int64_t> dbg_quic_progress_stream{-1};
@@ -26216,9 +26252,10 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
     return dbg_quic_progress_added.load(std::memory_order_acquire);
 }
 
-//! simulates a peer that takes the data of an HTTP/3 client stream a little at a time
-/** The next \a reads reads of the stream's acknowledged byte count (Socket::getQuicClientStreamAckedBytes(), which
-    a send waiting for a full send buffer to drain makes at the start and at the end of each wait) each see one byte
+//! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
+/** The next \a reads reads of the stream's progress count (Socket::getQuicClientStreamAckedBytes() or
+    Socket::getHttp2StreamTakenBytes(), which a send waiting for a full send buffer to drain makes at the start and
+    at the end of each wait) each see one byte
     more acknowledged than the one before, with no clock involved: with the stream's staged data held back (see
     dbg_quic_hold_stream_data()), a wait that times out after such a read has seen progress.  Setting it again
     starts a new count.
@@ -28643,6 +28680,13 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
+    qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");

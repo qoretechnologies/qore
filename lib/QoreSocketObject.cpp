@@ -7046,6 +7046,15 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         owner_name.c_str(), xsink);
 }
 
+int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    return h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+}
+
 int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
     ValueHolder rv(qore_socket_object_exec_quic_query(s,
         new QoreSocketObjectQuicQueryPollOperation(s,
