@@ -247,7 +247,7 @@ public namespace GrantProbe {
             load_module(path);
             return "LOADED";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.desc =~ /native code only from the module path/ ? "NATIVE-REFUSED" : ex.err;
+            return classify_native_load(ex);
         }
     }
 
@@ -257,8 +257,20 @@ public namespace GrantProbe {
             target.loadModule(path);
             return "LOADED";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.desc =~ /native code only from the module path/ ? "NATIVE-REFUSED" : ex.err;
+            return classify_native_load(ex);
         }
+    }
+
+    #! classifies the result of a load of the deliberately empty native module file of the test: refused by the
+    #! policy, or reached the loader, which cannot load the empty file
+    public string sub classify_native_load(hash<ExceptionInfo> ex) {
+        if (ex.desc =~ /native code only from the module path/) {
+            return "NATIVE-REFUSED";
+        }
+        if (ex.err == "LOAD-MODULE-ERROR" && ex.desc =~ /file too short/) {
+            return "LOADER-REACHED";
+        }
+        return ex.err + ": " + ex.desc;
     }
 
     #! loads a native module by its path into another Program under a policy barrier: the host grant and the Program

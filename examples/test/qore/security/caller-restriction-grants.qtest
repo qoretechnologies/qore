@@ -70,7 +70,7 @@ class CallerRestrictionGrantsTest inherits QUnit::Test {
             assertEq("\"OK\"", h.imported_obj_declared, i.key + ": a declared domain called by imported code");
             assertEq("False", h.imported_func_ref, i.key + ": a call reference to an imported function");
         }
-        assertEq(7, sb.size(), "sandboxed: every result");
+        assertEq(9, sb.size(), "sandboxed: every result");
         # every way that restricted code's code runs is restricted, also under a grant and in a module's initialization
         foreach string k in (("path_direct", "closure_barrier", "path_ref_barrier", "path_obj_ref_barrier",
                 "subclass_ref_barrier", "made_obj_ref_barrier", "builtin_ref_barrier", "obj_with_grant",
@@ -95,12 +95,25 @@ class CallerRestrictionGrantsTest inherits QUnit::Test {
         assertEq("\"NATIVE-REFUSED\"", r.native_init, "restricted: native code in a module's initialization");
         assertEq("\"NATIVE-REFUSED\"", r.native_program_barrier,
             "restricted: native code into another Program under a grant");
-        assertNeq("\"NATIVE-REFUSED\"", u.native_program_barrier,
+        assertEq("\"LOADER-REACHED\"", u.native_program_barrier,
             "unrestricted: native code into another Program under a grant");
-        assertNeq("\"NATIVE-REFUSED\"", u.native_barrier, "unrestricted: native code under a grant");
-        assertNeq("\"NATIVE-REFUSED\"", u.native_init, "unrestricted: native code in a module's initialization");
-        assertEq(26, r.size(), "restricted: every result");
-        assertEq(26, u.size(), "unrestricted: every result");
+        assertEq("\"LOADER-REACHED\"", u.native_barrier, "unrestricted: native code under a grant");
+        assertEq("\"LOADER-REACHED\"", u.native_init, "unrestricted: native code in a module's initialization");
+        # library code that loads native code for a restricted caller under a host grant, in its own Program: refused,
+        # as a grant does not lend the loading of native code (#6844) and the caller's restriction applies (#7020);
+        # and a caller whose sandbox denies uncontrolled APIs while no parse option restricts them: refused only by the
+        # sandbox's policy (#7020)
+        assertEq("\"NATIVE-REFUSED\"", r.native_lib_barrier, "restricted: library code loads native code under a grant");
+        assertEq("\"LOADER-REACHED\"", u.native_lib_barrier, "unrestricted: library code loads native code under a grant");
+        assertEq("\"NATIVE-REFUSED\"", sb.native_sandbox_policy,
+            "a caller whose sandbox denies uncontrolled APIs: its own load");
+        # (a sandbox denies uncontrolled APIs unless it allows them: only the sandbox refuses the load of the sandboxed
+        # caller, which is restricted from external information only)
+        assertEq("\"NATIVE-REFUSED\"", sb.native_own, "sandboxed: its own load, refused by its sandbox's policy");
+        assertEq("\"NATIVE-REFUSED\"", r.native_own, "restricted: its own load");
+        assertEq("\"LOADER-REACHED\"", u.native_own, "unrestricted: its own load");
+        assertEq(28, r.size(), "restricted: every result");
+        assertEq(28, u.size(), "unrestricted: every result");
     }
 
     #! parses the output of a child process: one line per result, with the key, \c "=" and the value written with

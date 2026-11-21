@@ -59,7 +59,7 @@ p.parse("%modern
 class Sub inherits GrantPath::Obj {
 }
 # trusted code under a grant that calls another library module, and the host's code that the host imported
-hash<auto> sub run_common() {
+hash<auto> sub run_common(string native) {
     hash<auto> h;
     h.cross_in_grant = GrantProbe::cross_in_grant();
     h.cross_in_capability = GrantProbe::cross_in_capability();
@@ -69,10 +69,18 @@ hash<auto> sub run_common() {
     h.imported_obj_ref = (\\hc.probe())();
     h.imported_obj_declared = hc.declared();
     h.imported_func_ref = (\\host_probe())();
+    # the caller's own load of a native module: refused by the caller's options or by its sandbox's policy for
+    # uncontrolled APIs (#7020), which are not functional-domain restrictions
+    try {
+        load_module(native);
+        h.native_own = \"LOADED\";
+    } catch (hash<ExceptionInfo> ex) {
+        h.native_own = GrantProbe::classify_native_load(ex);
+    }
     return h;
 }
 hash<auto> sub run(string native) {
-    hash<auto> h = run_common();
+    hash<auto> h = run_common(native);
     GrantPath::Obj o();
     Sub s();
     GrantPath::Obj made = GrantPath::make();
@@ -106,9 +114,11 @@ hash<auto> sub run(string native) {
             load_module(native);
             return \"LOADED\";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.desc =~ /native code only from the module path/ ? \"NATIVE-REFUSED\" : ex.err;
+            return GrantProbe::classify_native_load(ex);
         }
     });
+    # library code under a host grant, in its own Program: decided by the caller walk without the grant (#6844)
+    h.native_lib_barrier = GrantProbe::load_native_barrier(native);
     # under a host grant, into another Program: neither the grant nor the Program switch lends it
     h.native_program_barrier = GrantProbe::load_native_in_program_barrier(native);
     load_module(\"GrantNativeInit\");
@@ -117,8 +127,29 @@ hash<auto> sub run(string native) {
 }
 ", ARGV[2]);
 # one line per result: the key, "=", and the value written with %y
-map printf("%s=%y\n", $1.key, $1.value), (ARGV[2] == "sandboxed" ? p.callFunction("run_common")
+map printf("%s=%y\n", $1.key, $1.value), (ARGV[2] == "sandboxed" ? p.callFunction("run_common", ARGV[1])
     : p.callFunction("run", ARGV[1])).pairIterator();
+
+# a caller whose sandbox denies uncontrolled APIs while no parse option restricts them loads native code itself: only
+# the sandbox's policy refuses it (#7020)
+if (ARGV[2] == "sandboxed") {
+    SandboxManager nsm();
+    nsm.setUncontrolledApiPolicy(False);
+    Program n(PO_NEW_STYLE);
+    n.setSandboxManager(nsm);
+    n.parse("%modern
+%requires GrantProbe
+string sub load(string path) {
+    try {
+        load_module(path);
+        return \"LOADED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return GrantProbe::classify_native_load(ex);
+    }
+}
+", "native-sandbox");
+    printf("native_sandbox_policy=%y\n", n.callFunction("load", ARGV[1]));
+}
 
 # the code of a trusted build runs for the Program that created the capability, also when that Program's own code
 # calls it: a creator restricted only from external information (it may create the capability)
