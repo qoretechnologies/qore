@@ -303,6 +303,10 @@ qore_ci_resource_report "before the tests"
 QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(qore_ci_test_jobs)}"
 echo "QORE_TEST_JOBS=${QORE_TEST_JOBS}"
 TEST_RC=0
+# the root helper through which run_tests.sh captures the native call stacks of the processes of a test that exceeds
+# its time limit (see ci-stack-capture.sh): the tests run as qore, whose debugger yama's ptrace_scope may not let attach
+. "${QORE_SRC_DIR}/test/docker_test/ci-stack-capture.sh"
+qore_ci_start_stack_capture qore
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
@@ -316,7 +320,10 @@ gosu qore:qore env \
     QORE_TEST_JOBS="${QORE_TEST_JOBS}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
+    QORE_TEST_STACK_CAPTURE_HELPER="${QORE_TEST_STACK_CAPTURE_HELPER}" \
     ./run_tests.sh || TEST_RC=$?
+# no process of the job may outlive it (see ci-job-processes.sh)
+qore_ci_stop_stack_capture
 qore_ci_resource_report "after the tests"
 # the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
 # database servers; a server that cannot be reached is reported, and the cleanup never fails the job

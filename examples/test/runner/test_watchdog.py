@@ -1074,6 +1074,12 @@ def watchdog_functions():
     source = RUN_TESTS.read_text()
     functions = []
     names = ["read_test_event", "run_with_watchdog"]
+    # the watchdog prints the native call stacks of the test's other processes (#6888), with the functions that the
+    # runner has of these
+    names[:0] = [name for name in ("capture_descendant_stacks", "test_stack_processes", "process_command_line",
+                                   "process_ended", "runs_stack_tool", "stack_attach_refused", "stack_attach_failed",
+                                   "test_stack_process_check", "runs_stack_helper")
+                 if re.search(r"^" + name + r"\(\) \{", source, re.M)]
     if re.search(r"^exec_in_test_group\(\) \{", source, re.M):
         names[:0] = ["exec_in_test_group", "end_test_group"]
     # the watchdog signals only the test (#6875)
@@ -1152,6 +1158,8 @@ class WatchdogReadTest(unittest.TestCase):
         self.assertIn("the test exceeded its 30s limit", result.output)
         self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event", result.output)
         self.assertNotIn("test ran to its end", result.output)
+        # every function that the watchdog calls is there ("sh: 1: capture_descendant_stacks: not found")
+        self.assertNotRegex(result.output, r"(?m)(: not found|command not found)$")
         # the failed read makes the watchdog send SIGKILL right after the timeout signal, so the test ends with
         # whichever arrives first: SIGABRT (134) or, when its core dump has not finished, SIGKILL (137); either way it
         # does not run to its end
