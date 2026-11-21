@@ -3238,6 +3238,12 @@ public:
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;
 
+    //! 1 if the class is SocketPollOperation or a subclass of it, 0 if not, -1 if not determined yet (qore#6839)
+    /** the objects of these classes keep the socket and goal of their operation with the operation; set when first
+        needed, by any thread, with the same value
+    */
+    mutable std::atomic<signed char> socket_poll_op_class{-1};
+
     qore_classid_t classID,          // class ID
         methodID;                    // for subclasses of builtin classes that will not have their own private data,
                                      // instead they will get the private data from this class

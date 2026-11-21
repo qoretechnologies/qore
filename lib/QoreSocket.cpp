@@ -15906,8 +15906,39 @@ static SocketPollOperationMembers* qore_poll_op_cast_members(const SocketPollOpe
 */
 static bool qore_poll_op_class_keeps_members(const QoreObject* obj) {
     const QoreClass* cls = obj->getClass();
-    return cls == QC_SOCKETPOLLOPERATION || cls->getClass(CID_SOCKETPOLLOPERATION);
+    if (cls == QC_SOCKETPOLLOPERATION) {
+        return true;
+    }
+    // the answer is kept with the class, as the hierarchy of a class does not change
+    const qore_class_private* cp = qore_class_private::get(*cls);
+    signed char v = cp->socket_poll_op_class.load(std::memory_order_relaxed);
+    if (v < 0) {
+        v = cls->getClass(CID_SOCKETPOLLOPERATION) ? 1 : 0;
+        cp->socket_poll_op_class.store(v, std::memory_order_relaxed);
+    }
+    return v;
 }
+
+#ifdef DEBUG
+//! returns true if the operation of the object keeps a socket with it (qore#6839)
+static bool qore_poll_op_object_keeps_socket(const QoreObject* obj) {
+    if (!qore_poll_op_class_keeps_members(obj)) {
+        return false;
+    }
+    ExceptionSink xsink;
+    ReferenceHolder<AbstractPrivateData> pd(obj->tryGetReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, &xsink),
+        &xsink);
+    const SocketPollOperationMembers* m = pd ? qore_poll_op_cast_members(static_cast<SocketPollOperationBase*>(*pd))
+        : nullptr;
+    bool rv = false;
+    if (m) {
+        ValueHolder v(m->getReferencedPollMember("sock"), &xsink);
+        rv = (bool)*v;
+    }
+    xsink.clear();
+    return rv;
+}
+#endif
 
 QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xsink) const {
     assert(self);
@@ -15915,17 +15946,19 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
     // private:internal member of SocketPollOperationBase (qore#6839)
     const QoreObject* self_obj = *self;
     ValueHolder rv(xsink);
-    if (qore_poll_op_class_keeps_members(self_obj)) {
+    const SocketPollOperationMembers* m = qore_poll_op_cast_members(this);
+    if (m) {
         // the operation of the object, whose members these are, or an operation that it runs and that shares its
         // object, whose own members are not set and which therefore reads them through the object
-        const SocketPollOperationMembers* m = qore_poll_op_cast_members(this);
-        if (m) {
-            rv = m->getReferencedPollMember("sock");
-        }
+        rv = m->getReferencedPollMember("sock");
         if (!rv) {
             rv = qore_poll_op_get_referenced_member(self_obj, "sock", xsink);
         }
     } else {
+        // an operation without the members (the poll operations that are not of qore/SocketPollOperation.h): its
+        // object keeps the socket in the private:internal member, as no operation that keeps it with it runs
+        // other operations that have no members of their own in its object
+        assert(!qore_poll_op_object_keeps_socket(self_obj));
         rv = self_obj->getReferencedInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
     }
     if (*xsink) {
