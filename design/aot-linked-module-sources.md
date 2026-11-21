@@ -58,6 +58,45 @@ the sandbox of that code (`sandboxDeniedTest` and `sandboxLibraryTest` in
 instead fails, `AOT-MODULE-STALE` follows its error in the exception chain (see
 `design/module-parse-option-masks.md`, "Reporting a refused AOT module").
 
+## Several builds of one tree
+
+All the builds of a source tree link their modules into the same source `qlib` directory: `qlib/<name>.qmod`, or
+`qlib/<name>/<name>.qmod` for a module in a directory of its own, links to the same relative path in the build's
+`qlib-qmod` directory.  With `build/` and `build-debug/` in one tree, each build points the links to its own modules,
+so they lead to the build that was built last, and a process of the other build found modules compiled against
+another libqore and other binary modules (`AOT-MODULE-STALE`, "compiled against other files of module 'json'", for
+example: qore#7030).
+
+So the loader uses the links only for the build of its own libqore (`qore_own_build_qmod()` in
+`lib/ModuleManager.cpp`): when libqore is in a CMake build tree (its directory has the `CMakeCache.txt` of the build,
+which names the source tree, `CMAKE_HOME_DIRECTORY`), a `.qmod` that is a symbolic link in that source tree's `qlib`
+directory (or a directory below it) to the module at the same relative path in the `qlib-qmod` directory of another
+build is replaced by the module at that path in libqore's own `qlib-qmod` directory; if libqore's build has none (a module it does not build, or a build
+without AOT modules), the link is not used, and the loader goes on as if it were not there: it finds the source
+module in the same directory.  This applies to a module found in the module path, to one named by the path of the
+link (without a module of the build and without a source next to the link, that load fails with
+`LOAD-MODULE-ERROR`), and to the candidate files of an optional module that a compile records.  The checks of this
+document then apply to the module that is used.  Whether the module is library code (trusted, see
+`QoreModuleManager::isTrustedModulePath()`) is decided by the link where it was found, which is in the module path,
+while the build's `qlib-qmod` directory need not be: the module is chosen by the build of the library, not by the code
+that loads it, so code whose functional domains are restricted loads it as it loads the link.
+
+A process therefore loads only the modules of its own build, whichever build linked them last, and the development
+workflow is unchanged: after a change to a module's source, rebuild the module (`<name>-qmod`) in the build that runs
+the tests.  The same applies to qcc, which runs with the libqore of its build when the build compiles a module that
+requires another module of the tree.  A link that leads into another source tree's build, and every module that is not
+a link, is used as found, as is any module that an installed libqore (one without a `CMakeCache.txt` next to it)
+loads, and a link to a module outside the `qlib-qmod` directory of a build (one compiled by hand).  The directory of
+libqore is resolved when the library is initialized, as the path that the dynamic linker gives can be relative (a
+relative `LD_LIBRARY_PATH` entry) and the program can change its working directory; libqore reads its
+`CMakeCache.txt` once per process, at the first `.qmod` link it finds.  A libqore that a multi-configuration
+generator puts in a directory of each configuration (`build/Release/`) has no `CMakeCache.txt` next to it and uses
+the links as found.
+
+On macOS the dynamic linker names a library by the path of its file, which it takes from the file system (the
+target of a symbolic link, and for a file with several hard links any of their names); the test therefore gives each
+of its build trees a clone of the library (`cp -c`), not a hard link.
+
 ## The sources of a module
 
 The sources are the files that the dependency file of the module lists (`<qmod>.d`, written by qcc with `--depfile`
@@ -244,6 +283,13 @@ mtime rule did; nothing is hashed.  After a checkout or a copy, each source of a
 process.
 
 ## Tests
+
+`examples/test/ir/AOTModuleOtherBuildLink.qtest`: build trees of a source tree, each with a copy of the libqore under
+test, load their own modules for a link into another build (flat and split modules, found in the module path or
+named by the path of the link), the source module when they have none (flat and split), the module of their own
+build for code whose functional domains are restricted when only the source `qlib` is in the module path, and a link
+as found with a libqore outside a build tree, for a link in another source tree, for a link outside the `qlib-qmod`
+directory of a build, and for a module that is not a link (qore#7030).
 
 `examples/test/ir/AOTLinkedModuleStale.qtest`: a current module is loaded; a changed source (of the same size, and of
 another size) and a changed dependency are found; sources that only got new modification times are not; the
