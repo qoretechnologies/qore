@@ -298,9 +298,8 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         #! The functional domains that the code that created the connection is restricted from (qore#6981)
         /** Set when the connection is created, also when it is deserialized: code restricted from the domains that
-            the connection's clients use cannot create the connection (qore#7052), and a connection is refused its
-            clients if its creator is restricted from them (see getConnectionDomainsImpl()); a connection that the
-            host created and lends to restricted code is not refused
+            the connection's clients use cannot create the connection (qore#7052; see checkCreation() and
+            getConnectionDomainsImpl())
         */
         transient int creator_restrictions = AbstractConnection::getCreatorRestrictions();
     }
@@ -825,7 +824,6 @@ conn.checkSandboxAccess(True);
     /** calls @ref getImpl() to actually acquire the connection object
     */
     object get(bool connect = True, *hash<auto> rtopts) {
-        checkCreator();
         # the common path is one call: only a sandboxed caller is checked
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
@@ -873,7 +871,6 @@ conn.checkSandboxAccess(True);
         @see getAsyncImpl()
     */
     object getAsync(bool connect = True, *hash<auto> rtopts) {
-        checkCreator();
         # the common path is one call: only a sandboxed caller is checked
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
@@ -1429,23 +1426,15 @@ scheme://user:pass@hostname:port/path
     private abstract object getImpl(bool connect = True, *hash<auto> rtopts);
 
     #! Returns the functional domains that the connection's clients use (qore#6981)
-    /** A connection that code restricted from any of them created gives no client (get(), getAsync()); 0 by default;
-        the connections to a network host return @ref Qore::DOM_NETWORK "DOM_NETWORK", those of the file system
-        @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM"
+    /** Code restricted from any of them cannot create the connection; 0 by default (a connection whose clients use
+        no functional domain); the connections to a network host return @ref Qore::DOM_NETWORK "DOM_NETWORK", those of
+        the file system @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", those of a database
+        @ref Qore::DOM_DATABASE "DOM_DATABASE"
 
         @since %ConnectionProvider 3.1
     */
     private int getConnectionDomainsImpl() {
         return 0;
-    }
-
-    #! Refuses the client of a connection that code restricted from the connection's domains created (qore#6981)
-    private:internal checkCreator() {
-        int dom = creator_restrictions & getConnectionDomainsImpl();
-        if (dom) {
-            throw "PERMISSION-DENIED", sprintf("connection %y was created by code restricted from the %s functional "
-                "domain, so it gives no client", name, dom & DOM_FILESYSTEM ? "FILESYSTEM" : "NETWORK");
-        }
     }
 
     #! Refuses a connection that code restricted from the connection's domains creates or deserializes (qore#7052)
@@ -1457,8 +1446,7 @@ scheme://user:pass@hostname:port/path
         int dom = creator_restrictions & getConnectionDomainsImpl();
         if (dom) {
             throw "PERMISSION-DENIED", sprintf("code restricted from the %s functional domain cannot create connection "
-                "%y; use a connection that the host provides", dom & DOM_FILESYSTEM ? "FILESYSTEM" : "NETWORK",
-                conn_name);
+                "%y; use a connection that the host provides", AbstractConnection::getDomainNames(dom), conn_name);
         }
     }
 
@@ -1472,13 +1460,35 @@ scheme://user:pass@hostname:port/path
         sandbox_check = new DataProvider::DataProviderSandboxCheck();
         creator_restrictions = AbstractConnection::getCreatorRestrictions();
         checkCreation(members.name);
-        self += members;
+        # the transient and internal members are the deserializing process's own, never the serialized data's
+        self += members - TransientMembers;
+    }
+
+    #! The members that deserializeMembers() assigns itself
+    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions");
+
+    #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
+    const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);
+
+    #! Returns the names of the given connection domains, for messages
+    private:internal static string getDomainNames(int dom) {
+        list<string> rv = ();
+        if (dom & DOM_NETWORK) {
+            push rv, "NETWORK";
+        }
+        if (dom & DOM_FILESYSTEM) {
+            push rv, "FILESYSTEM";
+        }
+        if (dom & DOM_DATABASE) {
+            push rv, "DATABASE";
+        }
+        return rv.join(" and ");
     }
 
     #! Returns the functional domains of a connection that the calling code is restricted from (qore#6981)
     private:internal static int getCreatorRestrictions() {
         int rv = 0;
-        foreach int dom in ((DOM_NETWORK, DOM_FILESYSTEM)) {
+        foreach int dom in (ConnectionDomains) {
             if (SandboxManager::isCallerRestricted(dom)) {
                 rv |= dom;
             }

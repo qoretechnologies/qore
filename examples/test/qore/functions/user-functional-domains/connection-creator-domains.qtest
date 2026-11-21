@@ -20,15 +20,16 @@
 %requires MllpUtil
 %requires WebSocketClient
 %requires ConnectDataProvider
+%requires DataStreamClientIo
+%requires MongoDbDataProvider
 
 %exec-class ConnectionCreatorDomainsTest
 
-#! Tests that a connection gives its clients according to the restrictions of the code that created it (qore#6981)
+#! Tests that code restricted from the functional domains of a connection cannot create it (qore#6981, qore#7052)
 /** A connection builds its client in its module's code, when get() or getAsync() is called, so a connection that code
-    restricted from the network created handed that code a live client.  A connection records the domains that its
-    creator is restricted from: one that restricted code created gives no client, whoever asks for it, and one that
-    the host created and lends to restricted code gives its clients, which the connection creates when they are asked
-    for, as a capability of the host.
+    restricted from the network created handed that code a live client.  Code restricted from the domains that a
+    connection's clients use cannot create the connection, by any constructor or by deserialization; a connection that
+    the host created gives its clients to the code that the host gives it to.
 */
 class ConnectionCreatorDomainsTest inherits QUnit::Test {
     private {
@@ -51,10 +52,16 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             "FtpConnection getAsync": ("ConnectionProvider::FtpConnection", "ftp", "getAsync"),
             "WebSocketConnectionObject get": ("WebSocketClient::WebSocketConnectionObject", "ws", "get"),
             "ConnectConnection get": ("ConnectDataProvider::ConnectConnection", "connect", "get"),
+            "DataStreamConnectionIo get": ("DataStreamClient::DataStreamConnectionIo", "dsio", "get"),
+            "MongoDbConnection get": ("MongoDbDataProvider::MongoDbConnection", "mongodb", "get"),
         };
 
         #! the connections whose creator is checked: those that restricted code creates give no client
         const Checked = keys Connections;
+
+        #! the classes of the connections that have a constructor that takes a configuration hash
+        const HashConfig = ("RestConnection get", "HttpConnection get", "SmtpConnection get", "FtpConnection getAsync",
+            "MongoDbConnection get", "DataStreamConnectionIo get");
     }
 
     constructor() : QUnit::Test("ConnectionCreatorDomains", "1.0", \ARGV) {
@@ -63,6 +70,7 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             addTestCase("connections that the host lends, " + m, sub () { testLent(m); });
             addTestCase("connections that restricted code creates, " + m, sub () { testRestrictedCreator(m); });
             addTestCase("the domains of a connection class, " + m, sub () { testDomainOverride(m); });
+            addTestCase("a file system connection, " + m, sub () { testFilesystem(m); });
         }
         set_return_value(main());
     }
@@ -83,7 +91,7 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
         }
     }
 
-    #! a connection that restricted code created gives no client, also to trusted code
+    #! code restricted from a connection's domain cannot create the connection, nor deserialize it
     private testRestrictedCreator(string mode) {
         int port = get_free_port();
         Program p = getProgram(mode);
@@ -93,6 +101,12 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
                 "connection \"c\"", p.callFunction("make", i[0], getUrl(i[1], port)),
                 sprintf("%s, %s", key, mode));
+            # also by the constructor that takes a configuration hash
+            if (HashConfig.contains(key)) {
+                assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                    "connection \"c\"", p.callFunction("make_hash", i[0], getUrl(i[1], port)),
+                    sprintf("%s from a configuration, %s", key, mode));
+            }
             # nor deserialized from a connection that the host serialized
             object c = create_object(i[0], "c", "d", getUrl(i[1], port), {"monitor": False});
             binary data = c.serialize();
@@ -129,6 +143,17 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
         assertRegex("^PARSE-EXCEPTION: .*getConnectionDomainsImpl", result, "override, " + mode);
     }
 
+    #! code restricted from the file system cannot create a file system connection
+    private testFilesystem(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires ConnectionProvider\nstring sub t() { try { new FilesystemConnection(\"c\", "
+            "\"d\", \"file:///tmp\", {\"monitor\": False}); return \"created\"; } catch (hash<ExceptionInfo> ex) "
+            "{ return ex.err + \": \" + ex.desc; } }", "filesystem");
+        assertRegex("^PERMISSION-DENIED: code restricted from the FILESYSTEM functional domain cannot create "
+            "connection \"c\"", p.callFunction("t"), "file system connection, " + mode);
+    }
+
     #! returns the URL of a connection; POP3 and IMAP connections need credentials
     private static string getUrl(string scheme, int port) {
         return sprintf("%s://%s127.0.0.1:%d", scheme, (scheme == "pop3" || scheme == "imap") ? "u:p@" : "", port);
@@ -140,7 +165,11 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
         p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n%requires SmtpClient\n"
             "%requires Pop3Client\n%requires ImapClient\n%requires TelnetClient\n%requires RedisDataProvider\n"
             "%requires MemcachedDataProvider\n%requires ServerSentEventClient\n%requires MllpUtil\n"
-            "%requires WebSocketClient\n%requires ConnectDataProvider\n"
+            "%requires WebSocketClient\n%requires ConnectDataProvider\n%requires DataStreamClientIo\n"
+            "%requires MongoDbDataProvider\n"
+            "string sub make_hash(string cls, string url) { try { create_object(cls, {\"name\": \"c\", \"desc\": "
+            "\"d\", \"url\": url}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err + \": \" + ex.desc; } }\n"
             "string sub make(string cls, string url) { try { create_object(cls, \"c\", \"d\", url, "
             "{\"monitor\": False}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
             "return ex.err + \": \" + ex.desc; } }\n"

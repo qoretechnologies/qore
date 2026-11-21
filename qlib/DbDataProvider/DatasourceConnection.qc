@@ -34,6 +34,11 @@ public namespace DbDataProvider {
     @since %DbDataProvider 2.3
 */
 public class DatasourceConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients open a database (qore#7052); the class also checks its creator itself
+    private final int getConnectionDomainsImpl() {
+        return DOM_DATABASE;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DbDataProvider",

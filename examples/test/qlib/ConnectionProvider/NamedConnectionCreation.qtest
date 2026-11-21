@@ -50,12 +50,14 @@ class NamedConnectionCreationTest inherits QUnit::Test {
         Socket allowed();
         allowed.bind("127.0.0.1:0");
         allowed.listen();
+        # a target that the policy denies: another port on the same address, which every platform has
         Socket denied();
-        denied.bind("127.0.0.2:0");
+        denied.bind("127.0.0.1:0");
         denied.listen();
         hash<auto> env = {
             "NCC_ALLOWED_URL": sprintf("http://127.0.0.1:%d", allowed.getSocketInfo().port),
-            "NCC_DENIED_URL": sprintf("http://127.0.0.2:%d", denied.getSocketInfo().port),
+            "NCC_DENIED_URL": sprintf("http://127.0.0.1:%d", denied.getSocketInfo().port),
+            "NCC_ALLOWED_PORT": allowed.getSocketInfo().port,
         };
         assertEq("connected", run(mode, True, "connect", "allowed", env), "allowed target, " + mode);
         assertTrue(exists allowed.accept(5s), "the allowed target is connected, " + mode);
@@ -76,7 +78,7 @@ class NamedConnectionCreationTest inherits QUnit::Test {
             "QORE_CONNECTION_PROVIDERS=%s", quote(libqore_dir), quote(libqore_dir), quote(libqore_dir),
             quote(mod_dir), "NamedConnectionTestProvider");
         foreach hash<auto> i in (env.pairIterator()) {
-            vars += sprintf(" %s=%s", i.key, quote(i.value));
+            vars += sprintf(" %s=%s", i.key, quote(sprintf("%s", i.value)));
         }
         string cmd = sprintf("%s %s -b %s %s %s %s %s 2>/dev/null", vars, quote(qore_bin), quote(dir + "/child.q"),
             mode, sandbox ? "1" : "0", op, quote(name));

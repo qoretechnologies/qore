@@ -39,9 +39,9 @@
 
 bool thread_capabilities_visible() {
     // the code of a user module, which the set is for, when the module's Program is not sandboxed: PO_IN_MODULE does
-    // not tell that the code is trusted, as a Program that module code creates inherits it, also in a module that
-    // sandboxed code loaded (which is sandboxed, as is a Program that code acting for sandboxed code creates); the
-    // code of a sandboxed module is judged by the rules below like any other code
+    // not tell that the code is trusted, as a module that sandboxed code loaded is sandboxed (a Program that module
+    // code creates does not have PO_IN_MODULE: qore#7067); the code of a sandboxed module is judged by the rules
+    // below like any other code
     QoreProgram* pgm = getProgram();
     if (pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE)) && !qore_program_is_sandboxed(pgm)) {
         return true;

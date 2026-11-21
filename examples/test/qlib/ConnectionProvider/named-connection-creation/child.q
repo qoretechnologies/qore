@@ -1,7 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright 2026 Qore Technologies, s.r.o.
 # fixture of NamedConnectionCreation.qtest: runs one operation of a Program restricted from the network, optionally
-# sandboxed to connect only to 127.0.0.1, in a process whose QORE_CONNECTION_PROVIDERS names the test provider
+# sandboxed to connect only to the port of 127.0.0.1 in NCC_ALLOWED_PORT, in a process whose QORE_CONNECTION_PROVIDERS
+# names the test provider
 # arguments: <exec mode> <sandbox: 0|1> <operation: lookup|client|connect|create> <connection name>; prints the result
 
 %modern
@@ -22,6 +23,7 @@ if (sandbox) {
     SandboxManager sm();
     sm.setNetworkDefaultPolicy(False);
     sm.addNetworkAllowedIPRange("127.0.0.1/32");
+    sm.addNetworkAllowedPort(int(getenv("NCC_ALLOWED_PORT")));
     p.setSandboxManager(sm);
 }
 p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n"

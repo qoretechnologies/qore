@@ -185,8 +185,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
     - a connection is a capability of the code that creates it: code restricted from the functional domain of a
-      connection's clients (\c NETWORK or \c FILESYSTEM) cannot create the connection, by a constructor or by
-      deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
+      connection's clients (\c NETWORK, \c FILESYSTEM or \c DATABASE) cannot create the connection, by a constructor
+      or by deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
       gives it its clients; see @ref ConnectionProvider::AbstractConnection "AbstractConnection"
       (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/7052">issue 7052</a>)
