@@ -79,6 +79,7 @@ qclass Http1Connection [
     dom=NETWORK;
     ns=Qore;
     arg=Http1ClientConnection* priv;
+    dom=NETWORK;
     flags=final;
 ];
 
