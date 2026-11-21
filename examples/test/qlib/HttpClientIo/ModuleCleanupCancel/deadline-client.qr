@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructors that the module cleanup runs for three modules submit operations that do not end: the cleanup
+# waits for them until its one deadline, not once per module, and names them in a warning (qore#7027); the deadline
+# is given with the QORE_MODULE_CLEANUP_TIMEOUT environment variable
+
+%requires DeadlineA
+%requires DeadlineB
+%requires DeadlineC
+%requires DeadlineZClock
+
+printf("started\n");
+flush();
+Start::clock.start_us = clock_getmicros();

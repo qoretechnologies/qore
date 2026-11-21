@@ -8405,6 +8405,8 @@ public class WebSocketClientHcioPollOp {
             @since WebSocketClient 2.5
         */
         bool error_close = False;
+        #! True once a refused re-arm of the heartbeat timer at the end of the process has been logged
+        bool heartbeat_shutdown_logged = False;
 
         #! The close code and reason of the error that the client closed the connection for (see startErrorClose());
         #! reported when the close ends; protected by @ref heartbeat_mutex
@@ -8921,7 +8923,7 @@ public class WebSocketClientHcioPollOp {
             }
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
+            logCloseTimerError(timer_err, "");
         }
         try {
             # the stream's frame state records that the client sends its close frame, so that it sends no second one
@@ -9009,8 +9011,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
-                timer_err.desc);
+            logCloseTimerError(timer_err, "; the connection is closed at once");
         }
         # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown that did not send the
         # client's close), nothing would end the close: the connection is closed now
@@ -9257,6 +9258,16 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
+    #! logs that the close timer cannot be armed; at the debug level at the end of the process, when the work of the
+    #! module cleanup cannot add timers after its deadline (see @ref Qore::AsyncIoController::submit())
+    private logCloseTimerError(hash<ExceptionInfo> ex, string what) {
+        if (ex.err == "ASYNC-IO-SHUTDOWN-ERROR") {
+            logDebug("cannot arm the close timer at the end of the process: %s: %s%s", ex.err, ex.desc, what);
+        } else {
+            logError("cannot arm the close timer: %s: %s%s", ex.err, ex.desc, what);
+        }
+    }
+
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
         last_recv_activity_ms = clock_get_monotonic_us() / 1000;
@@ -9303,9 +9314,24 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection goes on without
+            # its heartbeat
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            # the idle timeout, which shares the timer, ends with it; logged once, as every frame that the connection
+            # receives re-arms the timer
+            if (!heartbeat_shutdown_logged) {
+                heartbeat_shutdown_logged = True;
+                logDebug("heartbeat timer not re-armed at the end of the process: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

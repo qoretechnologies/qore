@@ -479,7 +479,13 @@ bool known = RestSchemaTableDataProvider::hasRecordField(provider.getRecordType(
         }
         AutoLock al(record_type_lock);
         if (!exists record_type) {
-            record_type = checkRecordType(addExtraColumns(deriveRecordType()));
+            *hash<string, AbstractDataField> rt = checkRecordType(addExtraColumns(deriveRecordType()));
+            # a provider instance can be shared between tenants: a type that a sandboxed caller derives is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            if (!DataProvider::mayRegisterShared()) {
+                return rt;
+            }
+            record_type = rt;
         }
         return record_type;
     }

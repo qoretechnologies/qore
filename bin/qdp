@@ -82,6 +82,9 @@ class QdpCmd {
         #! Signal handler flag for graceful shutdown
         static bool shutdown_requested = False;
 
+        #! the width of a line with a description, once known (see getLineWidth())
+        static *int line_width;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
@@ -837,12 +840,46 @@ class QdpCmd {
         }
     }
 
+    #! returns the width of a line with a description: the COLUMNS environment variable, else the width of the
+    #! terminal, or 0 (no limit) when the process has no terminal (qore#7125)
+    static int getLineWidth() {
+        if (!exists line_width) {
+            line_width = QdpCmd::getLineWidthIntern();
+        }
+        return line_width;
+    }
+
+    private static int getLineWidthIntern() {
+        *string columns = ENV.COLUMNS;
+        if (columns =~ /^[0-9]+$/ && columns.toInt() > 0) {
+            return columns.toInt();
+        }
+        # no terminal support in this build
+        if (!Option::HAVE_TERMIOS) {
+            return 0;
+        }
+        try {
+            return TermIOS::getWindowSize().columns;
+        } catch (hash<ExceptionInfo> ex) {
+            # no controlling terminal (output to a pipe or a file in a process without one, as in CI or a background
+            # job): descriptions are not shortened
+            if (ex.err !~ /^TERMIOS-/) {
+                rethrow;
+            }
+        }
+        return 0;
+    }
+
     static string getDesc(int offset, hash<auto> h) {
-        int len = TermIOS::getWindowSize().columns - offset;
-        map len -= h{$1}.length(), argv;
         string desc = h.desc ?? "";
         desc =~ s/\n/ /g;
         desc =~ s/ +/ /g;
+        int width = QdpCmd::getLineWidth();
+        if (!width) {
+            return desc;
+        }
+        int len = width - offset;
+        map len -= h{$1}.length(), argv;
         if (len < 0) {
             return "";
         }
@@ -2103,6 +2140,30 @@ class QdpCmd {
         QdpCmd::exitProgram(0);
     }
 
+    #! returns the connection of an app action and removes it from \a options (qore#7126)
+    /** The connection is given with the \c "connection" option, or with \c "qorus_app_connection", the name of the
+        option in Qorus and the IDE; a missing connection is a usage error.
+    */
+    private static string getAppActionConnection(string app_name, string action_name, reference<*hash<auto>> options) {
+        auto connection = options.connection;
+        auto alias = options.qorus_app_connection;
+        # an empty value is no value
+        if (connection.val() && alias.val() && connection != alias) {
+            error("@%s/%s: the options \"connection\" (%y) and \"qorus_app_connection\" (%y) name different "
+                "connections; give one of them", app_name, action_name, connection, alias);
+        }
+        # a missing connection is reported with the other required options
+        string key = connection.val() ? "connection" : "qorus_app_connection";
+        auto value = options{key};
+        if (value.typeCode() != NT_STRING) {
+            error("@%s/%s: the %y option must be a connection name; got type %y", app_name, action_name, key,
+                value.type());
+        }
+        remove options.connection;
+        remove options.qorus_app_connection;
+        return value;
+    }
+
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
         if (!ENV.QORE_PROVIDER_INDEX_DIR) {
             DataProvider::registerKnownFactories();
@@ -2126,30 +2187,45 @@ class QdpCmd {
         }
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(app_name);
 
+        # the required options: the connection of an app with a connection scheme and the data provider path options
+        # (qore#7126)
+        list<string> missing = map $1.key, action.path_vars.pairIterator(), !options{$1.key}.val();
+        if (app.scheme.val() && !options.connection.val() && !options.qorus_app_connection.val()) {
+            unshift missing, "connection";
+        }
+        if (missing) {
+            # the syntax with every required option of the action
+            list<string> required = keys action.path_vars ?? ();
+            if (app.scheme.val()) {
+                unshift required, "connection";
+            }
+            error("@%s/%s requires the option%s %s: qdp '@%s/%s{%s}' ...", app_name, action_name,
+                missing.size() == 1 ? "" : "s", (map sprintf("%y", $1), missing).join(", "), app_name, action_name,
+                (map $1 + "=<value>", required).join(","));
+        }
+
         string connection;
         AbstractConnection conn;
         if (app.scheme.val()) {
-            connection = OptionHelper::getString(options, "connection", True);
-            remove options.connection;
-            conn = get_connection(connection);
+            connection = getAppActionConnection(app_name, action_name, \options);
+            try {
+                conn = get_connection(connection);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "CONNECTION-ERROR") {
+                    rethrow;
+                }
+                error("@%s/%s: connection %y cannot be used: %s", app_name, action_name, connection, ex.desc);
+            }
             hash<ConnectionSchemeInfo> scheme_info = ConnectionSchemeCache::getSchemeEx(app.scheme);
             if (!scheme_info.schemes{string scheme = conn.getType()}) {
-                throw "APP-CONFIG-ERROR", sprintf("app %y action %y: connection %y has scheme %y; expecting %y", app.name,
-                    action.action, connection, scheme, keys scheme_info.schemes);
+                error("@%s/%s: connection %y has scheme %y; expecting %y", app_name, action_name, connection, scheme,
+                    keys scheme_info.schemes);
             }
             if (!conn.hasDataProvider()) {
-                throw "APP-CONFIG-ERROR", sprintf("connection %y has no data provider but should be valid for "
-                    "app %y action %y", connection, app.name, action.action);
+                error("@%s/%s: connection %y has no data provider", app_name, action_name, connection);
             }
         }
 
-        # check data provider path options
-        foreach hash<auto> i in (action.path_vars.pairIterator()) {
-            if (!options{i.key}.val()) {
-                throw "ACTION-ARG-ERROR", sprintf("app %y action %y: required option %y is missing in \"options\"",
-                    app.name, action.action, i.key);
-            }
-        }
 
         AbstractDataProvider prov;
         try {
@@ -2429,6 +2505,10 @@ class QdpCmd {
         printHelpLine(color.key("<connection>"), "Use a named connection", key_width);
         printHelpLine(color.key("<factory>{options}"), "Use a factory with options", key_width);
         printHelpLine(color.key("@<app>/<action>"), "Use an app action", key_width);
+        printHelpLine(color.key("@<app>/<action>{...}"), "Use an app action with options, ex: connection=<name>",
+            key_width);
+        printHelpLine(color.key("  qorus_app_connection"), "Alias of the connection option of an app action",
+            key_width);
         printHelpLine(color.key("<provider>/child/..."), "Navigate to child providers", key_width);
         printf("\n");
 
@@ -2498,6 +2578,8 @@ class QdpCmd {
         printHelpLine(color.key("-Y, --yaml"), "Use YAML for input and output", key_width);
         printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
         printHelpLine(color.key("-v, --verbose"), "Increase verbosity (can repeat)", key_width);
+        printHelpLine(color.key("COLUMNS=N"), "Shorten descriptions to N columns (default: the terminal width; "
+            "not shortened without a terminal)", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("SEARCH OPTIONS"));

@@ -1,0 +1,14 @@
+box: 42
+box nothing: null
+required box: RUNTIME-TYPE-ERROR
+wrong type argument: RUNTIME-TYPE-ERROR
+captured box: null
+reference to box: null
+parameterized type argument: 42
+wrong parameterized type argument: RUNTIME-TYPE-ERROR
+typed callable: 42
+callable nothing: null
+scalar: RUNTIME-TYPE-ERROR
+wrong signature: RUNTIME-TYPE-ERROR
+Box<int> round trip: True True
+code<int(string, ...)> round trip: True True

@@ -838,6 +838,8 @@ void HttpWebSocketPollOperationPriv::setFrameCallback(ResolvedCallReferenceNode*
         frame_callback = cb;
         std::swap(frame_callback_po.po, po.po);
         std::swap(frame_callback_po.override, po.override);
+        // the callback runs for the code that set it, with its restrictions (qore#6844)
+        std::swap(frame_callback_po.caller_domain_restrictions, po.caller_domain_restrictions);
     }
 }
 

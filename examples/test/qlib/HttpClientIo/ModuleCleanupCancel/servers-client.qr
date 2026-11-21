@@ -1,0 +1,12 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructor of AbServers's data starts an HTTP/2 WebSocket server and an operation that creates an HTTP/2 SSE
+# stream when the cleanup cancels it; the module cleanup reaches its deadline at once
+# (QORE_MODULE_CLEANUP_TIMEOUT=0): the server's stream re-arms its heartbeat timer in work that the cleanup handed
+# over after it, and the SSE stream in the work of an operation that the cleanup canceled, which are refused, and
+# which the streams handle quietly (qore#7027)
+
+%requires AbServers
+
+printf("started\n");
+flush();
