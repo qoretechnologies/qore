@@ -642,10 +642,24 @@ const std::string* QoreSandboxIsolation::callerDomain() const {
             continue;
         }
         if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(level->callers)) {
+            // the domain that the callers' sandboxes with a domain have; the sandboxes of different tenants govern code
+            // together when one tenant calls code or an object of another tenant's, and such a caller belongs to
+            // neither: it is mixed, never one of their domains nor that of an outer level (fails closed)
+            const std::string* rv = nullptr;
             for (const QoreSandboxManager* sm : *members) {
-                if (const std::string* domain = QoreSandboxComposition::governingIsolationDomain(sm)) {
-                    return domain;
+                const std::string* domain = QoreSandboxComposition::governingIsolationDomain(sm);
+                if (!domain) {
+                    continue;
                 }
+                if (qore_isolation_domain_is_mixed(*domain) || (rv && *rv != *domain)) {
+                    return &QoreSandboxComposition::MixedIsolationDomain;
+                }
+                if (!rv) {
+                    rv = domain;
+                }
+            }
+            if (rv) {
+                return rv;
             }
         } else if (const std::string* domain = QoreSandboxComposition::governingIsolationDomain(level->callers)) {
             return domain;
@@ -679,29 +693,49 @@ const std::string* QoreSandboxIsolation::levelRefuses(const QoreSandboxManager* 
     if (!domain) {
         return nullptr;
     }
+    // a mixed sandbox (a copy of a composite of the sandboxes of different tenants) belongs to no tenant: only the
+    // build's own code below
+    const bool member_mixed = qore_isolation_domain_is_mixed(*domain);
     // the caller's domains: a caller without one isolates nothing
-    bool caller_has_domain = false;
-    auto same = [&] (const QoreSandboxManager* sm) -> bool {
+    const std::string* caller_domain = nullptr;
+    // true if the caller's sandboxes have more than one domain, or a mixed one
+    bool mixed = false;
+    // true if a sandbox of the caller is the member or has its domain
+    bool same = false;
+    auto visit = [&] (const QoreSandboxManager* sm) {
         if (sm == member) {
-            return true;
+            same = true;
         }
         const std::string* d = QoreSandboxComposition::governingIsolationDomain(sm);
         if (!d) {
-            return false;
+            return;
         }
-        caller_has_domain = true;
-        return *d == *domain;
+        if (qore_isolation_domain_is_mixed(*d)) {
+            mixed = true;
+        }
+        if (!caller_domain) {
+            caller_domain = d;
+        } else if (*caller_domain != *d) {
+            mixed = true;
+        }
+        if (!member_mixed && *d == *domain) {
+            same = true;
+        }
     };
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(callers)) {
         for (const QoreSandboxManager* sm : *members) {
-            if (same(sm)) {
-                return nullptr;
-            }
+            visit(sm);
         }
-    } else if (same(callers)) {
+    } else {
+        visit(callers);
+    }
+    if (!caller_domain) {
         return nullptr;
     }
-    if (!caller_has_domain) {
+    // the sandboxes of different tenants govern the caller together when one tenant calls code or an object of
+    // another tenant's: the build serves both, so the code of neither runs in it, only the build's own code (fails
+    // closed)
+    if (same && !mixed && !member_mixed) {
         return nullptr;
     }
     // the build's own code
@@ -726,8 +760,10 @@ void QoreSandboxBudgetStack::refuseIsolation(int tid, const void* owner, const s
     refused_owner = owner;
     qore_sandbox_refused_threads.fetch_add(1, std::memory_order_relaxed);
     try {
-        refused_domain = domain;
-        refused_caller_domain = caller_domain ? *caller_domain : std::string();
+        // a mixed value is named as such (see qore_isolation_domain_is_mixed())
+        refused_domain = qore_isolation_domain_is_mixed(domain) ? std::string("(more than one)") : domain;
+        refused_caller_domain = !caller_domain ? std::string() : (qore_isolation_domain_is_mixed(*caller_domain)
+            ? std::string("(more than one)") : *caller_domain);
     } catch (std::bad_alloc&) {
         // the exception is raised without the names
         refused_domain.clear();

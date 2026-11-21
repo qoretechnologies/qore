@@ -818,10 +818,16 @@ DLLLOCAL bool qore_sandbox_isolation_active();
 */
 DLLLOCAL QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm, ExceptionSink* xsink);
 
+//! The check of qore_sandbox_isolation_refused() while a thread has a refused entry (qore#7009)
+/** Out of line and cold, so that the fast paths that check qore_sandbox_isolation_refused() stay small enough to be
+    inlined
+*/
+DLLLOCAL __attribute__((noinline, cold)) bool qore_sandbox_isolation_refused_slow();
+
 //! Returns true if the thread entered the code of another tenant in a trusted build: a fast path that would run code
 //! inline declines, so that the regular call path raises the error (qore#6536)
 DLLLOCAL inline bool qore_sandbox_isolation_refused() {
-    return qore_sandbox_refused_threads.load(std::memory_order_relaxed) && qore_sandbox_check_isolation(nullptr, "");
+    return qore_sandbox_refused_threads.load(std::memory_order_relaxed) && qore_sandbox_isolation_refused_slow();
 }
 
 class QoreTrustedBuildChargeHelper {
@@ -3168,7 +3174,13 @@ struct QoreReferenceProgramEntry {
 class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
-    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+    //! Enters the Program (see set())
+    /** Always inlined: the calls that enter a Program on every call (a method call of the IR interpreter, for
+        example) then initialize the helper in place, and the inlining does not depend on the size of the code around
+        it (qore#7009)
+    */
+    DLLLOCAL __attribute__((always_inline)) ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
+            bool runtime) {
         set(xsink, pgm, runtime);
     }
     DLLLOCAL ~ProgramThreadCountContextHelper();
@@ -3324,6 +3336,16 @@ private:
     //! handler, the thread initialization code and the debugger); an exception that they raise is undone by the caller
     DLLLOCAL void enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, qore_program_private* pp,
         bool runtime);
+
+    //! The step of enterSwitched() for a Program with a sandbox manager: its budgets and the isolation of the
+    //! thread's trusted build (qore#6536)
+    /** Out of line, so that the entry of the many Programs without a manager stays small enough to be inlined into
+        the calls that enter a Program
+
+        @return true if the entry is refused (\c SANDBOX-ISOLATION-ERROR is raised and the context is restored)
+    */
+    DLLLOCAL __attribute__((noinline)) bool enterSandboxedProgram(ThreadData* td, ExceptionSink* xsink,
+        qore_program_private* pp);
 
     //! Takes the thread count in the Program that set() entered without it (module_uncounted) for takeThreadCount()
     /** The entry without the thread count is still left when the context is restored

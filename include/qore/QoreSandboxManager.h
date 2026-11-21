@@ -585,7 +585,9 @@ public:
     DLLEXPORT int setIsolationDomain(const char* domain, ExceptionSink* xsink);
 
     //! Returns the isolation domain (tenant) of the sandbox, or an empty string if it has none
-    /** For a composite sandbox, the domain of its first member that has one
+    /** For a composite sandbox, the domain that its members with a domain have; if they have different domains, the
+        mixed value (see qore_isolation_domain_is_mixed()), which is no tenant's domain: such a sandbox belongs to no
+        tenant, and nothing that is kept for a tenant may be given to its code
     */
     DLLEXPORT std::string getIsolationDomain() const;
 
@@ -1135,9 +1137,25 @@ DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
     that code calls the library through other library code; empty if no sandbox governs it or its sandbox has no
     domain.  Library code that keeps process-wide state for its callers uses it to keep each tenant's entries apart.
 
+    The sandboxes of different tenants govern code together when one tenant's code calls code or an object of another
+    tenant: such code belongs to no tenant, and the function returns the mixed value (see
+    qore_isolation_domain_is_mixed()), for which the caller must refuse what it keeps for tenants.
+
     @since %Qore 3.0
 */
 DLLEXPORT std::string qore_caller_isolation_domain();
+
+//! Returns true if \a domain is the mixed isolation domain value: the sandboxes of different tenants govern the code
+/** Returned by qore_caller_isolation_domain() and QoreSandboxManager::getIsolationDomain() for code or a sandbox that
+    belongs to no tenant because the sandboxes of more than one tenant govern it; it is never a domain that
+    QoreSandboxManager::setIsolationDomain() can set (it starts with a NUL character), and nothing that is kept for a
+    tenant may be given for it.
+
+    @since %Qore 3.0
+*/
+static inline bool qore_isolation_domain_is_mixed(const std::string& domain) {
+    return !domain.empty() && domain[0] == '\0';
+}
 
 //! defined if QoreSandboxManager::setIsolationDomain(), QoreSandboxManager::getIsolationDomain() and
 //! qore_caller_isolation_domain() are available

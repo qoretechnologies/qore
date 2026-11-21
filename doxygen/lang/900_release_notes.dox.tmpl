@@ -1243,6 +1243,12 @@
     methods, members, \c instanceof, casts, types), where the first path found decided, and inherited method variants
     take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
+    @par Code That the Sandboxes of More Than One Tenant Govern Belongs to No Tenant
+    @ref Qore::SandboxManager::getIsolationDomain() "SandboxManager::getIsolationDomain()" and
+    @ref Qore::SandboxManager::getCallerIsolationDomain() "getCallerIsolationDomain()" raise
+    \c SANDBOX-ISOLATION-ERROR for such code, which cannot create a sandbox, a %Program or a thread either (see
+    @ref sandbox_isolation_domains; <a href="https://github.com/qoretechnologies/qore/issues/7009">issue 7009</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
