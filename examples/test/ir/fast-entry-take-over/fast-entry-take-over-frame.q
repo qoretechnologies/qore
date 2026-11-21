@@ -1,13 +1,53 @@
 %modern
+%allow-weak-references
 # a temporary given to a callee whose parameter takes it over and whose frame is larger than the stack guard allows,
 # in a recursion that ends when the stack has no room for that frame: the thunk that checks the stack for the frame
-# (QoreIRFrameCheck) releases the reference that the call handed over to the entry (issue #6105); the objects that it
-# frees are counted under valgrind
+# (QoreIRFrameCheck) releases the reference that the call handed over to the entry, so no object made outlives the
+# recursion (issue #6105)
 
+const Ring = 16;
+
+# weak references to the last objects made, which are those given to the calls that end the recursion
+our list<auto> weaks = ();
 our int made = 0;
 
 class T {
-    constructor() { ++made; }
+}
+
+#! makes an object and keeps a weak reference to it, which does not keep it alive
+T sub mk() {
+    T t();
+    weaks[made++ % Ring] := t;
+    return t;
+}
+
+#! accepts only an object that exists
+bool sub is_object(object o) {
+    return True;
+}
+
+#! returns True if the weak reference still gives an object that exists
+bool sub alive(auto w) {
+    try {
+        return is_object(w);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR") {
+            return False;
+        }
+        rethrow;
+    }
+}
+
+#! runs the recursion and prints its exception and the number of the last objects made that still exist
+sub run(string name, code c) {
+    weaks = ();
+    made = 0;
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", name, ex.err);
+    }
+    printf("%s: %d alive\n", name, (select weaks, alive($1)).size());
 }
 
 hashdecl HD {
@@ -622,13 +662,8 @@ int sub big(list<auto> l, int n) {
 }
 
 int sub r(int d) {
-    big((0, new T()), d);
+    big((0, mk()), d);
     return r(d + 1);
 }
 
-try {
-    r(0);
-} catch (hash<ExceptionInfo> ex) {
-    printf("%s\n", ex.err);
-}
-printf("done %s\n", made > 0 ? "made" : "none");
+run("big", sub () { r(0); });

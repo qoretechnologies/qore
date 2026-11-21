@@ -27,10 +27,10 @@
     entries) and of another class, a method and a loop, and parameters that the callee does not use, borrows, strips
     (`any`) or writes through a closure beside parameters that it writes.  Recursions that end with a stack overflow in
     the entry (fast-entry-take-over-overflow.q) or in the thunk that checks the stack for its large frame
-    (fast-entry-take-over-frame.q) raise the exception as in the AST interpreter (valgrind checks that they release
-    the references that they were given).  Every mode
-    and the qcc executables at -O0 and -O3 must print the AST interpreter's output, and the qcc code must call the
-    entry that takes the arguments over.
+    (fast-entry-take-over-frame.q) raise the exception as in the AST interpreter and release the references that they
+    were given: weak references show that no object they made outlives them.  Every mode and the qcc executables at
+    -O0 and -O3 must print the AST interpreter's output, and the qcc code must call the entry that takes the arguments
+    over.
 */
 class FastEntryTakeOverTest inherits QUnit::Test {
     private {
@@ -104,13 +104,12 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         }
     }
 
-    #! a stack overflow in the entry of a recursion that gives it temporaries is raised as in the AST interpreter
-    /** the entry releases the references that it was given (the memory checks are those of valgrind: a destructor
-        that runs at the end of the stack cannot run its code, so the program does not count the objects)
+    #! a stack overflow in the entry of a recursion that gives it temporaries releases the references it was given
+    /** no object that the recursion made outlives it: the program checks the last ones through weak references
     */
     testStackOverflow() {
         string prog = dir + "/fast-entry-take-over-overflow.q";
-        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: done\nra: STACK-LIMIT-EXCEEDED\nra: done\n";
+        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: 0 alive\nra: STACK-LIMIT-EXCEEDED\nra: 0 alive\n";
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
             "--exec-mode=ast %s", qore_bin, prog));
         assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
@@ -128,11 +127,11 @@ class FastEntryTakeOverTest inherits QUnit::Test {
 
     #! a recursion that ends when the stack has no room for the frame of an entry that takes its arguments over
     /** the thunk that checks the stack for the large frame of the entry (QoreIRFrameCheck) releases the reference
-        that the call handed over to it; the memory checks are those of valgrind
+        that the call handed over to it: no object that the recursion made outlives it (weak references)
     */
     testFrameCheck() {
         string prog = dir + "/fast-entry-take-over-frame.q";
-        string expected_out = "STACK-LIMIT-EXCEEDED\ndone made\n";
+        string expected_out = "big: STACK-LIMIT-EXCEEDED\nbig: 0 alive\n";
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
             "--exec-mode=ast %s", qore_bin, prog));
         assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
