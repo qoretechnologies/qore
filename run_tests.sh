@@ -727,27 +727,6 @@ physical_dir() {
     (cd "$1" 2>/dev/null && pwd -P)
 }
 
-# Prints the physical path of the given file, with the links that lead to it resolved (at most 32), or nothing if it
-# does not exist; ls prints a link's target after "->" (BusyBox's readlink takes one file)
-physical_file() {
-    (
-        file_path=$1
-        file_links=0
-        while [ -L "$file_path" ] && [ $file_links -lt 32 ]; do
-            file_target=`ls -ld "$file_path" 2>/dev/null`
-            file_target=${file_target##* -> }
-            case "$file_target" in
-                /*) file_path=$file_target ;;
-                *) file_path=${file_path%/*}/$file_target ;;
-            esac
-            file_links=$((file_links + 1))
-        done
-        if [ -e "$file_path" ] && cd -P "${file_path%/*}" 2>/dev/null; then
-            echo "$PWD/${file_path##*/}"
-        fi
-    )
-}
-
 BUILD_MISMATCH=""
 # Adds a line to the description of the mismatch
 build_mismatch() {
@@ -1217,6 +1196,27 @@ BUILD_CHANGES_EOF
     fi
 }
 
+# Prints the physical path of the given file, with the links that lead to it resolved (at most 32), or nothing if it
+# does not exist; ls prints a link's target after "->" (BusyBox's readlink takes one file)
+link_physical_file() {
+    (
+        file_path=$1
+        file_links=0
+        while [ -L "$file_path" ] && [ $file_links -lt 32 ]; do
+            file_target=`ls -ld "$file_path" 2>/dev/null`
+            file_target=${file_target##* -> }
+            case "$file_target" in
+                /*) file_path=$file_target ;;
+                *) file_path=${file_path%/*}/$file_target ;;
+            esac
+            file_links=$((file_links + 1))
+        done
+        if [ -e "$file_path" ] && cd -P "${file_path%/*}" 2>/dev/null; then
+            echo "$PWD/${file_path##*/}"
+        fi
+    )
+}
+
 # Checks the qcc and the .qmod files that the tests use (see above).  The links of qlib are checked as the module loader
 # uses them (qore#7030, lib/ModuleManager.cpp qore_own_build_qmod()): when the directory of the run's libqore has a
 # CMakeCache.txt (a regular file) whose CMAKE_HOME_DIRECTORY's qlib is this tree's qlib (both physically), the loader
@@ -1252,7 +1252,7 @@ check_build_parts() {
     # whether the loader replaces the links of this tree's qlib (see above): by the directory of the file of the run's
     # libqore (LIBQORE_BINARY may be a link into another directory)
     loader_replaces_links=0
-    libqore_build=`physical_file "$LIBQORE"`
+    libqore_build=`link_physical_file "$LIBQORE"`
     libqore_build=${libqore_build%/*}
     if [ -n "$libqore_build" ] && [ -f "$libqore_build/CMakeCache.txt" ]; then
         libqore_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' \
@@ -1281,7 +1281,7 @@ check_build_parts() {
                 /*) qmod_full=$qmod_target ;;
                 *) qmod_full=$qmod_dir/$qmod_target ;;
             esac
-            qmod_resolved=$(physical_file "$qmod_full")
+            qmod_resolved=$(link_physical_file "$qmod_full")
             if [ -n "$qmod_resolved" ]; then
                 qmod_full=$qmod_resolved
             fi
