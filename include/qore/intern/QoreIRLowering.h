@@ -875,6 +875,17 @@ private:
         encloses the block whose cleanup entry is there
     */
     LoopJumpTarget findLoopJumpTarget(bool is_break, size_t max_cleanup_depth = SIZE_MAX) const;
+    //! Returns true if a loop or switch statement pushed at \a cleanup_depth was left by an exit that lowers the
+    //! handler whose code is being lowered inline (qore#6905)
+    /** A HandlerBarrier entry protects the Scope entry of the block whose handler is lowered inline at an exit (its
+        handler_start is the depth just above that entry): the loops and switch statements in that block, pushed above
+        the protected entry and below the barrier, belong to the blocks that the exit has already left, and the code of
+        the handler cannot break or continue them.  A loop that encloses the block of the handler is pushed at the
+        depth of the protected entry or below and stays a target.  Only the paths of a debugger's flow requests ask
+        for such a target (getScopeFlowPaths()): a break or a continue statement outside a loop or switch statement
+        in the handler does not parse.
+    */
+    bool flowTargetLeftByHandlerExit(size_t cleanup_depth) const;
     //! Lowers the jump of a break or a continue statement to \a jt at the current lowering position
     /** Emits the cleanups of the blocks that the jump leaves (emitBlockCleanups()), the restore of $# for a break out
         of a foreach loop and the branch to the target; the code of a debugger's break or continue request at a step
