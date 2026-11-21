@@ -1,0 +1,331 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# test-exec-mode: children - the modules are loaded in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleMissingDependencyFallbackTest
+
+#! The AOT modules loaded from their source because a module is missing are reported in one warning (qore#7004)
+/** An AOT module compiled against a module that its source loads with \c %%try-module cannot be loaded without that
+    module, and the module loader loads its source instead.  The AOT modules loaded from their source for this reason
+    in one module load are reported in one \c BINARY-MODULE-SOURCE-FALLBACK warning when the load ends, which names
+    the missing modules and, for each, the modules loaded from their source, in the order of their names.  An AOT
+    module loaded from its source for another reason (here one refused by the restrictions of the Program loading it,
+    \c AOT-MODULE-RESTRICTED) keeps its own warning.
+
+    The modules: \c FbAlpha and \c FbBeta are compiled against \c OptDepA, \c FbGamma against \c OptDepB, and
+    \c RestrictedBg uses the \c background operator; \c FbTop, a source module, requires them all.  At run time
+    \c OptDepA and \c OptDepB are not in the module path, and the Program that loads \c FbTop has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", so that \c RestrictedBg is loaded from another source that
+    does not use threads.  Each case runs a driver in a new process, as a module is loaded once per process: with a
+    warning sink (Program::parse() returns the warnings) and without one (\c qore writes the warnings of the script's
+    own \c %%requires directive), in every execution mode and compiled with \c qcc.
+*/
+class AOTModuleMissingDependencyFallbackTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+
+        #! holds the modules and the driver scripts
+        TmpDir tmp("qore-aot-module-missing-dependency-fallback-");
+
+        #! the optional modules, only in the module path when the AOT modules are compiled
+        string dep_dir;
+        #! the AOT modules and their sources
+        string mod_dir;
+        #! the source of RestrictedBg that does not use threads
+        string plain_dir;
+        #! the source of RestrictedBg that uses threads, which its AOT module is compiled from
+        string thread_dir;
+
+        #! the driver that loads FbTop with Program::parse(), which returns the warnings
+        string parse_driver;
+        #! the driver that loads FbTop with its own %requires directive
+        string requires_driver;
+    }
+
+    public {
+        #! the warning for the modules loaded from their source because modules are missing
+        const Summary = "3 AOT modules were loaded from their source because modules that they were compiled "
+            "against are missing: 'OptDepA' (FbAlpha, FbBeta), 'OptDepB' (FbGamma); loading a module from its source "
+            "is slower than loading its AOT module; install the missing modules to load the AOT modules";
+
+        #! the start of the warning of RestrictedBg, which keeps its own warning
+        const RestrictedRegex = "^binary module '.*/RestrictedBg\\.qmod' for feature 'RestrictedBg' failed to load; "
+            "loading source module '.*/RestrictedBg\\.qm' instead: AOT-MODULE-RESTRICTED: ";
+
+        #! what the modules return without their optional modules
+        const Values = "values: -1 -1 -2 42";
+
+        #! the execution modes of the drivers
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        #! the optimization levels of the compiled drivers
+        const OptLevels = (0, 3);
+
+        const ModuleHeader = "module %s {
+    version = \"1.0\";
+    desc = \"qore#7004 test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+";
+
+        #! an optional module
+        const OptDepSource = "%%modern
+" + ModuleHeader + "
+public namespace %s {
+    public int sub value() { return %d; }
+}
+";
+
+        #! a module that uses an optional module if it can be loaded
+        const UserSource = "%%modern
+%%try-module %s
+%%define No%s
+%%endtry
+" + ModuleHeader + "
+public namespace %s {
+%%ifndef No%s
+    public int sub get() { return %s::value(); }
+%%else
+    public int sub get() { return %d; }
+%%endif
+}
+";
+
+        #! the source that RestrictedBg is compiled from: it uses thread control
+        const ThreadSource = "%modern
+" + "module RestrictedBg {
+    version = \"1.0\";
+    desc = \"qore#7004 test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace RestrictedBg {
+    public int sub get() {
+        Counter c(1);
+        int rv;
+        background sub () { rv = 42; c.dec(); }();
+        c.waitForZero();
+        return rv;
+    }
+}
+";
+
+        #! another source of RestrictedBg, which does not use thread control
+        const PlainSource = "%modern
+module RestrictedBg {
+    version = \"1.0\";
+    desc = \"qore#7004 test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace RestrictedBg {
+    public int sub get() { return 42; }
+}
+";
+
+        #! the source module that requires the others, out of the order of their names
+        const TopSource = "%modern
+%requires FbGamma
+%requires RestrictedBg
+%requires FbBeta
+%requires FbAlpha
+module FbTop {
+    version = \"1.0\";
+    desc = \"qore#7004 test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace FbTop {
+    public string sub values() {
+        return sprintf(\"values: %d %d %d %d\", FbAlpha::get(), FbBeta::get(), FbGamma::get(), RestrictedBg::get());
+    }
+}
+";
+
+        #! loads FbTop with Program::parse() and prints the warnings returned and what the modules return
+        const ParseDriver = "%modern
+sub print_chain(*hash<ExceptionInfo> ex) {
+    while (ex) {
+        printf(\"returned: %s: %s\\n\", ex.err, ex.desc);
+        ex = ex.next;
+    }
+}
+Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+print_chain(p.parse(\"%requires FbTop\\nstring sub f() { return FbTop::values(); }\\n\", \"requires\", WARN_ALL));
+printf(\"%s\\n\", p.callFunction(\"f\"));
+";
+
+        #! loads FbTop with its own %requires directive, whose warnings qore writes to stderr
+        const RequiresDriver = "%modern
+%no-thread-control
+%requires FbTop
+printf(\"%s\\n\", FbTop::values());
+";
+    }
+
+    constructor() : QUnit::Test("AOTModuleMissingDependencyFallbackTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        dep_dir = tmp.path + "/dep";
+        mod_dir = tmp.path + "/mod";
+        plain_dir = tmp.path + "/plain";
+        thread_dir = tmp.path + "/thread";
+        map mkdir($1), (dep_dir, mod_dir, plain_dir, thread_dir);
+        writeFile(dep_dir + "/OptDepA.qm", sprintf(OptDepSource, "OptDepA", "OptDepA", 1));
+        writeFile(dep_dir + "/OptDepB.qm", sprintf(OptDepSource, "OptDepB", "OptDepB", 2));
+        writeFile(mod_dir + "/FbAlpha.qm", sprintf(UserSource, "OptDepA", "OptDepA", "FbAlpha", "FbAlpha",
+            "OptDepA", "OptDepA", -1));
+        writeFile(mod_dir + "/FbBeta.qm", sprintf(UserSource, "OptDepA", "OptDepA", "FbBeta", "FbBeta", "OptDepA",
+            "OptDepA", -1));
+        writeFile(mod_dir + "/FbGamma.qm", sprintf(UserSource, "OptDepB", "OptDepB", "FbGamma", "FbGamma",
+            "OptDepB", "OptDepB", -2));
+        writeFile(thread_dir + "/RestrictedBg.qm", ThreadSource);
+        writeFile(plain_dir + "/RestrictedBg.qm", PlainSource);
+        writeFile(mod_dir + "/FbTop.qm", TopSource);
+        parse_driver = writeFile(tmp.path + "/parse-driver.q", ParseDriver);
+        requires_driver = writeFile(tmp.path + "/requires-driver.q", RequiresDriver);
+
+        addTestCase("the AOT modules are compiled against their optional modules", \compileTest());
+        foreach string mode in (Modes) {
+            addTestCase(mode + ": one warning returned by Program::parse()", \parseTest(), (mode,));
+            addTestCase(mode + ": one warning of a %requires directive", \requiresTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: one warning returned by Program::parse()", opt), \aotParseTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    #! writes \a contents to \a path and returns \a path
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    #! returns the environment prefix for running \c qore with the given module path
+    private string env(string module_path) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, module_path);
+    }
+
+    #! the module path at run time: the optional modules are missing
+    private string runPath() {
+        return mod_dir + ":" + plain_dir;
+    }
+
+    #! AOT-compiles the modules with their optional modules in the module path, once
+    /** The AOT module of RestrictedBg is in the module directory without the source that it is compiled from, so
+        that its source fallback loads the source that does not use threads, which is found later in the module path
+    */
+    private compileModules() {
+        foreach string name in (("FbAlpha", "FbBeta", "FbGamma", "RestrictedBg")) {
+            string qmod = mod_dir + "/" + name + ".qmod";
+            if (is_file(qmod)) {
+                continue;
+            }
+            string src_dir = name == "RestrictedBg" ? thread_dir : mod_dir;
+            string out = backquote(sprintf("%s %s -b --compile-module --output %s %s 2>&1",
+                env(dep_dir + ":" + src_dir), qore_bin, qmod, src_dir + "/" + name + ".qm"));
+            assertTrue(is_file(qmod), sprintf("compiled %s: %s", name, out));
+        }
+    }
+
+    compileTest() {
+        compileModules();
+        # with the optional modules, the AOT modules load and use them, and no module is loaded from its source
+        int rc;
+        TmpFile err("qore-aot-module-missing-dependency-fallback-", ".err");
+        string out = backquote(sprintf("%s %s -b %s 2>%s", env(dep_dir + ":" + runPath()), qore_bin,
+            parse_driver, err.path), \rc);
+        string err_text = ReadOnlyFile::readTextFile(err.path);
+        assertEq(0, rc, out + err_text);
+        assertEq("values: 1 1 2 42", (select out.split("\n"), $1 =~ /^values: /)[0], out);
+        # only RestrictedBg is loaded from its source, as the Program does not allow threads
+        list<string> returned = getReturned(out);
+        assertEq(1, returned.size(), out);
+        assertRegex("^BINARY-MODULE-SOURCE-FALLBACK: " + RestrictedRegex.substr(1), returned[0] ?? "");
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK", err_text);
+    }
+
+    parseTest(string mode) {
+        compileModules();
+        checkParse(sprintf("%s %s -b --exec-mode=%s %s", env(runPath()), qore_bin, mode, parse_driver), mode);
+    }
+
+    requiresTest(string mode) {
+        compileModules();
+        int rc;
+        TmpFile err("qore-aot-module-missing-dependency-fallback-", ".err");
+        string out = backquote(sprintf("%s %s -b --exec-mode=%s %s 2>%s", env(runPath()), qore_bin, mode,
+            requires_driver, err.path), \rc);
+        string err_text = ReadOnlyFile::readTextFile(err.path);
+        assertEq(0, rc, mode + ": " + out + err_text);
+        assertEq(Values, trim(out), mode);
+        # the warnings of the script's %requires directive: the summary once, and RestrictedBg's own warning
+        list<string> warnings = select err_text.split("\n"), $1 =~ /^BINARY-MODULE-SOURCE-FALLBACK: /;
+        assertEq(2, warnings.size(), mode + ": " + err_text);
+        assertEq(1, (select warnings, $1 == "BINARY-MODULE-SOURCE-FALLBACK: " + Summary).size(),
+            mode + ": the summary: " + err_text);
+        assertEq(1, (select warnings, regex($1, "^BINARY-MODULE-SOURCE-FALLBACK: " + RestrictedRegex.substr(1)))
+            .size(), mode + ": RestrictedBg's warning: " + err_text);
+        assertNRegex("loading source module '.*/Fb(Alpha|Beta|Gamma)\\.qm' instead", err_text,
+            mode + ": no warning of its own for a module loaded from its source because a module is missing");
+    }
+
+    aotParseTest(int opt) {
+        compileModules();
+        TmpDir exe_dir("qore-aot-module-missing-dependency-fallback-exe-");
+        string exe = exe_dir.path + "/parse-driver";
+        string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env(runPath()), qcc_bin, opt, exe,
+            parse_driver));
+        assertTrue(is_file(exe), sprintf("compiled the driver: %s", out));
+        checkParse(sprintf("%s %s", env(runPath()), exe), sprintf("qcc -O%d", opt));
+    }
+
+    #! runs a driver that loads FbTop with Program::parse() and checks the warnings that it returns
+    private checkParse(string cmd, string ctx) {
+        int rc;
+        TmpFile err("qore-aot-module-missing-dependency-fallback-", ".err");
+        string out = backquote(sprintf("%s 2>%s", cmd, err.path), \rc);
+        string err_text = ReadOnlyFile::readTextFile(err.path);
+        assertEq(0, rc, ctx + ": " + out + err_text);
+        assertEq(Values, (select out.split("\n"), $1 =~ /^values: /)[0] ?? "", ctx + ": " + out);
+        list<string> returned = getReturned(out);
+        # the summary once, and RestrictedBg's own warning
+        assertEq(2, returned.size(), ctx + ": " + out);
+        assertEq(1, (select returned, $1 == "BINARY-MODULE-SOURCE-FALLBACK: " + Summary).size(),
+            ctx + ": the summary: " + out);
+        assertEq(1, (select returned, regex($1, "^BINARY-MODULE-SOURCE-FALLBACK: " + RestrictedRegex.substr(1)))
+            .size(), ctx + ": RestrictedBg's warning: " + out);
+        # the warnings are returned, not written to stderr
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK", err_text, ctx + ": stderr");
+    }
+
+    #! returns the warnings that a driver printed as returned
+    private static list<string> getReturned(string out) {
+        return map $1.substr(10), out.split("\n"), $1 =~ /^returned: /;
+    }
+}
