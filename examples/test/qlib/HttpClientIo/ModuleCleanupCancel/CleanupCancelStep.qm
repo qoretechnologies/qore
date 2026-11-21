@@ -119,13 +119,17 @@ public class Holder {
     }
 
     #! submits the operation and returns once the result of its first step is held
-    static bool start() {
+    /** @param own_canceller if @ref False, the operation is canceled by another module's destructor
+    */
+    static bool start(bool own_canceller = True) {
         call_function("dbg_async_io_hold_step_results", True);
         # only the first step's result is held
         on_exit call_function("dbg_async_io_hold_step_results", False);
         notifier = new EventNotifier();
         completed = new Queue();
-        canceller = new Canceller(completed);
+        if (own_canceller) {
+            canceller = new Canceller(completed);
+        }
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": notifier,
             "spop": new StepOperation(completed),

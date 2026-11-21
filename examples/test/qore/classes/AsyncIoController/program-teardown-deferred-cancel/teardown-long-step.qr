@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# cancels an async I/O operation during a step that runs for longer than the I/O thread's idle grace period
+# (qore#6703): the thread must stay until the step's result arrives, and abort() must not run during the step
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+        bool in_step;
+        Counter started;
+        Counter completed;
+    }
+    constructor(Counter started, Counter completed) {
+        self.started = started;
+        self.completed = completed;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        in_step = True;
+        started.dec();
+        # longer than the 2 second grace period after which an idle I/O thread stops: the duration is what is tested
+        sleep(3);
+        done = True;
+        in_step = False;
+        return NOTHING;
+    }
+    abort() {
+        printf(\"abort: step running: %y\\n\", in_step);
+        flush();
+    }
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf(\"onComplete: canceled: %y\\n\", result.canceled);
+        flush();
+        completed.dec();
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *EventNotifier notifier;
+our *Counter started;
+our *Counter completed;
+
+sub start() {
+    started = new Counter(1);
+    completed = new Counter(1);
+    notifier = new EventNotifier();
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new Op(started, completed),
+        \"owner\": \"teardown-long-step\",
+        \"to\": -1s,
+    });
+}
+
+bool sub wait_started() {
+    return !started.waitForZero(20s);
+}
+
+bool sub wait_completed() {
+    return !completed.waitForZero(20s);
+}
+";
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-long-step");
+p.callFunction("start");
+printf("step started: %y\n", p.callFunction("wait_started"));
+# the cancellation is deferred until the step's result, which arrives after the grace period
+AsyncIoController::cancelByOwner("teardown-long-step");
+printf("result received: %y\n", p.callFunction("wait_completed"));
+AsyncIoController::flushCallbacks();
+delete p;
+printf("done\n");

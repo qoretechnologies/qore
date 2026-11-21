@@ -1471,6 +1471,9 @@ private:
             pending_threads / cancel_count / info_result / cancel_pinfos)
             — see AsyncOpCompletion docs. */
         AsyncOpCompletion* completion = nullptr;
+        //! For CancelByProgram: the caller waits for the operations whose cancellation is deferred until their step's
+        //! result and cancels them itself (a caller on an I/O thread cannot wait; qore#6703)
+        bool wait_deferred = false;
         //! For Cancel: refcounted holder receiving the match result (0 or 1).
         /** Heap-allocated and refcounted so it outlives any caller
             stack frame that may go out of scope before this command is
@@ -1544,6 +1547,29 @@ private:
         //! For SubmitOp: the operation, which has no C++ poll operation, is registered by its Qore object (see
         //! registerQoreOp())
         bool submit_qop_registered = false;
+    };
+
+    //! A cancellation that a CancelByProgram command deferred until the result of the operation's step (qore#6703)
+    /** Held by the deferred PollInfo (shared by its copies).  When the step's result arrives, the I/O thread hands the
+        operation back to the caller of cancelByProgram(), which waits for it and cancels it as it cancels the Program's
+        other operations; when the last copy goes (also at the I/O thread's exit, which delivers the cancellation
+        itself), the caller is released
+    */
+    struct AsyncOpDeferredCancel {
+        AsyncOpCompletion* completion;
+
+        DLLLOCAL explicit AsyncOpDeferredCancel(AsyncOpCompletion* c) : completion(c) {
+            completion->addDeferred();
+            completion->ROreference();
+        }
+
+        DLLLOCAL ~AsyncOpDeferredCancel() {
+            completion->completeDeferred();
+            completion->deref();
+        }
+
+        AsyncOpDeferredCancel(const AsyncOpDeferredCancel&) = delete;
+        AsyncOpDeferredCancel& operator=(const AsyncOpDeferredCancel&) = delete;
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -1648,6 +1674,13 @@ private:
         AsyncIoSandboxContext sandbox_ctx;
         //! The references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+        //! the callers of the CancelByProgram commands that wait until the operation's cancellation, deferred until the
+        //! result of its step, has run (see AsyncOpDeferredCancel): the command that deferred it, or one that found it
+        //! deferred by an earlier cancellation
+        std::vector<std::shared_ptr<AsyncOpDeferredCancel>> deferred_cancels;
+        //! the operation's native abort() has run on its I/O thread, before a socket cancel that waited for the step
+        //! ended (see handBackDeferredCancel())
+        bool abort_called = false;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1727,8 +1760,48 @@ private:
         //! The names of the operations of in_flight_canceled at the deadline of the module cleanup, guarded by
         //! pinfos_lock (moduleCleanupOpName())
         std::vector<std::string> in_flight_names;
+        //! The operations whose cancellation was deferred until their step's result, handed back to the caller of
+        //! cancelByProgram(), which cancels them (qore#6703); guarded by pinfos_lock
+        std::vector<PollInfo> deferred_pinfos;
         //! Protects cancel_pinfos against concurrent appends from I/O threads
         QoreThreadLock pinfos_lock;
+
+        //! The operations of a CancelByProgram command whose step was in flight, whose cancellation runs when the
+        //! step's result reaches their I/O thread (pending_aborts); guarded by deferred_lock, not by the controller's
+        //! mutex: the holder that counts one is released wherever the deferred PollInfo goes (qore#6703)
+        int deferred = 0;
+        QoreThreadLock deferred_lock;
+        //! Signaled when the last deferred cancellation has run
+        QoreCondition deferred_cond;
+
+        //! Counts a deferred cancellation (see AsyncOpDeferredCancel)
+        DLLLOCAL void addDeferred() {
+            AutoLocker al(deferred_lock);
+            ++deferred;
+        }
+
+        //! Ends a deferred cancellation; signals the waiter if it was the last
+        DLLLOCAL void completeDeferred() {
+            AutoLocker al(deferred_lock);
+            assert(deferred > 0);
+            if (!--deferred) {
+                deferred_cond.broadcast();
+            }
+        }
+
+        //! Returns true if a cancellation is still deferred
+        DLLLOCAL bool hasDeferred() {
+            AutoLocker al(deferred_lock);
+            return deferred > 0;
+        }
+
+        //! Waits until the deferred cancellations have been handed back; the controller's mutex must not be held
+        DLLLOCAL void waitDeferred() {
+            AutoLocker al(deferred_lock);
+            while (deferred) {
+                deferred_cond.wait(deferred_lock);
+            }
+        }
 
         //! Build a completion for a fan-out of @a n_pending I/O threads.
         /** Starts with refcount = 1 (the caller's initial ref).  For
@@ -2034,6 +2107,11 @@ private:
             forever, so the fan-outs skip it (see readsCommands()).
         */
         bool commands_closed = false;
+        //! True once this stopping thread has run the cancellations of its exit cleanup, until it is started again
+        /** Guarded by the controller's lock; set before the thread logs that it has exited, so that cancelByProgram()
+            does not wait for that logger call (see anyThreadInExitDrain())
+        */
+        bool exit_cancel_done = false;
 #ifdef DEBUG
         //! Test hook: when set, the thread waits on \c dbg_cond after its last command drain until it is cleared
         bool dbg_hold_after_drain = false;
@@ -2228,6 +2306,15 @@ private:
 
         //! Maps pending-abort operation IDs back to their socket-cancel barrier
         std::unordered_map<uint64_t, std::string> pending_abort_cancel_hash;
+
+        //! The batch of commands with a Quit command, kept for the thread's exit cleanup (I/O thread only)
+        /** Taken over without an allocation.  The commands from \c quit_batch_start on were not processed: the callers
+            of their CancelByProgram commands wait for the Program's operations that the exit cleanup cancels
+            (qore#6703)
+        */
+        std::vector<Command> quit_batch;
+        //! The index of the first command of \c quit_batch that was not processed
+        size_t quit_batch_start = 0;
     };
 
     //! Get the I/O thread index for a route key (hash-based affinity)
@@ -2579,6 +2666,39 @@ public:
     //! Debug-only: waits until the pause taken by dbgTakeDeliveryPause() is ended
     DLLLOCAL static void dbgWaitAfterDelivery(DbgPausePoint point);
 
+    //! Debug-only: the points of the cancellation of a Program's operations at which a test can pause (qore#6703)
+    enum DbgCancelPausePoint : int {
+        //! a callback worker that has taken a step of an operation (continuePoll()) waits before it enters the
+        //! operation's Program; the end of the processing of a CancelByProgram command ends the pause
+        DBG_CANCEL_STEP_BEFORE_ENTRY = 0,
+        //! an I/O thread waits before it runs a cancellation that was deferred until the result of the operation's
+        //! step (pending_aborts) and that no caller waits for, as a slow I/O thread does
+        DBG_CANCEL_DEFERRED_RESULT = 1,
+        //! an I/O thread waits after a socket cancel has started to wait for the step of an operation of the socket
+        DBG_CANCEL_SOCKET_BARRIER = 2,
+        //! the caller of cancelByProgram() waits before it cancels the operations handed back to it
+        DBG_CANCEL_BEFORE_HANDED_BACK = 3,
+    };
+
+    //! Debug-only: requests a pause at the given point of the cancellation of a Program's operations, or ends it
+    /** @param point the point (DbgCancelPausePoint)
+        @param pause true to pause the next thread that reaches the point, false to end a pause (and to cancel one not
+        taken yet)
+
+        @return with @p pause = false: true if a thread took the pause since it was requested; false otherwise
+    */
+    DLLLOCAL static bool dbgPauseCancelPoint(int point, bool pause);
+
+    //! Debug-only: waits until a thread has taken the pause requested at the given point; returns false if none did
+    //! when \a timeout_ms elapsed
+    DLLLOCAL static bool dbgWaitCancelPointTaken(int point, int timeout_ms);
+
+    //! Debug-only: pauses the calling thread at the given point if a pause was requested there, until it is ended
+    DLLLOCAL static void dbgTakeCancelPause(int point);
+
+    //! Debug-only: ends the pause taken at the given point, if any
+    DLLLOCAL static void dbgEndCancelPause(int point);
+
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer
         that fired before the timer's owner stopped it, after the owner has stopped it (see
@@ -2727,12 +2847,44 @@ private:
     DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
+    //! Records that the caller of the CancelByProgram command with this completion waits for the operation's
+    //! deferred cancellation (qore#6703)
+    DLLLOCAL void attachDeferredCancel(PollInfo& pinfo, AsyncOpCompletion* completion);
+
+    //! Hands an operation whose step has ended back to the caller that waits for it
+    /** A socket cancel that waited for the step ends when the operation is handed back, not after its cleanup: the
+        operation's abort() can itself close the socket and wait for that cancel.  For such an operation (@a
+        socket_barrier), a native abort() runs here first, so that it still precedes the close of the socket, and the
+        operation's claim on the socket is released here, so that the socket can be used when the cancel returns.
+
+        @return true if the operation was handed back; false if no caller waits for it or it could not be handed back
+        (out of memory), in which case the operation keeps its holders, and the caller's wait ends when the operation
+        is released after the calling thread has canceled it
+    */
+    DLLLOCAL bool handBackDeferredCancel(PollInfo& pinfo, bool socket_barrier, ExceptionSink* xsink);
+
+    //! Cancels an operation handed back to cancelByProgram() in the context of the code that submitted it
+    DLLLOCAL void cancelHandedBack(PollInfo& pinfo, bool inline_on_complete, ExceptionSink* xsink);
+
+    //! Returns true if an I/O thread is past its last command drain and has not ended its exit cancellations; the
+    //! caller holds \c m
+    /** Such a thread is canceling the operations that it held, and cancelByProgram() cannot reach them with a command
+    */
+    DLLLOCAL bool anyThreadInExitDrain() const;
+
+    //! Reports the exception of an onComplete() run in the calling thread, as a callback worker reports it
+    DLLLOCAL void reportInlineOnCompleteException(const PollInfo& pinfo, ExceptionSink& on_complete_xsink);
+
+    //! Cancels the operation
     /** @param pinfo the operation
         @param xsink for exceptions
         @param cancel_ex if given, the exception that the canceled result carries (a refused submission, which is
         reported canceled with the reason; borrowed)
+        @param inline_on_complete runs the operation's onComplete() in the calling thread: the module cleanup, which
+        cancels an operation of a module's Program before it destroys the module's data (qore#6510, qore#6703)
     */
-    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex = nullptr);
+    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex = nullptr,
+            bool inline_on_complete = false);
 
     //! Delivers a deferred result and releases the references of @a dd
     DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);
@@ -2747,6 +2899,21 @@ private:
         controller mutex may be held.  Sets pinfo.completion_delivered.
     */
     DLLLOCAL void deliverBackstopCompletionIfUndelivered(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Signaled when an I/O thread has ended its exit cancellations (guarded by \c m; see anyThreadInExitDrain())
+    QoreCondition exit_drain_cond;
+
+    //! The number of cancelByProgram() calls in progress outside of the I/O threads (guarded by \c m)
+    /** stop() does not replace the dispatcher during one: the Program's mark is in the dispatcher, and a replacement
+        would run the callbacks of the operations that the call cancels (qore#6703)
+    */
+    int active_program_cancels = 0;
+    //! The cancelByProgram() calls in progress on the threads that are waiting in stop() (guarded by \c m)
+    /** Such a call cannot end before its thread returns from stop(), so stop() does not wait for it
+    */
+    int program_cancels_in_stop = 0;
+    //! Signaled when active_program_cancels decreases or program_cancels_in_stop increases
+    QoreCondition program_cancels_cond;
 
     //! Cancel all operations in one I/O-thread context matching a socket hash
     DLLLOCAL int cancelSocketInContext(IoThreadContext& t, const std::string& sock_hash,
