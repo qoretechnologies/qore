@@ -1178,6 +1178,9 @@ DLLEXPORT QoreValue qore_get_module_option(std::string mod, std::string opt);
 
     Writing requires the PROCESS functional domain; reading via qore_get_app_registry() has no
     domain restriction, making it safe for use by library modules executed in sandboxed contexts.
+    The Qore functions set_app_registry() and get_app_registry() refuse sandboxed code: the registry holds data and
+    callbacks of the host, so the code of a sandboxed Program does not get its values, while library module code that
+    serves such code does (qore#6749).
 
     @param key the registry key
     @param val the value to store; must be already referenced for the assignment; NOTHING removes the key
@@ -1187,7 +1190,10 @@ DLLEXPORT QoreValue qore_get_module_option(std::string mod, std::string opt);
 DLLEXPORT void qore_set_app_registry(std::string key, QoreValue val);
 
 //! gets a value from the application registry (no domain restriction)
-/** @param key the registry key
+/** For the C++ code of the library and of modules, which is responsible for what it returns to its callers; the Qore
+    function get_app_registry() returns no value to the code of a sandboxed Program (qore#6749)
+
+    @param key the registry key
 
     @return the referenced value; if a value is returned here, it must be dereferenced
 

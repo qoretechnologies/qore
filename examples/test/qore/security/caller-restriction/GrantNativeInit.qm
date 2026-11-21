@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-grants.qtest: its initialization loads a native module by its path
+
+%modern
+%requires GrantProbe
+
+module GrantNativeInit {
+    version = "1.0";
+    desc = "test module whose initialization loads a native module by its path";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        GrantProbe::set_native_init_result(GrantProbe::load_native(GrantProbe::get_native_path()));
+    };
+}

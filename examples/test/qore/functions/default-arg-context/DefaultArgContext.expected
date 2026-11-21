@@ -1,0 +1,95 @@
+sandbox method read: PRIVATE-MEMBER
+sandbox method by name read: PRIVATE-MEMBER
+sandbox function reference read: PRIVATE-MEMBER
+sandbox call_function_args read: PRIVATE-MEMBER
+sandbox closure read: PRIVATE-MEMBER
+sandbox closure with captures read: PRIVATE-MEMBER
+sandbox closure of a method read: PRIVATE-MEMBER
+sandbox static method reference read: PRIVATE-MEMBER
+sandbox method reference read: PRIVATE-MEMBER
+sandbox static caller read: PRIVATE-MEMBER
+sandbox background read: PRIVATE-MEMBER
+sandbox sort callback read: PRIVATE-MEMBER
+sandbox method iread: PRIVATE-MEMBER
+sandbox method by name iread: PRIVATE-MEMBER
+sandbox function reference iread: PRIVATE-MEMBER
+sandbox call_function_args iread: PRIVATE-MEMBER
+sandbox closure iread: PRIVATE-MEMBER
+sandbox closure with captures iread: PRIVATE-MEMBER
+sandbox closure of a method iread: PRIVATE-MEMBER
+sandbox static method reference iread: PRIVATE-MEMBER
+sandbox method reference iread: PRIVATE-MEMBER
+sandbox static caller iread: PRIVATE-MEMBER
+sandbox background iread: PRIVATE-MEMBER
+sandbox sort callback iread: PRIVATE-MEMBER
+sandbox method write: PRIVATE-MEMBER
+sandbox method by name write: PRIVATE-MEMBER
+sandbox function reference write: PRIVATE-MEMBER
+sandbox call_function_args write: PRIVATE-MEMBER
+sandbox closure write: PRIVATE-MEMBER
+sandbox closure with captures write: PRIVATE-MEMBER
+sandbox closure of a method write: PRIVATE-MEMBER
+sandbox static method reference write: PRIVATE-MEMBER
+sandbox method reference write: PRIVATE-MEMBER
+sandbox static caller write: PRIVATE-MEMBER
+sandbox background write: PRIVATE-MEMBER
+sandbox sort callback write: PRIVATE-MEMBER
+sandbox method call: METHOD-IS-PRIVATE
+sandbox method by name call: METHOD-IS-PRIVATE
+sandbox function reference call: METHOD-IS-PRIVATE
+sandbox call_function_args call: METHOD-IS-PRIVATE
+sandbox closure call: METHOD-IS-PRIVATE
+sandbox closure with captures call: METHOD-IS-PRIVATE
+sandbox closure of a method call: METHOD-IS-PRIVATE
+sandbox static method reference call: METHOD-IS-PRIVATE
+sandbox method reference call: METHOD-IS-PRIVATE
+sandbox static caller call: METHOD-IS-PRIVATE
+sandbox background call: METHOD-IS-PRIVATE
+sandbox sort callback call: METHOD-IS-PRIVATE
+sandbox method icall: METHOD-DOES-NOT-EXIST
+sandbox method by name icall: METHOD-DOES-NOT-EXIST
+sandbox function reference icall: METHOD-DOES-NOT-EXIST
+sandbox call_function_args icall: METHOD-DOES-NOT-EXIST
+sandbox closure icall: METHOD-DOES-NOT-EXIST
+sandbox closure with captures icall: METHOD-DOES-NOT-EXIST
+sandbox closure of a method icall: METHOD-DOES-NOT-EXIST
+sandbox static method reference icall: METHOD-DOES-NOT-EXIST
+sandbox method reference icall: METHOD-DOES-NOT-EXIST
+sandbox static caller icall: METHOD-DOES-NOT-EXIST
+sandbox background icall: METHOD-DOES-NOT-EXIST
+sandbox sort callback icall: METHOD-DOES-NOT-EXIST
+sandbox program: "./tenant-program"
+script function reference read: PRIVATE-MEMBER
+script function reference iread: PRIVATE-MEMBER
+script function reference write: PRIVATE-MEMBER
+script function reference call: METHOD-IS-PRIVATE
+script closure read: PRIVATE-MEMBER
+script closure call: METHOD-IS-PRIVATE
+script constructor read: PRIVATE-MEMBER
+script constructor from a class read: PRIVATE-MEMBER
+module function direct read: PRIVATE-MEMBER
+module function reference read: PRIVATE-MEMBER
+module function reference iread: PRIVATE-MEMBER
+module function reference call: METHOD-IS-PRIVATE
+module function by reflection read: PRIVATE-MEMBER
+own top-level: ["secret", "isecret", "helper", "ihelper"]
+own other class: ["secret", "isecret", "helper", "ihelper"]
+own subclass: ["secret", "isecret", "helper", "ihelper"]
+own inherited top-level: ["secret", "isecret", "helper", "ihelper"]
+own method reference: ["secret", "isecret", "helper", "ihelper"]
+own method reference other class: ["secret", "isecret", "helper", "ihelper"]
+own by name: ["secret", "isecret", "helper", "ihelper"]
+own by reflection: ["secret", "isecret", "helper", "ihelper"]
+own constructor top-level: ["csecret", "cisecret", "chelper"]
+own constructor other class: ["csecret", "cisecret", "chelper"]
+own constructor subclass: ["csecret", "cisecret", "chelper"]
+own constructor by reflection: ["csecret", "cisecret", "chelper"]
+own static top-level: ["svar", "shelper"]
+own static other class: ["svar", "shelper"]
+own static reference: ["svar", "shelper"]
+own static by reflection: ["svar", "shelper"]
+own closure top-level: ["secret", "isecret"]
+own closure other class: ["secret", "isecret"]
+own static closure top-level: ["svar", "shelper"]
+own static closure other class: ["svar", "shelper"]
+state: "secret/isecret"

@@ -105,6 +105,12 @@
     Restricted Programs now get a parse error when explicitly loading standard module sources outside the
     process-wide module path if the source needs a denied @ref function_domains "functional domain".
 
+    @par Serialized SqlUtil Objects Keep No Datasource Credentials
+    Serialized @ref sqlutilintro "SqlUtil" objects keep the connection name or the masked configuration of their
+    datasource instead of its credentials; a registered deserializer gets an empty string for such data, and a
+    registered credential resolver gives the credentials (see @ref sqlutil_serialization;
+    <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
@@ -206,6 +212,12 @@
     \c private:internal, so subclasses use their accessors and \c %y no longer shows them (see
     @ref Qore::SocketPollOperationBase and @ref Qore::PollPipeline::setGoal();
     <a href="https://github.com/qoretechnologies/qore/issues/6839">issue 6839</a>).
+
+    @par Members Cannot Be Added to Builtin Constant Objects
+    Adding a member to a builtin constant's object (ex: @ref Qore::stdout "stdout") raises \c SYSTEM-OBJECT-ERROR;
+    sandboxed code cannot add members to other code's builtin objects or read module options; and
+    @ref Qore::get_app_registry() "get_app_registry()" requires \c PROCESS, a parse error under \c PO_NO_PROCESS_CONTROL
+    (@ref sandbox_process_wide_registries; <a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>).
 
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
     The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
@@ -1702,6 +1714,12 @@
     the global loggers of the data provider modules; see
     @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>).
 
+    @par Process-Wide State Is Not Readable by Sandboxed Code
+    Sandboxed code does not get the module options (@ref Qore::get_module_option() "get_module_option()"), the
+    application registry and the process-wide state of the standard modules that holds the configuration of the host
+    or of other tenants; see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>).
+
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
     pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and
@@ -2250,6 +2268,7 @@
         default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
+      - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
@@ -2651,6 +2670,12 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref providerindexutilintro "ProviderIndexUtil" applies @ref providerindexutil_sandbox "caller permissions"
+      to process-wide logging and initialization
+      (<a href="https://github.com/qoretechnologies/qore/issues/7060">issue 7060</a> and
+      <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
+    - fixed a crash when a debugger paused or terminated a debugged Program while it was being torn down and one of its
+      threads had just ended (<a href="https://github.com/qoretechnologies/qore/issues/7103">issue 7103</a>)
     - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
       module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
       (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
@@ -2682,6 +2707,10 @@
       @ref remove "remove" and @ref delete "delete" operators on a member of an object reached through a member of the
       object itself, as in <tt>t.o = t; t.o += {"a": 2};</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7107">issue 7107</a>)
+    - the default values of a function, method or closure are evaluated in the class context of the code that
+      declared them; they were evaluated in the class context of the caller with its private access, which a default
+      value that uses the private declarations of the caller's class no longer has (see
+      @ref function_param_default_values; <a href="https://github.com/qoretechnologies/qore/issues/7066">issue 7066</a>)
     - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
       a class with only the same name and declarations as another class had the other class's private and
       \c private:internal access to its objects (see @ref private_access_class_identity;
@@ -2703,6 +2732,25 @@
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
       "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
       @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
+    - fixed \c qdp ending with an unhandled \c TERMIOS-GET-WINDOW-SIZE-ERROR exception when it printed descriptions
+      without a controlling terminal; descriptions are shortened to the width in the \c COLUMNS environment variable,
+      else to that of the terminal, and are not shortened without one
+      (<a href="https://github.com/qoretechnologies/qore/issues/7125">issue 7125</a>)
+    - fixed \c qdp ending with an unhandled exception for an app action without its connection or a required option,
+      or with an unknown connection; these are usage errors that name the options, and the connection can also be
+      given with \c qorus_app_connection, the name of the option in Qorus
+      (<a href="https://github.com/qoretechnologies/qore/issues/7126">issue 7126</a>)
+    - a data provider instance or action set that callers with different restrictions share no longer keeps a type
+      that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
+      AsyncApi request providers, the record table provider and RestSchemaActions actions;
+      <a href="https://github.com/qoretechnologies/qore/issues/7104">issue 7104</a>)
+    - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
+      that begins with a parameterized class (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
+    - substituting type arguments in nullable declarations preserves the \c NOTHING alternative of a
+      @ref generic_class_type "parameterized class" and the signature of a @ref code_complex_type "typed callable"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7135">issue 7135</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7144">issue 7144</a>)
+
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
@@ -4162,6 +4210,10 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
+      their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
+      an exception leaves the call after a return statement
+      (<a href="https://github.com/qoretechnologies/qore/issues/6052">issue 6052</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

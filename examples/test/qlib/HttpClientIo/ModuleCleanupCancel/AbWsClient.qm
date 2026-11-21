@@ -1,0 +1,87 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes after its deadline, which AaDeadline makes it reach (the cleanup
+# deletes the data of the user modules in the order of their names: after that of AaDeadline, and before that of the
+# library modules that it uses, AsyncSocketIo, HttpClientIo and WebSocketClient): its destructor connects a WebSocket
+# client with a heartbeat and waits for the echo of a message; the frame of the echo arrives in a step of the
+# client's operation, work that the cleanup handed over, whose re-arm of the heartbeat timer is refused after the
+# deadline, which the client handles quietly, while the delivery of the message goes on (qore#7027); see
+# ws-heartbeat-client.qr
+
+%modern
+
+%requires Logger
+%requires WebSocketClient
+
+module AbWsClient {
+    version = "1.0";
+    desc = "connects a WebSocket client with a heartbeat after the deadline of the module cleanup";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbWsClient {
+#! returns the callback of the client; created outside of a method, as a closure created in one cannot run once its
+#! object is gone
+code sub make_echo_callback(Counter received) {
+    return sub (*data msg) {
+        if (exists msg) {
+            printf("echo received: %s\n", msg);
+            flush();
+            received.dec();
+        }
+    };
+}
+
+#! writes the debug messages of the client's heartbeat
+class HeartbeatAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("heartbeat", new LoggerLayoutPattern("%m")) {
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /heartbeat/) {
+            printf("client log: %s\n", params);
+            flush();
+        }
+    }
+}
+
+#! connects the client when the cleanup deletes it
+class Connector {
+    destructor() {
+        Logger logger("late-ws-client", LoggerLevel::getLevelDebug());
+        HeartbeatAppender appender();
+        appender.open();
+        logger.addAppender(appender);
+        Counter received(1);
+        WebSocketClient ws(make_echo_callback(received), {
+            "url": Holder::url,
+            # HTTP/2: the connection re-arms a heartbeat timer of the controller
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "heartbeat": 1h,
+            "logger": logger,
+        });
+        ws.connect();
+        ws.send("hello");
+        if (received.waitForZero(20s)) {
+            printf("no echo\n");
+        }
+        ws.disconnect();
+        printf("client done\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class Holder {
+    public {
+        #! the URL of the echo server, set by the script
+        static string url;
+        static Connector connector();
+    }
+}
+}

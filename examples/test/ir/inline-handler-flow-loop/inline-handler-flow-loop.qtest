@@ -30,7 +30,8 @@
     handler of a handler's body (qore#6949).  The paths after a block do not run the handlers of the block and of the
     blocks in it again, which have run (qore#6955).  A break or a continue request in a handler of a block of the body
     of a handler that is not the last one of its exit ends that handler, whose request the next handler's normal end
-    replaces (qore#7040).
+    replaces (qore#7040).  A return request in a handler that is not the last one runs the next handlers and ends the
+    function (qore#6999).
 */
 class InlineHandlerFlowLoopTest inherits QUnit::Test {
     public {
@@ -40,7 +41,10 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             "tryExitContinue", "tryCutReturn", "loopHandlerTop", "scopeMidHandler", "scopeMid", "scopeMidLoop",
             "tryHandlerTry", "tryNestedHandlers", "nonLast", "nonLastLoop", "nonLastSwitch", "nonLastInnerLoop",
             "nonLastDeep", "nonLastInner", "nonLastTry", "nonLastSuccess", "retNonLast", "retLast", "retLastLoop",
-            "retNonLastLoop", "retDeep", "retDeepLast");
+            "retNonLastLoop", "retDeep", "retDeepLast",
+            "twoHandlersLoop", "twoHandlers", "twoHandlersInner", "twoHandlersInnerReturn", "twoHandlersMid",
+            "twoHandlersTry", "twoHandlersLaterReturn", "threeHandlers", "mixedHandlers",
+            "mixedHandlersLoop", "mixedInHandler");
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
         #! request, tag and hit
@@ -160,6 +164,57 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             ("retDeep", "continue", "ret_deep", 1),
             ("retDeepLast", "break", "ret_deep_last", 1),
             ("retDeepLast", "continue", "ret_deep_last", 1),
+            # a handler that is not the last of its exit: the next handlers run, and keep a return request and replace
+            # a break or a continue request (qore#6999)
+            ("twoHandlersLoop", "return", "two_handlers_loop_a", 1),
+            ("twoHandlersLoop", "break", "two_handlers_loop_a", 1),
+            ("twoHandlersLoop", "continue", "two_handlers_loop_a", 1),
+            ("twoHandlers", "return", "two_handlers_a", 1),
+            ("twoHandlers", "break", "two_handlers_a", 1),
+            ("twoHandlers", "continue", "two_handlers_a", 1),
+            ("twoHandlersInner", "return", "two_handlers_inner_a", 1),
+            ("twoHandlersInner", "break", "two_handlers_inner_a", 1),
+            ("twoHandlersInner", "continue", "two_handlers_inner_a", 1),
+            ("twoHandlersInnerReturn", "return", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "break", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "continue", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "return", "two_handlers_inner_return_b", 1),
+            ("twoHandlersInnerReturn", "break", "two_handlers_inner_return_b", 1),
+            ("twoHandlersInnerReturn", "continue", "two_handlers_inner_return_b", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_c", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_c", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_c", 1),
+            ("twoHandlersTry", "return", "two_handlers_try_a", 1),
+            ("twoHandlersTry", "break", "two_handlers_try_a", 1),
+            ("twoHandlersTry", "continue", "two_handlers_try_a", 1),
+            ("twoHandlersLaterReturn", "return", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "break", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "continue", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "return", "two_handlers_later_return_b", 1),
+            ("twoHandlersLaterReturn", "break", "two_handlers_later_return_b", 1),
+            ("twoHandlersLaterReturn", "continue", "two_handlers_later_return_b", 1),
+            ("threeHandlers", "return", "three_handlers_a", 1),
+            ("threeHandlers", "break", "three_handlers_a", 1),
+            ("threeHandlers", "continue", "three_handlers_a", 1),
+            ("mixedHandlers", "return", "mixed_handlers", 1),
+            ("mixedHandlers", "break", "mixed_handlers", 1),
+            ("mixedHandlers", "continue", "mixed_handlers", 1),
+            ("mixedHandlersLoop", "return", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "return", "mixed_handlers_loop_b", 2),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_b", 2),
+            ("mixedHandlersLoop", "continue", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "continue", "mixed_handlers_loop_b", 2),
+            ("mixedInHandler", "return", "mixed_in_handler", 1),
+            ("mixedInHandler", "break", "mixed_in_handler", 1),
+            ("mixedInHandler", "continue", "mixed_in_handler", 1),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_x", 1, "return", "mixed_handlers_loop_b", 1),
         );
 
         #! the qcc optimization levels
