@@ -601,11 +601,13 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         );
         # the definition is found by the letters and digits of the name, as musl's iconv ignores all punctuation in
         # names: the Shift_JIS forms are selected by their name, whether or not the platform's iconv knows the
-        # spelling; the other families where the platform's iconv converts the encoding by that spelling (musl)
-        foreach list<auto> c in (("Shift.JIS", <8140>, True), ("MS.932", <f040>, True), ("S.J.I.S", <8140>, True),
-                ("GB.2312", <b0a1>), ("EUC.JP", <8ea1>)) {
-            if (c[2] || converts(c[0])) {
-                assertEq(1, binary_to_string(c[1], c[0]).length(), c[0] + ": a character of the definition");
+        # spelling (one character for a double-byte one); the other families where the platform's iconv converts the
+        # encoding by that spelling (musl), by a character of the definition that the family found by probing the
+        # encoding does not have (the C1 control character 0x81 of EUC-JP: three characters)
+        foreach list<auto> c in (("Shift.JIS", <8140>, 1, True), ("MS.932", <f040>, 1, True),
+                ("S.J.I.S", <8140>, 1, True), ("EUC.JP", <418142>, 3)) {
+            if (c[3] || converts(c[0])) {
+                assertEq(c[2], binary_to_string(c[1], c[0]).length(), c[0] + ": the characters of the definition");
             }
         }
         list<string> unavailable = ();
