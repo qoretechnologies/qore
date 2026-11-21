@@ -2538,12 +2538,37 @@ static bool is_nullable_parameterized_class(const QoreTypeInfo* ti) {
     return ti->return_vec.size() == 2 && ti->return_vec[1].spec.isRuntimeBaseType(NT_NOTHING);
 }
 
+// A symbolic member may accept NOTHING. Until substitution, conversion between the declared value
+// type and its or-nothing type must preserve the distinction between union<C<int>, T> and *union<C<int>, T>.
+static bool type_accepts_nothing_for_conversion(const QoreTypeInfo* ti) {
+    if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+        return false;
+    }
+    const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti);
+    return !uti || uti->isOrNothing();
+}
+
 static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
-    assert(QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
+    assert(type_accepts_nothing_for_conversion(typeInfo));
 
     typeinfo_map_t::iterator i = typeinfo_or_nothing_map.find(typeInfo);
     if (i != typeinfo_or_nothing_map.end()) {
         return i->second;
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(typeInfo)) {
+        type_vec_t members = uti->getMemberTypes();
+        members.erase(std::remove(members.begin(), members.end(), nothingTypeInfo), members.end());
+        for (const QoreTypeInfo*& member : members) {
+            if (qore_get_type_parameter_type_info(member)) {
+                member = member->return_vec.front().spec.getTypeParameterTypeInfo();
+            } else if (QoreTypeInfo::getUnionType(member)) {
+                member = get_value_type(member);
+            } else {
+                member = get_or_nothing_base_type(member);
+            }
+        }
+        return qore_get_union_type(members);
     }
 
     // see if we have a complex type
@@ -2614,11 +2639,11 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
 }
 
 const QoreTypeInfo* get_value_type(const QoreTypeInfo* typeInfo) {
-   return !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING) ? typeInfo : get_value_type_intern(typeInfo);
+   return !type_accepts_nothing_for_conversion(typeInfo) ? typeInfo : get_value_type_intern(typeInfo);
 }
 
 const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo) {
-    if (!QoreTypeInfo::hasType(typeInfo) || !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
+    if (!QoreTypeInfo::hasType(typeInfo) || !type_accepts_nothing_for_conversion(typeInfo)) {
         return typeInfo;
     }
     // get_value_type_intern() does not resolve enum types
@@ -2631,7 +2656,7 @@ const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo) {
     const QoreTypeInfo* vti = get_value_type_intern(typeInfo);
     // the type is *T only if T is a type without NOTHING whose or-nothing type is the type given; types such as
     // any, auto and nothing have no such T
-    if (!QoreTypeInfo::hasType(vti) || QoreTypeInfo::parseAcceptsReturns(vti, NT_NOTHING)
+    if (!QoreTypeInfo::hasType(vti) || type_accepts_nothing_for_conversion(vti)
         || get_or_nothing_type(vti) != typeInfo) {
         return typeInfo;
     }
@@ -2649,16 +2674,20 @@ const QoreTypeInfo* qore_get_or_nothing_type(const QoreTypeInfo* typeInfo) {
 }
 
 const QoreTypeInfo* get_or_nothing_type_check(const QoreTypeInfo* typeInfo) {
-   return QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING) ? typeInfo : get_or_nothing_type(typeInfo);
+   return type_accepts_nothing_for_conversion(typeInfo) ? typeInfo : get_or_nothing_type(typeInfo);
 }
 
 const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
-    assert(!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
+    assert(!type_accepts_nothing_for_conversion(typeInfo));
 
     // a builtin type holds its or-nothing type, which is read without a map lookup (issue #6126)
     if (unsigned index = typeInfo ? typeInfo->getBuiltinOrNothingIndex() : 0) {
         assert(index <= builtin_or_nothing_types.size());
         return builtin_or_nothing_types[index - 1];
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(typeInfo)) {
+        return qore_get_union_or_nothing_type(uti->getMemberTypes());
     }
 
     // see if we have a complex type
@@ -3448,6 +3477,17 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         return cached & 1;
     }
 
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        for (const QoreTypeInfo* member : orphanable_type_vec_view_t(uti->getOrphanableMemberTypes())) {
+            if (qore_type_contains_type_parameter(member)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
     if (qore_get_type_parameter_type_info(ti)) {
         ti->setContainsTypeParameterCache(true);
         return true;
@@ -3491,18 +3531,6 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         }
         for (const QoreTypeInfo* param : cti->getParamTypes()) {
             if (qore_type_contains_type_parameter(param)) {
-                ti->setContainsTypeParameterCache(true);
-                return true;
-            }
-        }
-        ti->setContainsTypeParameterCache(false);
-        return false;
-    }
-
-    if (QoreTypeInfo::getUnionType(ti)) {
-        for (const QoreReturnSpec& rt : ti->return_vec) {
-            const QoreTypeInfo* member = rt.spec.getTypeInfo();
-            if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
                 ti->setContainsTypeParameterCache(true);
                 return true;
             }
@@ -3974,7 +4002,7 @@ static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_no
     std::vector<const QoreTypeSpec*> value_specs;
     for (const QoreTypeInfo* ti : key) {
         for (const auto& r : ti->return_vec) {
-            if (r.spec.getType() == NT_NOTHING) {
+            if (r.spec.isRuntimeBaseType(NT_NOTHING)) {
                 continue;
             }
             if (std::none_of(value_specs.begin(), value_specs.end(),
@@ -4042,7 +4070,12 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Check if any member already accepts NOTHING, if so, or_nothing is already covered
     bool has_nothing = false;
     for (const QoreTypeInfo* ti : key) {
-        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+        // A symbolic T might specialize to a type that accepts NOTHING. Only a definite NOTHING
+        // alternative makes the outer * redundant; otherwise the two declarations need distinct cache entries.
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                && (!qore_type_contains_type_parameter(ti)
+                    || std::any_of(ti->return_vec.begin(), ti->return_vec.end(),
+                        [](const QoreReturnSpec& rt) { return rt.spec.isRuntimeBaseType(NT_NOTHING); }))) {
             has_nothing = true;
             break;
         }
@@ -4846,6 +4879,25 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         return ti;
     }
 
+    // Return specs describe values after filtering. Substitute the declared union members so their
+    // conversions, signatures and priority survive specialization.
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        type_vec_t members = uti->getMemberTypes();
+        bool changed = false;
+        bool nullable = uti->isOrNothing();
+        for (const QoreTypeInfo*& member : members) {
+            // Match union construction: a single original member must both accept and return NOTHING.
+            // A direct symbolic parameter can do so even if its eventual argument cannot.
+            nullable = nullable || QoreTypeInfo::parseAcceptsReturns(member, NT_NOTHING);
+            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
+            if (subst != member) {
+                member = subst;
+                changed = true;
+            }
+        }
+        return changed ? qore_get_union_type(members, nullable) : ti;
+    }
+
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
         const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info, type_param_inst);
         return subst ? subst : ti;
@@ -4901,23 +4953,6 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
             }
         }
         return changed ? qore_get_complex_code_type(ret, params, cti->hasVarArgs(), cti->isOrNothing()) : ti;
-    }
-
-    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
-        type_vec_t members;
-        bool changed = false;
-        for (const QoreReturnSpec& rt : ti->return_vec) {
-            const QoreTypeInfo* member = rt.spec.getTypeInfo();
-            if (member == nothingTypeInfo) {
-                continue;
-            }
-            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
-            members.push_back(subst);
-            if (subst != member) {
-                changed = true;
-            }
-        }
-        return changed ? qore_get_union_type(members, uti->isOrNothing()) : ti;
     }
 
     // a container of a type parameter, also an or-nothing one (qore#5849)
@@ -5739,8 +5774,10 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new hash
+    // The resulting hash carries the selected member type, including when the declaration is a union.
+    const QoreTypeInfo* complex_type = qore_get_complex_hash_type(uTi());
     if (!h->is_unique()) {
-        AbstractQoreNode* p = n.assign(h = qore_hash_private::get(*h)->copy(get_value_type(&typeInfo)));
+        AbstractQoreNode* p = n.assign(h = qore_hash_private::get(*h)->copy(complex_type));
         if (lvhelper) {
             lvhelper->saveTemp(p);
         } else {
@@ -5751,8 +5788,6 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
             }
         }
     } else {
-        // Use the base complex type, not the optional field type
-        const QoreTypeInfo* complex_type = qore_get_complex_hash_type(uTi());
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
     }
