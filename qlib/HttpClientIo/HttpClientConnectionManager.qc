@@ -2881,11 +2881,11 @@ printf("%d connection(s) migrated\n", migrated);
         if (!origin_tls_credentials) {
             return url_info;
         }
-        hash<UrlInfo> target = url_info;
+        hash<UrlInfo> target = <UrlInfo>{"protocol": url_info.protocol, "host": url_info.host, "port": url_info.port};
         if (HttpRedirectFollower::getOriginKey(target) != client_credential_origin) {
             throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
         }
-        return target + {"bound_tls_cert": exists origin_tls_credentials.cert,
+        return url_info + {"bound_tls_cert": exists origin_tls_credentials.cert,
             "bound_tls_key": exists origin_tls_credentials.key};
     }
 
