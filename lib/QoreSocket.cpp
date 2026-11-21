@@ -287,10 +287,10 @@ QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
         // network access (issue #6913)
         // the current Program, if any: a native thread has no thread data and no Program
         QoreProgram* pgm = qore_thread_current_program_if_any();
-        // a sandbox manager of its own or of the code that created it (read without the lock); not while library code
-        // is initialized: the policy walk does not look at the Program that loads it, whose sandbox does not govern the
+        // a sandbox manager of its own or the policy manager of the code that created it; not while library code is
+        // initialized: the policy walk does not look at the Program that loads it, whose sandbox does not govern the
         // initialization (see QoreModuleInitSandboxBarrierHelper)
-        if (pgm && qore_program_private::get(*pgm)->hasSandboxManager() && !qore_module_init_library()) {
+        if (pgm && qore_program_has_policy_sandbox(pgm) && !qore_module_init_library()) {
             // a manager set by another thread since the walk: the walk finds it now
             QoreSandboxManagerHelper again(QoreSandboxManagerHelper::Policy);
             if (again

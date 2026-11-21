@@ -8070,6 +8070,28 @@ void qore_thread_program_teardown_leave() {
     --td->pgm_teardown_depth;
 }
 
+bool qore_program_has_policy_sandbox(QoreProgram* pgm) {
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    // the quick test, without the lock: no sandbox at all
+    if (!pp->hasSandboxManager()) {
+        return false;
+    }
+    // a manager of its own, or the policy manager of the code that created it; not the sandbox of the code that
+    // created it alone, as a Program created under a system-policy capability has: the policy of that code does not
+    // apply to it (see qore_program_private::creator_policy_manager)
+    QoreSandboxManager* own;
+    QoreSandboxManager* creator;
+    pp->getSandboxManagerRefs(own, creator, true);
+    const bool rv = own || creator;
+    if (own) {
+        own->deref(nullptr);
+    }
+    if (creator) {
+        creator->deref(nullptr);
+    }
+    return rv;
+}
+
 QoreProgram* qore_thread_current_program_if_any() {
     ThreadData* td = thread_data.get();
     return td ? td->current_pgm : nullptr;

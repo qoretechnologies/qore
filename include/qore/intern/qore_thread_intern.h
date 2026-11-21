@@ -881,6 +881,10 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! returns true if a file system and network policy must govern the code of the Program: it has a sandbox manager of
+//! its own, or the policy manager of the code that created it (issues #6913, #6942)
+DLLLOCAL bool qore_program_has_policy_sandbox(QoreProgram* pgm);
+
 //! returns the current Program of the thread, or nullptr, also on a thread without thread data (a native thread)
 DLLLOCAL QoreProgram* qore_thread_current_program_if_any();
 
