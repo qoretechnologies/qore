@@ -4823,22 +4823,13 @@ void CalleeContextHelper::restoreArgv() {
     td->current_implicit_arg = old_argv;
 }
 
-// The RuntimeConfig remains with the thread for its lifetime. Preserve rc_get_tls_ref()'s
-// initialization of a missing location when a caller cleared it between context changes.
-static RuntimeConfig::Impl& object_context_runtime_config(ThreadData* td) {
-    if (!td->rc || !td->rc->loc) {
-        td->rc = rc_get_tls_impl();
-    }
-    return *td->rc;
-}
-
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c)
         : td(thread_data.get()) {
     old_obj = td->current_obj;
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
-    RuntimeConfig::Impl& rc = object_context_runtime_config(td);
+    RuntimeConfig::Impl& rc = rc_get_tls_ref().implRef();
     old_rc_obj = rc.obj;
     old_rc_class = rc.cls;
     rc.obj = obj;
@@ -4849,7 +4840,7 @@ ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
     assert(td == thread_data.get());
     td->current_obj = old_obj;
     td->current_class = old_class;
-    RuntimeConfig::Impl& rc = object_context_runtime_config(td);
+    RuntimeConfig::Impl& rc = rc_get_tls_ref().implRef();
     rc.obj = old_rc_obj;
     rc.cls = old_rc_class;
 }
