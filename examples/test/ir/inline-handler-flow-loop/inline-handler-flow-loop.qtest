@@ -27,14 +27,16 @@
     handler-flow.q gives the output of the AST interpreter in every execution mode and in qcc executables compiled with
     -O0 and -O3, without a debugger and with a debugger's request at a step event of a statement of such a handler.
     A request in a handler that a return runs ends the handler, and the return goes on with its value, also from a
-    handler of a handler's body (qore#6949).
+    handler of a handler's body (qore#6949).  The paths after a block do not run the handlers of the block and of the
+    blocks in it again, which have run (qore#6955).
 */
 class InlineHandlerFlowLoopTest inherits QUnit::Test {
     public {
         #! the functions of handler-flow.q
         const Functions = ("loopThrow", "loopReturn", "switchBreak", "nestedLoops", "noLoop", "deepReturn", "nestIf",
             "nestLoop", "deepIf", "loopIf", "midReturn", "tryReturn", "tryNested", "switchContinue", "tryExitBreak",
-            "tryExitContinue", "tryCutReturn");
+            "tryExitContinue", "tryCutReturn", "loopHandlerTop", "scopeMidHandler", "scopeMid", "scopeMidLoop",
+            "tryHandlerTry", "tryNestedHandlers");
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
         #! request, tag and hit
@@ -87,13 +89,34 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             # a handler that runs after the try statement that its block's exit left
             ("tryExitBreak", "return", "try_exit_break", 1),
             ("tryExitContinue", "return", "try_exit_continue", 2),
-        );
-
-        #! requests whose results are compared, but not the handlers that run and the step events, which differ in
-        #! qcc executables while a handler that can return runs again in the paths of a scope (qore#6955)
-        const ResultRequests = (
-            # a handler lowered inline in the paths after a block left from a try statement (qore#6949)
+            # a handler lowered inline in the paths after a block left from a try statement (qore#6949); a handler
+            # that can return ran again in those paths (qore#6955)
             ("tryCutReturn", "continue", "try_cut_inner", 1, "return", "try_cut_handler", 1),
+            ("tryCutReturn", "continue", "try_cut_inner", 1),
+            ("tryCutReturn", "continue", "try_cut_inner", 2),
+            # the paths after a block run neither its handlers nor those of the blocks in it, which have run
+            # (qore#6955: qcc executables ran them again)
+            ("loopHandlerTop", "return", "loop_top_body", 1),
+            ("loopHandlerTop", "return", "loop_top_body", 2),
+            ("scopeMidHandler", "break", "scope_mid_handler_inner", 1),
+            ("scopeMidHandler", "continue", "scope_mid_handler_inner", 1),
+            ("scopeMidHandler", "return", "scope_mid_handler_inner", 1),
+            ("scopeMidHandler", "return", "scope_mid_handler", 1, "return", "scope_mid_handler_inner", 1),
+            ("scopeMid", "break", "scope_mid_inner", 1),
+            ("scopeMid", "continue", "scope_mid_inner", 1),
+            ("scopeMid", "return", "scope_mid_inner", 1),
+            ("scopeMid", "continue", "scope_mid", 1, "return", "scope_mid_inner", 1),
+            ("scopeMidLoop", "break", "scope_mid_loop_inner", 1),
+            ("scopeMidLoop", "continue", "scope_mid_loop_inner", 1),
+            ("scopeMidLoop", "continue", "scope_mid_loop_inner", 2),
+            ("scopeMidLoop", "return", "scope_mid_loop_inner", 1),
+            ("scopeMidLoop", "break", "scope_mid_loop", 1, "continue", "scope_mid_loop_inner", 1),
+            ("tryHandlerTry", "break", "try_handler_try", 1),
+            ("tryHandlerTry", "continue", "try_handler_try", 1),
+            ("tryHandlerTry", "return", "try_handler_try", 1),
+            ("tryHandlerTry", "return", "try_handler_try_inner", 1),
+            ("tryHandlerTry", "continue", "try_handler_try_inner", 1, "return", "try_handler_try", 1),
+            ("tryNestedHandlers", "return", "try_nested_handlers", 1),
         );
 
         #! the qcc optimization levels
@@ -173,14 +196,6 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
                 assertRegex("^RESULT:", expected, args + ": AST");
                 assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, args)), sprintf("qcc -O%d: %s", opt,
                     args));
-            }
-            foreach list<auto> r in (ResultRequests) {
-                string args = sprintf("%s %s %d %d %s %d %d", r[0], r[1], tags{r[2]}, r[3], r[4], tags{r[5]}, r[6]);
-                *string expected = (backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
-                    args)) =~ x/^(RESULT:\S*) /)[0];
-                assertEq(Type::String, expected.type(), args + ": AST");
-                *string actual = (backquote(sprintf("%s %s -b %s 2>&1", env, exe, args)) =~ x/^(RESULT:\S*) /)[0];
-                assertEq(expected, actual, sprintf("qcc -O%d: %s: the result", opt, args));
             }
         }
     }

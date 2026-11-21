@@ -373,6 +373,133 @@ auto sub tryCutReturn(int n) {
     return n;
 }
 
+# a handler of a loop body run at an exception out of the loop, with a handler of a foreach loop in its body: a request
+# in the foreach loop's handler does not run the handlers of blocks that the paths after the loop's block have left
+# (qore#6955)
+auto sub loopHandlerTop(int n) {
+    on_exit {
+        push log, "top";
+    }
+    int i = 0;
+    while (True) {
+        on_exit {
+            foreach int k in (xrange(3)) {
+                on_exit {
+                    push log, "lh" + k;
+                }
+                push log, "lb" + k;                 ### loop_top_body
+            }
+        }
+        if (++i == n) {
+            throw "X", "loopHandlerTop";
+        }
+    }
+}
+
+# a handler that can return of a block in a handler's body, around a block with a handler (qore#6955)
+auto sub scopeMidHandler(int n) {
+    on_exit {
+        {
+            on_exit {
+                push log, "mid";                    ### scope_mid_handler
+                if (n > 100) {
+                    return -5;
+                }
+            }
+            {
+                on_exit {
+                    push log, "in";                 ### scope_mid_handler_inner
+                }
+                push log, "x";
+            }
+            push log, "y";
+        }
+        push log, "outer";
+    }
+    push log, "body";
+}
+
+# the same in the function's body (qore#6955)
+auto sub scopeMid(int n) {
+    {
+        on_exit {
+            push log, "mid";                        ### scope_mid
+            if (n > 100) {
+                return -5;
+            }
+        }
+        {
+            on_exit {
+                push log, "in";                     ### scope_mid_inner
+            }
+            push log, "x";
+        }
+        push log, "y";
+    }
+    push log, "body";
+}
+
+# the same in a loop: a break and a continue take the loop (qore#6955)
+auto sub scopeMidLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        {
+            on_exit {
+                push log, "mid";                    ### scope_mid_loop
+                if (n > 100) {
+                    return -5;
+                }
+            }
+            {
+                on_exit {
+                    push log, "in";                 ### scope_mid_loop_inner
+                }
+                push log, "x";
+            }
+        }
+        push log, "j" + j;
+    }
+    return -9;
+}
+
+# a handler of a try block with a try statement in its body (qore#6955)
+auto sub tryHandlerTry(int n) {
+    try {
+        on_exit {
+            push log, "h";                          ### try_handler_try
+            try {
+                push log, "t";                      ### try_handler_try_inner
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        push log, "x";
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    return n;
+}
+
+# handlers of blocks in a try statement in a handler's body (qore#6955)
+auto sub tryNestedHandlers(int n) {
+    on_exit {
+        try {
+            {
+                on_exit {
+                    {
+                        on_exit {
+                            push log, "inner";      ### try_nested_handlers_inner
+                        }
+                        push log, "x3";
+                    }
+                    push log, "mid";                ### try_nested_handlers
+                }
+                push log, "x2";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        push log, "h2";
+    }
+    return n;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
