@@ -2225,6 +2225,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     bool discard = false;
     // set when an owner-barrier discard happens on the async I/O thread
     bool release_off_io_thread = false;
+    // set when work that the module cleanup handed over is released here because no worker can run it (qore#6928)
+    bool release_cleanup_delegate = false;
     {
         AutoLocker al(m);
 
@@ -2312,6 +2314,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
                     }
                 }
                 discard = true;
+                // the references are released with the delegation of the cleanup, as a worker would release them
+                release_cleanup_delegate = true;
             } else {
                 // Enqueue even if no workers exist — stop() will drain and clean up.
                 // Cannot execute synchronously here: caller may be the I/O thread,
@@ -2347,7 +2351,21 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             enqueue(std::move(item));
             return;
         }
-        releaseWorkItem(item, &xsink);
+#ifdef DEBUG
+        const bool dbg_held = item.dbg_held_module_cleanup_work;
+#endif
+        {
+            // work that the module cleanup handed over enters the Programs of the modules as the worker would; the
+            // releases of the other discards run where they ran before
+            QoreModuleCleanupDelegateHelper cleanup_delegate(release_cleanup_delegate);
+            releaseWorkItem(item, &xsink);
+        }
+#ifdef DEBUG
+        if (dbg_held) {
+            fprintf(stderr, "held module cleanup work: an item was discarded and ended\n");
+            fflush(stderr);
+        }
+#endif
     }
 }
 
@@ -3350,7 +3368,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.dbg_held_module_cleanup_work) {
             // the item's callbacks and the release of its references have ended
             fprintf(stderr, "held module cleanup work: an item %s and ended\n",
-                (pgm_shutting_down || owner_shutting_down) ? "was discarded" : "ran");
+                (pgm_shutting_down || owner_shutting_down || async_item.type == DT_RELEASE) ? "was discarded" : "ran");
             fflush(stderr);
         }
 #endif

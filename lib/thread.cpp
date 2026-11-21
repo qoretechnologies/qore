@@ -5455,8 +5455,11 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
     }
 
     void child() noexcept override {
-        // only the forking thread is left, which holds the lock since prepare()
+        // only the forking thread is left, which holds the lock since prepare(); a waiter of the parent does not exist
+        // in the child, so the condition is initialized again
+        qore_condition_ops(&cond).reinitAfterFork();
         count = 0;
+        forked = true;
 #ifdef DEBUG
         dbg_held = false;
 #endif
@@ -5465,6 +5468,9 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
 
     QoreThreadLock lock;
     QoreCondition cond;
+    //! true in a child process created with fork(): work that the forking thread held when the count was reset can
+    //! end in it, which is not counted
+    bool forked = false;
     //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
     size_t count = 0;
 #ifdef DEBUG
@@ -5489,7 +5495,11 @@ void qore_module_cleanup_work_begin() {
 void qore_module_cleanup_work_end() {
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
     AutoLocker al(work.lock);
-    assert(work.count);
+    if (!work.count) {
+        // work of the forking thread that ended in the child, after the count was reset there
+        assert(work.forked);
+        return;
+    }
     if (!--work.count) {
         work.cond.broadcast();
     }

@@ -260,7 +260,10 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   gets a counted copy when the cleanup cancels it; a command that an I/O thread creates while it processes a command
   of the cleanup is the cleanup's too; a counted work item that no callback worker can run (none runs and none can be
   started) has its references released at once, as `stop()` releases them, as `stop()` comes after the cleanup; and a
-  child process created with `fork()` starts with no work counted.  A debug test that holds step results or releases
+  child process created with `fork()` starts with no work counted.  Not covered: an operation that work of the
+  cleanup submits and that ends on its own, without being canceled for the cleanup (its context is delegated but not
+  counted): counting every operation that such work submits would make the cleanup wait for operations that never end
+  (a listener), so its `onComplete()` can still run after a module's Program has been deleted.  A debug test that holds step results or releases
   with the other test hooks must release them before the end of the process, as the cleanup waits for the work they
   keep.  A debug build's `dbg_async_io_hold_module_cleanup_work()` hook holds the `onComplete()` items until the
   cleanup releases them, when it waits for its work (or else after the user modules have been deleted), which makes
