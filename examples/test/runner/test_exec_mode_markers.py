@@ -173,6 +173,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
         #   compiled programs in child processes
         # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
+        # - AOTModuleMissingDependencyFallback (#7004): its checks compile modules and run drivers that load them, in
+        #   child processes that set their own --exec-mode, and compiled with qcc
         # - AOTNamedCallRefModules (M4 phase 3): its checks compile modules with qcc and run the interpreter and the
         #   compiled programs in child processes
         # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
@@ -399,6 +401,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",
+                                 "examples/test/ir/AOTModuleMissingDependencyFallback.qtest",
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
