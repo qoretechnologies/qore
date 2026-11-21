@@ -118,6 +118,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getTextFile(r.scheme, r.location, r.opts);
     }
 
@@ -130,6 +132,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getBinaryFile(r.scheme, r.location, r.opts);
     }
 
@@ -146,6 +150,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         hash<FileResourceResult> rv = r.handler.getResource(r.scheme, r.location, r.opts);
         # the resolved target location can carry credentials; the connection location is reported instead
         rv.info.requested_location = scheme + "://" + location;
@@ -164,6 +170,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
             string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         string requested_location = scheme + "://" + location;
         return new FileResourcePollOperation(r.handler.getResourcePoller(r.scheme, r.location, r.opts),
             hash<FileResourceResult> sub (auto output) {
@@ -183,6 +191,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
             *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getIoPollerForLocation(r.scheme, r.location, r.opts);
     }
 
@@ -195,6 +205,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getStreamReader(r.scheme, r.location, r.opts);
     }
 
@@ -207,6 +219,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getBinaryStream(r.scheme, r.location, r.opts);
     }
 
@@ -218,6 +232,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, True);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         r.handler.writeFile(r.scheme, r.location, contents, r.opts);
     }
 
@@ -230,6 +246,8 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     */
     private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
         hash<ResolvedLocation> r = resolve(scheme, location, opts, True);
+        # the connection allows the location that it resolves to (qore#6959)
+        FileLocationCallerExemption exemption(r.handler, r.scheme);
         return r.handler.getOutputStream(r.scheme, r.location, r.opts);
     }
 

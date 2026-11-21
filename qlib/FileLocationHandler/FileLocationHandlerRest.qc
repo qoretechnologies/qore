@@ -183,6 +183,11 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         };
     }
 
+    #! The network for the code that calls it, unless the handler is bound to a client that it was given (qore#6959)
+    private int getCallerDomainsImpl(string scheme) {
+        return isBoundImpl() ? 0 : DOM_NETWORK;
+    }
+
     #! Retrieves a text file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme

@@ -58,6 +58,7 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         addTestCase("client-bound handlers", \boundHandlerTest());
         addTestCase("resources with metadata", \resourceTest());
         addTestCase("negative", \negativeTest());
+        addTestCase("restricted caller", \restrictedCallerTest());
 
         setupConnectionProvider();
 
@@ -163,6 +164,21 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         # a truncated file read proves the pass-through option actually reached the target handler
         makeFile("trunc.txt", "0123456789");
         assertEq("01234", FileLocationHandler::getTextFileFromLocation(p("trunc.txt") + "{max_file_len=5}"));
+    }
+
+    #! a caller restricted from the file system uses a conn location that the connection policy allows, as the
+    #! connection decides, but not the file location that it resolves to (qore#6959)
+    restrictedCallerTest() {
+        makeFile("restricted.txt");
+        Program rp(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        rp.parse("%requires FileLocationHandler\nstring sub t(string loc) { try { "
+            "return FileLocationHandler::getTextFileFromLocation(loc); } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; } }", "restricted");
+        assertEq(FileContents, rp.callFunction("t", p("restricted.txt")));
+        assertEq("PERMISSION-DENIED", rp.callFunction("t", "file://" + tmp.path + DirSep + "restricted.txt"));
+        # the exemption covers only the call that the connection makes: the next direct call is refused again
+        assertEq(FileContents, rp.callFunction("t", p("restricted.txt")));
+        assertEq("PERMISSION-DENIED", rp.callFunction("t", tmp.path + DirSep + "restricted.txt"));
     }
 
     readTest() {

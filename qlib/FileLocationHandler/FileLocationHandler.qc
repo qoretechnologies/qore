@@ -144,6 +144,61 @@ public hashdecl FileResourceResult {
     hash<FileResourceInfo> info;
 }
 
+#! The connection policy's exemption of the location that a conn location resolves to (qore#6959)
+/** Not exported: only this module's code can create one.  The \c conn handler creates one for the handler and scheme
+    that the connection resolves a location to, just before it gives the location to that handler; the handler's
+    caller check takes it at once (take()), so it covers that call only, and the object removes it when it goes out of
+    scope if it was not taken.
+*/
+class FileLocationCallerExemption {
+    private:internal {
+        #! the token in the thread's data
+        FileLocationCallerToken token;
+    }
+
+    const Key = "FileLocationHandler::FileLocationCallerExemption";
+
+    #! Grants the exemption for the next call of the handler for the scheme in this thread
+    constructor(AbstractFileLocationHandler handler, string scheme) {
+        token = new FileLocationCallerToken(handler, scheme);
+        save_thread_data(Key, token);
+    }
+
+    #! Removes the exemption if it was not taken
+    destructor() {
+        if (get_thread_data(Key) === token) {
+            remove_thread_data(Key);
+        }
+    }
+
+    #! Takes the exemption of the thread: returns True if it is for the given handler and scheme
+    static bool take(AbstractFileLocationHandler handler, string scheme) {
+        auto v = get_thread_data(Key);
+        if (!exists v) {
+            return False;
+        }
+        remove_thread_data(Key);
+        return v instanceof FileLocationCallerToken && cast<FileLocationCallerToken>(v).matches(handler, scheme);
+    }
+}
+
+#! The token of a FileLocationCallerExemption; not exported
+class FileLocationCallerToken {
+    private:internal {
+        AbstractFileLocationHandler handler;
+        string scheme;
+    }
+
+    constructor(AbstractFileLocationHandler handler, string scheme) {
+        self.handler = handler;
+        self.scheme = scheme;
+    }
+
+    bool matches(AbstractFileLocationHandler handler, string scheme) {
+        return self.handler == handler && self.scheme == scheme;
+    }
+}
+
 #! The abstract file location handler class
 public class AbstractFileLocationHandler {
     public {
@@ -168,6 +223,7 @@ public class AbstractFileLocationHandler {
         @return the string of the file's contents, if it can be retrieved
     */
     string getTextFile(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getTextFileImpl(scheme, location, opts);
     }
 
@@ -179,6 +235,7 @@ public class AbstractFileLocationHandler {
         @return the binary data of the file's contents, if it can be retrieved
     */
     binary getBinaryFile(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getBinaryFileImpl(scheme, location, opts);
     }
 
@@ -190,6 +247,7 @@ public class AbstractFileLocationHandler {
         @return an I/O poller to retrieve the file's data
     */
     Qore::AbstractPollOperation getIoPollerForLocation(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getIoPollerForLocationImpl(scheme, location, opts);
     }
 
@@ -203,6 +261,7 @@ public class AbstractFileLocationHandler {
         @since FileLocationHandler 3.0
     */
     hash<FileResourceResult> getResource(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getResourceImpl(scheme, location, opts);
     }
 
@@ -218,6 +277,7 @@ public class AbstractFileLocationHandler {
     */
     Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePoller(string scheme, string location,
             *hash<auto> opts) {
+        checkCaller(scheme);
         return getResourcePollerImpl(scheme, location, opts);
     }
 
@@ -231,6 +291,7 @@ public class AbstractFileLocationHandler {
         @note The data is read in the background and added to the input stream backing the stream reader
     */
     Qore::StreamReader getStreamReader(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getStreamReaderImpl(scheme, location, opts);
     }
 
@@ -244,6 +305,7 @@ public class AbstractFileLocationHandler {
         @note The data is read in the background and added to the input stream
     */
     Qore::InputStream getBinaryStream(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getBinaryStreamImpl(scheme, location, opts);
     }
 
@@ -254,6 +316,7 @@ public class AbstractFileLocationHandler {
         @param opts write options
     */
     writeFile(string scheme, string location, data contents, *hash<auto> opts) {
+        checkCaller(scheme);
         return writeFileImpl(scheme, location, contents, opts);
     }
 
@@ -271,12 +334,34 @@ public class AbstractFileLocationHandler {
           has been written to the target, call OutputStreamWrapper::waitForIo()
     */
     OutputStreamWrapper getOutputStream(string scheme, string location, *hash<auto> opts) {
+        checkCaller(scheme);
         return getOutputStreamImpl(scheme, location, opts);
     }
 
     #! Gets supported read options
     /** @return supported read options
     */
+    #! Returns the functional domains that the handler uses for the code that calls it for the given scheme
+    /** A caller restricted from any of them (see @ref Qore::SandboxManager::isCallerRestricted()
+        "SandboxManager::isCallerRestricted()") cannot read or write a location of the scheme with the handler:
+        - the \c file handler: @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM"
+        - the \c http, \c https, \c ftp, \c ftps, \c sftp, \c rest and \c rests handlers:
+          @ref Qore::DOM_NETWORK "DOM_NETWORK", unless the handler is bound to a client (see isBound())
+        - other handlers, such as those of the \c data and \c conn schemes and the handlers that host code
+          registers: none, by default: the handler applies its own policy (a \c conn location the policy of its
+          connection, see @ref FileLocationHandler::setConnectionFilter())
+
+        @param scheme the scheme being used
+
+        @return the @ref Qore::functional_domain_constants "functional domains" of the handler for the scheme, as a
+        bitmask of \c DOM_* constants
+
+        @since %FileLocationHandler 3.0
+    */
+    int getCallerDomains(string scheme) {
+        return getCallerDomainsImpl(scheme);
+    }
+
     hash<string, hash<FileHandlerOptionInfo>> getReadOptions() {
         return getReadOptionsImpl();
     }
@@ -318,6 +403,26 @@ public class AbstractFileLocationHandler {
     */
     bool isBound() {
         return isBoundImpl();
+    }
+
+    #! Returns the functional domains that the handler uses for the code that calls it for the given scheme
+    /** @see getCallerDomains()
+    */
+    private int getCallerDomainsImpl(string scheme) {
+        return 0;
+    }
+
+    #! Refuses a caller restricted from the functional domains of the handler for the given scheme (qore#6959)
+    /** A \c conn location's handler gives the location to the handler that its connection resolves it to, which
+        the connection's policy allows (FileLocationCallerExemption)
+    */
+    private:internal checkCaller(string scheme) {
+        bool exempt = FileLocationCallerExemption::take(self, scheme);
+        int dom = getCallerDomainsImpl(scheme);
+        if (dom && !exempt && SandboxManager::isCallerRestricted(dom)) {
+            throw "PERMISSION-DENIED", sprintf("the calling code may not use %y locations, as it is restricted from "
+                "the %s functional domain", scheme, dom & DOM_FILESYSTEM ? "FILESYSTEM" : "NETWORK");
+        }
     }
 
     #! Checks text read in its encoding with the given encoding_errors option

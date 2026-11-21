@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires FileLocationHandler
+
+%exec-class FileLocationHandlerRestrictedCallersTest
+
+#! Tests that FileLocationHandler refuses a caller restricted from the domain of a location's scheme (qore#6959)
+/** The domain is decided per scheme: a \c file location (and a location without a scheme) is in the FILESYSTEM domain,
+    an \c http, \c https, \c ftp, \c ftps, \c sftp, \c rest or \c rests location in the NETWORK domain, and a \c data
+    location in none.  A caller restricted from the domain of a location's scheme gets PERMISSION-DENIED from every
+    static method of FileLocationHandler that reads or writes a location and from the handler that getHandler()
+    returns; a caller restricted only from the other domain is not refused.  This holds also when unrestricted code
+    loaded the module first (a Program that loads a module that is already loaded gets the module's code as it is, so
+    only the module's own checks restrict the calls).  The restricted calls leave the directory of the test as it was.
+    A \c conn location follows the policy of the connection (FileLocationHandlerConnection.qtest), and a scheme that
+    host code registers the policy of its handler (testRegistered()).
+*/
+class FileLocationHandlerRestrictedCallersTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT};
+
+        #! the uses refused to a caller restricted from the file system (given the directory "d" with the file "f")
+        const FilesystemUses = {
+            "getTextFileFromLocation": "FileLocationHandler::getTextFileFromLocation(\"file://\" + d + \"/f\")",
+            "no scheme": "FileLocationHandler::getBinaryFileFromLocation(d + \"/f\")",
+            "getFileFromLocation": "FileLocationHandler::getFileFromLocation(True, \"file://\" + d + \"/f\")",
+            "getResourceFromLocation": "FileLocationHandler::getResourceFromLocation(\"file://\" + d + \"/f\")",
+            "getIoPollerForLocation": "FileLocationHandler::getIoPollerForLocation(\"file://\" + d + \"/f\")",
+            "getResourcePollerForLocation":
+                "FileLocationHandler::getResourcePollerForLocation(\"file://\" + d + \"/f\")",
+            "getStreamReaderFromLocation":
+                "FileLocationHandler::getStreamReaderFromLocation(\"file://\" + d + \"/f\")",
+            "getBinaryStreamFromLocation":
+                "FileLocationHandler::getBinaryStreamFromLocation(\"file://\" + d + \"/f\")",
+            "writeFileToLocation": "FileLocationHandler::writeFileToLocation(\"file://\" + d + \"/w\", \"x\")",
+            "getOutputStreamForLocation":
+                "FileLocationHandler::getOutputStreamForLocation(\"file://\" + d + \"/w\")",
+            "getHandler": "FileLocationHandler::AbstractFileLocationHandler h = FileLocationHandler::getHandler(\"file\"); "
+                "h.getTextFile(\"file\", d + \"/f\")",
+        };
+
+        #! the uses refused to a caller restricted from the network (given the closed port "port")
+        const NetworkUses = {
+            "http": "FileLocationHandler::getTextFileFromLocation(sprintf(\"http://localhost:%d/\", port))",
+            "https": "FileLocationHandler::getBinaryFileFromLocation(sprintf(\"https://localhost:%d/\", port))",
+            "ftp": "FileLocationHandler::getTextFileFromLocation(sprintf(\"ftp://localhost:%d/x\", port))",
+            "sftp": "FileLocationHandler::getTextFileFromLocation(sprintf(\"sftp://localhost:%d/x\", port))",
+            "rest": "FileLocationHandler::getTextFileFromLocation(sprintf(\"rest://localhost:%d/x\", port))",
+            "write": "FileLocationHandler::writeFileToLocation(sprintf(\"http://localhost:%d/x\", port), \"x\")",
+            "getHandler": "FileLocationHandler::AbstractFileLocationHandler h = FileLocationHandler::getHandler(\"http\"); "
+                "h.getTextFile(\"http\", sprintf(\"localhost:%d/\", port))",
+        };
+    }
+
+    constructor() : QUnit::Test("FileLocationHandlerRestrictedCallers", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("file system, " + m, sub () { testDomain(m, PO_NO_FILESYSTEM, FilesystemUses); });
+            addTestCase("network, " + m, sub () { testDomain(m, PO_NO_NETWORK, NetworkUses); });
+            addTestCase("other domains and schemes, " + m, sub () { testAllowed(m); });
+        }
+        addTestCase("registered scheme", \testRegistered());
+        set_return_value(main());
+    }
+
+    private testDomain(string mode, int po, hash<string, string> uses) {
+        TmpDir tmp("qore-flh-restricted-");
+        string d = tmp.path;
+        writeFile(d + "/f");
+        string before = listing(d);
+        int port = get_free_port();
+
+        foreach hash<auto> i in (uses.pairIterator()) {
+            assertEq("PERMISSION-DENIED", run(mode, po, i.value, d, port), sprintf("%s, %s", i.key, mode));
+        }
+        assertEq(before, listing(d), "the directory after the restricted uses, " + mode);
+    }
+
+    private testAllowed(string mode) {
+        TmpDir tmp("qore-flh-allowed-");
+        string d = tmp.path;
+        writeFile(d + "/f");
+        int port = get_free_port();
+
+        # data locations are in no domain
+        assertEq("called", run(mode, PO_NO_FILESYSTEM | PO_NO_NETWORK,
+            "FileLocationHandler::getTextFileFromLocation(\"data://test\")", d, port), "data, " + mode);
+        # a caller restricted from the network reads a file
+        assertEq("called", run(mode, PO_NO_NETWORK,
+            "FileLocationHandler::getTextFileFromLocation(\"file://\" + d + \"/f\")", d, port), "file, " + mode);
+        # a caller restricted from the file system makes a request, which the closed port refuses
+        string rv = run(mode, PO_NO_FILESYSTEM,
+            "FileLocationHandler::getTextFileFromLocation(sprintf(\"http://localhost:%d/\", port))", d, port);
+        assertNeq("PERMISSION-DENIED", rv, "http, " + mode);
+        assertNeq("called", rv, "http, " + mode);
+    }
+
+    #! a scheme that unrestricted host code registers follows its handler's own policy
+    private testRegistered() {
+        FileLocationHandler::tryRegisterHandler("qore6959", new HostHandler());
+        assertEq("called", run("ast", PO_NO_FILESYSTEM | PO_NO_NETWORK,
+            "FileLocationHandler::getTextFileFromLocation(\"qore6959://x\")", "", 0));
+    }
+
+    #! runs a use in a Program with the given restrictions and returns "called" or the code of its exception
+    private static string run(string mode, int po, string code, string d, int port) {
+        Program p(PO_NEW_STYLE | po);
+        p.setExecMode(Modes{mode});
+        p.parse(sprintf("%%modern\n%%requires FileLocationHandler\nstring sub t(string d, int port) { try { %s; "
+            "return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }", code), "use");
+        return p.callFunction("t", d, port);
+    }
+
+    private static writeFile(string path) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("data");
+    }
+
+    #! returns the sorted paths under a directory
+    private static string listing(string dir) {
+        list<string> rv;
+        Dir d();
+        d.chdir(dir);
+        foreach string e in (d.list() ?? ()) {
+            rv += e;
+            if (is_dir(dir + "/" + e)) {
+                rv += map e + "/" + $1, split(",", listing(dir + "/" + e));
+            }
+        }
+        return ((map $1, sort(rv), $1 != "") ?? ()).join(",");
+    }
+}
+
+#! a handler that host code registers; it serves its locations from memory
+class HostHandler inherits FileLocationHandler::AbstractFileLocationHandler {
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+        return "host:" + location;
+    }
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        return binary("host:" + location);
+    }
+    private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
+            *hash<auto> opts) {
+        throw "UNSUPPORTED";
+    }
+    private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED";
+    }
+    private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED";
+    }
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        throw "UNSUPPORTED";
+    }
+    private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED";
+    }
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
+        return {};
+    }
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
+        return {};
+    }
+}

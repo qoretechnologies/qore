@@ -60,6 +60,11 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         };
     }
 
+    #! The network for the code that calls it (qore#6959)
+    private int getCallerDomainsImpl(string scheme) {
+        return DOM_NETWORK;
+    }
+
     #! Retrieves a text file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme
