@@ -735,6 +735,14 @@ QoreProgram* qore_get_function_pgm_context(const QoreFunction* func, const Abstr
     return call_pgm;
 }
 
+//! checks the sandboxed rule of non-public method calls for a call of a method variant of any kind (qore#7102), in
+//! the class context of the caller; out of line and cold, as the callers run it only while code in the process is
+//! sandboxed
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_method_variant_call(QoreObject* self,
+        const MethodVariant* mv, const char* mname, ExceptionSink* xsink) {
+    return qore_object_private::checkSandboxedMethodCall(self, mv->getAccess(), mname, xsink);
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue qore_method_private::evalNormalVariantImpl(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
@@ -746,6 +754,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_method_private::evalNormalVariantImpl(L
         CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class, spgm_holder), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
+    // the sandboxed rule of non-public method calls (qore#7102), for every kind of variant
+    if (qore_sandboxed_code_active() && qore_check_method_variant_call(self, METHV_const(variant), getName(), xsink)) {
+        return QoreValue();
+    }
 
     if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(self, ceh, xsink);
     else return METHV_const(variant)->evalMethod(self, ceh, xsink);
@@ -11230,6 +11242,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodImpl(Lexical
     //  self->getClass()->getName(), variant->getClass()->getName(), variant, mv, mv->isPrivate(),
     //  qore_class_private::runtimeCheckPrivateClassAccess(*mv->getClass()), runtime_get_class(),
     //  runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
+    // the sandboxed rule of non-public method calls (qore#7102), for every kind of variant
+    if (qore_sandboxed_code_active() && qore_check_method_variant_call(self, mv, mname, xsink)) {
+        return QoreValue();
+    }
 
     if constexpr (Lexical) return mv->evalLexicalMethod(self, ceh, xsink);
     else return mv->evalMethod(self, ceh, xsink);
@@ -11252,6 +11268,10 @@ QoreValue NormalMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
     if (mv->isAbstract()) {
         xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
             mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    // the sandboxed rule of non-public method calls (qore#7102), for every kind of variant
+    if (qore_sandboxed_code_active() && qore_check_method_variant_call(self, mv, mname, xsink)) {
         return QoreValue();
     }
     return mv->evalMethod(self, ceh, xsink);
@@ -11434,6 +11454,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodTmpArgsImpl(
     //  "(%p %s)\n",getClassName(), mname, mv->getSignature()->getSignatureText(), self->getClass()->getName(),
     //  variant, mv, mv->isPrivate(), qore_class_private::runtimeCheckPrivateClassAccess(*mv->getClass()),
     //  runtime_get_class(), runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
+    // the sandboxed rule of non-public method calls (qore#7102), for every kind of variant
+    if (qore_sandboxed_code_active() && qore_check_method_variant_call(self, mv, mname, xsink)) {
+        return QoreValue();
+    }
 
     if constexpr (Lexical) return mv->evalLexicalMethod(self, ceh, xsink);
     else return mv->evalMethod(self, ceh, xsink);
@@ -11611,6 +11635,10 @@ static QoreValue eval_normal_method_named(const NormalMethodFunction& f, Excepti
     if (mv->isAbstract()) {
         xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",
             f.getClassName(), mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    // the sandboxed rule of non-public method calls (qore#7102), for every kind of variant
+    if (qore_sandboxed_code_active() && qore_check_method_variant_call(self, mv, mname, xsink)) {
         return QoreValue();
     }
     // a legacy AST call runs a builtin variant with its own semantic policy

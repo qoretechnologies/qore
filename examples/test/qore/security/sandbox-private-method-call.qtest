@@ -112,6 +112,28 @@ class LSub inherits Logger::LoggerWrapper {
     }
 }
 
+#! a subclass of a builtin class that calls a private builtin method of an object
+class QSub inherits Logger::LoggerAppenderQueue {
+    static string getEventOf(Logger::LoggerAppenderQueue q) {
+        try {
+            auto e = q.getEvent(0);
+            return e ? \"event\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+string sub get_event_of(Logger::LoggerAppenderQueue q) {
+    return QSub::getEventOf(q);
+}
+
+Logger::LoggerAppenderQueue sub make_queue() {
+    Logger::LoggerAppenderQueue q();
+    q.push(new Logger::LoggerAppenderNull(), 2, \"own\");
+    return q;
+}
+
 #! calls the private method of the object with every form and returns the results
 hash<string, string> sub run_all(Target w, int count = 2) {
     hash<string, string> rv;
@@ -194,6 +216,10 @@ foreach hash<auto> i in (r.pairIterator()) {
     printf(\"tenant-on-own.%s=%s\\n\", i.key, i.value);
 }
 printf(\"host-on-host=%s\\n\", HostSub::call(host_obj));
+Logger::LoggerAppenderQueue host_queue();
+host_queue.push(new Logger::LoggerAppenderNull(), 2, \"host\");
+printf(\"tenant-on-host-queue=%s\\n\", p.callFunction(\"get_event_of\", host_queue));
+printf(\"tenant-on-own-queue=%s\\n\", p.callFunction(\"get_event_of\", p.callFunction(\"make_queue\")));
 printf(\"host-on-tenant=%s\\n\", HostSub::call(p.callFunction(\"make_target\")));
 ";
 
@@ -301,6 +327,13 @@ class SandboxPrivateMethodCallTest inherits QUnit::Test {
         assertEq((map {$1: "logger"}, LoggerRoutes),
             a.callFunction("get_logger_of", a.callFunction("make_wrapper")), mode + ": A gets its own logger");
 
+        # a private builtin method
+        LoggerAppenderQueue host_queue();
+        host_queue.push(new LoggerAppenderNull(), 2, "host");
+        assertEq(Err, a.callFunction("get_event_of", host_queue), mode + ": A on the host's builtin object");
+        assertEq("event", a.callFunction("get_event_of", a.callFunction("make_queue")),
+            mode + ": A on its own builtin object");
+
         # the tenant's own objects and self
         assertEq(Owned, a.callFunction("run_all", a.callFunction("make_target"), count),
             mode + ": A on its own object");
@@ -313,6 +346,7 @@ class SandboxPrivateMethodCallTest inherits QUnit::Test {
         assertEq(Owned, safe.callFunction("run_all", host_obj, count), mode + ": code safety on the host's object");
         assertEq((map {$1: "logger"}, LoggerRoutes), safe.callFunction("get_logger_of", host_wrapper),
             mode + ": code safety gets the logger");
+        assertEq("event", safe.callFunction("get_event_of", host_queue), mode + ": code safety on the builtin object");
     }
 
     trustedTest() {
@@ -359,6 +393,8 @@ class SandboxPrivateMethodCallTest inherits QUnit::Test {
             expected{"tenant-on-own." + i.key} = i.value;
         }
         expected."host-on-host" = "secret";
+        expected."tenant-on-host-queue" = Err;
+        expected."tenant-on-own-queue" = "event";
         expected."host-on-tenant" = "secret";
         assertEq(expected, results, "compiled host output:\n" + out);
         assertEq(0, status);
