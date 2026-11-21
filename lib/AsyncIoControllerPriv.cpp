@@ -282,6 +282,27 @@ static thread_local int current_io_thread_idx = -1;
 */
 static thread_local bool io_command_module_cleanup_delegate = false;
 
+// true while a callback worker runs work that the module cleanup handed over (an operation's abort(), onComplete()
+// or the release of its references): such work cannot submit an operation (qore#7027)
+static thread_local bool module_cleanup_async_callback = false;
+
+namespace {
+//! sets module_cleanup_async_callback for the processing of one work item
+class ModuleCleanupAsyncCallbackHelper {
+public:
+    DLLLOCAL ModuleCleanupAsyncCallbackHelper(bool set) : prev(module_cleanup_async_callback) {
+        module_cleanup_async_callback = prev || set;
+    }
+
+    DLLLOCAL ~ModuleCleanupAsyncCallbackHelper() {
+        module_cleanup_async_callback = prev;
+    }
+
+private:
+    bool prev;
+};
+}
+
 namespace {
 //! Sets io_command_module_cleanup_delegate for the processing of one command
 class IoCommandModuleCleanupDelegateHelper {
@@ -1201,27 +1222,6 @@ bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code
     }
     state.cond.broadcast();
     return true;
-}
-
-// true while a callback worker runs work that the module cleanup handed over (an operation's abort(), onComplete()
-// or the release of its references): such work cannot submit an operation (qore#7027)
-static thread_local bool module_cleanup_async_callback = false;
-
-namespace {
-//! sets module_cleanup_async_callback for the processing of one work item
-class ModuleCleanupAsyncCallbackHelper {
-public:
-    DLLLOCAL ModuleCleanupAsyncCallbackHelper(bool set) : prev(module_cleanup_async_callback) {
-        module_cleanup_async_callback = prev || set;
-    }
-
-    DLLLOCAL ~ModuleCleanupAsyncCallbackHelper() {
-        module_cleanup_async_callback = prev;
-    }
-
-private:
-    bool prev;
-};
 }
 
 // the step results held by the dbg_async_io_hold_step_results() test hook; see dbgHoldStepResults()
