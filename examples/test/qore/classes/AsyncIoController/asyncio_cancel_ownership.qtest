@@ -172,13 +172,8 @@ list<auto> sub collide(string key, int n, bool replace) {
     return rv;
 }
 
-string sub get_info() {
-    try {
-        AsyncIoController::getInfo();
-        return \"ok\";
-    } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
-    }
+hash<auto> sub get_info() {
+    return AsyncIoController::getInfo();
 }
 
 sub flush_owner(string owner) {
@@ -237,7 +232,7 @@ Queue sub chain(string key, string follow_key) {
         addTestCase("a sandboxed caller cannot cancel another code's operations by their owner", \ownerTest());
         addTestCase("a sandboxed caller cancels its own operations", \ownTest());
         addTestCase("a sandboxed submit does not take the key of another code's operation", \collisionTest());
-        addTestCase("sandboxed code does not get the information of the controller", \infoTest());
+        addTestCase("sandboxed code gets the settings of the controller only", \infoTest());
         addTestCase("a sandboxed flush does not discard another code's callbacks", \flushTest());
         addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
             \moduleWrapperTest());
@@ -310,7 +305,18 @@ Queue sub chain(string key, string follow_key) {
 
     infoTest() {
         Program tenant = getTenant();
-        assertEq("PERMISSION-DENIED", tenant.callFunction("get_info"));
+        string owner = getName("host-info");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        hash<auto> host_info = AsyncIoController::getInfo();
+        assertTrue(inlist(owner + "-key", host_info.cache_keys), "the host sees its operation");
+        hash<auto> info = tenant.callFunction("get_info");
+        # the tenant gets the settings only, which give no operation of any caller
+        assertEq(("autostop", "io_threads", "running", "shutting_down"), sort(keys info));
+        assertEq(host_info.io_threads, info.io_threads);
+        assertEq(host_info.autostop, info.autostop);
+        assertEq(0, rq.size(), "the host's operation is still there");
     }
 
     #! the tenant flushes an owner while the host's callbacks of the owner run; the host's later callback is not

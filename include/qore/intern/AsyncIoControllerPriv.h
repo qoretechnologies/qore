@@ -1135,6 +1135,9 @@ public:
     //! Returns info about the controller state
     DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink);
 
+    //! Returns the settings of the controller only: the keys of getInfo() that give no operation of any caller
+    DLLLOCAL QoreHashNode* getSettingsInfo(ExceptionSink* xsink);
+
     //! Sets the logger
     /** @param logger_obj the LoggerInterface Qore object (or nullptr to clear)
         @param xsink for exception handling

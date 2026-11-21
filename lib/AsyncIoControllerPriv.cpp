@@ -6497,6 +6497,19 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
     return rv.release();
 }
 
+QoreHashNode* AsyncIoControllerPriv::getSettingsInfo(ExceptionSink* xsink) {
+    if (checkForked("getInfo", xsink)) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    AutoLocker al(m);
+    rv->setKeyValue("running", anyThreadActive(), xsink);
+    rv->setKeyValue("autostop", autostop_flag, xsink);
+    rv->setKeyValue("shutting_down", shutting_down, xsink);
+    rv->setKeyValue("io_threads", (int64)io_threads.size(), xsink);
+    return rv.release();
+}
+
 void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
     if (forked()) {
         return;

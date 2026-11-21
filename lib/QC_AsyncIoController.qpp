@@ -690,20 +690,13 @@ static bool AsyncIoController::getAutostop() {
       behind, which is a bug in %Qore); called from an I/O thread, only that thread is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
-    @throw PERMISSION-DENIED the calling code is sandboxed, or acts for sandboxed code: the information gives the
-    operations of every caller in the process (see @ref getCacheSize())
+    @note code that is sandboxed or acts for sandboxed code gets the settings of the controller only (\c running,
+    \c autostop, \c shutting_down and \c io_threads): the other keys give the operations of every caller in the
+    process (see @ref getCacheSize())
 
     @since %Qore 3.0
 */
 static hash<auto> AsyncIoController::getInfo() {
-    // the keys and counts of the operations of every caller of the process-wide controller: not disclosed to
-    // sandboxed code (qore#7010), as getCacheSize()
-    if (qore_caller_is_sandboxed()) {
-        xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
-            "information of the global async I/O controller, which gives the operations of every caller in the "
-            "process");
-        return QoreValue();
-    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -711,6 +704,11 @@ static hash<auto> AsyncIoController::getInfo() {
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    // the keys and counts of the operations of every caller of the process-wide controller are not disclosed to
+    // sandboxed code (qore#7010), as getCacheSize(); its settings are
+    if (qore_caller_is_sandboxed()) {
+        return ctrl->getSettingsInfo(xsink);
+    }
     return ctrl->getInfo(xsink);
 }
 
