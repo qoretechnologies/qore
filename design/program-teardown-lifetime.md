@@ -33,7 +33,12 @@ operator has its Program as its context from its registration and holds its coun
 `ProgramThreadCountContextHelper::restoreContext()` restores the outer Program context before it releases the count
 (the runtime location, which the scoped location helpers restore for a nested context, is reset with it), so the
 thread's teardown (`ThreadData::del()`, which runs the destructors of its thread-local data) runs in no Program of its
-own, as a thread started with `q_run_thread()` does, while the Program can be deleted (qore#6629).
+own, as a thread started with `q_run_thread()` does, while the Program can be deleted (qore#6629).  Every other
+thread end that frees thread data (`q_run_thread()` and its users, foreign and reserved foreign threads, the signal
+thread, the main thread) has no Program context then either, as only a `background` thread is registered with one;
+so a destructor that such a teardown runs enters its class's Program with a counted entry, which the Program's
+deletion waits for or refuses once `ptid` is set, and runs no code of a deleted Program (qore#7012; a fork child
+abandons the other threads' data without running it).
 
 The debug build calls `qore_program_private_base::dbg_teardown_hook` after step 2 (it can wait) and in step 3
 after `ptid` is set (under `plock`; it must not wait).  `dbg_hold_program_teardown()`,
