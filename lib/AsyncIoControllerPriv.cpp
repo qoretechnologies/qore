@@ -46,6 +46,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreObjectIntern.h"
 // the debug-build counters of the synchronous releases (qore_dbg_sync_release_taken/refused)
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreValueExceptionOps.h"
@@ -205,6 +206,8 @@ QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     }
     aio_singleton = *holder;
     QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
+    // the singleton is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(obj);
     aio_singleton_obj = obj;
     // Register cleanup callback to cancel operations when QorePrograms are destroyed
     qore_register_program_cleanup_callback(aio_program_cleanup);

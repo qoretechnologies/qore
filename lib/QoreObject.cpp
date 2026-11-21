@@ -700,6 +700,10 @@ QoreHashNode* qore_object_private::copyData(ExceptionSink* xsink, bool throw_exc
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a constant of the whole process gets no member from any code (qore#6749)
+    if (checkProcessConstantWrite(nullptr, xsink)) {
+        return;
+    }
     // saves source data to merge
     ReferenceHolder<QoreHashNode> new_data(xsink);
 
@@ -738,6 +742,11 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     }
 
     bool check_recursive = false;
+
+    // sandboxed code gives no undeclared member to a foreign builtin object (qore#6749)
+    if (new_data && checkForeignBuiltinMemberWrite(nullptr, *new_data, class_ctx, xsink)) {
+        return;
+    }
 
     // the values for members held in external storage are written with their setters, without the object lock
     ReferenceHolder<QoreHashNode> ext(xsink);
@@ -782,6 +791,10 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a constant of the whole process gets no member from any code (qore#6749)
+    if (!h->empty() && checkMemberWrite(nullptr, h, runtime_get_class(), xsink)) {
+        return;
+    }
     bool check_recursive = false;
 
     // the values for members held in external storage are written with their setters, without the object lock
@@ -1195,8 +1208,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
         QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-        rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-            : odata->priv->swapKeyValue(key, QoreValue(), this);
+        // a missing member is not created: an empty key would let a later write skip the checks of a new member
+        // (qore#6749), and it would show in the keys of the object
+        bool found;
+        rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
         if (!needs_scan(rv)) {
             return rv;
         }
@@ -1288,8 +1303,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-        : odata->priv->swapKeyValue(key, QoreValue(), this);
+    // a missing member is not created: an empty key would let a later write skip the checks of a new member
+    // (qore#6749), and it would show in the keys of the object
+    bool found;
+    QoreValue rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
@@ -1515,6 +1532,91 @@ QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* m
     return qore_hash_private::get(*odata)->getValueRef(member);
 }
 
+int qore_object_private::raiseProcessConstantWrite(const char* mem, ExceptionSink* xsink) const {
+    if (mem) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot add member \"%s\" to a constant object of class "
+            "'%s': the object is shared by the whole process, so no code can add members to it", mem,
+            theclass->getName());
+    } else {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot merge members into a constant object of class '%s': "
+            "the object is shared by the whole process, so no code can add members to it", theclass->getName());
+    }
+    return -1;
+}
+
+int qore_object_private::checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
+        const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+    // only an object of a builtin class without a public member list, whose class refuses no undeclared member
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (!cls->sys || theclass->hasPublicMembersInHierarchy()) [[likely]] {
+        return 0;
+    }
+    QoreProgram* cpgm = getProgram();
+    if (pgm == cpgm || !cpgm || !qore_program_is_sandboxed(cpgm)) {
+        return 0;
+    }
+    // only a member that the class does not declare: the C++ code of the class writes its declared members
+    if (mem) {
+        if (cls->runtimeGetMemberInfo(mem, class_ctx)) {
+            return 0;
+        }
+    } else {
+        bool undeclared = false;
+        if (h) {
+            ConstHashIterator i(h);
+            while (i.next()) {
+                if (!cls->runtimeGetMemberInfo(i.getKey(), class_ctx)) {
+                    undeclared = true;
+                    break;
+                }
+            }
+        }
+        if (!undeclared) {
+            return 0;
+        }
+    }
+    if (mem) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "sandboxed code cannot give member \"%s\" to an object of "
+            "builtin class '%s' that it did not create: the object can be shared with other code, which would read "
+            "the member", mem, theclass->getName());
+    } else {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "sandboxed code cannot merge members into an object of builtin "
+            "class '%s' that it did not create: the object can be shared with other code, which would read the "
+            "members", theclass->getName());
+    }
+    return -1;
+}
+
+void qore_object_mark_process_constant(QoreValue v) {
+    switch (v.getType()) {
+        case NT_OBJECT: {
+            // only a system object, which no Program owns: an object that a Program owns, such as one that a
+            // language bridge (the python and jni modules) imports as a constant of a Program, stays that Program's
+            qore_object_private* priv = qore_object_private::get(*v.get<QoreObject>());
+            if (!priv->pgm) {
+                priv->process_constant = true;
+            }
+            break;
+        }
+        case NT_LIST: {
+            ConstListIterator i(v.get<const QoreListNode>());
+            while (i.next()) {
+                qore_object_mark_process_constant(i.getValue());
+            }
+            break;
+        }
+        case NT_HASH: {
+            ConstHashIterator i(v.get<const QoreHashNode>());
+            while (i.next()) {
+                qore_object_mark_process_constant(i.get());
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
     lvh.disableMemberWriteBack();
     const qore_class_private* cls = qore_class_private::get(*theclass);
@@ -1546,13 +1648,18 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 
     //printd(5, "qore_object_private::getLValue() this: %p %s::%s type %s for_remove: %d int: %d odata: %p\n", this, theclass->getName(), key, QoreTypeInfo::getName(mti), for_remove, internal_member, odata);
 
-    HashMember* m;
-    if (for_remove) {
-        m = odata->priv->findMember(key);
-        if (!m)
+    HashMember* m = odata->priv->findMember(key);
+    if (!m) {
+        if (for_remove) {
             return -1;
-    } else
-        m = odata->priv->findCreateMember(key);
+        }
+        // a member that the object does not have yet: a constant of the whole process gets none from any code, and
+        // sandboxed code gives none that the class does not declare to a builtin object of other code (qore#6749)
+        if (checkMemberWrite(key, nullptr, class_ctx, xsink)) {
+            return -1;
+        }
+        m = odata->priv->createMemberKnownAbsent(key);
+    }
 
     lvh.setValue(m->val, mti);
     lvh.setObjectContext(this);
@@ -1737,6 +1844,12 @@ void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink
 // runtime class context
 void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val,
         ExceptionSink* xsink) {
+    // a constant of the whole process gets no member from any code (qore#6749); the value is consumed in any case
+    if (process_constant) [[unlikely]] {
+        val.discard(xsink);
+        raiseProcessConstantWrite(key, xsink);
+        return;
+    }
     // a declared member held in external storage is written with its setter; the value is consumed in any case
     {
         const qore_class_private* cls = qore_class_private::get(*theclass);

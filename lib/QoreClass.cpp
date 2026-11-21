@@ -9948,6 +9948,8 @@ void QoreClass::recheckBuiltinMethodHierarchy() {
 
 void QoreClass::addBuiltinConstant(const char* name, QoreValue value, ClassAccess access,
         const QoreTypeInfo* typeInfo) {
+    // an object of a builtin constant is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(value);
     priv->addBuiltinConstant(name, value, access, typeInfo);
 }
 

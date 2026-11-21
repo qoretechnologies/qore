@@ -1960,6 +1960,15 @@ DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 */
 DLLLOCAL bool qore_calling_code_is_untrusted();
 
+//! Returns true if the code that calls the current builtin is the code of a sandboxed Program (qore#6749)
+/** For a builtin that returns process-wide state that the host configures, such as the application registry: the
+    code of a sandboxed Program (see qore_program_is_sandboxed()), also of a Program that sandboxed code created or of
+    a user module that a sandboxed Program loaded by its path, does not get the state, while library module code that
+    reads it to serve a sandboxed caller still does; such code is responsible for what it returns to its caller.
+    Unlike qore_caller_is_sandboxed(), only the code that calls the builtin is looked at, not the code that it serves.
+*/
+DLLLOCAL bool qore_calling_code_is_sandboxed();
+
 //! Records that code that is not trusted (see qore_calling_code_is_untrusted()) in the current Program created \a sm
 /** Called by the SandboxManager constructors that %Qore code calls; see qore_sandbox_manager_check_change()
 */

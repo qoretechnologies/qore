@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires YamlTagHandler
+%requires VoyageRestClient
+%requires Mapper
+
+%exec-class ProcessWideStateReadTest
+
+#! The process-wide state of the standard modules that the host configures is not readable by sandboxed code
+/** Code that is sandboxed or acts for sandboxed code does not get the global YAML tag handler registry, the lock of
+    the process-wide data provider type cache, the default post-processing code of connections or the shared Voyage
+    REST clients of other code, also from a background thread, under a policy barrier and from a Program that it
+    created; the host keeps and gets its state, and the module code that serves a tenant still uses it (issue #6749)
+*/
+class ProcessWideStateReadTest inherits QUnit::Test {
+    public {
+        #! the code that reads the state; each value is what the tenant got
+        const ReadSource = "hash<auto> rv = {};
+    try {
+        rv.\"yaml-registry\" = exists YamlTagHandler::globalTagRegistry() ? \"got the registry\" : \"no value\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.\"yaml-registry\" = ex.err;
+    }
+    rv.\"yaml-handlers\" = YamlTagHandler::get_yaml_tag_handlers();
+    try {
+        rv.\"type-cache-lock\" = exists DataProvider::getTypeCache().getLock() ? \"got the lock\" : \"no value\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.\"type-cache-lock\" = ex.err;
+    }
+    rv.\"post-processing\" = exists ConnectionProvider::AbstractConnection::getPostProcessing()
+        ? \"got the code\" : \"no value\";
+    rv.\"voyage-client-count\" = exists VoyageRestClient::VoyageRestClientBase::getSharedClientCount()
+        ? \"got the count\" : \"no value\";
+    return rv;";
+
+        #! the URL of the Voyage clients; no request is made
+        const VoyageUrl = "http://127.0.0.1:9";
+
+        #! the API key of the Voyage clients
+        const VoyageKey = "qore-test-6749-key";
+
+        #! the modules that the Programs of the test require
+        const Modules = "%requires DataProvider\n%requires ConnectionProvider\n%requires YamlTagHandler\n"
+            "%requires VoyageRestClient\n%requires Mapper\n";
+    }
+
+    constructor() : Test("process-wide state of the standard modules is not readable by sandboxed code", "1.0",
+            \ARGV) {
+        addTestCase("tenants do not get the process-wide state of the host", \readTest());
+        addTestCase("tenants cannot set the post-processing code of connections", \postProcessingSetTest());
+        addTestCase("the module code that serves a tenant still uses the host's state", \libraryReadTest());
+        addTestCase("a tenant shares Voyage clients only with its own code", \voyageClientTest());
+        addTestCase("a type object of a module passes no data between tenants", \moduleObjectTest());
+        set_return_value(main());
+    }
+
+    readTest() {
+        HostTagHandler handler();
+        register_yaml_tag_handler(handler);
+        on_exit unregister_yaml_tag_handler(handler.getTagPrefix());
+        *code old_pp = AbstractConnection::getPostProcessing();
+        on_exit AbstractConnection::setPostProcessing(old_pp);
+        AbstractConnection::setPostProcessing(sub (AbstractConnection conn, object o) {});
+
+        hash<auto> results = {};
+        # two tenants with sandboxes of their own
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = ProcessWideStateReadTest::tenant(name, "read", ReadSource);
+            results{name} = tenant.callFunction("t_read");
+        }
+        # a background thread of a tenant
+        Program tenant_bg = ProcessWideStateReadTest::tenant("tenant-bg", "bg", "code read = hash<auto> sub () { "
+            + ReadSource + " }; Queue q(); background q.push(read()); return q.get();");
+        results."background" = tenant_bg.callFunction("t_bg");
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            return ProcessWideStateReadTest::read();
+        });
+        Program tenant_c = ProcessWideStateReadTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = tenant_c.callFunction("t_run", cap);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = ProcessWideStateReadTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(ProcessWideStateReadTest_Modules + \"hash<auto> sub read() { \" + s + \" }\", \"child\"); "
+            "return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", ReadSource);
+        results.child = child.callFunction("read");
+        # trusted code and a trusted Program
+        results.host = ProcessWideStateReadTest::read();
+        Program trusted_pgm(PO_NEW_STYLE);
+        trusted_pgm.parse(Modules + "hash<auto> sub read() { " + ReadSource + " }", "trusted");
+        results."trusted Program" = trusted_pgm.callFunction("read");
+
+        hash<auto> refused = {
+            "yaml-registry": "YAML-TAG-REGISTRATION-DENIED",
+            "yaml-handlers": (),
+            "type-cache-lock": "DATA-PROVIDER-REGISTRATION-DENIED",
+            "post-processing": "no value",
+            "voyage-client-count": "no value",
+        };
+        hash<auto> expected = {};
+        map expected{$1} = refused, ("tenant-a", "tenant-b", "background", "barrier", "child");
+        map expected{$1} = ProcessWideStateReadTest::trusted(handler.getTagPrefix()), ("host", "trusted Program");
+        # the handlers that the host sees can include those of other code
+        foreach string k in ("host", "trusted Program") {
+            results{k}."yaml-handlers" = (select results{k}."yaml-handlers", $1 == handler.getTagPrefix());
+        }
+        assertEq(expected, results);
+    }
+
+    postProcessingSetTest() {
+        *code old_pp = AbstractConnection::getPostProcessing();
+        on_exit AbstractConnection::setPostProcessing(old_pp);
+        code host_pp = sub (AbstractConnection conn, object o) {};
+        AbstractConnection::setPostProcessing(host_pp);
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = ProcessWideStateReadTest::tenant(name, "set", "try { "
+                "ConnectionProvider::AbstractConnection::setPostProcessing(sub (auto c, object o) {}); "
+                "return \"no exception\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }");
+            assertEq("SANDBOX-REGISTRATION-ERROR", tenant.callFunction("t_set"), name);
+        }
+        assertEq(host_pp, AbstractConnection::getPostProcessing());
+    }
+
+    libraryReadTest() {
+        # the host's post-processing code still runs for the connections of a tenant
+        *code old_pp = AbstractConnection::getPostProcessing();
+        on_exit AbstractConnection::setPostProcessing(old_pp);
+        Counter calls();
+        AbstractConnection::setPostProcessing(sub (AbstractConnection conn, object o) { calls.inc(); });
+        Program tenant = ProcessWideStateReadTest::tenant("tenant", "get", "ConnectionProvider::HttpConnection c("
+            "\"c\", \"c\", \"" + VoyageUrl + "\"); return c.get(False).className();");
+        assertEq("HTTPClient", tenant.callFunction("t_get"));
+        assertEq(1, calls.getCount());
+
+        # the custom expressions that the host publishes in the application registry are evaluated for a tenant, which
+        # does not get the registry itself
+        *hash<auto> custom = get_app_registry("dp-custom-expressions");
+        on_exit set_app_registry("dp-custom-expressions", custom);
+        set_app_registry("dp-custom-expressions", (custom ?? {}) + {
+            "qore-test-6749": {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "qore-test-6749",
+                    "display_name": "Host Expression",
+                    "short_desc": "Gives the host's text",
+                    "desc": "Gives the host's text",
+                    "symbol": "qore-test-6749()",
+                    "args": (),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return "host-impl";
+                },
+            },
+        });
+        Program tenant_e = ProcessWideStateReadTest::tenant("tenant-e", "eval", "return {"
+            "\"eval\": DataProvider::AbstractDataProvider::evalGenericExpression({}, "
+            "<DataProvider::DataProviderExpression>{\"exp\": \"qore-test-6749\", \"args\": ()}), "
+            "\"registry\": get_app_registry(\"dp-custom-expressions\"),"
+            "};");
+        assertEq({"eval": "host-impl", "registry": NOTHING}, tenant_e.callFunction("t_eval"));
+    }
+
+    voyageClientTest() {
+        VoyageRestClientIo host_client = VoyageRestClientBase::getSharedClient(VoyageUrl, VoyageKey);
+        string src = "VoyageRestClient::VoyageRestClientIo c1 = VoyageRestClient::VoyageRestClientBase::"
+            "getSharedClient(u, k); VoyageRestClient::VoyageRestClientIo c2 = VoyageRestClient::"
+            "VoyageRestClientBase::getSharedClient(u, k); return {\"same\": c1 == c2, \"host\": c1 == h, "
+            "\"client\": c1};";
+        Program tenant_a = ProcessWideStateReadTest::tenant("tenant-a", "client", src,
+            "string u, string k, VoyageRestClient::VoyageRestClientIo h");
+        Program tenant_b = ProcessWideStateReadTest::tenant("tenant-b", "client", src,
+            "string u, string k, VoyageRestClient::VoyageRestClientIo h");
+        hash<auto> a = tenant_a.callFunction("t_client", VoyageUrl, VoyageKey, host_client);
+        hash<auto> b = tenant_b.callFunction("t_client", VoyageUrl, VoyageKey, host_client);
+        # each tenant shares its client with its own code only, not with the host or the other tenant
+        assertTrue(a.same);
+        assertFalse(a.host);
+        assertTrue(b.same);
+        assertFalse(b.host);
+        assertFalse(a.client == b.client);
+        # the host still shares its client
+        assertTrue(host_client == VoyageRestClientBase::getSharedClient(VoyageUrl, VoyageKey));
+    }
+
+    moduleObjectTest() {
+        # a builtin object that a module keeps in a public static member is shared by every caller
+        Program tenant_a = ProcessWideStateReadTest::tenant("tenant-a", "write", "auto t = Mapper::Mapper::recordType; "
+            "try { t.qore_test_6749 = \"tenant-a\"; return \"no exception\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; }");
+        Program tenant_b = ProcessWideStateReadTest::tenant("tenant-b", "read", "auto t = Mapper::Mapper::recordType; "
+            "return t.qore_test_6749;");
+        string err = tenant_a.callFunction("t_write");
+        assertNothing(tenant_b.callFunction("t_read"));
+        assertEq("SYSTEM-OBJECT-ERROR", err);
+
+        # a removal of the missing member before the assignment does not let the tenant add it
+        Program tenant_c = ProcessWideStateReadTest::tenant("tenant-c", "write", "auto t = Mapper::Mapper::recordType; "
+            "hash<auto> rv = {}; foreach string op in (\"remove\", \"delete\", \"-=\") { "
+            "switch (op) { case \"remove\": remove t.qore_test_6749_6; break; case \"delete\": delete t.qore_test_6749_6; "
+            "break; default: t -= \"qore_test_6749_6\"; } "
+            "try { t.qore_test_6749_6 = \"tenant-c\"; rv{op} = \"no exception\"; } catch (hash<ExceptionInfo> ex) { "
+            "rv{op} = ex.err; } } return rv;");
+        assertEq({"remove": "SYSTEM-OBJECT-ERROR", "delete": "SYSTEM-OBJECT-ERROR", "-=": "SYSTEM-OBJECT-ERROR"},
+            tenant_c.callFunction("t_write"));
+        Program tenant_d = ProcessWideStateReadTest::tenant("tenant-d", "read", "auto t = Mapper::Mapper::recordType; "
+            "return {\"value\": t.qore_test_6749_6, \"key\": inlist(\"qore_test_6749_6\", keys t)};");
+        assertEq({"value": NOTHING, "key": False}, tenant_d.callFunction("t_read"));
+    }
+
+    #! Reads the state as \c ReadSource does
+    static hash<auto> read() {
+        hash<auto> rv = {};
+        try {
+            rv."yaml-registry" = exists YamlTagHandler::globalTagRegistry() ? "got the registry" : "no value";
+        } catch (hash<ExceptionInfo> ex) {
+            rv."yaml-registry" = ex.err;
+        }
+        rv."yaml-handlers" = YamlTagHandler::get_yaml_tag_handlers();
+        try {
+            rv."type-cache-lock" = exists DataProvider::getTypeCache().getLock() ? "got the lock" : "no value";
+        } catch (hash<ExceptionInfo> ex) {
+            rv."type-cache-lock" = ex.err;
+        }
+        rv."post-processing" = exists ConnectionProvider::AbstractConnection::getPostProcessing()
+            ? "got the code" : "no value";
+        rv."voyage-client-count" = exists VoyageRestClient::VoyageRestClientBase::getSharedClientCount()
+            ? "got the count" : "no value";
+        return rv;
+    }
+
+    #! What trusted code gets
+    static hash<auto> trusted(string prefix) {
+        return {
+            "yaml-registry": "got the registry",
+            "yaml-handlers": (prefix,),
+            "type-cache-lock": "got the lock",
+            "post-processing": "got the code",
+            "voyage-client-count": "got the count",
+        };
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("%s\nconst ProcessWideStateReadTest_Modules = %y;\nauto sub t_%s(%s) { %s }\n", Modules,
+            Modules, func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}
+
+#! A tag handler of the host
+class HostTagHandler inherits AbstractYamlTagHandler {
+    string getTagPrefix() {
+        return "!qore-test-6749-host";
+    }
+
+    auto parseScalar(string tag, string value) {
+        return value;
+    }
+
+    bool canEmit(auto value) {
+        return False;
+    }
+
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) {
+        throw "UNSUPPORTED";
+    }
+}

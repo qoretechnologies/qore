@@ -213,6 +213,12 @@
     @ref Qore::SocketPollOperationBase and @ref Qore::PollPipeline::setGoal();
     <a href="https://github.com/qoretechnologies/qore/issues/6839">issue 6839</a>).
 
+    @par Members Cannot Be Added to Builtin Constant Objects
+    Adding a member to a builtin constant's object (ex: @ref Qore::stdout "stdout") raises \c SYSTEM-OBJECT-ERROR;
+    sandboxed code cannot add members to other code's builtin objects or read module options; and
+    @ref Qore::get_app_registry() "get_app_registry()" requires \c PROCESS, a parse error under \c PO_NO_PROCESS_CONTROL
+    (@ref sandbox_process_wide_registries; <a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>).
+
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
     The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
     handlers of the standard modules refuse registrations, replacements and removals from sandboxed code, also when it
@@ -1707,6 +1713,12 @@
     Sandboxed code cannot change the process-wide default thread stack size or logger start time, and does not get
     the global loggers of the data provider modules; see
     @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>).
+
+    @par Process-Wide State Is Not Readable by Sandboxed Code
+    Sandboxed code does not get the module options (@ref Qore::get_module_option() "get_module_option()"), the
+    application registry and the process-wide state of the standard modules that holds the configuration of the host
+    or of other tenants; see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>).
 
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
