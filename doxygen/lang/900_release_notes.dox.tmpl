@@ -2674,6 +2674,8 @@
       to process-wide logging and initialization
       (<a href="https://github.com/qoretechnologies/qore/issues/7060">issue 7060</a> and
       <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
+    - fixed a crash when a debugger paused or terminated a debugged Program while it was being torn down and one of its
+      threads had just ended (<a href="https://github.com/qoretechnologies/qore/issues/7103">issue 7103</a>)
     - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
       module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
       (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
