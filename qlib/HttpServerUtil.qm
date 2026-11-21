@@ -2084,6 +2084,22 @@ public class HttpListenerInterface inherits AbstractLogger {
         # no implementation in the base class — listeners that support
         # dedicated persistent sessions override this
     }
+
+    #! Force-closes the persistent session for the given connection, if the given handler registered it
+    /** As signalPersistentSessionClose(softstring), but the session is closed only if \a handler is the handler
+        whose persistent session it is; this is the variant that sandboxed code uses (see
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface")
+
+        This implementation calls signalPersistentSessionClose(softstring)
+
+        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param handler the handler whose persistent session it is
+
+        @since HttpServerUtil 1.6
+    */
+    signalPersistentSessionClose(softstring uh, AbstractHttpRequestHandler handler) {
+        signalPersistentSessionClose(uh);
+    }
 }
 
 # for backwared compatibility, calls to deprecated methods are made below
