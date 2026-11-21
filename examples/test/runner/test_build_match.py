@@ -297,7 +297,7 @@ class BuildMatchTest(BuildMatchFixture):
 
     def test_qmod_files_of_another_build_are_refused(self):
         other = self.base / "other-build"
-        stand_in_build(other, self.tree, OTHER_COMMIT)
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
         self.assert_refused(self.run_runner(QORE_TEST_QMOD_DIR=str(other / "qlib-qmod")),
                             "the .qmod files in %s/qlib-qmod: from the build in" % other.resolve())
         # a qlib/*.qmod link into another build
@@ -405,7 +405,7 @@ class BuildMatchTest(BuildMatchFixture):
     def test_qmod_links_are_read_with_a_readlink_of_one_file(self):
         # BusyBox's readlink takes one file: the links into another build are found all the same
         other = self.base / "other-build"
-        stand_in_build(other, self.tree, OTHER_COMMIT)
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
         for name in ("Mod", "Src"):
             (self.tree / ("qlib/%s.qmod" % name)).symlink_to(other / ("qlib-qmod/%s.qmod" % name))
         real_readlink = shutil.which("readlink")
@@ -513,10 +513,31 @@ class BuildMatchTest(BuildMatchFixture):
         os.utime(self.tree / "qlib/Sep/i18n/en.json", (LATER + 20, LATER + 20))
         self.assert_runs(self.run_runner())
 
+    def test_links_into_another_build_of_this_tree_are_not_checked(self):
+        # the module loader does not load a .qmod that a link of qlib names in another build of the same tree (a
+        # build-debug of an older commit, say): it takes libqore's own build's module instead, or ignores the link
+        # (qore#7030); a link into a build of another tree is still refused
+        self.separated_module()
+        same = self.base / "build-debug"
+        stand_in_build(same, self.tree, OTHER_COMMIT)
+        (same / "qlib-qmod/Mod.qmod").touch()
+        (same / "qlib-qmod/Sep").mkdir()
+        (same / "qlib-qmod/Sep/Sep.qmod").touch()
+        (self.tree / "qlib/Mod.qmod").symlink_to(same / "qlib-qmod/Mod.qmod")
+        (self.tree / "qlib/Sep/Sep.qmod").unlink()
+        (self.tree / "qlib/Sep/Sep.qmod").symlink_to(same / "qlib-qmod/Sep/Sep.qmod")
+        self.assert_runs(self.run_runner())
+        other = self.base / "other-build"
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
+        (other / "qlib-qmod/Mod.qmod").touch()
+        (self.tree / "qlib/Mod.qmod").unlink()
+        (self.tree / "qlib/Mod.qmod").symlink_to(other / "qlib-qmod/Mod.qmod")
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+
     def test_a_separated_module_s_link_into_another_build_is_refused(self):
         self.separated_module()
         other = self.base / "other-build"
-        stand_in_build(other, self.tree, OTHER_COMMIT)
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
         (other / "qlib-qmod/Sep").mkdir()
         (other / "qlib-qmod/Sep/Sep.qmod").touch()
         (self.tree / "qlib/Sep/Sep.qmod").unlink()

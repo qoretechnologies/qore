@@ -668,8 +668,9 @@ fi
 #   it, see .gitattributes), and it must be the build's;
 # - the qcc that the tests use (QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the qcc next to qore, or the one in the PATH; see
 #   examples/test/TestInterpreter.qm) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
-#   and the build that each qlib/*.qmod symlink points into) must come from the same build: the qore next to each of
-#   them must be the qore used or name the same commit.
+#   and the build that each qlib/*.qmod symlink points into, unless it is another build of this tree, whose modules the
+#   loader does not take: qore#7030) must come from the same build: the qore next to each of them must be the qore
+#   used or name the same commit.
 # A mismatch ends the run with a MISMATCH error naming both commits and the first paths that differ, unless
 # QORE_TEST_ALLOW_BUILD_MISMATCH=1, with which the run goes on and says so.  Each program and git command it runs is
 # limited to BUILD_CHECK_WAIT seconds by the timeout command (a libqore that hangs in its initialization cannot hold up
@@ -1248,6 +1249,19 @@ check_build_parts() {
         done | sort -u`
     if [ -n "$qmod_link_dirs" ]; then
         while IFS= read -r qmod_build; do
+            # A link into another build of this tree (its CMakeCache.txt names the tree; a build-debug of an older
+            # commit, for example) is not loaded: the module loader takes libqore's own build's module instead, or
+            # ignores the link (qore#7030).  A link into the run's own build, or into a build of another tree, is
+            # checked.
+            qmod_build_dir=`physical_dir "$qmod_build"`
+            if [ -n "$qmod_build_dir" ] && [ "$qmod_build_dir" != "$QORE_BUILD_DIR" ]; then
+                qmod_build_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' \
+                    "$qmod_build_dir/CMakeCache.txt" 2>/dev/null`
+                if [ -n "$qmod_build_source" ] \
+                        && [ "`physical_dir "$qmod_build_source"`" = "$QORE_SOURCE_DIR" ]; then
+                    continue
+                fi
+            fi
             check_companion_build "the qlib .qmod links into $qmod_build" "$qmod_build"
         done <<QMOD_LINKS_EOF
 $qmod_link_dirs
