@@ -1776,6 +1776,9 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Returns true if the Program is sandboxed or its parse options restrict a functional domain
+DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a

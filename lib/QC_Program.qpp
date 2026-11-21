@@ -2515,7 +2515,10 @@ nothing Program::importGlobalVariable(
     therefore will not be overritten by subsequent calls to Program::importSystemClasses(),
     Program::importSystemHashDecls(), Program::importSystemConstants(), Program::importSystemApi(),
     Program::loadApplyToPrivateUserModule(), or Program::loadApplyToUserModule(); note that for this call to succeed,
-    the Program must have @ref Qore::PO_ALLOW_INJECTION set
+    the Program must have @ref Qore::PO_ALLOW_INJECTION set. When the injection relates two classes, a sandboxed
+    caller or one restricted from a functional domain may only relate classes declared by its own Program.
+    Rebuild older compiled programs with a current compiler so a restricted caller can establish ownership of
+    classes declared in those programs.
     @param module_visibility see @ref import_visibility_constants for valid values
 
     @par Example:

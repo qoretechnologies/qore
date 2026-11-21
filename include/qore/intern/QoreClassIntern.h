@@ -3112,6 +3112,8 @@ public:
     //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
     //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
     bool ns_copy = false;
+    //! false when an AOT class was reconstructed without proof that its loading Program declared it
+    bool declaration_owner_known = true;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -3540,6 +3542,11 @@ public:
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
+
+    //! A reconstructed source Program alone cannot establish ownership of an embedded class.
+    DLLLOCAL bool declaredBy(const QoreProgram* pgm) const {
+        return pgm && declaration_owner_known && spgm.load() == pgm;
+    }
 
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();

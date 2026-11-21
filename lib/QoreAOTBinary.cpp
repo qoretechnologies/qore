@@ -11545,7 +11545,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
         // flags: bit 0 = pub, bit 1 = final, bit 2 = injected import,
         // bit 3 = reexported import, bit 4 = raw generic accepts,
-        // bit 5 = raw generic construction
+        // bit 5 = raw generic construction, bit 6 = declaration belongs to the serialized Program
         uint16_t flags = 0;
         if (priv->pub) {
             flags |= 0x0001;
@@ -11566,6 +11566,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             if (priv->rawConstructionDefaultsToAuto()) {
                 flags |= 0x0020;
             }
+        }
+        if (priv->declaredBy(writer.serialization_program)) {
+            flags |= QORE_AOT_CLASS_DECLARED_BY_PROGRAM;
         }
         writer.writeU16(flags);
 
@@ -17881,6 +17884,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         QoreClass* qc = new QoreClass(name, path, domain);
         qore_class_private* priv = qore_class_private::get(*qc);
         priv->loc = getBlobLocation();
+        // Older records and embedded foreign classes do not attest a declaration in this Program.
+        priv->declaration_owner_known = (flags & QORE_AOT_CLASS_DECLARED_BY_PROGRAM) != 0;
         priv->pub = (flags & 0x0001) != 0;
         if (flags & 0x0002) {
             priv->final = true;

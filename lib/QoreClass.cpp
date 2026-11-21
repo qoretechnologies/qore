@@ -1435,6 +1435,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
     ns_copy = true;
+    declaration_owner_known = old.declaration_owner_known;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
@@ -1613,6 +1614,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
     ns_copy = true;
+    declaration_owner_known = old.declaration_owner_known;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
