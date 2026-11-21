@@ -27,10 +27,13 @@
     class, which the trusted class calls, and call the base class's version of a method that it overrides; trusted
     code keeps its private access to the objects of the sandboxed class.  A class that sandboxed code declares with
     the name and the declarations of a trusted class has no private access to the trusted class's objects either
-    (lookalike.q; its private:internal declarations: lookalike-internal.q, which depends on qore#7036).  The output of
-    every execution mode and of qcc executables (-O0, -O3) must be the expected one.
+    (lookalike.q; its private:internal declarations: lookalike-internal.q, which depends on qore#7036).  The uses of
+    the private hooks of library classes that stay allowed (overrides, private and public, a recursive call of the own
+    override, the implementation of private abstract hooks, the call of the library class's version of an overridden
+    method) and the call of another private method of a library class, which is refused, are in library-hooks.q.  The
+    output of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
 
-    The program is in \c sandbox-trusted-private-access/.
+    The programs are in \c sandbox-trusted-private-access/.
 */
 class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
     private {
@@ -38,7 +41,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         string dir = get_script_dir() + "/sandbox-trusted-private-access";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe", "lookalike");
+        const Programs = ("probe", "lookalike", "library-hooks");
 
         #! the private:internal declarations of a look-alike class (lookalike-internal.q) are refused once qore#7036
         #! is fixed: until then the program is not run
