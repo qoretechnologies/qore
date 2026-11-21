@@ -2674,14 +2674,18 @@ public:
 
         @param adopt the owned descriptor of @a new_fd, if any (see setDescriptor()), which is reset
         @param hold set to a hold of @a new_fd when the socket adopts @a adopt (see setDescriptor())
+        @param old_generation the @ref fd_generation that the caller read with @a old_fd (getDescriptorGeneration()),
+        if any: the descriptor is then replaced only if the socket still has that descriptor, not only its number
+        (qore#7003)
 
         @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
         concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
     DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old,
-            std::shared_ptr<SharedDescriptor>* adopt = nullptr, std::shared_ptr<SharedDescriptor>* hold = nullptr) {
+            std::shared_ptr<SharedDescriptor>* adopt = nullptr, std::shared_ptr<SharedDescriptor>* hold = nullptr,
+            const uint32_t* old_generation = nullptr) {
         CloseLockHelper cl(*this);
-        if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
+        if (sock != old_fd || old_fd == QORE_INVALID_SOCKET || (old_generation && fd_generation != *old_generation)) {
             return false;
         }
         sock = new_fd;
@@ -2704,6 +2708,16 @@ public:
         ++fd_generation;
         fd_nonblocking.store(false, std::memory_order_relaxed);
         return true;
+    }
+
+    //! Returns the socket's descriptor and its @ref fd_generation, read together with @ref close_m held
+    /** For replaceDescriptor(): a descriptor that the socket was given after the caller's read has another
+        generation, also when its number is the same
+    */
+    DLLLOCAL int getDescriptorGeneration(uint32_t& generation) {
+        CloseLockHelper cl(*this);
+        generation = fd_generation;
+        return sock;
     }
 
     //! Makes an owned descriptor the descriptor of the socket, which has none

@@ -14948,9 +14948,10 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
             continue;
         }
         // the new socket replaces the socket's descriptor, which keeps its port allocated until this returns
-        int old_fd = priv->sock;
+        uint32_t old_generation;
+        int old_fd = priv->getDescriptorGeneration(old_generation);
         bool close_old;
-        if (!priv->replaceDescriptor(old_fd, fd, close_old)) {
+        if (!priv->replaceDescriptor(old_fd, fd, close_old, nullptr, nullptr, &old_generation)) {
             for (int rfd : fds) {
                 qore_socket_private::closeDescriptor(rfd);
             }

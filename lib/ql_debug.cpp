@@ -7662,6 +7662,61 @@ public:
         }
     }
 
+    //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
+    /** A contract test (qore#7003), not a reproduction: no path of the library can give a socket a new descriptor
+        between the read of its descriptor and its replacement, as the paths that give a socket a descriptor run with
+        its lock held, as do the callers that replace it.  The test reads the descriptor and its generation, closes the
+        socket, gives it a descriptor with the same number, and replaces the descriptor with what it read: the
+        replacement must be refused; the replacement of the current descriptor with its generation is not.
+    */
+    static void runReplaceDescriptorGeneration(UnitTestCounters& c) {
+        QoreSocket qs;
+        qore_socket_private* sp = qore_socket_private::get(qs);
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        UT_ASSERT(c, fd >= 0, "replace generation: a socket is created");
+        if (fd < 0) {
+            return;
+        }
+        std::shared_ptr<QoreSharedDescriptor> owned = qore_owned_descriptor_create(fd);
+        sp->setDescriptor(fd, owned, false);
+        uint32_t gen;
+        int read_fd = sp->getDescriptorGeneration(gen);
+        UT_ASSERT_EQ(c, fd, read_fd, "replace generation: the descriptor is read");
+        // closed, and a descriptor with the same number is given to the socket
+        sp->close_and_reset();
+        int fd2 = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd2 >= 0 && fd2 != fd) {
+            ::dup2(fd2, fd);
+            ::close(fd2);
+            fd2 = fd;
+        }
+        UT_ASSERT_EQ(c, fd, fd2, "replace generation: the number is given to a new descriptor");
+        if (fd2 < 0) {
+            return;
+        }
+        std::shared_ptr<QoreSharedDescriptor> owned2 = qore_owned_descriptor_create(fd2);
+        sp->setDescriptor(fd2, owned2, false);
+        int fd3 = ::socket(AF_INET, SOCK_STREAM, 0);
+        UT_ASSERT(c, fd3 >= 0, "replace generation: a replacement is created");
+        if (fd3 < 0) {
+            return;
+        }
+        bool close_old = false;
+        bool replaced = sp->replaceDescriptor(read_fd, fd3, close_old, nullptr, nullptr, &gen);
+        UT_ASSERT(c, !replaced, "replace generation: a descriptor given to the socket after the read is not replaced");
+        uint32_t gen2;
+        int cur = sp->getDescriptorGeneration(gen2);
+        UT_ASSERT_EQ(c, fd2, cur, "replace generation: the socket keeps its descriptor");
+        replaced = sp->replaceDescriptor(cur, fd3, close_old, nullptr, nullptr, &gen2);
+        UT_ASSERT(c, replaced, "replace generation: the current descriptor is replaced with its generation");
+        if (replaced && close_old) {
+            ::close(cur);
+        } else if (!replaced) {
+            ::close(fd3);
+        }
+        sp->close_and_reset();
+    }
+
     //! How runConnectCloseInProgress() closes the connection
     enum ConnectCloseMode {
         //! between two steps, and the operation is destroyed
@@ -23222,6 +23277,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_DESTROY, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c);
+    AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);

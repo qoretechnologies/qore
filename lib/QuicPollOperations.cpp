@@ -1500,7 +1500,9 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         return -1;
     }
 
-    int old_fd = sock->priv->socket->getDescriptor();
+    // the descriptor is replaced below only if the socket still has this one, not only its number (qore#7003)
+    uint32_t old_generation;
+    int old_fd = sock->priv->socket->priv->getDescriptorGeneration(old_generation);
     if (old_fd < 0) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "socket is not open");
         return -1;
@@ -1593,7 +1595,8 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         // the swap also bumps fd_generation so any sync I/O helper mid-wait (lock released) returns QSE_NOT_OPEN on
         // re-acquire instead of operating on the pre-migration fd; a close that raced with the migration has already
         // released the old fd, so the new fd is not installed and closed by the guard instead
-        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old)) {
+        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old, nullptr, nullptr,
+                &old_generation)) {
             xsink->raiseException("SOCKET-CLOSED", "the socket was closed during QUIC connection migration");
             return -1;
         }
