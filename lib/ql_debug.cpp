@@ -28392,6 +28392,15 @@ static QoreValue f_dbg_nanosleep_eintr(const QoreListNode* params, RuntimeConfig
 }
 #endif
 
+//! Debug-only test hook: returns its argument, with the declared return type Socket whatever the argument is
+/** A builtin whose declared return type does not match what it returns: a method call on its value is resolved at
+    parse time from the declared class (Socket), so a value of another type reaches the run-time dispatch of the
+    resolved method (qore#6813).  DEBUG builds only.
+*/
+static QoreValue f_dbg_value_as_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return get_param_value(params, 0).refSelf();
+}
+
 void init_debug_functions(QoreNamespace& qns) {
 #ifdef HAVE_NANOSLEEP
     qns.addBuiltinVariant("dbg_nanosleep_eintr", f_dbg_nanosleep_eintr, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -28408,6 +28417,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_value_as_socket", f_dbg_value_as_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        QC_SOCKET->getTypeInfo(), 1, anyTypeInfo, QORE_PARAM_NO_ARG, "v");
     qns.addBuiltinVariant("dbg_type_retention_breakdown", f_dbg_type_retention_breakdown, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_type_retirement_info", f_dbg_type_retirement_info, QCF_NO_FLAGS,
