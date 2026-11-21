@@ -116,6 +116,12 @@ public:
         return has_creator_po ? &creator_po : nullptr;
     }
 
+    //! returns the effective parse options of the code that created the reference if it is the code of a Program that
+    //! is not a module's, or nullptr (qore#7056)
+    DLLLOCAL const QoreParseOptions* getNonModuleCreatorParseOptions() const {
+        return has_creator_po && creator_non_module ? &creator_po : nullptr;
+    }
+
     //! returns the Program whose code a call of the reference runs, or nullptr for builtin code (qore#6520)
     /** Called by captureCreatorParseOptions() in the constructor of the run-time reference classes, which give their
         target without the generic lookup (qore_call_reference_code_program())
@@ -129,6 +135,9 @@ protected:
 private:
     QoreParseOptions creator_po;
     bool has_creator_po = false;
+    //! true if the code that created the reference is the code of a Program that is not a module's, whose options
+    //! are \c creator_po (see qore_callable_origin_restrictions_po(), qore#7056)
+    bool creator_non_module = false;
 };
 
 class AbstractUnresolvedCallReferenceNode : public AbstractCallReferenceNodeIntern {

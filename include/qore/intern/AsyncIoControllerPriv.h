@@ -176,6 +176,10 @@ struct AsyncIoDeferredRelease {
     //! asynchronous work (AsyncIoControllerPriv::checkModuleCleanupNewWork(), qore#7027)
     bool module_cleanup_canceled = false;
 
+    //! the functional-domain restrictions of the code that submitted the work whose references these are, which the
+    //! release runs with (see QoreSubmitterRestrictionsHelper, qore#6844)
+    QoreParseOptions caller_restrictions;
+
     //! Sets the module cleanup flags of the references from the context of the work that they belong to
     DLLLOCAL void setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx);
 
@@ -337,6 +341,11 @@ DLLLOCAL inline bool async_io_module_cleanup_cancel_match(const std::shared_ptr<
         bool deadline) {
     return deadline ? ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_canceled
         : async_io_module_cleanup_uncounted(ctx);
+}
+
+//! Returns the functional-domain restrictions of the code that captured the context, or none (qore#6844)
+DLLLOCAL inline QoreParseOptions async_io_caller_restrictions(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx ? ctx->caller_restrictions : QoreParseOptions();
 }
 
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it

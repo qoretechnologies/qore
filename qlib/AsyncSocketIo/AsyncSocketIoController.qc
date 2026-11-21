@@ -578,7 +578,26 @@ public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
     if (!SandboxManager::isProcessWideRegistrationAllowed()) {
         return new AsyncSocketIoController();
     }
-    return globalController ?? (globalController = new AsyncSocketIoController(True));
+    # the controller is created when the module is initialized, for no caller (issue #6996); autostop is enabled when
+    # it is first returned, as when it was created here
+    if (!globalController) {
+        globalController = GlobalAsyncIoControllerHolder::controller;
+        Qore::AsyncIoController::setAutostop(auto_stop: True);
+    }
+    return globalController;
+}
+
+#! Holds the process-wide controller, which is created for every caller, not for the caller that needs it first
+#! (issue #6996)
+/** An object that library code creates while it serves a restricted caller runs its code for that caller (its
+    provenance): the process-wide controller is shared by every caller, so it is created when the module is
+    initialized, which is not a call by any caller; the constructor used changes no process-wide setting
+*/
+class GlobalAsyncIoControllerHolder {
+    public {
+        #! the process-wide controller
+        static AsyncSocketIoController controller = new AsyncSocketIoController();
+    }
 }
 
 our *AsyncSocketIoController globalController;

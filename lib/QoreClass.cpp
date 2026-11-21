@@ -1673,6 +1673,33 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 }
 
+bool qore_class_private::spansPrograms() const {
+    signed char cached = spans_programs_cache.load(std::memory_order_relaxed);
+    if (cached) {
+        return cached == 2;
+    }
+    bool rv = false;
+    const QoreProgram* own = spgm.load(std::memory_order_acquire);
+    if (scl) {
+        for (auto& i : *scl) {
+            if (!i->sclass) {
+                continue;
+            }
+            const qore_class_private* parent = qore_class_private::get(*i->sclass);
+            const QoreProgram* parent_pgm = parent->spgm.load(std::memory_order_acquire);
+            // only a base class of a module: the code of another Program that is not a module's runs with that Program
+            // on the stack, which decides for it
+            if ((parent_pgm && parent_pgm != own && qore_program_is_module_inline(parent_pgm))
+                    || parent->spansPrograms()) {
+                rv = true;
+                break;
+            }
+        }
+    }
+    spans_programs_cache.store(rv ? 2 : 1, std::memory_order_relaxed);
+    return rv;
+}
+
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
     releaseMethodsAndData(false);

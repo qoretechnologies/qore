@@ -2593,6 +2593,12 @@ public:
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
+    //! Returns true once the teardown of the Program has started (its private data is being or has been deleted)
+    DLLLOCAL bool isTornDown() {
+        AutoLocker al(plock);
+        return ptid != 0;
+    }
+
     //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
     /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
         govern the Program's code together (see \c creator_sandbox_manager).  If \a own_additive is not nullptr, it is

@@ -1016,6 +1016,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     refs.spop_base = spop_base;
     // taken before the context is released below
     refs.setModuleCleanup(sandbox_ctx);
+    refs.caller_restrictions = async_io_caller_restrictions(sandbox_ctx);
     sock_obj = nullptr;
     sock = nullptr;
     spop_obj = nullptr;
@@ -2091,6 +2092,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.state_queue_obj = cmd.submit_state_queue_obj;
                 refs.spop_base = cmd.submit_spop_base;
                 refs.setModuleCleanup(cmd.submit_sandbox_ctx);
+                refs.caller_restrictions = async_io_caller_restrictions(cmd.submit_sandbox_ctx);
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
                 cmd.submit_spop_obj = nullptr;
@@ -2222,8 +2224,10 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
-    // also only the isolation of a trusted build that submits the operation (qore#6536)
-    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation) {
+    // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
+    // capturing code alone, which the step runs with (qore#6844)
+    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
+            || ctx->caller_restrictions) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -2322,6 +2326,12 @@ void QoreCallDispatcher::dispatchNativeTaskAsync(AsyncIoNativeTask* task) {
 }
 
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+    // the release (a destructor, a native task's discard()) runs for the code that submitted the work, also on a thread
+    // of other code that drains or cancels it, and on a release of a Program's parked items (qore#6844)
+    // (a deferred release of the controller's own references carries them with the references)
+    QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
+        ? item.sandbox_ctx->caller_restrictions
+        : (item.release ? item.release->caller_restrictions : QoreParseOptions()));
     if (item.native_task) {
         // the task was never run
         item.native_task->discard(xsink);
@@ -3051,7 +3061,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.pgm) {
             item_po.po = async_item.pgm->getParseOptions();
         }
-        QoreThreadRuntimeParseOptionsHelper item_po_helper(async_item.pgm ? &item_po : nullptr);
+        // a step runs for the code that submitted the operation: its caller restrictions replace those of the code
+        // that started the worker (empty: workers are started without inheriting them) (qore#6844)
+        const bool submitter_restrictions = async_item.sandbox_ctx
+            && async_item.sandbox_ctx->caller_restrictions;
+        if (submitter_restrictions) {
+            item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
+        }
+        QoreThreadRuntimeParseOptionsHelper item_po_helper((async_item.pgm || submitter_restrictions)
+            ? &item_po : nullptr);
         // a callback that is not run in a Program (a timer's) runs with the options of the code that registered it,
         // which for module code running for a sandboxed caller include the caller's restrictions (qore#6208)
         QoreThreadRuntimeParseOptionsHelper registrar_po_helper(async_item.runtime_po.get());
@@ -7848,6 +7866,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         node->second.spop_base->ref();
                         refs.spop_base = node->second.spop_base;
                         refs.setModuleCleanup(node->second.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(node->second.sandbox_ctx);
                     }
                     releaseOffIoThread(refs, xsink);
                 };
@@ -8761,6 +8780,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 AsyncIoDeferredRelease cancel_refs;
                                 cancel_refs.udata = it->second.cancel_cb;
                                 cancel_refs.setModuleCleanup(it->second.sandbox_ctx);
+                                cancel_refs.caller_restrictions = async_io_caller_restrictions(it->second.sandbox_ctx);
                                 it->second.cancel_cb = QoreValue();
                                 fired_cancel_refs.push_back(cancel_refs);
                             }
@@ -8975,6 +8995,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             AsyncIoDeferredRelease refs;
             refs.udata = tinfo.udata;
             refs.setModuleCleanup(tinfo.sandbox_ctx);
+            refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
             if (tinfo.cancel_cb.hasNode()) {
@@ -8982,6 +9003,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 AsyncIoDeferredRelease cancel_refs;
                 cancel_refs.udata = tinfo.cancel_cb;
                 cancel_refs.setModuleCleanup(tinfo.sandbox_ctx);
+                cancel_refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
                 tinfo.cancel_cb = QoreValue();
                 exit_timer_refs.push_back(cancel_refs);
             }
@@ -9392,6 +9414,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     refs.spop_base = spop_base;
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -9429,6 +9452,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     refs.spop_obj = obj;
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
+                        refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -10506,6 +10530,7 @@ void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete,
     refs.queue = dd.queue;
     refs.queue_obj = dd.queue_obj;
     refs.setModuleCleanup(dd.sandbox_ctx);
+    refs.caller_restrictions = async_io_caller_restrictions(dd.sandbox_ctx);
     dd.spop_obj = nullptr;
     dd.result = nullptr;
     dd.queue = nullptr;

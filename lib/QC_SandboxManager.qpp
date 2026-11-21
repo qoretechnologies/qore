@@ -1159,6 +1159,16 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
       calls, is still checked against its sandbox
     - only filesystem/network policy is affected; interrupt and force-terminate checks
       resolve unchanged, so a barriered call remains cancellable
+    - of the functional-domain restrictions of the calling code, only those of the file system, the network and
+      external information are lent (see isCallerRestricted()); native code is never loaded for the caller through it,
+      and a thread started inside the call for a caller with a sandbox keeps that caller's restrictions
+    - an object of a builtin class records no restrictions of the code that created it: a builtin method (or one of a
+      binary module) that checks its caller when it runs, and that the trusted code calls inside the call, judges the
+      trusted code, also for an object that the caller created
+
+    @note Objects that the code inside the call creates from data that the caller gave (deserialization, for example)
+    are objects of classes that the caller chose, whose code then runs with the lent access: trusted code
+    deserializes such data outside the call
 
     @note Object and callback provenance remains enforced through this barrier. A reference created while
     serving a sandboxed caller retains that caller's policy. Trusted infrastructure needing access beyond that
@@ -1402,6 +1412,70 @@ class MapperContainers {
 */
 static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
     return qore_create_trusted_build_call(call, xsink);
+}
+
+//! Calls host code that creates objects for a sandboxed %Program, governed by that %Program's sandbox
+/** Trusted host code that builds objects for a sandboxed %Program (a container that creates the data providers or
+    connections of an interface, for example) calls the factory with this method: the factory runs with the host's
+    parse options, so it may create objects whose classes or constructors use functional domains that the governed
+    %Program's own code may not use, and the sandbox of the governed %Program governs the call and the objects that it
+    creates, as their provenance, for their whole life:
+    - its filesystem and network policy applies to their I/O, whoever calls their methods; its interrupts and force
+      terminations reach them, and its limits count them
+    - the work that the call starts (timers, asynchronous operations, callbacks added while the factory runs, by host or
+      module code) belongs to the governed %Program's application, not to the host; work that the objects' methods
+      start later belongs to the code that calls them (the code of another %Program that the factory calls keeps its
+      own application)
+    - the objects record the host's functional-domain restrictions (none), not those of the governed %Program:
+      arguments that the governed %Program's code passes to their methods later (URLs, paths) are used with the
+      objects' rights, and are still checked against the sandbox's policy; code that the governed %Program gives them
+      (callbacks) runs as that %Program's code, with its restrictions, also when the factory calls it
+
+    Two axes are kept apart: the functional-domain restrictions of the code that creates an object (here the host's)
+    and the sandbox that governs the object (here the governed %Program's).
+
+    The objects themselves are created in the host's %Program (their %Program is the host's).  A restricted %Program
+    that calls
+    host code which calls this method with a fixed factory of its own is allowed: the calling code is the host's
+    (see isCallerRestricted()); the host decides what its code creates for whom.
+
+    @param factory the host code to call; it must not have been created by code whose functional domains are
+    restricted, or by sandboxed code
+    @param governed the %Program whose sandbox governs the call and the objects that it creates; it must have a
+    sandbox manager (see Program::setSandboxManager()) or the sandbox of the code that created it, and it is referenced
+    for the call
+    @param call_args optional arguments for @p factory
+
+    @return the value that @p factory returns
+
+    @throw SANDBOX-CALL-GOVERNED-ERROR the calling code is governed by a sandbox, is sandboxed, or has restricted
+    functional domains; @p factory was created by restricted or sandboxed code; @p governed has no sandbox manager or
+    has been deleted
+
+    Exceptions that @p factory raises are raised unchanged; the sandbox and application of the call are removed on
+    every exit.
+
+    @par Example:
+    @code{.py}
+# a container creates the connection-bound data provider of a sandboxed interface
+AbstractDataProvider sub get_provider(Program interface_pgm, AbstractConnection conn) {
+    return SandboxManager::callGoverned(\conn.getDataProvider(), interface_pgm);
+}
+    @endcode
+
+    @note Use @ref Qore::Option::HAVE_SANDBOX_CALL_GOVERNED "HAVE_SANDBOX_CALL_GOVERNED" to check for the method
+    (\c %ifdef HAVE_SANDBOX_CALL_GOVERNED)
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::callGoverned(code factory, Program governed, *softlist<auto> call_args)
+        [dom=UNCONTROLLED_API] {
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(governed->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return qore_sandbox_call_governed(factory, *pgm, call_args, xsink);
 }
 
 //! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
@@ -1739,7 +1813,27 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
     of a sandboxed caller that the module code runs with, and those of the modules on the way that are not library code
     (a module loaded by its path, which has the restrictions of the %Program that loaded it first); the options of a
     library module's own %Program do not, and neither
-    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
+    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).  The code of an object
+    or call reference that restricted code created is restricted as its creator is when its code is the code of a
+    module (a library module or one loaded by its path), of a base class of a module that its class inherits, or
+    builtin code; the code of a %Program that is not a module's (the creator's own, or the host's that the host
+    imported) runs with that %Program on the stack, which decides.  An object of a class that inherits a class of a
+    module is restricted in all of its methods, also in those of its own class.
+
+    The same rule decides the declared domains of user module code (see @ref sandbox_caller_domains):
+    - the initialization of library module code is not a call by the code that loads it: the calling code is not
+      looked up past it, while the objects and call references that restricted code created keep their restrictions
+    - the host lends access to the file system, the network and external information
+      (@ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", @ref Qore::DOM_NETWORK "DOM_NETWORK" and
+      @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO") with a policy barrier (callWithSystemPolicy()) or a capability
+      (createSystemPolicyCall()): only the code that runs inside the innermost grant counts for them then, so trusted
+      code can use those resources for a restricted caller, while restricted code that the grant calls back, and the
+      code of the objects and call references that restricted code created, are still restricted (a capability also
+      masks the provenance of the code that ran before it); the other domains are not lent, and neither is the loading
+      of native code (see @ref sandbox_uncontrolled_api).  The code that the grant runs must not have been created
+      for the restricted caller: a closure or call reference that library code creates while it serves the caller
+      keeps the caller's restrictions, so the code is created in the module's initialization, or it is a capability
+      created there
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 

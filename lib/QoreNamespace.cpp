@@ -1754,9 +1754,11 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
     qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));
+    // to resolve circular dependencies: Program/Expression class, and SandboxManager, whose callGoverned() takes a
+    // Program
+    preinitProgramClass();
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     qns.addSystemClass(initParseOptionsClass(qns));  // must be before Program class
-    preinitProgramClass();  // to resolve circular dependency Program/Expression class
     qns.addSystemClass(initExpressionClass(qns));
     preinitBreakpointClass();  // to resolve circular dependency Program/Breakpoint class
     qns.addSystemClass(initProgramControlClass(qns));

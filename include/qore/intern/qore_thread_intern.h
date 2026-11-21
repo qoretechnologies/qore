@@ -882,8 +882,29 @@ private:
     int tid = 0;
 };
 
+//! Adds the functional-domain restrictions of the code that submitted work to those of the code that started the
+//! thread while the work's references are released (qore#6844)
+/** For a release that runs on a thread of other code (a drain or a cancellation by the code that calls it): the
+    restrictions are added, not replaced, so that the release is never less restricted than the thread's own code
+*/
+class QoreSubmitterRestrictionsHelper {
+public:
+    DLLLOCAL explicit QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions);
+    DLLLOCAL ~QoreSubmitterRestrictionsHelper();
+
+    DLLLOCAL QoreSubmitterRestrictionsHelper(const QoreSubmitterRestrictionsHelper&) = delete;
+    DLLLOCAL QoreSubmitterRestrictionsHelper& operator=(const QoreSubmitterRestrictionsHelper&) = delete;
+
+private:
+    QoreParseOptions old_restrictions;
+    uint64_t old_gen = 0;
+    bool active = false;
+};
+
 //! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
 struct QoreTrustedBuildTag {
+    //! the Program that created the capability, whose code the build runs for (qore#6844)
+    const QoreProgram* creator = nullptr;
 };
 
 class QoreModuleInitSandboxBarrierHelper {
@@ -1111,6 +1132,12 @@ public:
         qore_get_provenance_origin_restrictions()
     */
     QoreParseOptions origin_restrictions;
+    //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
+    /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
+        controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
+        those that the worker thread got from the code that started it while the work runs (qore#6844)
+    */
+    QoreParseOptions caller_restrictions;
     //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
@@ -1449,6 +1476,7 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
     QoreParseOptions old_caller_restrictions;
+    uint64_t old_caller_restrictions_gen;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
     bool old_sandboxed;
@@ -1600,6 +1628,9 @@ struct QoreRuntimePoState {
     /** see runtime_get_own_program_state_parse_options()
     */
     QoreParseOptions caller_restrictions;
+    //! the generation of caller_restrictions: changed each time they are set, restored with them (qore#6844, see
+    //! ThreadData::GrantSnapshot)
+    uint64_t caller_restrictions_gen;
     //! the Program of the module whose code runs with caller_restrictions, or nullptr
     const QoreProgram* module_pgm;
     //! the ID of the application Program that the code of module_pgm runs for
@@ -1633,7 +1664,13 @@ public:
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 
     //! sets the override of a call for a helper created without one on \a td, the current thread; may be called once
-    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o);
+    /** @param td the current thread's data
+        @param o the override
+        @param new_gen true to give the caller restrictions a new generation always (see ThreadData::GrantSnapshot):
+        for work that runs for other code (a thread, a callback); a call of module code that passes on equal
+        restrictions keeps their generation otherwise
+    */
+    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o, bool new_gen = false);
 
     //! clears the override of the caller for a call, as set() with an empty override does; may be called once
     DLLLOCAL void setCleared();
@@ -1768,6 +1805,8 @@ private:
     std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
     //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
     QoreParseOptions old_caller_restrictions;
+    //! their generation (ThreadData::thread_caller_restrictions_gen)
+    uint64_t old_caller_restrictions_gen = 0;
 
     //! restores old_caller_restrictions
     DLLLOCAL void restoreCallerRestrictions();
