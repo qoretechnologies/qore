@@ -749,6 +749,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy);
+    } else if (raiseIfDeleted(vl, xsink)) {
+        // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
+        return;
     }
 
     if (check_recursive) {
@@ -800,6 +803,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
         }
 
         mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy);
+    } else if (raiseIfDeleted(vl, xsink)) {
+        // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
+        return;
     }
 
     if (check_recursive) {

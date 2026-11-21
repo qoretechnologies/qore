@@ -480,6 +480,19 @@ public:
         return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
     }
 
+    //! raises OBJECT-ALREADY-DELETED and returns true if the object is deleted
+    /** takes the object's read lock unless \a vl holds the object's lock: the lvalue is then a member of the object
+        itself, whose lock this thread holds for writing
+    */
+    DLLLOCAL bool raiseIfDeleted(const AutoVLock& vl, ExceptionSink* xsink) const {
+        QoreSafeVarRWReadLocker sl(rml, vl.getRWL() != &rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return true;
+        }
+        return false;
+    }
+
     // must be called in the object read lock
     DLLLOCAL const QoreHashNode* getInternalData(const qore_class_private* class_ctx) const {
         if (!cdmap)
