@@ -78,6 +78,10 @@ GDB17_REFUSED = ("Could not attach to process.  If your uid matches the uid of t
                  "again as the root user.  For more details, see /etc/sysctl.d/10-ptrace.conf\n"
                  "ptrace: Inappropriate ioctl for device.")
 
+# A program that opens the FIFO given (returning once a writer has opened it) and then stays until it is killed: the
+# program that a process of the helper's cases executes, whose start its writer sees
+STAYS = "import os, sys; os.open(sys.argv[1], os.O_RDONLY); r, w = os.pipe(); os.read(r, 1)"
+
 # the frame of a read(): gdb's "read ()" or "__GI___libc_read", eu-stack's "read", lldb's "`read + 8", sample's
 # "read  (in libsystem_kernel.dylib)" or "__read_nocancel"; not "Thread" or "pthread_..."
 READ_FRAME = re.compile(r"(?<![A-Za-z])read(_nocancel)?\b")
@@ -427,7 +431,8 @@ class LinuxScanAndHelperTest(StacksCase):
                 QORE_TEST_STACK_CAPTURE_HELPER=str(fifo))
             for pid in pids:
                 stacks = self.capture(output, pid)
-                self.assertRegex(stacks, r"the helper ran gdb -nx -batch .* -p %d -ex thread apply all bt" % pid)
+                self.assertRegex(stacks, r"the helper ran gdb -nx -batch .* -p %d -ex info proc status "
+                                         r"-ex thread apply all bt" % pid)
                 self.assertNotIn("the runner ran", stacks)
                 self.assertNotIn("qore-stack-capture-status", stacks)
             self.assert_before_signals(output)
@@ -453,6 +458,7 @@ class LinuxScanAndHelperTest(StacksCase):
                                       env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.7"), stdout=subprocess.PIPE,
                                       stderr=subprocess.DEVNULL, text=True)
             self.addCleanup(end_session, leader)
+            self.addCleanup(leader.stdout.close)
             child = int(leader.stdout.readline())
             self.assertEqual(os.getpgid(leader.pid), os.getpgid(child))
             answer = self.ask(fifo, "%d 5 77.7 gdb {reply}" % child, directory)
@@ -462,6 +468,68 @@ class LinuxScanAndHelperTest(StacksCase):
             # another mark: refused
             answer = self.ask(fifo, "%d 5 77.8 gdb {reply}" % child, directory)
             self.assertIn("refused: process %d is not a process of the test with mark 77.8" % child, answer)
+
+    def test_the_helper_takes_the_identity_before_its_checks(self):
+        # The process executes another program right after the helper's last check (its mark), as one that executes a
+        # set-user-ID program then would: the helper took its identity only after the checks, so it took the new
+        # program's both before and after the capture, and sent that program's stacks.  The helper's grep (the check of
+        # the mark) is a stand-in that releases the process from its first latch and returns once the new program has
+        # opened the second one.
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            first = Path(directory) / "first"
+            second = Path(directory) / "second"
+            os.mkfifo(first)
+            os.mkfifo(second)
+            fifo = self.start_helper(directory)
+            grep = Path(directory) / "helper-bin" / "grep"
+            grep.write_text('#!/bin/sh\ncase "$*" in\n    *QORE_TEST_PROCESS_MARK=77.6*)\n        cat > /dev/null\n'
+                            '        echo released > "%s"\n        exec 3> "%s"\n        exit 0\n        ;;\nesac\n'
+                            'exec \'%s\' "$@"\n' % (first, second, shutil.which("grep")))
+            grep.chmod(0o755)
+            target = start_in_session(
+                ["sh", "-c", 'read x < "$1"; exec "$3" -c "$4" "$2"', "sh", str(first), str(second),
+                 sys.executable, STAYS],
+                env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.6"), stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            self.addCleanup(end_session, target)
+            answer = self.ask(fifo, "%d 5 77.6 gdb {reply}" % target.pid, directory)
+            self.assertEqual("qore-stack-capture: refused: process %d changed during the capture\n"
+                             "qore-stack-capture-status: 126\n" % target.pid, answer)
+
+    def test_the_helper_checks_the_user_of_the_process_stopped_for_the_capture(self):
+        # gdb prints the process's status while it is stopped (where it cannot execute another program): a user ID that
+        # is not the runner's, or group IDs that differ, keep its stacks from being sent; the status lines are not sent
+        uid = os.geteuid()
+        gid = os.getegid()
+        for name, uids, gids, sent in (
+                ("runner", (uid,) * 4, (gid,) * 4, True),
+                ("root", (0,) * 4, (gid,) * 4, False),
+                ("set-user-ID", (uid, 0, 0, 0), (gid,) * 4, False),
+                ("set-group-ID", (uid,) * 4, (gid, 0, 0, 0), False),
+                ("no status", None, None, False)):
+            with self.subTest(status=name), tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+                fifo = self.start_helper(directory)
+                # gdb's "info proc status": "process <pid>", then the lines of /proc/<pid>/status
+                status = ""
+                if uids is not None:
+                    status = ("printf 'process %%s\\nName:\\tsh\\nUid:\\t%s\\nGid:\\t%s\\n' \"$2\"\n"
+                              % ("\\t".join(map(str, uids)), "\\t".join(map(str, gids))))
+                gdb = Path(directory) / "helper-bin" / "gdb"
+                gdb.write_text('#!/bin/sh\nwhile [ "$1" != -p ]; do shift; done\n' + status
+                               + 'echo "#0  0x0000 in read () from libc"\n')
+                latch = Path(directory) / "latch"
+                os.mkfifo(latch)
+                target = start_in_session(["sh", "-c", 'exec 3<>"$1"; read x <&3', "sh", str(latch)],
+                                          env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.5"),
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.addCleanup(end_session, target)
+                answer = self.ask(fifo, "%d 5 77.5 gdb {reply}" % target.pid, directory)
+                if sent:
+                    self.assertEqual("#0  0x0000 in read () from libc\nqore-stack-capture-status: 0\n", answer)
+                else:
+                    self.assertEqual("qore-stack-capture: refused: process %d was not a process of the runner's user "
+                                     "while it was stopped for the capture\nqore-stack-capture-status: 126\n"
+                                     % target.pid, answer)
 
     def test_the_helper_sends_nothing_of_a_process_that_changed_during_the_capture(self):
         # The process executes another program during the attach (as one that executes a set-user-ID program would):
@@ -476,9 +544,11 @@ class LinuxScanAndHelperTest(StacksCase):
             (Path(directory) / "helper-bin" / "gdb").write_text(
                 '#!/bin/sh\necho released > "%s"\nexec 3> "%s"\necho "stacks of the other program"\n'
                 % (first, second))
-            target = start_in_session(["sh", "-c", 'read x < "$1"; exec cat "$2"', "sh", str(first), str(second)],
-                                      env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.9"),
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            target = start_in_session(
+                ["sh", "-c", 'read x < "$1"; exec "$3" -c "$4" "$2"', "sh", str(first), str(second),
+                 sys.executable, STAYS],
+                env=dict(os.environ, QORE_TEST_PROCESS_MARK="77.9"), stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
             self.addCleanup(end_session, target)
             answer = self.ask(fifo, "%d 5 77.9 gdb {reply}" % target.pid, directory)
             self.assertEqual("qore-stack-capture: refused: process %d changed during the capture\n"
