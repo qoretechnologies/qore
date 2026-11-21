@@ -274,15 +274,16 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     condition wait (`qore_module_cleanup_wait_work()`); when it times out, the cleanup sets
     `qore_module_cleanup_deadline_passed()` and runs one cancel round of everything of its work that it has not
     canceled (`async_io_module_cleanup_cancel_match()` with `deadline`), whose `onComplete()` then runs as counted
-    work; after the deadline, its waits are not timed, and an operation of its work that an I/O thread admits is
-    canceled at once (`cancelAdmittedAfterModuleCleanupDeadline()`, where the operation enters the cache: the flag is
-    set before the round sends its commands, so an operation that an I/O thread admits after the round's command, or
-    while it does not read commands yet, sees it; a later round alone would run only when the drain's untimed wait
-    ends, which a synchronous wait for that operation in counted work would prevent; a synchronous operation of the
-    cleanup thread itself, which blocks only its own destructor, keeps its own timeout:
-    `AsyncIoSyncRelease::module_cleanup_handed_over`); the operations canceled at or
-    after the deadline are named in a warning on stderr (`qore_module_cleanup_report_canceled()`).  An
-    operation whose own timeout is renewed as it makes progress (`renewsTimeout()`) does not extend the deadline
+    work; after the deadline, its waits are not timed, and an operation that the work that it handed over submits is
+    canceled when an I/O thread admits it (`cancelAdmittedAfterModuleCleanupDeadline()`, where the operation enters the
+    cache: the flag is set before the round sends its commands, so an operation that an I/O thread admits after the
+    round's command, or while it does not read commands yet, sees it; a later round alone would run only when the
+    drain's untimed wait ends, which a synchronous wait for that operation in counted work would prevent; the
+    `Command`'s `submit_module_cleanup_handed_over`, `qore_module_cleanup_handed_over_work()` in the submitting thread);
+    an operation of the cleanup thread itself is canceled by its next round, which it runs after the destructor that
+    submitted it, so a synchronous wait of that destructor keeps the operation's own timeout; the operations canceled at
+    or after the deadline are named in a warning on stderr (`qore_module_cleanup_report_canceled()`).  An operation
+    whose own timeout is renewed as it makes progress (`renewsTimeout()`) does not extend the deadline
   - a timer that such work adds, and an operation that the controller starts for it without `submit()`, have a
     delegated but uncounted context: each drain, once the count is zero, cancels them for the cleanup
     (`AsyncIoControllerPriv::cancelModuleCleanupUncounted()`: the timers first, then a `CancelByProgram` command

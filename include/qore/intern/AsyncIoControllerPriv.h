@@ -217,15 +217,6 @@ public:
         assert(refs.empty());
     }
 
-    //! True if work that the module cleanup handed over submitted the operation (a worker that runs its work), not
-    //! the cleanup itself (qore#7027)
-    /** Set by AsyncIoControllerPriv::submit() before the operation is queued and read on the I/O thread that admits
-        it: after the deadline of the cleanup, such a synchronous wait would keep the cleanup from ending, so its
-        operation is canceled when it is admitted (AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline()),
-        while one of the cleanup itself keeps its own timeout
-    */
-    bool module_cleanup_handed_over = false;
-
     //! Takes references for the caller
     /** @param r the references; cleared if they were taken
 
@@ -1421,6 +1412,9 @@ private:
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
         //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
+        //! For SubmitOp: work that the module cleanup handed over submitted the operation, not the cleanup itself
+        //! (see cancelAdmittedAfterModuleCleanupDeadline(), qore#7027)
+        bool submit_module_cleanup_handed_over = false;
         //! For CancelDeletedOp: the C++ poll operation whose Qore object was deleted (referenced)
         /** The reference keeps the address from being reused for another operation until the command is processed
         */
@@ -2520,13 +2514,16 @@ private:
     */
     DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
 
-    //! Cancels the operation of \a key that the I/O thread has just admitted, if it is work of the module cleanup that
-    //! the cleanup has not canceled and the cleanup has reached its deadline (qore#7027)
+    //! Cancels the operation of \a key that the I/O thread has just admitted, if work that the module cleanup handed
+    //! over submitted it (\a handed_over), the cleanup has not canceled it and the cleanup has reached its deadline
+    //! (qore#7027)
     /** Called on the I/O thread where an operation enters its cache: such an operation would otherwise be canceled
-        only by a later cancel round of the cleanup, which runs only when its wait ends; also named in a warning
+        only by a later cancel round of the cleanup, which runs only when its wait ends, which the work that waits for
+        it synchronously would keep from ending; also named in a warning.  An operation of the cleanup thread itself
+        is canceled by the cleanup's next round, and a synchronous wait of it keeps the operation's own timeout
     */
     DLLLOCAL void cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
-            ExceptionSink* xsink);
+            bool handed_over, ExceptionSink* xsink);
 
     //! Returns a name of the operation of \a pinfo for a message of the module cleanup: its class and owner
     DLLLOCAL static std::string moduleCleanupOpName(const PollInfo& pinfo);

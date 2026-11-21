@@ -343,10 +343,10 @@ AsyncIoController::copy() {
       milliseconds; at the deadline, the operations that have not ended are canceled (their
       @ref Qore::AbstractPollOperation::onComplete() "onComplete()" runs with a canceled result), and a warning that
       names them is written on the standard error output; an operation that such a destructor submits after the
-      deadline is canceled at once.  The deadline is not extended by an operation whose own timeout is renewed as it
-      makes progress, such as a connection that keeps receiving data.  It bounds the waits of the cleanup for this
-      work, not a destructor that itself waits for the result of the operation that it submits: such a destructor
-      gives its operation a timeout
+      deadline is canceled when the cleanup goes on, unless the destructor waits for it.  The deadline is not extended
+      by an operation whose own timeout is renewed as it makes progress, such as a connection that keeps receiving data.
+      It bounds the waits of the cleanup for this work, not a destructor that itself waits for the result of the
+      operation that it submits: such a destructor gives its operation a timeout
     - a task that such a destructor or that work submits (@ref submitTask()) is waited for; it is not canceled
     - a timer that such a destructor or that work adds is canceled before the next module is deleted; a timer whose
       callback adds it again keeps the cleanup waiting for its callbacks until the deadline, after which the callback

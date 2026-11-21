@@ -4197,11 +4197,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // an operation that the module cleanup or its work submits (a destructor that closes a connection or flushes a
     // log at the end of the process) is waited for by the cleanup until its deadline, whatever the operation's own
     // timeout; then it is canceled (see qore_module_cleanup_drain_work()); after the deadline, it is canceled when
-    // the cleanup waits for its work (qore#7027)
-    // a synchronous caller that runs work that the cleanup handed over (see cancelAdmittedAfterModuleCleanupDeadline())
-    if (sync_release && async_io_module_cleanup_delegate(sandbox_ctx)) [[unlikely]] {
-        sync_release->module_cleanup_handed_over = qore_module_cleanup_handed_over_work();
-    }
+    // an I/O thread admits it if work that the cleanup handed over submitted it, and else when the cleanup waits
+    // for its work (qore#7027)
+    // submitted by work that the cleanup handed over, not by the cleanup itself (see
+    // cancelAdmittedAfterModuleCleanupDeadline())
+    const bool module_cleanup_handed_over = async_io_module_cleanup_delegate(sandbox_ctx)
+        && qore_module_cleanup_handed_over_work();
     if (async_io_module_cleanup_uncounted(sandbox_ctx) && !qore_module_cleanup_deadline_passed()) {
         try {
             sandbox_ctx = std::make_shared<const QoreSandboxContext>(sandbox_ctx.get(),
@@ -4514,7 +4515,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             std::memory_order_release);
         // work of the module cleanup admitted after its deadline is canceled at once (qore#7027)
         if (async_io_module_cleanup_delegate(pinfo.sandbox_ctx)) [[unlikely]] {
-            cancelAdmittedAfterModuleCleanupDeadline(t, uh, xsink);
+            cancelAdmittedAfterModuleCleanupDeadline(t, uh, module_cleanup_handed_over, xsink);
         }
     } else {
         // Worker thread: package data into SubmitOp command
@@ -4548,6 +4549,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
         cmd.submit_socket_async_io = socket_async_io_guard.active;
         cmd.submit_sandbox_ctx = std::move(sandbox_ctx);
+        cmd.submit_module_cleanup_handed_over = module_cleanup_handed_over;
         cmd.submit_sync_release = std::move(sync_release);
 
         // Compute socket hash BEFORE publishing the cmd so it is read while
@@ -9806,7 +9808,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     cmd.submit_route_thread_idx = -1;
                     // work of the module cleanup admitted after its deadline is canceled at once (qore#7027)
                     if (async_io_module_cleanup_delegate(pinfo.sandbox_ctx)) [[unlikely]] {
-                        cancelAdmittedAfterModuleCleanupDeadline(t, cmd.key, xsink);
+                        cancelAdmittedAfterModuleCleanupDeadline(t, cmd.key, cmd.submit_module_cleanup_handed_over,
+                            xsink);
                     }
                     break;
                 }
@@ -10129,18 +10132,18 @@ void AsyncIoControllerPriv::applyModuleCleanupCancel(PollInfo& pinfo) {
 }
 
 void AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
-        ExceptionSink* xsink) {
+        bool handed_over, ExceptionSink* xsink) {
     // the flag is set before the cancel round of the deadline sends its commands to the I/O threads: an operation that
     // an I/O thread admits after it processed that command, or that it admits while it does not read commands yet,
     // sees it, so no operation of the work of the cleanup escapes both
-    if (!qore_module_cleanup_deadline_passed()) {
+    // an operation of the cleanup thread itself is canceled by its next cancel round, which it runs after the
+    // destructor that submitted it: no round can miss it, and a synchronous wait for it (a destructor that logs out
+    // or resolves a name) keeps the operation's own timeout
+    if (!handed_over || !qore_module_cleanup_deadline_passed()) {
         return;
     }
     auto it = t.cache.find(key);
-    if (it == t.cache.end() || !async_io_module_cleanup_cancel_match(it->second.sandbox_ctx, true)
-            // a synchronous wait of the cleanup itself (a destructor that logs out) does not keep the cleanup from
-            // ending: it is bounded by the operation's own timeout
-            || (it->second.sync_release && !it->second.sync_release->module_cleanup_handed_over)) {
+    if (it == t.cache.end() || !async_io_module_cleanup_cancel_match(it->second.sandbox_ctx, true)) {
         return;
     }
     PollInfo pinfo_copy = retireOp(t, it, xsink);

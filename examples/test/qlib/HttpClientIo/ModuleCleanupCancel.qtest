@@ -78,6 +78,9 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         const DeadlineWarning = "warning: the module cleanup at the end of the process reached its deadline of %d ms "
             "\\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operations? that had not ended:";
 
+        const PastDeadlineWarning = "warning: the module cleanup at the end of the process is past its deadline of %d "
+            "ms \\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operation that had not ended:";
+
         const SubmittedAfterWarning = "warning: the module cleanup at the end of the process is past its deadline of "
             "%d ms \\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operation submitted after it:";
 
@@ -324,11 +327,12 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             + "ModuleCleanupCancel" + DirSep + "deadline-client.qr")), \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)started\n", out, "the modules are loaded: " + out);
-        # the destructors of the next modules run after the deadline of the first one: one deadline for all of them
+        # the destructors of the next modules run after the deadline of the first one, whose operations the cleanup
+        # cancels when it goes on, without waiting: one deadline for all of them
         foreach string label in ("deadline-a", "deadline-b", "deadline-c") {
             string warning = label == "deadline-a"
                 ? sprintf(DeadlineWarning, ModulesDeadline)
-                : sprintf(SubmittedAfterWarning, ModulesDeadline);
+                : sprintf(PastDeadlineWarning, ModulesDeadline);
             assertRegex("(^|\n)" + warning + " FollowUpOperation \\(owner 'module-cleanup-follow-up-" + label
                 + "'\\)\n", out, "the operation is named in a warning: " + out);
             assertRegex("(?s)(^|\n)" + label + " onComplete: canceled: True\n.*follow-up ops cleared\n", out,
