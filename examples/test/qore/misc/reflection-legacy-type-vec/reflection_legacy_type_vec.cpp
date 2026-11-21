@@ -4,8 +4,8 @@
 // The deprecated one-argument forms of qore_type_get_type_arguments() and qore_type_get_code_param_types(), which the
 // earlier module API 2.3 headers declared, are still exported with their original symbols and give the same types as
 // the forms that copy them to a vector of the caller (qore#6936).  The pointer that they return is stable, and when
-// the declarations that the types name are freed with their deleted Program, its elements are the tombstones that the
-// derived type itself names, never a freed type.
+// the declarations that the types name are freed with their deleted Program, the vector's elements are the tombstones
+// that the derived type itself names, never a freed type.
 //
 // usage: reflection-legacy-type-vec <ast|ir|jit|tiered>
 // prints "reflection-legacy-type-vec: ok" when every check passes, else each failure and exits with 1
@@ -280,7 +280,7 @@ int run_checks() {
             check(!pending, "no retired declaration is left in a debug build: " + std::to_string(pending) + " left");
             // Foo, whose type the vectors named before it was retired (checked above), is among them, as nothing
             // retired is left
-            check(freed_after - freed_before >= 1,"the retired declarations are freed in a debug build: "
+            check(freed_after - freed_before >= 1, "the retired declarations are freed in a debug build: "
                 + std::to_string(freed_after - freed_before) + " freed");
         }
     }

@@ -69,7 +69,8 @@
     qore_type_get_type_arguments() have forms that copy the types to a type_vec_t that the caller gives and return a
     bool (#6419), with their feature macros _QORE_HAS_CODE_PARAM_TYPES_BY_REF and _QORE_HAS_TYPE_ARGUMENTS_BY_REF;
     the earlier one-argument forms, which return a pointer to a vector that lives as long as the type (for a
-    parameterized hashdecl type: as long as the concrete hashdecl), are deprecated and still exported, so modules built with the earlier 2.3 headers load and run (#6936)
+    parameterized hashdecl type: as long as the concrete hashdecl), are deprecated and still exported, so modules
+    built with the earlier 2.3 headers load and run (#6936)
 */
 #define QORE_MODULE_API_MINOR 3
 
