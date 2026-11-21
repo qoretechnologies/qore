@@ -21787,7 +21787,7 @@ static void ut_fast_any_size_short_string(UnitTestCounters& c) {
     QoreValue empty = QoreValue::makeStringValue("");
     UT_ASSERT_EQ(c, 0, (int)any_size(empty, xsink), "the size of an empty string is 0");
     // the same characters in a node: "\xc3\xa9\xc3\xa9\xc3\xa9a" is four characters in seven bytes
-    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9a", QCS_UTF8));
+    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9" "a", QCS_UTF8));
     QoreValue node_value(*node);
     UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
     UT_ASSERT_EQ(c, 4, (int)any_size(node_value, xsink), "the size of a string node is its length");
