@@ -13991,7 +13991,9 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
         : qore_rt_user_fast_call_eligible(variant);
 }
 
-#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+// Keep the context for owning native calls in JITRuntimeTakeOver.cpp. Adding its location guard to the
+// single compilation unit makes GCC outline the location restore on ordinary interpreter calls (#6860).
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
 namespace {
 struct QoreNativeMethodContext {
     // Reflective code called by the method sees a distinct local-variable frame, just as in the ordinary binder.
