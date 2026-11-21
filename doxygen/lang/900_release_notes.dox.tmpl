@@ -2726,6 +2726,10 @@
       or with an unknown connection; these are usage errors that name the options, and the connection can also be
       given with \c qorus_app_connection, the name of the option in Qorus
       (<a href="https://github.com/qoretechnologies/qore/issues/7126">issue 7126</a>)
+    - a data provider instance or action set that callers with different restrictions share no longer keeps a type
+      that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
+      AsyncApi request providers, the record table provider and RestSchemaActions actions;
+      <a href="https://github.com/qoretechnologies/qore/issues/7104">issue 7104</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

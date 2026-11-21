@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RestSchemaTenantResponseTypes.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7104, part 2: the output type of an action of a RestSchemaActionSet that is built on first use is kept in
+    the action operation.  An action set can be shared between callers with different restrictions, and the type
+    that a sandboxed caller built as the first one was kept for every other caller, as were the fields of the
+    record type that RestSchemaTableDataProvider derives from it.  What a sandboxed caller builds is now private to
+    that caller: only the type that an unsandboxed caller builds is kept in the operation.  A sandboxed caller
+    still gets the response conversions of the action when it processes a response.  The action's overlay builds
+    a field of its own for each build of the type, so that the types and the record types that two callers built
+    differ in an object and the test can tell them apart.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%exec-class RestSchemaTenantResponseTypesTest
+
+class RestSchemaTenantResponseTypesTest inherits QUnit::Test {
+    public {
+        #! the manifest: a list of records whose "label" field has an overlay, and a response with a conversion
+        const Manifest = (
+            <RestSchemaActionInfo>{"action": "list-nodes", "method": "GET", "path": "/nodes",
+                "display_name": "List Nodes", "short_desc": "List nodes", "desc": "Lists nodes.",
+                "response_fields": {"label": <RestSchemaFieldOverlayInfo>{"display_name": "Node label"}}},
+            <RestSchemaActionInfo>{"action": "result", "method": "GET", "path": "/result",
+                "display_name": "Result", "short_desc": "Get a result", "desc": "Gets a result.",
+                "response_fields": {"created": <RestSchemaFieldOverlayInfo>{
+                    "codec": RestSchemaActionCodecs::UnixSeconds}}},
+        );
+
+        const NodeTable = <RestSchemaRecordTableInfo>{
+            "name": "nodes",
+            "display_name": "Nodes",
+            "short_desc": "the nodes",
+            "desc": "the nodes",
+            "list_action": "list-nodes",
+            "id_field": "id",
+            "paging": <RestSchemaRecordPagingInfo>{"mode": RSRP_NONE},
+        };
+    }
+
+    private {
+        Program tenant;
+    }
+
+    constructor() : Test("RestSchemaTenantResponseTypesTest", "1.0") {
+        # the sandboxed Program is a tenant: it may not read files
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        tenant = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        tenant.parse("auto sub call_method(object o, string m) { return call_object_method(o, m); }\n"
+            "auto sub process(object o, auto body) { return o.processResponse(body); }\n", "tenant");
+        tenant.setSandboxManager(sm);
+
+        addTestCase("the output type of an action", \outputTypeTest());
+        addTestCase("the response conversions of an action", \conversionTest());
+        addTestCase("the record type of a table", \recordTypeTest());
+        set_return_value(main());
+    }
+
+    #! Returns a lazy action set over a fresh schema
+    private RestSchemaActionSet lazySet() {
+        OpenApi3Schema schema = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3",
+            "info": {"title": "Nodes", "version": "1"},
+            "servers": ({"url": "https://nodes.example.com/v1"},),
+            "paths": {
+                "/nodes": {"get": {"operationId": "listNodes", "responses": {"200": {"description": "the nodes",
+                    "content": {"application/json": {"schema": {"type": "array", "items": {
+                        "type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}},
+                    }}}}}}}},
+                "/result": {"get": {"operationId": "getResult", "responses": {"200": {"description": "the result",
+                    "content": {"application/json": {"schema": {"type": "object", "required": ("created",),
+                        "properties": {"created": {"type": "integer"}}}}}}}}},
+            },
+        }), True);
+        return new RestSchemaActionSet(schema, Manifest, NOTHING, NOTHING, NOTHING,
+            <RestSchemaActionSetOptionInfo>{"lazy_response_types": True});
+    }
+
+    private auto asTenant(object o, string method) {
+        return tenant.callFunction("call_method", o, method);
+    }
+
+
+    outputTypeTest() {
+        # the tenant is the first caller
+        RestSchemaActionOperation op = lazySet().getOperationEx("list-nodes");
+        assertTrue(op.isResponseTypePending(), "the output type is built on first use");
+        AbstractDataProviderType tenant_type = asTenant(op, "getResponseType");
+        assertTrue(op.isResponseTypePending(), "the tenant's build is not kept in the operation");
+        AbstractDataProviderType trusted = op.getResponseType();
+        assertFalse(op.isResponseTypePending(), "trusted code's build is kept");
+        assertTrue(trusted !== tenant_type, "trusted code does not get the type that the tenant built");
+        assertTrue(op.getResponseType() === trusted, "the operation keeps the type of trusted code");
+        assertTrue(asTenant(op, "getResponseType") === trusted, "a tenant gets the kept type");
+
+        # a tenant's type is not kept for the next tenant
+        RestSchemaActionOperation op2 = lazySet().getOperationEx("list-nodes");
+        assertTrue(asTenant(op2, "getResponseType") !== asTenant(op2, "getResponseType"),
+            "a tenant's type is not kept for the next tenant");
+    }
+
+    conversionTest() {
+        # the conversions are those of the output type: a tenant that is the first to process a response gets them
+        RestSchemaActionOperation op = lazySet().getOperationEx("result");
+        assertTrue(op.isResponseTypePending());
+        assertEq({"created": 1970-01-01Z}, tenant.callFunction("process", op, {"created": 0}),
+            "a tenant's response is converted");
+        assertTrue(op.isResponseTypePending(), "the tenant's build is not kept in the operation");
+        assertEq({"created": 1970-01-01Z}, op.processResponse({"created": 0}), "trusted code's response is converted");
+        assertFalse(op.isResponseTypePending(), "trusted code's build is kept");
+        assertEq({"created": 1970-01-01Z}, tenant.callFunction("process", op, {"created": 0}),
+            "a tenant's response is converted after the kept build");
+    }
+
+    recordTypeTest() {
+        # the fields of the record type of a table come from the output type of its listing action
+        RestSchemaActionSet aset = lazySet();
+        RestSchemaTableDataProvider table(aset, NodeTable);
+        *hash<string, AbstractDataField> tenant_type = asTenant(table, "getRecordType");
+        assertEq(("id", "label"), keys tenant_type);
+        *hash<string, AbstractDataField> trusted = table.getRecordType();
+        assertEq(keys tenant_type, keys trusted);
+        assertTrue(trusted.label !== tenant_type.label,
+            "trusted code does not get the record type that the tenant derived");
+        assertTrue(table.getRecordType().label === trusted.label, "the table keeps the type of trusted code");
+        assertTrue(asTenant(table, "getRecordType").label === trusted.label, "a tenant gets the kept type");
+    }
+}
