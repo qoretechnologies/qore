@@ -2981,6 +2981,22 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return rv;
     }
 
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
+        std::string rv = or_nothing ? "*object<" : "object<";
+        rv += pti->getBaseClass() ? qore_aot_encode_class_ref(pti->getBaseClass()) : "";
+        rv += "<";
+        const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i) {
+                rv += ", ";
+            }
+            rv += getAOTSerializableTypePath(args[i]);
+        }
+        rv += ">>";
+        return rv;
+    }
+
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
         std::string rv = cti->isOrNothing() ? "*code<" : "code<";
         rv += cti->getReturnType() ? getAOTSerializableTypePath(cti->getReturnType()) : "nothing";
@@ -3042,8 +3058,9 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return "*list<auto!>";
     }
 
-    // Write declared union members before inspecting the first return type. Both a parameterized class (#7147)
-    // and a hashdecl (#5858) in first position would otherwise be written as the entire union.
+    // a union is written with the path of each of its member types; it is checked before the type checks below, which
+    // look at the first member of a union only (QoreTypeInfo::getTypedHash() took union<hash<H>, int> for hash<H>:
+    // qore#5858)
     if (const QoreUnionTypeInfo* union_ti = QoreTypeInfo::getUnionType(ti)) {
         // the members as declared, without duplicates (QoreUnionTypeInfo::getMemberTypes())
         type_vec_t members = union_ti->getMemberTypes();
@@ -3063,22 +3080,6 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
             rv += member_path;
         }
         rv += ">";
-        return rv;
-    }
-
-    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
-        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
-        std::string rv = or_nothing ? "*object<" : "object<";
-        rv += pti->getBaseClass() ? qore_aot_encode_class_ref(pti->getBaseClass()) : "";
-        rv += "<";
-        const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (i) {
-                rv += ", ";
-            }
-            rv += getAOTSerializableTypePath(args[i]);
-        }
-        rv += ">>";
         return rv;
     }
 

@@ -79,7 +79,7 @@ sub main() {
     show("return int", auto sub () { return ret_union(False); });
     show("param hash", auto sub () { return param_union(cast<hash<NS::NH>>({"s": "z"})); });
     show("param string", auto sub () { return param_union("w"); });
-    show("hash value type refuses", auto sub () { hash<string, union<hash<H>, int>> h = {}; h.x = Str; return h; });
+    show("hash value type refuses", auto sub () { hash<string, union<hash<H>, int>> h = {}; h.x = "s"; return h; });
     show("list element type", auto sub () {
         list<union<hash<H>, int>> l = (1, cast<hash<H>>({"a": 8}));
         return l[1].a;
