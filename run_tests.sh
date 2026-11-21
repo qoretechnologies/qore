@@ -77,6 +77,12 @@ print_usage () {
   echo "  QORE_TEST_PLATFORM_SUBSET"
   echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
+  echo "  QCC                      The qcc that the tests use (also QORE_QCC, QORE_QCC_EXECUTABLE; default: the"
+  echo "                           build's, and the one in the PATH for the tests that find none there).  On macOS,"
+  echo "                           a run with a build refuses a qore or a qcc that loads a libqore other than the"
+  echo "                           build's, or that cannot be checked (not a Mach-O program) (#7029)."
+  echo "  QORE_LIBDIR              The directory of the build's libqore, if set: qcc links the tests' programs with"
+  echo "                           the libqore there; the run refuses another directory (#7029)."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_TEST_ALLOW_BUILD_MISMATCH"
@@ -601,10 +607,33 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+if [ ! -f "$LIBQORE" ]; then
+    # a libqore that is not there cannot be compared with the one that the programs of the tests load (#7029)
+    echo "ERROR: the libqore of the run ($LIBQORE, LIBQORE_BINARY) does not exist; set LIBQORE_BINARY to the build's" \
+        "libqore. Exiting." >&2
+    exit 1
+fi
+
 export QORE_BINARY="$QORE"
 export LIBQORE_BINARY="$LIBQORE"
 
 QORE_DIR=`dirname "$QORE"`
+# QORE_LIBDIR is where qcc takes libqore from for the programs that it links, and the directory that it records in them
+# (before the libqore that it loaded; lib/QoreAOT.cpp getLibqoreDir()), and where the tests look for qcc: one that names
+# another directory (an installation) makes the tests' programs load another libqore (#7029)
+if [ -n "$QORE_LIBDIR" ] \
+        && [ "$(cd "$QORE_LIBDIR" 2>/dev/null && pwd -P)" != "$(cd "$(dirname "$LIBQORE")" && pwd -P)" ]; then
+    echo "ERROR: QORE_LIBDIR ($QORE_LIBDIR) is not the directory of the libqore of the run ($LIBQORE): the programs" \
+        "that qcc compiles in the tests would load the libqore in QORE_LIBDIR (#7029); unset it or set it to the" \
+        "build's directory. Exiting." >&2
+    exit 1
+fi
+if [ -n "$QORE_LIBDIR" ]; then
+    # absolute: qcc records the directory in the programs that it links as it is given, and a relative one would be
+    # taken from the directory that a program runs in (#7029)
+    QORE_LIBDIR=`cd "$QORE_LIBDIR" && pwd -P`
+    export QORE_LIBDIR
+fi
 QORE_BUILD_DIR="$QORE_DIR"
 if [ -n "$QORE_LIBDIR" ] && [ -d "$QORE_LIBDIR" ]; then
     QORE_BUILD_DIR="$QORE_LIBDIR"
@@ -684,8 +713,8 @@ fi
 #     object, which may be older than a change that was built, so that the change is refused.
 # - in a tree without git (an archive), .git-archive-revision must name the commit (an archive that git makes has
 #   it, see .gitattributes), and it must be the build's;
-# - the qcc that the tests use (QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the qcc next to qore, or the one in the PATH; see
-#   examples/test/TestInterpreter.qm) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
+# - the qcc programs that the tests use (tests_qccs(): QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the build's qcc, or the one
+#   in the PATH) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
 #   and the build that each qlib/*.qmod symlink points into) must come from the same build: the qore next to each of
 #   them must be the qore used or name the same commit.
 # A mismatch ends the run with a MISMATCH error naming both commits and the first paths that differ, unless
@@ -743,6 +772,90 @@ tree_git() {
 # Prints the physical path of the given directory, or nothing
 physical_dir() {
     (cd "$1" 2>/dev/null && pwd -P)
+}
+
+# Prints the physical path of the given file (its directories and its own symbolic links resolved), or nothing
+physical_file() {
+    (
+        file_name=$1
+        while :; do
+            cd "`dirname "$file_name"`" 2>/dev/null || exit 1
+            file_name=`basename "$file_name"`
+            if [ ! -L "$file_name" ]; then
+                break
+            fi
+            file_name=`readlink "$file_name"`
+        done
+        echo "`pwd -P`/$file_name"
+    )
+}
+
+# Prints the qcc programs that the tests use, one per line: each one that QCC, QORE_QCC or QORE_QCC_EXECUTABLE names
+# (tests read different ones of them), the build's qcc in the directories that the tests look in (QORE_LIBDIR, which
+# must be the directory of the build's libqore, and next to qore: examples/test/TestInterpreter.qm and the tests that
+# look for qcc themselves), and the one in the PATH, which a test that finds none in the variable that it reads and in
+# the directory that it looks in takes
+tests_qccs() {
+    for qcc_candidate in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE"; do
+        if [ -n "$qcc_candidate" ]; then
+            case "$qcc_candidate" in
+                */*) echo "$qcc_candidate" ;;
+                *) command -v "$qcc_candidate" 2>/dev/null ;;
+            esac
+        fi
+    done
+    for qcc_dir in "${QORE_LIBDIR:-$QORE_DIR}" "$QORE_DIR"; do
+        if [ -f "$qcc_dir/qcc" ]; then
+            echo "$qcc_dir/qcc"
+        fi
+    done
+    if [ ! -f "${QORE_LIBDIR:-$QORE_DIR}/qcc" ] || [ ! -f "$QORE_DIR/qcc" ]; then
+        command -v qcc 2>/dev/null
+    fi
+}
+
+# Returns 0 if the given file is a Mach-O program (thin or universal)
+is_macho() {
+    case "`od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n'`" in
+        cffaedfe|cefaedfe|feedfacf|feedface|cafebabe|bebafeca) return 0 ;;
+    esac
+    return 1
+}
+
+# Prints the paths, symbolic links resolved, of the libqore images that the loader reports for the given program
+# (macOS), run with --version within BUILD_CHECK_WAIT seconds.  env sets DYLD_PRINT_LIBRARIES for the program itself,
+# after the timeout command, which macOS may protect (/usr/bin/timeout), so that it is not removed
+loaded_libqore() {
+    run_build_check env DYLD_PRINT_LIBRARIES=1 "$1" --version 2>&1 >/dev/null </dev/null \
+        | sed -n 's/^dyld[^ ]* \(<[^>]*> \)\{0,1\}\(\/.*\/libqore\.[^/]*dylib\)$/\2/p' \
+        | while IFS= read -r loaded_lib; do
+            physical_file "$loaded_lib" || echo "$loaded_lib"
+        done
+}
+
+# Ends the run unless the given program (a description, then the program) is a Mach-O program that loads the build's
+# libqore (EXPECTED_LIBQORE) and no other (#7029)
+check_loaded_libqore() {
+    if [ ! -f "$2" ] || ! is_macho "$2"; then
+        echo "ERROR: $1 is not a Mach-O program: the libqore that it loads cannot be checked; the tests could run on" \
+            "another libqore (#7029). Exiting." >&2
+        exit 1
+    fi
+    check_loaded=`loaded_libqore "$2"`
+    if [ -z "$check_loaded" ]; then
+        echo "ERROR: $1 reports no libqore (DYLD_PRINT_LIBRARIES): the libqore that it loads cannot be checked; the" \
+            "tests could run on another libqore (#7029). Exiting." >&2
+        exit 1
+    fi
+    while IFS= read -r check_lib; do
+        if [ "$check_lib" != "$EXPECTED_LIBQORE" ]; then
+            echo "ERROR: $1 loads $check_lib, not the libqore of the run ($LIBQORE, $EXPECTED_LIBQORE); the tests" \
+                "would run on another libqore (#7029).$3 Exiting." >&2
+            exit 1
+        fi
+    done <<CHECK_LOADED_EOF
+$check_loaded
+CHECK_LOADED_EOF
 }
 
 BUILD_MISMATCH=""
@@ -1219,23 +1332,14 @@ check_build_parts() {
     if [ -z "$BUILD_HASH" ]; then
         return
     fi
-    test_qcc=""
-    for candidate in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE"; do
-        if [ -n "$candidate" ]; then
-            test_qcc=$candidate
-            break
-        fi
-    done
-    if [ -z "$test_qcc" ]; then
-        if [ -f "$QORE_DIR/qcc" ]; then
-            test_qcc=$QORE_DIR/qcc
-        else
-            test_qcc=`command -v qcc 2>/dev/null`
-        fi
+    tests_qcc_list=`tests_qccs`
+    if [ -n "$tests_qcc_list" ]; then
+        while IFS= read -r test_qcc; do
+            check_companion_build "the qcc that the tests use ($test_qcc)" "`dirname "$test_qcc"`"
+        done <<TESTS_QCC_EOF
+$tests_qcc_list
+TESTS_QCC_EOF
     fi
-    case "$test_qcc" in
-        */*) check_companion_build "the qcc that the tests use ($test_qcc)" "`dirname "$test_qcc"`" ;;
-    esac
     if [ -n "$BUILD_QMOD_DIR" ]; then
         check_companion_build "the .qmod files in $BUILD_QMOD_DIR" "`dirname "$BUILD_QMOD_DIR"`"
     fi
@@ -1411,6 +1515,36 @@ for build_check_signal in HUP INT TERM; do
 done
 check_build
 trap - HUP INT TERM
+
+# The children of the tests run the interpreter of the run (QORE_BINARY): QORE_BIN, which TestInterpreter.qm takes
+# first, is for a test run without this script, and one left in the environment would run another qore (#7029)
+unset QORE_BIN
+
+# On macOS the dynamic loader ignores LD_LIBRARY_PATH: a program finds libqore through the directories recorded in it
+# (LC_RPATH), and a program that qcc compiles records the directory of the libqore that qcc loaded (or QORE_LIBDIR,
+# checked above).  DYLD_LIBRARY_PATH would not help, as macOS removes it from the environment of a protected program
+# (/bin/sh, /usr/bin/env, perl), which its children then do not get.  So the qore and the qcc that the tests use must
+# load the build's libqore by themselves: one from a build directory copied from another tree loads the other tree's,
+# and a qcc from another build or installation (QCC in the environment, or the one in the PATH that the tests take
+# when the build has none) compiles programs that load its own.  A run with a build refuses them (#7029), and a qore or
+# qcc that the loader cannot be asked about (a script, or a program that does not report the libqore it loads).  A
+# libqore that is not a Mach-O library (it exists, see above) is a stand-in that no program can load (the runner's
+# checkers), and is not checked.
+if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ] && is_macho "$LIBQORE"; then
+    EXPECTED_LIBQORE=`physical_file "$LIBQORE" || echo "$LIBQORE"`
+    check_loaded_libqore "the qore of the run ($QORE)" "$QORE"
+    tests_qcc_hint=" Build the build's qcc (cmake --build <build> --target qcc), or name a qcc that loads the"\
+" build's libqore in QCC, QORE_QCC and QORE_QCC_EXECUTABLE and put it first in the PATH."
+    tests_qcc_list=`tests_qccs`
+    if [ -n "$tests_qcc_list" ]; then
+        while IFS= read -r check_qcc; do
+            check_loaded_libqore "the qcc that the tests use ($check_qcc)" "$check_qcc" "$tests_qcc_hint"
+        done <<TESTS_QCC_EOF
+$tests_qcc_list
+TESTS_QCC_EOF
+    fi
+    unset tests_qcc_list tests_qcc_hint check_qcc
+fi
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
