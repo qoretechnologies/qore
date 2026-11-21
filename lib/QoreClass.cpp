@@ -11865,7 +11865,7 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 
 // FIXME: eliminate this method; move injected fields to local, always copy classes with priv by reference
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
-    QoreMemberInfoBaseAccess(old, old.access),
+    QoreMemberInfoBaseAccess(old, old.access, !old.pending_init_next),
     accessors(old.accessors),
     // the new class owner is in the initial position for a member that it declares; a member that it inherits keeps
     // the class that declares it, as its inheritance list and its context map do, or an object of a subclass of the
@@ -11875,10 +11875,12 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
+    deferInitializerCopy(old);
 }
 
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls, ClassAccess cls_access) :
-    QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access)),
+    QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access),
+        !old.pending_init_next),
     accessors(old.accessors),
     decl_cls(old.decl_cls),
     cls_list(old.cls_list),
@@ -11909,6 +11911,42 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
             //    member_info_list, privpub(old.access));
         }
     }
+    deferInitializerCopy(old);
+}
+
+void QoreMemberInfo::deferInitializerCopy(const QoreMemberInfo& old) {
+    if (old.pending_init_next) {
+        pending_init_next = old.pending_init_next;
+        old.pending_init_next = this;
+    }
+}
+
+QoreMemberInfo::~QoreMemberInfo() {
+    if (pending_init_next) {
+        QoreMemberInfo* prev = pending_init_next;
+        while (prev->pending_init_next != this) {
+            prev = prev->pending_init_next;
+        }
+        prev->pending_init_next = pending_init_next;
+    }
+    delete cls_context_map;
+    delete member_info_list;
+}
+
+void QoreMemberInfo::finishInitializer(bool resolved) {
+    while (pending_init_next != this) {
+        QoreMemberInfo* copy = pending_init_next;
+        pending_init_next = copy->pending_init_next;
+        copy->pending_init_next = nullptr;
+        assert(copy->exp.isNothing() && !copy->parseTypeInfo);
+        copy->typeInfo = typeInfo;
+        copy->initializer_filter = initializer_filter;
+        copy->initializer_type_info = initializer_type_info;
+        if (resolved) {
+            copy->exp = exp.refSelf();
+        }
+    }
+    pending_init_next = nullptr;
 }
 
 void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi) {
@@ -12204,6 +12242,11 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
         return 0;
     }
     init = true;
+    // An initializer can reenter inheritance resolution while its expression or type is being replaced.
+    // Only the declaring member owns the parse node. Publish its resolved state to surviving copies on exit.
+    pending_init_next = this;
+    bool resolved = false;
+    ON_BLOCK_EXIT([&] { finishInitializer(resolved); });
 
     int err = 0;
     if (!typeInfo) {
@@ -12274,6 +12317,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
             }
         }
     }
+    resolved = !err;
     return err;
 }
 
