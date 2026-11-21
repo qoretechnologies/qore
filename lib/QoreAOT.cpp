@@ -38249,7 +38249,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_COMPLEX_LIST;
-        id.ref1 = getSlotTypePath(clc->getCastTypeInfo());
+        const QoreTypeInfo* ti = clc->getCastTypeInfo();
+        id.ref1 = ti ? getSlotTypePath(ti) : "list";
         id.flags = clc->isOrNothing() ? 1 : 0;
         return id;
     }
@@ -38264,9 +38265,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (cast_hd || hdc->isDynamicHashDeclCast()) {
+        if (cast_hd || hdc->getCastTypeInfo() == hashTypeInfo || hdc->isDynamicHashDeclCast()) {
             id.kind = AOTExprKind::CAST_HASHDECL;
-            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd) : hdc->getDynamicHashDeclName();
+            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd)
+                : (hdc->isDynamicHashDeclCast() ? hdc->getDynamicHashDeclName() : "hash");
             id.flags = hdc->isOrNothing() ? 1 : 0;
             return id;
         }

@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - compiles and runs the cast suite as standalone executables
+# test-platform: macos - qcc code generation and linking for cast lvalue paths
+%modern
+%no-child-restrictions
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class AOTLValueCastTest
+
+class AOTLValueCastTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AOT lvalue casts", "1.0", \ARGV) {
+        addTestCase("cast suite compiled at -O0", sub () { checkCompiled(0); });
+        addTestCase("cast suite compiled at -O3", sub () { checkCompiled(3); });
+        set_return_value(main());
+    }
+
+    private checkCompiled(int opt) {
+        string qcc = ENV.QCC_BIN ?? dirname(TestInterpreter::qore_interpreter()) + "/qcc";
+        if (!is_file(qcc)) {
+            testSkip("qcc is unavailable");
+        }
+        TmpDir tmp("qore-aot-lvalue-cast-");
+        string binary = tmp.path + "/cast";
+        string source = get_script_dir() + "/../qore/misc/cast.qtest";
+        auto build = ExecModeHarness::run_command(sprintf("%s -O%d -o %s %s", quote(qcc), opt, quote(binary),
+            quote(source)));
+        assertEq(0, build.rc, build.out);
+        auto run = ExecModeHarness::run_command(quote(binary) + " -b");
+        assertEq(0, run.rc, run.out);
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\"'\"'") + "'";
+    }
+}
