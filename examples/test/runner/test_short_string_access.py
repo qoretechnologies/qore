@@ -11,13 +11,19 @@ This test keeps the raw pattern out of the sources of libqore (lib/ and include/
 QoreStringDataHelper (the bytes, size and encoding of either representation, with no allocation), or with
 QoreStringValueHelper or QoreStringNodeValueHelper when a QoreString or QoreStringNode is needed (they make a node of
 an inline string).  The test flags every read as a string node: QoreValue::get<QoreStringNode>() (also split across
-lines) and every static_cast, reinterpret_cast or C-style cast to a QoreStringNode pointer, of any expression, also
-through a typedef or using alias of the type found in the sources.  A read is accepted only when:
-- the code before it in the same function excludes an inline string for the same value, or for the value that it is
-  read from (QoreValue::isShortString(), hasNode(), isPlainPointer(), isPointer(), or ensureUnique()/ensure_unique(),
-  which make a node of it): a guard of another value does not count;
+lines) and every static_cast, reinterpret_cast, dynamic_cast or C-style cast to a QoreStringNode pointer or reference,
+of any expression, also through a typedef or using alias of the type found in the sources.  A read is accepted only
+when:
+- a guard before it in the same function excludes an inline string for the same value (or for the value of an
+  LValueHelper, getValue(), or the node of a value, getInternalNode(), or for the pointer that the read dereferences):
+  a guard of another value, or of a value that the read only derives another value from, does not count.  A test
+  (QoreValue::isShortString(), hasNode(), isPlainPointer(), isPointer()) counts only when it decides that the read
+  runs: the read is in the branch of an if, while or ?: that it excludes the inline string from, or after an && or ||
+  of it, or after an if on it whose branch leaves (return, continue, break, throw, goto) for the inline string, or
+  after an assert() that the value is not one; a call that makes a node of it (ensureUnique()/ensure_unique()) counts
+  for the reads that follow it in its block;
 - a comment just before it says why it is safe ("// note: safe; <reason>"), as for a cast of a node pointer that is
-  not read from a value; or
+  not read from a value; a note covers the next read only; or
 - the allowlist (short-string-access-allowlist.txt) names it with a reason.
 
 The sources of the binary modules in this repository (modules/: their C++ and qpp sources, and the C++ helpers of
@@ -44,7 +50,7 @@ SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".h", ".hh", ".hpp", ".qpp", ".ypp", ".l
 NODE_TYPES = ("QoreStringNode",)
 NODE_POINTER_TYPES = ()
 #! a guard call on a value: the value is not an inline short string after it, or is a node
-GUARD_CALL = re.compile(r"(?:\.|->)\s*(?:isShortString|hasNode|isPlainPointer|isPointer|ensureUnique)\s*\(")
+GUARD_CALL = re.compile(r"(?:\.|->)\s*(?P<name>isShortString|hasNode|isPlainPointer|isPointer|ensureUnique)\s*\(")
 #! ensure_unique(<value>, ...): makes a node of an inline short string
 ENSURE_UNIQUE = re.compile(r"\bensure_unique\s*\(\s*([^,()]+?)\s*[,)]")
 #! the comment that says why a read is safe
@@ -72,14 +78,14 @@ def find_aliases(code):
 
 def access_patterns(types, pointers):
     """Returns the regular expressions of a read of a value as a string node, which can span lines: a get<>() of the
-    node type (group "get"), a static_cast or reinterpret_cast to a node pointer (group "cast") and a C-style cast to
-    one (group "ccast")"""
+    node type (group "get"), a static_cast, reinterpret_cast or dynamic_cast to a node pointer or reference (group
+    "cast") and a C-style cast to one (group "ccast")"""
     t = "|".join(re.escape(x) for x in types)
     pt = "|".join(re.escape(x) for x in pointers)
-    node_ptr = r"(?:const\s+)?(?:%s)\s*\*" % t + (r"|(?:const\s+)?(?:%s)" % pt if pt else "")
+    node_ptr = r"(?:const\s+)?(?:%s)\s*[*&]" % t + (r"|(?:const\s+)?(?:%s)" % pt if pt else "")
     node_arg = r"(?:const\s+)?(?:%s)\s*\*?" % t + (r"|(?:const\s+)?(?:%s)" % pt if pt else "")
     return re.compile(r"(?P<get>(?:\.|->)\s*get\s*<\s*(?:%s)\s*>\s*\(\s*\))" % node_arg
-        + r"|(?P<cast>\b(?:static|reinterpret)_cast\s*<\s*(?:%s)\s*>\s*\()" % node_ptr
+        + r"|(?P<cast>\b(?:static|reinterpret|dynamic)_cast\s*<\s*(?:%s)\s*>\s*\()" % node_ptr
         + r"|(?P<ccast>\(\s*(?:%s)\s*\)\s*(?=[\w(*&]))" % node_ptr)
 
 
@@ -99,8 +105,9 @@ def skip_back_balanced(code, i):
     return 0
 
 
-def receiver_before(code, end):
-    """Returns the expression that ends just before code[end] (the receiver of a member call), without white space"""
+def receiver_span(code, end):
+    """Returns the start of the expression that ends just before code[end] (the receiver of a member call), and the
+    expression without white space"""
     i = end - 1
     start = end
     while i >= 0:
@@ -128,22 +135,17 @@ def receiver_before(code, end):
                 continue
             break
         break
-    return "".join(code[start:end].split())
+    return start, "".join(code[start:end].split())
+
+
+def receiver_before(code, end):
+    """Returns the expression that ends just before code[end] (the receiver of a member call), without white space"""
+    return receiver_span(code, end)[1]
 
 
 def argument_after(code, i):
     """Returns the expression in the parentheses that open at code[i], without white space"""
-    depth = 0
-    j = i
-    while j < len(code):
-        if code[j] == "(":
-            depth += 1
-        elif code[j] == ")":
-            depth -= 1
-            if not depth:
-                break
-        j += 1
-    return "".join(code[i + 1:j].split())
+    return "".join(code[i + 1:matching_close(code, i)].split())
 
 
 def operand_after(code, i):
@@ -154,18 +156,7 @@ def operand_after(code, i):
     start = j
     while j < len(code):
         if code[j] in "([":
-            depth = 0
-            close = ")" if code[j] == "(" else "]"
-            opener = code[j]
-            while j < len(code):
-                if code[j] == opener:
-                    depth += 1
-                elif code[j] == close:
-                    depth -= 1
-                    if not depth:
-                        break
-                j += 1
-            j += 1
+            j = matching_close(code, j) + 1
             continue
         if code[j].isalnum() or code[j] in "_*&":
             j += 1
@@ -177,13 +168,272 @@ def operand_after(code, i):
     return "".join(code[start:j].split())
 
 
+#! the accessors that give the value that a guard of their receiver covers: the value of an lvalue (LValueHelper
+#! ensureUnique() covers getValue()) and the node of a value (hasNode() covers getInternalNode())
+EQUIVALENT_ACCESSORS = (".getValue()", "->getValue()", ".getInternalNode()", "->getInternalNode()")
+
+
 def same_value(subject, guarded):
-    """True if the guard's value is the subject, or the value that the subject is read from"""
+    """True if the guard's value is the subject, or the subject is the guard's value through one of the
+    EQUIVALENT_ACCESSORS, or a dereference of the guarded pointer"""
     if not guarded:
         return False
-    if subject == guarded:
-        return True
-    return any(subject.startswith(guarded + sep) for sep in (".", "->", "["))
+    if subject.startswith("*"):
+        subject = subject[1:]
+    return subject == guarded or any(subject == guarded + accessor for accessor in EQUIVALENT_ACCESSORS)
+
+
+def matching_close(code, i):
+    """Returns the index of the bracket that closes the one that opens at code[i], or len(code)"""
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    stack = []
+    j = i
+    while j < len(code):
+        c = code[j]
+        if c in pairs:
+            stack.append(pairs[c])
+        elif c in ")]}":
+            if stack:
+                stack.pop()
+            if not stack:
+                return j
+        j += 1
+    return len(code)
+
+
+def enclosing_open(code, pos):
+    """Returns the index of the innermost bracket that encloses code[pos], or -1"""
+    depth = 0
+    i = pos - 1
+    while i >= 0:
+        c = code[i]
+        if c in ")]}":
+            depth += 1
+        elif c in "([{":
+            if not depth:
+                return i
+            depth -= 1
+        i -= 1
+    return -1
+
+
+def word_before(code, i):
+    """Returns the word that ends just before code[i], skipping white space"""
+    j = i - 1
+    while j >= 0 and code[j].isspace():
+        j -= 1
+    end = j + 1
+    while j >= 0 and (code[j].isalnum() or code[j] == "_"):
+        j -= 1
+    return code[j + 1:end]
+
+
+def word_at(code, i):
+    """Returns the word that starts at code[i] after white space, and its end"""
+    while i < len(code) and code[i].isspace():
+        i += 1
+    j = i
+    while j < len(code) and (code[j].isalnum() or code[j] == "_"):
+        j += 1
+    return code[i:j], j
+
+
+def statement_end(code, i):
+    """Returns the index just after the statement that starts at code[i]"""
+    while i < len(code) and code[i].isspace():
+        i += 1
+    if i >= len(code):
+        return i
+    if code[i] == "{":
+        return matching_close(code, i) + 1
+    word, j = word_at(code, i)
+    if word in ("if", "while", "for", "switch"):
+        k = j
+        while k < len(code) and code[k].isspace():
+            k += 1
+        end = statement_end(code, matching_close(code, k) + 1)
+        if word == "if":
+            next_word, after = word_at(code, end)
+            if next_word == "else":
+                end = statement_end(code, after)
+        return end
+    j = i
+    while j < len(code) and code[j] not in ";}":
+        j = matching_close(code, j) + 1 if code[j] in "([{" else j + 1
+    return j + 1 if j < len(code) and code[j] == ";" else j
+
+
+def top_level_ops(code, start, end):
+    """Returns the operators &&, ||, ? and : at the top level of code[start:end], as (index, op)"""
+    ops = []
+    i = start
+    while i < end:
+        c = code[i]
+        if c in "([{":
+            i = matching_close(code, i) + 1
+            continue
+        if code.startswith("&&", i) or code.startswith("||", i):
+            ops.append((i, code[i:i + 2]))
+            i += 2
+            continue
+        if c == "?":
+            ops.append((i, "?"))
+        elif c == ":" and not code.startswith("::", i) and (i == 0 or code[i - 1] != ":"):
+            ops.append((i, ":"))
+        i += 1
+    return ops
+
+
+def expression_region(code, pos):
+    """Returns the region of the expression that contains code[pos]: the inside of the parentheses or brackets that
+    enclose it, or its statement"""
+    open_ = enclosing_open(code, pos)
+    if open_ >= 0 and code[open_] in "([":
+        return open_ + 1, matching_close(code, open_), open_
+    start = pos
+    while start > 0 and code[start - 1] not in ";{}":
+        start -= 1
+        if code[start] in ")]":
+            start = skip_back_balanced(code, start)
+    end = pos
+    while end < len(code) and code[end] not in ";}":
+        end = matching_close(code, end) + 1 if code[end] in "([{" else end + 1
+    return start, end, -1
+
+
+EXIT = re.compile(r"\s*(?:return|continue|break|throw|goto)\b")
+
+
+def ends_with_exit(code, start, end):
+    """True if the statement in code[start:end] (a block or a single statement) leaves the code that follows it"""
+    i = start
+    while i < end and code[i].isspace():
+        i += 1
+    if i < end and code[i] == "{":
+        stmts = []
+        j = i + 1
+        close = matching_close(code, i)
+        while j < close:
+            while j < close and code[j].isspace():
+                j += 1
+            if j >= close:
+                break
+            k = statement_end(code, j)
+            stmts.append(j)
+            j = k
+        return bool(stmts) and bool(EXIT.match(code, stmts[-1]))
+    return bool(EXIT.match(code, i))
+
+
+def guard_covers(code, guard_start, guard_end, means_short, read):
+    """True if the guard term code[guard_start:guard_end], whose truth means that the value is an inline short string
+    if means_short (and that it is not one otherwise), excludes an inline string at the read at code[read]: the read
+    is in the branch where the term excludes it, or after the code leaves for the inline string"""
+    start, end, open_ = expression_region(code, guard_start)
+    ops = top_level_ops(code, start, end)
+    before = [op for i, op in ops if i < guard_start]
+    if start <= read < end:
+        # the read is in the same expression: a ternary or a chain of && or ||
+        between = [op for i, op in ops if guard_end <= i < read]
+        question = [i for i, op in ops if op == "?" and i >= guard_end]
+        if question and "?" not in before and ":" not in before:
+            q = question[0]
+            cond = [op for i, op in ops if i < q]
+            nested = 0
+            colon = end
+            for i, op in ops:
+                if i <= q:
+                    continue
+                if op == "?":
+                    nested += 1
+                elif op == ":":
+                    if not nested:
+                        colon = i
+                        break
+                    nested -= 1
+            if q < read < colon:
+                return not means_short and "||" not in cond
+            if read > colon:
+                return means_short and "&&" not in cond
+        if between and all(op == "&&" for op in between):
+            return not means_short
+        if between and all(op == "||" for op in between) and (not before or before[-1] == "||"):
+            return means_short
+        return False
+    if open_ >= 0 and code[open_] == "(" and word_before(code, open_) == "assert":
+        # an assertion that the value is not an inline string: the reads after it in its block
+        if not means_short and "||" not in [op for i, op in ops] and read > end:
+            block = enclosing_open(code, open_)
+            return block < 0 or read < matching_close(code, block)
+        return False
+    if open_ < 0 or code[open_] != "(" or word_before(code, open_) not in ("if", "while"):
+        return False
+    # the guard is a term of the condition of an if or a while
+    cond = [op for i, op in ops]
+    if "?" in cond or ":" in cond:
+        return False
+    body_start = end + 1
+    body_end = statement_end(code, body_start)
+    if body_start <= read < body_end:
+        return not means_short and "||" not in cond
+    if word_before(code, open_) != "if":
+        return False
+    word, after = word_at(code, body_end)
+    if word == "else":
+        else_end = statement_end(code, after)
+        if after <= read < else_end:
+            return means_short and "&&" not in cond
+    else:
+        else_end = body_end
+    # the code leaves for the inline string before the read, in the block of the if
+    if means_short and "&&" not in cond and read >= else_end and ends_with_exit(code, body_start, body_end):
+        block = enclosing_open(code, open_ - 1)
+        return block < 0 or read < matching_close(code, block)
+    return False
+
+
+def ensure_covers(code, call, read):
+    """True if the call at code[call] that makes a node of an inline string runs before the read at code[read]: the
+    read is in the block of the call"""
+    block = call
+    while True:
+        block = enclosing_open(code, block)
+        if block < 0 or code[block] == "{":
+            break
+    return block < 0 or read < matching_close(code, block)
+
+
+def is_guarded(code, scope_start, read, subject):
+    """True if a guard in code[scope_start:read] excludes an inline string at the read of the subject at code[read]"""
+    before = code[scope_start:read]
+    for m in GUARD_CALL.finditer(before):
+        r_start, guarded = receiver_span(before, m.start())
+        if not same_value(subject, guarded):
+            continue
+        call_open = scope_start + m.end() - 1
+        call_close = matching_close(code, call_open)
+        if m.group("name") == "ensureUnique":
+            if ensure_covers(code, scope_start + m.start(), read):
+                return True
+            continue
+        # the term, with the negations before it
+        term_start = scope_start + r_start
+        negations = 0
+        i = term_start - 1
+        while i >= 0 and (code[i].isspace() or code[i] == "!"):
+            if code[i] == "!":
+                negations += 1
+            i -= 1
+        if i >= 0 and code[i] == "!":
+            continue
+        term_start = i + 1
+        means_short = (m.group("name") == "isShortString") != bool(negations % 2)
+        if guard_covers(code, term_start, call_close + 1, means_short, read):
+            return True
+    for m in ENSURE_UNIQUE.finditer(before):
+        if same_value(subject, "".join(m.group(1).split())) and ensure_covers(code, scope_start + m.start(), read):
+            return True
+    return False
 
 
 def find_unguarded(text, types=NODE_TYPES, pointers=NODE_POINTER_TYPES):
@@ -196,12 +446,21 @@ def find_unguarded(text, types=NODE_TYPES, pointers=NODE_POINTER_TYPES):
     line_starts = [0]
     for line in code_lines[:-1]:
         line_starts.append(line_starts[-1] + len(line) + 1)
-    found = []
-    reported = set()
+    reads = []
     for match in pattern.finditer(code):
         # the line of the read: of "get" or of the cast
         pos = match.start() if not match.group("get") else match.start() + match.group("get").index("get")
-        index = code.count("\n", 0, pos)
+        reads.append((match, code.count("\n", 0, pos)))
+    # a note covers the next read only, if it is within NOTE_WINDOW lines of it
+    covered = set()
+    notes = [n for n, line in enumerate(text_lines) if NOTE.search(line)]
+    for note in notes:
+        following = [k for k, (_, index) in enumerate(reads) if index >= note]
+        if following and reads[following[0]][1] - note <= NOTE_WINDOW:
+            covered.add(following[0])
+    found = []
+    reported = set()
+    for k, (match, index) in enumerate(reads):
         if match.group("get"):
             subject = receiver_before(code, match.start())
         elif match.group("cast"):
@@ -212,12 +471,9 @@ def find_unguarded(text, types=NODE_TYPES, pointers=NODE_POINTER_TYPES):
         first = index
         while first > 0 and index - first < GUARD_WINDOW and not BOUNDARY.match(code_lines[first - 1]):
             first -= 1
-        before = code[line_starts[first]:match.start()]
-        guarded = any(same_value(subject, receiver_before(before, m.start())) for m in GUARD_CALL.finditer(before)) \
-            or any(same_value(subject, "".join(m.group(1).split())) for m in ENSURE_UNIQUE.finditer(before))
-        if guarded:
+        if is_guarded(code, line_starts[first], match.start(), subject):
             continue
-        if any(NOTE.search(text_lines[prev]) for prev in range(max(0, index - NOTE_WINDOW), index + 1)):
+        if k in covered:
             continue
         if index in reported:
             continue
@@ -468,6 +724,158 @@ class ShortStringAccessTest(unittest.TestCase):
             "    return const_cast<QoreStringNode*>(s);\n"
             "}\n")
         self.assertEqual([], find_unguarded(text))
+
+    def test_a_guard_must_decide_the_branch_of_the_read(self):
+        # a guard counts only when the read is in the branch where it excludes an inline string, or after the code
+        # leaves for one
+        text = ("size_t f1(const QoreValue& v) {\n"
+            "    bool s = v.isShortString();\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f2(const QoreValue& v) {\n"
+            "    if (v.isShortString()) {\n"
+            "        log();\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f3(const QoreValue& v) {\n"
+            "    if (v.hasNode()) {\n"
+            "        log();\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f4(const QoreValue& v, bool x) {\n"
+            "    if (v.isShortString() && x) {\n"
+            "        return 0;\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f5(const QoreValue& v, bool x) {\n"
+            "    if (v.hasNode() || x) {\n"
+            "        return v.get<const QoreStringNode>()->size();\n"
+            "    }\n"
+            "    return 0;\n"
+            "}\n"
+            "size_t f6(const QoreValue& v) {\n"
+            "    return v.isShortString() ? v.get<const QoreStringNode>()->size() : 0;\n"
+            "}\n"
+            "size_t f7(const QoreValue& v) {\n"
+            "    if (v.hasNode()) {\n"
+            "        return 0;\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f8(const QoreValue& v) {\n"
+            "    {\n"
+            "        if (v.isShortString()) {\n"
+            "            return 0;\n"
+            "        }\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f9(LValueHelper& lvh, bool x) {\n"
+            "    if (x) {\n"
+            "        lvh.ensureUnique();\n"
+            "    }\n"
+            "    return lvh.getValue().get<QoreStringNode>()->size();\n"
+            "}\n")
+        self.assertEqual([3, 9, 15, 21, 25, 30, 36, 44, 50], [line for line, _ in find_unguarded(text)])
+
+    def test_guards_that_decide_the_branch_are_accepted(self):
+        text = ("size_t f1(const QoreValue& v) {\n"
+            "    if (v.isShortString()) {\n"
+            "        return 0;\n"
+            "    } else {\n"
+            "        return v.get<const QoreStringNode>()->size();\n"
+            "    }\n"
+            "}\n"
+            "size_t f2(const QoreValue& v) {\n"
+            "    if (!v.hasNode())\n"
+            "        return 0;\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f3(const QoreValue& v, bool x) {\n"
+            "    if (v.isShortString() || x) {\n"
+            "        log();\n"
+            "        throw 1;\n"
+            "    }\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "bool f4(const QoreValue& v) {\n"
+            "    return v.hasNode() && v.get<const QoreStringNode>()->empty();\n"
+            "}\n"
+            "bool f5(const QoreValue& v) {\n"
+            "    return v.isShortString() || v.get<const QoreStringNode>()->empty();\n"
+            "}\n"
+            "size_t f6(const QoreValue& v) {\n"
+            "    return v.isShortString() ? 0 : v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "void f7(const QoreListNode* l) {\n"
+            "    for (size_t i = 0; i < l->size(); ++i) {\n"
+            "        QoreValue v = l->retrieveEntry(i);\n"
+            "        if (v.isShortString()) {\n"
+            "            continue;\n"
+            "        }\n"
+            "        use(v.get<const QoreStringNode>());\n"
+            "    }\n"
+            "}\n"
+            "size_t f8(const QoreValue& v) {\n"
+            "    assert(v.hasNode());\n"
+            "    return v.get<const QoreStringNode>()->size();\n"
+            "}\n"
+            "size_t f9(const QoreValue& v) {\n"
+            "    while (v.isPlainPointer()) {\n"
+            "        return v.get<const QoreStringNode>()->size();\n"
+            "    }\n"
+            "    return 0;\n"
+            "}\n")
+        self.assertEqual([], find_unguarded(text))
+
+    def test_reference_and_dynamic_casts_are_found(self):
+        text = ("size_t f(const AbstractQoreNode* n) {\n"
+            "    return static_cast<const QoreStringNode&>(*n).size();\n"
+            "}\n"
+            "size_t g(AbstractQoreNode* n) {\n"
+            "    return static_cast<QoreStringNode &>(*n).size();\n"
+            "}\n"
+            "size_t h(const AbstractQoreNode* n) {\n"
+            "    return ((const QoreStringNode&)*n).size();\n"
+            "}\n"
+            "size_t k(const QoreValue& v) {\n"
+            "    auto* s = dynamic_cast<const QoreStringNode*>(v.getInternalNode());\n"
+            "    return s ? s->size() : 0;\n"
+            "}\n"
+            "size_t m(const AbstractQoreNode* n) {\n"
+            "    return dynamic_cast<const QoreStringNode&>(*n).size();\n"
+            "}\n"
+            "size_t p(const QoreValue& v) {\n"
+            "    if (v.hasNode()) {\n"
+            "        return static_cast<const QoreStringNode&>(*v.getInternalNode()).size();\n"
+            "    }\n"
+            "    return 0;\n"
+            "}\n")
+        self.assertEqual([2, 5, 8, 11, 15], [line for line, _ in find_unguarded(text)])
+
+    def test_a_guard_covers_its_own_value_only(self):
+        # a guard of a value does not cover a value derived from it, and a note covers the next read only
+        text = ("size_t f(const QoreValue& h) {\n"
+            "    if (h.isPointer()) {\n"
+            "        return h.getX().get<QoreStringNode>()->size();\n"
+            "    }\n"
+            "    return 0;\n"
+            "}\n"
+            "size_t g(const QoreValue* h) {\n"
+            "    if (h->hasNode()) {\n"
+            "        return h->get<const QoreHashNode>()->getKeyValue(\"a\").get<QoreStringNode>()->size();\n"
+            "    }\n"
+            "    return 0;\n"
+            "}\n"
+            "size_t k(const AbstractQoreNode* a, const AbstractQoreNode* b) {\n"
+            "    // note: safe; a is a string node\n"
+            "    size_t rv = static_cast<const QoreStringNode*>(a)->size();\n"
+            "    return rv + static_cast<const QoreStringNode*>(b)->size();\n"
+            "}\n")
+        self.assertEqual([3, 9, 16], [line for line, _ in find_unguarded(text)])
 
     def test_module_sources_are_scanned(self):
         with tempfile.TemporaryDirectory() as tmp:

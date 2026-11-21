@@ -68,6 +68,8 @@ static const QoreStringNode* get_string_join_separator(const QoreValue& fold_exp
         return nullptr;
     }
     const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(inner->getLeft().getInternalNode());
+    // note: safe; a separator that is not a string node, also an inline short string, gives nullptr: the fold is not
+    // made a join, and runs as written
     const auto* separator = dynamic_cast<const QoreStringNode*>(inner->getRight().getInternalNode());
     return arg1 && arg1->getOffset() == 0 ? separator : nullptr;
 }
