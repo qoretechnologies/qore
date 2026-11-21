@@ -815,6 +815,8 @@ private:
 
 //! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
 struct QoreTrustedBuildTag {
+    //! the Program that created the capability, whose code the build runs for (qore#6844)
+    const QoreProgram* creator = nullptr;
 };
 
 class QoreModuleInitSandboxBarrierHelper {
@@ -1463,7 +1465,13 @@ public:
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 
     //! sets the override of a call for a helper created without one on \a td, the current thread; may be called once
-    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o);
+    /** @param td the current thread's data
+        @param o the override
+        @param new_gen true to give the caller restrictions a new generation always (see ThreadData::GrantSnapshot):
+        for work that runs for other code (a thread, a callback); a call of module code that passes on equal
+        restrictions keeps their generation otherwise
+    */
+    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o, bool new_gen = false);
 
     //! clears the override of the caller for a call, as set() with an empty override does; may be called once
     DLLLOCAL void setCleared();

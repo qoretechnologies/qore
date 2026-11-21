@@ -119,3 +119,17 @@ hash<auto> sub run(string native) {
 # one line per result: the key, "=", and the value written with %y
 map printf("%s=%y\n", $1.key, $1.value), (ARGV[2] == "sandboxed" ? p.callFunction("run_common")
     : p.callFunction("run", ARGV[1])).pairIterator();
+
+# the code of a trusted build runs for the Program that created the capability, also when that Program's own code
+# calls it: a creator restricted only from external information (it may create the capability)
+if (ARGV[2] != "sandboxed") {
+    Program c(ARGV[2] == "restricted" ? PO_NEW_STYLE | PO_NO_EXTERNAL_INFO : PO_NEW_STYLE);
+    c.parse("%modern
+%requires GrantProbe
+bool sub own_build() {
+    code cap = SandboxManager::createTrustedBuildCall(bool sub () { return GrantProbe::plain(); });
+    return cap();
+}
+", "build-creator");
+    printf("own_build=%y\n", c.callFunction("own_build"));
+}

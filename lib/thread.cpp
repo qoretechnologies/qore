@@ -916,6 +916,10 @@ public:
         //! the Program of the library module initialized under the barrier, once it exists, or nullptr; never set
         //! for a lift or for the barrier of a deferred initialization (see qore_module_init_set_program())
         const QoreProgram* module_pgm = nullptr;
+        //! for the barrier of a trusted build: the Program that created the capability, whose restrictions apply to
+        //! the code of the build as those of its calling code, also when its own code called the capability (no
+        //! context is entered for it then) (qore#6844)
+        const QoreProgram* build_creator = nullptr;
         //! Whether the caller that initiated this load may select a native file outside the host module path
         bool caller_may_select_native_file = true;
         //! Governing managers at entry; their permission to use uncontrolled APIs can be revoked during the load.
@@ -6964,6 +6968,12 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
     }
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
         if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            // the code of a trusted build runs for the Program that created the capability: the walk stops at the
+            // barrier, where that Program is the calling code (also when its own code called the capability, which
+            // entered no context for it)
+            if (mib->build && mib->build_creator && !qore_program_is_library_module(mib->build_creator)) {
+                rv |= qore_program_private::getParseOptions(*mib->build_creator) & restricting;
+            }
             return rv;
         }
         if (grant && ch == grant_ctx) {
@@ -7294,7 +7304,7 @@ QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
     }
 }
 
-QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const QoreTrustedBuildTag&) {
+QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const QoreTrustedBuildTag& tag) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
@@ -7302,7 +7312,8 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const Qor
     // a trusted loader: nothing below the barrier is the loader's, as for library code that trusted code loads
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true});
+            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true,
+            nullptr, tag.creator});
         pushed = true;
     } catch (std::bad_alloc&) {
     }
@@ -7323,7 +7334,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
             ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(), nullptr);
             td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
                 td->sandbox_context, td->inherited_sandbox_context, false, untrusted, owner.operator->(),
-                untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr,
+                untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr, nullptr,
                 qore_caller_may_load_native_code(), policy.operator->()});
             owner.release();
             policy.release();
@@ -7349,7 +7360,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
     const qore_program_id_t pgm_id = top.loader_pgm_id;
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr,
+            td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr, nullptr,
             top.caller_may_select_native_file});
         pushed = true;
     } catch (std::bad_alloc&) {
@@ -8530,7 +8541,7 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
     set(o.td ? o.td : thread_data.get(), o);
 }
 
-void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseOptionsOverride& o) {
+void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseOptionsOverride& o, bool new_gen) {
     // the caller restrictions apply only to the code of the given module Program
     assert(!o.caller_restrictions || o.module_pgm);
     assert(!active);
@@ -8545,7 +8556,8 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
     // restored with the state (see GrantSnapshot); a call of module code that passes on the restrictions in effect
     // keeps their generation: trusted code inside a host grant that calls another module passes on those of the code
     // that established the grant, which are not set inside it
-    state->caller_restrictions_gen = (o.caller_restrictions && o.caller_restrictions == old.caller_restrictions)
+    state->caller_restrictions_gen = (!new_gen && o.caller_restrictions
+            && o.caller_restrictions == old.caller_restrictions)
         ? old.caller_restrictions_gen : ++td->restriction_gen;
     state->module_pgm = o.module_pgm;
     state->app_pgm_id = o.app_pgm_id;
@@ -8561,8 +8573,11 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
+    ThreadData* td = thread_data.get();
     *state = QoreRuntimePoState();
     state->po = po;
+    // a new generation, as for any setting of the restrictions (see GrantSnapshot)
+    state->caller_restrictions_gen = ++td->restriction_gen;
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
@@ -8637,7 +8652,9 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     ThreadData* td = thread_data.get();
     override_helper.emplace();
     // saves the override and the options in effect, and sets the override
-    override_helper->set(td, o->override);
+    // the work runs for the code that registered it or started the thread: its restrictions are set here, also when
+    // they equal those in effect (inside a host grant, for example)
+    override_helper->set(td, o->override, true);
     // the options were computed with the override in the starting thread
     td->runtime_po_state.po = o->po;
     // the restrictions of the code that started the thread (qore#6337)

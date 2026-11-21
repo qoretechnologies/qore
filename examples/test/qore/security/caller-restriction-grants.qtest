@@ -74,7 +74,7 @@ class CallerRestrictionGrantsTest inherits QUnit::Test {
         # every way that restricted code's code runs is restricted, also under a grant and in a module's initialization
         foreach string k in (("path_direct", "closure_barrier", "path_ref_barrier", "path_obj_ref_barrier",
                 "subclass_ref_barrier", "made_obj_ref_barrier", "builtin_ref_barrier", "obj_with_grant",
-                "thing_made_plain", "after_exception")) {
+                "thing_made_plain", "after_exception", "own_build")) {
             assertEq("True", r{k}, "restricted: " + k);
             assertEq("False", u{k}, "unrestricted: " + k);
         }
@@ -99,8 +99,8 @@ class CallerRestrictionGrantsTest inherits QUnit::Test {
             "unrestricted: native code into another Program under a grant");
         assertNeq("\"NATIVE-REFUSED\"", u.native_barrier, "unrestricted: native code under a grant");
         assertNeq("\"NATIVE-REFUSED\"", u.native_init, "unrestricted: native code in a module's initialization");
-        assertEq(25, r.size(), "restricted: every result");
-        assertEq(25, u.size(), "unrestricted: every result");
+        assertEq(26, r.size(), "restricted: every result");
+        assertEq(26, u.size(), "unrestricted: every result");
     }
 
     #! parses the output of a child process: one line per result, with the key, \c "=" and the value written with

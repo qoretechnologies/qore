@@ -1085,6 +1085,9 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
     - of the functional-domain restrictions of the calling code, only those of the file system, the network and
       external information are lent (see isCallerRestricted()); native code is never loaded for the caller through it,
       and a thread started inside the call for a caller with a sandbox keeps that caller's restrictions
+    - an object of a builtin class records no restrictions of the code that created it: a builtin method (or one of a
+      binary module) that checks its caller when it runs, and that the trusted code calls inside the call, judges the
+      trusted code, also for an object that the caller created
 
     @note Objects that the code inside the call creates from data that the caller gave (deserialization, for example)
     are objects of classes that the caller chose, whose code then runs with the lent access: trusted code

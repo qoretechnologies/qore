@@ -2744,7 +2744,7 @@ private:
         // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
         // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
         QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
-        barrier.emplace(QoreTrustedBuildTag());
+        barrier.emplace(QoreTrustedBuildTag{trusted_program});
         if (!barrier->recorded()) {
             if (callers) {
                 callers->deref(nullptr);
