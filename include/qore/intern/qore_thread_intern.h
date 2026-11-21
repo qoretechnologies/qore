@@ -63,8 +63,14 @@ class RuntimeConfig;
 #define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
 
-#ifndef QORE_DESTRUCTOR_STACK_SLICE
-// the part of the stack guard that a destructor can use when it runs at the stack limit (see destructor_stack_floor);
+// the part of the stack guard that a destructor can use when it runs at the stack limit (see destructor_stack_floor)
+#if defined(__x86_64) || defined(__aarch64__)
+// measured (qore#6861): the call path of a destructor needs up to 6.5 KB (IR/JIT debug build; AST 3.1 KB, AOT 2.6 KB),
+// so the destructor has about 25 KB for its body and the objects that it releases, and 48 KB of the guard (see
+// QORE_STACK_GUARD in macros-x86_64.h and macros-aarch64.h) remain for raising STACK-LIMIT-EXCEEDED and the native
+// frames of the functions that it calls
+#define QORE_DESTRUCTOR_STACK_SLICE (32 * 1024)
+#else
 // none where it has not been measured: such a destructor fails with STACK-LIMIT-EXCEEDED, chained to the exception
 // being raised
 #define QORE_DESTRUCTOR_STACK_SLICE 0
