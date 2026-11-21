@@ -39,14 +39,48 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
         #! the connection ID returned by getEventConnectionId(), when set (otherwise the current one)
         *int event_cid;
+
+        #! True if the next send is held until holdRelease() is given a value
+        bool hold_next = False;
+
+        #! receives a value when a held send has started and is held
+        Queue hold_entered();
+
+        #! the held send continues when it gets a value
+        Queue hold_release();
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
     }
 
     #! capture outbound payloads instead of writing to a (nonexistent) connection
+    /** a message sent on whatever connection the client has when it is sent is recorded with the ID of that
+        connection (\c on_cid)
+    */
     sendData(auto value) {
-        sent += value;
+        holdIfRequested();
+        sent += value + {"on_cid": current_cid};
+    }
+
+    #! as the real method: the message is sent only if the client's connection is the one that it belongs to, which is
+    #! decided when it is taken, after any hold
+    bool sendDataOnConnection(int cid, auto value) {
+        holdIfRequested();
+        if (current_cid != cid) {
+            return False;
+        }
+        sent += value + {"on_cid": cid};
+        return True;
+    }
+
+    #! holds the calling thread, once, if requested
+    private holdIfRequested() {
+        if (!hold_next) {
+            return;
+        }
+        hold_next = False;
+        hold_entered.push(True);
+        hold_release.get(60s);
     }
 
     #! sets the ID of the client's current connection
@@ -67,6 +101,17 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     setHeartbeatForTest(int id) {
         AutoLock al(heartbeat_lock);
         hb = new DiscordHeartbeat(++hb_seq, id, 41250);
+    }
+
+    #! returns the heartbeat record
+    DiscordHeartbeat getHeartbeatForTest() {
+        AutoLock al(heartbeat_lock);
+        return hb;
+    }
+
+    #! exposes the private heartbeat beat of the heartbeat thread
+    bool testHeartbeatBeat(DiscordHeartbeat h) {
+        return heartbeatBeat(h);
     }
 
     #! returns the connection ID of the heartbeat record, or -1
@@ -192,6 +237,7 @@ public class Main inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("gateway discovery tests", \gatewayDiscoveryTests());
         addTestCase("close of an older connection", \olderConnectionCloseTests());
+        addTestCase("a heartbeat held across a reconnect", \heartbeatAcrossReconnectTests());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -489,5 +535,50 @@ public class Main inherits QUnit::Test {
 
         DiscordWebSocketClient client = drc.get(False);
         assertEq("DiscordWebSocketClient", client.className());
+    }
+
+    #! Tests that a heartbeat is sent only on the connection that its heartbeat record belongs to (qore#7106)
+    heartbeatAcrossReconnectTests() {
+        # without a reconnect, the beat is sent on its own connection
+        {
+            TestDiscordWebSocketClient c({"token": "t", "url": "wss://127.0.0.1:1/"});
+            c.setConnectionIdForTest(7);
+            c.setHeartbeatForTest(7);
+            c.setSessionStateForTest("sid", 12);
+            DiscordHeartbeat h = c.getHeartbeatForTest();
+            assertTrue(c.testHeartbeatBeat(h), "the heartbeat thread continues");
+            assertEq(1, c.sent.size(), "the beat is sent");
+            assertEq(DiscordWebSocketClient::DOP_HEARTBEAT, c.sent[0].op);
+            assertEq(12, c.sent[0].d, "with the last sequence number");
+            assertEq(7, c.sent[0].on_cid, "on its own connection");
+        }
+
+        # a beat that is held while the client reconnects is not sent on the new connection
+        {
+            TestDiscordWebSocketClient c({"token": "t", "url": "wss://127.0.0.1:1/"});
+            c.setConnectionIdForTest(7);
+            c.setHeartbeatForTest(7);
+            c.setSessionStateForTest("sid", 12);
+            DiscordHeartbeat h = c.getHeartbeatForTest();
+            c.hold_next = True;
+            *string background_error;
+            Counter done(1);
+            on_exit done.waitForZero();
+            background sub () {
+                on_exit done.dec();
+                try {
+                    c.testHeartbeatBeat(h);
+                } catch (hash<ExceptionInfo> ex) {
+                    background_error = get_exception_string(ex);
+                }
+            }();
+            # the beat of the connection 7 is held; the client reconnects, and the new connection is 8
+            assertTrue(c.hold_entered.get(60s));
+            c.setConnectionIdForTest(8);
+            c.hold_release.push(True);
+            done.waitForZero();
+            assertEq(NOTHING, background_error, "the held beat raised no error");
+            assertEq(0, c.sent.size(), "the heartbeat of the connection 7 was not sent on the connection 8");
+        }
     }
 }
