@@ -9307,7 +9307,9 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     /** The variant without the handler cannot tell whose connection it removes, so it is refused to any code that a
         sandbox governs (SandboxManager::isSandboxed()), also to a sandbox that sets only resource limits: the check
         fails closed, and such code calls removeExternalDedicatedSocket(softstring,
-        AbstractHttpSocketHandlerInterface) with its own handler, as the standard socket handlers do
+        AbstractHttpSocketHandlerInterface) with its own handler, as the standard socket handlers do.  Code that is
+        restricted only by the parse options of its Program, with no sandbox, is not governed by a sandbox, so this
+        check does not refuse it.
 
         @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
     */
@@ -9361,7 +9363,8 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     #! Closes a persistent session; refused to sandboxed code, which closes only its own handler's session
     /** As removeExternalDedicatedSocket(softstring), the variant without the handler cannot tell whose session it
         closes, so it is refused to any code that a sandbox governs (the check fails closed); such code calls
-        signalPersistentSessionClose(softstring, AbstractHttpRequestHandler) with its own handler
+        signalPersistentSessionClose(softstring, AbstractHttpRequestHandler) with its own handler.  As there, code
+        that is restricted only by the parse options of its Program, with no sandbox, is not refused.
 
         @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
     */
