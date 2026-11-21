@@ -262,7 +262,14 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> fh = fast.hdr - ("date",);
         assertEq(sort(keys nh), sort(keys fh), "the same header names");
         foreach string name in (keys nh) {
-            assertEq(nh{name}, fh{name}, "header " + name);
+            # the date of two responses differs when a second passes between them (also in the hash of all headers)
+            auto nv = nh{name};
+            auto fv = fh{name};
+            if (nv.typeCode() == NT_HASH) {
+                nv -= ("date",);
+                fv -= ("date",);
+            }
+            assertEq(nv, fv, "header " + name);
         }
         assertTrue(exists fast.hdr.date, "the response has a Date header");
         assertEq("Keep-Alive", fast.hdr.connection);
@@ -277,7 +284,14 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq(sort(keys (ncl.hdr - ("date",))), sort(keys (fcl.hdr - ("date",))),
             "the same headers with Connection: close");
         foreach string name in (keys (ncl.hdr - ("date",))) {
-            assertEq(ncl.hdr{name}, fcl.hdr{name}, "close, header " + name);
+            # the date of two responses differs when a second passes between them (also in the hash of all headers)
+            auto nv = ncl.hdr{name};
+            auto fv = fcl.hdr{name};
+            if (nv.typeCode() == NT_HASH) {
+                nv -= ("date",);
+                fv -= ("date",);
+            }
+            assertEq(nv, fv, "close, header " + name);
         }
         assertEq("close", fcl.hdr.connection);
         assertTrue(fast.hdr."x-powered-by" =~ /^Qore\//, "the server's headers are added");
@@ -968,7 +982,14 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq(nr.hdr."alt-svc", fr.hdr."alt-svc", "and to the responses of a route");
         assertEq(sort(keys (nr.hdr - ("date",))), sort(keys (fr.hdr - ("date",))), "the same header names");
         foreach string name in (keys (nr.hdr - ("date",))) {
-            assertEq(nr.hdr{name}, fr.hdr{name}, "TLS header " + name);
+            # the date of two responses differs when a second passes between them (also in the hash of all headers)
+            auto nv = nr.hdr{name};
+            auto fv = fr.hdr{name};
+            if (nv.typeCode() == NT_HASH) {
+                nv -= ("date",);
+                fv -= ("date",);
+            }
+            assertEq(nv, fv, "TLS header " + name);
         }
         # a route that sets Alt-Svc itself keeps its own
         tls_hs.addFastRoute("/tls-own", {"public": True, "response": {"code": 200, "body": "x",
