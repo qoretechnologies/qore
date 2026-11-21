@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxPollOps.h"
+#include "qore/intern/qore_thread_intern.h"
 
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
@@ -1753,6 +1754,24 @@ if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
 */
 static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_ONLY] {
     return qore_caller_restricts_domain(domain);
+}
+
+//! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions
+/** Uses the caller check for a function or method declared with \c [dom=...]. A library module's own initialization
+    is checked independently of the Program that loaded it. On an ordinary call, the caller's restrictions apply.
+    Restrictions of code invoked by the initializer are checked as at a declared-domain entry.
+
+    This only queries functional domains. Use isProcessWideRegistrationAllowed() separately when sandboxed code
+    must be excluded even if the sandbox permits the domain. For an operation performed on behalf of a caller,
+    including across initialization, see isCallerRestricted().
+
+    @param domain a bitmask of functional domains
+    @return @ref True if the caller is denied any requested domain
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCallerDomainDeniedAtEntry(softint domain) [flags=RET_VALUE_ONLY] {
+    return qore_caller_denied_user_domains(domain) != 0;
 }
 
 //! Returns @ref True if the current thread's code may use uncontrolled APIs
