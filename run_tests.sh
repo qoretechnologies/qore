@@ -47,6 +47,10 @@ print_usage () {
   echo "  QORE_TEST_DURATION_PROFILE"
   echo "                           The column of test-durations.tsv used (default: CI_JOB_NAME without its shard)."
   echo "  QORE_TEST_DURATIONS_FILE The durations file (default: examples/test/docker_test/test-durations.tsv)."
+  echo "  QORE_TEST_TIME_BINS      The time programs that -t tries, in order (default: time, /usr/bin/time,"
+  echo "                           /bin/time and the one in PATH); set it empty to use none, so that the shell's time"
+  echo "                           keyword is used if the shell has one (tests of the runner use it to be independent of"
+  echo "                           the host)."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P), and the tests that"
   echo "                           declare '# test-release-build: <why>', which check a release build (the CI"
@@ -682,7 +686,7 @@ if [ $MEASURE_TIME -eq 1 ]; then
         TIME_OK=$?
     }
 
-    TIME_BINS="time /usr/bin/time /bin/time `which time`"
+    TIME_BINS=${QORE_TEST_TIME_BINS-"time /usr/bin/time /bin/time `which time 2>/dev/null`"}
     for tm in $TIME_BINS; do
         TIME_BIN=$tm
         test_time
@@ -692,8 +696,13 @@ if [ $MEASURE_TIME -eq 1 ]; then
         TIME_CMD=""
     done
 
-    if [ "$TIME_CMD" = "" ]; then
+    # without a time program, the shell's time keyword, if the shell has one (dash, the /bin/sh of Debian and Ubuntu,
+    # has none: no time is reported then); a keyword is not a program, so it must come before the timeout command,
+    # which can only run programs (TIME_KEYWORD)
+    TIME_KEYWORD=0
+    if [ "$TIME_CMD" = "" ] && (eval "time -p true") >/dev/null 2>&1; then
         TIME_CMD="time -p"
+        TIME_KEYWORD=1
     fi
 fi
 
@@ -1834,7 +1843,11 @@ run_test() {
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
             PLAIN_TIMEOUT=1
-            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            if [ $TIME_KEYWORD -eq 1 ]; then
+                eval $TIME_CMD $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            else
+                eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            fi
         else
             eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
         fi

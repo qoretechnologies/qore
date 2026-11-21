@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 @unittest.skipUnless(sys.platform.startswith("linux"), "the runner's core and process checks are Linux's")
 class TimeoutDiagnosticsTest(unittest.TestCase):
     def run_runner(self, exit_code, *, gnu=False, plain_timeout=False, core_name="core.fixture",
-                   kernel_pattern=None, fresh_core=True):
+                   kernel_pattern=None, fresh_core=True, time_program=True):
         with tempfile.TemporaryDirectory(prefix="qore-runner-diagnostics-") as directory:
             root = Path(directory)
             binaries = root / "bin"
@@ -61,6 +61,11 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                        'printf "%s\\n" "$TEST_KERNEL_CORE_PATTERN"; else exec /bin/cat "$@"; fi\n',
                 "sysctl": '#!/bin/sh\nexit 1\n',
             }
+            # -t (plain_timeout) times the tests: with time_program, a stand-in for GNU time ("time -f FORMAT cmd"),
+            # else none, so that the runner falls back to the shell's time keyword or to no timing; either way the
+            # host's time program is not used (QORE_TEST_TIME_BINS)
+            if time_program:
+                scripts["time"] = '#!/bin/sh\nif [ "$1" = -f ]; then shift 2; fi\nexec "$@"\n'
             for name, source in scripts.items():
                 path = binaries / name
                 path.write_text(source)
@@ -88,6 +93,7 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                 "FRESH_CORE": str(int(fresh_core)),
                 "TEST_CORE_TARGET": str(target),
                 "TEST_KERNEL_CORE_PATTERN": pattern,
+                "QORE_TEST_TIME_BINS": str(binaries / "time") if time_program else "",
             }
             args = ["sh", str(ROOT / "run_tests.sh")]
             if plain_timeout:
@@ -163,6 +169,25 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
         result, debugger = self.run_runner(124, gnu=True, plain_timeout=True, kernel_pattern="|/usr/bin/core-handler %p")
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         self.assertFalse(debugger)
+
+    def test_timed_run_without_a_time_program(self):
+        # -t with a timeout command but no time program: the runner must not hand the shell's time keyword to the
+        # timeout command (which can only run programs: "exec: time: not found" made every test fail)
+        for gnu in (False, True):
+            with self.subTest(gnu=gnu):
+                result, debugger = self.run_runner(0, gnu=gnu, plain_timeout=True, time_program=False)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("not found", result.stderr)
+                self.assertFalse(debugger)
+                result, debugger = self.run_runner(1, gnu=gnu, plain_timeout=True, time_program=False)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("not found", result.stderr)
+
+    def test_timed_run_with_a_time_program(self):
+        # -t with a time program and a timeout command: the time program runs under the timeout command
+        result, debugger = self.run_runner(0, gnu=True, plain_timeout=True, time_program=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("not found", result.stderr)
 
     def test_success(self):
         result, debugger = self.run_runner(0)

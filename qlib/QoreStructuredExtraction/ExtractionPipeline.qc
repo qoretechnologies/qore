@@ -39,7 +39,9 @@ public hashdecl ExtractionPipelineOptions {
         integer thread ID.  When not set, the \c start_thread capability of the
         code that creates the pipeline is used, if a host set one
         (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"), and
-        otherwise Qore's @ref background operator
+        otherwise Qore's @ref background operator; required with
+        @ref Qore::PO_NO_THREAD_CONTROL and \c batch_parallel > 1 only when
+        the module is loaded by its path
     */
     *code<int(code<nothing()>)> start_thread;
     #! Force the LLM to call the extraction tool; default @ref True
@@ -118,6 +120,10 @@ public class ExtractionPipeline {
         @param options optional pipeline configuration
 
         @throw EXTRACTION-PIPELINE-ERROR if the schema has no fields
+        @throw EXTRACTION-ARG-ERROR if the module was loaded by its path into a
+            program with @ref Qore::PO_NO_THREAD_CONTROL set, \c batch_parallel
+            is > 1, and no \c start_thread callable is supplied or set as a
+            capability
     */
     constructor(LlmBackend llm_backend, hash<ExtractionSchemaInfo> extraction_schema,
             *hash<ExtractionPipelineOptions> options) {
@@ -135,6 +141,15 @@ public class ExtractionPipeline {
         # without the option, the capability of the code that the host runs, if any (qorus#867)
         start_thread = exists options.start_thread ? options.start_thread : get_thread_capability("start_thread");
 
+%ifdef PO_NO_THREAD_CONTROL
+        if (batch_parallel > 1 && !start_thread) {
+            throw "EXTRACTION-ARG-ERROR",
+                "ExtractionPipeline requires the \"start_thread\" option when "
+                "\"batch_parallel\" > 1 in a program with PO_NO_THREAD_CONTROL "
+                "set; see the QoreStructuredExtraction module documentation "
+                "for sandbox integration details";
+        }
+%endif
 
         if (options.system_prompt.val()) {
             system_prompt = options.system_prompt;
@@ -271,11 +286,15 @@ public class ExtractionPipeline {
                         progress(completed, total);
                     }
                 };
+%ifdef PO_NO_THREAD_CONTROL
+                call_function(start_thread, worker);
+%else
                 if (start_thread) {
                     call_function(start_thread, worker);
                 } else {
                     background worker();
                 }
+%endif
             }
             cnt.waitForZero();
             offset = batch_end;

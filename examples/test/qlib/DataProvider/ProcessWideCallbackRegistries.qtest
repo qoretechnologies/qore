@@ -107,6 +107,10 @@ class TL inherits LoggerInterfaceBase {
             "remove_catalog_listener": sprintf("DataProviderActionCatalog::removeCatalogChangeListener(%d);",
                 listener_id),
         };
+        # the test hook of HttpListener exists only in a debug build of the library (issue #6848)
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            remove calls.http_listener_stopping_hook;
+        }
 
         # the calls that were not refused, with what they raised instead
         hash<string, string> not_refused = {};

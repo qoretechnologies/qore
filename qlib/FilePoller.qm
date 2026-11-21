@@ -113,13 +113,15 @@ module FilePoller {
 
     The @ref FilePoller::FilePoller "FilePoller" class includes support for running in sandboxed Program objects with
     the following parse options set:
-    - \c PO_NO_THREAD_CONTROL: when loaded from the module path, the poller can start its polling thread
-      under the caller's sandbox. It uses the supplied starter, the captured host capability, or its own thread.
-      The eager event provider starts polling in its constructor. The delayed event provider starts polling
-      when its \c observersReady() method is called. In either case, the polling thread counts toward the caller's sandbox thread quota.
+    - \c PO_NO_THREAD_CONTROL: the module declares the \c THREAD_CONTROL @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, it starts its polling thread for such a caller
+      (the thread runs under the caller's sandbox), and the \c "start_thread" option is not required in
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
-      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 
     @section file_poller_relnotes FilePoller Release Notes
 
@@ -299,7 +301,14 @@ public class FilePoller {
         );
 
         #! minimum required keys for all constructors
-        const RequiredKeys = ();
+        const RequiredKeys = (
+%ifdef PO_NO_PROCESS_CONTROL
+            "sleep",
+%endif
+%ifdef PO_NO_THREAD_CONTROL
+            "start_thread",
+%endif
+        );
     }
 
     private {
@@ -384,9 +393,9 @@ public class FilePoller {
           \c poll_inteval is 10 seconds
         - \c "reopt": regular expression options; see @ref regex_constants for possible values (ex
           @ref Qore::RE_Caseless for case-insensitive matches)
-        - \c "sleep": an optional @ref closure "closure" or @ref call_reference "call reference" taking a wait in
-          seconds; by default the poller waits on a condition that is signalled on stop. The polling thread holds
-          the supplied callable while it sleeps, so a closure that
+        - \c "sleep": (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+          @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
+          set then @ref Qore::sleep() will be used); the polling thread holds it while it sleeps, so a closure that
           refers to the poller (one created in a method of a subclass, for example) keeps the poller alive after its
           owner drops its last reference
         - \c "sort_order": an integer constant giving the sort order; valid options are:
@@ -399,7 +408,8 @@ public class FilePoller {
         - \c "start_thread": a @ref closure "closure" or @ref call_reference "call reference" for
           starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
           sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
-          "ThreadCapabilityScope"), and otherwise @ref background
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
 
         @throw FILEPOLLER-CONSTRUCTOR-ERROR invalid option
     */
@@ -407,8 +417,15 @@ public class FilePoller {
         path = n_path;
         mask = n_mask;
 
-        # without the option, the capability of the code that the host runs, if any (qorus#867)
+        # without the option, the capability of the code that the host runs, if any (qorus#867); it satisfies the
+        # requirement of a Program that may not control threads
         *code cap = exists n_opts.start_thread ? NOTHING : get_thread_capability("start_thread");
+
+        foreach string k in (RequiredKeys) {
+            if (!exists n_opts{k} && (k != "start_thread" || !cap))
+                throw "FILEPOLLER-CONSTRUCTOR-ERROR", sprintf("required key %y missing from constructor hash "
+                    "argument)", k);
+        }
 
         foreach hash<auto> h in (n_opts.pairIterator()) {
             switch (h.key) {
@@ -574,9 +591,13 @@ public class FilePoller {
         # the thread holds the poller only by a weak reference between its polls, so that the poller's destructor
         # runs, and stops it, when the owner drops its last reference
         FilePollerThreadRef ref(self, run_state, sc, sleep_m, sleep_cond);
+%ifdef PO_NO_THREAD_CONTROL
+        return tid = call_function(start_thread, FilePoller::threadBody(ref));
+%else
         return tid = (start_thread
             ? call_function(start_thread, FilePoller::threadBody(ref))
             : FilePoller::startThread(ref));
+%endif
     }
 
     #! stops the polling operation, returns when the polling operation has been stopped
@@ -680,6 +701,16 @@ public class FilePoller {
 
     #! sleeps for the specified number of seconds
     private fileSleep(softint secs) {
+%ifdef PO_NO_PROCESS_CONTROL
+        # Sandbox mode: must use custom sleep function with polling
+        date end = now_us() + seconds(secs);
+        while (True) {
+            call_function(sleep, 1);
+            if (!run_state.run || (now_us() >= end)) {
+                break;
+            }
+        }
+%else
         if (sleep) {
             # Custom sleep function: use polling with custom sleep
             date end = now_us() + seconds(secs);
@@ -696,6 +727,7 @@ public class FilePoller {
                 sleep_cond.wait(sleep_m, seconds(secs));
             }
         }
+%endif
     }
 
     #! the code of the polling thread, which refers to no poller: a closure of a static method
@@ -781,6 +813,15 @@ public class FilePoller {
 
     #! sleeps for the given number of seconds in the polling thread, holding no reference to the poller
     private static threadSleep(FilePollerThreadRef ref, softint secs, *code<nothing(int)> sleep_code) {
+%ifdef PO_NO_PROCESS_CONTROL
+        date end = now_us() + seconds(secs);
+        while (True) {
+            call_function(sleep_code, 1);
+            if (!ref.state.run || (now_us() >= end)) {
+                break;
+            }
+        }
+%else
         if (sleep_code) {
             date end = now_us() + seconds(secs);
             while (True) {
@@ -795,6 +836,7 @@ public class FilePoller {
                 ref.sleep_cond.wait(ref.sleep_m, seconds(secs));
             }
         }
+%endif
     }
 
     #! runs one poll of the polling thread or of run()
