@@ -2510,21 +2510,21 @@ public class AbstractStreamRequest {
 
         @since HttpServerUtil 1.6
     */
-    hash<auto> getContext() {
+    final hash<auto> getContext() {
         return AbstractStreamRequest::filterContext(cx);
     }
 
     #! Returns a copy of the request headers
     /** @since HttpServerUtil 1.6
     */
-    hash<auto> getHeaders() {
+    final hash<auto> getHeaders() {
         return hdr;
     }
 
     #! Returns any message body received with the request
     /** @since HttpServerUtil 1.6
     */
-    auto getBody() {
+    final auto getBody() {
         return body;
     }
 

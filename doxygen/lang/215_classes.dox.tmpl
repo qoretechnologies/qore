@@ -729,7 +729,9 @@ while (i.next) {}  # parse exception: the call is i.next()
     \c Observable::hasObservers() and \c getObserverCount()), \c FtpPoller (\c setFatal() and \c isFatal()),
     \c HttpServerUtil (\c AbstractStreamRequest::getContext(), \c getHeaders() and \c getBody()) and \c RestHandler
     (\c AbstractRestStreamRequestHandler::getContext() and \c getArgs()); a context that they give is a copy with the
-    request metadata only.  The private methods that change shared state or reach the host's resources stay private:
+    request metadata only.  These methods are @ref final_methods "final": a subclass method with the name and the
+    signature of one of them is a parse error (a method of the name with other parameters, or a static method of the
+    name, is a method of its own, which a call with the signature of the final method does not call).  The private methods that change shared state or reach the host's resources stay private:
     a data provider subclass declared by sandboxed code cannot call \c AbstractDataProvider::resolveValue() or
     \c valueNeedsResolution() (the host's dynamic value resolution) or
     \c AbstractWatchDataProviderBase::persistCheckpoint() (see

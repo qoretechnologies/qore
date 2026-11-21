@@ -636,7 +636,7 @@ public namespace RestHandler {
 
             @since RestHandler 1.6.8
         */
-        hash<auto> getContext() {
+        final hash<auto> getContext() {
             hash<auto> rv = HttpServer::AbstractStreamRequest::filterContext(cx);
             foreach string key in (RestContextKeys) {
                 if (cx.hasKey(key)) {
@@ -649,7 +649,7 @@ public namespace RestHandler {
         #! Returns any URI arguments of the request
         /** @since RestHandler 1.6.8
         */
-        *hash<auto> getArgs() {
+        final *hash<auto> getArgs() {
             return ah;
         }
 

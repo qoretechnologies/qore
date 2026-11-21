@@ -42,7 +42,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         string dir = get_script_dir() + "/sandbox-trusted-private-access";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe", "lookalike", "library-hooks", "public-hooks", "stream-request");
+        const Programs = ("probe", "lookalike", "library-hooks", "public-hooks", "stream-request", "final-hooks");
 
         #! the private:internal declarations of a look-alike class (lookalike-internal.q) are refused once qore#7036
         #! is fixed: until then the program is not run

@@ -750,14 +750,14 @@ public class FtpPoller {
 
         @since FtpPoller 2.2
     */
-    setFatal(bool fatal = True) {
+    final setFatal(bool fatal = True) {
         self.fatal = fatal;
     }
 
     #! Returns the fatal error flag of the poller; see setFatal()
     /** @since FtpPoller 2.2
     */
-    bool isFatal() {
+    final bool isFatal() {
         return fatal;
     }
 

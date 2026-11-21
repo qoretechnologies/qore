@@ -198,14 +198,14 @@ public class Observable {
 
         @since DataProvider 3.12
     */
-    bool hasObservers() {
+    final bool hasObservers() {
         return observer_map.size() > 0;
     }
 
     #! Returns the number of registered observers; see hasObservers()
     /** @since DataProvider 3.12
     */
-    int getObserverCount() {
+    final int getObserverCount() {
         return observer_map.size();
     }
 
