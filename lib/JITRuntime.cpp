@@ -13090,6 +13090,12 @@ protected:
             callee_loc);
     }
 
+    //! Pushes the frame of a call that AOT code makes; see QoreAOTNativeCallStackLocation
+    DLLLOCAL void pushAot(const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+        prev = push_aot_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm,
+            runtime_loc, callee_loc);
+    }
+
 private:
     //! the data of the thread, which the caller got once (QoreNativeEntrySlots::thread_data)
     void* thread_data;
@@ -13145,7 +13151,8 @@ public:
             const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
             const QoreProgramLocation* callee_loc = nullptr)
             : QoreNativeCallStackLocation(thread_data, call_name, statements, nullptr) {
-        push(call_loc, callee_loc);
+        // the frame of a native cross-module call records the caller's Program (qore#7101)
+        pushAot(call_loc, callee_loc);
     }
 };
 
@@ -13598,10 +13605,11 @@ struct QoreRtCrossModuleCallState {
         QoreParseOptions old_po;
     };
 
-    //! the Program of the caller, for the frame that the callee's fast entry pushes (qore#7101)
-    /** The fast entry pushes the frame of the call itself, once the callee's Program has been entered, so the frame
-        would record the callee's Program as its caller's: library code that reads the Programs of the frames
-        (Program::getCallerCapabilityMask(), for example) would not see the restrictions of a module that calls it
+    //! the Program of the caller, for the frame of the call that the calling AOT code pushes (qore#7101)
+    /** The AOT code that makes the call pushes the frame of the call once the callee's Program has been entered
+        (QoreAOTNativeCallStackLocation), so the frame would record the callee's Program as its caller's: library
+        code that reads the Programs of the frames (Program::getCallerCapabilityMask(), for example) would not see the
+        restrictions of a module that calls it
     */
     class CallSiteProgram {
     public:
