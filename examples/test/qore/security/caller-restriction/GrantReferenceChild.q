@@ -75,7 +75,7 @@ hash<auto> sub run_common(string native) {
         load_module(native);
         h.native_own = \"LOADED\";
     } catch (hash<ExceptionInfo> ex) {
-        h.native_own = GrantProbe::classify_native_load(ex);
+        h.native_own = GrantProbe::classify_native_load(ex, native);
     }
     return h;
 }
@@ -114,7 +114,7 @@ hash<auto> sub run(string native) {
             load_module(native);
             return \"LOADED\";
         } catch (hash<ExceptionInfo> ex) {
-            return GrantProbe::classify_native_load(ex);
+            return GrantProbe::classify_native_load(ex, native);
         }
     });
     # library code under a host grant, in its own Program: decided by the caller walk without the grant (#6844)
@@ -144,7 +144,7 @@ string sub load(string path) {
         load_module(path);
         return \"LOADED\";
     } catch (hash<ExceptionInfo> ex) {
-        return GrantProbe::classify_native_load(ex);
+        return GrantProbe::classify_native_load(ex, path);
     }
 }
 ", "native-sandbox");
