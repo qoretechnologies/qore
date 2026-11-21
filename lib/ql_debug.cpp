@@ -18736,6 +18736,29 @@ static QoreValue f_dbg_async_io_wait_cancel_point(const QoreListNode* params, Ru
         static_cast<int>(get_param_value(params, 1).getAsBigInt()));
 }
 
+//! Debug-only: waits until the global async I/O controller has queued the given number of onComplete() calls
+/** Counted since the controller's callback dispatcher was created, once each call is queued for the workers, so that
+    AsyncIoController::flushCallbacks() called after the wait covers them; a test waits with it for the completion of
+    an operation that no Qore code of its own can see, such as one whose callbacks are skipped (qore#6685)
+
+    @return True if the count was reached, False if it was not when the timeout elapsed, NOTHING without a controller
+*/
+static QoreValue f_dbg_async_io_wait_on_complete_queued(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitOnCompleteQueued(count, static_cast<int>(timeout_ms));
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -28878,6 +28901,9 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
     qns.addBuiltinVariant("dbg_async_io_wait_cancel_point", f_dbg_async_io_wait_cancel_point,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "point",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_wait_on_complete_queued", f_dbg_async_io_wait_on_complete_queued,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,

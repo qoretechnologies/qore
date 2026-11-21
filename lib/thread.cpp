@@ -735,6 +735,10 @@ public:
     //! which the cleanup closes to other threads, stay open to it; see qore_close_module_programs().  Only the thread
     //! itself reads or writes it
     unsigned module_cleanup_delegate = 0;
+    //! the number of times that the thread was refused entry into the Program of a module because the module cleanup
+    //! had closed the Programs of the modules to it (see qore_module_entry_refusals()); only the thread itself reads or
+    //! writes it
+    uint64_t module_entry_refusals = 0;
     int tid;
     //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
     unsigned pgm_teardown_depth = 0;
@@ -5560,9 +5564,33 @@ void qore_module_uncounted_exit(ThreadData* td) {
 }
 
 //! raises the exception of an entry into a module's Program that qore_close_module_programs() refuses
-static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ExceptionSink* xsink) {
-    xsink->raiseException("PROGRAM-ERROR", "the Program of a module cannot be entered by another thread while the "
-        "modules are deleted at the end of the process");
+//! the description of the exception that refuses an entry into the Program of a module once the module cleanup has
+//! closed them (see qore_module_entry_refusals_only())
+static const char* QORE_MODULE_PROGRAMS_CLOSED_DESC = "the Program of a module cannot be entered by another thread "
+    "while the modules are deleted at the end of the process";
+
+static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* td, ExceptionSink* xsink) {
+    ++td->module_entry_refusals;
+    xsink->raiseException("PROGRAM-ERROR", QORE_MODULE_PROGRAMS_CLOSED_DESC);
+}
+
+//! returns true if the value is a string equal to the given one
+static bool qore_value_is_string(const QoreValue& v, const char* str) {
+    return v.getType() == NT_STRING && !strcmp(v.get<const QoreStringNode>()->c_str(), str);
+}
+
+bool qore_module_entry_refusals_only(ExceptionSink* xsink) {
+    QoreException* e = xsink->getException();
+    if (!e) {
+        return false;
+    }
+    for (; e; e = e->next) {
+        if (!qore_value_is_string(e->err, "PROGRAM-ERROR") || !qore_value_is_string(e->desc,
+                QORE_MODULE_PROGRAMS_CLOSED_DESC)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void qore_close_module_programs() {
@@ -5669,6 +5697,11 @@ void qore_module_cleanup_drain_work() {
         }
         work.cond.wait(work.lock);
     }
+}
+
+uint64_t qore_module_entry_refusals() {
+    ThreadData* td = thread_data.get();
+    return td ? td->module_entry_refusals : 0;
 }
 
 bool qore_module_cleanup_delegation() {
@@ -5969,7 +6002,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
             // enter their Programs (see qore_close_module_programs()); the cleanup waits for the threads that
             // entered before
             if (pp->module_lifetime.load(std::memory_order_acquire) && qore_module_programs_closed(td)) {
-                qore_raise_module_programs_closed(xsink);
+                qore_raise_module_programs_closed(td, xsink);
                 return;
             }
             // try to increment thread count

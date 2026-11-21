@@ -2172,6 +2172,14 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
     enqueue(std::move(item));
+#ifdef DEBUG
+    // counted once queued: a flush made after dbgWaitOnCompleteQueued() covers the item
+    {
+        AutoLocker al(m);
+        ++dbg_on_complete_queued;
+        dbg_on_complete_queued_cond.broadcast();
+    }
+#endif
 }
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
@@ -2591,6 +2599,19 @@ bool QoreCallDispatcher::dbgWaitAllIdle(int timeout_ms) {
     return true;
 }
 
+bool QoreCallDispatcher::dbgWaitOnCompleteQueued(int64_t count, int timeout_ms) {
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    AutoLocker al(m);
+    while (dbg_on_complete_queued < count) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        dbg_on_complete_queued_cond.wait(m, static_cast<int>(remaining_ms));
+    }
+    return true;
+}
+
 bool QoreCallDispatcher::dbgWaitIdleWaiter(int timeout_ms) {
     int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
     AutoLocker al(m);
@@ -2962,6 +2983,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
 
         ExceptionSink work_xsink;
+        // the refusals of this thread's entries into the Programs of the modules before the item runs (see below)
+        const uint64_t module_entry_refusals = qore_module_entry_refusals();
         const char* method_name = nullptr;
         // the class of the operation of a continuePoll() item, whose reference is released after the step; for the
         // log below (copied, as the release can delete the object and, with it, the last reference to its class)
@@ -3310,6 +3333,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // next, unrelated work item on this worker
         end_thread_cancellation();
 
+        // a callback whose only failure is that it was refused entry into the Program of a module, which the module
+        // cleanup at the end of the process closes to the threads other than its own before it deletes the modules,
+        // is not reported, at any depth: the item's own Program (an operation that a module's code submitted, whose
+        // step completes while the modules are deleted), the Program of the class of the method that it calls (an
+        // HTTP client operation of a connection manager whose object belongs to its client's Program), or the Program
+        // of a timer's callback; the code of the closed Program does not run.  Any other exception is reported (one
+        // that a callback raised after it caught the refusal, for example).  A step (continuePoll()) gives the
+        // refusal as the operation's error, as before (qore#6685)
+        if (work_xsink && qore_module_entry_refusals() != module_entry_refusals
+                && qore_module_entry_refusals_only(&work_xsink)) {
+            work_xsink.clear();
+        }
+        // the same for the release of the item's references below, which can run the destructor of an object of a
+        // module's class
+        const uint64_t cleanup_module_entry_refusals = qore_module_entry_refusals();
+
         if (work_xsink) {
             QoreStringValueHelper err_str(work_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
@@ -3487,7 +3526,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // exits), while the derefs above can run arbitrary Qore destructors that raise into it.  An
         // exception left pending here would stay for every subsequent work item, where it is invisible and
         // can be mistaken for a failure by any helper that reports through the sink.  Report it once and
-        // clear it so each work item starts from a clean sink.
+        // clear it so each work item starts from a clean sink.  A refused entry into the Program of a module while
+        // the modules are deleted is not reported (see above; qore#6685)
+        if (*xsink && qore_module_entry_refusals() != cleanup_module_entry_refusals
+                && qore_module_entry_refusals_only(xsink)) {
+            xsink->clear();
+        }
         if (*xsink) {
             QoreStringValueHelper err(xsink->getExceptionErr());
             QoreStringValueHelper desc(xsink->getExceptionDesc());
@@ -10107,6 +10151,17 @@ bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
         cd = call_dispatcher;
     }
     return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
+}
+
+bool AsyncIoControllerPriv::dbgWaitOnCompleteQueued(int64_t count, int timeout_ms) {
+    ensureCallDispatcher();
+    // as in flushCallbacks(): the dispatcher's lock is not taken with the controller's held
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    return cd ? cd->dbgWaitOnCompleteQueued(count, timeout_ms) : false;
 }
 #endif
 

@@ -2146,6 +2146,21 @@ DLLLOCAL void qore_dbg_module_cleanup_work_held();
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
 
+//! Returns the number of times that the calling thread was refused entry into the Program of a module because the
+//! module cleanup had closed the Programs of the modules to it (see qore_close_module_programs(); qore#6685)
+/** A callback whose only failure is a new refusal was refused entry into a module's Program, at any depth (its own
+    Program, the Program of the class of the method that it calls, or one that it calls into): the failure is not
+    reported (see qore_module_entry_refusals_only())
+*/
+DLLLOCAL uint64_t qore_module_entry_refusals();
+
+//! Returns true if every exception in \a xsink is the refusal of an entry into the Program of a module once the
+//! module cleanup has closed them (see qore_module_entry_refusals()), and there is at least one
+/** A failure with any other exception is reported: it can be one that a callback raised after it caught the refusal,
+    or one of its own before code that it ran on exit was refused
+*/
+DLLLOCAL bool qore_module_entry_refusals_only(ExceptionSink* xsink);
+
 //! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
 //! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
 /** See qore_close_module_programs(); the helpers of a thread nest
