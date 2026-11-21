@@ -1148,9 +1148,9 @@ public:
     unsigned cancel_raise_count = 0;
 
     //! true if the thread is a foreign thread
-    /** Read by other threads (ThreadProgramData::canRunDebugCallbacks(), when a debugger attaches to or detaches from a
-        Program that the thread runs in), so it is not a bit-field: the thread writes its bit-fields (finalizing, for
-        example), which writes the memory location of each bit-field of the group
+    /** Read by other threads (over the list of threads, for the module programs' uncounted entries), so it is not a
+        bit-field: the thread writes its bit-fields (finalizing, for example), which writes the memory location of each
+        bit-field of the group; the debugger reads the copy in ThreadProgramData, which outlives this object (qore#7103)
     */
     const bool foreign;
 
@@ -1170,7 +1170,7 @@ public:
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
-            tpd(new ThreadProgramData(this, ptid)),
+            tpd(new ThreadProgramData(this, ptid, n_foreign)),
             foreign(n_foreign),
             try_reexport(false),
             finalizing(false),
@@ -2374,11 +2374,9 @@ bool ThreadProgramData::saveProgram(bool runtime, bool* first_entry) {
 }
 
 bool ThreadProgramData::canRunDebugCallbacks() const {
-    return !td->foreign;
-}
-
-bool ThreadProgramData::isActiveProgram(QoreProgram* pgm) const {
-    return td->current_pgm == pgm;
+    // not td->foreign: the debugger reads it from a Program's records of its threads, also of a thread that has ended,
+    // whose data has been freed (qore#7103)
+    return !foreign;
 }
 
 QoreHashNode* ThreadProgramData::getThreadDataRef(qore_program_private* root, bool create, bool& final, bool ref) {
@@ -4492,6 +4490,8 @@ void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLoc
 
 QoreProgram* set_runtime_call_site_program(QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
+    // the frame of the previous call took the Program that its call set before this call can set one (qore#7101)
+    assert(!td->call_site_pgm);
     QoreProgram* prev = td->call_site_pgm;
     td->call_site_pgm = pgm;
     return prev;
@@ -10554,6 +10554,7 @@ static void leave_background_thread_program(ThreadData* td) {
     assert(!td->callback_caller_pgm);
     assert(!td->current_stack_location.load(std::memory_order_relaxed));
     assert(!td->call_site_loc);
+    assert(!td->call_site_pgm);
     set_thread_current_pgm(td, nullptr);
     td->tlpd = nullptr;
     sync_runtime_config_program(td);

@@ -689,9 +689,7 @@ struct qore_list_private {
         // Transfer every owned representation, including inline enum references.
         entry[offset].clear();
 
-        // no value of a list whose scan count is zero needs a scan (see QoreListNode::shift())
-        assert(obj_count || !needs_scan(rv));
-        if (obj_count && needs_scan(rv)) {
+        if (needs_scan(rv)) {
             --obj_count;
         }
 

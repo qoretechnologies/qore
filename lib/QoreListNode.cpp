@@ -99,21 +99,12 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     // allocated a list and its entries for each call; the caller keeps its reference and releases the list
     {
         bool evaluated = true;
-        // only a node can need evaluation; it is checked with the inline accessors, as this is done for every call
-        // (qore#6052)
-        const qore_list_private* ep = qore_list_private::get(*exp);
-        for (size_t i = 0, e = ep->length; i < e; ++i) {
-            const QoreValue& ev = ep->entry[i];
-            if (!ev.isPointer()) {
-                continue;
-            }
-            const AbstractQoreNode* n = ev.getPtr();
-            if (n && n->needs_eval()) {
-                qore_type_t t = n->getType();
-                if (t != NT_REFERENCE && t != NT_WEAKREF && t != NT_WEAKREF_HASH && t != NT_WEAKREF_LIST) {
-                    evaluated = false;
-                    break;
-                }
+        for (size_t i = 0, e = exp->size(); i < e; ++i) {
+            const QoreValue& ev = exp->retrieveEntry(i);
+            if (ev.needsEval() && ev.getType() != NT_REFERENCE && ev.getType() != NT_WEAKREF
+                    && ev.getType() != NT_WEAKREF_HASH && ev.getType() != NT_WEAKREF_LIST) {
+                evaluated = false;
+                break;
             }
         }
         if (evaluated) {
@@ -843,10 +834,7 @@ QoreValue QoreListNode::shift() {
     priv->entry[pos] = QoreValue();
     priv->resize(pos);
 
-    // no value of a list whose scan count is zero needs a scan, which, for a call reference, is a dynamic cast
-    // (qore#6052)
-    assert(priv->obj_count || !needs_scan(rv));
-    if (priv->obj_count && needs_scan(rv)) {
+    if (needs_scan(rv)) {
         priv->incScanCount(-1);
     }
 
@@ -863,10 +851,7 @@ QoreValue QoreListNode::pop() {
     priv->entry[pos] = QoreValue();
     priv->resize(pos);
 
-    // no value of a list whose scan count is zero needs a scan, which, for a call reference, is a dynamic cast
-    // (qore#6052)
-    assert(priv->obj_count || !needs_scan(rv));
-    if (priv->obj_count && needs_scan(rv)) {
+    if (needs_scan(rv)) {
         priv->incScanCount(-1);
     }
 
