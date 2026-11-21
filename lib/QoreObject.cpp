@@ -508,7 +508,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 // must be called in the object write lock
 QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_private* class_ctx) {
     if (cdmap) {
-        cdmap_t::iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::iterator i = cdmap->find(class_ctx->classID);
         if (i != cdmap->end())
             return i->second;
     } else
@@ -518,7 +518,7 @@ QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_privat
 #ifdef DEBUG
     qore_hash_private::get(*id)->is_obj = true;
 #endif
-    cdmap->insert(cdmap_t::value_type(class_ctx->getHash(), id));
+    cdmap->insert(cdmap_t::value_type(class_ctx->classID, id));
     return id;
 }
 
@@ -725,11 +725,11 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         if (class_ctx && o.cdmap) {
-            cdmap_t::iterator i = o.cdmap->find(class_ctx->getHash());
+            cdmap_t::iterator i = o.cdmap->find(class_ctx->classID);
             if (i != o.cdmap->end()) {
-                // see if the current object supports this class's data
+                // see if the current object supports this class's data: the class itself, by identity (qore#7036)
                 ClassAccess access;
-                if (theclass->priv->getClass(*class_ctx, access)) {
+                if (theclass->priv->getAccessClass(*class_ctx, access)) {
                     new_internal_data = i->second->copy();
                 }
             }

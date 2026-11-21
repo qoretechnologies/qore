@@ -459,7 +459,9 @@ authenticate();
     read are listed, each with the reason why every caller may read it, and a check of the sources
     (\c examples/test/runner/test_module_shared_statics.py) fails for any other.  The members of an object that hold
     credentials, such as the options of an HTTP listener with its TLS certificate and private key, are
-    \c private:internal as well, so that a subclass cannot read them from an object that it is given.
+    \c private:internal as well, so that a subclass cannot read them from an object that it is given.  A class that
+    sandboxed code declares with the name and the declarations of a trusted class is another class, with no private
+    access to the objects of the trusted class (see @ref private_access_class_identity).
 
     The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
     serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,

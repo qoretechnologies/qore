@@ -1687,8 +1687,10 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     }
     // see if non-static method is part of self's class hierarchy
     if (!meth->isStatic()) {
+        // by identity: a method of another class with the same name and signature is not a method of the object
+        // (qore#7036)
         bool priv;
-        if (!self->getClass()->getClass(*meth->getClass(), priv)) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *meth->getClass(), priv)) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
             // no call reference with the error (issue #5866)

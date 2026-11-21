@@ -938,28 +938,34 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
 }
 
 bool QoreReflectionCaller::canUseObjectElementClass(const QoreObject& obj, const QoreClass& cls) const {
-    // a class reached without a private:internal edge below the object's class
-    if (obj.validInstanceOf(cls)) {
-        return true;
-    }
     if (!obj.isValid()) {
         return false;
     }
     const qore_class_private* oc = qore_class_private::get(*obj.getClass());
     const qore_class_private* decl = qore_class_private::get(cls);
-    if (!member_access) {
-        // a caller that may use every element of a class may use every class of the object's hierarchy
+    // a class reached without a private:internal edge below the object's class, by identity for a caller that the
+    // language's rules govern: a class with only the name and signature of a class of the object's hierarchy is
+    // another class (qore#7036)
+    {
         ClassAccess access = Public;
-        return oc->inHierarchyStrict(*decl, access);
+        if (oc->getAccessClass(*decl, access)) {
+            return true;
+        }
+    }
+    if (!member_access) {
+        // a caller that may use every element of a class may use every class of the object's hierarchy, by identity
+        ClassAccess access = Public;
+        return oc->inAccessHierarchy(*decl, access);
     }
     // the language's rules: the class context is in the object's hierarchy, and is the class or reaches it, also
     // through a class that it inherits with private:internal itself
     if (!caller_class) {
         return false;
     }
+    // the classes by identity, never by name and signature (qore#7036)
     ClassAccess access;
-    return oc->getClass(*caller_class, access)
-        && (caller_class == decl || caller_class->getClass(*decl, access));
+    return oc->getAccessClass(*caller_class, access)
+        && (caller_class == decl || caller_class->getAccessClass(*decl, access));
 }
 
 bool QoreReflectionCaller::appliesModuleExports(const QoreProgram* target) const {
