@@ -38,8 +38,6 @@
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/QoreCallTargetCheckCache.h"
 
-#include <atomic>
-
 //! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
 /** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
     of the parameters are); thread-safe
@@ -865,15 +863,12 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const;
 
-    //! \a t is the type of \a n
-    DLLLOCAL QoreValue execPseudo(const QoreValue n, qore_type_t t, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
 
-    DLLLOCAL QoreValue execPseudo(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
-            ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
-            ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
     //! evaluates a named call resolved at run time by parameter name on a value that is not an object: the call of
     //! a method of an object whose receiver has no value or another value at run time (see
     //! QoreDotEvalOperatorNode::evalWithBase())
@@ -937,15 +932,6 @@ public:
         return pseudoTypeInfo;
     }
 
-    //! Returns true if the pseudo-method that the parse-time resolution bound can be called on a value of type \a t
-    /** It can if the pseudo-class of the type is its class or inherits it; the value of a builtin whose declared type
-        is wrong can be of another type, whose pseudo-class then finds the method by name (qore#6813).  The last type
-        that was accepted is kept, so the check of a value of that type is a comparison
-    */
-    DLLLOCAL bool pseudoAcceptsType(qore_type_t t) const {
-        return t == pseudo_accepted_type.load(std::memory_order_relaxed) || pseudoAcceptsTypeSlow(t);
-    }
-
     //! Sets the source type info (type of object the method is called on)
     /** Used for iterator element type inference in map operators
     */
@@ -963,12 +949,7 @@ protected:
     char* c_str;
     const QoreTypeInfo* pseudoTypeInfo = nullptr;
     const QoreTypeInfo* sourceTypeInfo = nullptr;  //!< type of object the method is called on
-    //! the last type of a value that the pseudo-method was accepted for (see pseudoAcceptsType()); -1 if none
-    mutable std::atomic<qore_type_t> pseudo_accepted_type{-1};
     bool pseudo = false;
-
-    //! the part of pseudoAcceptsType() for a type that was not the last one accepted
-    DLLLOCAL QORE_INTERN_NOINLINE bool pseudoAcceptsTypeSlow(qore_type_t t) const;
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

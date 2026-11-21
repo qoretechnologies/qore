@@ -22297,13 +22297,6 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
 #endif
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
-//! calls the pseudo-method of a value found by name in the pseudo-class of its type (qore#6813); out of line, so that
-//! the dispatch of a pseudo-method of the value's class keeps its frame
-static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_eval_pseudo_method_by_name(const QoreClass* vqc,
-        QoreValue base, const char* name, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return toBits(qore_class_private::evalPseudoMethod(vqc, base, name, args, rc, xsink));
-}
-
 static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
@@ -22328,9 +22321,7 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     // normal name-based dispatch before pseudo-method dispatch.  This preserves
     // user method overrides such as className() and hash member callrefs such as
     // h.size().
-    // the type is read once (see below)
-    qore_type_t bt = base.getType();
-    switch (bt) {
+    switch (base.getType()) {
         case NT_OBJECT:
         case NT_WEAKREF:
         case NT_HASH:
@@ -22342,7 +22333,7 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     }
 
     // Unwrap weak references — pseudo method handlers expect the underlying value
-    if (bt == NT_WEAKREF) {
+    if (base.getType() == NT_WEAKREF) {
         QoreObject* o = base.get<const WeakReferenceNode>()->get();
         if (!o || !o->isValid()) {
             qore_raise_deleted_object(xsink, 
@@ -22360,22 +22351,9 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     RuntimeConfig& rc = rc_get_current_ref();
 
     // If base is nothing and class is not <nothing>, use <nothing> pseudo class
-    if (bt == NT_NOTHING) {
-        if (qc != QC_PSEUDONOTHING) {
-            return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
-                *arg_list, rc, xsink));
-        }
-    } else {
-        // the method that the parse-time resolution found is called only on a value of its class: a value of another
-        // type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class of
-        // its type, as a value with no declared type does (qore#6813), with the predicate of the check of the receiver
-        // before the arguments (qore_pseudo_class_accepts_type()); the pseudo-class of the value's type is the usual
-        // case, compared first (by the private data, which a Program's copy of a class shares)
-        const QoreClass* vqc = qore_pseudo_get_class(bt);
-        if (qore_class_private::get(*vqc) != qore_class_private::get(*qc)
-                && !qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
-            return qore_rt_eval_pseudo_method_by_name(vqc, base, method->getName(), *arg_list, rc, xsink);
-        }
+    if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+        return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
+            *arg_list, rc, xsink));
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }
