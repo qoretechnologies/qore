@@ -228,6 +228,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 "heartbeat quietly", mode), sub () { runWsHeartbeatCase(m); });
         }
         foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: a WebSocket server stream and an SSE stream refused their heartbeat timer at the "
+                "end of the process go on quietly", mode), sub () { runServersCase(m); });
+        }
+        foreach string mode in (ExecModes) {
             foreach string follow_up in (FollowUpExpected.keyIterator()) {
                 string m = mode;
                 string f = follow_up;
@@ -293,6 +298,29 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)client log: [^\n]*heartbeat timer not re-armed at the end of the process: "
             "ASYNC-IO-SHUTDOWN-ERROR", out, "the refused re-arm is logged at the debug level: " + out);
         assertRegex("(^|\n)client done\n", out, "the client disconnects: " + out);
+        assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
+    }
+
+    #! the frame that a WebSocket server stream receives is processed in work that the module cleanup handed over after
+    #! its deadline (a test hook holds its notification until then), and an HTTP/2 SSE stream is created in the work
+    #! of an operation that the cleanup canceled: their heartbeat timers are refused, which they handle quietly
+    #! (qore#7027)
+    private runServersCase(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the notifications are held with a test hook of a debug build");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "servers-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)echo received: hello\n", out, "the WebSocket server answers: " + out);
+        assertRegex("(?s)(^|\n)" + sprintf(DeadlineWarning, 0) + ".*\nserver log: H2/H3 WebSocket heartbeat timer not "
+            "re-armed at the end of the process: ASYNC-IO-SHUTDOWN-ERROR", out, "the server stream's refused re-arm, "
+            "after the deadline, is logged at the debug level: " + out);
+        assertRegex("(^|\n)sse stream created: canceled: True\n", out, "the SSE stream is created: " + out);
+        assertNRegex("notification of the frame was not held", out, "the frame is processed after the deadline: "
+            + out);
         assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
     }
 

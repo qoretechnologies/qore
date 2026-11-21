@@ -658,13 +658,22 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         # (or its Program) alive; if the appender is deleted first, the call throws OBJECT-ALREADY-DELETED
         ElasticSearchLoggerAppender wself;
         wself := self;
-        flushTimerId = AsyncIoController::addTimerDelay(milliseconds(flushIntervalMs), sub () {
-            try {
-                wself.flushTimerCallback(generation);
-            } catch (hash<ExceptionInfo> ex) {
-                # OBJECT-ALREADY-DELETED: the appender was deleted before the callback ran; nothing to flush
+        try {
+            flushTimerId = AsyncIoController::addTimerDelay(milliseconds(flushIntervalMs), sub () {
+                try {
+                    wself.flushTimerCallback(generation);
+                } catch (hash<ExceptionInfo> ex) {
+                    # OBJECT-ALREADY-DELETED: the appender was deleted before the callback ran; nothing to flush
+                }
+            }, timerOwner);
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the events are flushed when the
+            # appender is closed, not periodically (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
             }
-        }, timerOwner);
+        }
     }
 
     #! Periodic flush timer callback; runs on an async I/O controller worker thread

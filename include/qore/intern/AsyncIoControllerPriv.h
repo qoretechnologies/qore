@@ -2463,9 +2463,19 @@ public:
         operation's onComplete() or a timer's callback with QoreSandboxContext::module_cleanup_delegate) is held
         instead of queued until the module
         cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
-        the cleanup lets it
+        the cleanup lets it; with \a stream_data, also the stream data and poll-complete notifications of such
+        operations (the frames that a connection receives), which the cleanup releases only after its deadline
+        (qore#7027)
     */
-    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
+    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold, bool stream_data = false);
+
+    //! Debug-only: waits until at least \a count items are held by dbgHoldModuleCleanupWork(), of operations whose
+    //! class name contains \a class_part if given; returns false if the wait timed out (qore#7027)
+    /** Note that the stream data and poll-complete notifications held are released only after the deadline of the
+        cleanup, also after an onComplete() of the same operation, and that code that waits for such a notification
+        while they are held waits until then
+    */
+    DLLLOCAL static bool dbgWaitHeldModuleCleanupWork(size_t count, const char* class_part, int64 timeout_ms);
 
     //! Debug-only: the held test-hook work that the drain of the module cleanup releases (QDMCDP_* flags, qore#7027)
     /** QDMCDP_BEFORE_CANCEL_ROUND: the step results held by dbg_async_io_hold_step_results(), before the drain's cancel

@@ -1332,9 +1332,13 @@ namespace {
 struct AsyncIoDebugHeldModuleCleanupWork {
     //! True while such items are held; checked without the lock first
     std::atomic<bool> hold{false};
+    //! True if the stream data and poll-complete notifications of such operations are held too
+    std::atomic<bool> hold_stream_data{false};
     QoreThreadLock lock;
     //! the items held, with the dispatcher that they were queued to
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+    //! signaled when an item is held (dbgWaitHeldModuleCleanupWork())
+    QoreCondition held_cond;
     //! the tasks held (qore_dbg_hold_module_cleanup_task()), signaled when one is released
     QoreCondition task_cond;
     //! the number of tasks held that the module cleanup counts, and of those that it does not
@@ -1352,9 +1356,10 @@ struct AsyncIoDebugHeldModuleCleanupWork {
 };
 }
 
-void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold) {
+void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold, bool stream_data) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     AutoLocker al(state.lock);
+    state.hold_stream_data.store(hold && stream_data, std::memory_order_release);
     state.hold.store(hold, std::memory_order_release);
     if (!hold && (state.held_counted_tasks || state.held_uncounted_tasks)) {
         // the tasks held run now
@@ -1374,7 +1379,9 @@ static thread_local bool dbg_requeue_held_module_cleanup_work = false;
 bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     if (dbg_requeue_held_module_cleanup_work || !state.hold.load(std::memory_order_acquire)
-            || (item.type != DT_ON_COMPLETE && item.type != DT_CALLBACK)
+            || (item.type != DT_ON_COMPLETE && item.type != DT_CALLBACK
+                && !(state.hold_stream_data.load(std::memory_order_acquire)
+                    && (item.type == DT_STREAM_DATA_NOTIFY || item.type == DT_POLL_COMPLETE_NOTIFY)))
             || !async_io_module_cleanup_delegate(item.sandbox_ctx)) {
         return false;
     }
@@ -1384,6 +1391,7 @@ bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
             return false;
         }
         state.held.emplace_back(this, std::move(item));
+        state.held_cond.broadcast();
     }
     // the module cleanup releases it when it waits for its work
     qore_dbg_module_cleanup_work_held();
@@ -1406,6 +1414,28 @@ void qore_dbg_module_cleanup_drain_point(int point) {
         AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(&xsink);
     } else {
         AsyncIoControllerPriv::dbgReleaseHeldStepResults(&xsink);
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(size_t count, const char* class_part, int64 timeout_ms) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+    AutoLocker al(state.lock);
+    while (true) {
+        size_t n = 0;
+        for (auto& i : state.held) {
+            if (!class_part || (i.second.spop_obj && strstr(i.second.spop_obj->getClassName(), class_part))) {
+                ++n;
+            }
+        }
+        if (n >= count) {
+            return true;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        state.held_cond.wait2(state.lock, (remaining_us + 999) / 1000);
     }
 }
 
@@ -1458,10 +1488,15 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
         } else {
             // the cleanup waits only for the work that it counts: work whose context is delegated but not counted
             // (an operation that work of the cleanup submitted) stays held until the hold ends (qore#7027)
+            // the stream data and poll-complete notifications held only after its deadline, as the test hook holds
+            // them to make the frames that they bring be processed in the work of the cleanup after its deadline
+            const bool deadline_passed = qore_module_cleanup_deadline_passed();
             auto it = state.held.begin();
             while (it != state.held.end()) {
-                if ((it->second.sandbox_ctx && it->second.sandbox_ctx->module_cleanup_work)
-                        || it->second.module_cleanup_work) {
+                if (((it->second.sandbox_ctx && it->second.sandbox_ctx->module_cleanup_work)
+                        || it->second.module_cleanup_work)
+                    && (deadline_passed || (it->second.type != QoreCallDispatcher::DT_STREAM_DATA_NOTIFY
+                        && it->second.type != QoreCallDispatcher::DT_POLL_COMPLETE_NOTIFY))) {
                     held.push_back(std::move(*it));
                     it = state.held.erase(it);
                 } else {
