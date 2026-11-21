@@ -88,7 +88,8 @@ int sub r(list<auto> l, int d, bool io) {
 }
 
 #! returns the number of exceptions in the chain that a destructor raised: a destructor that could not run because of
-#! the stack raises STACK-LIMIT-EXCEEDED, which is chained to the exception being raised
+#! the stack raises STACK-LIMIT-EXCEEDED, which is chained to the exception being raised (or which replaces the
+#! exception being handled, when the destructor runs in a catch block; see dtor_failure())
 int sub dtor_errors(hash<ExceptionInfo> ex) {
     int n = 0;
     *hash<ExceptionInfo> e = ex;
@@ -105,8 +106,12 @@ string sub counts(string cls) {
     return sprintf("%s=%d/%d", cls, made{cls} ?? 0, destroyed{cls} ?? 0);
 }
 
+#! the exception of the last scenario that run() ran
+our *hash<ExceptionInfo> last_ex;
+
 #! runs a scenario on a new thread and returns its exception
 string sub run(code c, int stack_size) {
+    remove last_ex;
     set_default_thread_stack_size(stack_size);
     Queue q();
     background sub () {
@@ -118,6 +123,7 @@ string sub run(code c, int stack_size) {
             c();
             res = sprintf("none stack=%d", size);
         } catch (hash<ExceptionInfo> ex) {
+            last_ex = ex;
             res = sprintf("%s dtor=%d stack=%d", ex.err, dtor_errors(ex), size);
         }
     }();
@@ -166,7 +172,38 @@ sub start(*code make) {
 }
 int sub get_depth() { return depth ?? 0; }
 *string sub get_err() { return deep_err; }
+bool sub get_held() { return exists released; }
 ";
+
+#! returns the line of the sandboxed code that holds the text
+int sub sandbox_line(string text) {
+    foreach string line in (SandboxCode.split("\n")) {
+        if (line.find(text) >= 0) {
+            return $# + 1;
+        }
+    }
+    throw "LINE-ERROR", sprintf("%y is not in the sandboxed code", text);
+}
+
+#! returns "yes" if the exception chain holds the STACK-LIMIT-EXCEEDED of a destructor that could not run
+/** It is raised by "remove released" in the catch block of the sandboxed code, where the stack check of the call of
+    the destructor fails before its frame is pushed, or in the destructor, where a check in its body fails before the
+    destructor catches the failure of its recursion; which one depends on how the execution mode and the build use
+    the stack, as for any call.  Raised in a catch block, it replaces the exception being handled, as any exception
+    raised there does, and it can have others chained to it.
+*/
+string sub dtor_failure(*hash<ExceptionInfo> ex) {
+    int remove_line = sandbox_line("remove released;");
+    *hash<ExceptionInfo> e = ex;
+    while (e) {
+        if (e.err == "STACK-LIMIT-EXCEEDED" && ((e.callstack[0].function ?? "") =~ /::destructor$/
+                || (e.file == "sandboxed" && e.line == remove_line))) {
+            return "yes";
+        }
+        e = e.next;
+    }
+    return "no";
+}
 
 string rv;
 if (scenarios == "small") {
@@ -236,8 +273,12 @@ if (scenarios == "small") {
             # the host's object is released by the sandboxed code at its stack budget
             p.callFunction("start", what == "sandbox" ? NOTHING : object sub () { return new D(); });
         }, Big);
-        printf("%s: %s depth=%d err=%s%s\n", what, rv, what == "sandbox" ? p.callFunction("get_depth") : depth,
-            what == "sandbox" ? p.callFunction("get_err") : deep_err, what == "sandbox" ? "" : " " + counts("D"));
+        # the destructor was called if the sandboxed code released the object; its recursion never returns, so the
+        # destructor ran to its end only if it caught the failure of its recursion (err)
+        printf("%s: %s depth=%d err=%s released=%s dtor_failure=%s\n", what, rv,
+            what == "sandbox" ? p.callFunction("get_depth") : depth,
+            what == "sandbox" ? p.callFunction("get_err") : deep_err,
+            p.callFunction("get_held") ? "no" : "yes", dtor_failure(last_ex));
     }
     # the host is not affected
     reset();
