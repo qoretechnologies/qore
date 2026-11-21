@@ -76,6 +76,14 @@ public class LiveProvider {
         #! the variable that enables live calls
         const OptInVar = "QORE_TEST_LIVE_PROVIDERS";
 
+        #! the URLs of the hosted services of providers whose tests also run against servers of their own
+        /** by service id; see isLocalService()
+        */
+        const RemoteServicePatterns = {
+            # MongoDB Atlas: an SRV URL or a host in its domain
+            "mongodb": "^mongodb\\+srv:|\\.mongodb\\.net(?:[:,/?]|$)",
+        };
+
         #! the variables that client modules or their tools read credentials from without a test reading them
         /** by service id; they are removed from the environment when the module is loaded, for each service that live
             calls are not enabled for
@@ -216,6 +224,45 @@ public class LiveProvider {
             throw "TEST-SKIPPED-EXCEPTION", LiveProvider::skipReason(provider, vars);
         }
         return rv;
+    }
+
+    #! Returns the URL of a service that a test can run against a server of its own (ex: a MongoDB server in a
+    #! container), unless it is a remote, credentialed service that live calls are not enabled for
+    /** A URL that carries credentials (<tt>user:password\@</tt> or any other user information) or that names a
+        hosted service of the provider (RemoteServicePatterns, ex: MongoDB Atlas) is a live call as a credential
+        variable is; any other URL (ex: <tt>mongodb://mongodb:27017</tt> of CI, or \c localhost) is a local service,
+        which a test uses whether live calls are enabled or not; see isLocalService()
+
+        @param provider the id of the service, as for enabled()
+        @param var the variable with the URL (ex: \c "MONGODB_URL")
+
+        @return the URL, or no value if the variable is not set, or the URL is not a local service and live calls to
+        the service are not enabled
+    */
+    static *string getService(string provider, string var) {
+        *string url = LiveProvider::getVar(var);
+        if (!url || (!LiveProvider::isLocalService(provider, url) && !LiveProvider::enabled(provider))) {
+            return;
+        }
+        return url;
+    }
+
+    #! Returns @ref True "True" if a URL of the service needs no credential and does not name its hosted service
+    /** @param provider the id of the service, as for enabled()
+        @param url the URL
+
+        @return @ref False "False" if the URL has user information (<tt>user:password\@</tt>, <tt>user\@</tt>) or
+        matches the provider's RemoteServicePatterns (ex: <tt>mongodb+srv://</tt> or a \c *.mongodb.net host for
+        \c "mongodb"), else @ref True "True"
+    */
+    static bool isLocalService(string provider, string url) {
+        # the authority: after the scheme, up to the path, query or fragment
+        *string authority = (url =~ x/^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^\/?#]*)/)[0] ?? url;
+        if (authority.find("@") >= 0) {
+            return False;
+        }
+        *string remote = RemoteServicePatterns{provider.lwr()};
+        return !remote || !url.regex(remote, RE_Caseless);
     }
 
     #! Returns a named connection to the service, only when live calls to it are enabled

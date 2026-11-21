@@ -33,6 +33,7 @@ class LiveProviderHelperTest inherits QUnit::Test {
         addTestCase("require() skips the test case with the reason, which has no value", \requireSkips());
         addTestCase("connection() opens nothing without the opt-in", \connection());
         addTestCase("the ambient credentials of a disabled service are removed", \ambient());
+        addTestCase("a local service URL is given, a remote or credentialed one only when enabled", \service());
         set_return_value(main());
     }
 
@@ -137,6 +138,30 @@ class LiveProviderHelperTest inherits QUnit::Test {
         LiveProvider::clearAmbient();
         # live-provider-optin: checks that the fake value set above was removed
         assertEq(NOTHING, getenv("AZURE_CLIENT_SECRET"), "removed: nothing is enabled");
+    }
+
+    service() {
+        map assertTrue(LiveProvider::isLocalService("mongodb", $1), $1), ("mongodb://mongodb:27017",
+            "mongodb://localhost:27017/db?replicaSet=rs0", "mongodb://127.0.0.1", "mongodb://a:1,b:2/x");
+        map assertFalse(LiveProvider::isLocalService("mongodb", $1), $1), ("mongodb+srv://cluster0.example.net/x",
+            "mongodb://u:p@localhost:27017", "mongodb://u@localhost", "mongodb://shard-00.abc.mongodb.net:27017",
+            "MONGODB+SRV://host/x", "mongodb://a:1,shard-01.abc.mongodb.net:27017/x");
+        # a provider without hosted-service patterns: only the credentials count
+        assertTrue(LiveProvider::isLocalService("other", "https://x.mongodb.net"));
+        assertFalse(LiveProvider::isLocalService("other", "https://u:p@x"));
+
+        unsetenv(LiveProvider::OptInVar);
+        setenv(Var, "mongodb://mongodb:27017");
+        on_exit unsetenv(Var);
+        assertEq("mongodb://mongodb:27017", LiveProvider::getService("mongodb", Var), "local: given when disabled");
+        setenv(Var, "mongodb://fakeuser:" + Value + "@localhost:27017");
+        assertEq(NOTHING, LiveProvider::getService("mongodb", Var), "credentialed: not given when disabled");
+        setenv(LiveProvider::OptInVar, "mongodb");
+        # live-provider-optin: compares with the fake value that the test set
+        assertTrue(LiveProvider::getService("mongodb", Var) == getenv(Var), "credentialed: given when enabled");
+        unsetenv(LiveProvider::OptInVar);
+        unsetenv(Var);
+        assertEq(NOTHING, LiveProvider::getService("mongodb", Var), "unset");
     }
 
     private checkOptIn(string optin, list<string> providers) {

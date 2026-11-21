@@ -35,7 +35,7 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
         addTestCase("constructor accepts full config",       \constructorOkTest());
         addTestCase("management filters and summary pipeline", \managementBuildersTest());
         # the management methods use plain MongoDB operations, so any server (not only Atlas) will do
-        if (LiveProvider::get("mongodb", "MONGODB_URL").val()) {
+        if (LiveProvider::getService("mongodb", "MONGODB_URL").val()) {
             addTestCase("live: count, delete and summarize by payload filter", \liveManagementTest());
         }
         addTestCase("vector-search action wired into collection ChildMap",
@@ -95,14 +95,14 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
         QoreRagUtils::MongoAtlasVectorStore store(<QoreRagUtils::VectorStoreConfig>{
             "backend": "mongo-atlas",
             "collection": "qore_rag_mgmt_test",
-            "url": LiveProvider::get("mongodb", "MONGODB_URL"),
+            "url": LiveProvider::getService("mongodb", "MONGODB_URL"),
             "options": {"database": "qore_rag_test", "index_name": "unused"},
         });
         # CI sets MONGODB_URL on runners where the server is not reachable
         try {
             store.countByFilter();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("MongoDB is not reachable at %y: %s", LiveProvider::get("mongodb", "MONGODB_URL"),
+            testSkip(sprintf("MongoDB is not reachable at %y: %s", LiveProvider::getService("mongodb", "MONGODB_URL"),
                 ex.desc));
         }
         on_exit {

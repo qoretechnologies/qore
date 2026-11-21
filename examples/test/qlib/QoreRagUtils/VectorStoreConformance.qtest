@@ -113,7 +113,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if ((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL).val()) {
             addTestCase("pgvector", \pgvectorTest());
         }
-        if (ENV.MONGODB_URL.val()) {
+        if (LiveProvider::getService("mongodb", "MONGODB_URL").val()) {
             addTestCase("MongoDB", \mongoTest());
         }
         if (ENV.OPENSEARCH_URL.val()) {
@@ -338,13 +338,14 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
             <QoreRagUtils::VectorStoreConfig>{
                 "backend": "mongo-atlas",
                 "collection": "qore_rag_conformance",
-                "url": ENV.MONGODB_URL,
+                "url": LiveProvider::getService("mongodb", "MONGODB_URL"),
                 "options": {"database": "qore_rag_test", "index_name": "unused"},
             });
         try {
             store.countByFilter();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("MongoDB is not reachable at %y: %s", ENV.MONGODB_URL, ex.desc));
+            testSkip(sprintf("MongoDB is not reachable at %y: %s", LiveProvider::getService("mongodb", "MONGODB_URL"),
+                ex.desc));
         }
         string scope = "mongo-" + get_random_string(6);
         on_exit {
