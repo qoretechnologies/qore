@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Datasource String With an Invalid Port Raises an Error
+    A datasource string whose port is 0, larger than 65535, negative or not a number raises
+    \c DATASOURCE-PARSE-ERROR instead of being parsed with that port or with the port in the host name, and an IPv6
+    address is given in brackets (see @ref Qore::SQL::parse_datasource() "parse_datasource()";
+    <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
@@ -1145,6 +1151,12 @@
     take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par IPv6 Hosts in Datasource Strings
+    A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
+    @ref Qore::SQL::make_datasource_string() "make_datasource_string()" writes one so (see
+    @ref Qore::SQL::parse_datasource() "parse_datasource()";
+    <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>).
+
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
     or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;
