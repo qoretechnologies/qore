@@ -472,6 +472,14 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
+// refuses a call of a reference that code that may not control threads created, to code that does not check it when
+// it is entered (the code of another Program, builtin code), if the expression of the background operator makes it
+// itself (qore#7087)
+static int check_background_creator(const ResolvedCallReferenceNodeIntern* r, ExceptionSink* xsink) {
+    const QoreParseOptions* po = r->getNonModuleCreatorParseOptions();
+    return po && (*po & QoreParseOptions(QDOM_THREAD_CONTROL)) ? qore_check_background_direct_call(xsink) : 0;
+}
+
 void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
     creator_po = runtime_get_effective_program_parse_options();
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
@@ -974,6 +982,9 @@ RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
 }
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1001,6 +1012,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* 
 }
 
 QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -1020,6 +1034,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* arg
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1041,6 +1058,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* 
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -1147,6 +1167,9 @@ const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember
 }
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1160,6 +1183,9 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* ar
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
@@ -1172,6 +1198,9 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListN
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
@@ -1271,6 +1300,9 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1294,6 +1326,9 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* ar
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -1311,6 +1346,9 @@ QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args,
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1369,6 +1407,9 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -1921,6 +1962,9 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1936,6 +1980,9 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
 }
 
 QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -1946,6 +1993,9 @@ QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Ex
 
 QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1961,6 +2011,9 @@ QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
 
 QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -2120,6 +2173,9 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2128,6 +2184,9 @@ QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, Excep
 }
 
 QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -2137,6 +2196,9 @@ QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Exceptio
 
 QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2147,6 +2209,9 @@ QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const
 
 QoreValue MethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -2512,6 +2577,9 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2520,6 +2588,9 @@ QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, Exc
 }
 
 QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -2529,6 +2600,9 @@ QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, Except
 
 QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2538,6 +2612,9 @@ QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, con
 
 QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -3102,4 +3179,10 @@ QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const Q
     xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "a call through a %s cannot take named arguments; use "
         "positional arguments", r->getTypeName());
     return QoreValue();
+}
+
+QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm) {
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    return qore_non_module_program_restrictions(pgm) & restricting;
 }

@@ -146,6 +146,94 @@ probe("module background in a closure of the module", RunOrRefuse + 'string sub 
     return run(sub (Counter done) { ThreadEscapeHelper::runInClosure(sub (int x) { done.dec(); }, 1); });
 }');
 
+#! the result of code that a probe runs on another thread, where it can be refused when it is called: "ran" if it ran,
+#! "not run" if the thread ended without running it (the thread's exception is the refusal), or the exception that
+#! refused it when the thread was started
+const RunOrRefuseInThread = 'string sub runc(code<nothing(Counter, Counter)> start) {
+    Counter done(1);
+    Counter end(1);
+    try {
+        start(done, end);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    if (end.waitForZero(10s)) {
+        return "timeout";
+    }
+    return done.getCount() ? "not run" : "ran";
+}
+';
+
+# module code whose background expression computes its callee in the new thread: the code is checked when the
+# expression calls it, in every mode, and the new thread ends with the refusal (qore#7087)
+foreach string how in (("null coalescing", "conditional", "index", "hash member", "call result", "global variable",
+        "static class variable", "call_function", "call_function_args")) {
+    probe("module background, computed callee: " + how, RunOrRefuseInThread + 'string sub t(string how) {
+    return runc(sub (Counter done, Counter end) {
+        ThreadEscapeHelper::runComputed(how, sub (int x, *auto e) { done.dec(); }, 1, end);
+    });
+}', how);
+}
+const DecClass2 = 'class D2 {
+    private { Counter done; }
+    constructor(Counter done) { self.done = done; }
+    runWith(int x, *auto e) { done.dec(); }
+}
+';
+foreach string how in (("index", "method reference", "call_object_method", "call_object_method_args")) {
+    probe("module background, computed object: " + how, RunOrRefuseInThread + DecClass2 + 'string sub t(string how) {
+    return runc(sub (Counter done, Counter end) { ThreadEscapeHelper::runComputedMethod(how, new D2(done), 1, end); });
+}', how);
+}
+# a call of a method of the object of module code, which dispatches to the override of a restricted subclass
+probe("module background, method of the object overridden by a subclass", RunOrRefuseInThread + 'class S inherits
+        ThreadEscapeHelper::SelfRunner {
+    private { Counter done; }
+    constructor(Counter done) { self.done = done; }
+    work(int x, *auto e) { done.dec(); }
+}
+string sub t() {
+    return runc(sub (Counter done, Counter end) { (new S(done)).runSelf(1, end); });
+}');
+# module code that the new thread computes and calls, which calls the restricted code: the callee is the module's
+probe("module background, computed module code", RunOrRefuseInThread + 'string sub t() {
+    return runc(sub (Counter done, Counter end) {
+        ThreadEscapeHelper::runComputedModuleCode(sub (int x, *auto e) { done.dec(); }, 1, end);
+    });
+}');
+# the top-level code of a Program and an expression of a Program that may not control threads, which the restricted code
+# creates, and a callable that the new thread would run when it ends (qore#7087)
+probe("module background, Program::run()", RunOrRefuseInThread + 'string sub t() {
+    return runc(sub (Counter done, Counter end) {
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        p.parse("our Counter done; done.dec();", "top");
+        p.setGlobalVarValue("done", done);
+        ThreadEscapeHelper::runProgram(p, end);
+    });
+}');
+# the Program is kept: an expression does not keep its Program
+probe("module background, Expression::eval()", RunOrRefuseInThread + 'our *Program keep;
+string sub t() {
+    return runc(sub (Counter done, Counter end) {
+        keep = new Program(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        keep.parse("our Counter done;", "vars");
+        keep.setGlobalVarValue("done", done);
+        ThreadEscapeHelper::runExpression(keep.getExpression("done.dec()", "e"), end);
+    });
+}');
+probe("module background, thread resource", RunOrRefuseInThread + 'string sub t() {
+    return runc(sub (Counter done, Counter end) {
+        ThreadEscapeHelper::runAsThreadResource(sub (auto a) { done.dec(); }, end);
+    });
+}');
+# a computed callable that the host created is run
+code make_host_dec = code sub (Counter done) { return sub (int x, *auto e) { done.dec(); }; };
+probe("module background, computed host callable", RunOrRefuseInThread + 'string sub t(code make_host_dec) {
+    return runc(sub (Counter done, Counter end) {
+        ThreadEscapeHelper::runComputed("conditional", make_host_dec(done), 1, end);
+    });
+}', make_host_dec);
+
 # the private helpers of the HTTP controller are internal: a subclass cannot call them
 probe("subclass runOnThreadOfItsOwn", 'class X inherits HttpServerAsyncIo::HttpAsyncSocketIoController {
     constructor(AsyncSocketIoController c) : HttpAsyncSocketIoController(c) {}

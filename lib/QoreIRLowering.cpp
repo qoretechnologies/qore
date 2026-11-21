@@ -15691,37 +15691,40 @@ bool QoreIRLowering::extractLValuePath(const QoreValue& expr, std::vector<LVPath
 
 int QoreIRLowering::backgroundHelperCallee(const QoreValue& expr, const std::vector<LocalVar*>& params,
         const BackgroundHelperLowering& state) {
-    // QBH_NO_CALLEE and QBH_CALLEE_UNKNOWN of qore_thread_intern.h
-    static constexpr int no_callee = -2;
+    // QBH_CHECK_IN_THREAD and QBH_CALLEE_UNKNOWN of qore_thread_intern.h
+    static constexpr int in_thread = -2;
     static constexpr int unknown = -1;
-    // the callee of the expression: a call of a named function, a static method or a method of the object of the
-    // starting code has none; the callee of a call of a closure or call reference, or the object of a call of a method,
-    // is checked when the thread starts, as the AST interpreter checks it (do_op_background()); any other expression
-    // is unknown, and every closure, call reference and object that it takes is checked (qore#7087)
+    // the callee of a call of a closure or call reference, or the object of a call of a method, that is a value that
+    // the thread takes when it starts is checked then, as the AST interpreter checks it (do_op_background()); the code
+    // that any other expression calls (a call of a named function, a static method or a method of the object of the
+    // starting code, which can dispatch to an override, or a callable that the new thread computes) is checked when it
+    // is called in the new thread, as in the AST interpreter (qore_check_background_direct_entry()); a local variable
+    // or a value of the thread that is not found among the parameters is unknown, and every closure, call reference
+    // and object that the expression takes is checked when the thread starts (qore#7087)
     QoreValue callee;
     switch (expr.getType()) {
         case NT_FUNCTION_CALL:
         case NT_PROGRAM_FUNC_CALL:
         case NT_STATIC_METHOD_CALL:
         case NT_SELF_CALL:
-            return no_callee;
+            return in_thread;
         case NT_FUNCREFCALL:
             callee = expr.get<const CallReferenceCallNode>()->getExp();
             break;
         case NT_OPERATOR: {
             const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
             if (!call) {
-                return unknown;
+                return in_thread;
             }
             callee = call->getExpression();
             break;
         }
         default:
-            return unknown;
+            return in_thread;
     }
     const AbstractQoreNode* node = callee.getInternalNode();
     if (!node) {
-        return unknown;
+        return in_thread;
     }
     // a local variable of the starting code: one of the first parameters
     if (const VarRefNode* var = dynamic_cast<const VarRefNode*>(node)) {
@@ -15761,7 +15764,8 @@ int QoreIRLowering::backgroundHelperCallee(const QoreValue& expr, const std::vec
             return static_cast<int>(first_leaf + i);
         }
     }
-    return unknown;
+    // not a value that the thread takes when it starts: the thread computes it
+    return in_thread;
 }
 
 QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const QoreBackgroundOperatorNode* op,

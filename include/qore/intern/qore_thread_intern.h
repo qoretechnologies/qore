@@ -320,9 +320,11 @@ enum QoreBackgroundHelperSelf : uint8_t {
     @param num the number of parameters and values
     @param self_mode how the thread uses the object of the starting code
     @param callee the index of the value that is the callee of a call of a closure or call reference that the
-    expression is (which is checked as the AST interpreter checks the callee; qore#7087), QBH_NO_CALLEE if the
-    expression has no such callee among the values, or QBH_CALLEE_UNKNOWN if the starting code does not say (the
-    code of a compiled module: every closure and call reference of the values is checked then, qore#7056)
+    expression is, or the object of a call of a method (which is checked as the AST interpreter checks the callee;
+    qore#7087), QBH_CHECK_IN_THREAD if the expression has no such callee among the values (the new thread computes the
+    code that it calls, which is checked when it is called: qore_check_background_direct_entry()), or
+    QBH_CALLEE_UNKNOWN if the starting code does not say (the code of a compiled module: every closure, call reference
+    and object of the values is checked then, qore#7056)
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
@@ -332,8 +334,9 @@ DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code,
 
 //! the callee of a background helper's expression is not known: every closure and call reference is checked
 #define QBH_CALLEE_UNKNOWN -1
-//! the expression of a background helper has no callee among its values to check
-#define QBH_NO_CALLEE -2
+//! the expression of a background helper has no callee among its values: the code that it calls is checked in the
+//! new thread (qore_check_background_direct_entry(), qore#7087)
+#define QBH_CHECK_IN_THREAD -2
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.
@@ -777,6 +780,43 @@ DLLLOCAL int qore_check_thread_callable(const QoreValue v, int64 domain, const c
 //! refuses code that code restricted from a thread domain authored, to be run in another thread; see above
 DLLLOCAL int qore_check_thread_callable(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
         ExceptionSink* xsink);
+
+//! Refuses user code of a Program that may not control threads, called by the expression of the background operator
+/** The background operator checks the code that its expression calls when the thread starts, if it is a value then
+    (qore_check_thread_callable()); code that the expression computes in the new thread (a callable that an operator,
+    an index, a call or a global variable gives, or that call_function() or call_object_method() calls) is checked
+    when it is called: a call made by the expression itself, with only builtin frames between the call and the
+    expression, of the code of a Program, other than a module's, that may not control threads (PO_NO_THREAD_CONTROL)
+    raises \c PERMISSION-DENIED in the new thread and is not made.  Code that the functions and methods that the
+    expression calls call is not checked: module code that calls its caller's code (qore#7087).
+
+    Called by every path that enters the Program of user code for a call.
+
+    @param code_pgm the Program of the code called
+    @param callee_frame_pushed true if the call's own frame is the current frame (it is pushed before the Program is
+    entered), false if it is pushed after
+    @param xsink raises \c PERMISSION-DENIED if the call is refused
+
+    @return 0 if the call may be made, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed,
+        ExceptionSink* xsink);
+
+//! Refuses a callable or object authored by code that may not control threads, called by the background expression
+/** As qore_check_background_direct_entry(), for a call reference or a method call on an object before its call: a
+    reference that such code created to the code of another Program or to builtin code (qore#7087)
+
+    @return 0 if the call may be made, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_background_direct_callable(const QoreValue v, ExceptionSink* xsink);
+
+//! Refuses the next call if the expression of the background operator makes it itself (see above)
+/** For a call reference that code that may not control threads created, to the code of another Program or builtin
+    code (qore#7087)
+
+    @return 0 if the call may be made, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_background_direct_call(ExceptionSink* xsink);
 
 //! Returns true if the code running on the current thread is not trusted to choose library code
 /** Code that a sandbox governs, and code whose runtime parse options restrict a functional domain (other than the

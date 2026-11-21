@@ -6732,7 +6732,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     }
     // entering the Program refuses a call into a Program that has been deleted (PROGRAM-ERROR), as the call path
     // does: a reference to it, such as a call reference stored in another Program, keeps it registered
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -6863,7 +6866,10 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         return false;
     }
     QoreProgram* method_caller_pgm = getProgram();
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -7195,7 +7201,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;

@@ -957,6 +957,11 @@ set_thread_resource(obj);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    // the expression of the background operator does not give the new thread code of a Program that may not control
+    // threads, which it would run when it ends (qore#7087)
+    if (qore_check_background_direct_callable(get_param_value(args, 0), xsink)) {
+        return QoreValue();
+    }
     set_thread_resource(*resource);
 }
 
@@ -1004,6 +1009,11 @@ set_thread_resource(\func(), code);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(code resource, auto argument) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    // the expression of the background operator does not give the new thread code of a Program that may not control
+    // threads, which it would run when it ends (qore#7087)
+    if (qore_check_background_direct_callable(get_param_value(args, 0), xsink)) {
+        return QoreValue();
+    }
     set_thread_resource(resource, argument);
 }
 

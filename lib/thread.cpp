@@ -859,6 +859,12 @@ public:
     int64 bg_thread_id = 0;
     //! the ID of the Program of the background thread in bg_thread_id; it is the parent only of that Program's threads
     qore_program_id_t bg_pgm_id = 0;
+    //! the call stack frame of the expression of the background operator while it runs in this thread, or nullptr
+    /** A call that has only builtin frames (call_function(), for example) between its own frame and this one is made
+        by the expression itself: code that may not control threads, which the expression calls so, is refused
+        (qore_check_background_direct_entry(), qore#7087)
+    */
+    const QoreStackLocation* bg_expr_frame = nullptr;
 
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
@@ -9330,6 +9336,57 @@ int qore_check_thread_callable(const ResolvedCallReferenceNode* code, int64 doma
         : 0;
 }
 
+// returns true if the call is made by the expression of the background operator that the thread runs: only builtin
+// frames (call_function(), for example) are between the call and the expression's frame; \a callee_frame_pushed
+// means that the current frame is the call's own
+static bool qore_background_expression_call(const ThreadData* td, bool callee_frame_pushed) {
+    const QoreStackLocation* f = td->current_stack_location.load(std::memory_order_relaxed);
+    if (callee_frame_pushed && f && f != td->bg_expr_frame) {
+        f = f->getNext();
+    }
+    while (f && f != td->bg_expr_frame && f->getCallType() == CT_BUILTIN) {
+        f = f->getNext();
+    }
+    return f == td->bg_expr_frame;
+}
+
+static void raise_background_expression_call(ExceptionSink* xsink) {
+    xsink->raiseException("PERMISSION-DENIED", "background operator: the code that the expression calls was created "
+        "by code that may not control threads (PO_NO_THREAD_CONTROL), so it cannot be run in another thread");
+}
+
+int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed, ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame
+            || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
+            || !qore_background_expression_call(td, callee_frame_pushed)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
+int qore_check_background_direct_call(ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame || !qore_background_expression_call(td, false)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
+int qore_check_background_direct_callable(const QoreValue v, ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame || !qore_background_expression_call(td, false)) {
+        return 0;
+    }
+    if (!(qore_callable_authored_restrictions_po(v) & QoreParseOptions(QDOM_THREAD_CONTROL))) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
 // rcr is the code, or nullptr if the value is not code
 static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink) {
@@ -10848,6 +10905,18 @@ namespace {
                         BGTypeParamInstantiationHelper type_param_helper(btp->type_param_inst,
                             btp->receiver_type_info);
                         QoreStatementTempScope temps(&xsink);
+                        // the calls that the expression makes itself are checked (qore#7087)
+                        class BackgroundExpressionFrameHelper {
+                        public:
+                            BackgroundExpressionFrameHelper(ThreadData* td, const QoreStackLocation* frame) : td(td) {
+                                td->bg_expr_frame = frame;
+                            }
+                            ~BackgroundExpressionFrameHelper() {
+                                td->bg_expr_frame = nullptr;
+                            }
+                        private:
+                            ThreadData* td;
+                        } bg_expr_frame_helper(td, &stack_loc);
                         rv = btp->exec(&xsink);
                     } else {
                         btp->discardExpression(&xsink);
@@ -11040,7 +11109,8 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
     }
     // a call of a closure or call reference, or of a method of an object of a class, that code restricted from
     // thread control authored is not started in another thread, whichever code starts it (qore#7056, qore#7087);
-    // the copy holds the value of the callee and of the object
+    // the copy holds the value of the callee and of the object; code that the new thread computes and that the
+    // expression calls itself is checked when it is called (qore_check_background_direct_entry())
     if (nl->getType() == NT_FUNCREFCALL) {
         if (qore_check_thread_callable(nl->get<const CallReferenceCallNode>()->getExp(), QDOM_THREAD_CONTROL,
                 "background operator", xsink)) {

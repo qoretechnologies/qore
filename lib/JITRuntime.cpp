@@ -14347,7 +14347,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     QoreProgram* caller_pgm = getProgram();
 
     // Program context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -14739,7 +14742,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
     }
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
@@ -15004,7 +15010,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
     }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
@@ -15379,7 +15388,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -21891,7 +21903,10 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         result = toBits(QoreValue());
         return true;
@@ -23632,7 +23647,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -25238,11 +25256,11 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
 }
 
 // the callee of the expression of a background helper, as the lowering recorded it (qore#7087)
-static_assert(QBH_CALLEE_UNKNOWN == -1 && QBH_NO_CALLEE == -2, "QoreIRBackgroundInstruction::helper_callee");
+static_assert(QBH_CALLEE_UNKNOWN == -1 && QBH_CHECK_IN_THREAD == -2, "QoreIRBackgroundInstruction::helper_callee");
 static int qore_background_helper_callee(const QoreIRBackgroundInstruction& inst) {
     int callee = inst.helper_callee;
     // an index that is not one of the parameters is never trusted: every value is checked then
-    if (callee >= static_cast<int>(inst.helper_params.size()) || callee < QBH_NO_CALLEE) {
+    if (callee >= static_cast<int>(inst.helper_params.size()) || callee < QBH_CHECK_IN_THREAD) {
         return QBH_CALLEE_UNKNOWN;
     }
     return callee;

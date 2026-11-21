@@ -204,8 +204,26 @@ Program p(opts);
       @ref background "background" operator (ex: \c "background c()" or \c "background o.m()" in module code that
       was given \c c or \c o), in every execution mode; a closure that is only an argument of the call (ex:
       \c "background f(c, x + 1)") is given by the code that starts the thread to the code that it calls, and is not
-      refused; the code of a module compiled with \c qcc does not give the callee when the new thread computes the
-      arguments of the call, and refuses every closure and call reference of such code that the expression takes
+      refused; a known limitation of code compiled with \c qcc (a module or an executable): it does not give the
+      callee when the new thread computes the arguments or the callee of the call, and refuses every closure, call
+      reference and object of such code that the expression takes when the thread starts, also one that is only an
+      argument of a call of trusted code (ex: \c "background call_function(\\hc(), c)")
+      (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
+    - code of such a %Program that the expression of the @ref background "background" operator calls itself, which
+      is not a value when the thread starts: a callable or object that the new thread computes (an element of a list,
+      a member of a hash, the result of an operator or of a call, a global or static class variable), the code that
+      @ref Qore::call_function() "call_function()", @ref Qore::call_function_args() "call_function_args()",
+      @ref Qore::call_object_method() "call_object_method()" or
+      @ref Qore::call_object_method_args() "call_object_method_args()" calls for the expression, the top-level code
+      or an expression of such a %Program (@ref Qore::Program::run() "Program::run()",
+      @ref Qore::Expression::eval() "Expression::eval()"), a callable or object that
+      @ref Qore::set_thread_resource() "set_thread_resource()" would run when the thread ends, or the override of
+      a subclass of such a %Program that a call of a method of the object of the starting code dispatches to (ex:
+      \c "background work(x + 1)" in a method of a module's class); the new thread checks it when it calls it, so
+      the thread is started and ends with the \c PERMISSION-DENIED exception, reported as any exception that ends a
+      thread, without calling it; code that the functions and methods that the expression calls call is not checked:
+      module code that calls the code of its caller in a thread of its own (ex: \c "background f(c, x + 1)"); a
+      destructor is not checked either: it runs where the last reference to its object is released
       (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
     - @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", its timers and
       @ref Qore::AsyncIoController::setTimerCallback() "setTimerCallback()", and

@@ -110,6 +110,10 @@ DLLLOCAL QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* f
     control threads use this (qore_check_thread_callable()).
 */
 DLLLOCAL QoreParseOptions qore_callable_authored_restrictions_po(const QoreValue v);
+
+//! Returns the restricting options of a Program that is not a module's: those of the code that it authors (qore#7087)
+DLLLOCAL QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm);
+
 //! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.
