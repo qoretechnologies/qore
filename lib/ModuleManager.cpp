@@ -42,6 +42,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreException.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAOT.h"
@@ -7412,23 +7413,49 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     mi->issueModuleCmd(&loc_builtin, cmd, xsink);
     // enrich exception description if present
     if (*xsink) {
-        // truncate command at first eol or at max 200 chars
-        qore_offset_t i = cmd.find('\n');
-        if (i == -1) {
-            i = cmd.find('\r');
-        }
-        if (((i == -1) && (cmd.size() > QORE_MAX_MODULE_ERROR_DESC)) || (i > QORE_MAX_MODULE_ERROR_DESC)) {
-            i = QORE_MAX_MODULE_ERROR_DESC;
-        }
-        if (i > 0) {
-            QoreString cmd_copy(&cmd, i);
-            cmd_copy.trim();
-            xsink->appendLastDescription(": module command error from command '%s...'", cmd_copy.c_str());
-        } else {
-            xsink->appendLastDescription(": module command error from command '%s'", cmd.c_str());
-        }
+        appendModuleCmdErrorDesc(*xsink, cmd);
     }
     return *xsink ? -1 : 0;
+}
+
+void QoreModuleManager::appendModuleCmdErrorDesc(ExceptionSink& xsink, const QoreString& cmd) {
+    // the command is appended as text, converted to the encoding of the description (qore#6741): it is taken in UTF-8,
+    // which every encoding converts to, up to its first end of line and at most QORE_MAX_MODULE_ERROR_DESC characters,
+    // so that it is never cut inside a character
+    ExceptionSink cmd_xsink;
+    TempEncodingHelper ucmd(cmd, QCS_UTF8, &cmd_xsink);
+    if (!ucmd) {
+        // a command that is not valid in its encoding is not appended
+        cmd_xsink.clear();
+        return;
+    }
+    qore_offset_t i = ucmd->find('\n');
+    if (i == -1) {
+        i = ucmd->find('\r');
+    }
+    QoreString text(": module command error from command '", QCS_UTF8);
+    if (i == 0) {
+        text.concat(ucmd->c_str(), ucmd->size());
+        text.concat('\'');
+    } else {
+        bool cut = i > 0;
+        QoreString part(ucmd->c_str(), cut ? static_cast<size_t>(i) : ucmd->size(), QCS_UTF8);
+        if (part.length() > QORE_MAX_MODULE_ERROR_DESC) {
+            std::unique_ptr<QoreString> prefix(part.substr(0, QORE_MAX_MODULE_ERROR_DESC, &cmd_xsink));
+            if (!prefix) {
+                cmd_xsink.clear();
+                return;
+            }
+            part.set(*prefix);
+            cut = true;
+        }
+        if (cut) {
+            part.trim();
+        }
+        text.concat(part.c_str(), part.size());
+        text.concat(cut ? "...'" : "'");
+    }
+    qore_exception_sink_ops(xsink).appendLastDescription(text);
 }
 
 int ModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,

@@ -2572,6 +2572,9 @@
       \c STACK-LIMIT-EXCEEDED exception, runs on a slice of the stack reserved below the limit, where it raised
       \c STACK-LIMIT-EXCEEDED and did not run, so that a file, lock or connection that it closes stayed open (see
       @ref destructors_at_stack_limit; <a href="https://github.com/qoretechnologies/qore/issues/6861">issue 6861</a>)
+    - the text that the library appends to the description of an exception (such as the command of a failed
+      @ref Qore::Program::issueModuleCmd() "module command", cut at its first end of line or 200 characters) is
+      converted to the encoding of the description, where it was appended as its bytes (issue #6741)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

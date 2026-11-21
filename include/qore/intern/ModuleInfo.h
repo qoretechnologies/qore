@@ -715,6 +715,9 @@ public:
         QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
         const QoreParseOptions* declared_po = nullptr);
 
+    //! Appends the command to the description of the exception that a module command raised (qore#6741)
+    DLLLOCAL static void appendModuleCmdErrorDesc(ExceptionSink& xsink, const QoreString& cmd);
+
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
         QoreModuleLoadFrameHelper) is recorded on it; a module registered under a new name keeps it
