@@ -14,7 +14,8 @@
 #! The process-wide sshutil registry refuses sandboxed code (#6744)
 /** The client identity providers, server host key providers and host key stores of the registry are used for every
     tenant and can hold credentials: code that a sandbox governs can neither register, replace or remove them, nor get
-    them from the registry.  A provider that the host gives a tenant itself stays usable by the tenant.
+    them from the registry, nor list its names (qore#6846).  A provider that the host gives a tenant itself stays
+    usable by the tenant.
 */
 class SshUtilRegistrySandboxTest inherits QUnit::Test {
     public {
@@ -49,6 +50,14 @@ hash<auto> sub run(string client, string server, Qore::SshUtil::AbstractSshClien
             Qore::SshUtil::SshUtilRegistry::deregisterServerHostKeyProvider(server);
         }),
         \"remove host key store\": attempt(sub () { Qore::SshUtil::SshUtilRegistry::deregisterHostKeyStore(\"x\"); }),
+        # the names of the entries of other code (qore#6846)
+        \"list client identity providers\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::listClientIdentityProviders();
+        }),
+        \"list server host key providers\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::listServerHostKeyProviders();
+        }),
+        \"list host key stores\": attempt(sub () { Qore::SshUtil::SshUtilRegistry::listHostKeyStores(); }),
     };
 }
 

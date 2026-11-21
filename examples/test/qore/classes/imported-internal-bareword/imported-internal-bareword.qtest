@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the scripts, modules and child Programs are parsed by each interpreter mode and qcc
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+%exec-class ImportedInternalBarewordTest
+
+class ImportedInternalBarewordTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-internal-bareword-");
+        string preamble = sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires InternalBarewordBase\n",
+            get_script_dir());
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        const ErrorText = "PARSE-EXCEPTION: cannot resolve bareword 'internal_value'";
+    }
+
+    constructor() : QUnit::Test("imported private:internal member lookup", "1.0", \ARGV) {
+        addTestCase("read", \checkLookup(), "return internal_value;");
+        addTestCase("write", \checkLookup(), "internal_value = 42;");
+        set_return_value(main());
+    }
+
+    private checkLookup(string statement) {
+        # Calling a method at top level makes the parser initialize the class before it resolves the method body.
+        string decl = sprintf("class Derived inherits InternalBarewordBase { auto probe() { %s } }\n", statement);
+        string source = decl + "Derived d();\nd.probe();\n";
+        string script = tmp.path + "/script.q";
+        string body = tmp.path + "/body.q";
+        string child = tmp.path + "/child.q";
+        string mod = tmp.path + "/DerivedProbe.qm";
+        string loader = tmp.path + "/load.q";
+        writeFile(mod, preamble + "module DerivedProbe { version = \"1.0\"; desc = \"probe\";"
+            " author = \"Qore\"; license = \"MIT\"; }\n" + decl);
+        writeFile(loader, sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires DerivedProbe\n", tmp.path));
+        writeFile(script, preamble + source);
+        writeFile(body, source);
+        writeFile(child, preamble + "Program p(PO_MODERN);\np.loadModule(\"InternalBarewordBase\");\n"
+            "p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"child\");\n");
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string run = sprintf("%s --exec-mode=%s ", quote(qore_bin), mode);
+            checkRefusal(run + quote(loader), mode + " module");
+            checkRefusal(run + quote(script), mode + " script");
+            checkRefusal(run + quote(child) + " " + quote(body), mode + " child Program");
+        }
+        foreach int opt in ((0, 3)) {
+            string exe = tmp.path + "/child";
+            string cc = sprintf("%s -O%d -o %s ", quote(qcc_bin), opt, quote(exe));
+            checkRefusal(cc + "--module " + quote(mod), sprintf("qcc -O%d module", opt));
+            checkRefusal(cc + quote(script), sprintf("qcc -O%d script", opt));
+            int rc;
+            string out = backquote(cc + quote(child) + " 2>&1", \rc);
+            assertEq(0, rc, sprintf("qcc -O%d compiles the child Program driver: %s", opt, out));
+            checkRefusal(quote(exe) + " " + quote(body), sprintf("qcc -O%d child Program", opt));
+        }
+    }
+
+    private checkRefusal(string command, string label) {
+        int rc;
+        string out = backquote(command + " 2>&1", \rc);
+        assertNeq(0, rc, label);
+        assertTrue(out.find(ErrorText) >= 0, label + ": " + out);
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    private static string quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

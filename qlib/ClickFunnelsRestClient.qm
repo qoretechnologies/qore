@@ -29,12 +29,12 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module ClickFunnelsRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for calling ClickFunnels REST API services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -63,7 +63,7 @@ module ClickFunnelsRestClient {
     The main classes are:
     - @ref ClickFunnelsRestClient::ClickFunnelsRestClient "ClickFunnelsRestClient":
       this class provides the REST client API for communication with the ClickFunnels API;
-      it handles Bearer token authentication
+      it authenticates with an OAuth2 or API Bearer token
     - @ref ClickFunnelsRestClient::ClickFunnelsRestConnection "ClickFunnelsRestConnection":
       provides a connection object to ClickFunnels services (based on the
       @ref connectionproviderintro "ConnectionProvider" module)
@@ -82,7 +82,35 @@ hash<auto> result = cf.get("teams");
 printf("Teams: %y\n", result.body);
     @endcode
 
+    @section clickfunnelsrestclient_auth Authentication
+
+    |!Method|!What it is|!Options
+    |OAuth2|the authorization code flow against a platform application registered in ClickFunnels|\
+\c oauth2_client_id, \c oauth2_client_secret
+    |API token|the API access token of a platform application|\c team, \c apikey
+
+    OAuth2 is the first alternative of the connection (see
+    <a href="https://developers.myclickfunnels.com/docs/oauth-20">ClickFunnels OAuth 2.0</a>).  ClickFunnels
+    authorizes at \c https://accounts.myclickfunnels.com/oauth/authorize, which requires the \c grant_type and
+    \c new_installation=true arguments that @ref ClickFunnelsRestClient::ClickFunnelsRestClientBase::DefaultAuthArgs
+    "DefaultAuthArgs" adds, and issues tokens at \c https://accounts.myclickfunnels.com/oauth/token.  ClickFunnels
+    tokens do not expire and there are no refresh tokens, so the \c expires_in value of the token response is
+    ignored.  The token response names the workspace that was authorized in \c workspace_url
+    (ex: \c https://myworkspace.myclickfunnels.com), and the connection takes its API URL from it.
+
+    @note ClickFunnels documents its token request with a JSON body; the code is exchanged for the token by the
+    platform that runs the authorization flow, and @ref RestClient::RestClient "RestClient" itself sends token
+    requests form-encoded only.
+
+    When an \c apikey is given, it is sent as a Bearer token and the OAuth2 options are removed, so that the
+    client does not try to run the OAuth2 flow.
+
     @section clickfunnelsrestclientrelnotes Release Notes
+
+    @subsection clickfunnelsrestclientv1_1 ClickFunnelsRestClient v1.1
+    - added OAuth2 authorization code authentication as the first alternative of the connection, with the API URL
+      taken from the workspace the token response names; the API token with the team subdomain is kept as the
+      fallback (<a href="https://github.com/qoretechnologies/qore/issues/6896">issue 6896</a>)
 
     @subsection clickfunnelsrestclientv1_0 ClickFunnelsRestClient v1.0
     - initial release
@@ -117,6 +145,49 @@ public class ClickFunnelsRestClientBase {
             "User-Agent": "Qore ClickFunnels Integration/1.0",
         };
 
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://accounts.myclickfunnels.com/oauth/authorize";
+
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://accounts.myclickfunnels.com/oauth/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default extra arguments of the OAuth2 authorization request
+        /** ClickFunnels requires \c new_installation=true and \c grant_type=authorization_code in the
+            authorization request.
+        */
+        const DefaultAuthArgs = {
+            "grant_type": DefaultGrantType,
+            "new_installation": "true",
+        };
+
+        #! The domain of ClickFunnels workspace hosts
+        const WorkspaceDomain = "myclickfunnels.com";
+
+        #! OAuth2 options set by default when the OAuth2 client ID is given
+        const OAuth2Options = {
+            "oauth2_auth_args": DefaultAuthArgs,
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+        };
+
+        #! Options that only apply to OAuth2; removed when an API token is given
+        const OAuth2OptionNames = (
+            "oauth2_auth_args",
+            "oauth2_auth_url",
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_grant_type",
+            "oauth2_redirect_url",
+            "oauth2_refresh_token",
+            "oauth2_scopes",
+            "oauth2_token_url",
+            "oauth2_token_use_basic_auth",
+        );
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
@@ -125,6 +196,20 @@ public class ClickFunnelsRestClientBase {
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
         };
+    }
+
+    #! Returns the team subdomain of a workspace URL, if it is a ClickFunnels workspace host
+    /** @param workspace_url the \c workspace_url value of a token response
+        (ex: \c "https://myworkspace.myclickfunnels.com")
+
+        @return the subdomain (ex: \c "myworkspace"), or @ref nothing if the URL's host is not a subdomain of
+        \c myclickfunnels.com
+    */
+    static *string getWorkspaceSubdomain(string workspace_url) {
+        *string host = parse_url(workspace_url).host;
+        if (host) {
+            return (host =~ x/^([^.]+)\.myclickfunnels\.com$/i)[0];
+        }
     }
 
     #! returns options for @ref ClickFunnelsRestClient::ClickFunnelsRestClient::constructor()
@@ -143,9 +228,17 @@ public class ClickFunnelsRestClientBase {
         }
 
         # Set Bearer token authentication
-        if (opts.apikey) {
+        if (opts.apikey.val()) {
             hdr.Authorization = "Bearer " + opts.apikey;
             remove rv.apikey;
+            # a client authenticating with an API token does not use OAuth2; the OAuth2 options are removed after
+            # the defaults are applied, or a defaulted grant type would make the client demand a client ID and
+            # secret.  The test is whether an API token was given: an authorized OAuth2 connection also has a
+            # token and keeps its OAuth2 options
+            rv -= OAuth2OptionNames;
+        } else if (opts.oauth2_client_id.val()) {
+            # set the OAuth2 defaults for the options not given
+            map rv{$1.key} = $1.value, OAuth2Options.pairIterator(), !exists rv{$1.key};
         }
 
         if (exists hdr) {
@@ -160,8 +253,10 @@ public class ClickFunnelsRestClientBase {
     token authentication.
 
     @par Authentication:
-    - Bearer token provided via the \c apikey option
+    - an OAuth2 access token (\c token, acquired with the authorization code flow) or the API token given with the
+      \c apikey option
     - The token is set as the \c Authorization header with "Bearer" prefix
+    - see @ref clickfunnelsrestclient_auth
 
     @par API Structure:
     All endpoints are under /api/v2 (included in the base URL).
@@ -180,7 +275,7 @@ ClickFunnelsRestClient cf({
 
         @param opts valid options are:
         - \c team: the ClickFunnels team subdomain (e.g., "myteam" for myteam.myclickfunnels.com)
-        - \c apikey: the API Bearer token
+        - \c apikey: the API Bearer token; if given, the OAuth2 options are removed
         - plus all options for the @ref RestClient::RestClient "RestClient" class
 
         @param do_not_connect if \c False (the default), then a connection will be immediately
@@ -212,7 +307,10 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
             "display_name": "ClickFunnels REST Connection",
             "short_desc": "A connection to the ClickFunnels REST API",
             "desc": "A connection to the ClickFunnels REST API for managing contacts, orders, "
-                "products, funnels, courses, forms, and fulfillments",
+                "products, funnels, courses, forms, and fulfillments\n\n"
+                "**Authentication** is OAuth2 with a ClickFunnels platform application, which sets the API "
+                "URL to the workspace you authorize, or an **API token** with your team subdomain as the "
+                "fallback.",
             "cls": Class::forName("ClickFunnelsRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -225,6 +323,22 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                 "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": ClickFunnelsRestClientBase::DefaultData,
                 }),
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": ClickFunnelsRestClientBase::DefaultAuthArgs,
+                    }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": ClickFunnelsRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": ClickFunnelsRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": ClickFunnelsRestClientBase::DefaultTokenUrl,
+                    }),
                 "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": ClickFunnelsRestClientBase::DefaultPingHeaders,
                 }),
@@ -254,14 +368,16 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                     "preselected": True,
                 },
             },
-            "required_options": "team,apikey",
+            # OAuth2 is the first alternative; it needs no team subdomain, as the API URL is taken from the
+            # workspace the token response names.  The API token with the team subdomain is the fallback
+            "required_options": "oauth2_client_id,oauth2_client_secret|team,apikey",
             "messages": (
                 <UiMessageInfo>{
                     "presentation_id": "setup-1",
                     "title": "How to Find Your Team Subdomain",
                     "intent": "warning",
-                    "content": "The **Team Subdomain** is required to connect to your "
-                        "ClickFunnels account.\n\n"
+                    "content": "The **Team Subdomain** is required to connect with an API token. "
+                        "With OAuth2, it is taken from the workspace you authorize.\n\n"
                         "**How to find it:**\n"
                         "1. Log in to your ClickFunnels 2.0 account\n"
                         "2. Look at the URL in your browser: "
@@ -272,7 +388,7 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                     "presentation_id": "setup-2",
                     "title": "How to Generate an API Token",
                     "intent": "info",
-                    "content": "An **API Token** is required for authentication.\n\n"
+                    "content": "An **API Token** is needed only if you do not connect with OAuth2.\n\n"
                         "**How to generate one:**\n"
                         "1. Log in to your ClickFunnels 2.0 account\n"
                         "2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n"
@@ -331,6 +447,34 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
     #! returns \c "clickfunnelsrest"
     string getType() {
         return "clickfunnelsrest";
+    }
+
+    #! Processes OAuth2 token responses and returns updated options
+    /** The token response names the authorized workspace in \c workspace_url, which is the base of the API URL;
+        when it is a subdomain of \c myclickfunnels.com, it is also stored as the \c team option, from which the
+        connection URL is built.  ClickFunnels tokens do not expire, so the \c expires_in value of the response is
+        ignored.
+    */
+    private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
+        *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
+        remove new_opts.oauth2_token_expiry;
+        if (resp.workspace_url.typeCode() == NT_STRING && resp.workspace_url.val()) {
+            *string team = ClickFunnelsRestClientBase::getWorkspaceSubdomain(resp.workspace_url);
+            if (team) {
+                if (team != opts.team) {
+                    new_opts.team = team;
+                }
+                string new_url = sprintf("clickfunnelsrest://%s.%s/api/v2", team,
+                    ClickFunnelsRestClientBase::WorkspaceDomain);
+                if (new_url != url) {
+                    new_opts.url = new_url;
+                }
+            } else {
+                warn("ignoring the workspace_url %y of the token response, which is not a subdomain of %s",
+                    resp.workspace_url, ClickFunnelsRestClientBase::WorkspaceDomain);
+            }
+        }
+        return new_opts;
     }
 
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
@@ -411,6 +555,10 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
         if (config.opts.team) {
             config.url = sprintf("clickfunnelsrest://%s.myclickfunnels.com/api/v2",
                 config.opts.team);
+        } else if (!config.url) {
+            # an OAuth2 connection has no team until it is authorized; the URL of the authorized workspace is
+            # then taken from the token response
+            config.url = DefaultConnectionUrl;
         }
         return config;
     }

@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+
+%exec-class HttpServerUtilSharedThreadStateTest
+
+#! The persistence state of a request handler is kept by the handler, never for the thread (issue #6847)
+/** The thread-local data of a module is shared by the code of every Program that runs on a thread, so the state that
+    one tenant's handler kept there was seen by the next tenant's handler on the same thread: a handler of another
+    tenant was persistent, and its close notification called the first tenant's callback.  Each tenant is a sandboxed
+    Program with its own handler; all handlers run on the same thread one after the other.
+*/
+class HttpServerUtilSharedThreadStateTest inherits QUnit::Test {
+    public {
+        #! the code of a tenant
+        const TenantSource = "%requires HttpServerUtil
+class H inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, \"\", {});
+    }
+}
+our *H h;
+our *int closed;
+H sub handler() { return h ?? (h = new H()); }
+sub set_persistent(bool p) { handler().setPersistent(p); }
+sub notify_closed() { handler().notifyClosed(sub () { ++closed; }); }
+sub clear_notify_closed() { handler().notifyClosed(); }
+bool sub is_persistent() { return handler().isPersistent(); }
+sub persistent_closed() { handler().persistentClosed(); }
+sub clear_persistent_thread() { handler().clearPersistentThread(); }
+int sub get_closed() { return closed ?? 0; }
+";
+    }
+
+    constructor() : Test("HttpServerUtilSharedThreadStateTest", "1.0", \ARGV) {
+        addTestCase("a tenant's persistence is not seen by another tenant's handler on the thread", \persistenceTest());
+        addTestCase("a tenant's close notification is never called for another tenant", \notificationTest());
+        addTestCase("each handler's close notification is its own", \ownNotificationTest());
+        addTestCase("persistence on another thread is not seen", \otherThreadTest());
+        addTestCase("the end of a pool task clears the persistence of every handler", \poolTaskCleanupTest());
+        addTestCase("the end of persistence leaves no state on the thread", \endOfPersistenceTest());
+        addTestCase("the cleanup skips the handler of a deleted Program", \deletedProgramTest());
+        addTestCase("the deletion of the first tenant's Program by another thread does not stop the cleanup",
+            \firstTenantDeletedElsewhereTest());
+        addTestCase("the deletion of the first tenant's Program on the thread leaves the others' persistence",
+            \firstTenantDeletedHereTest());
+        set_return_value(main());
+    }
+
+    #! returns a new tenant: a sandboxed Program with its own handler
+    static Program tenant(string name) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(TenantSource, name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+
+    persistenceTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        a.callFunction("set_persistent", True);
+        on_exit a.callFunction("set_persistent", False);
+
+        assertTrue(a.callFunction("is_persistent"), "tenant A's handler is persistent");
+        assertFalse(b.callFunction("is_persistent"), "tenant B's handler is not persistent on the same thread");
+
+        # B's own persistence is its own
+        b.callFunction("set_persistent", True);
+        b.callFunction("set_persistent", False);
+        assertFalse(b.callFunction("is_persistent"), "tenant B's handler ended its persistence");
+        assertTrue(a.callFunction("is_persistent"), "tenant A's handler is still persistent");
+
+        # B clearing its thread entry does not change A's
+        b.callFunction("clear_persistent_thread");
+        assertTrue(a.callFunction("is_persistent"), "tenant A's handler is persistent after B's cleanup");
+
+        a.callFunction("set_persistent", False);
+        assertFalse(a.callFunction("is_persistent"), "tenant A's handler ended its persistence");
+    }
+
+    notificationTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        a.callFunction("set_persistent", True);
+        a.callFunction("notify_closed");
+        on_exit {
+            a.callFunction("clear_notify_closed");
+            a.callFunction("set_persistent", False);
+        }
+
+        # B's handler becomes persistent without a notification of its own, and its persistent connection closes
+        b.callFunction("set_persistent", True);
+        b.callFunction("persistent_closed");
+        b.callFunction("clear_persistent_thread");
+        assertEq(0, a.callFunction("get_closed"), "tenant A's callback is not called for tenant B's handler");
+        assertEq(0, b.callFunction("get_closed"), "tenant B registered no callback");
+
+        # A's callback is still registered for A's handler and is called once for it
+        a.callFunction("persistent_closed");
+        assertEq(1, a.callFunction("get_closed"), "tenant A's callback is called for tenant A's handler");
+        a.callFunction("persistent_closed");
+        assertEq(1, a.callFunction("get_closed"), "tenant A's callback is called only once");
+    }
+
+    ownNotificationTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        a.callFunction("notify_closed");
+        b.callFunction("notify_closed");
+        on_exit {
+            a.callFunction("clear_notify_closed");
+            b.callFunction("clear_notify_closed");
+        }
+
+        b.callFunction("persistent_closed");
+        assertEq(1, b.callFunction("get_closed"), "tenant B's callback is called for tenant B's handler");
+        assertEq(0, a.callFunction("get_closed"), "tenant A's callback is not called for tenant B's handler");
+
+        # removing B's callback does not remove A's
+        b.callFunction("notify_closed");
+        b.callFunction("clear_notify_closed");
+        b.callFunction("persistent_closed");
+        assertEq(1, b.callFunction("get_closed"), "tenant B's removed callback is not called");
+        a.callFunction("persistent_closed");
+        assertEq(1, a.callFunction("get_closed"), "tenant A's callback is called for tenant A's handler");
+    }
+
+    otherThreadTest() {
+        Program a = tenant("tenant-a");
+        Queue set();
+        Queue release();
+        Queue done();
+        background sub () {
+            on_exit done.push(True);
+            try {
+                a.callFunction("set_persistent", True);
+                set.push(a.callFunction("is_persistent"));
+            } catch (hash<ExceptionInfo> ex) {
+                set.push(ex.err);
+                return;
+            }
+            # stays persistent until the main thread has checked
+            on_exit a.callFunction("set_persistent", False);
+            release.get();
+        }();
+        on_exit {
+            release.push(True);
+            done.get();
+        }
+        assertEq(True, set.get(), "the handler is persistent on the other thread");
+        assertFalse(a.callFunction("is_persistent"), "the handler is not persistent on the main thread");
+        Queue other();
+        background sub () {
+            try {
+                other.push(a.callFunction("is_persistent"));
+            } catch (hash<ExceptionInfo> ex) {
+                other.push(ex.err);
+            }
+        }();
+        assertEq(False, other.get(), "the handler is not persistent on a third thread");
+    }
+
+    poolTaskCleanupTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        ThreadPool tp(1, 1, 1);
+        on_exit tp.stopWait();
+        Queue q();
+
+        # both tenants' handlers set persistence on the pool's worker without ending it
+        tp.submit(sub () {
+            try {
+                a.callFunction("set_persistent", True);
+                b.callFunction("set_persistent", True);
+                q.push({"tid": gettid(), "a": a.callFunction("is_persistent"), "b": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        });
+        hash<auto> first = q.get();
+        assertEq(NOTHING, first.err, "the first task ran");
+        assertTrue(first.a, "tenant A's handler is persistent in the first task");
+        assertTrue(first.b, "tenant B's handler is persistent in the first task");
+
+        # the next task runs on the same worker thread after the pool cleared the first task's thread state
+        tp.submit(sub () {
+            try {
+                q.push({"tid": gettid(), "a": a.callFunction("is_persistent"), "b": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        });
+        hash<auto> second = q.get();
+        assertEq(NOTHING, second.err, "the second task ran");
+        assertEq(first.tid, second.tid, "both tasks ran on the same worker thread");
+        assertFalse(second.a, "tenant A's handler is not persistent in the next task");
+        assertFalse(second.b, "tenant B's handler is not persistent in the next task");
+    }
+
+    endOfPersistenceTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        Queue q();
+        background sub () {
+            try {
+                a.callFunction("set_persistent", True);
+                b.callFunction("set_persistent", True);
+                a.callFunction("set_persistent", False);
+                # B's persistence is still recorded for the thread's cleanup
+                throw_thread_resource_exceptions();
+                q.push({"a": a.callFunction("is_persistent"), "b": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        hash<auto> rv = q.get();
+        assertEq(NOTHING, rv.err, "the thread's cleanup raised no error");
+        assertFalse(rv.a, "tenant A's handler ended its persistence");
+        assertFalse(rv.b, "the thread's cleanup ended tenant B's persistence");
+    }
+
+    deletedProgramTest() {
+        Program b = tenant("tenant-b");
+        Queue q();
+        background sub () {
+            try {
+                b.callFunction("set_persistent", True);
+                {
+                    Program a = tenant("tenant-a");
+                    a.callFunction("set_persistent", True);
+                }
+                # tenant A's Program has been deleted: the cleanup skips its handler and ends tenant B's persistence
+                throw_thread_resource_exceptions();
+                q.push({"b": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        hash<auto> rv = q.get();
+        assertEq(NOTHING, rv.err, "the thread's cleanup raised no error");
+        assertFalse(rv.b, "the thread's cleanup ended tenant B's persistence");
+    }
+
+    firstTenantDeletedElsewhereTest() {
+        Program a = tenant("tenant-a");
+        Program b = tenant("tenant-b");
+        Queue set();
+        Queue deleted();
+        Queue q();
+        background sub () {
+            try {
+                # tenant A sets persistence on the thread first
+                a.callFunction("set_persistent", True);
+                b.callFunction("set_persistent", True);
+            } catch (hash<ExceptionInfo> ex) {
+                set.push(ex.err);
+                return;
+            }
+            set.push(True);
+            deleted.get();
+            try {
+                # tenant A's Program has been deleted by another thread: the cleanup ends tenant B's persistence
+                throw_thread_resource_exceptions();
+                q.push({"b": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        assertEq(True, set.get(), "both tenants set persistence on the thread");
+        delete a;
+        deleted.push(True);
+        hash<auto> rv = q.get();
+        assertEq(NOTHING, rv.err, "the thread's cleanup raised no error");
+        assertFalse(rv.b, "the thread's cleanup ended tenant B's persistence");
+    }
+
+    firstTenantDeletedHereTest() {
+        Program b = tenant("tenant-b");
+        Queue q();
+        background sub () {
+            try {
+                {
+                    # tenant A sets persistence on the thread first, and its Program is deleted on the thread
+                    Program a = tenant("tenant-a");
+                    a.callFunction("set_persistent", True);
+                    b.callFunction("set_persistent", True);
+                }
+                # the deletion of tenant A's Program does not end tenant B's persistence
+                bool b_persistent = b.callFunction("is_persistent");
+                b.callFunction("set_persistent", False);
+                q.push({"b": b_persistent, "b_after": b.callFunction("is_persistent")});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        hash<auto> rv = q.get();
+        assertEq(NOTHING, rv.err, "no error");
+        assertTrue(rv.b, "tenant B's handler is still persistent after tenant A's Program was deleted");
+        assertFalse(rv.b_after, "tenant B's handler ended its persistence");
+    }
+}

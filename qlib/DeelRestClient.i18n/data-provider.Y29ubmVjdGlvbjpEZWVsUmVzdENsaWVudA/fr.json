@@ -4,8 +4,8 @@
     "fr": {
       "messages": {
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
-          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
-          "message": "Une connexion à l'API REST Deel pour la gestion du personnel mondial.\n\nDeel est une plateforme RH mondiale pour embaucher, gérer et payer des prestataires et des employés à temps plein dans le monde entier. Cette intégration prend en charge les contrats, les feuilles de temps, les ajustements de factures, les travailleurs, les congés, les entités juridiques, les factures et les déclencheurs d'événements."
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.\n\n**Authentication** is OAuth2 (authorization code with refresh tokens) with an app registered in Deel's Developer Center, or an **API token** as the fallback.",
+          "message": "Une connexion à l'API REST Deel pour la gestion du personnel mondial.\n\nDeel est une plateforme RH mondiale pour embaucher, gérer et payer des prestataires et des employés à temps plein dans le monde entier. Cette intégration prend en charge les contrats, les feuilles de temps, les ajustements de factures, les travailleurs, les congés, les entités juridiques, les factures et les déclencheurs d'événements.\n\n**L'authentification** se fait par OAuth2 (code d'autorisation avec jetons d'actualisation) avec une application enregistrée dans le Developer Center de Deel, ou à défaut par un **jeton API**."
         },
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
           "source": "Deel REST Connection",

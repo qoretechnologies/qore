@@ -1380,6 +1380,13 @@ private:
         bool qop_registered = false;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
+        //! Whether the class of the operation has an onPollComplete() method: -1 = not looked up yet, 0 = no, 1 = yes
+        /** onPollComplete() is called when a step of the operation pushed items
+            (SocketPollOperationBase::getAndClearItemsPushed()); an operation without the method is not notified
+            (qore#6804).  The method is looked up by the I/O thread the first time a step of the operation pushed
+            items, so that the operations that never push items (most of them) do not pay for the lookup.
+        */
+        int8_t poll_complete = -1;
         //! True once a terminal completion (goal/timeout/cancel/error) has been
         //! committed for delivery to \c queue / onComplete.  Enforces the
         //! deliver-exactly-once invariant: every PollInfo that owns a result

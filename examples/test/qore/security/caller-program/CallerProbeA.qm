@@ -1,0 +1,66 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of caller-program.qtest: module code that serves the code of other Programs
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires CallerProbeB
+
+module CallerProbeA {
+    version = "1.0";
+    desc = "caller Program probe A";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CallerProbeA {
+#! returns the ID of the caller Program of this module code
+public *int sub probe() {
+    return SandboxManager::getCallerProgramId();
+}
+
+#! module code that calls the code of another module
+public *int sub via_b() {
+    return CallerProbeB::probe();
+}
+
+#! module code that calls the code that it is given
+public auto sub call_code(code c) {
+    return c();
+}
+
+#! the caller Program and the process-wide registration check in the same call
+public hash<auto> sub both() {
+    return {
+        "id": SandboxManager::getCallerProgramId(),
+        "allowed": SandboxManager::isProcessWideRegistrationAllowed(),
+    };
+}
+
+#! the caller Program of module code in a thread that this module code starts
+public *int sub in_background() {
+    Queue q();
+    background q.push(CallerProbeB::probe());
+    return q.get();
+}
+
+#! the caller Program of module code in a thread pool task that this module code submits
+public *int sub in_pool() {
+    ThreadPool tp(1);
+    Queue q();
+    tp.submit(sub () { q.push(CallerProbeB::probe()); });
+    tp.stopWait();
+    return q.get();
+}
+
+#! a class whose methods run as this module's code
+public class Probe {
+    *int probe() {
+        return SandboxManager::getCallerProgramId();
+    }
+}
+}

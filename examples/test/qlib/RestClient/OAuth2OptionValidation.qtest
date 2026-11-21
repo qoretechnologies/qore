@@ -1,0 +1,418 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OAuth2OptionValidation.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class OAuth2OptionValidationTest
+
+#! A local stand-in for a token endpoint and an API that records the requests it gets
+class StandInHandler inherits AbstractHttpRequestHandler {
+    private {
+        list<string> paths = ();
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            m.lock();
+            on_exit m.unlock();
+            paths += hdr.path;
+        }
+        if (hdr.path == "oauth2/token") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "access_token": "stand-in-access-token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                }),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"ok": True}),
+        };
+    }
+
+    #! Returns and clears the paths of the requests received
+    list<string> takePaths() {
+        m.lock();
+        on_exit m.unlock();
+        list<string> rv = paths;
+        paths = ();
+        return rv;
+    }
+}
+
+#! Both REST clients validate OAuth2 options when they are created, whether or not they connect (qore#6906)
+/** No credentials and no network: every URL is a local stand-in, and the only requests go to it.
+*/
+public class OAuth2OptionValidationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StandInHandler handler();
+        string base;
+    }
+
+    constructor() : Test("OAuth2OptionValidation", "1.0", \ARGV, Opts) {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.setDefaultHandler("stand-in", handler);
+        base = "http://127.0.0.1:" + port;
+
+        addTestCase("required options per grant", \requiredOptionsTest());
+        addTestCase("missing or empty required options", \missingOptionTest());
+        addTestCase("valid options", \validOptionsTest());
+        addTestCase("token without the grant's options", \tokenTest());
+        addTestCase("invalid grant type or option type", \invalidTest());
+        addTestCase("default redirect URL", \redirectUrlTest());
+        addTestCase("authorization code without a token", \authCodeNoTokenTest());
+        addTestCase("connections", \connectionTest());
+        set_return_value(main());
+    }
+
+    destructor() {
+        server.stop();
+    }
+
+    #! Returns the valid options of a grant type, at the stand-in's URLs
+    hash<auto> getGrantOptions(string grant_type) {
+        hash<auto> all = {
+            "oauth2_grant_type": grant_type,
+            "oauth2_auth_url": base + "/oauth2/authorize",
+            "oauth2_client_id": "client-id",
+            "oauth2_client_secret": "client-secret",
+            "oauth2_redirect_url": base + "/callback",
+            "oauth2_token_url": base + "/oauth2/token",
+        };
+        hash<auto> rv = all{("oauth2_grant_type",) + RestClient::OAuth2GrantOptions{grant_type}};
+        if (grant_type == "password") {
+            rv += {"username": "user", "password": "pass"};
+        }
+        return rv;
+    }
+
+    #! Returns the options that a grant type requires and that have no default value
+    /** \c oauth2_redirect_url has a default value; see redirectUrlTest()
+    */
+    list<string> getRequired(string grant_type) {
+        list<string> rv = select RestClient::OAuth2GrantOptions{grant_type}, $1 != "oauth2_redirect_url";
+        if (grant_type == "password") {
+            rv += ("username", "password");
+        }
+        return rv;
+    }
+
+    #! Creates a RestClient
+    RestClient newRestClient(hash<auto> opts, bool do_not_connect) {
+        return new RestClient({"url": base + "/api", "data": "json"} + opts, do_not_connect);
+    }
+
+    #! Creates a RestClientIo; \a do_not_connect is its \c skip_login option
+    RestClientIo newRestClientIo(hash<auto> opts, bool do_not_connect) {
+        return new RestClientIo({"url": base + "/api", "data": "json", "skip_login": do_not_connect} + opts);
+    }
+
+    #! The options that each grant type requires
+    requiredOptionsTest() {
+        assertEq(("authorization_code", "implicit", "client_credentials", "password"),
+            keys RestClient::OAuth2GrantOptions);
+        assertEq(("oauth2_auth_url", "oauth2_client_id", "oauth2_client_secret", "oauth2_redirect_url",
+            "oauth2_token_url"), RestClient::getMissingOAuth2GrantOptions("authorization_code", {}));
+        assertEq(("oauth2_auth_url", "oauth2_client_id", "oauth2_redirect_url"),
+            RestClient::getMissingOAuth2GrantOptions("implicit", {}));
+        assertEq(("oauth2_client_id", "oauth2_client_secret", "oauth2_token_url"),
+            RestClient::getMissingOAuth2GrantOptions("client_credentials", {}));
+        assertEq(("oauth2_client_id", "oauth2_client_secret", "oauth2_token_url", "username", "password"),
+            RestClient::getMissingOAuth2GrantOptions("password", {}));
+        # an empty value is missing
+        assertEq(("oauth2_client_id",), RestClient::getMissingOAuth2GrantOptions("client_credentials",
+            getGrantOptions("client_credentials") + {"oauth2_client_id": ""}));
+        # an option that the caller's own options replace
+        assertEq((), RestClient::getMissingOAuth2GrantOptions("client_credentials",
+            getGrantOptions("client_credentials") - "oauth2_client_secret", {"oauth2_client_secret": True}));
+        assertThrows("OAUTH2-ERROR", "unknown", \RestClient::getMissingOAuth2GrantOptions(), ("unknown", {}));
+
+        # no grant type: OAuth2 is not used
+        assertTrue(RestClient::checkOAuth2GrantOptions(NOTHING, {}));
+        assertTrue(RestClient::checkOAuth2GrantOptions("none", {}));
+        assertTrue(RestClient::checkOAuth2GrantOptions("", {}));
+        # a token is used without the options
+        assertFalse(RestClient::checkOAuth2GrantOptions("client_credentials", {}, True));
+        foreach string grant_type in (keys RestClient::OAuth2GrantOptions) {
+            assertTrue(RestClient::checkOAuth2GrantOptions(grant_type, getGrantOptions(grant_type)), grant_type);
+            assertTrue(RestClient::checkOAuth2GrantOptions(grant_type, getGrantOptions(grant_type), True),
+                grant_type);
+        }
+    }
+
+    #! A missing or empty required option of each grant raises OAUTH2-ERROR at creation, also without connecting
+    missingOptionTest() {
+        foreach string grant_type in (keys RestClient::OAuth2GrantOptions) {
+            hash<auto> valid = getGrantOptions(grant_type);
+            foreach string opt in (getRequired(grant_type)) {
+                foreach hash<auto> tcase in (({"label": "missing", "opts": valid - opt},
+                        {"label": "empty", "opts": valid + {opt: ""}})) {
+                    foreach bool do_not_connect in ((True, False)) {
+                        string label = sprintf("%s: %s %s; do_not_connect: %y", grant_type, tcase.label, opt,
+                            do_not_connect);
+                        assertThrows("OAUTH2-ERROR", opt, \newRestClient(), (tcase.opts, do_not_connect),
+                            "RestClient " + label);
+                        assertThrows("OAUTH2-ERROR", opt, \newRestClientIo(), (tcase.opts, do_not_connect),
+                            "RestClientIo " + label);
+                    }
+                }
+            }
+        }
+        # no request was made
+        assertEq((), handler.takePaths());
+    }
+
+    #! Valid options are accepted
+    validOptionsTest() {
+        foreach string grant_type in (keys RestClient::OAuth2GrantOptions) {
+            hash<auto> opts = getGrantOptions(grant_type);
+            {
+                RestClient rc = newRestClient(opts, True);
+                assertTrue(rc.usingOAuth2(), grant_type);
+                assertEq(grant_type, rc.getOAuth2Options().oauth2_grant_type);
+                assertNothing(rc.getToken());
+            }
+            {
+                RestClientIo rcio = newRestClientIo(opts, True);
+                on_exit rcio.close();
+                assertEq(grant_type, rcio.getOAuth2Options().oauth2_grant_type);
+                assertNothing(rcio.getToken());
+            }
+            # a client that does not connect does not log in
+            assertEq((), handler.takePaths(), grant_type);
+        }
+
+        # clients that connect log in with the grants that need no authorization step
+        foreach string grant_type in (("client_credentials", "password")) {
+            hash<auto> opts = getGrantOptions(grant_type);
+            {
+                RestClient rc = newRestClient(opts, False);
+                assertEq("stand-in-access-token", rc.getToken(), grant_type);
+                assertTrue(rc.usingOAuth2());
+            }
+            {
+                RestClientIo rcio = newRestClientIo(opts, False);
+                on_exit rcio.close();
+                assertEq("stand-in-access-token", rcio.getToken(), grant_type);
+            }
+            assertEq(("oauth2/token", "oauth2/token"), handler.takePaths(), grant_type);
+        }
+
+        # a client assertion replaces the client secret of the client credentials grant with RestClientIo
+        {
+            RestClientIo rcio = newRestClientIo(getGrantOptions("client_credentials") - "oauth2_client_secret" + {
+                "oauth2_client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                "oauth2_client_assertion": "assertion",
+            }, True);
+            on_exit rcio.close();
+            assertEq("client_credentials", rcio.getOAuth2Options().oauth2_grant_type);
+        }
+        assertThrows("OAUTH2-ERROR", "oauth2_client_secret.*client assertion", \newRestClientIo(),
+            (getGrantOptions("client_credentials") - "oauth2_client_secret", True));
+    }
+
+    #! A client given a token is created without the options of its grant type; the grant type is not used
+    tokenTest() {
+        foreach string grant_type in (keys RestClient::OAuth2GrantOptions) {
+            hash<auto> valid = getGrantOptions(grant_type);
+            foreach string opt in (getRequired(grant_type)) {
+                foreach hash<auto> opts in (valid - opt, valid + {opt: ""}) {
+                    opts.token = "given-token";
+                    foreach bool do_not_connect in ((True, False)) {
+                        string label = sprintf("%s without %s; do_not_connect: %y", grant_type, opt, do_not_connect);
+                        {
+                            RestClient rc = newRestClient(opts, do_not_connect);
+                            assertFalse(rc.usingOAuth2(), label);
+                            assertEq("given-token", rc.getToken(), label);
+                        }
+                        {
+                            RestClientIo rcio = newRestClientIo(opts, do_not_connect);
+                            on_exit rcio.close();
+                            assertNothing(rcio.getOAuth2Options().oauth2_grant_type, label);
+                            assertEq("given-token", rcio.getToken(), label);
+                        }
+                    }
+                }
+            }
+        }
+        # the token is used; no token was requested
+        assertEq((), (select handler.takePaths(), $1 == "oauth2/token"));
+    }
+
+    #! An unknown grant type and a required option that is not a string raise OAUTH2-ERROR
+    invalidTest() {
+        foreach bool do_not_connect in ((True, False)) {
+            assertThrows("OAUTH2-ERROR", "unknown", \newRestClient(), ({"oauth2_grant_type": "unknown"},
+                do_not_connect));
+            assertThrows("OAUTH2-ERROR", "unknown", \newRestClientIo(), ({"oauth2_grant_type": "unknown"},
+                do_not_connect));
+            hash<auto> opts = getGrantOptions("client_credentials") + {"oauth2_client_id": 1};
+            assertThrows("OAUTH2-ERROR", "string", \newRestClient(), (opts, do_not_connect));
+            assertThrows("OAUTH2-ERROR", "string", \newRestClientIo(), (opts, do_not_connect));
+        }
+        # "none" or no value: OAuth2 is not used
+        foreach auto grant_type in (("none", "")) {
+            RestClient rc = newRestClient({"oauth2_grant_type": grant_type}, True);
+            assertFalse(rc.usingOAuth2());
+            RestClientIo rcio = newRestClientIo({"oauth2_grant_type": grant_type}, True);
+            on_exit rcio.close();
+            *string io_grant_type = rcio.getOAuth2Options().oauth2_grant_type;
+            assertTrue(!io_grant_type.val() || io_grant_type == "none");
+        }
+        assertEq((), handler.takePaths());
+    }
+
+    #! A missing or empty redirect URL takes the default value in both clients and in a connection's status check
+    redirectUrlTest() {
+        foreach string grant_type in (("authorization_code", "implicit")) {
+            hash<auto> valid = getGrantOptions(grant_type);
+            foreach hash<auto> opts in (valid - "oauth2_redirect_url", valid + {"oauth2_redirect_url": ""}) {
+                string label = sprintf("%s: %y", grant_type, opts.oauth2_redirect_url);
+                RestClient rc = newRestClient(opts, True);
+                assertTrue(rc.usingOAuth2(), label);
+                assertEq(RestClient::DefaultOAuth2RedirectUrl, rc.getOAuth2Options().oauth2_redirect_url, label);
+                RestClientIo rcio = newRestClientIo(opts, True);
+                on_exit rcio.close();
+                assertEq(RestClient::DefaultOAuth2RedirectUrl, rcio.getOAuth2Options().oauth2_redirect_url, label);
+
+                # the connection only awaits authorization
+                RestConnection conn(grant_type, "test", base + "/api", {"monitor": False}, opts);
+                assertRegex("not yet authorized", conn.getInfo().status, label);
+                assertTrue(conn.get(False).usingOAuth2(), label);
+                RestClientIo conn_rcio = conn.getAsync(False);
+                on_exit conn_rcio.close();
+                assertEq(grant_type, conn_rcio.getOAuth2Options().oauth2_grant_type, label);
+            }
+        }
+        assertEq((), handler.takePaths());
+    }
+
+    #! A client of a grant with an authorization step exists before it is authorized
+    authCodeNoTokenTest() {
+        foreach string grant_type in (("authorization_code", "implicit")) {
+            hash<auto> opts = getGrantOptions(grant_type);
+            # created without connecting
+            RestClient rc = newRestClient(opts, True);
+            assertTrue(rc.usingOAuth2());
+            assertNothing(rc.getToken());
+            RestClientIo rcio = newRestClientIo(opts, True);
+            on_exit rcio.close();
+            assertEq(grant_type, rcio.getOAuth2Options().oauth2_grant_type);
+            # connecting needs the authorization
+            assertThrows("OAUTH2-ERROR", "manually authorized", \newRestClient(), (opts, False));
+            assertThrows("OAUTH2-ERROR", "manually authorized", \newRestClientIo(), (opts, False));
+            # a request needs the authorization
+            assertThrows("OAUTH2-ERROR", "manually authorized", \rcio.restGet(), "ping");
+
+            # the connection awaits authorization: it is created and presented, and its clients are created without
+            # connecting
+            RestConnection conn(grant_type, "test", base + "/api", {"monitor": False}, opts);
+            assertFalse(conn.getInfo().up);
+            assertRegex("not yet authorized", conn.getInfo().status);
+            assertTrue(conn.needsAuth());
+            assertTrue(conn.getExtendedInfo().oauth2);
+            if (grant_type == "authorization_code") {
+                assertRegex("^" + base + "/oauth2/authorize\\?", conn.getAuthorizationCodeRequest());
+            }
+            RestClient conn_rc = conn.get(False);
+            assertTrue(conn_rc.usingOAuth2());
+            RestClientIo conn_rcio = conn.getAsync(False);
+            on_exit conn_rcio.close();
+            assertEq(grant_type, conn_rcio.getOAuth2Options().oauth2_grant_type);
+            assertThrows("OAUTH2-ERROR", "manually authorized", \conn.get());
+            assertThrows("OAUTH2-ERROR", "manually authorized", \conn.getAsync());
+
+            # once authorized, its clients have the token
+            conn = new RestConnection(grant_type, "test", base + "/api", {"monitor": False},
+                opts + {"token": "authorized-token"});
+            assertTrue(conn.getInfo().up);
+            assertFalse(conn.needsAuth());
+            assertEq("authorized-token", conn.get(False).getToken());
+            RestClientIo authorized_rcio = conn.getAsync(False);
+            on_exit authorized_rcio.close();
+            assertEq("authorized-token", authorized_rcio.getToken());
+        }
+        assertEq((), handler.takePaths());
+    }
+
+    #! A connection with invalid OAuth2 options is created and reported down; both of its clients raise OAUTH2-ERROR
+    connectionTest() {
+        foreach string grant_type in (keys RestClient::OAuth2GrantOptions) {
+            hash<auto> valid = getGrantOptions(grant_type);
+            foreach string opt in (getRequired(grant_type)) {
+                foreach hash<auto> tcase in (({"label": "missing", "opts": valid - opt},
+                        {"label": "empty", "opts": valid + {opt: ""}})) {
+                    string label = sprintf("%s: %s %s", grant_type, tcase.label, opt);
+                    RestConnection conn(grant_type, "test", base + "/api", {"monitor": False}, tcase.opts);
+                    assertFalse(conn.getInfo().up, label);
+                    assertRegex(opt == "username" || opt == "password"
+                        ? sprintf("no %s is set", opt)
+                        : sprintf("not set or are empty on this connection: .*%s", opt),
+                        conn.getInfo().status, label);
+                    assertThrows("OAUTH2-ERROR", opt, \conn.get(), False, "get(False) " + label);
+                    assertThrows("OAUTH2-ERROR", opt, \conn.getAsync(), False, "getAsync(False) " + label);
+                    assertThrows("OAUTH2-ERROR", opt, \conn.get(), True, "get(True) " + label);
+                    assertThrows("OAUTH2-ERROR", opt, \conn.getAsync(), True, "getAsync(True) " + label);
+                }
+            }
+
+            # valid options: both clients are created without connecting
+            RestConnection conn(grant_type, "test", base + "/api", {"monitor": False}, valid);
+            RestClient rc = conn.get(False);
+            assertTrue(rc.usingOAuth2(), grant_type);
+            RestClientIo rcio = conn.getAsync(False);
+            on_exit rcio.close();
+            assertEq(grant_type, rcio.getOAuth2Options().oauth2_grant_type);
+            # neither logged in
+            assertEq((), handler.takePaths(), grant_type);
+            if (grant_type == "client_credentials" || grant_type == "password") {
+                assertTrue(conn.getInfo().up, grant_type);
+                # the async client logs in before its first request
+                rcio.restGet("ping");
+                assertEq(("oauth2/token", "api/ping"), handler.takePaths(), grant_type);
+            }
+        }
+    }
+}

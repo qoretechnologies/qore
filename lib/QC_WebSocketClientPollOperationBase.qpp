@@ -677,9 +677,9 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
         return;
     }
 
-    // Validate RSV bits — only when no extensions are active
-    if (!has_extensions && frame.rsv != 0) {
-        // RSV bits set but no extensions — protocol error
+    // an RSV bit that no negotiated extension defines fails the connection (RFC 6455 section 5.2), on every data
+    // frame of a message: the extensions see the RSV bits of its first frame only (qore#6810)
+    if (frame.rsv & ~extension_rsv_mask) {
         queueSendClose(WSCC_ProtocolError, "RSV bits set without extensions", xsink);
         return;
     }
@@ -1204,7 +1204,8 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     Key differences from the server-side @ref HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" :
     - ALL outgoing frames use client masking per RFC 6455 Section 5.3
     - RSV bits are included in recv_queue frame hashes for extension processing
-    - @ref setHasExtensions() controls RSV bit validation
+    - @ref setExtensionRsvMask() sets the RSV bits of the negotiated extensions, against which the RSV bits of every
+      data frame are checked
 
     The C++ base handles the HTTP/1.1 hot path:
     - Frame decoding via WebSocketFrameDecoder and fragment reassembly
@@ -1627,13 +1628,31 @@ string WebSocketClientPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY]
 }
 
 //! Sets whether extensions are active
-/** When extensions are active, RSV bit validation is skipped in C++
-    (the Qore wrapper handles extension-specific RSV validation).
+/** When extensions are active and no RSV bits are set with @ref setExtensionRsvMask(), RSV bit validation is
+    skipped in C++ (the Qore wrapper handles extension-specific RSV validation).
 
     @param enabled True if extensions are active
+
+    @see @ref setExtensionRsvMask(), which checks the RSV bits of every data frame against those of the negotiated
+    extensions
 */
 nothing WebSocketClientPollOperationBase::setHasExtensions(bool enabled = True) [flags=NAMED_ARGS] {
     priv->setHasExtensions(enabled);
+}
+
+//! Sets the RSV bits that the negotiated extensions define
+/** A data frame with another RSV bit set fails the connection with close code 1002 (RFC 6455 section 5.2): every
+    frame of a message is checked, its continuation frames included, whose RSV bits the extensions do not see.  With
+    no extension negotiated, the mask is 0, and any RSV bit on a data frame fails the connection.
+
+    @param rsv_mask the RSV bits in the positions of the first byte of a frame (@ref WebSocketUtil::WS_RSV1
+    "WS_RSV1", @ref WebSocketUtil::WS_RSV2 "WS_RSV2" and @ref WebSocketUtil::WS_RSV3 "WS_RSV3") of all the negotiated
+    extensions; other bits are ignored
+
+    @since %Qore 3.0
+*/
+nothing WebSocketClientPollOperationBase::setExtensionRsvMask(int rsv_mask) [flags=NAMED_ARGS] {
+    priv->setExtensionRsvMask(static_cast<uint8_t>((rsv_mask >> 4) & 0x07));
 }
 
 //! Called by the I/O controller when frames have been pushed during continuePoll

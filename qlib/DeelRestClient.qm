@@ -31,12 +31,12 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module DeelRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for calling Deel REST API services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -63,7 +63,7 @@ module DeelRestClient {
     The main classes are:
     - @ref DeelRestClient::DeelRestClient "DeelRestClient":
       this class provides the REST client API for communication with the Deel API;
-      it handles authentication via Bearer token
+      it authenticates with OAuth2 or with an API token
     - @ref DeelRestClient::DeelRestConnection "DeelRestConnection":
       provides a connection object to Deel services (based on the
       @ref connectionproviderintro "ConnectionProvider" module)
@@ -79,7 +79,28 @@ hash<auto> result = deel.get("legal-entities");
 printf("Legal Entities: %Y\n", result.body);
     @endcode
 
+    @section deelrestclient_auth Authentication
+
+    |!Method|!What it is|!Options
+    |OAuth2|the authorization code flow, with refresh tokens, against an app registered in Deel's Developer \
+Center|\c oauth2_client_id, \c oauth2_client_secret
+    |API token|a personal or organization token created in Deel's Developer Center|\c apikey
+
+    OAuth2 is the first alternative of the connection.  Deel authorizes at
+    \c https://app.deel.com/oauth2/authorize and issues and refreshes tokens at \c https://app.deel.com/oauth2/tokens,
+    which takes the client ID and secret by HTTP basic authentication; both are set by default.  Every API call made
+    with an OAuth2 token must also send the client ID in the \c x-client-id header, which the client adds to its
+    default headers (see <a href="https://developer.deel.com/api/oauth">Deel OAuth2</a>).
+
+    When an \c apikey is given, it is sent as a Bearer token and the OAuth2 options are removed, so that the
+    client does not try to run the OAuth2 flow.
+
     @section deelrestclientrelnotes Release Notes
+
+    @subsection deelrestclientv1_1 DeelRestClient v1.1
+    - added OAuth2 authorization code authentication with refresh tokens as the first alternative of the
+      connection, with the API token kept as the fallback; OAuth2 requests send the client ID in the
+      \c x-client-id header (<a href="https://github.com/qoretechnologies/qore/issues/6896">issue 6896</a>)
 
     @subsection deelrestclientv1_0 DeelRestClient v1.0
     - initial release
@@ -111,6 +132,67 @@ public class DeelRestClientBase {
             "Accept": MimeTypeJson,
         };
 
+        #! Default OAuth2 authorization request URL
+        const DefaultAuthUrl = "https://app.deel.com/oauth2/authorize";
+
+        #! Default OAuth2 token request URL
+        /** Used for both the authorization code exchange and refreshes; Deel takes the client ID and secret by
+            HTTP basic authentication here.
+        */
+        const DefaultTokenUrl = "https://app.deel.com/oauth2/tokens";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes
+        /** The token scopes that Deel's API reference names for the endpoints the
+            @ref deeldataproviderintro "DeelDataProvider" module calls: contracts, timesheets, invoice adjustments,
+            people, time off, invoices (\c accounting:read), legal entities (\c organizations:read) and webhooks.
+            Deel accepts only scopes that the registered app holds.
+        */
+        const DefaultScopes = (
+            "contracts:read",
+            "contracts:write",
+            "timesheets:read",
+            "timesheets:write",
+            "invoice-adjustments:read",
+            "invoice-adjustments:write",
+            "people:read",
+            "people:write",
+            "time-off:read",
+            "time-off:write",
+            "accounting:read",
+            "organizations:read",
+            "webhooks:read",
+            "webhooks:write",
+        );
+
+        #! The header that carries the OAuth2 client ID on every API call
+        const ClientIdHeader = "x-client-id";
+
+        #! OAuth2 options set by default when the OAuth2 client ID is given
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": DefaultScopes,
+            "oauth2_token_url": DefaultTokenUrl,
+            "oauth2_token_use_basic_auth": True,
+        };
+
+        #! Options that only apply to OAuth2; removed when an API token is given
+        const OAuth2OptionNames = (
+            "oauth2_auth_args",
+            "oauth2_auth_url",
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_grant_type",
+            "oauth2_redirect_url",
+            "oauth2_refresh_token",
+            "oauth2_scopes",
+            "oauth2_token_url",
+            "oauth2_token_use_basic_auth",
+        );
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
@@ -135,15 +217,25 @@ public class DeelRestClientBase {
         }
         remove rv.use_sandbox;
 
-        # Validate apikey is provided
-        if (!opts.apikey) {
-            throw "DEEL-ERROR", "missing required option 'apikey' (Deel API access token)";
+        if (opts.apikey.val()) {
+            # Set Bearer token Authorization header and remove apikey from opts
+            # so that RestClient does not attempt to handle it specially
+            hdr.Authorization = "Bearer " + opts.apikey;
+            remove rv.apikey;
+            # a client authenticating with an API token does not use OAuth2; the OAuth2 options are removed after
+            # the defaults are applied, or a defaulted grant type would make the client demand a client ID and
+            # secret.  The test is whether an API token was given: an authorized OAuth2 connection also has a
+            # token and keeps its OAuth2 options so that the token can be refreshed
+            rv -= OAuth2OptionNames;
+        } else if (opts.oauth2_client_id.val()) {
+            # set the OAuth2 defaults for the options not given
+            map rv{$1.key} = $1.value, OAuth2Options.pairIterator(), !exists rv{$1.key};
+            # Deel rejects an OAuth2 request without the client ID in this header
+            hdr{ClientIdHeader} = opts.oauth2_client_id;
+        } else if (!opts.token.val()) {
+            throw "DEEL-ERROR", "missing required option 'apikey' (Deel API access token) or the OAuth2 options "
+                "'oauth2_client_id' and 'oauth2_client_secret'";
         }
-
-        # Set Bearer token Authorization header and remove apikey from opts
-        # so that RestClient does not attempt to handle it specially
-        hdr.Authorization = "Bearer " + opts.apikey;
-        remove rv.apikey;
 
         if (exists hdr) {
             rv.headers = hdr;
@@ -155,9 +247,10 @@ public class DeelRestClientBase {
 #! This class provides the REST client API for communication with Deel servers
 /** Deel uses a REST API with Bearer token authentication.
 
-    Authentication is done via an API access token passed as a Bearer token in the
-    Authorization header. Tokens can be personal tokens (linked to a user) or
-    organization tokens (service-level access).
+    The Bearer token is either an OAuth2 access token, acquired with the authorization code flow, or an API
+    access token given with the \c apikey option; API tokens can be personal tokens (linked to a user) or
+    organization tokens (service-level access).  With OAuth2, every request also sends the client ID in the
+    \c x-client-id header.  See @ref deelrestclient_auth.
 
     @par API Information:
     - Base URL: https://api.letsdeel.com/rest/v2
@@ -173,13 +266,17 @@ DeelRestClient deel({"apikey": "your-api-token"});
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
-        - \c apikey: the Deel API access token (required)
+        - \c apikey: the Deel API access token; if given, the OAuth2 options are removed
+
+        Without \c apikey, the OAuth2 options are used (\c oauth2_client_id and \c oauth2_client_secret, with
+        \c token and \c oauth2_refresh_token once authorized); the other OAuth2 options default to Deel's
+        endpoints, and the client ID is sent in the \c x-client-id header of every request.
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw DEEL-ERROR missing required option 'apikey'
+        @throw DEEL-ERROR neither the \c apikey option nor the OAuth2 client ID or a token is given
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(DeelRestClientBase::getOptions(opts), do_not_connect) {
@@ -190,7 +287,9 @@ DeelRestClient deel({"apikey": "your-api-token"});
 #! Class for Deel REST connections; returns @ref DeelRestClient objects
 /** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
-    - \c apikey: the Deel API access token
+    - \c apikey: the Deel API access token, the fallback to OAuth2
+
+    The OAuth2 options default to Deel's authorization code flow; see @ref deelrestclient_auth.
 
     @see @ref DeelRestClient::DeelRestClient::constructor() for more information on the above options
 */
@@ -211,7 +310,9 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                 "Deel is a global HR platform for hiring, managing, and paying contractors "
                 "and full-time employees worldwide. This integration supports contracts, "
                 "timesheets, invoice adjustments, workers, time-off, legal entities, "
-                "invoices, and event triggers.",
+                "invoices, and event triggers.\n\n"
+                "**Authentication** is OAuth2 (authorization code with refresh tokens) with an app "
+                "registered in Deel's Developer Center, or an **API token** as the fallback.",
             "cls": Class::forName("DeelRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -235,6 +336,25 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                         "**organization tokens** (service-level access) are supported.",
                     "sensitive": True,
                 },
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": DeelRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": DeelRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
+                    "default_value": DeelRestClientBase::DefaultScopes,
+                }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": DeelRestClientBase::DefaultTokenUrl,
+                    }),
+                "oauth2_token_use_basic_auth": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth, {
+                        "default_value": True,
+                    }),
                 "use_sandbox": <ConnectionOptionInfo>{
                     "display_name": "Use Sandbox",
                     "short_desc": "Use Deel sandbox environment for testing",
@@ -258,7 +378,8 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                     "default_value": DeelRestClientBase::DefaultPingPath,
                 }),
             },
-            "required_options": "apikey",
+            # OAuth2 is the first alternative; an API token is the fallback
+            "required_options": "oauth2_client_id,oauth2_client_secret|apikey",
             "messages": (
                 <UiMessageInfo>{
                     "presentation_id": "setup-1",

@@ -1,7 +1,4 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
@@ -23,24 +20,16 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-%no-child-restrictions
-
-%requires QUnit
-%requires ../../TestInterpreter.qm
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires FsUtil
-%requires ../../ExecModeHarness.qm
-
-%include StackGuardCaseTest.qc
-
-%exec-class CallStackGuardTest
+# The cases of the CallStackGuard-<n>.qtest tests: each runs one part of them, so that each takes a short time (all of
+# them took about 115 s alone, nearly all of it in their child processes, one at a time, and more than the 300 s limit
+# of run_tests.sh beside other tests: qore#6856), and together they run every case (see addPartCase()); the parts are
+# balanced by the time of their cases, most of which is the native compilation of the nested expressions
 
 #! checks that code that recurses without bound raises STACK-LIMIT-EXCEEDED on every recursion path
 /** Each script recurses through one kind of call or evaluation on a thread with a small stack; see
     StackGuardCaseTest
 */
-class CallStackGuardTest inherits StackGuardCaseTest {
+class CallStackGuardBase inherits StackGuardCaseTest {
     public {
         #! nested expressions by kind: the body of a function that evaluates one, and the value it returns
         const NestedExpressions = {
@@ -66,6 +55,15 @@ class CallStackGuardTest inherits StackGuardCaseTest {
                 "1"),
             "cast": ("return " + strmul("cast<int>(", 450) + "x" + strmul(")", 450) + ";", "1"),
         };
+
+        #! the nested literals and the nested calls whose native compilation is short (part 2); the other nested
+        #! expressions are operators (part 1)
+        const NestedLiteralsAndCalls = ("list literal", "hash literal", "hashdecl initializer",
+            "function call arguments", "static method call arguments", "constructor arguments");
+
+        #! the nested calls whose native compilation takes the longest: evaluated once (part 3) and at every depth
+        #! (part 4)
+        const NestedLongCalls = ("method call arguments", "closure call arguments");
 
         #! the cases, by name
         const Cases = {
@@ -192,19 +190,46 @@ our code cb = sub () { p.callFunction(\"r\", cb); };",
         };
     }
 
-    constructor() : StackGuardCaseTest("CallStackGuardTest", CallStackGuardTest::getCases()) {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : StackGuardCaseTest(name) {
+        self.part = part;
+        # the recursion paths and the nested operators
+        map addPartCase(1, $1.key, \testCase(), ($1.key, $1.value)), Cases.pairIterator();
+        map addPartCase(1, $1.key, \testCase(), ($1.key, $1.value)),
+            getNestedCases(NestedExpressions - (NestedLiteralsAndCalls + NestedLongCalls)).pairIterator();
+        map addPartCase(2, $1.key, \testCase(), ($1.key, $1.value)),
+            getNestedCases(NestedExpressions{NestedLiteralsAndCalls}).pairIterator();
+        map addPartCase(3, $1.key, \testCase(), ($1.key, $1.value)),
+            getNestedCases(NestedExpressions{NestedLongCalls}, False).pairIterator();
+        map addPartCase(4, $1.key, \testCase(), ($1.key, $1.value)),
+            getNestedCases(NestedExpressions{NestedLongCalls}, True).pairIterator();
         set_return_value(main());
     }
 
-    #! returns the cases
+    #! adds the case \a name if it is in the part \a case_part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! returns the cases of the nested expressions given: each evaluated once, and at every depth of a recursion
     /** The nested expression cases are parsed on the main thread and evaluated on a thread with a small stack: the
         AST interpreter evaluates an expression recursively, with the nesting of the expression, which the parser
         accepts up to 1000 nested elements whatever the stack of the thread that runs the code; IR and native code
         evaluate it iteratively and return its value
+
+        @param nested_expressions the nested expressions by kind (see NestedExpressions)
+        @param at_every_depth if set, only the cases that evaluate the expressions at every depth (True) or once
+        (False)
     */
-    static hash<string, hash<StackCase>> getCases() {
-        hash<string, hash<StackCase>> rv = Cases;
-        foreach hash<auto> i in (NestedExpressions.pairIterator()) {
+    static hash<string, hash<StackCase>> getNestedCases(hash<auto> nested_expressions, *bool at_every_depth) {
+        hash<string, hash<StackCase>> rv();
+        foreach hash<auto> i in (nested_expressions.pairIterator()) {
             rv{"nested " + i.key} = <StackCase>{
                 "setup": sprintf("class C {
     constructor(auto x) {}
@@ -237,6 +262,13 @@ sub r() {
                 "op": "r()",
                 "stack_size": 512 * 1024,
             };
+        }
+        if (exists at_every_depth) {
+            foreach string name in (keys rv) {
+                if ((name =~ / at every depth$/) != at_every_depth) {
+                    remove rv{name};
+                }
+            }
         }
         return rv;
     }

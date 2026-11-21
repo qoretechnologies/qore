@@ -1,8 +1,4 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - stack guard margin for clang-built native recursion (formatting, YAML) on small stacks
-
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
@@ -24,24 +20,16 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-%no-child-restrictions
-
-%requires QUnit
-%requires ../../TestInterpreter.qm
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires FsUtil
-%requires ../../ExecModeHarness.qm
-
-%include StackGuardCaseTest.qc
-
-%exec-class DataStackGuardTest
+# The cases of the DataStackGuard-<n>.qtest tests: each runs one part of them, so that each takes a short time (all of
+# them took about 70 s alone in a debug build, nearly all of it in their child processes, one at a time, so that their
+# time grew with the load, as call-stack-guard's did beyond the 300 s limit of run_tests.sh: qore#6856), and together
+# they run every case (see addPartCase()); the parts are balanced by the time of their cases
 
 #! checks that library operations that recurse with the nesting of data raise STACK-LIMIT-EXCEEDED
 /** Each script builds deeply nested values iteratively on its main thread, and runs an operation that recurses with
     their nesting on a thread with a small stack; see StackGuardCaseTest
 */
-class DataStackGuardTest inherits StackGuardCaseTest {
+class DataStackGuardBase inherits StackGuardCaseTest {
     public {
         #! code that builds nested values iteratively, so that building them does not recurse
         const Builders = "# the nesting of the values: far beyond what the small thread stack holds when recursing
@@ -80,6 +68,13 @@ Link sub deep_object(int n) {
     return head;
 }
 ";
+
+        #! the cases that format nested values (part 1)
+        const FormattingCases = ("list %y", "list %N", "list %n", "hash %y", "hash %N", "object %y", "object %N");
+
+        #! the cases that compare nested values (part 2); the other cases serialize and parse them (part 3)
+        const ComparisonCases = ("list ==", "list !=", "list ===", "list !==", "hash ==", "hash ===", "list inlist()",
+            "list inlist_hard()");
 
         #! the cases, by name
         const Cases = {
@@ -226,7 +221,25 @@ auto sub iterate_yaml(string v) {
         };
     }
 
-    constructor() : StackGuardCaseTest("DataStackGuardTest", Cases, Builders) {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : StackGuardCaseTest(name, NOTHING, Builders) {
+        self.part = part;
+        map addPartCase(1, $1.key, \testCase(), ($1.key, $1.value)), Cases{FormattingCases}.pairIterator();
+        map addPartCase(2, $1.key, \testCase(), ($1.key, $1.value)), Cases{ComparisonCases}.pairIterator();
+        # serialization, YAML and BSON
+        map addPartCase(3, $1.key, \testCase(), ($1.key, $1.value)),
+            (Cases - (FormattingCases + ComparisonCases)).pairIterator();
         set_return_value(main());
+    }
+
+    #! adds the case \a name if it is in the part \a case_part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 }

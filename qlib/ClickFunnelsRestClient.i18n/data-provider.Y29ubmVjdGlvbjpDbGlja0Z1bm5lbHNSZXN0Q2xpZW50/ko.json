@@ -4,24 +4,24 @@
     "ko": {
       "messages": {
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
-          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
-          "message": "연락처, 주문, 제품, 퍼널, 코스, 양식 및 충족을 관리하기 위한 ClickFunnels REST API에 연결"
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments\n\n**Authentication** is OAuth2 with a ClickFunnels platform application, which sets the API URL to the workspace you authorize, or an **API token** with your team subdomain as the fallback.",
+          "message": "연락처, 주문, 제품, 퍼널, 코스, 양식 및 충족을 관리하기 위한 ClickFunnels REST API에 연결\n\n**인증**은 ClickFunnels 플랫폼 애플리케이션을 사용하는 OAuth2(API URL이 인증한 워크스페이스로 설정됨) 또는 대체 수단인 팀 하위 도메인과 **API 토큰**으로 수행합니다."
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
           "source": "ClickFunnels REST Connection",
           "message": "ClickFunnels REST 연결"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
-          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
-          "message": "ClickFunnels 계정에 연결하려면 **팀 하위 도메인**이 필요합니다.\n\n**찾는 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. 브라우저의 URL을 확인하세요: `https://**myteam**.myclickfunnels.com`\n3. `.myclickfunnels.com` 앞부분이 팀 하위 도메인입니다"
+          "source": "The **Team Subdomain** is required to connect with an API token. With OAuth2, it is taken from the workspace you authorize.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "API 토큰으로 연결하려면 **팀 하위 도메인**이 필요합니다. OAuth2를 사용하면 인증한 워크스페이스에서 가져옵니다.\n\n**찾는 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. 브라우저의 URL을 확인하세요: `https://**myteam**.myclickfunnels.com`\n3. `.myclickfunnels.com` 앞부분이 팀 하위 도메인입니다"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
           "source": "How to Find Your Team Subdomain",
           "message": "팀 하위 도메인 찾는 방법"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
-          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
-          "message": "인증을 위해 **API 토큰**이 필요합니다.\n\n**생성 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. **팀 목록 > 내 팀 > 팀 설정 > 개발자 포털**으로 이동합니다\n3. **새 플랫폼 애플리케이션 추가**를 클릭하고 필수 정보를 입력합니다\n4. 플랫폼 애플리케이션 세부 정보에서 **API 액세스 토큰**을 복사합니다\n\n**참고:** 이 토큰을 안전하게 보관하세요. 이 토큰은 ClickFunnels 계정에 대한 전체 API 액세스 권한을 제공합니다. API 액세스는 Scale, Optimize, 또는 Dominate 플랜이 필요합니다"
+          "source": "An **API Token** is needed only if you do not connect with OAuth2.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "**API 토큰**은 OAuth2로 연결하지 않는 경우에만 필요합니다.\n\n**생성 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. **팀 목록 > 내 팀 > 팀 설정 > 개발자 포털**으로 이동합니다\n3. **새 플랫폼 애플리케이션 추가**를 클릭하고 필수 정보를 입력합니다\n4. 플랫폼 애플리케이션 세부 정보에서 **API 액세스 토큰**을 복사합니다\n\n**참고:** 이 토큰을 안전하게 보관하세요. 이 토큰은 ClickFunnels 계정에 대한 전체 API 액세스 권한을 제공합니다. API 액세스는 Scale, Optimize, 또는 Dominate 플랜이 필요합니다"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
           "source": "How to Generate an API Token",

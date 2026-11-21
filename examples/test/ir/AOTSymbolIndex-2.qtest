@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%include AOTSymbolIndex.qc
+
+%exec-class AOTSymbolIndexPart2
+
+#! runs part 2 of 2 of the cases of AOTSymbolIndexBase
+class AOTSymbolIndexPart2 inherits AOTSymbolIndexBase {
+    constructor() : AOTSymbolIndexBase("AOTSymbolIndexPart2", 2) {
+    }
+}

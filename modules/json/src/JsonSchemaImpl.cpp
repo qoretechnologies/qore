@@ -83,7 +83,8 @@ JsonSchemaValidator::JsonSchemaValidator(const QoreStringNode* schema_json, Exce
         xsink->raiseException("JSON-SCHEMA-ERROR", "Schema string cannot be null");
         return;
     }
-    initFromJsonString(schema_json->c_str(), xsink);
+    // the whole text: a NUL byte does not end it (issue #6841)
+    initFromJsonString(std::string(schema_json->c_str(), schema_json->size()), xsink);
 }
 
 JsonSchemaValidator::JsonSchemaValidator(const QoreHashNode* schema_hash, ExceptionSink* xsink)
@@ -177,7 +178,8 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
 
         case NT_STRING: {
             QoreStringValueHelper str(val);
-            return jsoncons::json(str->c_str());
+            // the whole string, with any NUL characters, is validated (issue #6841)
+            return jsoncons::json(std::string(str->c_str(), str->size()));
         }
 
         case NT_LIST: {

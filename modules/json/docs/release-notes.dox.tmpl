@@ -6,6 +6,14 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
+    - @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for text after a NUL byte that follows
+      the JSON value, or follows whitespace only (which it took as empty text), where it ignored the rest of the
+      text: a NUL byte is not JSON whitespace
+      (<a href="https://github.com/qoretechnologies/qore/issues/6718">issue 6718</a>)
+    - JWT/JWS functions now process keys and signing inputs containing NUL characters by their full size, and reject
+      tokens and algorithm names containing NUL characters with \c JWT-ERROR; JSON schema texts, validated strings and
+      @ref Qore::Json::json_pointer_escape() "json_pointer_escape()" tokens containing NUL are no longer truncated
+      (<a href="https://github.com/qoretechnologies/qore/issues/6841">issue 6841</a>)
     - @ref Qore::Json::parse_json() "parse_json()" (and so @ref Qore::Json::jwt_decode() "jwt_decode()"),
       @ref Qore::Json::parse_toon() "parse_toon()" and @ref Qore::Json::JsonSaxParser "JsonSaxParser" raise
       \c INVALID-ENCODING for text that is not valid in its encoding, which was returned in strings

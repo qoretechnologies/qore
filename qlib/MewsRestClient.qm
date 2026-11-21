@@ -184,13 +184,19 @@ public class MewsRestClientBase {
 }
 
 #! this class provides the REST client API for communication with Mews servers
-/** You must use an OAuth2 token by setting the \c token and \c oauth2_refresh_token options; the following options
-    need to be set as well:
-    - \c oauth2_client_id: the OAuth2 client ID
-    - \c oauth2_client_secret: the OAuth2 client secret
+/** The Mews Connector API does not use OAuth2 or an \c Authorization header: the credentials are sent as
+    parameters in the JSON request body (see
+    <a href="https://docs.mews.com/connector-api/guidelines/authentication">Mews Connector API authentication</a>).
+    This client adds them to the body of every request it sends:
+    - \c ClientToken: from the \c client_token option (required), the token that identifies the client application
+    - \c AccessToken: from the \c access_token option (required), the token of the client's connection with one
+      property (an enterprise in the API)
+    - \c Client: from the \c client option, the name and version of the client application (default:
+      @ref MewsRestClient::MewsRestClientBase::DefaultClient "DefaultClient")
 
-    Then an external program has to guide the user through using the authorization_grant flow to get a token to use;
-    this module does not implement that flow.
+    A @ref MewsRestClient::MewsRestConnection "MewsRestConnection" accepts neither the OAuth2 options
+    (\c oauth2_*) nor the \c token, \c token_type, \c username and \c password options of a REST connection; a
+    connection given any of them is rejected for having an unknown option.
 */
 public class MewsRestClient inherits RestClient::RestClient, MewsRestClientBase {
     #! creates the object with the given options

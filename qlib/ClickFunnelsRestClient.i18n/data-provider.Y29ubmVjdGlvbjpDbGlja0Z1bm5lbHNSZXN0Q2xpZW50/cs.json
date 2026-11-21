@@ -4,24 +4,24 @@
     "cs": {
       "messages": {
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
-          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
-          "message": "Připojení k REST API ClickFunnels pro správu kontaktů, objednávek, produktů, funnelů, kurzů, formulářů a splnění"
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments\n\n**Authentication** is OAuth2 with a ClickFunnels platform application, which sets the API URL to the workspace you authorize, or an **API token** with your team subdomain as the fallback.",
+          "message": "Připojení k REST API ClickFunnels pro správu kontaktů, objednávek, produktů, funnelů, kurzů, formulářů a splnění\n\n**Ověřování** probíhá přes OAuth2 s platformní aplikací ClickFunnels, které nastaví URL API na pracovní prostor, jejž autorizujete, nebo jako záložní možnost přes **token API** s poddoménou vašeho týmu."
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
           "source": "ClickFunnels REST Connection",
           "message": "Připojení REST ClickFunnels"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
-          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
-          "message": "Pro připojení k vašemu účtu ClickFunnels je vyžadován **poddoména týmu**.\n\n**Jak ji najít:**\n1. Přihlaste se k účtu ClickFunnels 2.0\n2. Podívejte se na URL v prohlížeči: `https://**myteam**.myclickfunnels.com`\n3. Poddoména týmu je část před `.myclickfunnels.com`"
+          "source": "The **Team Subdomain** is required to connect with an API token. With OAuth2, it is taken from the workspace you authorize.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "Pro připojení pomocí tokenu API je vyžadována **poddoména týmu**. Při použití OAuth2 se převezme z pracovního prostoru, který autorizujete.\n\n**Jak ji najít:**\n1. Přihlaste se k účtu ClickFunnels 2.0\n2. Podívejte se na URL v prohlížeči: `https://**myteam**.myclickfunnels.com`\n3. Poddoména týmu je část před `.myclickfunnels.com`"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
           "source": "How to Find Your Team Subdomain",
           "message": "Jak najít svou poddoménu týmu"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
-          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
-          "message": "Pro ověření je vyžadován **přístupový token**.\n\n**Jak jej vytvořit:**\n1. Přihlaste se k účtu ClickFunnels 2.0\n2. Přejděte na **Seznam týmů > Váš tým > Nastavení týmu > Vývojářská centrála**\n3. Klikněte na **Přidat novou platformovou aplikaci** a vyplňte požadované údaje\n4. Zkopírujte **přístupový token API** z podrobností platformové aplikace\n\n**Poznámka:** Uchovávejte tento token bezpečně; poskytuje plný přístup k vašemu účtu ClickFunnels. Přístup k API vyžaduje plán Scale, Optimize nebo Dominate"
+          "source": "An **API Token** is needed only if you do not connect with OAuth2.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "**Token API** je potřeba pouze tehdy, pokud se nepřipojujete pomocí OAuth2.\n\n**Jak jej vytvořit:**\n1. Přihlaste se k účtu ClickFunnels 2.0\n2. Přejděte na **Seznam týmů > Váš tým > Nastavení týmu > Vývojářská centrála**\n3. Klikněte na **Přidat novou platformovou aplikaci** a vyplňte požadované údaje\n4. Zkopírujte **přístupový token API** z podrobností platformové aplikace\n\n**Poznámka:** Uchovávejte tento token bezpečně; poskytuje plný přístup k vašemu účtu ClickFunnels. Přístup k API vyžaduje plán Scale, Optimize nebo Dominate"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
           "source": "How to Generate an API Token",
