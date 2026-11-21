@@ -376,8 +376,8 @@ class MongoDbDriverConnectionsTest inherits QUnit::Test {
         assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));
         assertRegex("MONGODB-OIDC", ex.desc);
         # a client made with an environment by code that no sandbox governs, used by sandboxed code: k8s reads a
-        # token file, so the old code connects without contacting an endpoint
-        MongoClient client(sprintf("mongodb://127.0.0.1:%d/?authMechanism=MONGODB-OIDC&authMechanismProperties="
+        # token file, so the old code connects without contacting an endpoint (with a user name, as above)
+        MongoClient client(sprintf("mongodb://user@127.0.0.1:%d/?authMechanism=MONGODB-OIDC&authMechanismProperties="
             "ENVIRONMENT:k8s&%s", server.getPort(), Timeouts));
         ex = p.callFunction("ping_client", client);
         assertTrue(exists ex);
@@ -409,8 +409,14 @@ class MongoDbDriverConnectionsTest inherits QUnit::Test {
         if (!Process::commandExists("openssl")) {
             testSkip("the openssl executable is required to generate the test certificates");
         }
-        # the OCSP responder that the server's certificate names: a loopback address that the sandbox denies
-        CountingListener responder("127.0.0.2");
+        # the OCSP responder that the server's certificate names: a loopback address that the sandbox denies; macOS
+        # configures only 127.0.0.1 on its loopback interface, where no socket can be bound to 127.0.0.2
+        CountingListener responder;
+        try {
+            responder = new CountingListener("127.0.0.2");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no listener can be bound to 127.0.0.2 on this host: %s: %s", ex.err, ex.desc));
+        }
         on_exit responder.stop();
         string dir = make_tmp_dir("qore-mongodb-ocsp-");
         on_exit remove_tree(dir);
