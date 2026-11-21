@@ -129,13 +129,31 @@ public:
     DLLLOCAL virtual ~QoreTypeInfo() = default;
 #endif
 
+    //! Adds QTI_CTP_UNSAFE_RECEIVER to a known value (constructors of parameterized class types, after
+    //! unsafe_receiver is set; an unknown value takes it when it is set)
+    DLLLOCAL void setUnsafeReceiverCache() const {
+        signed char c = contains_type_parameter_cache.load(std::memory_order_relaxed);
+        if (c != -1) {
+            contains_type_parameter_cache.store(static_cast<signed char>(c | QTI_CTP_UNSAFE_RECEIVER),
+                std::memory_order_relaxed);
+        }
+    }
+
+    //! Returns the cached value: -1 if not known yet, otherwise 1 if the type contains a type parameter, 0 if not,
+    //! with QTI_CTP_UNSAFE_RECEIVER for a parameterized class type whose type arguments name user declarations; so a
+    //! value that is not 0 is a type that can contain a type parameter or such a receiver
     DLLLOCAL signed char getContainsTypeParameterCache() const {
         return contains_type_parameter_cache.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL void setContainsTypeParameterCache(bool contains_type_parameter) const {
-        contains_type_parameter_cache.store(contains_type_parameter ? 1 : 0, std::memory_order_relaxed);
+        contains_type_parameter_cache.store(static_cast<signed char>((contains_type_parameter ? 1 : 0)
+            | (unsafe_receiver ? QTI_CTP_UNSAFE_RECEIVER : 0)), std::memory_order_relaxed);
     }
+
+    //! a parameterized class type whose type arguments name user declarations: a call with it as its receiver holds
+    //! types read through it (contains_type_parameter_cache, with unsafe_receiver; issue #6419)
+    static constexpr signed char QTI_CTP_UNSAFE_RECEIVER = 4;
 
     // Accessors for accept_vec encapsulation
     DLLLOCAL bool isAcceptVecEmpty() const {
@@ -181,12 +199,26 @@ public:
         }
 
         for (const QoreAcceptSpec& as : accept_vec) {
+            // a typed callable checks the signature of the callable with the map of its specs (qore#6660)
             if (!as.map && as.spec.isRuntimeBaseType(t)) {
                 return true;
             }
         }
         return false;
     }
+
+    //! Returns true if this is a typed callable type (code<...> or *code<...>; see QoreComplexCodeTypeInfo)
+    /** A flag that the constructor of QoreComplexCodeTypeInfo sets, so that the type comparisons can ask it on every
+        call (qore#6660)
+    */
+    DLLLOCAL bool isComplexCode() const {
+        return complex_code;
+    }
+
+    //! Returns false if this is a typed callable type and \a n is a closure or call reference that it does not accept
+    /** Only the signature is checked: a value that is no closure or call reference gives true (qore#6660)
+    */
+    DLLLOCAL bool complexCodeAcceptsCallable(const QoreValue& n) const;
 
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
@@ -200,6 +232,13 @@ public:
 
     DLLLOCAL const q_accept_vec_t& getAcceptSpecs() const {
         return accept_vec;
+    }
+
+    //! Returns true if \a ti is a parameterized class type whose type arguments name user declarations: a call with
+    //! it as its receiver holds types read through it (issue #6419); one load, as it is tested for every call with a
+    //! receiver
+    DLLLOCAL static bool isUnsafeReceiver(const QoreTypeInfo* ti) {
+        return ti && ti->unsafe_receiver;
     }
 
     DLLLOCAL static const QoreTypeInfo* getHardReference(const QoreTypeInfo* ti);
@@ -977,10 +1016,21 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            // the specs of a typed callable do not hold its signature (qore#6660)
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs()) && return_vec_compare(a->return_vec, b->return_vec);
+        }
         return hta || htb ? false : true;
     }
+
+    //! Returns true if \a a and \a b are typed callable types with the same signature (qore#6660)
+    /** Called for two different types of which at least one is a typed callable type: the specs of a typed callable
+        type are those of any closure or call reference, so the signature is compared here
+    */
+    DLLLOCAL static bool complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeInfo* b);
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool isInputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
@@ -992,8 +1042,12 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs());
+        }
         return hta || htb ? false : true;
     }
 
@@ -1011,11 +1065,19 @@ public:
         return acceptsInputUncheckedDifferent(target, source);
     }
 
+    //! Returns true if \a target is code or *code and \a source a typed callable type whose values it accepts
+    //! (qore#6660)
+    /** Before the signature of a typed callable was part of its type, code and code<...> were the same type
+    */
+    DLLLOCAL static __attribute__((noinline)) bool codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target,
+            const QoreTypeInfo* source);
+
     //! Compares two different types for acceptsInputUnchecked() (issue #5782)
     DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
             const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
-            return false;
+            // code accepts the values of a typed callable type unchecked (qore#6660)
+            return codeAcceptsTypedCallablesUnchecked(target, source);
         }
         if (!target) {
             return true;
@@ -1058,8 +1120,12 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return return_vec_compare(a->return_vec, b->return_vec);
+        }
         return hta || htb ? false : true;
     }
 
@@ -1343,6 +1409,9 @@ protected:
     QoreString tname;
     QoreString sname;
     unsigned container_nesting = 0;
+    //! true for a parameterized class type whose type arguments name user declarations: a call with it as its
+    //! receiver holds types read through it (issue #6419; see QoreParameterizedClassTypeInfo::isUnsafeReceiver())
+    bool unsafe_receiver = false;
     //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
     /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
         qore_get_type_identity_serial()
@@ -1362,6 +1431,33 @@ protected:
         qore_type_info_created(this);
 #endif
     }
+
+    //! Appends the name of the type to a string, in the encoding of the string
+    /** The name of a type is made in the default encoding of the process when the type is made: UTF-8 for the types
+        made when the library is initialized, which is not the encoding of a message made in a process with another
+        default encoding (ex: \c --charset=ISO-8859-1) (qore#6814)
+    */
+    DLLLOCAL void concatName(QoreString& str) const {
+        qore_string_private* p = qore_string_private::get(str);
+        const qore_string_private* np = qore_string_private::get(tname);
+        if (np->encoding == p->encoding || !np->encoding) {
+            p->concat(np);
+            return;
+        }
+        concatNameConverted(str);
+    }
+
+    //! Appends the name of the given type to a string, in the encoding of the string; see concatName()
+    DLLLOCAL static void concatName(const QoreTypeInfo* ti, QoreString& str) {
+        if (ti && !ti->tname.empty()) {
+            ti->concatName(str);
+        } else {
+            str.concat(NO_TYPE_INFO);
+        }
+    }
+
+    //! Appends the name of the type to a string with another encoding, converting it; see concatName()
+    DLLLOCAL void concatNameConverted(QoreString& str) const;
 
     DLLLOCAL void setSimpleName() {
         ssize_t i = tname.find('<');
@@ -1523,7 +1619,9 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("type '%s'", tname.c_str());
+        str.concat("type '");
+        concatName(str);
+        str.concat('\'');
     }
 
     DLLLOCAL virtual const char* getPathImpl() const {
@@ -1571,9 +1669,12 @@ public:
 protected:
     //! true for an AOT deferred placeholder type only
     bool aot_deferred_placeholder = false;
+    //! true for a typed callable type (QoreComplexCodeTypeInfo) only; see isComplexCode()
+    bool complex_code = false;
 
 private:
     const q_accept_vec_t accept_vec;
+    //! -1 if not known yet, otherwise 1 or 0, with QTI_CTP_UNSAFE_RECEIVER; see getContainsTypeParameterCache()
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};
     //! whether the type takes NOTHING at run time: -1 = not known yet; see runtimeTakesNothing()
     mutable std::atomic<signed char> takes_nothing_cache {-1};
@@ -1652,7 +1753,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1693,6 +1794,11 @@ protected:
     }
 };
 
+//! A vector of types that can be orphaned (issue #6419; see QoreOrphanablePtr)
+typedef std::vector<QoreOrphanablePtr<const QoreTypeInfo>> orphanable_type_vec_t;
+//! A read-only view of an orphanable_type_vec_t
+typedef QoreOrphanablePtrVecView<const QoreTypeInfo> orphanable_type_vec_view_t;
+
 class QoreParameterizedClassTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreParameterizedClassTypeInfo(const QoreClass* qc,
@@ -1700,11 +1806,17 @@ public:
             const QoreParameterizedClassTypeInfo* value_type = nullptr);
 
     DLLLOCAL const QoreClass* getBaseClass() const {
+        return base_class.get();
+    }
+
+    //! Returns the generic class for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreClass>& getOrphanableBaseClass() const {
         return base_class;
     }
 
-    DLLLOCAL const std::vector<const QoreTypeInfo*>& getTypeArgs() const {
-        return type_args;
+    //! Returns the type arguments; each is read with an acquire load, as it can be orphaned (issue #6419)
+    DLLLOCAL orphanable_type_vec_view_t getTypeArgs() const {
+        return orphanable_type_vec_view_t(type_args);
     }
 
     DLLLOCAL size_t getArgCount() const {
@@ -1715,14 +1827,24 @@ public:
         return or_nothing;
     }
 
+    //! Returns true if a type argument names a user declaration (or may: a type parameter): a call with the type as
+    //! its receiver reads that declaration's types through the type (issue #6419)
+    DLLLOCAL bool hasUserTypeArgs() const {
+        return user_type_args;
+    }
+
 protected:
-    const QoreClass* base_class;
-    std::vector<const QoreTypeInfo*> type_args;
+    //! true if a type argument names a user declaration; set when the type is made
+    bool user_type_args = false;
+    //! the generic class; orphaned when it is retired (issue #6419)
+    QoreOrphanablePtr<const QoreClass> base_class;
+    //! the type arguments; orphaned when a declaration that one is the type of is retired (issue #6419)
+    orphanable_type_vec_t type_args;
     bool or_nothing;
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1804,7 +1926,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1825,16 +1947,22 @@ public:
     }
 
     DLLLOCAL const QoreTypeInfo* getBound() const {
+        return bound.get();
+    }
+
+    //! Returns the bound for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>& getOrphanableBound() const {
         return bound;
     }
 
 protected:
     QoreWildcardKind kind;
-    const QoreTypeInfo* bound = nullptr;
+    //! the bound; orphaned when the declaration that it is the type of is retired (issue #6419)
+    QoreOrphanablePtr<const QoreTypeInfo> bound;
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1874,7 +2002,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1953,7 +2081,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2020,7 +2148,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2061,7 +2189,9 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("hash<string, %s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexHash()));
+        str.concat("hash<string, ");
+        concatName(getFirstAcceptSpec().spec.getComplexHash(), str);
+        str.concat("> or no value (NOTHING)");
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2121,7 +2251,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2251,11 +2381,26 @@ protected:
     }
 };
 
+//! The element type of a soft list type that its conversions read; orphaned with the type's specs (issue #6419)
+typedef std::shared_ptr<QoreOrphanablePtr<const QoreTypeInfo>> qore_orphanable_type_cell_t;
+
 class QoreComplexSoftListTypeInfo : public QoreComplexListTypeInfo {
 public:
-    DLLLOCAL QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti);
+    DLLLOCAL QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti)
+            : QoreComplexSoftListTypeInfo(std::make_shared<QoreOrphanablePtr<const QoreTypeInfo>>(vti)) {
+    }
+
+    //! Returns the element type that the conversions of the type read, for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>* getOrphanableElementCell() const {
+        return vti_cell.get();
+    }
 
 protected:
+    //! the element type read by the conversions in the accept specs
+    qore_orphanable_type_cell_t vti_cell;
+
+    DLLLOCAL QoreComplexSoftListTypeInfo(qore_orphanable_type_cell_t cell);
+
     DLLLOCAL QoreComplexSoftListTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& tname)
             : QoreComplexListTypeInfo(std::move(a_vec), std::move(r_vec), tname) {
@@ -2264,9 +2409,21 @@ protected:
 
 class QoreComplexSoftListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
 public:
-    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const QoreTypeInfo* vti);
+    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const QoreTypeInfo* vti)
+            : QoreComplexSoftListOrNothingTypeInfo(std::make_shared<QoreOrphanablePtr<const QoreTypeInfo>>(vti)) {
+    }
+
+    //! Returns the element type that the conversions of the type read, for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>* getOrphanableElementCell() const {
+        return vti_cell.get();
+    }
 
 protected:
+    //! the element type read by the conversions in the accept specs
+    qore_orphanable_type_cell_t vti_cell;
+
+    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(qore_orphanable_type_cell_t cell);
+
     DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& tname)
             : QoreComplexListOrNothingTypeInfo(std::move(a_vec), std::move(r_vec), tname) {
@@ -2287,7 +2444,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2313,7 +2470,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2340,7 +2497,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2375,7 +2532,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2417,6 +2574,14 @@ public:
         return ref_type = getHardReferenceImpl();
     }
 
+    //! Returns the hard reference type if it has been made, for orphaning (issue #6419)
+    /** Read in the lock after the type's specs were orphaned: one made afterwards is made from the orphaned specs
+    */
+    DLLLOCAL const QoreTypeInfo* getCreatedHardReference() const {
+        AutoLocker al(ref_lock);
+        return ref_type;
+    }
+
 protected:
     QoreString pname;
     mutable QoreThreadLock ref_lock;
@@ -2427,7 +2592,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2461,7 +2626,9 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("reference<%s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexReference()));
+        str.concat("reference<");
+        concatName(getFirstAcceptSpec().spec.getComplexReference(), str);
+        str.concat("> or no value (NOTHING)");
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -4602,7 +4769,7 @@ public:
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
-            members(std::move(members)) {
+            members(qore_orphanable_vec(members)) {
     }
 
     //! records the member types that a value of the type is accepted as, given the value types of the members
@@ -4624,19 +4791,31 @@ public:
         for a class, \c string for a string enum), so the members are kept as declared (qore#5858)
     */
     DLLLOCAL type_vec_t getMemberTypes() const {
+        return orphanable_type_vec_view_t(members).toVector();
+    }
+
+    //! Returns the member types for orphaning (issue #6419)
+    DLLLOCAL const orphanable_type_vec_t& getOrphanableMemberTypes() const {
         return members;
+    }
+
+    //! Returns the exact member types for orphaning (issue #6419)
+    DLLLOCAL const orphanable_type_vec_t& getOrphanableExactMembers() const {
+        return exact_members;
     }
 
 protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
-    //! the member types as declared, without duplicates
-    const type_vec_t members;
-    //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407)
-    type_vec_t exact_members;
-
+    //! the member types as declared, without duplicates; orphaned when a declaration that one is the type of is
+    //! retired (issue #6419)
+    const orphanable_type_vec_t members;
+    //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407);
+    //! compared by address only, and orphaned as the members are, so that the address of a freed declaration's type
+    //! that a new type reuses is not taken for a member (issue #6419)
+    orphanable_type_vec_t exact_members;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -4962,12 +5141,17 @@ public:
 
     //! Returns the return type of this callable
     DLLLOCAL const QoreTypeInfo* getReturnType() const {
+        return returnType.get();
+    }
+
+    //! Returns the return type for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>& getOrphanableReturnType() const {
         return returnType;
     }
 
-    //! Returns the parameter types of this callable
-    DLLLOCAL const type_vec_t& getParamTypes() const {
-        return paramTypes;
+    //! Returns the parameter types of this callable; each is read with an acquire load (issue #6419)
+    DLLLOCAL orphanable_type_vec_view_t getParamTypes() const {
+        return orphanable_type_vec_view_t(paramTypes);
     }
 
     //! Returns true if this callable accepts variable arguments
@@ -4989,15 +5173,23 @@ public:
     */
     DLLLOCAL bool isSignatureCompatible(const class AbstractFunctionSignature* sig) const;
 
+    //! Returns true if \a n is a closure or call reference that this type accepts (qore#6660)
+    /** A callable whose function is not known, or that has no variant, is accepted; a call reference to a function
+        with more than one variant is accepted if one of its variants has a compatible signature
+    */
+    DLLLOCAL bool acceptsCallable(const QoreValue& n) const;
+
 protected:
-    const QoreTypeInfo* returnType;  //!< return type (nullptr = nothing)
-    type_vec_t paramTypes;           //!< parameter types
+    //! return type (nullptr = nothing); orphaned when the declaration that it is the type of is retired (#6419)
+    QoreOrphanablePtr<const QoreTypeInfo> returnType;
+    //! parameter types; orphaned when a declaration that one is the type of is retired (issue #6419)
+    orphanable_type_vec_t paramTypes;
     bool varargs;                    //!< true if accepts variable arguments
     bool orNothing;                  //!< true if accepts NOTHING
     QoreString pname;                //!< path name for type
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -5006,6 +5198,11 @@ protected:
 
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
         return orNothing;
+    }
+
+    //! a typed callable rejects the closures and call references of other signatures (qore#6660)
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
     }
 
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {

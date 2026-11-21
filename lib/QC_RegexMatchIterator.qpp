@@ -48,6 +48,7 @@ static int assignRegexIteratorReference(const ReferenceNode* ref, QoreValue valu
 RegexMatchIterator::RegexMatchIterator(const QoreStringNode* s, const QoreRegex* re,
         ExceptionSink* xsink) {
     if (s && s->getEncoding() != QCS_UTF8) {
+        result_encoding = s->getEncoding();
         QoreString tmp(s->c_str(), s->size(), s->getEncoding());
         std::unique_ptr<QoreString> converted(tmp.convertEncoding(QCS_UTF8, xsink));
         if (*xsink) {
@@ -81,7 +82,7 @@ RegexMatchIterator::RegexMatchIterator(const QoreStringNode* s, const QoreRegex*
 }
 
 RegexMatchIterator::RegexMatchIterator(const RegexMatchIterator& old, ExceptionSink* xsink)
-        : subject(old.subject), regex(old.regex), name_count(old.name_count),
+        : subject(old.subject), result_encoding(old.result_encoding), regex(old.regex), name_count(old.name_count),
           name_entry_size(old.name_entry_size), name_table(old.name_table),
           utf_validated(old.utf_validated) {
     if (subject) {
@@ -106,19 +107,6 @@ RegexMatchIterator::~RegexMatchIterator() {
     if (subject) {
         subject->deref();
     }
-}
-
-size_t RegexMatchIterator::advanceCodepoint(size_t byte_offset) const {
-    const size_t size = subject->size();
-    if (byte_offset >= size) {
-        return size + 1;
-    }
-    ++byte_offset;
-    while (byte_offset < size
-            && (static_cast<unsigned char>(subject->c_str()[byte_offset]) & 0xc0) == 0x80) {
-        ++byte_offset;
-    }
-    return byte_offset;
 }
 
 bool RegexMatchIterator::next(ExceptionSink* xsink) {
@@ -158,7 +146,7 @@ bool RegexMatchIterator::next(ExceptionSink* xsink) {
     PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
     match_offset = ovector[0];
     match_length = ovector[1] - ovector[0];
-    next_offset = match_length ? ovector[1] : advanceCodepoint(ovector[1]);
+    next_offset = match_length ? ovector[1] : qore_regex_after_empty_match(subject->c_str(), subject_size, ovector[1]);
     m_valid = true;
     if (!regex->isGlobal() || next_offset > subject_size) {
         exhausted = true;
@@ -183,7 +171,8 @@ QoreValue RegexMatchIterator::getCapture(int capture, ExceptionSink* xsink) cons
     if (start == PCRE2_UNSET) {
         return QoreValue();
     }
-    return QoreValue(QoreStringNode::makeView(subject, start, ovector[capture * 2 + 1] - start));
+    auto* view = QoreStringNode::makeView(subject, start, ovector[capture * 2 + 1] - start);
+    return QoreValue(qore_regex_subject_result(view, result_encoding, xsink));
 }
 
 QoreValue RegexMatchIterator::getMatch(ExceptionSink* xsink) const {
@@ -264,11 +253,15 @@ int RegexMatchIterator::namedCapture(const char* name, ExceptionSink* xsink) con
     return capture;
 }
 
-QoreValue RegexMatchIterator::getNamedGroup(const char* name, ExceptionSink* xsink) const {
+QoreValue RegexMatchIterator::getNamedGroup(const QoreString& name, ExceptionSink* xsink) const {
     if (!checkValid(xsink) || !name_count) {
         return QoreValue();
     }
-    int capture = namedCapture(name, xsink);
+    TempEncodingHelper utf8(name, QCS_UTF8, xsink);
+    if (!utf8 || memchr(utf8->c_str(), 0, utf8->size())) {
+        return QoreValue();
+    }
+    int capture = namedCapture(utf8->c_str(), xsink);
     return capture < 0 ? QoreValue() : getCapture(capture, xsink);
 }
 
@@ -285,7 +278,7 @@ QoreValue RegexMatchIterator::getNamedGroups(ExceptionSink* xsink) const {
         }
         int capture = (entry[0] << 8) | entry[1];
         const char* name = reinterpret_cast<const char*>(entry + 2);
-        named->setKeyValue(name, getCapture(capture, xsink), xsink);
+        qore_regex_set_named_capture(**named, name, getCapture(capture, xsink), xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -460,7 +453,7 @@ hash<RegexMatchInfo> RegexMatchIterator::getValue() [flags=RET_VALUE_ONLY] {
     return i->getValue(xsink);
 }
 
-//! Returns the current full match as a zero-copy string view.
+//! Returns the current full match in the subject's encoding.
 /** @return the current full match
     @throw INVALID-ITERATOR the iterator does not point at a match
     @throw ITERATOR-THREAD-ERROR called from a thread other than the owning thread
@@ -508,7 +501,7 @@ int RegexMatchIterator::getCaptureCount() [flags=RET_VALUE_ONLY] {
     return i->getCaptureCount(xsink);
 }
 
-//! Returns a zero-based captured group as a zero-copy string view.
+//! Returns a zero-based capture in the subject's encoding.
 /** @param index the zero-based capture index
     @return the captured text, or @ref nothing for an unmatched or unavailable group
     @throw INVALID-ITERATOR the iterator does not point at a match
@@ -559,7 +552,7 @@ int RegexMatchIterator::getCaptureCount() [flags=RET_VALUE_ONLY] {
     return i->getGroups(xsink);
 }
 
-//! Returns a named captured group as a zero-copy string view.
+//! Returns a named capture in the subject's encoding.
 /** @param name the capture group name
     @return the captured text, or @ref nothing if the name is absent or unmatched
     @throw INVALID-ITERATOR the iterator does not point at a match
@@ -569,7 +562,7 @@ int RegexMatchIterator::getCaptureCount() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink)) {
         return QoreValue();
     }
-    return i->getNamedGroup(name->c_str(), xsink);
+    return i->getNamedGroup(*name, xsink);
 }
 
 //! Returns all named captured groups for the current match.

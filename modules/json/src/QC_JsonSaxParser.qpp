@@ -266,6 +266,14 @@ QoreStringNode* JsonSaxParser::parseString(ParseState& state) {
         }
 
         if (ch == '"') {
+            // the string is valid UTF-8 where it enters the program (qore#6604); the bytes of the text are copied, and
+            // the escapes give valid characters
+            QoreString what;
+            what.sprintf("JSON string ending at line %d, column %d", state.line_number, state.column);
+            if (q_check_text_encoding(str->getEncoding(), str->c_str(), str->size(), state.where, what.c_str(),
+                    state.xsink)) {
+                return nullptr;
+            }
             return str.release();
         }
 
@@ -743,6 +751,12 @@ bool JsonSaxParser::parseValue(ParseState& state) {
 
 int JsonSaxParser::parse(const QoreStringNode* json_str, ResolvedCallReferenceNode* callback, ExceptionSink* xsink) {
     ParseState state;
+    // text in another encoding is checked in its encoding before it is converted (qore#6604); UTF-8 text is checked
+    // by the strings parsed
+    if (json_str->getEncoding() != QCS_UTF8 && q_check_text_encoding(json_str->getEncoding(), json_str->c_str(),
+            json_str->size(), "JsonSaxParser::parse()", "JSON text", xsink)) {
+        return -1;
+    }
     TempEncodingHelper utf8(json_str, QCS_UTF8, xsink);
     if (*xsink) {
         return -1;
@@ -801,6 +815,7 @@ int JsonSaxParser::parseStream(QoreObject* stream, ResolvedCallReferenceNode* ca
     state.callback = callback;
     state.xsink = xsink;
     state.encoding = QCS_UTF8;
+    state.where = "JsonSaxParser::parseStream()";
 
     skipBom(state);
     skipWhitespace(state);
@@ -943,6 +958,10 @@ JsonSaxParser::constructor() {
     @param callback the callback code to execute for each SAX event; receives a hash with event information
 
     @throw JSON-SAX-PARSE-ERROR if there is a parsing error
+    @throw INVALID-ENCODING the JSON text in another encoding than UTF-8 is not valid in its encoding (it is
+    converted to UTF-8 to be parsed), or a string or key of the JSON text is not valid UTF-8: the description has the
+    line and column after its closing quote and the byte offset in its value of the first invalid byte sequence
+    (since json 3.0)
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 */
 nothing JsonSaxParser::parse(string json_str, code callback) {
@@ -963,6 +982,9 @@ nothing JsonSaxParser::parse(string json_str, code callback) {
     @param encoding optional character encoding (default: UTF-8)
 
     @throw JSON-SAX-PARSE-ERROR if there is a parsing error
+    @throw INVALID-ENCODING a string or key of the JSON text read in UTF-8 is not valid UTF-8; the description has
+    the line and column after its closing quote and the byte offset in its value of the first invalid byte sequence
+    (since json 3.0)
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 */
 nothing JsonSaxParser::parseStream(Qore::InputStream[InputStream] is, code callback, *string encoding) {

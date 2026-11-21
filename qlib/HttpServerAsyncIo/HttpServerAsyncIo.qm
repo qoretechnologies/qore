@@ -340,16 +340,16 @@ public namespace HttpServerAsyncIo {
 
     #! WebSocket frame info
     public hashdecl WebSocketFrameInfo {
-        #! Frame type: "text", "binary", "ping", "pong", "close", "disconnect"
+        #! Frame type: "text", "binary", "ping", "pong", "close", "disconnect", "error"
         string type;
 
         #! Frame data (string for text, binary for binary/ping/pong)
         auto data;
 
-        #! Close code (for close frames)
+        #! Close code (for close and error frames)
         *int code;
 
-        #! Close reason (for close frames)
+        #! Close reason (for close frames), or the description of the error (for error frames)
         *string reason;
     }
 }

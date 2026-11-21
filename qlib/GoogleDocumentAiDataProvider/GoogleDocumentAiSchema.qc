@@ -61,8 +61,11 @@ public class GoogleDocumentAiManifest {
 */
 public class GoogleDocumentAiSchema {
     private {
-        static Mutex lck();
         static list<RestSchemaActionSet> sets = ();
+    }
+
+    private:internal {
+        static Mutex lck();
     }
 
     #! Returns stable and explicitly beta action sets

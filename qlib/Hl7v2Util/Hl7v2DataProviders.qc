@@ -42,6 +42,7 @@ public namespace Hl7v2Util {
                     "type": AbstractDataProviderTypeMap."string",
                     "desc": "Inline HL7 v2 message data. Use this option when the message is already in memory.",
                 },
+                "encoding_errors": EncodingErrorsOptionInfo,
             };
 
             const ProviderInfo = <DataProviderInfo>{
@@ -63,7 +64,8 @@ public namespace Hl7v2Util {
             if (opts.data) {
                 data = opts.data;
             } else if (opts.path) {
-                data = File::readTextFile(opts.path);
+                # HL7 v2 files are often in ISO-8859-1: "latin1" reads such a file that is not valid UTF-8
+                data = File::readTextFile(opts.path, encoding_errors: opts.encoding_errors);
             } else {
                 throw "HL7V2-READ-ERROR", "one of `path` or `data` must be provided";
             }
@@ -172,7 +174,7 @@ public namespace Hl7v2Util {
             f.write(text);
             return {
                 "path": path,
-                "characters": text.size(),
+                "characters": text.length(),
                 "segments": segments,
             };
         }

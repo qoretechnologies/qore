@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc output
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class InheritsNamespaceLookupTest
+
+#! issue #6710: an unqualified parent name in an inherits list is resolved in the namespace of the inheriting class
+/** The hierarchy of a class (and the parent of a hashdecl) was resolved without the class's namespace as the current
+    parse namespace, so that an unqualified parent name found a class of the same name in another namespace (the
+    first one declared at the lowest depth) before the class in the class's own namespace
+*/
+class InheritsNamespaceLookupTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+        TmpDir tmp("inherits-namespace-lookup-");
+
+        const CasesOutput = "issue: N2::B N2::A\n"
+            "reference: N2::B N2::B N2::B N2::B\n"
+            "root only: ::RootOnly\n"
+            "other namespace only: N1::OnlyN1\n"
+            "declared later: N2::Later\n"
+            "hashdecl: N2::P 1\n"
+            "own name: ::Own ::OwnH 1\n"
+            "own generic name: ::OwnGen ::OwnGenH 1\n"
+            "own scoped name: N2::Inner::OwnScoped\n"
+            "nested namespace: True\n"
+            "N1: N1::B\n"
+            "separate commits: N2::B\n"
+            "one commit: N2::B\n"
+            "child Program: N2::B\n"
+            "child Program namespace: N3::B\n";
+
+        const CtorOutput = "base constructor: N2::Ctor\n";
+
+        const ModuleOutput = "InheritsNamespaceLookup::B InheritsNamespaceLookup::P InheritsNamespaceLookup::B\n";
+
+        const ModuleCheck = "printf(\"%s\\n\", InheritsNamespaceLookup::check());";
+    }
+
+    constructor() : QUnit::Test("InheritsNamespaceLookupTest", "1.0", \ARGV) {
+        addTestCase("scripts in every execution mode", \testModes());
+        addTestCase("module source in every execution mode", \testModuleModes());
+        addTestCase("qcc executable", \testQccExecutable());
+        addTestCase("qcc module", \testQccModule());
+        set_return_value(main());
+    }
+
+    private testModes() {
+        foreach hash<auto> i in ((("script": "InheritsNamespaceLookupCases.q", "out": CasesOutput),
+                ("script": "InheritsNamespaceLookupCtor.q", "out": CtorOutput))) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                    shellQuote(qore_bin), mode, shellQuote(dir + "/" + i.script)));
+                # the scripts run only top-level code, which is not compiled with tiered execution
+                ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+                assertEq(0, r.rc, sprintf("%s: %s: exit status: %s", i.script, mode, r.out));
+                assertEq(i.out, r.out, sprintf("%s: %s", i.script, mode));
+            }
+        }
+    }
+
+    private testModuleModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s -l %s "
+                "-ne %s", shellQuote(qore_bin), mode, shellQuote(dir + "/InheritsNamespaceLookup.qm"),
+                shellQuote(ModuleCheck)));
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertEq(ModuleOutput, r.out, mode);
+        }
+    }
+
+    private testQccExecutable() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        foreach hash<auto> i in ((("script": "InheritsNamespaceLookupCases.q", "out": CasesOutput),
+                ("script": "InheritsNamespaceLookupCtor.q", "out": CtorOutput))) {
+            string exe = tmp.path + "/" + basename_ext(i.script, ".q");
+            int rc;
+            string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe),
+                shellQuote(dir + "/" + i.script)), \rc);
+            assertEq(0, rc, sprintf("%s: qcc: %s", i.script, out));
+            out = backquote(shellQuote(exe) + " 2>&1", \rc);
+            assertEq(0, rc, sprintf("%s: exit status: %s", i.script, out));
+            assertEq(i.out, out, i.script);
+        }
+    }
+
+    private testQccModule() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        string qmod = tmp.path + "/InheritsNamespaceLookup.qmod";
+        int rc;
+        string out = backquote(sprintf("%s -m -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(qmod),
+            shellQuote(dir + "/InheritsNamespaceLookup.qm")), \rc);
+        assertEq(0, rc, "qcc: " + out);
+        out = backquote(sprintf("%s -l %s -ne %s 2>&1", shellQuote(qore_bin), shellQuote(qmod),
+            shellQuote(ModuleCheck)), \rc);
+        assertEq(0, rc, "exit status: " + out);
+        assertEq(ModuleOutput, out);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

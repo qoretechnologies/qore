@@ -18,6 +18,9 @@
     as the incoming value of the other path.  qcc verifies the IR that it writes with QORE_AOT_VERIFY_WRITTEN_IR set
     (in a debug build always), as the reader of the module verifies it, and refuses the module otherwise; the fixture
     of the verification (AOTIRVerify.qtest) refuses a phi of the old shape.
+
+    qore#6641: a hash map whose value is $# released the index of its loop before the loop incremented it, a use of a
+    value after its release, which the verification refuses.
 */
 class AOTFusedFoldVerifyTest inherits QUnit::Test {
     private {
@@ -33,6 +36,7 @@ class AOTFusedFoldVerifyTest inherits QUnit::Test {
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
         addTestCase("the IR of the fold of a fused pipeline passes the verification", \testFold());
+        addTestCase("the IR of a hash map of $# passes the verification (qore#6641)", \testHashMapIndex());
 
         set_return_value(main());
     }
@@ -82,5 +86,44 @@ printf(\"%y\\n\", joined(()));
         out = backquote(sprintf("QORE_MODULE_DIR='%s' %s %s 2>&1", module_dir, qore_bin, script), \rc);
         assertEq(0, rc, out);
         assertEq("\"a\nbc\nd\"\n\"1,2,3\"\n\"\"\n", out);
+    }
+
+    testHashMapIndex() {
+        TmpDir tmp("qore-aot-hash-map-index-");
+        string mod = tmp.path + "/HashMapIndexProbe.qm";
+        write(mod, "%modern
+module HashMapIndexProbe {
+    version = \"1.0\";
+    desc = \"qore#6641\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public namespace HashMapIndexProbe {
+public hash<auto> sub fromList(list<string> names) {
+    return map {$1: $#}, names;
+}
+
+public hash<auto> sub fromIterator(list<string> names) {
+    return map {$1: $#}, names.iterator();
+}
+}
+");
+        string qmod = tmp.path + "/HashMapIndexProbe.qmod";
+        int rc;
+        string out = backquote(sprintf("QORE_AOT_VERIFY_WRITTEN_IR=1 %s -o %s %s 2>&1", qcc_bin, qmod, mod), \rc);
+        assertEq(0, rc, out);
+        assertTrue(is_file(qmod), out);
+
+        string script = tmp.path + "/run.q";
+        write(script, "%modern
+%requires HashMapIndexProbe
+printf(\"%y\\n\", fromList((\"a\", \"b\")));
+printf(\"%y\\n\", fromIterator((\"a\", \"b\")));
+");
+        string module_dir = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        out = backquote(sprintf("QORE_MODULE_DIR='%s' %s %s 2>&1", module_dir, qore_bin, script), \rc);
+        assertEq(0, rc, out);
+        assertEq("{a: 0, b: 1}\n{a: 0, b: 1}\n", out);
     }
 }

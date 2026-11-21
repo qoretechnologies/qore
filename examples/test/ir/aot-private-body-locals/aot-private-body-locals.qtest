@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the fixture runs in separate interpreters and qcc executables
+# test-platform: macos - qcc native code generation and linking
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+%exec-class PrivateBodyLocalsTest
+
+class PrivateBodyLocalsTest inherits QUnit::Test {
+    private {
+        const Expected = "7 8 78 89 9 10\n";
+        const Lifetime = "after alias a []\nafter replace False [a]\nin block c [a]\nafter block [ac]\n"
+            "after return [acb]\nafter alias a []\nafter replace False [a]\nin block c [a]\nafter unwind UNWIND [acb]\n";
+        const AfterSet = " captured 7\nafter set 7 9\n";
+    }
+
+    constructor() : QUnit::Test("PrivateBodyLocalsTest", "1.0", \ARGV) {
+        addTestCase("private and captured weak owners", \sourceModes());
+        addTestCase("private weak owner uses its native storage", \compiled());
+        addTestCase("weak owner cleanup in an outlined function", \compiledOutlined());
+        addTestCase("observable compiled frame locals", \compiledReflection());
+        set_return_value(main());
+    }
+
+    sourceModes() {
+        string qore = TestInterpreter::qore_interpreter();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected + Lifetime, ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "QORE_IR_THRESHOLD=1 %s -b --exec-mode=%s %s/owners.q lifetimes", qore, mode, get_script_dir())), mode);
+            assertEq("private 7" + AfterSet + "parent 7 captured 9\nparent after write 21\n", ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 "
+                "QORE_JIT_THRESHOLD=1 QORE_IR_THRESHOLD=1 %s -b --exec-mode=%s %s/reflection.q", qore, mode,
+                get_script_dir())), mode);
+        }
+    }
+
+    compiled() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        foreach int opt in (0, 3) {
+            string exe = sprintf("%s/owners-%d", tmp, opt);
+            string dump = backquote(sprintf("QORE_DUMP_LLVM_IR=1 %s -O%d -o %s %s/owners.q 2>&1", qcc, opt, exe,
+                get_script_dir()));
+            assertTrue(is_file(exe), dump);
+            assertEq(Expected + Lifetime, ExecModeHarness::run_any(exe + " -b lifetimes"),
+                "weak expiration and destructor order on return and unwind");
+            assertEq(Expected + "0 0 0 0 0 0 0\n", ExecModeHarness::run_any(exe + " -b count"),
+                "compiled values and extra runtime slots for a private local");
+            bool in_function = False;
+            bool unique_owner = False;
+            bool runtime_owner = False;
+            foreach string line in (dump.split("\n")) {
+                if (line =~ /^define .*\@privateOwner_int__h[0-9a-f]+\(/) {
+                    in_function = True;
+                } else if (in_function) {
+                    if (line == "}") {
+                        break;
+                    }
+                    if (line =~ /call .*\@qore_rt_unique_local_aot\(/) {
+                        runtime_owner = True;
+                    } else if (line =~ /call .*\@qore_rt_unique_container\(/) {
+                        unique_owner = True;
+                    }
+                }
+            }
+            assertFalse(runtime_owner, "private owner accesses a runtime slot");
+            assertTrue(unique_owner, "private owner makes its own cached container unique");
+        }
+    }
+
+    compiledOutlined() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        foreach int opt in (0, 3) {
+            string exe = sprintf("%s/outlined-%d", tmp, opt);
+            string diagnostics = backquote(sprintf("QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=20 "
+                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s -O%d -o %s %s/owners.q 2>&1",
+                qcc, opt, exe, get_script_dir()));
+            assertTrue(is_file(exe), diagnostics);
+            assertTrue(diagnostics =~ /AOT-OUTLINE-FN: 'weakLifetime' outlined [1-9][0-9]* regions/, diagnostics);
+            assertEq(Expected + Lifetime, ExecModeHarness::run_any(exe + " -b lifetimes"),
+                "outlined cleanup on return and unwind");
+        }
+    }
+
+    compiledReflection() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        foreach int opt in (0, 3) {
+            string reflected = sprintf("%s/reflection-%d", tmp, opt);
+            string diagnostics = backquote(sprintf("%s -O%d -o %s %s/reflection.q 2>&1", qcc, opt, reflected,
+                get_script_dir()));
+            assertTrue(is_file(reflected), diagnostics);
+            assertEq("private unavailable" + AfterSet + "parent 7 captured 9\nparent after write 21\n", ExecModeHarness::run_any(reflected + " -b"),
+                "an unavailable native value and a writable capture in the same frame");
+            string foreign = sprintf("%s/foreign-%d", tmp, opt);
+            diagnostics = backquote(sprintf("%s -O%d -o %s %s/foreign-reflection.q 2>&1", qcc, opt, foreign,
+                get_script_dir()));
+            assertTrue(is_file(foreign), diagnostics);
+            assertEq("keys observer,owner,alias,nested,seed,inspect\nowner unavailable\nwrite AOT-FRAME-ERROR\nafter inspection 7 7\n"
+                "keys observer,owner,alias,nested,seed,inspect\nowner unavailable\nwrite AOT-FRAME-ERROR\nafter inspection 8 8\n",
+                ExecModeHarness::run_any(foreign + " -b"), "inspection from a child Program");
+        }
+    }
+}

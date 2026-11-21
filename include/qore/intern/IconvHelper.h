@@ -48,11 +48,13 @@ public:
        @param from the source encoding
        @param xsink if an error occurs, the Qore-language exception is raised here
        @param validate_utf8 true to validate UTF-8 input here even if the platform's iconv rejects malformed UTF-8;
-       by default, UTF-8 input is validated here only on a platform whose iconv accepts it (see rejectsMalformedUtf8())
+       by default, UTF-8 input is validated here on a platform whose iconv accepts it (see rejectsMalformedUtf8()), and
+       on every platform when the target encoding can hold a value that is not a Unicode scalar value (see
+       holdsNonScalarValues())
    */
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
-         validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
+         validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8() || holdsNonScalarValues(to))),
          validateForm(isUnicodeForm(from)
             && (!rejectsInvalidUnicodeForms() || qore_encoding_private::get(*from)->iconv_accepts_invalid)),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
@@ -233,11 +235,32 @@ public:
       return len;
    }
 
+   //! Returns true if the encoding can hold a value decoded from malformed UTF-8 that is not a Unicode scalar value
+   /** UTF-8 itself, and the Unicode forms other than UTF-16: UTF-32 and UCS-4 (values above U+10FFFF and surrogates)
+       and UCS-2 (surrogates).  iconv's UTF-8 decoder can accept such a value (glibc's accepts values above U+10FFFF:
+       \c "\xf4\x90\x80\x80" is converted to UTF-8 unchanged and to \c "UCS-4" as \c 0x110000), and the conversion
+       then fails only where the target encoding has no representation for it: UTF-16, which rejectsMalformedUtf8()
+       probes, and the encodings that cannot hold all Unicode characters.  UTF-8 input converted to an encoding that
+       has one is therefore always validated (qoretechnologies/qore#6730).
+   */
+   DLLLOCAL static bool holdsNonScalarValues(const QoreEncoding* enc) {
+      if (enc == QCS_UTF8) {
+         return true;
+      }
+      if (enc == QCS_UTF16 || enc == QCS_UTF16BE || enc == QCS_UTF16LE || !isUnicodeForm(enc)) {
+         return false;
+      }
+      // a Unicode form created on the fly: UTF-16 is the only one whose characters have different widths
+      return enc->getMinCharWidth() == static_cast<unsigned>(enc->getMaxCharWidth());
+   }
+
    //! Returns true if the platform's iconv rejects malformed UTF-8 input
-   /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input; some versions of Apple's system libiconv
-       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error.  The
-       answer is a property of the library %Qore is linked against, so it is probed once with malformed sequences;
-       where any of them is accepted, iconv() validates UTF-8 input itself.
+   /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input converted to UTF-16; some versions of
+       Apple's system libiconv convert some malformed sequences, such as a lead byte followed by an ASCII character,
+       without an error.  The answer is a property of the library %Qore is linked against, so it is probed once with
+       malformed sequences; where any of them is accepted, iconv() validates UTF-8 input itself.  The probe converts
+       to UTF-16, which cannot hold a value above U+10FFFF; for a target encoding that can, see
+       holdsNonScalarValues().
    */
    DLLLOCAL static bool rejectsMalformedUtf8() {
       static bool rv = probeMalformedUtf8Rejection();

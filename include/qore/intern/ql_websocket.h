@@ -32,6 +32,54 @@
 #ifndef QORE_QL_WEBSOCKET_H
 #define QORE_QL_WEBSOCKET_H
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
 DLLLOCAL void init_websocket_functions(QoreNamespace& ns);
+
+//! Returns true if the bytes are valid UTF-8, as the payload of a text message and the reason of a close frame must
+//! be (RFC 6455 sections 5.5.1, 5.6 and 8.1; qore#6604)
+/** UTF-8 is checked as RFC 3629 defines it (q_utf8_char_len()); an ASCII prefix is skipped a word at a time
+
+    @param p the bytes
+    @param len the number of bytes
+*/
+DLLLOCAL bool q_ws_utf8_valid(const void* p, size_t len);
+
+//! Returns true if a received close frame may have the given status code (RFC 6455 section 7.4; qore#6755)
+/** The codes 1000 - 1003 and 1007 - 1014 of the IANA registry and the codes 3000 - 4999 for libraries, frameworks
+    and applications; the reserved code 1004, the codes that must not be sent in a close frame (1005, 1006, 1015),
+    the unused codes below 1000 and the codes 1016 - 2999 and above 4999, which are not defined, are not
+*/
+DLLLOCAL bool q_ws_close_code_valid(uint16_t code);
+
+//! Parses the payload of a received close frame
+/** @param p the payload
+    @param len the size of the payload
+    @param code the status code of the frame; 1005 (no status code received, RFC 6455 section 7.1.5) for an empty
+    payload
+    @param reason the reason of the frame, UTF-8
+    @param error the description of the error, when the frame is not valid
+
+    @return 0 if the frame is valid, otherwise the status code that the connection is closed with: 1002 (protocol
+    error) for a one-byte payload (the status code is two bytes, RFC 6455 section 5.5.1) or a status code that the
+    frame may not have (see q_ws_close_code_valid()), 1007 (invalid payload data) for a reason that is not valid
+    UTF-8 (qore#6604, qore#6755)
+*/
+DLLLOCAL uint16_t q_ws_parse_close_payload(const void* p, size_t len, uint16_t& code, std::string& reason,
+        const char*& error);
+
+//! Returns the description of an RSV bit that a frame may not have whatever extensions are negotiated, or nullptr
+/** An RSV bit must be 0 unless a negotiated extension defines its meaning (RFC 6455 section 5.2); the extensions
+    are given the RSV bits of the first frame of a data message only, so none defines an RSV bit of a control frame,
+    and RSV1, the "Per-Message Compressed" bit of permessage-deflate, is not set on a control frame or a continuation
+    frame (RFC 7692 section 6.1): such a frame fails the connection with status code 1002 (protocol error;
+    qore#6781).  The RSV bits of a data frame that no negotiated extension defines are checked by the caller.
+
+    @param opcode the opcode of the frame
+    @param rsv the RSV bits of the frame: RSV1 is 4, RSV2 is 2, RSV3 is 1
+*/
+DLLLOCAL const char* q_ws_rsv_position_error(unsigned opcode, uint8_t rsv);
 
 #endif // QORE_QL_WEBSOCKET_H

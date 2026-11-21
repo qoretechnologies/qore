@@ -284,6 +284,9 @@ hashdecl MetadataDeserializeContext {
     TypedHash dp_msg_info_th;
     TypedHash dp_sig_info_th;
     TypedHash dp_arg_info_th;
+    # the processing and billing metadata of apps and actions (qore#6736)
+    TypedHash processing_th;
+    TypedHash billing_th;
     hash<auto> type_map;
     # the descriptions of the types in type_map
     hash<auto> type_info_map;
@@ -421,12 +424,6 @@ public class ProviderIndexUtil {
     public {}
 
     private {
-        #! Global logger
-        static *LoggerInterface logger;
-
-        #! Global mutex
-        static Mutex m();
-
         #! Global data provider index
         static *hash<DataProviderIndexInfo> index;
 
@@ -439,9 +436,6 @@ public class ProviderIndexUtil {
         #! Thread currently initializing the data provider index
         static *int initializing_tid;
 
-        #! Condition for threads waiting for data provider index initialization
-        static Condition init_cond();
-
         #! Serialized metadata retained until the corresponding app is requested
         static hash<string, hash<auto>> raw_appinfomap = {};
         static hash<string, hash<string, hash<auto>>> raw_actioninfomap = {};
@@ -451,7 +445,6 @@ public class ProviderIndexUtil {
         static bool metadata_initialized;
         static bool metadata_initializing;
         static *int metadata_initializing_tid;
-        static Condition metadata_init_cond();
 
         #! Per-app metadata materialization state
         static hash<string, bool> app_metadata_initialized = {};
@@ -516,9 +509,6 @@ public class ProviderIndexUtil {
         #! The thread reloading the index
         static *int reload_tid;
 
-        #! Condition for threads waiting for a reload to finish
-        static Condition reload_cond();
-
         #! The last error reading the index while it is reloaded; only set by the reloading thread
         static *string reload_read_error;
 
@@ -552,6 +542,20 @@ public class ProviderIndexUtil {
     }
 
     private:internal {
+        #! Global mutex
+        static Mutex m();
+
+        #! Condition for threads waiting for data provider index initialization
+        static Condition init_cond();
+
+        static Condition metadata_init_cond();
+
+        #! Condition for threads waiting for a reload to finish
+        static Condition reload_cond();
+
+        #! Global logger
+        static *LoggerInterface logger;
+
         #! The capability that reads the files of the configured index for code that a sandbox governs, or
         #! @ref NOTHING
         /** Created when the module is loaded; see initIndexFileReader().  Kept where no subclass can read it.
@@ -593,6 +597,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @since ProviderIndexUtil 1.2
     */
     static bool setBuildMode(bool build) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the build mode of");
         m.lock();
         on_exit m.unlock();
         bool rv = build_mode;
@@ -1725,6 +1731,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @ref reloadIndex()
     */
     static addAppToCache(hash<auto> app) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("add an app to");
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
@@ -1753,6 +1761,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @ref reloadIndex()
     */
     static addActionToCache(hash<auto> action) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("add an action to");
         if (!checkMetadataContext()) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
                 "provider index is initializing", action.action, action.app);
@@ -1794,6 +1804,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         info and actions added again with @ref addAppToCache() and @ref addActionToCache() are cached for it
     */
     static bool removeCachedApp(string app) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("remove an app from");
         while (True) {
             int gen = index_generation;
             # the app's actions are not restored: they are discarded
@@ -2000,7 +2012,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         # an index that code that a sandbox governs could not read is not kept for the process: its sandbox may have
         # refused it the files, as when the module has no capability to read them for it (see
         # initIndexFileReader()); the next reader reads the index again
-        if (!build && index_read_error && SandboxManager::isSandboxed()) {
+        if (!build && index_read_error && !SandboxManager::isProcessWideRegistrationAllowed()) {
             initializing = False;
             remove initializing_tid;
             init_cond.broadcast();
@@ -2635,7 +2647,15 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
             "path_vars": (summary.path_vars
                 ? ctx.path_vars_th.doCastValues(summary.path_vars)
                 : NOTHING),
-        });
+        } + getProcessingBillingOverrides(summary, ctx));
+    }
+
+    #! Returns the casts of the processing and billing metadata of a serialized app or action (qore#6736)
+    static private hash<auto> getProcessingBillingOverrides(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+        return {
+            "processing": (info.processing ? ctx.processing_th.doCast(info.processing) : NOTHING),
+            "billing": (info.billing ? ctx.billing_th.doCast(info.billing) : NOTHING),
+        };
     }
 
     #! Packs the action summary file of a metadata cache
@@ -2689,10 +2709,28 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         };
     }
 
+    #! Refuses a change of the process-wide provider index or its configuration to sandboxed code
+    /** The index, its cache, its logger and its configuration are used by every caller of the module, so a change that
+        one sandboxed tenant made would change them for the others (qore#6747).
+
+        @param what what the change does, for the error
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+    */
+    private:internal static checkChange(string what) {
+        # also code that a sandbox governs through a policy barrier (qore#6744)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            throw "PROVIDER-INDEX-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s the process-wide data "
+                "provider index", what);
+        }
+    }
+
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
+        # the logger is process-wide and receives the messages of every caller (qore#6747)
+        ProviderIndexUtil::checkChange("set the logger of");
         ProviderIndexUtil::logger = logger;
     }
 
@@ -4462,6 +4500,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "dp_msg_info_th": TypedHash::forName("DataProvider::IndexedDataProviderMessageInfo"),
             "dp_sig_info_th": TypedHash::forName("DataProvider::IndexedDataProviderSignatureTypeInfo"),
             "dp_arg_info_th": TypedHash::forName("DataProvider::DataProviderArgInfo"),
+            "processing_th": TypedHash::forName("DataProvider::DataProviderProcessingInfo"),
+            "billing_th": TypedHash::forName("DataProvider::DataProviderBillingInfo"),
             "type_map": type_map,
             "type_info_map": (map {$1.key: $1.value.getInfo()}, type_map.pairIterator()),
             "shape_map": getDataProviderShapeMap(),
@@ -4473,7 +4513,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Reconstructs one typed app metadata hash
     static private hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
-        return ctx.app_info_th.doCastWithOverrides(info, (
+        return ctx.app_info_th.doCastWithOverrides(info, getProcessingBillingOverrides(info, ctx) + (
             info.connection_options
             ? {
                 "connection_options": ctx.conn_opt_th.doCastValuesWithOverrides(info.connection_options, map {
@@ -4532,7 +4572,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *IndexedTypeTable types = action.hasKey(IndexedTypeTableKey) ? action{IndexedTypeTableKey} : NOTHING;
         # dynamic callbacks and output types are not indexed; earlier indexes may contain output types
         action -= ("output_type", "get_output_type", "get_dynamic_options", IndexedTypeTableKey);
-        return ctx.action_info_th.doCastWithOverrides(action, {
+        return ctx.action_info_th.doCastWithOverrides(action, getProcessingBillingOverrides(action, ctx) + {
             "path_vars": (action.path_vars
                 ? ctx.path_vars_th.doCastValues(action.path_vars)
                 : NOTHING),
@@ -4797,6 +4837,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         governs it
     */
     static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the test hook of");
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
         }
@@ -5020,6 +5062,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Sets the environment variable
     static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the index directory of");
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }

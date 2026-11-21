@@ -15,6 +15,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../EncodingCapability.qm
 
 %exec-class OnTheFlyEncodingTest
 
@@ -47,12 +48,18 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private bool hasEbcdic() {
-        try {
-            return convert_encoding("A", Ebcdic).toBinary() == <c1>;
-        } catch (hash<ExceptionInfo> ex) {
-            return False;
+    #! why the EBCDIC encoding cannot be tested on this platform (the iconv of some, such as musl's, has none), or
+    #! nothing
+    private static *string ebcdicUnavailable() {
+        *string reason = encoding_cannot_convert(Ebcdic, "Grüße 12 3€");
+        if (!reason && convert_encoding("A", Ebcdic).toBinary() != <c1>) {
+            reason = sprintf("the iconv library of the platform does not encode \"A\" as c1 in %s", Ebcdic);
         }
+        return reason;
+    }
+
+    private bool hasEbcdic() {
+        return !exists ebcdicUnavailable();
     }
 
     #! checks character operations on a string in the given encoding against the same text in UTF-8
@@ -161,7 +168,7 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
             assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (binary_to_string(l[0], l[1]), "UTF-8"),
                 label);
             InputStream is = new EncodingConversionInputStream(new BinaryInputStream(l[0]), l[1], "UTF-8");
-            assertThrows("ENCODING-CONVERSION-ERROR", sub () { while (is.read(64)) {} }, NOTHING, label
+            assertThrows("INVALID-ENCODING", sub () { while (is.read(64)) {} }, NOTHING, label
                 + " (stream)");
         }
         # valid input around the invalid values converts
@@ -170,8 +177,9 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
     }
 
     testEbcdic() {
-        if (!hasEbcdic()) {
-            testSkip(Ebcdic + " is not supported by iconv on this platform");
+        *string reason = ebcdicUnavailable();
+        if (reason) {
+            testSkip(reason);
         }
         string text = "Grüße 12 3€";
         string s = convert_encoding(text, Ebcdic);

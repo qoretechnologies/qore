@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+%requires Logger
+
+%exec-class AsyncSocketIoControllerSandboxTest
+
+#! An AsyncSocketIoController leaves the settings of the process-wide async I/O controller alone for sandboxed code
+/** The settings of the process-wide controller apply to every caller: code that is sandboxed or acts for sandboxed
+    code cannot change them through the class, also through a policy barrier; a controller wrapper that such code
+    creates uses the process's settings (issue #6836).  Such code reads the autostop setting, but not the number of
+    operations of every caller or the logger of the controller.  Trusted code is not affected
+*/
+class AsyncSocketIoControllerSandboxTest inherits QUnit::Test {
+    public {
+        #! the code of the tenants besides their function
+        const TenantSource = "%requires AsyncSocketIo
+%requires Logger
+";
+    }
+
+    private {
+        #! the autostop setting of the host when the test started
+        bool autostop;
+
+        #! what each attempt raised, and the autostop setting that the host and another tenant see after it
+        hash<auto> results;
+
+        #! a tenant that reads the setting
+        Program reader;
+    }
+
+    constructor() : Test("AsyncSocketIoController leaves process-wide settings alone for sandboxed code", "1.0",
+            \ARGV) {
+        addTestCase("sandboxed code cannot change the settings of the process-wide controller", \sandboxedTest());
+        addTestCase("sandboxed code reads the setting but not the operations or the logger", \readTest());
+        addTestCase("sandboxed code cannot log through the logger of the global wrapper", \globalWrapperLoggerTest());
+        addTestCase("trusted code changes the settings", \trustedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        autostop = Qore::AsyncIoController::getAutostop();
+    }
+
+    globalTearDown() {
+        Qore::AsyncIoController::setAutostop(autostop);
+        Qore::AsyncIoController::setMaxCallbackWorkers();
+    }
+
+    sandboxedTest() {
+        # the host's setting is the opposite of what the tenants ask for
+        Qore::AsyncIoController::setAutostop(False);
+        reader = AsyncSocketIoControllerSandboxTest::tenant("tenant-b", "read",
+            "return AsyncIoController::getAutostop();");
+        results = {};
+
+        # a tenant that is the first to use the global controller wrapper, which is created with autostop
+        Program first = AsyncSocketIoControllerSandboxTest::tenant("tenant-a", "global",
+            "return getGlobalAsyncIoController().getAutostop();");
+        check("global wrapper", sub () { results."global wrapper value" = first.callFunction("t_global"); },
+            "no exception");
+
+        # a tenant that creates a controller wrapper with an explicit autostop: it uses the process's setting
+        Program ctor = AsyncSocketIoControllerSandboxTest::tenant("tenant-a", "ctor",
+            "AsyncSocketIoController ctrl(True); return ctrl.getAutostop();");
+        check("constructor", sub () { results."constructor value" = ctor.callFunction("t_ctor"); }, "no exception");
+
+        # the setters of the class
+        Program set_autostop = AsyncSocketIoControllerSandboxTest::tenant("tenant-a", "autostop",
+            "AsyncSocketIoController ctrl(); ctrl.setAutostop(True);");
+        check("setAutostop", sub () { set_autostop.callFunction("t_autostop"); });
+        Program set_workers = AsyncSocketIoControllerSandboxTest::tenant("tenant-a", "workers",
+            "getGlobalAsyncIoController().setMaxCallbackWorkers(1);");
+        check("setMaxCallbackWorkers", sub () { set_workers.callFunction("t_workers"); });
+
+        # trusted code serving the tenants under a policy barrier
+        code ctor_cap = SandboxManager::createSystemPolicyCall(sub () { AsyncSocketIoController ctrl(True); });
+        code set_cap = SandboxManager::createSystemPolicyCall(sub () {
+            getGlobalAsyncIoController().setAutostop(True);
+        });
+        Program barrier = AsyncSocketIoControllerSandboxTest::tenant("tenant-c", "run", "c();", "code c");
+        check("barrier constructor", sub () { barrier.callFunction("t_run", ctor_cap); }, "no exception");
+        check("barrier setAutostop", sub () { barrier.callFunction("t_run", set_cap); });
+
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = AsyncSocketIoControllerSandboxTest::tenant("tenant-d", "child",
+            "Program p(PO_NEW_STYLE); p.parse(\"%requires AsyncSocketIo\n"
+            "sub ctor() { AsyncSocketIoController ctrl(True); } "
+            "sub autostop() { getGlobalAsyncIoController().setAutostop(True); } "
+            "sub workers() { getGlobalAsyncIoController().setMaxCallbackWorkers(1); }\", \"child\"); return p;");
+        Program child = tenant_d.callFunction("t_child");
+        check("child constructor", sub () { child.callFunction("ctor"); }, "no exception");
+        check("child setAutostop", sub () { child.callFunction("autostop"); });
+        check("child setMaxCallbackWorkers", sub () { child.callFunction("workers"); });
+
+        hash<auto!> expected = {
+            "global wrapper value": False,
+            "constructor value": False,
+        };
+        foreach string name in ("global wrapper", "constructor", "barrier constructor", "child constructor") {
+            expected{name} = "no exception";
+            expected{name + " (host)"} = False;
+            expected{name + " (tenant-b)"} = False;
+        }
+        foreach string name in ("setAutostop", "setMaxCallbackWorkers", "barrier setAutostop", "child setAutostop",
+                "child setMaxCallbackWorkers") {
+            expected{name} = "SANDBOX-REGISTRATION-ERROR";
+            expected{name + " (host)"} = False;
+            expected{name + " (tenant-b)"} = False;
+        }
+        assertEq(expected, results);
+    }
+
+    readTest() {
+        # the logger of the host on the process-wide controller, restored when the test ends
+        *LoggerInterfaceBase old_logger = Qore::AsyncIoController::getLogger();
+        on_exit Qore::AsyncIoController::setLogger(old_logger);
+        Logger host_logger("host", LoggerLevel::getLevelInfo());
+        AsyncSocketIoController host_ctrl(False, host_logger);
+        assertEq(host_logger, Qore::AsyncIoController::getLogger());
+
+        # what each caller reads through the class: the autostop setting, the number of operations and the logger of
+        # the process-wide controller
+        string read = "AsyncSocketIoController ctrl(); string cache_size; "
+            "try { cache_size = ctrl.getCacheSize().typeCode() == NT_INT ? \"int\" : \"other\"; } "
+            "catch (hash<ExceptionInfo> ex) { cache_size = ex.err; } "
+            "return {\"autostop\": ctrl.getAutostop(), \"logger\": exists AsyncIoController::getLogger(), "
+            "\"cache_size\": cache_size};";
+        hash<auto> results = {};
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = AsyncSocketIoControllerSandboxTest::tenant(name, "read", read);
+            results{name} = tenant.callFunction("t_read");
+        }
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            AsyncSocketIoController ctrl();
+            string cache_size;
+            try {
+                cache_size = ctrl.getCacheSize().typeCode() == NT_INT ? "int" : "other";
+            } catch (hash<ExceptionInfo> ex) {
+                cache_size = ex.err;
+            }
+            return {
+                "autostop": ctrl.getAutostop(),
+                "logger": exists Qore::AsyncIoController::getLogger(),
+                "cache_size": cache_size,
+            };
+        });
+        Program barrier = AsyncSocketIoControllerSandboxTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = barrier.callFunction("t_run", cap);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = AsyncSocketIoControllerSandboxTest::tenant("tenant-d", "child",
+            "Program p(PO_NEW_STYLE); p.parse(\"%requires AsyncSocketIo\nhash<auto> sub read() { \" + s + \" }\", "
+            "\"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", read);
+        results.child = child.callFunction("read");
+        # trusted code
+        Program trusted(PO_NEW_STYLE);
+        trusted.parse(TenantSource + "hash<auto> sub read() { " + read + " }", "trusted");
+        results.trusted = trusted.callFunction("read");
+
+        hash<auto> sandboxed = {"autostop": False, "logger": False, "cache_size": "PERMISSION-DENIED"};
+        hash<auto> expected = {"trusted": {"autostop": False, "logger": True, "cache_size": "int"}};
+        map expected{$1} = sandboxed, ("tenant-a", "tenant-b", "barrier", "child");
+        assertEq(expected, results);
+        assertEq(host_logger, Qore::AsyncIoController::getLogger());
+    }
+
+    globalWrapperLoggerTest() {
+        # the host sets its logger on the global wrapper, which sets it on the process-wide controller as well
+        *LoggerInterfaceBase old_logger = Qore::AsyncIoController::getLogger();
+        on_exit Qore::AsyncIoController::setLogger(old_logger);
+        on_exit getGlobalAsyncIoController().setLogger();
+        Logger host_logger("host", LoggerLevel::getLevelInfo());
+        RecordingAppender appender();
+        host_logger.addAppender(appender);
+        getGlobalAsyncIoController().setLogger(host_logger);
+
+        # what each caller logs through the global wrapper and whether it uses the host's logger
+        string use = "AsyncSocketIoController ctrl = getGlobalAsyncIoController(); ctrl.log(\"INFO\", \"%s log\", n); "
+            "ctrl.info(\"%s info\", n); return ctrl.isLogger(l);";
+        hash<auto> results = {};
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = AsyncSocketIoControllerSandboxTest::tenant(name, "use", use,
+                "LoggerInterface l, string n");
+            results{name} = tenant.callFunction("t_use", host_logger, name);
+        }
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(bool sub (LoggerInterface l, string n) {
+            AsyncSocketIoController ctrl = getGlobalAsyncIoController();
+            ctrl.log("INFO", "%s log", n);
+            ctrl.info("%s info", n);
+            return ctrl.isLogger(l);
+        });
+        Program barrier = AsyncSocketIoControllerSandboxTest::tenant("tenant-c", "run", "return c(l, \"barrier\");",
+            "code c, LoggerInterface l");
+        results.barrier = barrier.callFunction("t_run", cap, host_logger);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = AsyncSocketIoControllerSandboxTest::tenant("tenant-d", "child",
+            "Program p(PO_NEW_STYLE); p.parse(\"%requires AsyncSocketIo\n%requires Logger\n"
+            "bool sub use(LoggerInterface l, string n) { \" + s + \" }\", \"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", use);
+        results.child = child.callFunction("use", host_logger, "child");
+        # a tenant cannot give the wrapper that it gets a logger
+        Program setter = AsyncSocketIoControllerSandboxTest::tenant("tenant-e", "set",
+            "getGlobalAsyncIoController().setLogger(new Logger(\"tenant\"));");
+        try {
+            setter.callFunction("t_set");
+            results.set = "no exception";
+        } catch (hash<ExceptionInfo> ex) {
+            results.set = ex.err;
+        }
+        # the host still logs through its logger
+        Program trusted(PO_NEW_STYLE);
+        trusted.parse(TenantSource + "bool sub use(LoggerInterface l, string n) { " + use + " }", "trusted");
+        results.host = trusted.callFunction("use", host_logger, "host");
+
+        hash<auto> expected = {"host": True, "set": "SANDBOX-REGISTRATION-ERROR"};
+        map expected{$1} = False, ("tenant-a", "tenant-b", "barrier", "child");
+        assertEq(expected, results);
+        assertEq(("host log", "host info"), appender.messages);
+        assertTrue(getGlobalAsyncIoController().isLogger(host_logger));
+        assertEq(host_logger, Qore::AsyncIoController::getLogger());
+
+        # a tenant that gives the wrapper it gets a logger without setLogger(): through a subclass, which can write
+        # the logger member of any object of the class, and through reflection, which calls
+        # LoggerWrapper::setLogger() directly; the wrapper is its own, so another tenant does not log through it
+        Logger logger_a("tenant-a", LoggerLevel::getLevelInfo());
+        RecordingAppender appender_a();
+        logger_a.addAppender(appender_a);
+        Program writer = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        writer.parse(TenantSource + "%requires reflection
+class Sub inherits AsyncSocketIoController {
+    static set(AsyncSocketIoController c, LoggerInterface l) {
+        c.logger = l;
+    }
+}
+list<bool> sub t_write(LoggerInterface l) {
+    AsyncSocketIoController c0 = getGlobalAsyncIoController();
+    Sub::set(c0, l);
+    AsyncSocketIoController c1 = getGlobalAsyncIoController();
+    Reflection::NormalMethod m = Reflection::Class::forName(\"LoggerWrapper\").getNormalMethod(\"setLogger\");
+    Reflection::NormalMethodVariant v = m.getVariants()[0];
+    v.call(c1, l);
+    return (c0.isLogger(l), c1.isLogger(l));
+}
+", "tenant-a-writer");
+        writer.setSandboxManager(new SandboxManager());
+        # the tenant's own wrappers have its logger
+        assertEq((True, True), writer.callFunction("t_write", logger_a));
+        Program user = AsyncSocketIoControllerSandboxTest::tenant("tenant-b", "log",
+            "AsyncSocketIoController c = getGlobalAsyncIoController(); c.info(\"tenant-b info\"); "
+            "c.log(\"INFO\", \"tenant-b log\"); return c.isLogger(l);", "LoggerInterface l");
+        assertFalse(user.callFunction("t_log", logger_a));
+        assertEq((), appender_a.messages);
+        assertEq(("host log", "host info"), appender.messages);
+    }
+
+    trustedTest() {
+        AsyncSocketIoController ctrl(False);
+        assertFalse(Qore::AsyncIoController::getAutostop());
+        ctrl.setAutostop(True);
+        assertTrue(Qore::AsyncIoController::getAutostop());
+        AsyncSocketIoController ctrl2(False);
+        assertFalse(ctrl2.getAutostop());
+        ctrl.setMaxCallbackWorkers();
+    }
+
+    #! Records an attempt and the setting after it, and gives the host's setting back
+    private check(string name, code attempt, string expected_err = "SANDBOX-REGISTRATION-ERROR") {
+        try {
+            attempt();
+            results{name} = "no exception";
+        } catch (hash<ExceptionInfo> ex) {
+            results{name} = ex.err;
+            if (ex.err != expected_err) {
+                results{name} += ": " + ex.desc;
+            }
+        }
+        results{name + " (host)"} = Qore::AsyncIoController::getAutostop();
+        results{name + " (tenant-b)"} = reader.callFunction("t_read");
+        Qore::AsyncIoController::setAutostop(False);
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(TenantSource + sprintf("auto sub t_%s(%s) { %s }\n", func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}
+
+#! records the messages that a logger of the host logs
+class RecordingAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! the messages, in order
+        list<string> messages = ();
+    }
+
+    private {
+        #! serializes access to the messages
+        Mutex mtx();
+    }
+
+    constructor() : LoggerAppenderWithLayout("record", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        AutoLock al(mtx);
+        push messages, params.toString();
+    }
+}

@@ -168,7 +168,7 @@ public:
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
     bool lowerStatement(const AbstractStatement* stmt, std::string& error);
-    bool lowerStatementBlock(const StatementBlock* block, std::string& error);
+    bool lowerStatementBlock(const StatementBlock* block, std::string& error, LocalVar* debug_catch_var = nullptr);
     void setParseContext(QoreParseContext* parse_context);
 
     //! Closes the innermost temp scope with a DiscardTemps instruction that has the active exception handler
@@ -460,6 +460,7 @@ public:
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerIterate(const QoreValue& expr, std::string& error);
     QoreIRValue lowerStreaming(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerConsumedTruthValue(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
@@ -830,6 +831,8 @@ private:
         //! return, whose value replaces that of the exit (#5992): for the paths of a debugger's flow requests, which
         //! run only on a request and stay small (#6201)
         CF_HANDLERS_OUT_OF_LINE = 8,
+        //! the walk is the block cleanups of a return statement (see return_walk, #6552)
+        CF_RETURN_WALK = 16,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -848,7 +851,8 @@ private:
      *  @return false if lowering failed
      */
     bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE,
-        size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr);
+        size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr,
+        size_t start_depth = SIZE_MAX);
 
     //! The target of a break or a continue at the current lowering position (see findLoopJumpTarget())
     struct LoopJumpTarget {
@@ -1079,6 +1083,16 @@ private:
         //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
         //! (select l, c)), released after the operator before the source (issue #6262)
         QoreIRValue intermediate;
+        //! the Phi of a fold's accumulator, which can hold a reference of its own to the fold's value when the Phi
+        //! after the loop cannot take it over (a conditional fold expression, a fused pipeline): released once the
+        //! fold's value has a reference of its own (see lowerWithSourceRelease(); issue #6442)
+        QoreIRValue accumulator;
+        //! the values that the accumulator's Phi gets on the loop's back edges (the value of the fold's expression),
+        //! which can keep a reference of their own when the Phi does not take them over (a ternary expression whose
+        //! temporaries are discarded, foldl ($1 ? $1 : $2), l), released with the accumulator (issue #6442)
+        std::vector<QoreIRValue> accumulator_values;
+        //! A source read through a reference belongs to the statement.
+        bool may_read_reference = false;
     };
     //! The sources of the functional operators being lowered, innermost last
     std::vector<FunctionalSourceCapture> functional_source_captures;
@@ -1087,6 +1101,9 @@ private:
     //! returns true if the source of the functional operator being lowered is released after the operator (a
     //! temporary or a plain read of a local, see FunctionalSourceRelease)
     DLLLOCAL bool functionalSourceReleased() const;
+    //! records the Phi of the accumulator of the fold being lowered, which is released once the fold's value has a
+    //! reference of its own (see FunctionalSourceCapture::accumulator)
+    DLLLOCAL void recordFoldAccumulator(const QoreIRPhiInstruction* accumulator, QoreIRValue initial);
     //! Releases the value that a functional operator's expression gave once its result container holds it
     /** The container takes a reference of its own, as the AST interpreter's operator pushes the value, which the
         container then holds alone; see the definition.  Nothing is emitted for a value of a type that holds no object,
@@ -1162,6 +1179,11 @@ private:
         //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
         //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
         QoreIRBasicBlock* try_outer_target = nullptr;
+        //! for an entry with try_end_depth: the handler of an exception raised when the try statement ends (qore#6658:
+        //! the exception stack of a walk from the body of a handler lowered inline does not hold it): the catch block
+        //! of the try statement for its try block, the handler outside the statement for its catch block (nullptr: the
+        //! exception leaves the frame)
+        QoreIRBasicBlock* try_end_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         //! the exception target where the entry was pushed, outside the block: an exception that a destructor raises
         //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the
@@ -1171,6 +1193,11 @@ private:
         //! that a non-local exit lowers after the entry's cleanup has the exception targets outside the entry (qore#6643)
         size_t exception_depth = 0;
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
+        //! the runtime location of the cleanup: the location of the statement whose code the entry's block is, where
+        //! the block was entered (QoreIRBuilder::getStatementLocation()); an exit that leaves the block from a
+        //! statement in it runs the cleanup in this location, as the AST interpreter ends the block once the
+        //! statement in it has ended (qore#6646)
+        const QoreProgramLocation* stmt_loc = nullptr;
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
         //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
         //! write-back of the list goes (an enclosing try block's handler, or nullptr to leave the frame; qore#6197)
@@ -1431,6 +1458,26 @@ private:
     bool pending_return_active = false;
     //! try_depth at the return statement of pending_return
     int pending_return_try_depth = 0;
+    //! true while the exit being lowered is the block cleanups of a return statement (CF_RETURN_WALK), not a block end,
+    //! a break or a continue (#6552)
+    /** A ScopeExit whose handlers run out of line past the inline cap in it leaves the value that they hand over to the
+        return, which takes it when its cleanups end (pending_return_handed_over); in another exit, a value handed
+        over ends the code around the run as a return statement there would (lowerHandedOverReturn())
+    */
+    bool return_walk = false;
+    //! Lowers the return of the value that handlers run out of line past the inline cap handed over, on the path
+    //! where they did, in an exit that is not the block cleanups of a return statement (#6552)
+    /** As a return statement at the point of the ScopeExit: the cleanup entries below \a start_depth (the index of the
+        scope that the ScopeExit left) are lowered as the block cleanups of a return, and the Return gives the value.
+    */
+    DLLLOCAL bool lowerHandedOverReturn(size_t start_depth, QoreIRValue result, const QoreProgramLocation* loc,
+        std::string& error);
+    //! true if the block cleanups of pending_return have a ScopeExit whose handlers run out of line past the inline cap
+    //! and hand the values of their returns over (QoreIRScopeExitInstruction::hand_over_return, #6137)
+    /** The return takes the value handed over, if any (QoreIROpcode::TakeHandedOverReturn), and a return in a handler
+        that replaces pending_return releases it (QoreIROpcode::ReleaseHandedOverReturn).
+    */
+    bool pending_return_handed_over = false;
     //! the nesting of emitBlockCleanups() and lowerHandlersAtExit() calls (see QORE_IR_INLINE_HANDLER_BUDGET in
     //! QoreIRLowering.cpp)
     int exit_lowering_nesting = 0;
@@ -1439,6 +1486,7 @@ private:
     //! the handler bodies lowered inline since the outermost exit being lowered began
     size_t inline_handlers_lowered = 0;
     class ExitLoweringNesting;
+    class PendingReturnScope;
     //! the nesting of the lowering of the paths of a debugger's flow requests (see DebugFlowPathLowering)
     int debug_flow_path_depth = 0;
     //! the handler bodies lowered inline in the paths of the debugger's requests of the function (see
@@ -1453,6 +1501,9 @@ private:
     QoreIRValue try_replaced_return_base;
     //! the try_depth of the try statement whose end releases try_replaced_return, or 0
     int try_replaced_depth = 0;
+    //! true if the end of the try statement of try_replaced_depth releases the value that handlers run out of line
+    //! handed over to the return that it replaces (see pending_return_handed_over, #6137)
+    bool try_replaced_handed_over = false;
     //! Returns true if a return at the current point replaces the value of pending_return (see there)
     DLLLOCAL bool replacesPendingReturn() const;
     //! Releases the value of the return that a return in a handler replaces (see pending_return)

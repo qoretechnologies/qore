@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - native qcc linking and iconv conversion of tagged source and switch values
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 #
@@ -30,6 +31,10 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         addTestCase("AST reference output", \astOutput());
         addTestCase("execution modes", \executionModes());
         addTestCase("AOT", \aot());
+        addTestCase("source and image literal encodings", \sourceLiterals());
+        addTestCase("regex result encodings", \regexEncodings());
+        addTestCase("UTF-8 files and stdin", \fileEncoding());
+        addTestCase("whole source validation", \wholeSource());
         set_return_value(main());
     }
 
@@ -37,13 +42,214 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
-    private string run(list<string> args, string prefix = "") {
+    private string run(list<string> args, string prefix = "", bool expect_error = False) {
         int status;
         string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
             + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
             + (map quote($1), args).join(" ") + " 2>&1", \status);
-        assertEq(0, status, output);
+        if (expect_error) {
+            assertTrue(status != 0, output);
+        } else {
+            assertEq(0, status, output);
+        }
         return output;
+    }
+
+    regexEncodings() {
+        string probe = get_script_dir() + "/utf8-source-literals/regex-results.q";
+        string expected = "regex encodings passed\n";
+        foreach string charset in ("ISO-8859-1", "UTF-8") {
+            string env = "QORE_CHARSET=" + charset + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+            foreach string mode in ("ast", "ir", "jit", "tiered") {
+                assertEq(expected, run((qore, "-b", "--exec-mode=" + mode, probe), env), mode);
+            }
+            foreach string opt in ("-O0", "-O3") {
+                TmpDir tmp("qore-regex-result-encoding-");
+                string exe = tmp.path + "/probe";
+                run((qcc, opt, "-o", exe, probe), env);
+                assertEq(expected, run((exe, "-b"), env), opt);
+            }
+        }
+    }
+
+    sourceLiterals() {
+        string dir = get_script_dir() + "/utf8-source-literals";
+        string probe = dir + "/probe.q";
+        string out = "UTF-8 1 True\nUTF-8 1 True\nUTF-8 1 True\nUTF-8 1 True\n"
+            "UTF-8 1 True\nUTF-8 3 True\nTrue\nTrue\n";
+        string module_out = "UTF-8 3 True\nUTF-8 1 True\nISO-8859-1 1 True\n";
+        string latin = "QORE_CHARSET=ISO-8859-1 ";
+        string tiers = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(out, run((qore, "-b", "--exec-mode=" + mode, probe), latin + tiers), mode);
+        }
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-source-literal-encoding-");
+            string module_env = "QORE_MODULE_DIR=" + quote(tmp.path) + " ";
+            run((qcc, opt, "-o", tmp.path + "/SourceText.qmod", dir + "/SourceText.qm"), "QORE_CHARSET=UTF-8 ");
+            string caller = tmp.path + "/module-probe.q";
+            copy_file(dir + "/module-probe.q", caller);
+            assertEq(module_out, run((qore, "-b", "--exec-mode=ast", caller), latin + module_env), opt + " module");
+            string exe = tmp.path + "/image";
+            run((qcc, opt, "-o", exe, caller), "QORE_CHARSET=UTF-8 " + module_env);
+            assertEq(module_out, run((exe, "-b"), latin + module_env), opt + " compiled module caller");
+            run((qcc, opt, "-o", exe, probe), "QORE_CHARSET=UTF-8 ");
+            assertEq(out, run((exe, "-b"), latin), opt + " tagged parser input");
+        }
+    }
+
+    private checkInvalid(list<string> args, string location, string prefix = "") {
+        string out = run(args, prefix, True);
+        assertTrue(out.find("invalid UTF-8 in source") >= 0, out);
+        assertTrue(out.find(location) >= 0, out);
+    }
+
+    fileEncoding() {
+        TmpDir dir("qore-unlabelled-source-");
+        string path = dir.path + "/file.q";
+        foreach binary bytes in (<e9>, <c3a9>) {
+            FileOutputStream file(path);
+            file.write(binary("%modern\nstring s = '"));
+            file.write(bytes);
+            file.write(binary("'; printf(\"%s %d\\n\", s.encoding(), length(s));\n"));
+            file.close();
+            if (bytes.size() == 1) {
+                foreach string mode in ("ast", "ir", "jit", "tiered") {
+                    checkInvalid((qore, "-b", "--charset=ISO-8859-1", "--exec-mode=" + mode, path), path + ":2");
+                }
+                checkInvalid((qore, "-b", "--charset=ISO-8859-1"), "<stdin>:2", "<" + quote(path) + " ");
+                foreach string opt in ("-O0", "-O3") {
+                    checkInvalid((qcc, opt, "-o", dir.path + "/invalid", path), path + ":2");
+                }
+            } else {
+                foreach string mode in ("ast", "ir", "jit", "tiered") {
+                    assertEq("UTF-8 1\n", run((qore, "-b", "--charset=ISO-8859-1", "--exec-mode=" + mode, path),
+                        "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), "converted " + mode);
+                }
+                assertEq("UTF-8 1\n", run((qore, "-b"), "<" + quote(path) + " QORE_CHARSET=ISO-8859-1 "), "stdin");
+                foreach string opt in ("-O0", "-O3") {
+                    string exe = dir.path + "/image";
+                    run((qcc, opt, "-o", exe, path));
+                    assertEq("UTF-8 1\n", run((exe, "-b"), "QORE_CHARSET=ISO-8859-1 "), opt + " image");
+                }
+            }
+        }
+
+        # Start a four-byte character at the end of an input block. Comments
+        # are validated too, including a partial character at physical EOF.
+        foreach binary seq in (<f09f9880>, <f09f98>, <f09f9841>, <eda080>, <c080>, <f4908080>) {
+            FileOutputStream file(path);
+            file.write(binary("%modern\n#" + sprintf("%16374s", "")));
+            file.write(seq);
+            file.close();
+            if (seq == <f09f9880>) {
+                assertEq("", run((qore, "-b", path)), "split UTF-8 character");
+            } else {
+                checkInvalid((qore, "-b", path), path + ":2");
+            }
+        }
+        string inc = dir.path + "/include.qi";
+        FileOutputStream file(inc);
+        file.write(binary("string sub inside() { return '"));
+        file.write(<c3a9>);
+        file.write(binary("'; }\n"));
+        file.close();
+        string fragment = dir.path + "/literal.qi";
+        FileOutputStream literal(fragment);
+        literal.write(<27c3a9270a>);
+        literal.close();
+        string child = get_script_dir() + "/utf8-source-literals/include-probe.q";
+        assertEq("UTF-8 1\nUTF-8 1\nUTF-8 3\nTrue\n",
+            run((qore, "-b", "--charset=ISO-8859-1", child, inc, fragment)),
+            "include inside tagged UTF-8 Program source");
+
+        FileOutputStream broken(inc);
+        broken.write(binary("# line 1\n# "));
+        broken.write(<ff>);
+        broken.close();
+        checkInvalid((qore, "-b", child, inc, fragment), inc + ":2");
+
+        # A failed refill in the middle of an included literal is an encoding error at the physical line.
+        FileOutputStream large(inc);
+        large.write(binary("# first line\nstring s = \"" + sprintf("%32768s", "")));
+        large.write(<ff>);
+        large.close();
+        FileOutputStream outer(path);
+        outer.write(binary("%modern\n%include include.qi\n%include must-not-resume.qi\n"));
+        outer.close();
+        foreach list<string> args in ((qore, "-b", path), (qcc, "-O0", "-o", dir.path + "/invalid", path)) {
+            string out = run(args, "", True);
+            assertTrue(out.find(inc + ":2") >= 0, out);
+            assertTrue(out.find("invalid UTF-8 in source") >= 0, out);
+            assertFalse(out.find("unexpected end of file in string literal") >= 0, out);
+            assertFalse(out.find("must-not-resume.qi") >= 0, out);
+        }
+
+        FileOutputStream errors(path);
+        errors.write(binary("%exec-class\n#" + sprintf("%32768s", "") + "\n#"));
+        errors.write(<ff>);
+        errors.close();
+        string both = run((qore, "-b", path), "", True);
+        assertTrue(both.find("missing argument to %exec-class") >= 0, both);
+        assertTrue(both.find(path + ":3") >= 0, both);
+        assertTrue(both.find("invalid UTF-8 in source") >= 0, both);
+
+        string accented = dir.path + "/café.qi";
+        FileOutputStream named(accented);
+        named.write(binary("int sub fromFile() { return 7; }\n"));
+        named.close();
+        string including = dir.path + "/including.q";
+        FileOutputStream source(including);
+        source.write(binary("%modern\n%include café.qi\nprintf(\"%d\\n\", fromFile());\n"));
+        source.close();
+        foreach string charset in ("UTF-8", "ISO-8859-1") {
+            assertEq("7\n", run((qore, "-b", "--charset=" + charset, including)), "UTF-8 include spelling");
+            assertEq("7\n", run((qore, "-b", "--charset=" + charset,
+                get_script_dir() + "/utf8-source-literals/named-include.q", dir.path)), "tagged include filename");
+        }
+    }
+
+    wholeSource() {
+        # A NUL in a comment must not hide malformed bytes later in memory-backed input.
+        string label = "tagged-source";
+        Program pgm(PO_NEW_STYLE);
+        *hash<ExceptionInfo> error;
+        try {
+            pgm.parse(binary_to_string(<2320636f6d6d656e7400ff>, "UTF-8"), label);
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+        assertTrue(exists error, "invalid UTF-8 after NUL in Program source");
+        assertEq("PARSE-EXCEPTION", error.err);
+        assertEq(label, error.file);
+        assertEq(1, error.line);
+        assertTrue(error.desc.find("invalid UTF-8 in source") >= 0, error.desc);
+
+        TmpDir tmp("qore-invalid-module-");
+        string dir = tmp.path + "/SourceText";
+        mkdir(dir);
+        string main = dir + "/SourceText.qm";
+        string module = get_script_dir() + "/utf8-source-literals/SourceText.qm";
+        copy_file(module, main);
+        string worker = tmp.path + "/load.q";
+        FileOutputStream code(worker);
+        code.write(binary("%modern\n%requires SourceText\n"));
+        code.close();
+        string env = "QORE_CHARSET=ISO-8859-1 QORE_MODULE_DIR=" + quote(tmp.path) + " ";
+        foreach string file in (main, dir + "/Invalid.qc") {
+            if (file != main) {
+                copy_file(module, main, False, True);
+            }
+            FileOutputStream append(file, True);
+            append.write(binary("\n# "));
+            append.write(<00ff>);
+            append.close();
+            checkInvalid((qore, "-b", worker), file + ":", env);
+            checkInvalid((qcc, "-O0", "-o", tmp.path + "/out.qmod", dir), file + ":", env);
+            if (file == main) {
+                checkInvalid((qcc, "-O3", "-o", tmp.path + "/out.qmod", main), file + ":", env);
+            }
+        }
     }
 
     private string getExpected() {

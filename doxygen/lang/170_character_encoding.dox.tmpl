@@ -4,7 +4,18 @@
 
     @section character_encoding_overview Overview
 
-    The %Qore language is character-encoding aware. All strings are assumed to have the default character encoding, unless the program explicitly specified another encoding for certain objects and operations. Every %Qore string has a character encoding ID attached to it, so, when another encoding is required, the %Qore language will attempt to do an encoding translation.
+    Every %Qore string carries a character encoding. When an operation requires another encoding, %Qore attempts to
+    convert the string.
+
+    %Qore reads source files, including <tt>%include</tt> files and source modules, and standard input as UTF-8.
+    Filenames written in <tt>%include</tt> directives retain their UTF-8 spelling during lookup.
+    An invalid UTF-8 sequence raises a parse error identifying the source and line. The \c --charset option,
+    \c QORE_CHARSET and the locale select the default string and I/O encoding at run time. To migrate a legacy
+    Latin-1 source file, use <tt>iconv -f ISO-8859-1 -t UTF-8 legacy.q > converted.q</tt>.
+
+    A source string passed to a Program or Expression is decoded from its own encoding into UTF-8 for parsing.
+    String literals in the parsed source use UTF-8. Compiled executables and modules preserve the encoding of string
+    constants across process charsets.
 
     %Qore uses the operating system's \c iconv library functions to perform any encoding conversions.  The encodings
     available depend on the \c iconv library %Qore is built with and on how it is installed: for example, Apple's
@@ -62,7 +73,7 @@
     - conversion flags after \c "//" in a name (ex: \c "UTF-16LE//", \c "UTF-32//TRANSLIT") are not part of the name of the encoding: where the platform's \c iconv does not accept a name with them (musl rejects every name with flags, and GNU libiconv, which %Qore uses on macOS when it is built with MacPorts, a name whose flags are empty, as \c "UTF-16LE//"), the name without them is given to \c iconv, so that the encoding has the same properties on every platform
     - a stateful encoding, in which the bytes of a character depend on the characters before it (ex: \c "UTF-7", \c "ISO-2022-JP", \c "ISO-2022-KR", and the mixed EBCDIC code pages such as \c "IBM930" and \c "IBM939", which shift between character sets with escape sequences, base64 runs, or the SO and SI bytes), is not backwards compatible with \c ASCII; a character has no byte sequence of its own, so every character operation (length(), substr(), index(), rindex(), reverse(), the @ref splice "splice" and @ref extract "extract" operators, case conversion, searching, splitting, trimming, comparison, iteration, and formatting) is made on the text of the string in \c UTF-8, and text results are converted back to the encoding, ending in the initial shift state.  The same text can have more than one byte sequence in such an encoding (ex: ISO-2022-JP text concatenated from two strings shifts twice), so strings are compared by their text.  Functions that work with the byte positions of characters raise an \c UNSUPPORTED-ENCODING exception for such a string.  Readers (@ref Qore::StreamReader "StreamReader", @ref Qore::ReadOnlyFile "ReadOnlyFile") keep the shift state of such text between reads, so characters can be read one at a time or a number of characters at a time (@ref Qore::StreamReader::readString() "StreamReader::readString()", @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()", @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()"): each string read starts and ends in the initial shift state, and the lines and text read after characters continue in the shift state left by them; a @ref Qore::Scanner "Scanner" scans the text of such a string in \c UTF-8
     - any other encoding that does not represent each \c ASCII character as the same single byte (ex: single-byte EBCDIC code pages such as \c "IBM1140") is handled as an encoding that is not backwards compatible with \c ASCII, with one byte per character: strings are converted to \c UTF-8 wherever text is parsed, split, or formatted (numbers, hash keys, lines, CSV data, format strings, HTML and URL encoding)
-    - a multi-byte encoding in which the length of a character is given by its first bytes (EUC encodings such as \c "EUC-JP", \c "EUC-KR" and \c "GB2312", double-byte encodings such as \c "GBK", \c "BIG5" and \c "CP949", \c "GB18030", and Shift_JIS and its variants such as \c "CP932") has strings made of characters of one to four bytes; Shift_JIS and its variants are not backwards compatible with \c ASCII: in Shift_JIS, the bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201, and \c iconv implementations and variants such as \c "CP932" map them differently
+    - a multi-byte encoding in which the length of a character is given by its first bytes (EUC encodings such as \c "EUC-JP", \c "EUC-KR" and \c "GB2312", double-byte encodings such as \c "GBK", \c "BIG5" and \c "CP949", \c "GB18030", and Shift_JIS and its variants such as \c "CP932") has strings made of characters of one to four bytes; Shift_JIS and its variants are not backwards compatible with \c ASCII: in Shift_JIS, the bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201, and \c iconv implementations and variants such as \c "CP932" map them differently; the character functions of such a string count the bytes and byte sequences that the encoding's definition can have as characters (its single bytes, and the first and following bytes of its multi-byte characters: ex: the C1 control characters \c 0x80 - \c 0x9f are characters of \c "EUC-JP" and \c "EUC-KR" by their standards, but \c 0x80, \c 0xa0 and \c 0xfd - \c 0xff are not characters of Shift_JIS or \c "CP932", and the second byte of a \c "BIG5" character is \c 0x40 - \c 0x7e or \c 0xa1 - \c 0xfe), and raise an \c INVALID-ENCODING exception for any other byte, the same way on every platform; a well-formed multi-byte sequence that is not assigned to a character is counted as a character by them, and refused by @ref Qore::zzz8stringzzz9::isEncodingValid() "<string>::isEncodingValid()" and the conversions
     - any other encoding and any encoding unknown to \c iconv is assumed to be backwards compatible with \c ASCII, meaning that one character is represented by one byte and that the strings are null-terminated.
 
     An encoding created this way is registered for the life of the process, with a canonical name that does not depend
@@ -79,6 +90,121 @@
     HTTP body functions and the Mime module look up the names that they receive in this way.
 
     Note that when %Qore matches an encoding name to a code or alias in the following table, the comparison is not case-sensitive.
+
+    @section encoding_errors Text Read That Is Not Valid in Its Encoding
+
+    The readers of text check the text they read in the @ref character_encoding "character encoding" they read it in:
+    @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::File "File" (@ref Qore::ReadOnlyFile::read() "read()",
+    @ref Qore::ReadOnlyFile::readLine() "readLine()", @ref Qore::ReadOnlyFile::getchar() "getchar()" and the text
+    read with @ref Qore::ReadOnlyFile::startPollRead() "startPollRead()"),
+    @ref Qore::ReadOnlyFile::readTextFile() "ReadOnlyFile::readTextFile()",
+    @ref Qore::StreamReader "StreamReader" and @ref Qore::BufferedStreamReader "BufferedStreamReader"
+    (@ref Qore::StreamReader::readString() "readString()", @ref Qore::StreamReader::readLine() "readLine()"),
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" and @ref Qore::FileLineIterator "FileLineIterator".
+    What text that is not valid gives is set with the \c encoding_errors option of the reader (an argument of its
+    constructor, and @ref Qore::ReadOnlyFile::setEncodingErrors() "ReadOnlyFile::setEncodingErrors()" and
+    @ref Qore::StreamReader::setEncodingErrors() "StreamReader::setEncodingErrors()"), one of the
+    @ref encoding_errors_constants :
+
+    |!Value|!Text that is not valid in the encoding
+    |\c "raise" (@ref Qore::ENCODING_ERRORS_RAISE "ENCODING_ERRORS_RAISE", the default)|raises an \c INVALID-ENCODING exception: <tt>&lt;class&gt;::&lt;method&gt;(): the &lt;what&gt; read is not valid &lt;encoding&gt;: invalid byte sequence at byte offset &lt;n&gt;</tt>, where the offset is that of the first invalid byte sequence in the string that would have been returned (after a byte order mark that is removed), or in the bytes read by the call in a stateful encoding; the line iterators add the line number (<tt>(line &lt;n&gt;)</tt>); the bytes read up to the error are consumed, and the next read starts after them (in a stateful encoding, after the rest of the line)
+    |\c "latin1" (@ref Qore::ENCODING_ERRORS_LATIN1 "ENCODING_ERRORS_LATIN1")|the whole string read (the whole line for a line read) is tagged \c ISO-8859-1, with its bytes; the reader stays in its encoding, so the text read next is tagged with it if it is valid
+    |\c "keep" (@ref Qore::ENCODING_ERRORS_KEEP "ENCODING_ERRORS_KEEP")|the string read is tagged with the encoding of the reader without a check, as all of the text and the lines were before %Qore 3.0; a read of a number of characters and @ref Qore::ReadOnlyFile::getchar() "getchar()", which raised an exception for an invalid sequence before, return it as a character of its own
+
+    The check is made on each string returned: on the text of each read of a number of characters or of all of the
+    text, on each line, and on each character read with @ref Qore::ReadOnlyFile::getchar() "getchar()":
+    - a read of a number of characters never splits a character, and returns that number of characters; with
+      \c "latin1" and \c "keep", a code unit that does not start a valid character (a byte in \c UTF-8, two bytes
+      in \c UTF-16, four in \c UTF-32) is read as a character of its own, so that the characters after it are read
+      from a code unit boundary; bytes read after the characters returned (the rest of what looked like the start
+      of a character) are kept for the next read (by a stream reader, and in a regular file), and with \c "raise"
+      so are the bytes after the invalid code unit; a file that cannot seek (ex: a pipe or a terminal) cannot keep
+      them: there, a read of characters with \c "latin1" or \c "keep" returns them with the characters read (ex:
+      \c UTF-8 \c E2 \c 41 \c 42 \c 43 read one character at a time from a pipe gives \c E2 \c 41 \c 42), and with
+      \c "raise" they are lost
+    - a character cut off by the end of the data is not valid; a character cut off by the limit of a read of a
+      number of bytes (the \c max_bytes argument of @ref Qore::ReadOnlyFile::startPollRead() "startPollRead()") is
+      not an error, the bytes before it are checked
+    - @ref Qore::ReadOnlyFile::getchar() "getchar()" reads the bytes of a character one at a time and checks each
+      byte when it is read, so that no byte after an invalid one is read, except for the rest of its code unit in
+      \c UTF-16 and \c UTF-32; the invalid sequence is its first code unit: in a regular file, the bytes read
+      after it are given back, so that the next character read starts after it (ex: \c UTF-8 \c E2 \c 41 and
+      \c UTF-16LE \c 3D \c D8 \c 41 \c 00, an unpaired surrogate: the next character read is \c "A"), while on a
+      pipe or a device they stay consumed and are part of the invalid sequence; with \c "latin1" and \c "keep",
+      the bytes of the invalid sequence are returned
+    - a @ref Qore::StreamReader "StreamReader" (and so a line iterator) resolves and removes a byte order mark only
+      at the start of its text (or after its encoding is changed); after it, U+FEFF is a character
+    - \c UTF-8 is checked as RFC 3629 defines it (see @ref utf8_validity), US-ASCII byte by byte (a byte above
+      \c 0x7f is not valid), and the other multi-byte encodings (the \c UTF-16 encodings, the Unicode encodings
+      created on the fly, the EUC, double-byte, GB18030 and Shift_JIS families) with their character functions; a
+      single-byte encoding has no invalid bytes, so text in it is not checked
+    - a \c UTF-16 or \c UTF-32 byte order mark is removed before the text is checked; a \c UTF-8 byte order mark
+      is a valid character (U+FEFF)
+    - text in a stateful encoding (ex: \c "ISO-2022-JP", \c "UTF-7") is read with the conversion that keeps its
+      shift state, which checks it, unless the option is \c "keep" (a read of a number of characters always uses
+      it); after an invalid sequence, the shift state is not known until the end of the line, so the rest of the
+      line is skipped with \c "raise" (up to and including its end-of-line marker for a line read, and up to and
+      including the next line feed, or the end of the data, for a read of a number of characters), and the text
+      after it is read from the initial shift state; with \c "latin1", the bytes of the whole line are returned
+      instead (the end-of-line marker is removed when lines are trimmed)
+    - the lines of a @ref Qore::FileLineIterator "FileLineIterator" in an encoding that is not ASCII-compatible are
+      checked in the encoding of the file and then converted to \c UTF-8: with \c "latin1", a line that is not valid
+      is returned as its bytes read as \c ISO-8859-1 characters, converted to \c UTF-8, and with \c "keep" a line
+      that is not valid raises an \c ENCODING-CONVERSION-ERROR exception when it is converted, as before %Qore 3.0
+    - the C++ API of \c QoreFile that has no exception sink (\c readLine(QoreString&), \c readUntil(),
+      \c getchar()) does not check the text
+
+    @anchor encoding_conversion_streams
+    The conversion streams @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
+    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" check their input in the source
+    encoding in the same way, and take the \c encoding_errors option as an argument of their constructors:
+    - \c "raise" (the default): input that is not valid in the source encoding (also a character or shift sequence
+      cut off by the end of the input) raises \c INVALID-ENCODING when it is read (or written), with the byte offset
+      of the invalid sequence in all of the input of the stream (counting a byte order mark that is removed):
+      <tt>EncodingConversionInputStream::read(): the input is not valid UTF-8: invalid byte sequence at byte offset
+      &lt;n&gt;</tt> (\c peek() for a peek, and <tt>EncodingConversionOutputStream::write(): the data written is
+      not valid ...</tt> or \c close()); a valid character that the target encoding cannot hold raises
+      \c ENCODING-CONVERSION-ERROR, as before
+    - \c "latin1": the text already returned cannot be retagged, so each byte that does not start a valid
+      character of the source encoding is taken as the ISO-8859-1 character of that byte and converted to the target
+      encoding, and the input after it is converted from the next byte (ex: \c UTF-8 \c 61 \c E2 \c 41 converted to
+      \c UTF-8 gives \c "aâA"); in a Unicode encoding form with code units of more than one byte (the \c UTF-16
+      and \c UTF-32 encodings, \c UCS-2 and \c UCS-4), the bytes of a code unit that does not start a valid
+      character are each taken as their ISO-8859-1 character, and the input after it is converted from the next code
+      unit, so that it stays aligned (ex: \c UTF-16LE \c 41 \c 00 \c 00 \c DC \c 42 \c 00, with an unpaired
+      surrogate, gives \c "A", U+0000, U+00DC, \c "B"); a character split between reads or writes is converted
+      when the rest of it is given, and a character cut off by the end of the input gives its bytes as ISO-8859-1
+      characters; if the target encoding cannot hold such a character, \c ENCODING-CONVERSION-ERROR is raised
+    - \c "keep": the bytes are passed as they are without a check, also a \c UTF-16 or \c UTF-32 byte order mark,
+      which \c "raise" and \c "latin1" remove; allowed only when the source and target encodings are the same,
+      otherwise the constructor raises \c ENCODING-ERRORS-ERROR
+
+    Valid input is defined as for the readers: a byte sequence that has the form of a character but is not defined
+    in the source encoding (ex: \c 0x81 in \c CP1252, an unmapped \c Shift_JIS code) is not invalid input, and
+    gives \c ENCODING-CONVERSION-ERROR when it is converted, also with \c "latin1".
+
+    The error raised is that of the first problem in the input (an invalid sequence or a character that the target
+    encoding cannot hold), whatever the size of the reads or writes.
+
+    @ref Qore::convert_encoding() "convert_encoding()" of a string that is already in the encoding given checks it
+    in the same way and raises \c INVALID-ENCODING if it is not valid in it (<tt>convert_encoding(): the string is
+    not valid UTF-8: invalid byte sequence at byte offset &lt;n&gt;</tt>).
+
+    Binary reads (\c readBinary(), the \c readi*() and \c readu*() methods) are not text and are not checked.  A
+    @ref Qore::DataLineIterator "DataLineIterator" does not check the lines of its string, whose bytes were tagged
+    or checked when the string was made.
+
+    @par Example:
+    @code{.py}
+# a file that can have bytes in ISO-8859-1 among UTF-8 text
+FileLineIterator i(path, "UTF-8", encoding_errors: ENCODING_ERRORS_LATIN1);
+while (i.next()) {
+    # each line is valid in its encoding: UTF-8, or ISO-8859-1 if it is not valid UTF-8
+    string line = i.getValue();
+}
+    @endcode
+
+    @since %Qore 3.0
 
     @section known_encodings Character Encodings Known to Qore
 
@@ -173,7 +299,8 @@
     conversion instead, which uses the display width of the argument.
 
     @ref qore_regex "Regular expression" operators and functions convert UTF-16 strings to \c UTF-8 before
-    matching, so any strings they return are tagged with \c UTF-8 and not with the source encoding.
+    matching. Captures, split pieces and substitution results use the subject's encoding. Match offsets and
+    lengths count bytes in the UTF-8 representation used for matching.
 
     Conversions of UTF-16 strings to numbers, booleans and dates (ex: \c int(), \c float(), \c number(),
     \c boolean(), @ref Qore::parse_boolean() "parse_boolean()", \c date(), the \c softint, \c softfloat,

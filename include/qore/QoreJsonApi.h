@@ -107,14 +107,19 @@ struct QoreJsonApi {
     // --- version 1.0 ---
 
     //! parses a JSON string and returns the corresponding %Qore value
-    /** A leading UTF-8, UTF-16 or UTF-32 byte-order mark is skipped if present.  Any
-        non-whitespace text following the JSON value is an error.
+    /** A leading UTF-8 byte-order mark is skipped if present, and so are the bytes of a UTF-16
+        byte-order mark at the start of text in an encoding compatible with ASCII; the byte-order
+        mark of text in the generic \c UTF-16 encoding gives its byte order.  Text in a multi-byte
+        encoding other than UTF-8, in an encoding not compatible with ASCII or in a stateful
+        encoding is converted to UTF-8 to be parsed.  Any non-whitespace text following the JSON
+        value is an error.
 
         Returns the %Qore value corresponding to \a str, or a null value if an exception was
         raised; an empty input string returns @ref nothing without raising an exception.  The
         caller owns any reference returned.
 
-        Raises \c JSON-PARSE-ERROR on a syntax error.
+        Raises \c JSON-PARSE-ERROR on a syntax error, and \c INVALID-ENCODING if \a str is not
+        valid in its encoding (since json 3.0).
     */
     QoreValue (*parse)(const QoreString& str, ExceptionSink* xsink);
 

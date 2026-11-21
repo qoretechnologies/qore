@@ -47,6 +47,7 @@
 #include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -1676,6 +1677,9 @@ Program pgm();
     @ref Qore::Program "Program" and @ref sandbox_program_capability)
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
+
+    @note since %Qore 3.0, if a binary module cannot copy its data in the current %Program to the new %Program, the
+    constructor raises the exception of the module, and no %Program is created
  */
 Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
@@ -1705,9 +1709,13 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     // tests hold the creation here to change the parent's options after the check
     qore_dbg_child_program_create_hold();
 #endif
-    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
-    //pgm->registerQoreObject(self, xsink);
-    assert(!xsink->isEvent());
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr, xsink);
+    if (*xsink) {
+        // a module could not copy its external data to the child, which must not run without it: the exception of
+        // the module is raised, and the Program is deleted unused (issue #6786)
+        qore_program_private::deleteFailedChild(pgm, xsink);
+        return;
+    }
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
     // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
@@ -1738,6 +1746,9 @@ Program pgm(opts);
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
+    @note if a binary module cannot copy its data in the current %Program to the new %Program, the constructor
+    raises the exception of the module, and no %Program is created
+
     @since %Qore 3.0
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
@@ -1760,8 +1771,13 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     // tests hold the creation here to change the parent's options after the check
     qore_dbg_child_program_create_hold();
 #endif
-    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
-    assert(!xsink->isEvent());
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr, xsink);
+    if (*xsink) {
+        // a module could not copy its external data to the child, which must not run without it: the exception of
+        // the module is raised, and the Program is deleted unused (issue #6786)
+        qore_program_private::deleteFailedChild(pgm, xsink);
+        return;
+    }
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
     // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
@@ -1788,6 +1804,9 @@ Program::copy() {
     Program cannot wait for the current thread: the %Qore object is deleted at once, and the Program is kept until the
     current thread has left its code; then, when other threads have finished executing its code as well, its global
     variables are deleted and it is dereferenced
+
+    The objects of the Program's own classes that its constants hold are deleted with its data, also if other values
+    hold them (see @ref program_deletion_constant_objects)
 
     @since %Qore 3.0 a Program deleted while the current thread runs its code is kept until the thread has left it;
     the code crashed the process when it returned
@@ -1858,7 +1877,7 @@ while (wh) {
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1918,7 +1937,7 @@ pgm.parseCommit();
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1989,7 +2008,7 @@ while (exists wh) {
     if (!wsink.isException())
         return QoreValue();
 
-    QoreException *e = wsink.catchException();
+    QoreException *e = qore_exception_sink_ops(wsink).catchException();
     return e->makeExceptionObjectAndDelete(xsink);
 }
 
@@ -3332,7 +3351,7 @@ pgm.loadModule("mysql");
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3424,7 +3443,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3536,7 +3555,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();
@@ -3641,7 +3660,7 @@ Program::loadApplyToPrivateUserModule(
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();

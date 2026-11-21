@@ -226,6 +226,13 @@ public hashdecl TabularColumnProfile {
         (after trimming whitespace), so they are reported unredacted: no other cell text is reported here.  No value
         if the column has none.
 
+        A hash key is held in the default encoding of the process (see @ref tabular_profiler_encoding): a marker that
+        this encoding cannot represent, such as \c "—" in a process whose default encoding is \c ISO-8859-1, is
+        reported under its Unicode code points, each written as \c U+ and at least four upper-case hex digits and
+        separated by a space, as in \c "U+2014" for \c "—", \c "U+2013" for \c "–" and \c "U+2026" for \c "…"; no
+        marker of the vocabulary has this form.  A process whose default encoding is \c UTF-8 reports every marker as
+        it is written.
+
         @since %DataProvider 3.9
     */
     *hash<string, int> empty_markers;
@@ -329,6 +336,33 @@ public hashdecl TabularWorkbookProfile {
     - \c wide_period_columns: several columns are periods such as weeks, months, or dates, a layout that is usually
       unpivoted into rows
 
+    @anchor tabular_profiler_encoding
+    @par Character Encoding
+    A sheet is profiled in any default encoding of the process, also when its text holds characters that this
+    encoding cannot represent, such as \c "—", \c "✓" or CJK text in a process whose default encoding is
+    \c ISO-8859-1: the profiler handles text as \c UTF-8, and the text that the profile reports (header labels, the
+    values of yes/no and two-value columns, currencies, samples and counter-examples) is \c UTF-8 text, or the cell
+    value itself where it is reported unredacted.
+
+    The text of a binary cell is its bytes read as \c UTF-8 if they are valid \c UTF-8, otherwise read in the default
+    encoding of the process; only bytes that are not valid \c UTF-8 and that the default encoding cannot read either
+    are written as their hex digits in angle brackets, as in \c "\<fffe\>" for \c \<fffe\>: in practice in a
+    process whose default encoding is \c UTF-8, as \c ISO-8859-1 reads every byte.
+
+    In a process whose default encoding is \c UTF-8, the profiler keys its own hashes by the text of the header labels
+    and of the values of a column (to find duplicate headers and yes/no columns), and a hash key cannot hold a NUL
+    character: a header label or a text or binary cell that holds one raises \c HASH-KEY-ERROR there.  In a process
+    whose default encoding is not \c UTF-8, the text is keyed by the hex digits of its bytes, so such text is
+    profiled.
+
+    A hash key is held in the default encoding of the process.  The only cell text that the profile holds as hash keys
+    are the reported empty markers, which come from a fixed vocabulary; a marker that the default encoding cannot
+    represent is reported under its Unicode code points (see
+    @ref TabularColumnProfile::empty_markers "TabularColumnProfile::empty_markers").  The keys of
+    @ref TabularWorkbookProfile::named_ranges "TabularWorkbookProfile::named_ranges" are the names of the ranges as the
+    grid gives them, and @ref gridFromHash() gives the formulas and the references of the named ranges as \c UTF-8
+    text.
+
     @par Example
     @code{.py}
 hash<TabularWorkbookProfile> profile = TabularProfiler::profile(<TabularWorkbookGrid>{
@@ -388,6 +422,9 @@ public class TabularProfiler {
 
     private {
         #! @ref TotalsRegex compiled once: a pattern given as text is compiled at every match
+        /** The pattern is read as the UTF-8 text of the source, which the default encoding of the process need not
+            be (issue #6666)
+        */
         static Regex totals_label_regex(TotalsRegex, RE_Caseless | RE_Unicode);
 
         #! @ref TotalsFormulaRegex compiled once
@@ -421,6 +458,9 @@ public class TabularProfiler {
         #! The length in characters of the longest of the @ref EmptyMarkers
         const MaxEmptyMarkerLength = max(map $1.length(), EmptyMarkers);
 
+        #! The ellipsis that ends a truncated redacted value, as UTF-8 text
+        const Ellipsis = "…";
+
         #! Header labels that name periods
         const PeriodHeaderRegex = "^\\s*(W(K|eek)?\\s*\\d{1,2}|KW\\s*\\d{1,2}|Q[1-4]|\\d{4}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{4}"
             "|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(tember)?|oct(ober)?"
@@ -438,18 +478,75 @@ public class TabularProfiler {
         return binary(text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8")).toHex();
     }
 
-    #! Counts an empty marker found in a cell
-    /** A marker that the encoding of the process cannot represent (\c "—" in ISO-8859-1) cannot be a key of the
-        reported counts, and is not counted (issue #6663)
+    #! Returns the text of a cell as UTF-8 text
+    /** A binary cell is read by binaryText(); any other value is converted to UTF-8 (issue #6666)
     */
-    private static countEmptyMarker(reference<hash<string, int>> empty_markers, string text) {
+    private static string cellText(auto value) {
+        return value.typeCode() == NT_BINARY ? binaryText(value) : value.toString("UTF-8");
+    }
+
+    #! Returns the text of a binary cell as UTF-8 text
+    /** Its bytes read as UTF-8 if they are valid UTF-8, otherwise read in the default encoding of the process, and
+        otherwise its hex digits in angle brackets, as in \c "\<fffe\>", so that profiling a cell never raises an
+        exception (see @ref tabular_profiler_encoding)
+    */
+    private static string binaryText(binary value) {
+        string rv = binary_to_string(value, "UTF-8");
+        if (rv.isEncodingValid()) {
+            return rv;
+        }
+        string enc = get_default_encoding();
+        if (enc != "UTF-8") {
+            try {
+                rv = convert_encoding(binary_to_string(value, enc), "UTF-8");
+                if (rv.isEncodingValid()) {
+                    return rv;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "ENCODING-CONVERSION-ERROR" && ex.err != "INVALID-ENCODING") {
+                    rethrow;
+                }
+            }
+        }
+        return sprintf("<%s>", value.toHex());
+    }
+
+    #! Returns the key of a UTF-8 text in a hash of the profiler's own
+    /** A hash key is held in the default encoding of the process: when it is not UTF-8, the text is keyed by the hex
+        digits of its UTF-8 bytes, so that text that this encoding cannot represent can be a key (issue #6666)
+
+        @param text the text, in UTF-8
+        @param utf8 True if the default encoding of the process is UTF-8, in which case the key is the text itself
+    */
+    private static string getDataKey(string text, bool utf8) {
+        return utf8 ? text : binary(text).toHex();
+    }
+
+    #! Returns the UTF-8 text of a key given by getDataKey()
+    private static string getDataText(string key, bool utf8) {
+        return utf8 ? key : binary_to_string(parse_hex_string(key), "UTF-8");
+    }
+
+    #! Returns the key of an empty marker in the reported counts
+    /** The marker as written if the default encoding of the process can represent it, otherwise its Unicode code
+        points, as in \c "U+2014" (see @ref TabularColumnProfile::empty_markers "TabularColumnProfile::empty_markers")
+
+        @param marker the marker, in UTF-8
+    */
+    private static string getEmptyMarkerReportKey(string marker) {
         try {
-            ++empty_markers{text};
+            return convert_encoding(marker, get_default_encoding());
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "ENCODING-CONVERSION-ERROR") {
                 rethrow;
             }
         }
+        list<string> code_points = ();
+        int len = marker.length();
+        for (int i = 0; i < len; ++i) {
+            code_points += sprintf("U+%04X", marker.getUnicode(i));
+        }
+        return code_points.join(" ");
     }
 
     #! Profiles a workbook or text file
@@ -494,10 +591,11 @@ public class TabularProfiler {
             foreach hash<auto> range in (sheet.merged) {
                 s.merged += cast<hash<TabularCellRange>>(range{"first_row", "last_row", "first_col", "last_col"});
             }
-            map s.formulas{$1.key} = $1.value.toString(), sheet.formulas.pairIterator();
+            # text is kept in UTF-8, which the default encoding of the process need not be (issue #6666)
+            map s.formulas{$1.key} = $1.value.toString("UTF-8"), sheet.formulas.pairIterator();
             rv.sheets += s;
         }
-        map rv.named_ranges{$1.key} = $1.value.toString(), grid.named_ranges.pairIterator();
+        map rv.named_ranges{$1.key} = $1.value.toString("UTF-8"), grid.named_ranges.pairIterator();
         if (grid.text_format) {
             rv.text_format = cast<hash<TabularTextFormat>>(grid.text_format);
         }
@@ -668,14 +766,20 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                 return "9999-99-99";
         }
         # a spreadsheet stores whole numbers as floats; they are classified and redacted as integers
+        # the value is redacted as UTF-8 text, which the default encoding of the process need not be (issue #6666)
         string str = (inlist(value.typeCode(), (NT_FLOAT, NT_NUMBER)) && value == value.toInt())
-            ? value.toInt().toString()
-            : value.toString();
-        string rv;
+            ? value.toInt().toString("UTF-8")
+            : cellText(value);
         int len = str.length();
+        if (!len) {
+            # an empty value is redacted to no value
+            return;
+        }
+        # an empty UTF-8 string, so that the characters are added without a conversion
+        string rv = str.substr(0, 0);
         for (int i = 0; i < len; ++i) {
             if (i == MaxRedactedLength) {
-                rv += "…";
+                rv += Ellipsis;
                 break;
             }
             string c = str[i];
@@ -751,29 +855,30 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         @return the parts and the remaining \c number text, or @ref NOTHING if the text has none of these parts
     */
     private static *hash<auto> parseAmount(string s) {
-        # U+2212 is a minus sign
-        s = replace(s, "\u2212", "-");
+        # a minus is "-" or U+2212 MINUS SIGN; the patterns give it by its code point, so that the text is matched in
+        # any encoding: a replace() of the sign would convert it to the encoding of the text, which need not
+        # represent it (issue #6666)
         hash<auto> rv;
         if (s =~ /^\(.*\)$/u) {
             rv.parentheses = True;
             s = trim(s.substr(1, -1));
-        } else if (s =~ /[0-9%\p{Sc}A-Z ]-$/u && s !~ /^-/) {
+        } else if (s =~ /[0-9%\p{Sc}A-Z ][-\x{2212}]$/u && s !~ /^[-\x{2212}]/u) {
             rv.trailing_minus = True;
             s = trim(s.substr(0, -1));
         }
         string sign;
-        if (s =~ /^[-+]/) {
+        if (s =~ /^[-+\x{2212}]/u) {
             sign = s[0];
             s = trim(s.substr(1));
         }
         # a currency before the number
         *list<*string> pre = (s =~ x/^(\p{Sc}|[A-Z]{3})( *)(.*)$/u);
         if (pre && (pre[0] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{pre[0]})) {
-            rv.currency = pre[0];
+            rv.currency = convert_encoding(pre[0], "UTF-8");
             rv.currency_position = "before";
             rv.currency_space = pre[1].val();
-            s = pre[2];
-            if (!sign && s =~ /^[-+]/) {
+            s = convert_encoding(pre[2], "UTF-8");
+            if (!sign && s =~ /^[-+\x{2212}]/u) {
                 sign = s[0];
                 s = trim(s.substr(1));
             }
@@ -786,10 +891,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         if (!rv.currency) {
             *list<*string> post = (s =~ x/^(.*?)( *)(\p{Sc}|[A-Z]{3})$/u);
             if (post && (post[2] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{post[2]})) {
-                rv.currency = post[2];
+                rv.currency = convert_encoding(post[2], "UTF-8");
                 rv.currency_position = "after";
                 rv.currency_space = post[1].val();
-                s = post[0];
+                s = convert_encoding(post[0], "UTF-8");
             }
         }
         if (!rv) {
@@ -940,6 +1045,9 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         }
 
         # columns
+        # text is handled as UTF-8 and keyed by getDataKey(), as the default encoding of the process need not
+        # represent it (issue #6666)
+        bool utf8 = get_default_encoding() == "UTF-8";
         hash<string, int> header_seen = {};
         int period_headers = 0;
         for (int c = first_col; c <= last_col; ++c) {
@@ -948,26 +1056,29 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                 auto cell = rows[header][c];
                 string cell_type = types[header][c] ?? "empty";
                 if (cell_type != "empty") {
-                    label = trim(cell.toString());
+                    label = trim(cellText(cell));
                     if (cell_type == "date" || regex(label, PeriodHeaderRegex, RE_Caseless)) {
                         ++period_headers;
                     }
                 }
             }
-            hash<TabularColumnProfile> column = profileColumn(rows, types, data_rows, c, label, options);
+            hash<TabularColumnProfile> column = profileColumn(rows, types, data_rows, c, label, options, utf8);
             if (exists header) {
                 if (!exists label) {
                     if (column.non_empty) {
                         rv.findings += <TabularProfileFinding>{"code": "empty_header", "col": c + 1};
                     }
-                } else if (header_seen{label.lwr()}) {
-                    rv.findings += <TabularProfileFinding>{
-                        "code": "duplicate_header",
-                        "col": c + 1,
-                        "detail": label,
-                    };
                 } else {
-                    header_seen{label.lwr()} = c + 1;
+                    string key = getDataKey(label.lwr(), utf8);
+                    if (header_seen{key}) {
+                        rv.findings += <TabularProfileFinding>{
+                            "code": "duplicate_header",
+                            "col": c + 1,
+                            "detail": label,
+                        };
+                    } else {
+                        header_seen{key} = c + 1;
+                    }
                 }
             }
             rv.findings += columnFindings(column);
@@ -1048,58 +1159,62 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
     }
 
     #! The yes/no pairs a column of text is recognized by: each true value and its false value, in lower case
+    /** As UTF-8 text, which the default encoding of the process need not be (issue #6666)
+    */
     const BoolPairs = (
         ("true", "false"), ("yes", "no"), ("y", "n"), ("t", "f"), ("on", "off"), ("ja", "nein"),
         ("oui", "non"), ("si", "no"), ("sí", "no"), ("ano", "ne"), ("áno", "nie"), ("tak", "nie"),
         ("wahr", "falsch"), ("✓", "✗"), ("✔", "✘"), ("☑", "☐"),
     );
 
-    #! The values that mark a yes in a column whose other cells are empty
+    #! The values that mark a yes in a column whose other cells are empty, as UTF-8 text
     const BoolMarks = ("x", "✓", "✔", "☑");
 
     #! Recognizes a yes/no column from its distinct values
-    /** @param spellings the distinct non-empty values in lower case, each with its spellings and their counts
+    /** @param spellings the distinct non-empty values in lower case, each with its spellings and their counts, keyed
+        by getDataKey()
         @param empty the number of empty cells
+        @param utf8 True if the default encoding of the process is UTF-8
 
         @return @c bool_true, @c bool_false and @c empty_is_false, or nothing
     */
-    private static *hash<auto> boolColumn(hash<string, hash<string, int>> spellings, int empty) {
-        list<string> values = keys spellings;
+    private static *hash<auto> boolColumn(hash<string, hash<string, int>> spellings, int empty, bool utf8) {
+        list<string> value_keys = keys spellings;
+        # the values are compared in UTF-8 with the pairs and the marks, which the encoding of the process need not
+        # represent (a comparison converts to the encoding of its first operand, and "✓" has no ISO-8859-1 form;
+        # issues #6663 and #6666); a match is mapped back to the key of the value in the spellings
+        list<string> values = map getDataText($1, utf8), value_keys;
         # the most frequent way the file writes a value
-        code written = string sub (string v) {
+        code written = string sub (string key) {
             string rv;
             int n = -1;
-            foreach hash<auto> i in (spellings{v}.pairIterator()) {
+            foreach hash<auto> i in (spellings{key}.pairIterator()) {
                 if (i.value > n) {
                     rv = i.key;
                     n = i.value;
                 }
             }
-            return rv;
+            return getDataText(rv, utf8);
         };
-        # the values are compared in UTF-8 with the pairs and the marks, which the encoding of the process need not
-        # represent (a comparison converts to the encoding of its first operand, and "✓" has no ISO-8859-1 form;
-        # issue #6663); a match is mapped back to the value as the spellings hold it
-        list<string> utf8_values = map $1.encoding() == "UTF-8" ? $1 : convert_encoding($1, "UTF-8"), values;
-        code value_of = *string sub (string word) {
-            foreach string u in (utf8_values) {
-                if (u == word) {
-                    return values[$#];
+        code key_of = *string sub (string word) {
+            foreach string v in (values) {
+                if (v == word) {
+                    return value_keys[$#];
                 }
             }
         };
-        if (values.size() == 1 && empty && inlist(utf8_values[0], BoolMarks)) {
-            return {"bool_true": (written(values[0]),), "bool_false": (), "empty_is_false": True};
+        if (values.size() == 1 && empty && inlist(values[0], BoolMarks)) {
+            return {"bool_true": (written(value_keys[0]),), "bool_false": (), "empty_is_false": True};
         }
-        foreach list<string> pair in (BoolPairs) {
+        foreach list<auto> pair in (BoolPairs) {
             # both values, or one of them, but nothing else
-            if (values.size() <= 2 && !(select utf8_values, !inlist($1, pair))) {
+            if (values.size() <= 2 && !(select values, !inlist($1, pair))) {
                 if (values.size() == 1 && !empty) {
                     # one value and no other: not enough to call it yes/no
                     return;
                 }
-                *string yes = value_of(pair[0]);
-                *string no = value_of(pair[1]);
+                *string yes = key_of(pair[0]);
+                *string no = key_of(pair[1]);
                 return {
                     "bool_true": yes ? (written(yes),) : (),
                     "bool_false": no ? (written(no),) : (),
@@ -1112,7 +1227,7 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
     #! Profiles one column of the data rows
     private static hash<TabularColumnProfile> profileColumn(list<list<auto>> rows, list<list<string>> types,
             list<int> data_rows, int col,
-            *string label, hash<TabularProfileOptions> options) {
+            *string label, hash<TabularProfileOptions> options, bool utf8) {
         hash<TabularColumnProfile> rv({
             "index": col + 1,
             "letter": columnLetter(col),
@@ -1129,11 +1244,13 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         bool decimal_point;
         # amount and rate parts of numbers stored as text
         *hash<TabularAmountFormat> amount_format;
+        # the currencies, keyed by getDataKey()
         hash<string, int> currencies = {};
-        # the distinct text values, for yes/no columns: lower case -> spelling -> count; up to a few only
+        # the distinct text values, for yes/no columns: lower case -> spelling -> count, keyed by getDataKey(); up to
+        # a few only
         hash<string, hash<string, int>> spellings = {};
         bool many_values;
-        # cells with text from the fixed empty-marker vocabulary
+        # cells with text from the fixed empty-marker vocabulary, keyed by getEmptyMarkerKey()
         hash<string, int> empty_markers = {};
         foreach int r in (data_rows) {
             if ((types[r][col] ?? "empty") == "empty") {
@@ -1142,16 +1259,28 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             }
             if (rows[r][col].typeCode() == NT_STRING) {
                 string text = trim(rows[r][col]);
-                if (text.length() <= MaxEmptyMarkerLength && EmptyMarkerSet{getEmptyMarkerKey(text)}) {
-                    countEmptyMarker(\empty_markers, text);
+                if (text.length() <= MaxEmptyMarkerLength) {
+                    string key = getEmptyMarkerKey(text);
+                    if (EmptyMarkerSet{key}) {
+                        ++empty_markers{key};
+                    }
                 }
             }
             hash<auto> cls = classify(rows[r][col]);
             ++rv.non_empty;
             if (!many_values && (cls.type == "string" || cls.type == "bool")) {
-                string v = trim(rows[r][col].toString());
+                # the text as UTF-8 (a binary cell by binaryText()); toString() gives it in a UTF-8 process,
+                # without an argument to look up
+                string v = trim(rows[r][col].typeCode() == NT_BINARY
+                    ? binaryText(rows[r][col])
+                    : (utf8 ? rows[r][col].toString() : rows[r][col].toString("UTF-8")));
                 if (v.length() <= 40) {
-                    ++spellings{v.lwr()}{v};
+                    # keyed by the text itself in a UTF-8 process, without a call for the common case
+                    if (utf8) {
+                        ++spellings{v.lwr()}{v};
+                    } else {
+                        ++spellings{getDataKey(v.lwr(), False)}{getDataKey(v, False)};
+                    }
                 }
                 if (spellings.size() > 2) {
                     many_values = True;
@@ -1187,7 +1316,7 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     amount_format = <TabularAmountFormat>{};
                 }
                 if (cls.amount.currency) {
-                    ++currencies{cls.amount.currency};
+                    ++currencies{utf8 ? cls.amount.currency : getDataKey(cls.amount.currency, False)};
                     if (!amount_format.currency_position) {
                         amount_format.currency_position = cls.amount.currency_position;
                         amount_format.currency_space = cls.amount.currency_space;
@@ -1197,7 +1326,12 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             }
         }
         if (empty_markers) {
-            rv.empty_markers = empty_markers;
+            # each marker as written, or as its code points when the encoding of the process cannot represent it
+            hash<string, int> reported = {};
+            foreach hash<auto> i in (empty_markers.pairIterator()) {
+                reported{getEmptyMarkerReportKey(binary_to_string(parse_hex_string(i.key), "UTF-8"))} = i.value;
+            }
+            rv.empty_markers = reported;
         }
         if (!rv.non_empty) {
             return rv;
@@ -1223,17 +1357,17 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
 
         # a yes/no column written as text: a known pair, or a mark with empty cells
         if (!many_values && spellings && (type == "string" || type == "bool")) {
-            *hash<auto> yes_no = boolColumn(spellings, rv.empty);
+            *hash<auto> yes_no = boolColumn(spellings, rv.empty, utf8);
             if (yes_no) {
                 rv.type = "bool";
                 rv.confidence = 1.0;
                 rv += yes_no;
             } else if (spellings.size() == 2 && type == "string" && rv.non_empty >= 4
-                    && !(select keys spellings, $1 !~ /^\p{L}[\p{L} ]{0,19}$/u)) {
+                    && !(select keys spellings, getDataText($1, utf8) !~ /^\p{L}[\p{L} ]{0,19}$/u)) {
                 # two words, neither a known pair, such as good/bad or pass/fail: maybe yes/no, but which is yes
                 # is the user's to say; identifiers and codes with digits are not candidates
                 rv.two_values = map options.redact ? redact($1) : $1,
-                    (map (keys spellings{$1})[0], keys spellings);
+                    (map getDataText((keys spellings{$1})[0], utf8), keys spellings);
             }
         }
 
@@ -1258,7 +1392,7 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             int n;
             foreach hash<auto> i in (currencies.pairIterator()) {
                 if (i.value > n) {
-                    amount_format.currency = i.key;
+                    amount_format.currency = getDataText(i.key, utf8);
                     n = i.value;
                 }
             }

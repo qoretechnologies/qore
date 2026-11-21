@@ -21,6 +21,12 @@ extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
     Supports BPE (GPT-2, RoBERTa, Llama), WordPiece (BERT), and
     Unigram (T5, XLM-RoBERTa) tokenization models.
 
+    Tokenizers work on UTF-8 text: text given to a method (text to encode, words, tokens, added tokens, chat
+    messages and templates, the strings and token keys of the configuration) is checked in its own encoding and an
+    \c INVALID-ENCODING exception is raised if it is not valid, and text in another encoding is converted to UTF-8,
+    so that the same text gives the same token IDs in any encoding; offsets are byte offsets in the UTF-8 form of the
+    text.  Decoded text is UTF-8; see @ref tokenizer_text_encoding.
+
     @par Example:
     @code{.py}
     %requires json
@@ -44,18 +50,34 @@ qclass HFTokenizer [arg=QoreHFTokenizer* tok; ns=Qore::Tokenizer; flags=final];
 /** @param config the parsed tokenizer.json hash (from parse_json())
 
     @throw TOKENIZER-ERROR if the configuration is invalid or missing required fields
+    @throw INVALID-ENCODING the content of an added token, or a string or token key of the configuration of the model,
+    normalizer, pre-tokenizer, post-processor or decoder, is not valid in its encoding (ex:
+    <tt>"HFTokenizer::constructor(): the added token content at index 0 is not valid UTF-8: invalid byte sequence at
+    byte offset 3"</tt>, <tt>"HFTokenizer::constructor(): the merge is not valid UTF-8: ..."</tt>)
+    @throw ENCODING-CONVERSION-ERROR a string or token key of the configuration cannot be converted to UTF-8
+
+    @note the strings of the configuration (vocabulary tokens, merges, patterns, replacement strings, special tokens)
+    are converted to UTF-8 from their encodings, and the token keys (the vocabulary keys of a \c BPE or
+    \c WordPiece model, the special token keys of a \c TemplateProcessing post-processor) from the default encoding,
+    the encoding of hash keys; see @ref tokenizer_text_encoding
 */
 HFTokenizer::constructor(hash<auto> config) {
     self->setPrivate(CID_HFTOKENIZER, new QoreHFTokenizer(config, xsink));
 }
 
 //! Encodes text to token IDs
-/** @param text the input text to tokenize
+/** @param text the input text to tokenize; text in an encoding other than UTF-8 is converted to UTF-8
 
-    @return a hash with input_ids, token_type_ids, attention_mask, tokens
+    @return a hash with input_ids, token_type_ids, attention_mask, tokens (UTF-8 strings)
+
+    @throw INVALID-ENCODING the text is not valid in its encoding (ex: <tt>"HFTokenizer::encode(): the text is not
+    valid UTF-8: invalid byte sequence at byte offset 3"</tt>)
+    @throw PRETOKENIZER-MATCH-ERROR a regular expression of a \c Split pre-tokenizer cannot be matched against the
+    text (ex: a match limit, or text made invalid UTF-8 by a \c Replace normalizer whose pattern matches part of a
+    character); this applies to every method that pre-tokenizes text
 */
 hash<auto> HFTokenizer::encode(string text) {
-    return tok->encode(text, nullptr, true, xsink);
+    return tok->encode(text, nullptr, true, "HFTokenizer::encode()", xsink);
 }
 
 //! Encodes text with options for sentence pairs
@@ -64,16 +86,23 @@ hash<auto> HFTokenizer::encode(string text) {
     @param add_special_tokens whether to add special tokens (default True)
 
     @return encoding result hash
+
+    @throw INVALID-ENCODING the text or the text pair is not valid in its encoding (ex:
+    <tt>"HFTokenizer::encodeWithOptions(): the text pair is not valid UTF-8: invalid byte sequence at byte offset
+    3"</tt>)
 */
 hash<auto> HFTokenizer::encodeWithOptions(string text, *string text_pair, softbool add_special_tokens = True) {
-    return tok->encode(text, text_pair, (bool)add_special_tokens, xsink);
+    return tok->encode(text, text_pair, (bool)add_special_tokens, "HFTokenizer::encodeWithOptions()", xsink);
 }
 
 //! Decodes token IDs back to text
 /** @param ids a list of token IDs to decode
     @param skip_special_tokens whether to skip special tokens (default False)
 
-    @return the decoded text string
+    @return the decoded text string, in UTF-8; as in Hugging Face tokenizers, a byte sequence that is not valid
+    UTF-8 (ex: the tokens of a part of a character, such as the first byte-level token of an emoji) is replaced by
+    the replacement character U+FFFD (\c "\ufffd"), one for each maximal part of a valid sequence or each byte that
+    cannot start one; see @ref tokenizer_text_encoding
 */
 string HFTokenizer::decode(list<softint> ids, softbool skip_special_tokens = False) {
     return tok->decode(ids, (bool)skip_special_tokens, xsink);
@@ -90,7 +119,7 @@ int HFTokenizer::getVocabSize() [flags=CONSTANT] {
 /** As in Hugging Face tokenizers, an added token with the ID is found before the model vocabulary.
 
     @param id the token ID
-    @return the token string, or an empty string if the ID is not known
+    @return the token string in UTF-8, or an empty string if the ID is not known
 */
 string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
     return tok->idToToken(id, xsink);
@@ -99,17 +128,23 @@ string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
 //! Converts a token string to its ID
 /** As in Hugging Face tokenizers, an added token with the content is found before the model vocabulary.
 
-    @param token the token string
+    @param token the token string; a string in an encoding other than UTF-8 is converted to UTF-8
     @return the token ID, or -1 if not found
+
+    @throw INVALID-ENCODING the token is not valid in its encoding (ex: <tt>"HFTokenizer::tokenToId(): the token is
+    not valid UTF-8: invalid byte sequence at byte offset 3"</tt>)
 */
-int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
-    return tok->tokenToId(token);
+int HFTokenizer::tokenToId(string token) [flags=RET_VALUE_ONLY] {
+    return tok->tokenToId(token, xsink);
 }
 
 //! Returns the full vocabulary as a token-to-ID hash
 /** Includes all model vocabulary entries plus any added tokens.
-    @return a hash mapping token strings to their integer IDs
+    @return a hash mapping token strings to their integer IDs; the tokens are converted to the default encoding, in
+    which hash keys are, as \c parse_json() converts the keys of a \c tokenizer.json file
 
+    @throw ENCODING-CONVERSION-ERROR a token cannot be represented in the default encoding (ex: a byte-level token
+    such as \c "Ġ" with an ISO-8859-1 default encoding)
     @throw HASH-KEY-ERROR a token has a NUL character, which a hash key cannot contain; use
     @ref Qore::Tokenizer::HFTokenizer::tokenToId() "tokenToId()" to look such a token up
 */
@@ -133,9 +168,13 @@ hash<string, int> HFTokenizer::getVocab() [flags=RET_VALUE_ONLY] {
 
     @return encoding result hash with input_ids, token_type_ids, attention_mask,
     tokens, offset_mapping, special_tokens_mask, word_ids, and optionally overflowing
+
+    @throw INVALID-ENCODING the text, the \c text_pair option or a word of the \c words option is not valid in its
+    encoding (ex: <tt>"HFTokenizer::encodeAdvanced(): the text_pair option is not valid UTF-8: invalid byte sequence
+    at byte offset 3"</tt>)
 */
 hash<auto> HFTokenizer::encodeAdvanced(string text, *hash<auto> options) {
-    return tok->encodeAdvanced(text, options, xsink);
+    return tok->encodeAdvanced(text, options, "HFTokenizer::encodeAdvanced()", xsink);
 }
 
 //! Batch encoding with truncation and padding
@@ -143,6 +182,10 @@ hash<auto> HFTokenizer::encodeAdvanced(string text, *hash<auto> options) {
     @param options same as encodeAdvanced, plus padding "true" for batch-longest
 
     @return list of encoding result hashes
+
+    @throw INVALID-ENCODING a text, the \c text_pair option or a word of the \c words option is not valid in its
+    encoding (ex: <tt>"HFTokenizer::encodeBatch(): the text at index 1 is not valid UTF-8: invalid byte sequence at
+    byte offset 3"</tt>)
 */
 list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> options) {
     return tok->encodeBatch(texts, options, xsink);
@@ -157,6 +200,10 @@ list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> option
     @return a hash containing dense \c buffer<int64> values for \c input_ids,
     \c attention_mask, and \c token_type_ids, plus \c shape, \c rows,
     \c columns, \c sequence_lengths, and \c dtype metadata
+
+    @throw INVALID-ENCODING the text, the \c text_pair option or a word of the \c words option is not valid in its
+    encoding (ex: <tt>"HFTokenizer::encodeForModel(): the text is not valid UTF-8: invalid byte sequence at byte
+    offset 3"</tt>)
 
     This method avoids materializing per-token Qore lists and is intended for
     direct conversion to <a href="../../ml/html/classQore_1_1ML_1_1Tensor.html">ML::Tensor</a> values with
@@ -188,6 +235,9 @@ hash<TokenizerModelInputBatch> HFTokenizer::encodeForModel(string text, *hash<au
     \c input_ids, \c attention_mask, and \c token_type_ids
 
     @throw TOKENIZER-ERROR if padding is required but no pad token is available
+    @throw INVALID-ENCODING a text, the \c text_pair option or a word of the \c words option is not valid in its
+    encoding (ex: <tt>"HFTokenizer::encodeBatchForModel(): the text at index 1 is not valid UTF-8: invalid byte
+    sequence at byte offset 3"</tt>)
 
     @par Example:
     @code{.py}
@@ -220,6 +270,10 @@ hash<TokenizerModelInputBatch> HFTokenizer::encodeBatchForModel(list<string> tex
     @return a hash containing row-major dense \c buffer<int64> values for
     \c input_ids, \c attention_mask, and \c token_type_ids
 
+    @throw INVALID-ENCODING a text or a text pair is not valid in its encoding (ex:
+    <tt>"HFTokenizer::encodeBatchPairsForModel(): the text pair at index 1 is not valid UTF-8: invalid byte sequence
+    at byte offset 3"</tt>)
+
     @since tokenizer 1.2
 */
 hash<TokenizerModelInputBatch> HFTokenizer::encodeBatchPairsForModel(list<string> texts, list<string> text_pairs,
@@ -246,6 +300,10 @@ int HFTokenizer::getPadTokenId() [flags=CONSTANT] {
 
     @return encoding result hash
 
+    @throw INVALID-ENCODING a word or the \c text_pair option is not valid in its encoding (ex:
+    <tt>"HFTokenizer::encodePreTokenized(): the word at index 1 is not valid UTF-8: invalid byte sequence at byte
+    offset 3"</tt>)
+
     @par Example:
     @code{.py}
     hash<auto> enc = tok.encodePreTokenized(("Hello", "world", "!"));
@@ -267,7 +325,7 @@ hash<auto> HFTokenizer::encodePreTokenized(list<string> words, *hash<auto> optio
     opts->setKeyValue("is_pretokenized", true, xsink);
     opts->setKeyValue("words", words->refSelf(), xsink);
     SimpleRefHolder<QoreStringNode> empty_text(new QoreStringNode(""));
-    return tok->encodeAdvanced(*empty_text, *opts, xsink);
+    return tok->encodeAdvanced(*empty_text, *opts, "HFTokenizer::encodePreTokenized()", xsink);
 }
 
 //! Adds tokens to the tokenizer vocabulary dynamically
@@ -278,6 +336,10 @@ hash<auto> HFTokenizer::encodePreTokenized(list<string> words, *hash<auto> optio
     Duplicate tokens (already in the model vocabulary or added tokens) are skipped.
 
     @return the number of tokens actually added
+
+    @throw INVALID-ENCODING the content of a token is not valid in its encoding (ex: <tt>"HFTokenizer::addTokens():
+    the token at index 0 is not valid UTF-8: invalid byte sequence at byte offset 3"</tt>); the tokens before it are
+    added
 
     @par Example:
     @code{.py}
@@ -347,7 +409,8 @@ int HFTokenizer::getModelMaxLength() [flags=CONSTANT] {
 //! Decodes a batch of token ID sequences back to text
 /** @param batch list of token ID lists to decode
     @param skip_special_tokens whether to skip special tokens (default False)
-    @return list of decoded text strings
+    @return list of decoded text strings, in UTF-8, with each byte sequence that is not valid UTF-8 replaced by
+    U+FFFD as in @ref Qore::Tokenizer::HFTokenizer::decode() "decode()"
 
     @since tokenizer 1.0
 */
@@ -360,6 +423,10 @@ list<string> HFTokenizer::decodeBatch(list<auto> batch, softbool skip_special_to
     model_max_length, and chat_template from the config hash.
 
     @param config a parsed tokenizer_config.json hash
+
+    @throw INVALID-ENCODING the \c chat_template or a special token (ex: \c eos_token) is not valid in its encoding
+    (ex: <tt>"HFTokenizer::loadConfig(): the chat_template is not valid UTF-8: invalid byte sequence at byte offset
+    3"</tt>); nothing is changed then
 
     @par Example:
     @code{.py}
@@ -392,11 +459,14 @@ nothing HFTokenizer::loadConfig(hash<auto> config) {
     a message loop gives the contents of the messages, one per line.
 
     @param messages list of hashes with \c role and \c content keys
-    @return the formatted prompt string ready for tokenization
+    @return the formatted prompt string ready for tokenization, in UTF-8
 
     @throw TOKENIZER-ERROR if no chat_template is configured, or the template is malformed: a block that is not
     closed or is closed without being opened, an \c elif or \c else outside an if block, a loop in a loop, or
     blocks nested more than 100 deep
+    @throw INVALID-ENCODING the role or content of a message is not valid in its encoding (ex:
+    <tt>"HFTokenizer::applyChatTemplate(): the message content at index 0 is not valid UTF-8: invalid byte sequence
+    at byte offset 3"</tt>)
 
     @par Example:
     @code{.py}

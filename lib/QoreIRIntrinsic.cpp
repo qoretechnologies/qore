@@ -12,10 +12,33 @@
 #include <qore/intern/QoreJITIncludes.h>
 #include <qore/intern/QoreIRIntrinsic.h>
 
+#include <atomic>
+#include <cstdio>
 #include <cstring>
+
+//! the number of the resolutions of pseudo-method intrinsics by name, which QORE_IR_OPT_STATS reports at exit, so that
+//! tests can check that a call does not resolve it again (#6709)
+static std::atomic<uint64_t> qore_ir_pseudo_intrinsic_resolutions{0};
+
+static void qore_ir_report_pseudo_intrinsic_resolutions() {
+    fprintf(stderr, "IR-OPT: pseudo-intrinsic-resolutions=%llu\n",
+        static_cast<unsigned long long>(qore_ir_pseudo_intrinsic_resolutions.load(std::memory_order_relaxed)));
+}
+
+static bool qore_ir_pseudo_intrinsic_stats() {
+    if (!q_env_is_set("QORE_IR_OPT_STATS")) {
+        return false;
+    }
+    atexit(qore_ir_report_pseudo_intrinsic_resolutions);
+    return true;
+}
 
 QoreIRIntrinsic qore_ir_resolve_pseudo_intrinsic(const QoreMethod* method, const QoreClass* qc,
         const char* fallback_name) {
+    static const bool stats = qore_ir_pseudo_intrinsic_stats();
+    if (stats) {
+        qore_ir_pseudo_intrinsic_resolutions.fetch_add(1, std::memory_order_relaxed);
+    }
     const char* name = method ? method->getName() : fallback_name;
     if (!name) {
         return QoreIRIntrinsic::None;

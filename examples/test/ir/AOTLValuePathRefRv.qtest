@@ -16,8 +16,8 @@
     (the debug IR of a function, the body of a closure without native code) used the value of every operation: an
     unused post increment or decrement copied the old value, and an unused remove or delete returned its value to be
     discarded.  The results did not change, so it is the native test (\c qore-aot-lvalue-path-ref-rv-test) that checks
-    the fix: it writes and reads the instructions with the serializer of the current format and reads one of the
-    earlier format, which has no flag.  The script in \c aot-lvalue-path-ref-rv/ runs such operations in closures of
+    the fix: it writes and reads the instructions with the serializer of the current format and verifies refusal of the
+    earlier format that has no flag.  The script in \c aot-lvalue-path-ref-rv/ runs such operations in closures of
     qcc executables, from their native code and from the IR of their image, against the output of the AST interpreter,
     so that the rebuilt instructions that do not use their values keep their results.
 */

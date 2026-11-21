@@ -110,6 +110,8 @@ hashdecl AzureTokenCacheEntry {
     string access_token;
     #! Absolute date/time when the token expires
     date expires_at;
+    #! The request parameters that an invalidation names (without the secret and the endpoint)
+    string group;
 }
 
 #! Cache of issued tokens keyed by request parameters
@@ -141,20 +143,25 @@ class TokenCache {
     }
 
     #! Stores a token in the cache
-    static put(string key, string access_token, int expires_in_seconds) {
+    static put(string key, string group, string access_token, int expires_in_seconds) {
         cache_lock.lock();
         on_exit cache_lock.unlock();
         cache{key} = <AzureTokenCacheEntry>{
             "access_token": access_token,
             "expires_at": now_us() + seconds(expires_in_seconds),
+            "group": group,
         };
     }
 
-    #! Removes a token from the cache (for tests + explicit invalidation)
-    static invalidate(string key) {
+    #! Removes the tokens cached for the request parameters \a group, whatever their secrets and endpoints
+    static invalidate(string group) {
         cache_lock.lock();
         on_exit cache_lock.unlock();
-        remove cache{key};
+        foreach string key in (keys cache) {
+            if (cache{key}.group == group) {
+                remove cache{key};
+            }
+        }
     }
 
     #! Clears the entire cache (for tests)
@@ -165,9 +172,31 @@ class TokenCache {
     }
 }
 
+#! Returns the cache key of a token: a SHA-256 digest of every input that authorizes it
+/** The key covers the secret and the endpoint that issued the token, so that a token is returned only to a caller that
+    gives the same secret and endpoint and could therefore have obtained it itself, and a token that a caller fetches
+    from an endpoint of its own choice is stored under a key of its own (qore#6745).  Each part is prefixed with its
+    length, so no two lists of parts give the same input.
+*/
+string sub tokenCacheKey(list<string> parts) {
+    return SHA256(foldl $1 + $2, (map sprintf("%d:%s", $1.size(), $1), parts));
+}
+
+#! Checks that the caller may connect to a token endpoint before a cached token is served
+/** A token cached for such an endpoint is served only to a caller whose sandbox would let it fetch the token itself:
+    the check raises what a connection to the endpoint would raise for the caller (qore#6745).
+*/
+sub checkEndpointAccess(string endpoint) {
+    hash<auto> url = parse_url(endpoint);
+    if (!url.host.val()) {
+        throw "AZURE-AUTH-ERROR", sprintf("token endpoint %y has no host", endpoint);
+    }
+    SandboxManager::checkNetworkConnect(url.host, url.port ?? (url.protocol == "https" ? 443 : 80));
+}
+
 #! Fetches an Entra access token via the client-credentials OAuth2 grant
-/** Caches the token keyed by (tenant, client_id, scope); a second call with
-    the same parameters returns the cached token unless the cached entry is
+/** Caches the token keyed by (tenant, client_id, scope, endpoint, secret); a
+    second call with the same parameters returns the cached token unless the cached entry is
     within @ref TokenSafetyWindowMs of expiry.
 
     Posts to <tt>https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token</tt>
@@ -195,14 +224,16 @@ class TokenCache {
 */
 public string sub getEntraTokenClientCredentials(string tenant, string client_id,
         string client_secret, string scope, *hash<auto> opts) {
-    string key = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
+    string base_url = opts.base_url ?? EntraBaseUrl;
+    string group = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
+    string key = tokenCacheKey(("cc", tenant, client_id, scope, base_url, client_secret));
+    checkEndpointAccess(base_url);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
         if (cached) {
             return cached;
         }
     }
-    string base_url = opts.base_url ?? EntraBaseUrl;
     string url = sprintf("%s/%s/oauth2/v2.0/token", base_url, tenant);
     RestClientIo::RestClientIo rest({
         "url": url,
@@ -227,13 +258,13 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
     string token;
     int expires_in;
     (token, expires_in) = parseTokenResponse(resp.body);
-    TokenCache::put(key, token, expires_in);
+    TokenCache::put(key, group, token, expires_in);
     return token;
 }
 
 #! Fetches an Entra access token via the Azure IMDS managed-identity flow
-/** Caches the token keyed by (resource, client_id); a second call with the
-    same parameters returns the cached token unless within @ref TokenSafetyWindowMs
+/** Caches the token keyed by (resource, client_id, endpoint, API version); a
+    second call with the same parameters returns the cached token unless within @ref TokenSafetyWindowMs
     of expiry.
 
     Issues <tt>GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=...</tt>
@@ -258,15 +289,17 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
 */
 public string sub getEntraTokenManagedIdentity(string resource, *string client_id,
         *hash<auto> opts) {
-    string key = sprintf("mi|%s|%s", resource, client_id ?? "");
+    string endpoint = opts.imds_endpoint ?? ImdsEndpoint;
+    string api_version = opts.api_version ?? ImdsApiVersion;
+    string group = sprintf("mi|%s|%s", resource, client_id ?? "");
+    string key = tokenCacheKey(("mi", resource, client_id ?? "", endpoint, api_version));
+    checkEndpointAccess(endpoint);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
         if (cached) {
             return cached;
         }
     }
-    string endpoint = opts.imds_endpoint ?? ImdsEndpoint;
-    string api_version = opts.api_version ?? ImdsApiVersion;
     string path = sprintf("/metadata/identity/oauth2/token?api-version=%s&resource=%s",
         api_version, encode_url(resource, True));
     if (client_id.val()) {
@@ -284,20 +317,18 @@ public string sub getEntraTokenManagedIdentity(string resource, *string client_i
     string token;
     int expires_in;
     (token, expires_in) = parseTokenResponse(resp.body);
-    TokenCache::put(key, token, expires_in);
+    TokenCache::put(key, group, token, expires_in);
     return token;
 }
 
 #! Removes any cached client-credentials token for the given parameters
 public sub invalidateClientCredentialsToken(string tenant, string client_id, string scope) {
-    string key = sprintf("cc|%s|%s|%s", tenant, client_id, scope);
-    TokenCache::invalidate(key);
+    TokenCache::invalidate(sprintf("cc|%s|%s|%s", tenant, client_id, scope));
 }
 
 #! Removes any cached managed-identity token for the given parameters
 public sub invalidateManagedIdentityToken(string resource, *string client_id) {
-    string key = sprintf("mi|%s|%s", resource, client_id ?? "");
-    TokenCache::invalidate(key);
+    TokenCache::invalidate(sprintf("mi|%s|%s", resource, client_id ?? ""));
 }
 
 #! Clears the entire token cache (for tests)

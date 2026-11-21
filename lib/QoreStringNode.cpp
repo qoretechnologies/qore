@@ -531,6 +531,45 @@ const QoreString* QoreNodeAsStringHelper::operator*() {
     return str;
 }
 
+
+static inline void q_numeric_string_release(QoreString* str) {
+    delete str;
+}
+
+static inline void q_numeric_string_release(QoreStringNode* str) {
+    str->deref();
+}
+
+//! gives the ASCII string of a number or boolean the target encoding of a value-to-string conversion
+/** The digits, sign, decimal point and exponent of such a string are ASCII, which an ASCII-compatible encoding spells
+    with the same bytes; any other target is converted.  The maker builds it in the default encoding, which is not the
+    target when the caller asks for another one (for example a UTF-8 separator of join() while the default encoding is
+    ISO-8859-1, as for the UTF-8 string literals of a source, #6816)
+    @return 0 for OK, -1 if the conversion raised an exception
+*/
+template <typename S>
+static int q_numeric_string_encoding(S*& str, const QoreEncoding* enc, ExceptionSink* xsink) {
+    if (!enc || str->getEncoding() == enc) {
+        return 0;
+    }
+    if (enc->isAsciiCompat() && str->getEncoding()->isAsciiCompat()) {
+        str->setEncoding(enc);
+        return 0;
+    }
+    if (!xsink) {
+        return 0;
+    }
+    S* t = str->convertEncoding(enc, xsink);
+    if (!t) {
+        q_numeric_string_release(str);
+        str = nullptr;
+        return -1;
+    }
+    q_numeric_string_release(str);
+    str = t;
+    return 0;
+}
+
 void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
     str = nullptr;
     del = false;
@@ -542,6 +581,9 @@ void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringMaker(QLLD, n.getAsBigInt());
         del = true;
+        if (q_numeric_string_encoding(str, enc, xsink)) {
+            del = false;
+        }
     } else if (t == NT_CHAR) {
         str = new QoreString("", enc ? enc : QCS_UTF8);
         int err = xsink ? str->concatUnicode(n.getChar(), xsink) : str->concatUnicode(n.getChar());
@@ -554,6 +596,9 @@ void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringMaker("%.9g", n.getAsFloat()), 0);
         del = true;
+        if (q_numeric_string_encoding(str, enc, xsink)) {
+            del = false;
+        }
     } else if (n.isShortString()) {
         char buf[7];
         n.getShortString(buf);
@@ -662,12 +707,18 @@ void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, c
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringNodeMaker(QLLD, n.getAsBigInt());
         del = true;
+        if (q_numeric_string_encoding(str, enc, xsink)) {
+            del = false;
+        }
     } else if (t == NT_CHAR) {
         str = QoreValue::makeCharString(n.getChar(), enc ? enc : QCS_UTF8, xsink);
         del = true;
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringNodeMaker("%.9g", n.getAsFloat()), 0);
         del = true;
+        if (q_numeric_string_encoding(str, enc, xsink)) {
+            del = false;
+        }
     } else if (n.isShortString()) {
         char buf[7];
         n.getShortString(buf);

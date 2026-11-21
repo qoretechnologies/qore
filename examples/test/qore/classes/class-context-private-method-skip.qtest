@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ClassContextPrivateMethodSkipTest
+
+#! code of a class calls its own method when an earlier parent class of the object has a private method of the name
+#! (qore#6759)
+/** Code in a parent class of an object cannot call the private methods of another parent class of the object (a
+    sibling of its class).  A call of a method of its own class there found the private method of an earlier parent
+    class first and raised RUNTIME-OVERLOAD-ERROR (a typed call on the object's class failed to parse) in every
+    execution mode; it now skips the private method and calls the first method of the name that the class context
+    can call.  The program covers calls through \c self, calls without it, calls with arguments, static methods,
+    typed and untyped calls, call references, call_object_method(), getCallReference(), hasCallableMethod(),
+    closures (also one run in a background thread), typed calls parsed in a child Program, private:internal and
+    private:hierarchy methods, abstract methods, a method gate, and the calls that still call the private method (from
+    its own class, the object's class and a subclass) or a public override; the output of every execution mode and of
+    qcc executables (-O0, -O3) must be the expected one.
+
+    \c imported.q makes calls of the same kinds from the code of classes imported into a child Program
+    (Program::importClass()), for objects of the imported classes and of subclasses declared in the child, and typed
+    calls parsed in the child: a copy of a class is the class context of the code of its class at parse time and at run
+    time, so each call calls the method that it calls in the source Program (qore#6671); the calls of the methods of a
+    private:internal parent class looked up at run time (getMethodForEval()) by the code of the imported class raised
+    METHOD-DOES-NOT-EXIST for an object of the imported class.
+
+    The programs are in \c class-context-private-method-skip/.
+*/
+class ClassContextPrivateMethodSkipTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/class-context-private-method-skip";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("probe", "imported");
+    }
+
+    constructor() : QUnit::Test("ClassContextPrivateMethodSkipTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    #! runs the program in a mode; ir_tier: tiered execution on the IR tier (ExecModeHarness::IRTierEnv)
+    private string run(string name, string mode, *bool ir_tier) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name), NOTHING,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, ir_tier ? ExecModeHarness::IRTierName
+            : mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+            # the IR tier of tiered execution runs the calls in the IR interpreter
+            assertEq(expected(name), run(name, "tiered", True), name + " " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-class-context-private-method-skip-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                if (rc || !is_file(exe)) {
+                    testSkip("qcc is not available or cannot compile " + name + ": " + out);
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

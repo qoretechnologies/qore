@@ -1,0 +1,56 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module that arms its own timers with the AsyncIoController builtins and declares THREAD_CONTROL for them, as
+# WebSocketHandler does for its heartbeat; see WebSocketHandlerRestrictedTimers.qtest
+
+%modern
+
+module WebSocketHandlerTimerFixture {
+    domains = "THREAD_CONTROL";
+    version = "1.0";
+    desc = "a module that declares THREAD_CONTROL for its own timers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace WebSocketHandlerTimerFixture {
+#! a timer of the module, with the module's own closure
+public class ModuleTimer {
+    private {
+        #! reaches zero when the timer fires
+        Counter fired(1);
+
+        #! the ID of the timer
+        int id;
+    }
+
+    #! arms the timer with the module's own closure
+    constructor(timeout delay) {
+        id = Qore::AsyncIoController::addTimerDelay(delay, sub () { fired.dec(); });
+    }
+
+    #! cancels the timer
+    bool cancel() {
+        return Qore::AsyncIoController::cancelTimer(id);
+    }
+
+    #! returns True when the timer has fired, waiting for it for at most the given time (a guard against a hang)
+    bool waitFired(timeout guard) {
+        fired.waitForZero(guard);
+        return !fired.getCount();
+    }
+}
+
+#! arms a timer with the given code: the caller's own code; returns the timer ID
+public int sub arm_with(timeout delay, code<nothing()> cb) {
+    return Qore::AsyncIoController::addTimerDelay(delay, cb);
+}
+
+#! cancels a timer
+public bool sub cancel_timer(int id) {
+    return Qore::AsyncIoController::cancelTimer(id);
+}
+}

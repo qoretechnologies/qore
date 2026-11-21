@@ -392,6 +392,10 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option (\c "nowait",
+      \c "wait" and, with Oracle 11g and later, \c "skip_locked"), and the classification of the lock-not-available
+      errors (\c ORA-00054 and \c ORA-30006), also with the \c jdbc driver
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
     - a string given as the first argument of the \c in data provider expression is a bound value, as with the other
       databases; it was written into the SQL as a column name
       (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
@@ -651,6 +655,27 @@ int sub oracle_get_server_major_version(AbstractDatasource ds) {
         return version.major_version.toInt();
     }
     return (version =~ x/([0-9]+)/)[0].toInt();
+}
+
+# returns True if the server supports the lock_wait mode: NOWAIT and WAIT n are supported by every version that the
+# module supports; SKIP LOCKED is documented since Oracle 11g
+bool sub oracle_supports_lock_wait(AbstractDatasource ds, string mode) {
+    return mode != "skip_locked" || oracle_get_server_major_version(ds) >= 11;
+}
+
+# returns True if the exception is Oracle's error for a lock that is not available: ORA-00054 (resource busy and
+# acquire with NOWAIT specified, also raised for an expired WAIT n by Oracle 23) or ORA-30006 (resource busy; acquire
+# with WAIT timeout expired): the oracle driver gives the code in the "alterr" key of the exception's argument
+# (ex: "OCI-00054"); the jdbc driver gives the Java exception, whose getErrorCode() gives it
+bool sub oracle_is_lock_not_available(hash<ExceptionInfo> ex) {
+    *int code = sqlutil_get_vendor_error_code(ex);
+    if (!exists code && ex.arg.typeCode() == NT_HASH && ex.arg.alterr.typeCode() == NT_STRING) {
+        *list<auto> m = (ex.arg.alterr =~ x/^(?:OCI|ORA)-([0-9]+)$/);
+        if (m) {
+            code = m[0].toInt();
+        }
+    }
+    return code == 54 || code == 30006;
 }
 
 # returns a database link name for SQL, where it is not quoted: letters, digits, underscores, dollar and pound signs,
@@ -1940,6 +1965,27 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 
 #! the Oracle specialization for SqlUtil::AbstractDatabase
 public class OracleDatabase inherits SqlUtil::AbstractDatabase {
+    #! NOWAIT and WAIT n are supported by every version; SKIP LOCKED needs Oracle 11g
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return oracle_supports_lock_wait(ds, mode);
+    }
+
+    #! ORA-00054 or ORA-30006
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return oracle_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return True;
+    }
+
     public {
         #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
         /** @since OracleSqlUtilBase 1.7
@@ -4699,6 +4745,27 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         a plain \c FOR UPDATE would also try to lock (\c ORA-02014), so only the base table's rows are locked
         with <tt>FOR UPDATE OF</tt> there.
     */
+    #! NOWAIT and WAIT n are supported by every version; SKIP LOCKED needs Oracle 11g
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return oracle_supports_lock_wait(ds, mode);
+    }
+
+    #! ORA-00054 or ORA-30006
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return oracle_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return True;
+    }
+
     private doForUpdate(reference<string> sql) {
         if (sql.find(ForUpdatePageJoin) >= 0) {
             sql += sprintf(" for update of %s.%s", ForUpdatePageTableAlias, getColumnSqlName(describe().keys()[0]));
@@ -5725,9 +5792,10 @@ group by p.index_name", schema.upr(), name.upr());
 
         @return the SQL literal of the value
 
-        @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also a lone UTF-16
-        surrogate), that has a NUL character, or that has more than 2000 UTF-16 code units (a character outside of the
-        Basic Multilingual Plane has two) or an escaped form longer than 4000 bytes (the limits of
+        @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also one with a lone
+        UTF-16 surrogate, which its conversion to UTF-16 refuses), that has a NUL character, or that has more than
+        2000 UTF-16 code units (a character outside of the Basic Multilingual Plane has two) or an escaped form longer
+        than 4000 bytes (the limits of
         Oracle's national character strings and string literals); a \c float or a \c number that is not a finite
         value, or a \c number with an absolute value of \c 1e126 or more; a relative date (a duration), or a date
         whose year is before 1 or after 9999; or a value of another type
@@ -5808,18 +5876,8 @@ group by p.index_name", schema.upr(), name.upr());
                     if (!unit) {
                         throw "VALUE-ERROR", "a string with a NUL character cannot be given in the SQL";
                     }
-                    # a high surrogate must be followed by a low one, and a low one must follow a high one
-                    if (unit >= 0xd800 && unit <= 0xdbff) {
-                        int next = i + 1 < units ? ((utf16[i * 2 + 2] << 8) | utf16[i * 2 + 3]) : 0;
-                        if (next < 0xdc00 || next > 0xdfff) {
-                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
-                        }
-                    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-                        int prev = i ? ((utf16[i * 2 - 2] << 8) | utf16[i * 2 - 1]) : 0;
-                        if (prev < 0xd800 || prev > 0xdbff) {
-                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
-                        }
-                    }
+                    # the surrogates of the code units come in pairs: the conversion to UTF-16BE refuses a string
+                    # with a lone surrogate (it is not valid text; qore#6730)
                     # only ASCII letters, digits, space and punctuation other than quotes, backslashes and the
                     # characters of bind placeholders as they are
                     if (unit >= 0x20 && unit < 0x7f && unit != 0x27 && unit != 0x22 && unit != 0x5c && unit != 0x25
@@ -6445,7 +6503,20 @@ group by p.index_name", schema.upr(), name.upr());
     #! Oracle always supports bulk merging
     code getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
             *hash<auto> opt) {
-        return getUpsertClosure(example_row, upsert_strategy, opt);
+        code c = getUpsertClosure(example_row, upsert_strategy, opt);
+        if (isBulkUpsertRow(example_row)) {
+            return c;
+        }
+        # a closure made from a hash row takes rows of list values (bulk DML), whose lists are checked first, and which
+        # are upserted row by row with the select-first strategy (issue #6688); hash rows take it directly (issue
+        # #6691)
+        code rows = getBulkUpsertRowsClosure(c, upsert_strategy != UpsertSelectFirst);
+        return int sub (hash<auto> h) {
+            if (h.firstValue().typeCode() == NT_LIST && isBulkUpsertRow(h)) {
+                return rows(h);
+            }
+            return c(h);
+        };
     }
 
     #! Returns a closure for performing upserts
@@ -6453,6 +6524,18 @@ group by p.index_name", schema.upr(), name.upr());
         ignored and a closure using an Oracle merge statement is returned
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
+        # the statements bind the lists of a row of list values (bulk DML) as arrays; the lists are checked first
+        # (issue #6691); a select-first upsert cannot bind arrays in its select: a closure made from a row of list
+        # values upserts its rows one by one, with a closure made from its first row (issue #6688)
+        if (upsert_strategy == UpsertSelectFirst) {
+            return getUpsertRowsClosure(row, getOracleUpsertClosure(getBulkUpsertExampleRow(row), upsert_strategy,
+                opt));
+        }
+        return getUpsertRowsClosure(row, getOracleUpsertClosure(row, upsert_strategy, opt), True);
+    }
+
+    #! returns the upsert closure
+    private code getOracleUpsertClosure(hash<auto> row, int upsert_strategy, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
@@ -6547,10 +6630,13 @@ group by p.index_name", schema.upr(), name.upr());
         # hash of columns to skip on update if applicable
         *hash suh = map {$1: True}, opt.omit_update;
         map updc += $1, row.keyIterator(), !cols.hasKey($1) && !suh.$1;
-        # cannot use merge where only the join columns are present
-        if (!updc)
-            throw "UPSERT-ERROR", sprintf("cannot use the UpsertUpdateOnly upsert option on table %y when the only "
-                "columns present are the columns for the unique key used for the update: %y", getSqlName(), keys row);
+        # nothing to update: a row is unchanged, and no row is inserted (issue #6692)
+        if (!updc) {
+            # a row of list values (bulk DML) gives UR_Verified, as with the merge statements (issue #6691)
+            return int sub (hash<auto> crow) {
+                return crow.firstValue().lsize() > 1 ? UR_Verified : UR_Unchanged;
+            };
+        }
 
         string sql = sprintf("merge into %s t using dual on (", getSqlName());
         # a key value is converted as the column stores it, so that the row stored for the key is matched (issue #6676)

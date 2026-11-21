@@ -18,20 +18,21 @@
 
 #! the delete_others upsert option keeps the rows of an input row of list values (bulk DML) (issue #6687)
 /** the keys of a row of list values were not collected per row, so that the rows of the input were not input keys
-    and were deleted with every other row of the table; a bulk upsert is run with array binding, which the Oracle
-    driver does for an upsert: runs on Oracle when \c QORE_DB_CONNSTR_ORACLE is set
+    and were deleted with every other row of the table; runs on Oracle, whose upsert binds the lists of a bulk row as
+    arrays, when \c QORE_DB_CONNSTR_ORACLE is set
 */
 class DeleteOthersBulkRowsTest inherits QUnit::Test {
     private {
         *Datasource ds;
         string skip = "QORE_DB_CONNSTR_ORACLE is not set";
 
-        # the strategies that run a bulk upsert with array binding (a select-first upsert cannot array-bind its
-        # select)
+        # the strategies that update an existing row (a select-first upsert upserts the rows of a bulk row one by one,
+        # as it cannot bind arrays in its select: issue #6688)
         const Strategies = {
             "auto": AbstractTable::UpsertAuto,
             "update-first": AbstractTable::UpsertUpdateFirst,
             "insert-first": AbstractTable::UpsertInsertFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
         };
     }
 

@@ -200,6 +200,11 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option: \c "nowait" and
+      \c "skip_locked" with MySQL 8.0 and later, \c "nowait" and \c "wait" with MariaDB 10.3 and later and
+      \c "skip_locked" with MariaDB 10.6 and later, and the classification of the lock-not-available errors
+      (\c 3572 and \c 1205)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
     - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
@@ -1167,7 +1172,50 @@ auto v = c.name;
     }
 
     #! provides the MySQL-specific implementation of the AbstractDatabase interface
+    # returns True if the server supports the lock_wait mode; MariaDB's versions are 10.0 and later, MySQL's are before
+    # 10.0: MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no WAIT n; MariaDB 10.3 supports NOWAIT and WAIT n, and
+    # MariaDB 10.6 also SKIP LOCKED
+    bool sub mysql_supports_lock_wait(AbstractDatasource ds, string mode) {
+        int version = ds.getServerVersion();
+        if (version >= 100000) {
+            return version >= (mode == "skip_locked" ? 100600 : 100300);
+        }
+        return mode != "wait" && version >= 80000;
+    }
+
+    # returns True if the exception is MySQL's or MariaDB's error for a lock that is not available: 3572 (MySQL:
+    # NOWAIT found a locked row) or 1205 (lock wait timeout exceeded: MariaDB's NOWAIT and WAIT n, and a lock wait
+    # that ran out of innodb_lock_wait_timeout)
+    bool sub mysql_is_lock_not_available(hash<ExceptionInfo> ex) {
+        *int code = sqlutil_get_vendor_error_code(ex);
+        return code == 3572 || code == 1205;
+    }
+
     public class MysqlDatabase inherits SqlUtil::AbstractDatabase {
+        #! The modes of the @ref select_option_lock_wait "lock_wait" select option that the server supports
+        /** MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no lock wait with a time; MariaDB 10.3 supports NOWAIT and
+            WAIT n, and MariaDB 10.6 also SKIP LOCKED
+
+            @since MysqlSqlUtil 1.6
+        */
+        private bool supportsLockWaitImpl(string mode) {
+            return mysql_supports_lock_wait(ds, mode);
+        }
+
+        #! MySQL's error 3572 (NOWAIT) and the lock wait timeout error 1205 (MariaDB's NOWAIT and WAIT n)
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+            return mysql_is_lock_not_available(ex);
+        }
+
+        #! InnoDB keeps the row locks of a failed statement until the transaction ends
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool lockNotAvailableReleasesLocksImpl() {
+            return False;
+        }
+
         public {
             #! MySQL-specific options
             const MysqlOptions = (
@@ -1919,10 +1967,46 @@ end";
 
     #! provides the MySQL-specific implementation of the AbstractTable interface
     public class MysqlTable inherits SqlUtil::AbstractTable {
+        #! The modes of the @ref select_option_lock_wait "lock_wait" select option that the server supports
+        /** MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no lock wait with a time; MariaDB 10.3 supports NOWAIT and
+            WAIT n, and MariaDB 10.6 also SKIP LOCKED
+
+            @since MysqlSqlUtil 1.6
+        */
+        private bool supportsLockWaitImpl(string mode) {
+            return mysql_supports_lock_wait(ds, mode);
+        }
+
+        #! MySQL's error 3572 (NOWAIT) and the lock wait timeout error 1205 (MariaDB's NOWAIT and WAIT n)
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+            return mysql_is_lock_not_available(ex);
+        }
+
+        #! InnoDB keeps the row locks of a failed statement until the transaction ends
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool lockNotAvailableReleasesLocksImpl() {
+            return False;
+        }
+
         #! the default recursion limit of a recursive query on MySQL (\c cte_max_recursion_depth) and MariaDB (\c max_recursive_iterations)
         /** @since MysqlSqlUtil 1.6
         */
         const MysqlRecursionDepthDefault = 1000;
+
+        #! the ranges of the integer types (issue #6689)
+        const IntegerRanges = {
+            "tinyint": {"signed": {"min": "-128", "max": "127"}, "unsigned": {"min": "0", "max": "255"}},
+            "smallint": {"signed": {"min": "-32768", "max": "32767"}, "unsigned": {"min": "0", "max": "65535"}},
+            "mediumint": {"signed": {"min": "-8388608", "max": "8388607"},
+                "unsigned": {"min": "0", "max": "16777215"}},
+            "int": {"signed": {"min": "-2147483648", "max": "2147483647"},
+                "unsigned": {"min": "0", "max": "4294967295"}},
+            "bigint": {"signed": {"min": "-9223372036854775808", "max": "9223372036854775807"},
+                "unsigned": {"min": "0", "max": "18446744073709551615"}},
+        };
 
         public {
             #! the \c information_schema.tables \c table_type values of tables, as an SQL list
@@ -2835,12 +2919,20 @@ end";
             \c "decimal(10,2)", \c "datetime(0)", \c "signed"), so that a bound value is rounded as the column
             rounds it when it stores it; a \c float or \c double column is cast to \c float or \c double (MySQL 8.0.17
             or later, MariaDB 10.4.5 or later), without the deprecated number of decimals of \c float(M,D)
+
+            Without a strict SQL mode, an integer key value is clamped to the range of its column (issue #6689); the
+            SQL mode of the session is read with the types, which the upsert closures keep: after the SQL mode is
+            changed, @ref SqlUtil::AbstractTable::clear() "clear()" makes them read again, and the connections of a
+            pool are expected to use the same SQL mode
         */
         private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
             *hash<auto> qh = ds.select("select column_name, data_type, column_type, numeric_precision, numeric_scale, "
                 "datetime_precision from information_schema.columns where table_name = %v and table_schema = %v",
                 name, schema);
             hash<string, string> rv;
+            # without a strict SQL mode, MySQL stores an integer value out of the range of its column as the nearest
+            # value in the range: the key values are clamped as well (issue #6689)
+            *bool clamp;
             foreach hash<auto> row in (qh.contextIterator()) {
                 # the result keys of information_schema may be in upper case
                 row = map {$1.key.lwr(): $1.value}, row.pairIterator();
@@ -2856,9 +2948,18 @@ end";
                     case "mediumint":
                     case "int":
                     case "integer":
-                    case "bigint":
-                        type = (row.column_type =~ /unsigned/i) ? "unsigned" : "signed";
+                    case "bigint": {
+                        bool unsigned = (row.column_type =~ /unsigned/i);
+                        type = unsigned ? "unsigned" : "signed";
+                        if (!exists clamp) {
+                            clamp = !isStrictSqlMode();
+                        }
+                        if (clamp) {
+                            hash<auto> r = IntegerRanges{dt == "integer" ? "int" : dt}{unsigned ? "unsigned" : "signed"};
+                            type += sprintf("@%s:%s", r.min, r.max);
+                        }
                         break;
+                    }
                     case "decimal":
                     case "numeric":
                         type = sprintf("decimal(%d,%d)", row.numeric_precision, row.numeric_scale);
@@ -2894,10 +2995,54 @@ end";
             database does
         */
         private *string getDeleteOthersKeyCastType(string type, auto val) {
-            if ((type == "signed" || type == "unsigned") && val.typeCode() != NT_FLOAT && val.typeCode() != NT_INT) {
+            # an integer type with the range of the column to clamp the value to (issue #6689)
+            *string range = (type =~ x/@(.*)$/)[0];
+            string base = range ? type.substr(0, type.find("@")) : type;
+            if (base != "signed" && base != "unsigned") {
+                return type;
+            }
+            # a value that is clamped is converted exactly (a negative integer is not wrapped by an unsigned cast); a
+            # float within the range of the column is converted to the integer type, which rounds it exactly as MySQL
+            # stores it, and a float out of the range (or at a bound, which a float may not give exactly) is rounded,
+            # ties to even, and clamped, which gives the bound (a cast of a float out of the range of an integer type
+            # does not saturate in every version) (issue #6689)
+            if (range) {
+                if (val.typeCode() == NT_FLOAT) {
+                    (string min, string max) = range.split(":");
+                    if (val > min.toFloat() && val < max.toFloat()) {
+                        return base;
+                    }
+                    return "double@" + range;
+                }
+                return "decimal(65,0)@" + range;
+            }
+            if (val.typeCode() != NT_FLOAT && val.typeCode() != NT_INT) {
                 return "decimal(65,0)";
             }
             return type;
+        }
+
+        #! returns the SQL expression that converts a key value to the type of its column (issues #6635, #6689)
+        /** a type with the range of an integer column (\c "<type>@<min>:<max>", without a strict SQL mode) gives the
+            converted value clamped to the range, as MySQL stores a value out of the range of the column: a value is
+            converted to \c decimal(65,0), a float (\c "double@...") rounded to the nearest integer first, ties to even
+        */
+        private string getKeyCastExpr(string expr, string type) {
+            int i = type.find("@");
+            if (i < 0) {
+                return sprintf("cast(%s as %s)", expr, type);
+            }
+            (string min, string max) = type.substr(i + 1).split(":");
+            string val = type.substr(0, i) == "double"
+                ? sprintf("cast(round(%s) as decimal(65,0))", expr)
+                : sprintf("cast(%s as decimal(65,0))", expr);
+            return sprintf("least(greatest(%s, %s), %s)", val, min, max);
+        }
+
+        #! returns @ref True "True" if the SQL mode of the session is strict (issue #6689)
+        private bool isStrictSqlMode() {
+            *string mode = ds.selectRow("select @@session.sql_mode as m").firstValue();
+            return mode =~ /STRICT_(TRANS|ALL)_TABLES/i;
         }
 
         private Columns describeImpl() {

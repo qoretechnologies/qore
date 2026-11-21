@@ -50,9 +50,21 @@ class TestRestClass inherits AbstractRestClass {
     }
 }
 
+#! Returns a hash, which a REST location cannot return as a file
+class TestHashRestClass inherits AbstractRestClass {
+    string name() {
+        return "hash";
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {"a": 1});
+    }
+}
+
 class MyRestHandler inherits RestHandler {
     constructor() {
         addClass(new TestRestClass());
+        addClass(new TestHashRestClass());
     }
 }
 
@@ -290,10 +302,29 @@ public class FileLocationHandlerTest inherits QUnit::Test {
 
         MyRestHandler mHandler();
         serv.setHandler("rest-handler", "/test", MimeTypeHtml, mHandler, NOTHING, False);
+        serv.setHandler("rest-hash-handler", "/hash", MimeTypeHtml, mHandler, NOTHING, False);
         int port = serv.getPort();
 
         string url = "rest://127.0.0.1:" + port + "/test";
         doTests(url, True);
+
+        # the error message of data that cannot be returned as a file names the location without user information
+        string hash_loc = "127.0.0.1:" + port + "/hash";
+        string hash_url = "rest://user:secret-pw@" + hash_loc;
+        foreach code get in ((\FileLocationHandler::getTextFileFromLocation(),
+                \FileLocationHandler::getBinaryFileFromLocation())) {
+            hash<ExceptionInfo> ex;
+            try {
+                get(hash_url);
+                fail("data of type hash was returned as a file");
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            assertEq("REST-DATA-ERROR", ex.err, ex.desc);
+            assertRegex("^rest://" + hash_loc + " returned data of type ", ex.desc);
+            assertNRegex("secret-pw", ex.desc);
+            assertNRegex("user", ex.desc);
+        }
     }
 
     private sftpTests() {

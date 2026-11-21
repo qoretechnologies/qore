@@ -37,7 +37,11 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     private {
         #! The REST client object for API calls
         *RestClientIo::RestClientIo rest;
+    }
 
+    # the caches are shared by every caller of the module: only this class reaches them, so that a subclass cannot
+    # change the document or the types that other callers build their requests from (qore#6838)
+    private:internal {
         #! API -> URL map
         static hash<string, string> api_map = {};
 
@@ -533,6 +537,27 @@ hash<auto> calendar = GoogleDataProviderBase::getSchemaInfo("calendar");
         # published document, so its already-resolved types and request paths retain the same revision.
         AutoLock al(m);
         return info_map{api} ?? (info_map{api} = api_info);
+    }
+
+    #! Publishes the Discovery document of an API in the process-wide cache
+    /** For a subclass that has the document without fetching it, such as a test fixture with a synthetic API.  The
+        first document published for an API is kept, as with getSchemaInfo(), so that the types and request paths
+        already built from it stay consistent; the document is then used for every caller of the module.
+
+        @param api the Google API name
+        @param info the Discovery document of the API
+
+        @return the document of the API in the cache: \a info, or the document published for it before
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot publish a document,
+        as the cache is process-wide (see @ref sandbox_process_wide_registries)
+
+        @since GoogleDataProvider 2.2
+    */
+    private static hash<auto> registerSchemaInfo(string api, hash<auto> info) {
+        SandboxManager::checkProcessWideRegistration("publish a Google API Discovery document");
+        AutoLock al(m);
+        return info_map{api} ?? (info_map{api} = info);
     }
 
     #! Returns a type from a Google schema description

@@ -23,19 +23,30 @@ using Payload = std::function<void(QoreAOTBinaryWriter&)>;
 static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         const std::vector<uint32_t>& operands, const Payload& payload, const char* expected,
         bool tag_only = false, bool wide = false, uint16_t version = QORE_AOT_BINARY_VERSION,
-        uint32_t result_id = 3, uint64_t features = 0) {
+        uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr,
+        const Payload* unwind = nullptr) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
     writer.writeStringRef("instruction-validation");
     writer.writeU32(32); // maximum value ID
-    writer.writeU32(0); // local slots
+    writer.writeU32(unwind ? 2 : 0); // maximum local slot ID
     writer.writeU32(0); // guards
     writer.writeStringRef(""); // return type
     writer.writeU32(0); // parent slots
     writer.writeU16(1); // blocks
-    writer.writeU16(0); // local variables
+    writer.writeU16(unwind ? 2 : 0); // local variables
     writer.writeU16(0); // body locals
+    if (unwind) {
+        // Sparse slots distinguish an unknown in-range ID from one beyond the frame.
+        for (uint32_t slot : {0u, 2u}) {
+            writer.writeStringRef(slot ? "inner" : "outer");
+            writer.writeStringRef("auto");
+            writer.writeU32(slot);
+            writer.writeU8(static_cast<uint8_t>(AOTIRLocalBinding::NONE));
+            writer.writeU32(UINT32_MAX);
+        }
+    }
     if (version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
         writer.writeU32(0); // handler-own slots
     }
@@ -71,6 +82,15 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        // no runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+        if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
+            writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+        }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
+        }
     };
     writer.writeU16(static_cast<uint16_t>(tag_only ? 1 : defined.size() + 2)); // instructions
     for (uint32_t id : defined) {
@@ -100,9 +120,33 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION): none, unless the case gives one
+        if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
+            if (stmt_loc) {
+                (*stmt_loc)(writer);
+            } else {
+                writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+            }
+        }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
+        }
         writeSimple(O::ReturnNothing, G::Return, 0, [&]() {
             writer.writeU8(0); // no value
         });
+    }
+    if (version >= QORE_AOT_CATCH_TABLES_VERSION) {
+        writer.writeU32(0); // catch-exit depths (qore#6733)
+        writer.writeU32(0); // catch-cleanup results
+    }
+    if (version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        if (unwind) {
+            (*unwind)(writer);
+        } else {
+            writer.writeU16(0);
+        }
     }
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
@@ -117,6 +161,9 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
     QoreAOTBinaryReader reader;
     std::string error;
     if (!reader.open(data.data(), data.size(), error)) {
+        if (expected && error.find(expected) != std::string::npos) {
+            return true;
+        }
         fprintf(stderr, "%s: cannot open payload: %s\n", label, error.c_str());
         return false;
     }
@@ -146,6 +193,15 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         }, nullptr, error);
     bool ok = expected ? !ir && error.find(expected) != std::string::npos
         : ir && error.empty() && ptr == end;
+    if (ok && unwind && !expected) {
+        // The nested local must reuse the precise location written for the instruction before the catch tables.
+        const auto* loc = ir->blocks.front()->instructions.front()->stmt_loc;
+        ok = loc && ir->local_unwind_locations.size() == 2 && ir->local_var_slots.size() == 2;
+        for (const auto& [local, slot] : ir->local_var_slots) {
+            auto site = ir->local_unwind_locations.find(local);
+            ok = ok && site != ir->local_unwind_locations.end() && site->second == (slot ? loc : nullptr);
+        }
+    }
     // A mismatched group must fail before its payload reader is called, even with no payload bytes.
     if (tag_only && expression_reads) {
         ok = false;
@@ -178,9 +234,10 @@ int main() {
     unsigned count = 0;
     auto run = [&](const char* label, O op, G group, std::vector<uint32_t> operands, Payload payload,
             const char* error = nullptr, bool tag_only = false, bool wide = false,
-            uint16_t version = QORE_AOT_BINARY_VERSION, uint32_t result_id = 3, uint64_t features = 0) {
+            uint16_t version = QORE_AOT_BINARY_VERSION, uint32_t result_id = 3, uint64_t features = 0,
+            const Payload* stmt_loc = nullptr) {
         ok = check(pgm, label, op, static_cast<uint8_t>(group), operands, payload, error,
-            tag_only, wide, version, result_id, features) && ok;
+            tag_only, wide, version, result_id, features, stmt_loc) && ok;
         ++count;
     };
     const Payload empty = [](QoreAOTBinaryWriter&) {};
@@ -197,9 +254,15 @@ int main() {
     for (G group : {G::Base, G::Expr}) {
         run("complete wrong-class payload", O::ConstInt, group, {}, empty, pairing);
     }
-    // The same guard applies to the oldest supported format and the latest one.
-    run("legacy v9 wrong class", O::ConstInt, G::Base, {}, empty, pairing, false, false, 9);
-    run("legacy v9 valid base", O::AddInt, G::Base, {1, 2}, empty, nullptr, false, false, 9);
+    run("v9 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 9 ", false, false, 9);
+    run("AK v47 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 47 ",
+        false, false, QORE_AOT_BATCH_AK_VERSION);
+    run("AL v48 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 48 ",
+        false, false, QORE_AOT_BATCH_AL_VERSION);
+    run("AM v49 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 49 ",
+        false, false, QORE_AOT_BATCH_AM_VERSION);
+    run("AN v50 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 50 ",
+        false, false, QORE_AOT_BATCH_AN_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -308,17 +371,17 @@ int main() {
         };
     };
     run("step event without paths before the flow version", O::DebugStatement, G::DebugStatement, {},
-        debug_step(-1, {}), nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+        debug_step(-1, {}), "unsupported binary format version 45 ", false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
     run("step event without paths", O::DebugStatement, G::DebugStatement, {}, debug_step(0, {}), nullptr,
-        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        false, false, QORE_AOT_BINARY_VERSION, 0);
     run("step event with paths", O::DebugStatement, G::DebugStatement, {}, debug_step(7, {0, 0, 0}), nullptr,
-        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        false, false, QORE_AOT_BINARY_VERSION, 0);
     for (int mask : {0x08, 0x10, 0x80, 0xff}) {
         run("step event flow mask", O::DebugStatement, G::DebugStatement, {}, debug_step(mask, {0, 0, 0}),
-            "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+            "invalid debugger flow mask", false, false, QORE_AOT_BINARY_VERSION, 0);
     }
     run("step event flow block", O::DebugStatement, G::DebugStatement, {}, debug_step(1, {5}),
-        "invalid debugger flow path block", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        "invalid debugger flow path block", false, false, QORE_AOT_BINARY_VERSION, 0);
     auto scope_exit = [](int mask, std::vector<uint16_t> blocks) -> Payload {
         return [mask, blocks](QoreAOTBinaryWriter& w) {
             w.writeU32(1); // scope id
@@ -332,12 +395,102 @@ int main() {
             }
         };
     };
+    // the function of a check has only the instruction: a ScopeExit that is decoded is then refused by the verification
+    // of the stacks, as no scope is open (qore#6468), which happens only once the instruction has been decoded
+    const char* no_scope = "ScopeExit closes an entry of the scopes that is not the innermost one";
     run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
-        nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
-    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
-        QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        "unsupported binary format version 45 ", false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), no_scope, false, false,
+        QORE_AOT_BINARY_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
-        "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        "invalid debugger flow mask", false, false, QORE_AOT_BINARY_VERSION, 0);
+    // the runtime location of an instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646): a new entry of the
+    // function's table is read; a tag that does not exist, the location of an instruction before it when there is
+    // none, an entry beyond the table and a new entry without a line are refused
+    auto stmt_loc = [&](const char* label, const Payload& loc, const char* error) {
+        run(label, O::AddInt, G::Base, {1, 2}, empty, error, false, false, QORE_AOT_BINARY_VERSION, 3, 0, &loc);
+    };
+    auto new_entry = [](int line) -> Payload {
+        return [line](QoreAOTBinaryWriter& w) {
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::New));
+            w.writeU32(static_cast<uint32_t>(line));
+            w.writeU32(static_cast<uint32_t>(line));
+            w.writeStringRef("stmt.q");
+        };
+    };
+    stmt_loc("statement location", new_entry(3), nullptr);
+    stmt_loc("statement location without a line", new_entry(0), "a runtime location has no line");
+    stmt_loc("statement location tag", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(4);
+    }, "invalid runtime location tag 4");
+    stmt_loc("statement location of none before", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Previous));
+    }, "has the runtime location of an instruction before it that has none");
+    stmt_loc("statement location entry", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+        w.writeU32(0);
+    }, "runtime location 0 is beyond the 0 location(s) of the function");
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        const Payload nothing = [](QoreAOTBinaryWriter& w) {
+            w.writeU8(static_cast<uint8_t>(QoreIRConstant::Kind::Nothing));
+        };
+        auto mapping = [&](const char* label, const Payload& wire, const char* error) {
+            const Payload instruction_location = new_entry(3);
+            ok = check(pgm, label, O::ConstNothing, static_cast<uint8_t>(G::Const), {}, nothing, error,
+                false, false, QORE_AOT_BINARY_VERSION, 3, 0, &instruction_location, &wire) && ok;
+            ++count;
+        };
+        auto slots = [](std::initializer_list<uint32_t> ids) -> Payload {
+            return [ids = std::vector<uint32_t>(ids)](QoreAOTBinaryWriter& w) {
+                w.writeU16(static_cast<uint16_t>(ids.size()));
+                for (uint32_t slot : ids) {
+                    w.writeU32(slot);
+                    w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+                }
+            };
+        };
+        mapping("caller and nested unwind locations", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(2);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+            w.writeU32(2);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU32(0);
+        }, nullptr);
+        mapping("too many unwind slots", slots({0, 1, 2}), "local unwind location count exceeds");
+        mapping("unknown unwind slot", slots({1}), "unknown or unordered local unwind slot");
+        mapping("out-of-range unwind slot", slots({3}), "unknown or unordered local unwind slot");
+        mapping("duplicate unwind slot", slots({0, 0}), "unknown or unordered local unwind slot");
+        mapping("unordered unwind slots", slots({2, 0}), "unknown or unordered local unwind slot");
+        mapping("truncated unwind section", [](QoreAOTBinaryWriter& w) { w.writeU16(1); },
+            "truncated IR function");
+        // The instruction created location entry zero. A short index must fail even if the bounds-checked
+        // read returns zero and that index would otherwise resolve.
+        mapping("truncated unwind location index", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU16(0);
+        }, "truncated IR function");
+        mapping("invalid unwind location tag", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(255);
+        }, "invalid runtime location tag");
+        mapping("unknown unwind location index", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU32(1);
+        }, "runtime location 1 is beyond");
+    }
+    constexpr unsigned expected_count =
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 169 : 159;
+    if (count != expected_count) {
+        fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
+            static_cast<unsigned>(QORE_AOT_BINARY_VERSION));
+        ok = false;
+    }
     qore_destroy_program(pgm);
     qore_cleanup();
     if (ok) {

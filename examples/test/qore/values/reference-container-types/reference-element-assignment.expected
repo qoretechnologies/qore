@@ -1,0 +1,12 @@
+top-level h.x[0] = 5: 5
+untyped hash h.x[0] = 3: 3
+hash<auto> h.x[0] = 4: 4
+hash<string, list<reference<int>>> h.x[0] = 5: 5
+h{k}[0] = 6: 6
+h.a.x[0] = 7: 7
+h.x[1] = 8: a: 1
+h.x[1] = 8: b: 8
+h.x[0] += 8: 9
+local v after h.x[0] = 10: 10
+h.x[0] reads: 10
+type error: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead

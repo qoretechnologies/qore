@@ -101,6 +101,36 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
+    Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
+    get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
+    (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
+
+    @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
+    The static members in which public classes of the standard modules keep state shared by all of their callers
+    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
+    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
+    6748</a>).
+
+    @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
+    The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
+    handlers of the standard modules refuse registrations, replacements and removals from sandboxed code, also when it
+    has the \c PROCESS_CONTROL domain (see @ref sandbox_module_state;
+    <a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>).
+    @par Code That Is Not Trusted Loads Native Code Only From the Module Path
+    A binary module (also a module compiled with \c qcc) from outside the process-wide module path is not loaded for
+    sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
+    loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
+    6776</a>).
+    @par REPL History Files Use UTF-8
+    The @ref repl_linenoise "REPL writes its history files in UTF-8" with a byte order mark, which older
+    %Qore versions may display as a marker character at the start of the first entry (issue #6816).
+
+    @par Source Files and Standard Input Use UTF-8
+    %Qore reads @ref character_encoding "source text" as UTF-8 in every locale and reports malformed input at its
+    source line, so legacy Latin-1 files must be converted, for example with <tt>iconv -f ISO-8859-1 -t UTF-8</tt>
+    (issue #6816).
+
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
     \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used
@@ -141,20 +171,25 @@
     @par HttpServer Refuses a Request Head That Is Not Valid Text
     The @ref httpserverintro "HttpServer" module answers with \c 400, before any handler sees it, a request whose path,
     query, method or HTTP version is not valid UTF-8 text, whose HTTP/1.x header names have a byte above 0x7f, or whose
-    body is not valid in its encoding; a header value that is not valid UTF-8 is given in ISO-8859-1 (RFC 9110 obs-text),
-    also by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" (issue #6554).
+    body, also chunked or compressed, is not valid in its encoding (@ref httpserver_invalid_text); a header value that
+    is not valid UTF-8 is given in ISO-8859-1, also by @ref Qore::Socket::readHTTPHeader() (issues #6554, #6604).
 
     @par HTTP Clients Check a Response Body's Encoding
     A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
     text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
-    another structured type, with @ref Qore::HTTPClient "HTTPClient", also for an error status, which raised
-    \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
-    obs-text (issue #6554).
+    another structured type, with @ref Qore::HTTPClient "HTTPClient" (also for an error status, which raised
+    \c HTTP-CLIENT-RECEIVE-ERROR) and RestClient; a response header value that is not valid UTF-8 is given in
+    ISO-8859-1, as RFC 9110 obs-text (issues #6554, #6604).
 
-    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
-    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
-    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
-    HTTP/3 (issue #6554).
+    @par WebSocket Connections Are Closed for Text That Is Not UTF-8
+    A WebSocket text message or close reason that is not valid UTF-8 closes the connection with code 1007 (RFC 6455
+    section 8.1) before the application sees it, in @ref websockethandlerintro "WebSocketHandler" and
+    @ref websocketclientintro "WebSocketClient" over HTTP/1.1, HTTP/2 and HTTP/3 (issues #6554, #6604).
+
+    @par Error Responses Give No Exception Location Unless Debugging Is Enabled
+    The error responses for an exception of @ref httpserverintro "HttpServer", @ref resthandlerintro "RestHandler"
+    (its \c 409 body), \c DataStreamRequestHandler and \c YamlRpcHandler no longer give the location of the exception
+    in the server's code or its call stack unless debugging is enabled (@ref restexceptions; issue #6780).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
@@ -217,6 +252,28 @@
     An unpaired surrogate is invalid in a \c UTF-16 string: the string functions and operators raise
     \c INVALID-ENCODING for it where they read it, or a high surrogate and the code unit after it, as a character
     (see @ref utf16_validity; issue #6604).
+
+    @par Text Readers Check the Encoding of the Text They Read
+    The file and stream readers and the line iterators, and so the modules that read text with them, raise
+    \c INVALID-ENCODING for text that is not valid in its encoding, unless their new \c encoding_errors option is
+    \c "latin1" or \c "keep" (see @ref encoding_errors; issue #6604).
+
+    @par Module Text Readers Raise INVALID-ENCODING by Default
+    The CSV and fixed-length readers, the file location handlers and the text reads of the \c FileDataProvider and
+    \c FtpClientDataProvider modules raise \c INVALID-ENCODING for invalid text unless their new \c encoding_errors
+    option is \c "latin1" (for ISO-8859-1 data, as EDIFACT and HL7 v2 data often are) or \c "keep" (see
+    @ref encoding_errors and @ref filelocationhandler_encoding_errors; issue #6604).
+
+    @par INVALID-ENCODING Replaces STREAM-ENCODING-ERROR and FILE-GETCHAR-ERROR for Invalid Characters
+    @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()",
+    @ref Qore::StreamReader::readString() "StreamReader::readString()" and
+    @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" raise \c INVALID-ENCODING for an invalid character,
+    where they raised \c STREAM-ENCODING-ERROR and \c FILE-GETCHAR-ERROR (see @ref encoding_errors; issue #6604).
+
+    @par Encoding Conversion Streams Raise INVALID-ENCODING for Invalid Input
+    The encoding conversion streams raise \c INVALID-ENCODING for input not valid in the source encoding, where they
+    raised \c ENCODING-CONVERSION-ERROR or passed it through, and @ref Qore::convert_encoding() "convert_encoding()"
+    checks a string already in the target encoding (see @ref encoding_conversion_streams; issue #6730).
 
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
@@ -512,7 +569,9 @@
     Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
     \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI
     changes of %Qore 3.0 and lets a module command handler judge the code that issues a command
-    (\c QoreModuleCommandContext); a module built for another module API (such as 2.0, 2.1 or 2.2) is not found by
+    (\c QoreModuleCommandContext); the reflection functions \c qore_type_get_code_param_types() and
+    \c qore_type_get_type_arguments() copy the types to a vector that the caller gives (issue #6419); a module built
+    for another module API (such as 2.0, 2.1 or 2.2) is not found by
     its feature name, and the \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
@@ -1086,6 +1145,11 @@
     take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par An encoding_errors Option for Text Readers
+    The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
+    or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;
+    issue #6604), as do the encoding conversion streams for their input (issue #6730).
+
     @par Testing Whether a String Is Valid in Its Encoding
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
     encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).
@@ -1103,9 +1167,11 @@
 
     @par Thread Capability Scopes
     A host sets capabilities for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope",
-    which module code uses through a guard (@ref Qore::get_thread_capability() "get_thread_capability()") when its
-    caller gives no \c start_thread or \c call_wrapper option
-    (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>).
+    or for one call with @ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()" also while
+    sandboxed callers are on the stack, which module code uses through a guard
+    (@ref Qore::get_thread_capability() "get_thread_capability()") when its caller gives no \c start_thread or
+    \c call_wrapper option (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6737">issue 6737</a>; see @ref sandbox_thread_capabilities).
 
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
@@ -1232,8 +1298,9 @@
     @parblock
     - new @ref Qore::get_http_body_encoding() "get_http_body_encoding()" and
       @ref Qore::decode_http_body() "decode_http_body()" apply the rules that all HTTP clients and servers use to
-      find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter
-      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter, and to decide what
+      text that is not valid in its encoding gives (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue
+      5469</a>, issue #6604)
     - new @ref Qore::get_http_content_type_info() "get_http_content_type_info()" and
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" return the character set, the media type and
       the response encoding that an HTTP server reports for a request, the same for every HTTP version
@@ -1466,6 +1533,12 @@
     change for such drivers); see @ref sandbox_datasource_connect_choosers
     (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).
 
+    @par Checking a Network Destination Without Connecting
+    @ref Qore::SandboxManager::checkNetworkConnect() "SandboxManager::checkNetworkConnect()" raises what a TCP
+    connection made by the calling code would raise under its sandbox's network policy, without connecting, so that
+    shared code serves data cached from a destination only to callers that could reach it; see
+    @ref sandbox_net_cached_data (<a href="https://github.com/qoretechnologies/qore/issues/6745">issue 6745</a>).
+
     @par Asking Whether a Sandbox Restricts Anything
     @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
     and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
@@ -1483,6 +1556,17 @@
     calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
     that it performs for a restricted caller; see @ref sandbox_caller_domains
     (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
+
+    @par Process-Wide Registries Refuse Sandboxed Code
+    Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
+    code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(), and
+    binary modules the new C++ function \c qore_check_process_wide_registration()
+    (\c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION; module API 2.3); see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6836">issue 6836</a>).  The factory, child data provider
+    and SSH provider registries of the standard modules and the module blacklist and options refuse changes by
+    sandboxed code as well, and the SSH registry does not give it its providers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1584,6 +1668,11 @@
     @ref Qore::Thread::ThreadPool::detachCurrentThread() "ThreadPool::detachCurrentThread()", so that it no longer
     counts against the pool's limit; the HTTP server does so for the thread of a persistent HTTP/1.x connection.
 
+    @par Binary Modules Report the Errors of Their Program Data
+    The %Program data of a binary module derived from the new C++ class \c AbstractQoreProgramExternalDataEx reports
+    the errors of its copy, initialization and release as %Qore exceptions, which fail the creation of a child
+    @ref Qore::Program "Program" or are raised by its deletion (see @ref qore_modules; issue #6786).
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, which holds all 128 option bits; the constants of options beyond bit 63 are \c 0
@@ -1646,6 +1735,8 @@
       - the writers can quote fields by type and write a field without a value without quotes, so that it can be told
         apart from an empty string (see @ref csvwriter_quoting)
         (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
+      - the readers take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref csvutil_v1_12 for all changes
 
     - @ref connectionproviderintro "ConnectionProvider" module
@@ -1673,6 +1764,12 @@
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); errors
         written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no terminal I/O
         instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo" option of the data providers that
+        read text (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - optional processing-locality and billing-model metadata on apps and actions
+        (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo",
+        @ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo"; an action's value of a field overrides
+        its app's) (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -1721,6 +1818,11 @@
     - @ref empathicbuildingdataproviderintro "EmpathicBuildingDataProvider" module
       - see @ref empathicbuildingdataprovider_v1_2 for all changes
 
+    - @ref filedataproviderintro "FileDataProvider" module
+      - the get request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref filedataprovider_v2_2 for all changes
+
     - @ref filelocationhandlerintro "FileLocationHandler" module
       - \c http(s):// and \c rest(s):// locations use @ref httpclientiointro "HttpClientIo" and
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2 and HTTP/3)
@@ -1729,6 +1831,9 @@
       - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
         terminal I/O instead of raising an exception
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - text reads check the text in its encoding, with the \c encoding_errors read option (see
+        @ref filelocationhandler_encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref filelocationhandler_v3_0 for all changes
 
     - @ref filepollerintro "FilePoller" module
@@ -1740,6 +1845,16 @@
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref file_poller_2_1 for all changes
+
+    - @ref fixedlengthutilintro "FixedLengthUtil" module
+      - the iterators and the read data provider take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref fixedlengthutil_v1_7 for all changes
+
+    - @ref ftpclientdataproviderintro "FtpClientDataProvider" module
+      - the \c get-file request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref ftpclientdataprovider_v2_1 for all changes
 
     - @ref ftppollerintro "FtpPoller" module
       - uses the \c start_thread capability of the code that a host runs
@@ -1786,6 +1901,8 @@
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
+      - the trailer fields of a chunked request body are not merged into the request's header fields
+        (<a href="https://github.com/qoretechnologies/qore/issues/6753">issue 6753</a>)
       - see @ref httputil1_6 for all changes
 
     - @ref huerestclientintro "HueRestClient" module
@@ -1981,6 +2098,9 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref select_option_lock_wait "lock_wait" select option gives a locking select \c NOWAIT, \c SKIP
+        \c LOCKED or \c WAIT \c n on PostgreSQL, Oracle, MySQL and MariaDB, with the classification of the
+        lock-not-available error (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
@@ -2369,6 +2489,75 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
+      the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
+      (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
+    - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
+      on the object, where code of a subclass could get a reference to a parent class's private method through an
+      object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
+    - a call reference obtained by name for a method (\c getCallReference(), @ref Qore::get_call_reference()
+      "get_call_reference()") applies the access rules of a method call from the same context, where it could give
+      a parent class's private method to code outside the class hierarchy
+      (<a href="https://github.com/qoretechnologies/qore/issues/6782">issue 6782</a>)
+    - a call by name of a \c constructor() or \c destructor() method that only a parent class declares, and a call
+      reference by name to a \c constructor(), \c destructor() or \c copy() method, are refused with an exception, where
+      they crashed (see @ref class_special_methods "special methods"; issue #6783)
+    - an object of a builtin class of a Program with code pending, or whose parse was rolled back without
+      @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", such as the argument of the exception of a failed module-python
+      command, can be destroyed and its pseudo-methods called: its C++ destructor and the method lookup no longer
+      raise \c PROGRAM-ERROR; its methods still do
+      (<a href="https://github.com/qoretechnologies/qore/issues/6752">issue 6752</a>)
+    - a parent class or hashdecl given without a namespace path in a namespace is resolved in the namespace of the
+      inheriting class or hashdecl (see @ref parent_class_name_resolution and @ref hashdecl_inheritance_rules), where
+      one of the same name in another namespace could be inherited instead (issue #6710)
+    - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
+      debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
+      message in its encoding (issue #6814)
+    - deleting a @ref Qore::Program "Program" deletes the objects of its own classes that its constants hold while
+      their destructors can run, where an object that the Program's code referred to (such as an object constant of
+      a Python module that module-python imported) skipped its destructor with a \c PROGRAM-ERROR exception (see
+      @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
+      6791</a>)
+    - a @ref number "number" parsed from a decimal string of 22 to 31 digits, including a value read from a
+      \c buffer<decimal128>, has enough precision to print as the value, where it could print with
+      binary conversion noise (see @ref number_string_precision; issue #6824)
+    - code that is not trusted (sandboxed or restricted) no longer adds a process-wide encoding for every new name that
+      it uses as an encoding name: a name that is not known resolves to a known encoding or a label that data may
+      select, registers only a plain name that iconv converts, and otherwise gives the encoding
+      \c "X-QORE-UNREGISTERED" (<a href="https://github.com/qoretechnologies/qore/issues/6826">issue 6826</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" reads serialized data in a process whose
+      @ref default_encoding "default character encoding" is not \c UTF-8, where it raised
+      \c DESERIALIZATION-ERROR for the header (<tt>expecting 'QS', got 'QS'</tt>; issue #6722)
+    - @ref qore_regex_result_encoding "Regular expression captures, split pieces and substitutions" preserve the subject's
+      encoding (issue #6815).
+
+    - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
+      a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
+      take it for the byte order of a line (see @ref encoding_errors; issue #6604)
+    - @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" checks every byte of a multi-byte character and
+      returns a \c UTF-16LE surrogate pair whole, where it checked only the first byte and returned half of the pair
+      (see @ref encoding_errors; issue #6620)
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" of @ref sqlutilintro "SqlUtil"
+      with a \c sequence_map, \c function_map or \c procedure_map entry whose target exists, which renamed the source
+      onto it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6729">issue 6729</a>); see @ref sqlutilv3_11_0
+    - @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" with an end of line marker ends a line only where
+      the marker starts at a character boundary, where a marker byte inside a character of a double-byte encoding
+      such as \c Shift_JIS ended the line in the character (issue #6648)
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
+      with a description of another table name, which raised \c LOCK-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0
+    - fixed @ref Qore::SQL::SQLStatement::describe() "SQLStatement::describe()" before the first execution of a statement
+      with a driver that describes it without executing it (ex: oracle), which lost the values given to
+      @ref Qore::SQL::SQLStatement::bind() "SQLStatement::bind()": the next fetch returned \c NULL for them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6690">issue 6690</a>)
+    - a method call resolved at run time (as on a value of type \c object) or a call reference made through it skips
+      an inaccessible @ref private_methods "private method" of a parent class and calls the accessible method of a
+      later parent class, as a call through a variable of the class does, instead of raising \c METHOD-IS-PRIVATE
+      (issue #6704)
+    - code of a class calls its own method when an earlier parent class of the object has a
+      @ref private_methods "private method" of the same name, which it cannot call, instead of raising
+      \c RUNTIME-OVERLOAD-ERROR or failing to parse (issue #6759)
     - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
       where it returned its bytes up to the NUL byte and memory after them (issue #6604)
     - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
@@ -2384,11 +2573,34 @@
       found in a class with that name that provides it, also when the name resolves first to another class with that
       name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
       reference raised a parse exception (issue #1527)
+    - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
+      the inheriting class only in that class, the declaring class and the classes between them, and a member that a
+      class also reaches through a public base class is public there (issue #6640)
+    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
+      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
+      (issue #6667)
+    - a member of a class inherited with @ref private_inheritance "private:internal" is assigned with the type of its
+      own declaration in a class that also has a member of the same name from another base class (issue #6670)
+    - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
+      its base classes inherits with @ref private_inheritance "private:internal" are refused when parsing, as the
+      name alone is, instead of raising \c INVALID-MEMBER at run time (issue #6669)
+    - a private member is accessible only in the class that declares it and its subclasses, as a private method is,
+      not in another base class of a subclass (issue #6760)
+    - a member that a class imported into another Program inherits keeps the class that declares it, so that an
+      object of a subclass declared there has one value of a member inherited through
+      @ref private_inheritance "private:internal" in every class context, and such classes combine as in one Program
+      (issues #6671, #6668)
+    - code that the AST interpreter runs (in any execution mode) returns the value of a return in an
+      @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
+      same block that runs after it completes normally, as compiled code does, instead of going on with the function
+      (see @ref on_exit_return; issue #6677)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
       so that two redirects between the same files in opposite directions at the same time can no longer deadlock
       (issue #6567)
+    - @ref httpserverintro "HttpServer" module: the errors that the server logs give the whole exception only when
+      debugging is enabled, and keep the text of their messages (issues #6793, #6809; see @ref http1_7)
     - @ref httpserverintro "HttpServer", @ref swaggerintro "Swagger" and
       @ref restschemavalidatorintro "RestSchemaValidator" modules: a handler path or a schema \c pattern that is not a valid regular expression raises
       \c REGEX-COMPILATION-ERROR when the handler is set or the schema is loaded, and a Swagger path template with a
@@ -2404,6 +2616,8 @@
     - a call of a method in a diamond class hierarchy tests the variants of a method of a shared ancestor once, not
       once for each path to the ancestor, so that a later path through a private edge no longer hides the parent
       classes after it, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see @ref overloading_intro; issue #6488)
+    - @ref connectionprovider_3_1 "ConnectionProvider" accepts closures and call references for \c code connection
+      options and checks parameterized option types by assignment (issue #6712)
     - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
       accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
     - @ref Qore::thread_list() "thread_list()" lists a thread from the time its TID is returned by the
@@ -2652,7 +2866,8 @@
       \c qdx and the documentation builds accept it (issue #6024)
     - a value whose type or member types name a class, hashdecl or enum of a deleted @ref Qore::Program "Program"
       (such as \c list<*Foo>), and a class imported from such a Program, used the freed types of the Program and could
-      crash; the declarations are now kept with their types (see @ref program_deletion_types) (issue #5790)
+      crash; the declarations are now kept while anything can read them (see @ref program_deletion_types) (issues
+      #5790, #6419)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
@@ -2778,6 +2993,8 @@
     - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
       significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
       limit; such a frame is now an error (issue #5878)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" accepted a close frame with a one-byte payload or a
+      close code that a close frame may not have (ex: 1005, 1006, 999); it is now an error (issue #6755)
     - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
       for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
@@ -3317,6 +3534,11 @@
     - fixed an exception raised by the default value expression of an omitted argument being reported as unhandled
       instead of being raised to the caller
     - fixed a crash when a thread exited while another thread deleted a @ref Qore::Program "Program" it had run code in
+    - <b>security</b>: fixed a use of freed @ref Qore::Program "Program" data at the end of a thread started with the
+      @ref background "background operator": the destructors of the thread's thread-local data, which run after the
+      thread has released the Program that started it, used that Program and the location of the thread's code in
+      it, which could already have been deleted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6629">issue 6629</a>)
     - fixed an unqualified call reference to a private static method (<tt>\\check()</tt>) raising
       \c RUNTIME-OVERLOAD-ERROR when called from outside the class
     - <b>security</b>: fixed @ref Qore::create_object() "create_object()",
@@ -3643,6 +3865,27 @@
     - fixed an upsert closure of @ref sqlutilintro "SqlUtil" kept across a call of
       @ref SqlUtil::AbstractTable::clear() "AbstractTable::clear()", which raised \c OBJECT-ALREADY-DELETED
       (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
+    - fixed the upsert of a row of list values (bulk DML) with @ref sqlutilintro "SqlUtil" by
+      \c upsertFromIterator() or an upsert closure made from such a row, which failed with a bind error with every
+      driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>), and with the
+      select-first strategy on Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>);
+      see @ref sqlutilv3_11_0
+    - fixed the upsert of a row with no column to update with @ref sqlutilintro "SqlUtil" (only key columns, or the
+      others omitted with \c omit_update), which gave an invalid update statement, or with an update-only upsert
+      inserted the row (SQL Server) or raised an error (Oracle)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts and the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL without a strict
+      SQL mode, which did not find the row of an integer key out of the range of its column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts of @ref sqlutilintro "SqlUtil" on PostgreSQL with an array column in the upsert key, which
+      failed with a missing operator for the array types
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>); see @ref sqlutilv3_11_0
+    - fixed @ref SqlUtil::op_in() "op_in()" on SQLite with dates, which failed with a syntax error, and with numbers
+      and floats, which compared otherwise than the same values bound
+      (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>); see @ref sqlite3sqlutilv12
+    - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators on SQLite with floats, which lost
+      precision (an update stored another value); a relative date raises an error there, as SQLite has no interval
+      type (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>); see @ref sqlite3sqlutilv12
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
@@ -3670,6 +3913,10 @@
     - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
       Program; it never creates the data or runs the Program's thread initialization code
       (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - a child @ref Qore::Program "Program" to which a binary module cannot copy its data is not created: the
+      constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
+      module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
+      (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

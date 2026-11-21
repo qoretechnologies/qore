@@ -1061,7 +1061,10 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
 
     // text in a generic Unicode encoding (ex: "UTF-32") can start with a byte order mark in either byte order, which
     // gives its byte order; iconv converts it with the explicit name of the byte order (see IconvHelper::getIconvCode())
+    size_t bom_len = src_len;
     q_skip_generic_bom(src, src_len, from);
+    // the offsets of the errors are those in the text given, with its byte order mark
+    bom_len -= src_len;
 
     // where the platform's iconv decodes stateful text cut off in a character as other characters instead of failing,
     // the text is decoded one byte at a time
@@ -1097,9 +1100,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
                 case EINVAL:
                 case EILSEQ:
                     if (err_offset) {
-                        *err_offset = ib - src;
+                        *err_offset = (ib - src) + bom_len;
                     }
-                    c.reportIllegalSequence(ib - src, xsink);
+                    c.reportIllegalSequence((ib - src) + bom_len, xsink);
                     targ.clear();
                     return -1;
                 case E2BIG:
@@ -1120,7 +1123,7 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
         } else if (rc > 0) {
             // issue #2500 non-reversible encoding executed (i.e. source char does not exist in target encoding); the
             // count gives no position, so the first character that cannot be converted is found
-            size_t offset = locate ? find_unconvertible_char(src, src_len, from, nccs, ib - src) : ib - src;
+            size_t offset = (locate ? find_unconvertible_char(src, src_len, from, nccs, ib - src) : ib - src) + bom_len;
             if (err_offset) {
                 *err_offset = offset;
             }
@@ -1174,6 +1177,7 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             if (locate) {
                 offset = find_unconvertible_char(src, src_len, from, nccs, offset);
             }
+            offset += bom_len;
             if (err_offset) {
                 *err_offset = offset;
             }

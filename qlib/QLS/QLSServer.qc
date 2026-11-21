@@ -431,14 +431,8 @@ public class QLSServer {
         #! Process-local cache for immutable standard module URI lists and lazily built symbol indexes
         static hash<auto> stdModuleIndexCache = {};
 
-        #! Lock protecting standard module index cache initialization
-        static Mutex stdModuleIndexCacheMutex();
-
         #! Process-local cache for immutable builtin metadata and lookup indexes
         static hash<auto> builtinMetadataCache = {};
-
-        #! Lock protecting builtin metadata cache initialization
-        static Mutex builtinMetadataCacheMutex();
 
         #! Whether files are indexed between requests instead of before responding to requests; set by main()
         bool backgroundIndexing = False;
@@ -518,6 +512,12 @@ public class QLSServer {
     }
 
     private:internal {
+        #! Lock protecting standard module index cache initialization
+        static Mutex stdModuleIndexCacheMutex();
+
+        #! Lock protecting builtin metadata cache initialization
+        static Mutex builtinMetadataCacheMutex();
+
         #! The log file; a File object can be written from any thread, unlike a stream
         *File logFh;
     }
@@ -1805,7 +1805,9 @@ public class QLSServer {
             string uri = index.getUri();
             if (index.sourceContains(name) || Document::getFilePath(uri) == oldPath) {
                 try {
-                    push ret, {"uri": uri, "text": ReadOnlyFile::readTextFile(Document::getFilePath(uri))};
+                    # a file in another encoding is read as before, without a check of its encoding
+                    push ret, {"uri": uri, "text": ReadOnlyFile::readTextFile(Document::getFilePath(uri), NOTHING, -1,
+                        ENCODING_ERRORS_KEEP)};
                 } catch (hash<ExceptionInfo> ex) {
                     log(1, "cannot read %s for renaming: %s: %s", uri, ex.err, ex.desc);
                 }
@@ -2188,7 +2190,9 @@ public class QLSServer {
     #! Returns @ref True if the text of an open document is the same as the file
     private:internal static bool sameAsFile(Document doc) {
         try {
-            return ReadOnlyFile::readTextFile(Document::getFilePath(doc.getUri())) == doc.getText();
+            # a file in another encoding is read as before, without a check of its encoding
+            return ReadOnlyFile::readTextFile(Document::getFilePath(doc.getUri()), NOTHING, -1, ENCODING_ERRORS_KEEP)
+                == doc.getText();
         } catch (hash<ExceptionInfo> ex) {
             # a file that cannot be read cannot be checked
         }

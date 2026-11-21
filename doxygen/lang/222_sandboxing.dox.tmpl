@@ -334,6 +334,27 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_thread_capabilities Thread Capability Scopes
+
+    A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code
+    that it runs for an interface with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"; module code
+    uses them through a guard (@ref Qore::get_thread_capability() "get_thread_capability()"), which runs only
+    code that no sandbox governs.  Sandboxed code can neither set nor see the capabilities.
+
+    - <b>A scope object</b> (<tt>ThreadCapabilityScope scope(caps);</tt>) keeps its set in effect until it is
+      destroyed, also for the code that runs after the call that created it: it cannot be created while any code that
+      a sandbox governs is on the thread's stack, including callers of the code that creates it.
+    - <b>A call-bound scope</b> (@ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()")
+      sets the capabilities only while the given call runs, and restores the outer set however it ends, so it cannot
+      outlive the frame of the code that made it.  Only that code is judged: Qore code that calls it directly, whose
+      %Program and the %Program running on the thread are not sandboxed (by a manager, or as a %Program that sandboxed
+      code created), and that may control threads.  Sandboxed callers further up the stack do not count, so a host
+      whose interfaces all have a sandbox manager can set the capabilities of the interface that it calls for another
+      one.  A call reference to the method is refused, as it would run the method for the code that holds the
+      reference, as is a call through another builtin (for example
+      @ref Qore::call_static_method() "call_static_method()").  The code run in the call, which can be sandboxed, keeps
+      its own restrictions: sandboxed code still cannot see the capabilities or set a scope.
+
     @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
 
     A DBI driver applies the options of a datasource when it opens a connection, which can happen long after the
@@ -428,6 +449,85 @@ authenticate();
     variable or static member, not the objects that it refers to, which keep the access control of their classes;
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
+
+    Reading is not restricted: a class that sandboxed code derives from a public class of a module can read the
+    class's static members that are visible to subclasses (\c private, which is \c private:hierarchy), and call the
+    methods of the objects that they hold.  State that a class keeps for all of its callers (caches of objects and
+    connections, the callbacks and loggers of the host, the state of other callers' operations) is therefore
+    \c private:internal, which no subclass can see; a subclass that needs to use such state calls a method that the
+    class provides for it.  In the standard modules, the static members that a subclass of a public class can still
+    read are listed, each with the reason why every caller may read it, and a check of the sources
+    (\c examples/test/runner/test_module_shared_statics.py) fails for any other.
+
+    The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
+    serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,
+    replacements and removals from sandboxed code
+    (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), whatever functional domains the
+    sandbox gives it, so that one tenant cannot change what a module does for another;
+    modules register their entries in their initialization, which no sandbox governs (see @ref sandbox_module_init).
+    A check of the sources of the standard modules (\c examples/test/runner/test_shared_registry_checks.py) fails for
+    a registry mutator that makes no such check.
+
+    @subsection sandbox_process_wide_registries Process-Wide Registries
+
+    A registry of callbacks, hooks, handlers or listeners that the library or a module keeps for the whole process is
+    shared by the code of every %Program: a module from the module path is loaded once per process, and what such a
+    registry holds runs or is used later for every caller, with the data of that caller.  Such registries therefore
+    refuse registrations, replacements and removals by code that is sandboxed or acts for sandboxed code (the code of
+    a sandboxed %Program or of a %Program that sandboxed code created, code that such a %Program calls, and code that a
+    sandbox governs, also through a policy barrier or a system-policy capability) with
+    \c SANDBOX-REGISTRATION-ERROR.  Trusted code is not affected, nor is the initialization of library code (see
+    @ref sandbox_module_init), whatever code loads the module first, so what the host and the library register stays
+    in place for every caller.
+
+    The builtin registries that apply the rule:
+    - signal handlers: @ref Qore::set_signal_handler() "set_signal_handler()" and
+      @ref Qore::remove_signal_handler() "remove_signal_handler()"
+    - the application registry: @ref Qore::set_app_registry() "set_app_registry()"
+    - exit hooks: @ref Qore::register_exit_hook() "register_exit_hook()", which raises \c EXIT-HOOK-ERROR
+    - the async I/O loggers and callbacks: @ref Qore::set_async_io_logger() "set_async_io_logger()",
+      @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()" and
+      @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()"
+    - the settings of the process-wide async I/O controller, which apply to the operations of every caller:
+      @ref Qore::AsyncIoController::setAutostop() "AsyncIoController::setAutostop()",
+      @ref Qore::AsyncIoController::setMaxCallbackWorkers() "AsyncIoController::setMaxCallbackWorkers()" and
+      @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()"
+    - the callbacks of the line editor of the \c linenoise module
+    - the module blacklist: @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
+      @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
+    - module options: @ref Qore::set_module_option() "set_module_option()"
+
+    The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
+    the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
+    callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider
+    generators that some data provider modules keep, the logger and the settings of the process-wide
+    \c AsyncSocketIo controller and the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).
+    The factory registries
+    apply the rule as well: the LLM, RAG, media and speech provider factories (\c QoreLlmTypes, \c QoreRagTypes,
+    \c QoreMediaUtils and \c QoreSpeechUtils), the child data providers that data provider modules register, and
+    the client identity providers, server host key providers and host key stores of the \c sshutil module's
+    \c SshUtilRegistry, which also refuses to give its providers to sandboxed code, as they can hold credentials;
+    the entries of the process-wide type cache of \c DataProvider refuse changes with
+    \c DATA-PROVIDER-REGISTRATION-DENIED.  The storage of these registries is \c private:internal, so a subclass
+    cannot change it either.  A module that keeps a
+    registry of its own calls
+    @ref Qore::SandboxManager::checkProcessWideRegistration() "SandboxManager::checkProcessWideRegistration()" before
+    it changes it (\c qore_check_process_wide_registration() in the C++ API,
+    \c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION); where the registration is only a side effect of an operation that
+    the caller may perform, such as an \c HttpServer setting its logger on the process-wide async I/O controller or
+    an \c AsyncSocketIoController created with an autostop flag setting it on that controller, it leaves the
+    registration out when
+    @ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()"
+    returns @ref False, and the object then uses the process's setting.
+
+    Code that is sandboxed or acts for sandboxed code (as decided for registrations) does not get the loggers that
+    the host configured either: @ref Qore::AsyncIoController::getLogger() "AsyncIoController::getLogger()" and
+    @ref Qore::get_async_io_logger() "get_async_io_logger()" return @ref nothing "NOTHING" for it, as if no logger
+    were set, and @ref Qore::AsyncIoController::getCacheSize() "AsyncIoController::getCacheSize()" refuses it
+    (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
+    change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
+
+    @since %Qore 3.0
 
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
@@ -530,7 +630,8 @@ authenticate();
 
     A module that a caller loads by path, or finds through a module path that a %Program added with
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
-    the code that loads it, and a source module's %Program keeps that sandbox.  Neither is a library module that code
+    the code that loads it, and a source module's %Program keeps that sandbox.  A binary module is native code, which no
+    sandbox governs: code that is not trusted loads one only from the module path (see @ref sandbox_native_code).  Neither is a library module that code
     that is not trusted loads into a %Program container of its own (for example with
     @ref Qore::Program::loadApplyToPrivateUserModule() "Program::loadApplyToPrivateUserModule()"): it is parsed and
     initialized with the container's code and parse defines, under the sandbox of the code that loads it.
@@ -549,6 +650,28 @@ authenticate();
       that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
+
+    @subsection sandbox_native_code The Trust Model of Native Code
+    Native code (a binary module, and the native code of a module compiled with \c qcc) runs with the privileges of
+    the process: no sandbox governs it, as it does not run through the checks of the library.  It is therefore trusted
+    code, and the module loader maps it only when trusted code decided the load:
+    - the module file is in a directory of the process-wide module path, which the host controls; or
+    - the code that loads it is trusted (no sandbox governs it and its functional domains are not restricted); or
+    - the code that loads it may use uncontrolled APIs: neither its parse options
+      (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS") nor any sandbox that governs it
+      (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()") forbid them.
+
+    Otherwise the load is refused with \c LOAD-MODULE-ERROR, whether the module is loaded by its path, found through a
+    module path of the loading code, or loaded into a %Program that the loading code created; a compiled module whose
+    source module is next to it is loaded as the source module, which runs under the sandbox of the loading code.  A
+    module statically linked into a program built with \c qcc is part of that program's own native code and needs no
+    such decision.
+
+    What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
+    the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
+    verification of the IR that a compiled module carries (the IR that the IR interpreter and the debugger run)
+    detects IR damaged by accident; neither is a security boundary, as the module's native code could do anything that
+    its IR could (qore#6776).
 
     @subsection sandbox_static_modules Statically Linked Modules
 
@@ -942,6 +1065,17 @@ socket) and connects to the checked addresses only
 
     A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
     code) does not check database connections.
+
+    @subsection sandbox_net_cached_data Data Cached from a Network Destination
+    Code that is shared by several sandboxes, such as a library module, and that serves data it obtained from a network
+    destination to later callers (a cache of tokens that a metadata endpoint issued, for example) must serve it only to
+    a caller that could have fetched it itself: a caller whose sandbox denies the destination would otherwise receive
+    the data without a connection that the sandbox checks.  @ref Qore::SandboxManager::checkNetworkConnect()
+    "SandboxManager::checkNetworkConnect()" applies the policy that a TCP connection made at that point would be checked
+    against, and raises the exception that the connection would raise, without connecting; the cache calls it before it
+    serves a cached value.  Data that a secret or a credential file authorizes is instead cached under a key that covers
+    the secret or the content of the file, which the caller reads with its own policy.  The token caches of the
+    \c AzureAuth and \c GcpAuth modules follow these rules.
 
     @subsection sandbox_net_protocols Protocol Constants
 
@@ -1519,6 +1653,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

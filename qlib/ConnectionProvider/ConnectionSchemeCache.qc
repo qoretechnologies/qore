@@ -430,7 +430,7 @@ public class ConnectionSchemeCache {
         };
     }
 
-    private {
+    private:internal {
         #! Connection provider cache
         static hash<string, hash<ConnectionSchemeInfo>> cache = {
             "ftp": FtpConnection::ConnectionScheme,
@@ -461,6 +461,8 @@ public class ConnectionSchemeCache {
         @param init the initialization code that will register the scheme
     */
     static registerPendingScheme(string scheme, code init) [dom=PROCESS_CONTROL] {
+        # only trusted code adds to the process-wide registry of schemes (qore#6747)
+        ConnectionSchemeCache::checkRegistration(scheme);
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -496,6 +498,8 @@ public class ConnectionSchemeCache {
         scheme
     */
     static bool registerScheme(string scheme, hash<ConnectionSchemeInfo> entry) [dom=PROCESS_CONTROL] {
+        # only trusted code adds to the process-wide registry of schemes (qore#6747)
+        ConnectionSchemeCache::checkRegistration(scheme);
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -525,6 +529,28 @@ public class ConnectionSchemeCache {
         return True;
     }
 
+    #! Refuses a change of the process-wide registry of schemes to sandboxed code
+    /** A scheme that one sandboxed tenant registered would be used for every caller's connections of the scheme, with
+        their URLs and options; one that it removed would be removed for everyone.  A pending scheme's initialization,
+        which only trusted code registers, may register the scheme also when a sandboxed caller's lookup runs it
+        (qore#6747).
+
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the calling code is sandboxed
+    */
+    private:internal static checkRegistration(string scheme, *bool removal) {
+        if (!Priv::_trusted_scheme_init) {
+            DataProvider::checkSharedRegistration("connection scheme registry", "connection scheme", scheme, removal);
+        }
+    }
+
+    #! Runs the initialization of a pending scheme, which trusted code registered
+    private:internal static runPendingInit(code init) {
+        *bool save = Priv::_trusted_scheme_init;
+        on_exit Priv::_trusted_scheme_init = save;
+        Priv::_trusted_scheme_init = True;
+        init();
+    }
+
     #! Removes a scheme
     /** @param scheme the scheme name
 
@@ -535,6 +561,8 @@ public class ConnectionSchemeCache {
         @throw PERMISSION-DENIED Caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static *hash<ConnectionSchemeInfo> deregisterScheme(string scheme) {
+        # only trusted code removes from the process-wide registry of schemes (qore#6747)
+        ConnectionSchemeCache::checkRegistration(scheme, True);
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove scheme %y from a context with restricted process control",
                 scheme);
@@ -764,7 +792,7 @@ public class ConnectionSchemeCache {
         }
         if (*code init = remove initmap{scheme}) {
             ++registry_revision;
-            init();
+            ConnectionSchemeCache::runPendingInit(init);
         }
 
         *hash<ConnectionSchemeInfo> rv = cache{scheme};
@@ -808,15 +836,19 @@ public class ConnectionSchemeCache {
             # resolved within this same call instead of being reported as an unknown scheme.
             if (*code init = remove initmap{scheme}) {
                 ++registry_revision;
-                init();
+                ConnectionSchemeCache::runPendingInit(init);
             }
             if (rv = cache{scheme}) {
                 return rv;
             }
         }
         if (scheme_loader && (rv = scheme_loader(scheme))) {
-            cache{scheme} = rv;
-            ++registry_revision;
+            # the loader of a sandboxed caller gives the scheme to that caller only: the process-wide registry keeps
+            # the schemes of trusted code (qore#6747)
+            if (Priv::_trusted_scheme_init || DataProvider::mayRegisterShared()) {
+                cache{scheme} = rv;
+                ++registry_revision;
+            }
             return rv;
         }
         if (throw_exception) {
@@ -938,14 +970,25 @@ public class ConnectionSchemeCache {
                         }
                         continue;
                     }
-                    if (info.ignore_types{vtype}) {
-                        delete options{i.key};
-                        continue;
+                    # A runtime type name does not describe assignability: closures and function references
+                    # both satisfy code, and a typed collection reports only its container name.
+                    try {
+                        Reflection::Type target(DataProvider::OptimalQoreDataTypeMap{type} ?? type);
+                        i.value = target.acceptsValue(i.value);
+                        options{i.key} = i.value;
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "UNKNOWN-TYPE" && ex.err != "RUNTIME-TYPE-ERROR") {
+                            rethrow;
+                        }
+                        if (info.ignore_types{vtype}) {
+                            delete options{i.key};
+                            continue;
+                        }
+                        # The value and the underlying assignment diagnostic can contain credentials.
+                        throw "CONNECTION-OPTION-ERROR",
+                            sprintf("Connection %y (type %y) option %y was passed with type %s; expecting %y",
+                                conn_name, scheme_info.display_name, i.key, i.value.fullType(), type);
                     }
-                    # only the type of the value, which can be a credential
-                    throw "CONNECTION-OPTION-ERROR",
-                        sprintf("Connection %y (type %y) option %y was passed with type %s; expecting %y",
-                            conn_name, scheme_info.display_name, i.key, i.value.fullType(), type);
                 }
                 if (info.subst_env_vars) {
                     options{i.key} = substitute_env_vars(i.value);
@@ -1056,4 +1099,9 @@ public class ConnectionSchemeCache {
         }
     }
 }
+}
+
+namespace Priv {
+#! True while the current thread runs the initialization of a pending scheme, which trusted code registered
+thread_local *bool _trusted_scheme_init;
 }

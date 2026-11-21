@@ -392,6 +392,9 @@ public class EmbedderRateLimiter {
     }
 
     private:internal {
+        #! True for a limiter that getShared() returns, which every client of its account in the process uses
+        bool shared;
+
         #! Serializes the shared limiter registry
         static Mutex registry_lock();
         #! Key -> process-wide limiter
@@ -439,6 +442,7 @@ public class EmbedderRateLimiter {
             return limiter;
         }
         limiter = new EmbedderRateLimiter(requests_per_minute, tokens_per_minute);
+        limiter.shared = True;
         registry{key} = limiter;
         return limiter;
     }
@@ -485,9 +489,13 @@ int ticket = limiter.admit(estimated_tokens, limiter.getClockUs() + 60000000);
 
         @param c returns the current time in microseconds; it must never go backwards
 
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared (see getShared()) and the calling code is
+        sandboxed
+
         @since QoreRagTypes 1.0
     */
     setClock(code<int()> c) {
+        checkSeam("clock");
         AutoLock al(m);
         clock = c;
     }
@@ -511,11 +519,29 @@ limiter.setClock(int sub () { return now_us; });
 limiter.setWaiter(bool sub (int ms) { push waits, ms; now_us += ms * 1000; return False; });
         @endcode
 
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared (see getShared()) and the calling code is
+        sandboxed
+
         @since QoreRagTypes 1.0
     */
     setWaiter(code<bool(int)> w) {
+        checkSeam("waiter");
         AutoLock al(m);
         waiter = w;
+    }
+
+    #! Refuses a test seam of a shared limiter to sandboxed code
+    /** The clock and the waiter of a limiter that getShared() returns are called on the threads of every client
+        of its account in the process, so code that a sandbox governs cannot set them (qore#6750)
+
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared and the calling code is sandboxed
+    */
+    private:internal checkSeam(string what) {
+        # also code that a sandbox governs through a policy barrier (qore#6744)
+        if (shared && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            throw "EMBEDDER-RATE-LIMIT-ACCESS-DENIED", sprintf("sandboxed code cannot set the %s of a shared rate "
+                "limiter, which runs on the threads of every client of its account", what);
+        }
     }
 
     #! Admits one request, waiting until it fits in the window
@@ -2027,11 +2053,15 @@ public class RagProviderRegistry {
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: the registry is process-wide, so that only this class changes it (qore#6744)
         static hash<string, AbstractEmbedderFactory> embedder_cache = {};
         static hash<string, AbstractRerankerFactory> reranker_cache = {};
         static hash<string, AbstractVectorStoreFactory> vector_store_cache = {};
         static hash<string, AbstractChunkerFactory> chunker_cache = {};
+    }
+
+    private:internal {
         static Mutex registry_lock();
     }
 
@@ -2039,8 +2069,12 @@ public class RagProviderRegistry {
     /** @param factory the new embedder factory
 
         @throw RAG-CONFIG-ERROR a factory for the same backend is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerEmbedderFactory(AbstractEmbedderFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string type = factory.getType();
@@ -2053,7 +2087,12 @@ public class RagProviderRegistry {
     }
 
     #! Registers a reranker factory
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerRerankerFactory(AbstractRerankerFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string type = factory.getType();
@@ -2066,7 +2105,12 @@ public class RagProviderRegistry {
     }
 
     #! Registers a vector-store factory
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerVectorStoreFactory(AbstractVectorStoreFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string type = factory.getType();
@@ -2082,8 +2126,12 @@ public class RagProviderRegistry {
     /** @param factory the new chunker factory
 
         @throw RAG-CONFIG-ERROR a factory for the same strategy is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChunkerFactory(AbstractChunkerFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string type = factory.getStrategy();
@@ -2096,28 +2144,48 @@ public class RagProviderRegistry {
     }
 
     #! Removes an embedder factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterEmbedderFactory(string type) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove embedder_cache{type};
     }
 
     #! Removes a reranker factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterRerankerFactory(string type) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove reranker_cache{type};
     }
 
     #! Removes a vector-store factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterVectorStoreFactory(string type) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove vector_store_cache{type};
     }
 
     #! Removes a chunker factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterChunkerFactory(string type) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the RAG provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove chunker_cache{type};

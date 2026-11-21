@@ -65,7 +65,22 @@ private:
 };
 }
 
-QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, ExceptionSink* xsink) {
+// returns the value of a string field as a UTF-8 string; raises INVALID-ENCODING if it is not valid UTF-8
+/* A protobuf string is UTF-8 text: proto3 refuses a message with one that is not valid UTF-8, but proto2 does not
+   check it (qore#6604); the text is checked where it enters the program
+*/
+static QoreStringNode* protobuf_string(const std::string& val, const FieldDescriptor* field, const char* what,
+        const char* where, ExceptionSink* xsink) {
+    if (q_get_invalid_text_offset(QCS_UTF8, val.data(), val.size()) >= 0) {
+        QoreString desc;
+        desc.sprintf("%s '%s'", what, std::string(field->full_name()).c_str());
+        q_check_text_encoding(QCS_UTF8, val.data(), val.size(), where, desc.c_str(), xsink);
+        return nullptr;
+    }
+    return new QoreStringNode(val.data(), val.size(), QCS_UTF8);
+}
+
+QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, const char* where, ExceptionSink* xsink) {
     const Descriptor* desc = msg.GetDescriptor();
     const Reflection* ref = msg.GetReflection();
 
@@ -82,18 +97,81 @@ QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, ExceptionSink* x
         // the holder releases a value returned with an exception
         ValueHolder val(xsink);
         if (field->is_map()) {
-            val = mapFieldToHash(msg, field, ref, xsink);
+            val = mapFieldToHash(msg, field, ref, where, xsink);
         } else if (field->is_repeated()) {
-            val = repeatedFieldToList(msg, field, ref, xsink);
+            val = repeatedFieldToList(msg, field, ref, where, xsink);
         } else {
-            val = fieldToQore(msg, field, ref, xsink);
+            val = fieldToQore(msg, field, ref, where, xsink);
         }
         if (*xsink || hash->setKeyValue(std::string(field->name()), val.release(), xsink)) {
             return nullptr;
         }
     }
 
+    // the extension fields that are set in the message, which are not fields of its descriptor; they are given with
+    // their full names in square brackets, as in protobuf's JSON and text formats
+    if (desc->extension_range_count()) {
+        std::vector<const FieldDescriptor*> fields;
+        ref->ListFields(msg, &fields);
+        for (const FieldDescriptor* field : fields) {
+            if (!field->is_extension()) {
+                continue;
+            }
+            ValueHolder val(xsink);
+            if (field->is_repeated()) {
+                val = repeatedFieldToList(msg, field, ref, where, xsink);
+            } else {
+                val = fieldToQore(msg, field, ref, where, xsink);
+            }
+            if (*xsink || hash->setKeyValue(extensionKey(field), val.release(), xsink)) {
+                return nullptr;
+            }
+        }
+    }
+
     return hash.release();
+}
+
+const FieldDescriptor* ProtobufHelper::findSetExtension(const Message& msg) {
+    const Reflection* ref = msg.GetReflection();
+    std::vector<const FieldDescriptor*> fields;
+    ref->ListFields(msg, &fields);
+    for (const FieldDescriptor* field : fields) {
+        if (field->is_extension()) {
+            return field;
+        }
+        if (field->cpp_type() != FieldDescriptor::CPPTYPE_MESSAGE) {
+            continue;
+        }
+        // the nesting of the message was bounded when it was made from a hash
+        if (field->is_repeated()) {
+            for (int i = 0, e = ref->FieldSize(msg, field); i < e; ++i) {
+                if (const FieldDescriptor* rv = findSetExtension(ref->GetRepeatedMessage(msg, field, i))) {
+                    return rv;
+                }
+            }
+        } else if (const FieldDescriptor* rv = findSetExtension(ref->GetMessage(msg, field))) {
+            return rv;
+        }
+    }
+    return nullptr;
+}
+
+std::string ProtobufHelper::extensionKey(const FieldDescriptor* field) {
+    return std::string("[") + std::string(field->full_name()) + "]";
+}
+
+const FieldDescriptor* ProtobufHelper::findExtension(const Descriptor* desc, const char* key) {
+    if (!desc->extension_range_count()) {
+        return nullptr;
+    }
+    // "[full.name]", or the full name alone
+    std::string name(key);
+    if (name.size() > 2 && name.front() == '[' && name.back() == ']') {
+        name = name.substr(1, name.size() - 2);
+    }
+    const FieldDescriptor* field = desc->file()->pool()->FindExtensionByName(name);
+    return field && field->containing_type() == desc ? field : nullptr;
 }
 
 bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, ExceptionSink* xsink) {
@@ -117,6 +195,11 @@ bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, Excep
         if (!field) {
             // Try camelCase -> snake_case conversion
             field = desc->FindFieldByCamelcaseName(key);
+        }
+
+        if (!field) {
+            // an extension field of the message type
+            field = findExtension(desc, key);
         }
 
         if (!field) {
@@ -160,7 +243,7 @@ bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, Excep
 }
 
 QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor* field,
-        const Reflection* ref, ExceptionSink* xsink) {
+        const Reflection* ref, const char* where, ExceptionSink* xsink) {
     switch (field->cpp_type()) {
         case FieldDescriptor::CPPTYPE_INT32:
             return (int64)ref->GetInt32(msg, field);
@@ -186,7 +269,7 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return protobuf_string(val, field, "string field", where, xsink);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetEnumValue(msg, field);
@@ -197,7 +280,7 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
                 return QoreValue();
             }
             const Message& sub = ref->GetMessage(msg, field);
-            return messageToHash(sub, xsink);
+            return messageToHash(sub, where, xsink);
         }
         default:
             xsink->raiseException("PROTOBUF-TYPE-ERROR",
@@ -207,12 +290,12 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
 }
 
 QoreListNode* ProtobufHelper::repeatedFieldToList(const Message& msg,
-        const FieldDescriptor* field, const Reflection* ref, ExceptionSink* xsink) {
+        const FieldDescriptor* field, const Reflection* ref, const char* where, ExceptionSink* xsink) {
     int count = ref->FieldSize(msg, field);
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int i = 0; i < count; ++i) {
-        ValueHolder val(repeatedElementToQore(msg, field, ref, i, xsink), xsink);
+        ValueHolder val(repeatedElementToQore(msg, field, ref, i, where, xsink), xsink);
         if (*xsink || list->push(val.release(), xsink)) {
             return nullptr;
         }
@@ -222,7 +305,7 @@ QoreListNode* ProtobufHelper::repeatedFieldToList(const Message& msg,
 }
 
 QoreValue ProtobufHelper::repeatedElementToQore(const Message& msg,
-        const FieldDescriptor* field, const Reflection* ref, int index, ExceptionSink* xsink) {
+        const FieldDescriptor* field, const Reflection* ref, int index, const char* where, ExceptionSink* xsink) {
     switch (field->cpp_type()) {
         case FieldDescriptor::CPPTYPE_INT32:
             return (int64)ref->GetRepeatedInt32(msg, field, index);
@@ -248,13 +331,13 @@ QoreValue ProtobufHelper::repeatedElementToQore(const Message& msg,
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return protobuf_string(val, field, "string field", where, xsink);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetRepeatedEnumValue(msg, field, index);
         case FieldDescriptor::CPPTYPE_MESSAGE: {
             const Message& sub = ref->GetRepeatedMessage(msg, field, index);
-            return messageToHash(sub, xsink);
+            return messageToHash(sub, where, xsink);
         }
         default:
             xsink->raiseException("PROTOBUF-TYPE-ERROR",
@@ -297,7 +380,11 @@ bool ProtobufHelper::setFieldFromQore(Message* msg, const FieldDescriptor* field
                     ref->SetString(msg, field, std::string());
                 }
             } else {
-                QoreStringValueHelper str(val);
+                // a protobuf string is UTF-8 text
+                QoreStringValueHelper str(val, QCS_UTF8, xsink);
+                if (*xsink) {
+                    return false;
+                }
                 ref->SetString(msg, field, std::string(str->c_str(), str->size()));
             }
             return true;
@@ -363,7 +450,11 @@ bool ProtobufHelper::setRepeatedFieldFromList(Message* msg, const FieldDescripto
                         ref->AddString(msg, field, std::string());
                     }
                 } else {
-                    QoreStringValueHelper str(val);
+                    // a protobuf string is UTF-8 text
+                    QoreStringValueHelper str(val, QCS_UTF8, xsink);
+                    if (*xsink) {
+                        return false;
+                    }
                     ref->AddString(msg, field, std::string(str->c_str(), str->size()));
                 }
                 break;
@@ -396,7 +487,7 @@ bool ProtobufHelper::setRepeatedFieldFromList(Message* msg, const FieldDescripto
 }
 
 QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDescriptor* field,
-        const Reflection* ref, ExceptionSink* xsink) {
+        const Reflection* ref, const char* where, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
 
     int count = ref->FieldSize(msg, field);
@@ -421,6 +512,13 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
         switch (key_field->cpp_type()) {
             case FieldDescriptor::CPPTYPE_STRING:
                 key_str = entry_ref->GetString(entry, key_field);
+                // a string key is UTF-8 text, as a string field is
+                if (q_get_invalid_text_offset(QCS_UTF8, key_str.data(), key_str.size()) >= 0) {
+                    QoreString desc;
+                    desc.sprintf("map key of field '%s'", std::string(field->full_name()).c_str());
+                    q_check_text_encoding(QCS_UTF8, key_str.data(), key_str.size(), where, desc.c_str(), xsink);
+                    return nullptr;
+                }
                 break;
             case FieldDescriptor::CPPTYPE_INT32:
                 key_str = std::to_string(entry_ref->GetInt32(entry, key_field));
@@ -444,7 +542,7 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
         }
 
         // Get value
-        ValueHolder val(fieldToQore(entry, value_field, entry_ref, xsink), xsink);
+        ValueHolder val(fieldToQore(entry, value_field, entry_ref, where, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -455,7 +553,16 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
                 xsink)) {
             return nullptr;
         }
-        if (hash->setKeyValue(key_str.c_str(), val.release(), xsink)) {
+        // a hash key is in the default encoding: the UTF-8 key is converted to it, as parse_json() converts its keys;
+        // with a UTF-8 default encoding, the key is used as it is
+        if (QCS_DEFAULT == QCS_UTF8) {
+            if (hash->setKeyValue(key_str.c_str(), val.release(), xsink) || *xsink) {
+                return nullptr;
+            }
+            continue;
+        }
+        QoreString key(key_str.data(), key_str.size(), QCS_UTF8);
+        if (hash->setKeyValue(key, val.release(), xsink) || *xsink) {
             return nullptr;
         }
     }
@@ -485,9 +592,21 @@ bool ProtobufHelper::setMapFieldFromHash(Message* msg, const FieldDescriptor* fi
         // Set key
         const char* key = hi.getKey();
         switch (key_field->cpp_type()) {
-            case FieldDescriptor::CPPTYPE_STRING:
-                entry_ref->SetString(entry, key_field, std::string(key));
+            case FieldDescriptor::CPPTYPE_STRING: {
+                // a hash key is in the default encoding, a protobuf string key is UTF-8 text; with a UTF-8 default
+                // encoding, the key is used as it is
+                if (QCS_DEFAULT == QCS_UTF8) {
+                    entry_ref->SetString(entry, key_field, std::string(key));
+                    break;
+                }
+                QoreString key_str(key, QCS_DEFAULT);
+                TempEncodingHelper utf8_key(key_str, QCS_UTF8, xsink);
+                if (!utf8_key) {
+                    return false;
+                }
+                entry_ref->SetString(entry, key_field, std::string(utf8_key->c_str(), utf8_key->size()));
                 break;
+            }
             case FieldDescriptor::CPPTYPE_INT32:
                 entry_ref->SetInt32(entry, key_field, atoi(key));
                 break;

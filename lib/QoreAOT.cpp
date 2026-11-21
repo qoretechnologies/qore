@@ -1152,6 +1152,11 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
+// A different Program can attach after native code has entered the caller.
+static bool aotPreserveDebugCalls(int opt_level, QoreProgram* pgm) {
+    return opt_level == 0 && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
+}
+
 static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
     if (kind == BatchCalleeParamKind::NativeFloat) {
@@ -1360,6 +1365,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include "qore/intern/QoreIRFrameCheck.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -2950,6 +2956,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
+    if (!(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER)) {
+        ir_func->aot_private_root_scope = statements->getLVList();
+    }
     // the parse-time type checks of the lowering are made in the class context of the code, as in
     // UserVariantBase::lowerIRFunction() (qore#5750)
     QoreIRClassContextHelper class_ctx(*ir_func);
@@ -4064,6 +4073,11 @@ struct AOTFnOutlineRegion {
     std::vector<const LocalVar*> contained_locals;
     //! The shared locals that the helper can assign or remove (see QoreIRCallAOTHelperInstruction)
     std::vector<const LocalVar*> written_shared_locals;
+    //! The number of the function's catch blocks open where the region starts, if the region has catch blocks
+    /** The helper counts the catch blocks that the exit block of a catch block closes from those open when it is
+        called (QoreIRFunction::catch_exit_depths)
+    */
+    uint32_t catch_depth = 0;
 };
 
 //! Whole-function analysis state for outline-region discovery.
@@ -4163,17 +4177,22 @@ public:
                 }
                 if (inst->exception_target) {
                     has_exception_paths = true;
+                    exception_targets.insert(inst->exception_target);
                 }
                 if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
                     has_exception_paths |= thr->exception_target != nullptr;
+                    exception_targets.insert(thr->exception_target);
                 } else if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
                     has_exception_paths |= inv->exception_target != nullptr;
+                    exception_targets.insert(inv->exception_target);
                 } else if (auto* inv_md =
                         qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_md->exception_target != nullptr;
+                    exception_targets.insert(inv_md->exception_target);
                 } else if (auto* inv_de =
                         qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_de->exception_target != nullptr;
+                    exception_targets.insert(inv_de->exception_target);
                 }
                 switch (inst->opcode) {
                     case QoreIROpcode::CreateClosure:
@@ -4194,6 +4213,18 @@ public:
                     case QoreIROpcode::ScopeExit:
                         scope_exit_ids.emplace_back(
                             static_cast<const QoreIRScopeExitInstruction*>(inst)->scope_id, i);
+                        if (static_cast<const QoreIRScopeExitInstruction*>(inst)->hand_over_return) {
+                            hand_over_exit_blocks.insert(i);
+                        }
+                        break;
+                    case QoreIROpcode::TakeHandedOverReturn:
+                        hand_over_take_blocks.insert(i);
+                        break;
+                    case QoreIROpcode::ReleaseHandedOverReturn:
+                        // the form with an operand only clears the result of a ScopeExit for the IR interpreter
+                        if (inst->operands.empty()) {
+                            hand_over_take_blocks.insert(i);
+                        }
                         break;
                     case QoreIROpcode::PushTempMark:
                         if (inst->temp_scope_id) {
@@ -4252,6 +4283,10 @@ public:
         std::vector<size_t> block_insts(n);
         for (size_t i = 0; i < n; ++i) {
             block_insts[i] = fn.blocks[i]->instructions.size();
+        }
+        if (!hand_over_exit_blocks.empty() || !hand_over_take_blocks.empty()) {
+            succ_edges = out_edges;
+            pred_edges = in_edges;
         }
         std::unordered_set<const void*> body_local_set;
         for (const LocalVar* lv : fn.all_body_locals) {
@@ -4411,10 +4446,270 @@ private:
     std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
+    //! the blocks that an exception edge targets
+    std::unordered_set<const QoreIRBasicBlock*> exception_targets;
+    //! the blocks with a ScopeExit whose handlers hand the values of their returns over to a return (#6137)
+    std::unordered_set<size_t> hand_over_exit_blocks;
+    //! the blocks with an instruction that takes or releases a value handed over to a return (#6137)
+    std::unordered_set<size_t> hand_over_take_blocks;
+    //! the successors and predecessors of the blocks, kept for handOverCrossesRegion() when the function has a
+    //! handed-over return
+    std::vector<std::vector<size_t>> succ_edges;
+    std::vector<std::vector<size_t>> pred_edges;
+
+    //! Returns true if a ScopeExit that hands a return's value over and an instruction that takes or releases the
+    //! value can be on one path with one of them in the region [\a first..\a last] and the other outside it
+    /** Conservative: a path from a ScopeExit of the region to a take outside it, or from a ScopeExit outside the
+        region to a take in it.
+    */
+    bool handOverCrossesRegion(size_t first, size_t last) const {
+        if (hand_over_exit_blocks.empty() || hand_over_take_blocks.empty()) {
+            return false;
+        }
+        auto in_region = [&](size_t i) { return i >= first && i <= last; };
+        // true if a block of \a targets outside the region is reachable from a block of \a starts in the region
+        // along \a edges
+        auto reaches_outside = [&](const std::unordered_set<size_t>& starts,
+                const std::vector<std::vector<size_t>>& edges, const std::unordered_set<size_t>& targets) {
+            std::vector<bool> seen(edges.size());
+            std::vector<size_t> work;
+            for (size_t i : starts) {
+                if (in_region(i)) {
+                    seen[i] = true;
+                    work.push_back(i);
+                }
+            }
+            while (!work.empty()) {
+                size_t b = work.back();
+                work.pop_back();
+                if (!in_region(b) && targets.count(b)) {
+                    return true;
+                }
+                for (size_t j : edges[b]) {
+                    if (!seen[j]) {
+                        seen[j] = true;
+                        work.push_back(j);
+                    }
+                }
+            }
+            return false;
+        };
+        return reaches_outside(hand_over_exit_blocks, succ_edges, hand_over_take_blocks)
+            || reaches_outside(hand_over_take_blocks, pred_edges, hand_over_exit_blocks);
+    }
+    //! catch_depth_in: no path into the block seen yet
+    static constexpr int CatchDepthUnknown = -2;
+    //! catch_depth_in: the paths into the block disagree
+    static constexpr int CatchDepthConflict = -1;
+    //! catchDepthAfter(): the innermost catch block of an unknown depth was closed
+    static constexpr int CatchDepthInvalid = -3;
+    //! the number of the function's catch blocks open at the start of each block, computed for the first region with
+    //! catch blocks (see checkRegionCatchDepth())
+    std::vector<int> catch_depth_in;
+    bool catch_depths_computed = false;
     std::unordered_map<uint32_t, size_t> temp_mark_idx;
     std::vector<std::pair<uint32_t, size_t>> temp_discard_ids;
     bool has_closure_create = false;
     bool has_exception_paths = false;
+
+    //! Applies the catch blocks that \a inst opens or closes to \a depth, the number of the frame's catch blocks open
+    //! before it (or CatchDepthConflict)
+    /** Returns CatchDepthInvalid if \a inst closes the innermost catch block of an unknown depth
+    */
+    static int catchDepthAfter(const QoreIRFunction& fn, const QoreIRInstruction* inst, int depth) {
+        if (inst->opcode == QoreIROpcode::CatchException) {
+            return depth == CatchDepthConflict ? depth : depth + 1;
+        }
+        if (inst->opcode == QoreIROpcode::CatchCleanup) {
+            // the exit block of a catch block closes those opened since its try statement began, which sets the
+            // depth whatever the paths into it left open; any other CatchCleanup closes the innermost one
+            auto i = fn.catch_exit_depths.find(inst);
+            if (i != fn.catch_exit_depths.end()) {
+                return static_cast<int>(i->second);
+            }
+            return depth == CatchDepthConflict ? CatchDepthInvalid : depth - 1;
+        }
+        return depth;
+    }
+
+    //! Merges the depth \a depth of an edge into \a in, the depth at the start of its target; returns true if \a in
+    //! changed
+    static bool mergeCatchDepth(int& in, int depth) {
+        int merged = in == CatchDepthUnknown || in == depth ? depth : CatchDepthConflict;
+        if (merged == in) {
+            return false;
+        }
+        in = merged;
+        return true;
+    }
+
+    //! Propagates the number of the frame's catch blocks open over the blocks [\a first..\a last] from \a entry_depth
+    //! at the start of block \a first
+    /** Fills \a in, the depths at the start of the blocks (CatchDepthConflict where the paths into a block disagree,
+        as where a catch block without an exit block that an exception leaves open meets the normal path, until the
+        exit block that the exception reaches closes it); calls \a edge(depth) for each edge to block \a exit and
+        \a inst_cb(depth after) for each instruction; stops when either returns false
+    */
+    template <typename E, typename I>
+    bool propagateCatchDepths(const QoreIRFunction& fn, size_t first, size_t last, size_t exit, int entry_depth,
+            std::vector<int>& in, E&& edge, I&& inst_cb) {
+        const size_t count = last - first + 1;
+        in.assign(count, CatchDepthUnknown);
+        in[0] = entry_depth;
+        std::vector<size_t> work{0};
+        std::vector<bool> queued(count, false);
+        queued[0] = true;
+        bool ok = true;
+        while (!work.empty() && ok) {
+            size_t bi = work.back();
+            work.pop_back();
+            queued[bi] = false;
+            int depth = in[bi];
+            for (const auto& inst_ptr : fn.blocks[first + bi]->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->opcode == QoreIROpcode::Phi) {
+                    continue;
+                }
+                // an exception edge is taken before the instruction opens or closes a catch block (the exception
+                // edge of a CatchException is a thread_exit, which does not enter the catch block)
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    if (!target || !ok) {
+                        return;
+                    }
+                    auto it = block_idx.find(target);
+                    if (it == block_idx.end()) {
+                        return;
+                    }
+                    if (it->second == exit) {
+                        ok = edge(depth);
+                        return;
+                    }
+                    if (it->second < first || it->second > last) {
+                        return;
+                    }
+                    size_t ti = it->second - first;
+                    if (mergeCatchDepth(in[ti], depth) && !queued[ti]) {
+                        queued[ti] = true;
+                        work.push_back(ti);
+                    }
+                });
+                if (!ok) {
+                    break;
+                }
+                depth = catchDepthAfter(fn, inst, depth);
+                if (!inst_cb(depth)) {
+                    ok = false;
+                    break;
+                }
+                if (depth == CatchDepthInvalid) {
+                    depth = CatchDepthConflict;
+                }
+            }
+        }
+        return ok;
+    }
+
+    //! Checks that the catch blocks opened in \a region are closed in it and that it closes none opened before it
+    /** Sets the region's catch_depth; returns the reason for rejecting the region, or nullptr
+    */
+    const char* checkRegionCatchDepth(const QoreIRFunction& fn, AOTFnOutlineRegion& region) {
+        if (!catch_depths_computed) {
+            // the depths at the start of the function's blocks; the function starts with none open
+            catch_depths_computed = true;
+            propagateCatchDepths(fn, 0, fn.blocks.size() - 1, SIZE_MAX, 0, catch_depth_in, [](int) { return true; },
+                [](int) { return true; });
+        }
+        int entry_depth = catch_depth_in[region.first];
+        if (entry_depth < 0) {
+            return "catch depth at region entry unknown";
+        }
+        const char* why = nullptr;
+        std::vector<int> in;
+        propagateCatchDepths(fn, region.first, region.last, region.last + 1, entry_depth, in, [&](int depth) {
+            if (depth != entry_depth) {
+                why = "catch block open at region exit";
+                return false;
+            }
+            return true;
+        }, [&](int depth) {
+            if (depth == CatchDepthInvalid || (depth >= 0 && depth < entry_depth)) {
+                why = "region closes a catch block opened before it";
+                return false;
+            }
+            return true;
+        });
+        if (!why) {
+            region.catch_depth = static_cast<uint32_t>(entry_depth);
+        }
+        return why;
+    }
+
+    //! Returns true if a scope of \a scopes entered in the region [\a first..\a last] can be open on an edge to its
+    //! exit block
+    /** A forward dataflow over the region's blocks of the scopes entered and not yet exited (a trim leaves the scope
+        open); the region's entry has none of them open
+    */
+    static bool handlerScopeOpenAtExit(const QoreIRFunction& fn, size_t first, size_t last,
+            const std::unordered_set<uint32_t>& scopes) {
+        const size_t count = last - first + 1;
+        std::unordered_map<const QoreIRBasicBlock*, size_t> region_idx;
+        region_idx.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            region_idx[fn.blocks[first + i].get()] = i;
+        }
+        const QoreIRBasicBlock* exit = fn.blocks[last + 1].get();
+        std::vector<std::set<uint32_t>> open_in(count);
+        std::vector<bool> queued(count, false);
+        std::vector<bool> visited(count, false);
+        std::vector<size_t> work{0};
+        queued[0] = visited[0] = true;
+        bool open_at_exit = false;
+        while (!work.empty() && !open_at_exit) {
+            size_t bi = work.back();
+            work.pop_back();
+            queued[bi] = false;
+            std::set<uint32_t> open = open_in[bi];
+            for (const auto& inst_ptr : fn.blocks[first + bi]->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->opcode == QoreIROpcode::Phi) {
+                    continue;
+                }
+                if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                    uint32_t id = static_cast<const QoreIRScopeEnterInstruction*>(inst)->scope_id;
+                    if (scopes.count(id)) {
+                        open.insert(id);
+                    }
+                } else if (inst->opcode == QoreIROpcode::ScopeExit) {
+                    const auto* sx = static_cast<const QoreIRScopeExitInstruction*>(inst);
+                    if (!sx->trim) {
+                        open.erase(sx->scope_id);
+                    }
+                }
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    if (!target || open_at_exit) {
+                        return;
+                    }
+                    if (target == exit) {
+                        open_at_exit = !open.empty();
+                        return;
+                    }
+                    auto it = region_idx.find(target);
+                    if (it == region_idx.end()) {
+                        return;
+                    }
+                    size_t ti = it->second;
+                    size_t before = open_in[ti].size();
+                    open_in[ti].insert(open.begin(), open.end());
+                    if ((open_in[ti].size() != before || !visited[ti]) && !queued[ti]) {
+                        visited[ti] = true;
+                        queued[ti] = true;
+                        work.push_back(ti);
+                    }
+                });
+            }
+        }
+        return open_at_exit;
+    }
 
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
@@ -4454,7 +4749,17 @@ private:
                 }
             }
         }
+        // nor may the first block be the target of an exception edge (an exception path's cleanup block, which the
+        // exception enters with no landing pad): the helper would be entered with the exception pending, and the
+        // coordinator's call block is no exception path (qore#6651)
+        if (exception_targets.count(fn.blocks[first].get())) {
+            return fail("exception-path block at region boundary");
+        }
         std::unordered_set<const LocalVar*> region_locals;
+        // the scopes of the on_exit, on_error and on_success handlers registered in the region
+        std::unordered_set<uint32_t> handler_scopes;
+        // true if the region opens or closes a catch block
+        bool has_catch_ops = false;
         // the locals that an instruction of the region can write (qore#6314)
         std::unordered_set<const LocalVar*> region_written;
         size_t temp_push_count = 0;
@@ -4488,11 +4793,16 @@ private:
                                 || !in_region(it->second)) {
                             return fail("on-block-exit owner scope crosses region boundary");
                         }
+                        handler_scopes.insert(obe->owner_scope_id);
                         if (unknown_handler_locals.count(inst)) {
                             return fail("on-block-exit handler references locals that cannot be collected");
                         }
                         break;
                     }
+                    case QoreIROpcode::CatchException:
+                    case QoreIROpcode::CatchCleanup:
+                        has_catch_ops = true;
+                        break;
                     default:
                         break;
                 }
@@ -4605,38 +4915,29 @@ private:
                 return fail("scope enter/exit crosses region boundary");
             }
         }
-        // A closure created in the region that captures both a local of the region (instantiated in the helper)
-        // and a local that the coordinator shares with it cannot find the coordinator's local when it runs ("local
-        // variable ... is not instantiated in the current context"; found by compiling the test scripts with the
-        // outliner's thresholds forced low: qore#6560).  A closure capturing only one of the two kinds works.
-        for (size_t i = first; i <= last; ++i) {
-            for (const auto& inst_ptr : fn.blocks[i]->instructions) {
-                if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure) {
-                    continue;
-                }
-                const auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(inst_ptr.get());
-                const QoreClosureParseNode* closure = cci->closure_node
-                    ? cci->closure_node
-                    : qore_get_closure_parse_node(cci->expr.getInternalNode());
-                const LVarSet* vlist = closure ? closure->getVList() : nullptr;
-                if (!vlist) {
-                    continue;
-                }
-                bool captures_region_local = false;
-                bool captures_shared_local = false;
-                for (const LocalVar* lv : *vlist) {
-                    auto it = local_info.find(lv);
-                    if (it != local_info.end() && it->second.min_ref >= first && it->second.max_ref <= last
-                            && body_local_set.count(reinterpret_cast<const void*>(lv))) {
-                        captures_region_local = true;
-                    } else {
-                        captures_shared_local = true;
-                    }
-                }
-                if (captures_region_local && captures_shared_local) {
-                    return fail("closure captures locals of both the region and the coordinator");
-                }
+        // A scope with handlers that is still open where the region exits would have its handlers run by the
+        // helper's return, which runs the handlers registered in the helper, and not where the scope ends in the
+        // coordinator, with the exception or the return that ends it.  Such a scope has no ScopeExit when all of its
+        // paths end in a return or an exception, after the block split that ends the region (qore#6652).
+        if (!handler_scopes.empty() && handlerScopeOpenAtExit(fn, first, last, handler_scopes)) {
+            return fail("handler scope open at region exit");
+        }
+        // The catch blocks of the region must be opened and closed in it: the exit block of a catch block closes the
+        // catch blocks of the frame down to the depth of its try statement, which the helper counts from the catch
+        // blocks open when it is called (qore#6651)
+        if (has_catch_ops) {
+            const char* why = checkRegionCatchDepth(fn, region);
+            if (why) {
+                return fail(why);
             }
+        }
+        // The value that handlers run out of line past the inline cap in the block cleanups of a return hand over
+        // (a ScopeExit with hand_over_return) is kept in a cell of the function that runs them, which the return takes
+        // or releases (TakeHandedOverReturn, ReleaseHandedOverReturn): the helper and the coordinator have cells of
+        // their own, so the ScopeExit and the instructions that take or release its value must be in the same one
+        // (#6137, qore#6650)
+        if (handOverCrossesRegion(first, last)) {
+            return fail("handed-over return crosses region boundary");
         }
         // Classify referenced locals.
         for (const LocalVar* lv : region_locals) {
@@ -4712,6 +5013,30 @@ private:
                 region.contained_locals.push_back(lv);
             }
         }
+        // the helper releases its locals in the reverse order of their declaration, as the function does: a local
+        // declared later is released first, before a catch block's exception variable declared before it, for
+        // example (qore#6650); the sets above have no order
+        std::unordered_map<const LocalVar*, size_t> decl_order;
+        decl_order.reserve(fn.all_body_locals.size());
+        for (size_t i = 0; i < fn.all_body_locals.size(); ++i) {
+            decl_order.emplace(fn.all_body_locals[i], i);
+        }
+        auto order_key = [&](const LocalVar* lv) {
+            auto i = decl_order.find(lv);
+            if (i != decl_order.end()) {
+                return std::make_pair(i->second, static_cast<size_t>(0));
+            }
+            // a parameter or another local that is not a body local: by its slot
+            auto s = fn.local_var_slots.find(lv);
+            return std::make_pair(SIZE_MAX, s != fn.local_var_slots.end() ? static_cast<size_t>(s->second)
+                : SIZE_MAX);
+        };
+        auto by_declaration = [&](const LocalVar* a, const LocalVar* b) {
+            return order_key(a) < order_key(b);
+        };
+        std::stable_sort(region.contained_locals.begin(), region.contained_locals.end(), by_declaration);
+        std::stable_sort(region.shared_locals.begin(), region.shared_locals.end(), by_declaration);
+        std::stable_sort(region.written_shared_locals.begin(), region.written_shared_locals.end(), by_declaration);
         return true;
     }
 };
@@ -4799,6 +5124,8 @@ public:
             region_blocks.push_back({fn->blocks[r.first].get(),
                 fn->blocks[r.last].get(), fn->blocks[r.last + 1].get()});
         }
+        saved_all_body_locals = fn->all_body_locals;
+        all_body_locals_saved = true;
         for (size_t k = 0; k < regions.size(); ++k) {
             transformRegion(regions[k], region_blocks[k], k);
         }
@@ -4926,6 +5253,11 @@ public:
             helper->blocks.clear();
         }
         undo_records.clear();
+        if (all_body_locals_saved) {
+            fn->all_body_locals = std::move(saved_all_body_locals);
+            saved_all_body_locals.clear();
+            all_body_locals_saved = false;
+        }
         undoSplits();
         reattachDebugFlowPaths();
         fn->max_value_id = saved_max_value_id;
@@ -4962,6 +5294,9 @@ private:
 
     QoreIRFunction* fn = nullptr;
     std::vector<UndoRecord> undo_records;
+    //! the coordinator's body locals before the transform, restored by undo() (see transformRegion())
+    std::vector<LocalVar*> saved_all_body_locals;
+    bool all_body_locals_saved = false;
     std::vector<SplitRecord> split_records;
 
     //! The paths of the debugger's flow requests set aside while the function is outlined (#6201)
@@ -5309,6 +5644,17 @@ private:
             }
         }
 
+        // The helper unwinds locals it owns. A function-root local must use the coordinator's caller
+        // statement even when the region is entered from a different statement in the coordinator.
+        for (const LocalVar* lv : region.contained_locals) {
+            if (auto it = fn->local_unwind_locations.find(lv); it != fn->local_unwind_locations.end()) {
+                helper->local_unwind_locations.insert(*it);
+                if (!it->second) {
+                    helper->takes_body_entry_location = true;
+                }
+            }
+        }
+
         // Mark in-region returns for the outline return token: the helper
         // signals immediately before returning the value; the coordinator
         // consumes the flag after the call and re-executes the return
@@ -5324,6 +5670,14 @@ private:
                     auto* r = static_cast<QoreIRReturnInstruction*>(inst_ptr.get());
                     r->outline_signal = true;
                     signaled_returns.push_back(r);
+                } else if (inst_ptr && inst_ptr->opcode == QoreIROpcode::UninstantiateLocal && !inst_ptr->stmt_loc) {
+                    // An early return can release a shared root local inside the helper, before the
+                    // coordinator consumes the return token. Use the same enclosing statement here.
+                    const auto* local = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get())->local;
+                    if (fn->releasesLocalAtCaller(local)) {
+                        helper->local_unwind_locations.emplace(local, nullptr);
+                        helper->takes_body_entry_location = true;
+                    }
                 }
             }
         }
@@ -5344,6 +5698,8 @@ private:
             // before the call (qore#6300)
             call->shared_locals = region.shared_locals;
             call->written_shared_locals = region.written_shared_locals;
+            call->function_body = true;
+            call->takes_body_entry_location = helper->takes_body_entry_location;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
@@ -5368,6 +5724,7 @@ private:
                 for (const auto& inst_ptr : helper->blocks.front()->instructions) {
                     if (inst_ptr && inst_ptr->loc) {
                         call->loc = inst_ptr->loc;
+                        call->stmt_loc = inst_ptr->stmt_loc;
                         call->cached_start_line = inst_ptr->cached_start_line;
                         break;
                     }
@@ -5416,6 +5773,19 @@ private:
         helper->specialization_receiver_type_info = fn->specialization_receiver_type_info;
         helper->specialization_type_param_instantiation =
             fn->specialization_type_param_instantiation;
+        // a closure-bound local that only the region references is the helper's: the coordinator, which would take
+        // it for one of its own that no block of its code scopes and push its closure variable at its entry, below
+        // the closure variables of its other locals, does not have it; the helper's scope exit then popped the
+        // closure variable on the top of the stack, another local's, which a closure created later in the helper
+        // could not find (qore#6654)
+        for (const LocalVar* lv : region.contained_locals) {
+            if (lv->closureUse()) {
+                auto i = std::find(fn->all_body_locals.begin(), fn->all_body_locals.end(), lv);
+                if (i != fn->all_body_locals.end()) {
+                    fn->all_body_locals.erase(i);
+                }
+            }
+        }
         for (const LocalVar* lv : region.contained_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
             helper->all_body_locals.push_back(const_cast<LocalVar*>(lv));
@@ -5457,6 +5827,34 @@ private:
         }
         helper->total_local_count = region.contained_locals.size()
             + region.shared_locals.size();
+        // the function's tables of its try statements, keyed by instruction, go with the instructions that the helper
+        // lowers: the value of a return of a try block that the exception interrupted is released before the catch
+        // block runs, the information of a catch block is released when a jump leaves it (qore#6650), and the exit
+        // block of a catch block closes the catch blocks opened since its try statement began (qore#6651); without
+        // them, the helper kept the return value until it returned, after the catch block, and closed the innermost
+        // catch block only, which could be one that the exit block's try statement is in
+        for (auto& b : helper->blocks) {
+            for (auto& inst_ptr : b->instructions) {
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                if (auto i = fn->catch_interrupted_returns.find(inst); i != fn->catch_interrupted_returns.end()) {
+                    helper->catch_interrupted_returns.insert(*i);
+                }
+                if (auto i = fn->catch_cleanup_results.find(inst); i != fn->catch_cleanup_results.end()) {
+                    helper->catch_cleanup_results.insert(*i);
+                }
+                if (auto i = fn->catch_exit_depths.find(inst); i != fn->catch_exit_depths.end()) {
+                    // the helper counts the catch blocks from those open when it is called
+                    assert(i->second >= region.catch_depth);
+                    helper->catch_exit_depths[inst] = i->second - region.catch_depth;
+                }
+            }
+        }
+        // the catch blocks without an exit block that an exception leaving the helper leaves are closed before the
+        // locals that the helper releases, as the function closes them before its locals (qore#6650)
+        helper->catch_exit_unwind = fn->catch_exit_unwind;
 
         UndoRecord rec;
         rec.helper_idx = helpers.size();
@@ -5480,13 +5878,30 @@ private:
 /** The coordinator's own locals that only a helper uses are kept by the helper (see
     QoreIRFunction::aot_native_local_flags)
 */
-static void aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
-        const std::vector<AOTOutlinedHelper>& helpers) {
+static bool aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
+        const std::vector<AOTOutlinedHelper>& helpers, std::string& error) {
+    size_t examined = 0;
     for (const auto& h : helpers) {
+        // A contained local can still be listed in the coordinator after all its accesses moved to
+        // the helper. Only the entry that executes the stores can prove that it needs no stack slot.
+        for (LocalVar* lv : h.ir_func->all_body_locals) {
+            if (!(++examined % 100) && qore_check_cancel(nullptr, "AOT outlined local metadata")) {
+                error = "cancelled during AOT outlined local metadata";
+                return false;
+            }
+            if (!h.ir_func->aot_private_body_locals.count(lv)) {
+                coordinator.aot_private_body_locals.erase(lv);
+            }
+        }
         for (const auto& [key, flags] : h.ir_func->aot_native_local_flags) {
+            if (!(++examined % 100) && qore_check_cancel(nullptr, "AOT outlined local metadata")) {
+                error = "cancelled during AOT outlined local metadata";
+                return false;
+            }
             coordinator.aot_native_local_flags[key] |= flags;
         }
     }
+    return true;
 }
 
 //! Erases the unused declarations of the closure dispatch functions of the AOT body \a owner
@@ -5561,7 +5976,7 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
     aotEraseUnusedClosureDispatchDecls(module, owner);
 }
 
-static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
+static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
@@ -5573,7 +5988,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
             fprintf(stderr, "=================\n");
         }
         QoreIRToLLVM lowerer(ctx);
-        lowerer.setAOTMode(&slots);
+        lowerer.setAOTMode(&slots, !preserve_debug_calls);
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
@@ -5830,15 +6245,14 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     // assuming evalTiered set them up). Init functions are called directly
     // from the init-exec loop with no evalTiered wrapper — we handle the
     // instantiation ourselves in executeInitFunctions for MODULE_INIT entries
-    // by iterating ctx->all_body_locals and calling instantiate/uninstantiate
+    // by iterating ctx->runtime_body_locals and calling instantiate/uninstantiate
     // around the call.
 
     AOTSlotMap slots;
     buildAOTSlotMap(*ir_func, slots);
 
     QoreIRToLLVM lowerer(ctx);
-    lowerer.setAOTMode(&slots);
-    lowerer.setAOTDirectClosureFastEntry(false);
+    lowerer.setAOTMode(&slots, false);
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -14027,7 +14441,71 @@ static bool finalizeAOTBatchBodyContracts(
     return true;
 }
 
+//! Returns true if the instruction is one that a body summary turns into an operation that can raise an exception
+/** These are the operations of the summaries that a call is replaced by (emitAOTImportedSummary()): divisions, the
+    projections of hash keys and list elements, the string operations of method calls, and the calls whose summaries a
+    summary composes, which run in the inline frame of the summarized call (qore#6673)
+*/
+static bool qore_ir_summary_may_raise(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::ListIndexDynamic:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallClosureDirect:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns the statements of the operations of a function that a summary of it can raise an exception from
+/** @return 0 if there is none, 1 if they are all in one statement, whose location is returned in \a loc, or 2 if they
+    are in more than one statement, or -1 if cancelled
+*/
+static int qore_ir_get_raise_location(const QoreIRFunction& func, const QoreProgramLocation*& loc) {
+    loc = nullptr;
+    size_t check_count = 0;
+    for (QoreIRBasicBlock* block : qore_ir_code_blocks(func)) {
+        for (const auto& inst : block->instructions) {
+            if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT function raise location")) {
+                return -1;
+            }
+            if (!inst || !qore_ir_summary_may_raise(inst->opcode)) {
+                continue;
+            }
+            // the runtime location of the instruction: of its statement, which an exception takes (qore#6646)
+            const QoreProgramLocation* iloc = inst->stmt_loc ? inst->stmt_loc : inst->loc;
+            if (!iloc || iloc->start_line <= 0) {
+                continue;
+            }
+            if (!loc) {
+                loc = iloc;
+            } else if (loc != iloc && (loc->start_line != iloc->start_line || loc->end_line != iloc->end_line
+                    || loc->getFileValue() != iloc->getFileValue())) {
+                return 2;
+            }
+        }
+    }
+    return loc ? 1 : 0;
+}
+
 const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func) {
+    // the statement of the operations that can raise an exception, if they are all in one: an exception that the code
+    // run inline at this location raises is located at its statement (qore#6673)
+    const QoreProgramLocation* raise_loc;
+    if (qore_ir_get_raise_location(func, raise_loc) == 1) {
+        return raise_loc;
+    }
     const QoreProgramLocation* first = nullptr;
     size_t check_count = 0;
     // the code (QoreIRCodeBlocks): the return of the path of a debugger's request has the location of its step event
@@ -14056,7 +14534,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        bool collect_body_dependency_provenance) {
+        bool collect_body_dependency_provenance, bool preserve_debug_calls) {
     // the location of each body, for the callers that a summary of the body takes the place of a call in
     size_t body_loc_count = 0;
     for (const auto& [variant, func] : functions) {
@@ -14186,6 +14664,11 @@ bool qore_ir_resolve_batch_function_summaries(
             callee_it->second.param_may_modify =
                 summary.param_may_modify;
         }
+    }
+    // The debugger must be able to enter the real callee. Keep the effect and calling-convention
+    // facts above, but never publish a replacement for the body of a source-debug build.
+    if (preserve_debug_calls) {
+        return !collect_body_dependency_provenance || resolveAOTBatchBodyDependencyProvenance(functions, batch_callees);
     }
     // Member access, string and collection summaries replace a call with the value the callee's body returns, and
     // an inferred boxed return kind describes that value, so they are only derived from functions whose declared
@@ -15750,6 +16233,31 @@ bool qore_ir_resolve_batch_function_summaries(
             functions, batch_callees, check_count)) {
         return false;
     }
+    // a summary runs in an inline frame at one location (qore_ir_get_body_location()), so a summary that can raise an
+    // exception is declined for a function whose operations that can raise are in more than one statement: the
+    // exception would be located at the wrong statement (qore#6673)
+    for (const auto& [variant, func] : functions) {
+        auto it = func ? batch_callees.find(variant) : batch_callees.end();
+        if (it == batch_callees.end()) {
+            continue;
+        }
+        const QoreProgramLocation* raise_loc;
+        int rc = qore_ir_get_raise_location(*func, raise_loc);
+        if (rc < 0) {
+            return false;
+        }
+        if (rc == 2) {
+            BatchCalleeInfo& info = it->second;
+            info.int_expression = AOTIntExpressionInfo();
+            info.float_expression = AOTFloatExpressionInfo();
+            info.string_op = AOTStringOpInfo();
+            info.string_expression = AOTStringExpressionInfo();
+            info.collection_op = AOTCollectionOpInfo();
+            info.composed_int = AOTComposedIntInfo();
+            info.context_int = AOTContextIntInfo();
+            info.global_int = AOTGlobalIntInfo();
+        }
+    }
     return !collect_body_dependency_provenance
         || resolveAOTBatchBodyDependencyProvenance(functions,
             batch_callees);
@@ -16026,7 +16534,7 @@ size_t qore_ir_fuse_batch_aggregate_return_projections(
         func, projection_query);
 }
 
-static bool resolveAOTBatchFunctionEffectSummaries(
+static bool resolveAOTBatchFunctionEffectSummaries(bool preserve_debug_calls,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
@@ -16048,7 +16556,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
     }
     return qore_ir_resolve_batch_function_summaries(
-        functions, batch_callees, true);
+        functions, batch_callees, true, preserve_debug_calls);
 }
 
 static size_t projectAOTNonescapingObjectScalars(
@@ -16504,7 +17012,7 @@ static bool finalizeAOTBatchFastEntrySymbols(llvm::Module& module,
     return true;
 }
 
-static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
+static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         const AOTGenericSpecializationCandidates& specializations,
         std::unordered_map<const AbstractQoreFunctionVariant*,
@@ -16529,7 +17037,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         UserVariantBase* uvb = variant
             ? const_cast<AbstractQoreFunctionVariant*>(variant)
                 ->getUserVariantBase() : nullptr;
-        if (info == batch_callees.end() || !uvb
+        if (info == batch_callees.end() || !uvb || (method && preserve_debug_calls)
                 || (method
                     ? !isAOTFastMethodCallEligible(variant, true)
                     : !uvb->isStaticallyFastCallEligible(true))) {
@@ -16601,7 +17109,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
 
     const std::vector<std::pair<const AbstractQoreFunctionVariant*,
         std::unique_ptr<QoreIRFunction>>> effect_only_candidates;
-    if (!resolveAOTBatchFunctionEffectSummaries(candidates,
+    if (!resolveAOTBatchFunctionEffectSummaries(preserve_debug_calls, candidates,
             effect_only_candidates, batch_callees)) {
         return false;
     }
@@ -16637,7 +17145,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
             batch_callees);
 }
 
-static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
+static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
         std::set<std::string>& declared_keys,
@@ -16900,7 +17408,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 const bool speculative_object_fast_entry = !speculative_object_fast_entry_env.get();
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
                     ir_func, uvb, qc, meth, variant, speculative_object_fast_entry);
-                if (!will_outline && fast_method_eligible
+                // Only named functions have debugger dispatch in their typed native entry. A method
+                // call in a source-debug build uses the ordinary method binder, including in callers
+                // whose eligibility to run with a borrowed AOT context is determined from this map.
+                if (!preserve_debug_calls && !will_outline && fast_method_eligible
                         && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
                         || implicit_self)) {
                     unsigned num_params = sig->numParams();
@@ -17098,7 +17609,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 effect_only_candidates, *generic_specializations)) {
         return false;
     }
-    if (!resolveAOTBatchFunctionEffectSummaries(
+    if (!resolveAOTBatchFunctionEffectSummaries(preserve_debug_calls,
             context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
     }
@@ -17129,7 +17640,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
         ++ns_i;
         if (ni.second) {
-            if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, ctx, module,
+            if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, preserve_debug_calls, ctx, module,
                     aot_batch_callee_map, declared_keys, compile_module, compile_file,
                     keep_modules, compile_files, generic_specializations)) {
                 return false;
@@ -17137,7 +17648,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
     if (owns_generic_specializations
-            && !resolveAOTBatchGenericSpecializations(pgm, ctx,
+            && !resolveAOTBatchGenericSpecializations(pgm, preserve_debug_calls, ctx,
                 module, *generic_specializations,
                 aot_batch_callee_map)) {
         return false;
@@ -18264,7 +18775,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     return true;
 }
 
-static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
+static bool addAOTPreloadedFastEntries(qore_ns_private* ns, bool preserve_debug_calls,
         const std::unordered_map<std::string, QoreAOTSymbolIndexRecord>& records,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
     size_t check_count = 0;
@@ -18298,6 +18809,11 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
             BatchCalleeInfo info;
             bool cancelled = false;
             if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                // A debug caller can still use a sibling's real named entry. An optimized
+                // sibling with a body substitution can always be called by its standard entry.
+                if (preserve_debug_calls && info.hasImportableBodySummary()) {
+                    continue;
+                }
                 info.call_ref_path = function_name;
                 info.single_variant_function = func->numVariants() == 1;
                 batch_callees.emplace(variant, std::move(info));
@@ -18345,6 +18861,9 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
                     BatchCalleeInfo info;
                     bool cancelled = false;
                     if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                        if (preserve_debug_calls && (info.approach_b_eligible || info.hasImportableBodySummary())) {
+                            continue;
+                        }
                         batch_callees.emplace(variant, std::move(info));
                     } else if (cancelled) {
                         return false;
@@ -18360,7 +18879,7 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
             return false;
         }
         if (ni.second && !addAOTPreloadedFastEntries(qore_ns_private::get(*ni.second),
-                records, batch_callees)) {
+                preserve_debug_calls, records, batch_callees)) {
             return false;
         }
     }
@@ -18907,7 +19426,7 @@ static bool defineAOTClosureNativeThrowingDispatch(llvm::LLVMContext& ctx,
     runtime slot-map reconstruction create the closure variant from the owner's
     CLOSURE_CREATE record before registering the native body on that variant.
 */
-static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm,
+static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
@@ -19376,7 +19895,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                         }
                     }
                     QoreIRToLLVM fast_lowerer(ctx);
-                    fast_lowerer.setAOTMode(&slots);
+                    fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(false);
@@ -19462,7 +19981,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
         } else {
             QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
+            lowerer.setAOTMode(&slots, !preserve_debug_calls);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             lowerer.setDeferredExceptionChecking(false);
@@ -19530,7 +20049,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             fprintf(stderr, "AOT: compiled native closure '%s'\n", native_key.c_str());
         }
 
-        if (!compileAOTClosureBodiesForOwner(closure_index, pgm, ctx, module,
+        if (!compileAOTClosureBodiesForOwner(closure_index, pgm, preserve_debug_calls, ctx, module,
                 di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                 total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                 aot_batch_callee_map, fatal_error)) {
@@ -19540,7 +20059,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
     return true;
 }
 
-static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
+static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
@@ -19570,7 +20089,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
     if (!metadata_only && owns_aot_batch_callee_map) {
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, local_aot_batch_callee_map,
+        if (!declareAOTBatchFastEntries(ns, pgm, preserve_debug_calls, ctx, module, local_aot_batch_callee_map,
                 declared_fast_keys, compile_module, compile_file, keep_modules, compile_files)) {
             setAOTCompileFatal(fatal_error, "namespace", "<batch-callee-fast-entry>",
                 "declaration", "cancelled");
@@ -21722,7 +22241,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 } else {
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
-                    lowerer.setAOTMode(&slots);
+                    lowerer.setAOTMode(&slots, !preserve_debug_calls);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // Deferring exception checks is not semantics-preserving for
@@ -21776,7 +22295,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // helper failure fall back to un-outlined lowering.
                     if (fn_outliner.active()) {
                         std::string helper_error;
-                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
                                 module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
                         }
@@ -21795,7 +22314,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
-                        retry_lowerer.setAOTMode(&slots);
+                        retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         retry_lowerer.setDeferredExceptionChecking(false);
@@ -21806,7 +22325,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             llvm_error);
                     }
                     if (std_entry_ok && fn_outliner.active()) {
-                        aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                        std_entry_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                     }
 
                     // Compile fast entry for AOT Approach B.
@@ -21846,7 +22365,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
 
                         QoreIRToLLVM fast_lowerer(ctx);
-                        fast_lowerer.setAOTMode(&slots);
+                        fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
@@ -21923,7 +22442,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
-                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, module,
                             di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                             total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                             aot_batch_callee_map, fatal_error)) {
@@ -22214,7 +22733,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     } else {
                         // Lower to LLVM with AOT mode
                         QoreIRToLLVM lowerer(ctx);
-                        lowerer.setAOTMode(&slots);
+                        lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
@@ -22248,7 +22767,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // lowering of the restored original method.
                         if (fn_outliner.active()) {
                             std::string helper_error;
-                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
                                     module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
                             }
@@ -22265,7 +22784,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
-                            retry_lowerer.setAOTMode(&slots);
+                            retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             retry_lowerer.setDeferredExceptionChecking(false);
@@ -22276,7 +22795,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 llvm_error);
                         }
                         if (method_ok && fn_outliner.active()) {
-                            aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                            method_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                         }
 
                         if (method_ok && fast_entry_eligible) {
@@ -22314,7 +22833,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
 
                             QoreIRToLLVM fast_lowerer(ctx);
-                            fast_lowerer.setAOTMode(&slots);
+                            fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                             fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             fast_lowerer.setDeferredExceptionChecking(false);
@@ -22387,7 +22906,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         const size_t owner_index = compiled_funcs.size();
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
-                        if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                        if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, module,
                                 di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                                 total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                                 aot_batch_callee_map, fatal_error)) {
@@ -22528,8 +23047,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 return true;
             }
             QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
-            lowerer.setAOTDirectClosureFastEntry(false);
+            lowerer.setAOTMode(&slots, false);
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -22864,7 +23382,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
-            compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
+            compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, preserve_debug_calls, ctx, module,
                 di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
@@ -24841,8 +25359,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // slot dispatch even when the callee has a direct native ABI in this module.
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         executable_batch_callees;
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, pgm);
     std::set<std::string> declared_fast_keys;
-    if (!declareAOTBatchFastEntries(root_ns, pgm, ctx, *module,
+    if (!declareAOTBatchFastEntries(root_ns, pgm, preserve_debug_calls, ctx, *module,
             executable_batch_callees, declared_fast_keys, "", nullptr,
             local_module_names.empty() ? nullptr : &local_module_names, nullptr)) {
         error = "operation cancelled during executable AOT fast-entry discovery";
@@ -24862,7 +25381,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // ("Global is external, but doesn't have external or weak linkage!") -- and
     // that a module-private caller compiled below binds its call to.
     for (auto& root : local_module_roots) {
-        if (!declareAOTBatchFastEntries(root.second, pgm, ctx, *module,
+        if (!declareAOTBatchFastEntries(root.second, pgm, preserve_debug_calls, ctx, *module,
                 executable_batch_callees, declared_fast_keys, root.first.c_str(),
                 nullptr, nullptr, nullptr)) {
             error = "operation cancelled during executable AOT embedded-module "
@@ -24877,7 +25396,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // same local-module keep set that serialization keeps below.
     std::string fatal_lowering_error;
     std::set<std::string> compiled_keys;
-    compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, pgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, &compiled_keys, "",
         nullptr, false, nullptr, nullptr, &fatal_lowering_error,
@@ -24888,7 +25407,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // compileNamespaceFunctions() build its own under this module's
         // `compile_module`, re-declaring a prefixed `_fast` twin of every
         // exported item whose body the walk above already emitted.
-        compileNamespaceFunctions(root.second, pgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root.second, pgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
             total_ir_insts_all, &const_reverse_map, &compiled_keys, root.first.c_str(),
             nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr,
@@ -25062,7 +25581,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 buildAOTSlotMap(*ir_func, slots);
 
                 QoreIRToLLVM llvm_lowerer(ctx);
-                llvm_lowerer.setAOTMode(&slots);
+                llvm_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                 if (!executable_batch_callees.empty()) {
                     llvm_lowerer.setBatchCallees(&executable_batch_callees);
                 }
@@ -25119,7 +25638,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
-                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, *module,
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, *module,
                             di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                             total_ir_insts_all, &const_reverse_map, "", false,
                             executable_batch_callees.empty()
@@ -25804,7 +26323,7 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 /** Extracts name, version, desc, author, url, and license from the module { ... } block.
     Falls back to deriving the module name from the filename label.
 */
-static bool parseModuleMetadata(const char* source, int source_len, const char* label,
+static bool parseModuleMetadataImpl(const char* source, int source_len, const char* label,
         QoreAOTModuleInfo& info, std::string& error) {
     std::string src(source, source_len);
 
@@ -26087,6 +26606,25 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
     }
 
     return true;
+}
+
+// Metadata is read before the Program parses the whole module. Prefer its source
+// encoding error even when malformed bytes also prevent reading the declaration.
+static bool parseModuleMetadata(const char* source, int source_len, const char* label,
+        QoreAOTModuleInfo& info, std::string& error) {
+    if (parseModuleMetadataImpl(source, source_len, label, info, error)) {
+        return true;
+    }
+    ExceptionSink xsink;
+    int line = qore_invalid_source_utf8_line(source, source_len, xsink);
+    if (line < 0) {
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        error = desc->c_str();
+        xsink.clear();
+    } else if (line > 0) {
+        error = std::string(label) + ":" + std::to_string(line) + ": invalid UTF-8 in source";
+    }
+    return false;
 }
 
 //! Map a license string to a qore_license_t enum value
@@ -27713,7 +28251,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
         // after all module types/functions have been parsed.
-        qpgm->parsePending(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
+        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink, &wsink, QP_WARN_DEFAULT);
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         }
@@ -27810,13 +28348,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // namespace block), which were previously missed when only child
     // namespaces were iterated.
     std::string fatal_lowering_error;
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     // the module owns its fast-entry map: it is written to the module's symbol index, so that a module compiled
     // against this one can call its functions' native fast entries, and to its table of fast entries, through which
     // such a call finds them at run time (qore#6035)
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> module_batch_callees;
     {
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, ctx, *module, module_batch_callees, declared_fast_keys,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls,
+                ctx, *module, module_batch_callees, declared_fast_keys,
                 mod_info.name.c_str(), nullptr, nullptr, nullptr)) {
             error = "operation cancelled during module AOT fast-entry discovery";
             return false;
@@ -27831,7 +28371,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             }
         }
     }
-    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, *qpgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str(),
         nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr, &module_batch_callees);
@@ -28179,7 +28719,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -28238,7 +28778,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, file_warn_mask);
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -28356,7 +28896,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // namespace block), which were previously missed when only child
         // namespaces were iterated.
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), nullptr, false, nullptr, nullptr,
@@ -29029,7 +29570,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
 
     std::string fatal_lowering_error;
-    compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, qpgm, aotPreserveDebugCalls(opt_level, qpgm), ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
@@ -29346,7 +29887,7 @@ static bool parseStubFiles(QoreProgram* pgm,
         QoreAotWarningReportHelper wsink_report(wsink);
         {
             ParseStubDeclarationModeHelper h(pgm);
-            pgm->parsePending(src.c_str(), canon.c_str(),
+            qore_program_private::get(*pgm)->parsePending(src, canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
         }
         if (xsink.isException()) {
@@ -29587,7 +30128,7 @@ static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preload
     if (!preloaded || !xsink.isException()) {
         return false;
     }
-    for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+    for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
         if (ex->err.getType() != NT_STRING) {
             continue;
         }
@@ -30241,7 +30782,7 @@ bool QoreAOT::compileScriptFilesBatch(
                 &sibling_preload.source_labels);
             AOTParseSourceGuard parse_source_guard(&batch_target_set);
             if (!applyAOTSourceModernDefault(**qpgm, e.canon, &xsink)) {
-                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(e.source, e.canon.c_str(),
                     &xsink, &wsink, QP_WARN_DEFAULT);
             }
             // each source's parse options are restored when the guard goes out of scope, so they are checked here
@@ -30412,6 +30953,7 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     deps_done = std::chrono::steady_clock::now();
 
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     // Discover fast-entry ABIs once across the shared parse.  Each per-file
     // object receives declarations for this immutable map, while its normal
     // source filter still emits only that file's definitions.
@@ -30426,7 +30968,7 @@ bool QoreAOT::compileScriptFilesBatch(
     if (!sibling_preload.fast_entries.empty()
             && !q_env_is_set("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
         qore_ns_private* preload_root_ns = qore_ns_private::get(*batch_pp->RootNS);
-        if (!addAOTPreloadedFastEntries(preload_root_ns,
+        if (!addAOTPreloadedFastEntries(preload_root_ns, preserve_debug_calls,
                 sibling_preload.fast_entries, shared_batch_callees)) {
             error = "operation cancelled during preloaded AOT fast-entry import";
             return false;
@@ -30451,7 +30993,7 @@ bool QoreAOT::compileScriptFilesBatch(
             discovery_ctx);
         std::set<std::string> declared_fast_keys;
         qore_ns_private* root_ns = qore_ns_private::get(*batch_pp->RootNS);
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls, discovery_ctx,
                 discovery_module, shared_batch_callees, declared_fast_keys,
                 nullptr, nullptr, nullptr, &batch_target_files)) {
             error = "operation cancelled during AOT batch fast-entry discovery";
@@ -30965,7 +31507,7 @@ bool QoreAOT::compileScriptAggregate(
                 // parse directives are a property of the source that wrote them (see AOTBatchParseOptionGuard)
                 AOTBatchParseOptionGuard parse_option_guard(*qpgm);
                 if (!applyAOTSourceModernDefault(*qpgm, e.canon, &xsink)) {
-                    qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                    qore_program_private::get(*qpgm)->parsePending(e.source, e.canon.c_str(),
                         &xsink, &wsink, QP_WARN_DEFAULT);
                 }
                 file_po = qpgm->getParseOptions();
@@ -31032,7 +31574,8 @@ bool QoreAOT::compileScriptAggregate(
         register_native_inputs, include_source);
     if (!declaration_only) {
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, qpgm, aotPreserveDebugCalls(opt_level, qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             /*compile_module=*/nullptr, /*compile_file=*/nullptr,
@@ -31507,7 +32050,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             // even if the parse reports errors (an unresolved type, a
             // missing `%include`, …).  The real compile below reports the
             // authoritative error; here we only need the file set.
-            probe_pgm->parsePending(source_text.c_str(), target_canon.c_str(),
+            qore_program_private::get(**probe_pgm)->parsePending(source_text, target_canon.c_str(),
                 &probe_xsink, &probe_wsink, QP_WARN_NONE);
             std::unordered_set<std::string> probe_files;
             qore_program_private* pp_probe = qore_program_private::get(**probe_pgm);
@@ -31586,7 +32129,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
-        qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
+        qore_program_private::get(**qpgm)->parsePending(source_text, target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -31701,6 +32244,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         standalone_batch_callees;
     {
@@ -31708,7 +32252,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         llvm::Module discovery_module("qore_aot_standalone_fast_entry_discovery",
             discovery_ctx);
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls, discovery_ctx,
                 discovery_module, standalone_batch_callees, declared_fast_keys,
                 nullptr, target_canon.c_str(), nullptr, nullptr)) {
             error = "operation cancelled during standalone AOT fast-entry discovery";
@@ -31716,7 +32260,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
     if (!sibling_fast_entries.empty()
-            && !addAOTPreloadedFastEntries(root_ns, sibling_fast_entries,
+            && !addAOTPreloadedFastEntries(root_ns, preserve_debug_calls, sibling_fast_entries,
                 standalone_batch_callees)) {
         error = "operation cancelled during preloaded AOT fast-entry import";
         return false;
@@ -31747,7 +32291,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 qore_aot_set_body_contract_dep_sink(nullptr);
             }
         } body_dep_guard(&body_contract_dependencies);
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder,
+        compileNamespaceFunctions(root_ns, *qpgm, preserve_debug_calls, ctx, *module, di_builder,
             di_cu, compiled_funcs, compiled_init_funcs, total_funcs,
             compiled_count, failed_count, total_ir_insts_all,
             &const_reverse_map, nullptr, /*compile_module=*/nullptr,
@@ -32154,7 +32698,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink,
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink,
             QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -32224,7 +32768,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
                 continue;
             }
-            qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
+            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink,
                 file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
@@ -32342,7 +32886,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // Compile only items whose declaration location matches the
         // target file (per-file filter, slice 4).
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), target_canon.c_str(), false, nullptr, nullptr,
@@ -32739,7 +33284,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -32790,7 +33335,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 if (file_source.empty()) {
                     continue;
                 }
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
@@ -32871,7 +33416,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // metadata_only=true — only external declarations go into the
         // glue module; actual bodies come from input .qo's at link time.
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
@@ -33319,7 +33865,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -33370,7 +33916,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 if (file_source.empty()) {
                     continue;
                 }
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
@@ -33445,7 +33991,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
@@ -34957,7 +35504,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->allocate();
 
     // Copy all_body_locals from the fresh IR
-    ctx->all_body_locals = func.all_body_locals;
+    ctx->runtime_body_locals = func.all_body_locals;
 
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     ctx->all_body_locals_ir_only = func.areAllBodyLocalsIROnly();
@@ -36278,7 +36825,9 @@ class ExprTreeSerializer {
         // Method reference: \obj.method()
         if (auto* mr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_OBJ_METH_REF));
-            writeStr(mr->getMethodName().c_str(), mr->getMethodName().size());
+            // with the method resolved when parsing (qore#6680)
+            std::string ref_name = qore_aot_object_method_ref_name(mr);
+            writeStr(ref_name.c_str(), ref_name.size());
             writeU16(1);
             return serializeValue(mr->getExp());
         }
@@ -36547,10 +37096,11 @@ class ExprTreeSerializer {
         if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_METH_REF));
             const QoreMethod* method = scr->getMethod();
-            // the class that the reference names (qore#6285)
+            // the class that the reference names (qore#6285), and the method with the class that declares it
+            // (qore#6679)
             const QoreClass* qc = scr->getScopeClass();
             writeStr(qore_aot_encode_class_ref(qc));
-            writeStr(method ? method->getName() : "");
+            writeStr(qore_aot_encode_static_method_ref_target(method, qc));
             writeU16(0);
             return true;
         }
@@ -37083,7 +37633,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
-        // a CONST_STRING is rebuilt in the default encoding from its bytes up to a null byte
+        // a CONST_STRING is rebuilt in UTF-8 from its bytes up to a null byte
         if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {
             id.kind = AOTExprKind::CONST_VALUE;
             id.child_expr = v;
@@ -37670,23 +38220,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 : (target && target->method ? target->method : mc->getMethod());
             const char* fallback_name = target && target->fallback_method_name
                 ? target->fallback_method_name : mc->getName();
-            id.ref2 = method ? method->getName() : (fallback_name ? fallback_name : "");
             const AbstractQoreFunctionVariant* variant = force_name_dispatch
                 ? (record_parse_target ? mc->getVariant() : nullptr)
                 : (target && target->variant ? target->variant : mc->getVariant());
-            if (variant) {
-                if (AbstractFunctionSignature* sig = variant->getSignature()) {
-                    const QoreClass* variant_class = variant->getClass();
-                    id.ref2.append("\n");
-                    id.ref2.append(qore_aot_encode_class_ref(variant_class, is_pseudo));
-                    id.ref2.append("\n");
-                    id.ref2.append(sig->getSignatureText());
-                }
-            }
+            id.ref2 = qore_aot_dot_method_ref(method ? method->getName() : fallback_name, method, variant, is_pseudo);
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
             qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
-            id.flags = (is_pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
-                | (force_name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+            id.flags = qore_aot_dot_target_flags(method, is_pseudo, force_name_dispatch);
+            if (method) {
+                id.ref3 = qore_aot_encode_class_ref(method->getClass(), is_pseudo);
+            }
             return id;
         }
     }
@@ -37764,10 +38307,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::STATIC_METHOD_REF;
         const QoreMethod* method = scr->getMethod();
-        // the class that the reference names (qore#6285)
+        // the class that the reference names (qore#6285), and the method with the class that declares it
+        // (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         id.ref1 = qore_aot_encode_class_ref(qc);
-        id.ref2 = method ? method->getName() : "";
+        id.ref2 = qore_aot_encode_static_method_ref_target(method, qc);
         return id;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
@@ -37793,7 +38337,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         id.kind = AOTExprKind::OBJ_METHOD_REF_EXPR;
-        id.ref1 = omr->getMethodName().c_str();
+        // with the method resolved when parsing (qore#6680)
+        id.ref1 = qore_aot_object_method_ref_name(omr);
         id.child_expr = omr->getExp();
         return id;
     }
@@ -38342,7 +38887,6 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         gid.global_var = var;
     }
 
-    // Extract body local identities
     for (LocalVar* lv : func.all_body_locals) {
         AOTBodyLocalId blid;
         blid.local_var_ptr = static_cast<const void*>(lv);
@@ -38357,6 +38901,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         // Use that complete table so same-named locals in the body and a handler retain distinct identities.
         auto slot_it = slots.local_slots.find(static_cast<const void*>(lv));
         blid.slot_id = slot_it != slots.local_slots.end() ? slot_it->second : UINT32_MAX;
+        blid.native_only = func.aot_private_body_locals.count(lv) && blid.slot_id < out.locals.size()
+            && (out.locals[blid.slot_id].flags & QORE_AOT_LOCAL_SLOT_NATIVE_WRITES);
         out.body_locals.push_back(std::move(blid));
     }
 

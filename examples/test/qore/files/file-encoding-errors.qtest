@@ -1,0 +1,642 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! the file readers check the encoding of the text they read, with the encoding_errors option (qore#6604, qore#6620)
+/** ReadOnlyFile::read(), ReadOnlyFile::readLine(), ReadOnlyFile::getchar(), ReadOnlyFile::readTextFile(),
+    ReadOnlyFile::startPollRead() and FileLineIterator raise INVALID-ENCODING for text that is not valid in the
+    encoding of the file by default ("raise"), tag the whole string read ISO-8859-1 with its bytes with "latin1", and
+    tag it with the encoding of the file without a check with "keep".
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../EncodingCapability.qm
+
+%exec-class FileEncodingErrorsTest
+
+class FileEncodingErrorsTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("file-encoding-errors-");
+        int n = 0;
+    }
+
+    constructor() : Test("file encoding errors", "1.0", \ARGV) {
+        addTestCase("option values", \optionValues());
+        addTestCase("read() of all text", \readAll());
+        addTestCase("read() of characters", \readChars());
+        addTestCase("readLine()", \readLine());
+        addTestCase("readLine() with a marker", \readLineMarker());
+        addTestCase("getchar()", \getChar());
+        addTestCase("readTextFile()", \readTextFile());
+        addTestCase("startPollRead()", \pollRead());
+        addTestCase("FileLineIterator", \fileLineIterator());
+        addTestCase("FileLineIterator in UTF-16", \fileLineIteratorUtf16());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("stateful encodings", \statefulEncodings());
+        addTestCase("stateful encodings: a byte that is not a character", \statefulInvalidBytes());
+        addTestCase("FileLineIterator byte order marks and line numbers", \fileLineIteratorBomAndLines());
+        addTestCase("a very large number of characters and US-ASCII", \largeCountAndAscii());
+        set_return_value(main());
+    }
+
+    #! writes the given bytes to a new file and returns its path
+    private string file(binary data) {
+        string path = tmp.path + DirSep + sprintf("f%d", ++n);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        return path;
+    }
+
+    optionValues() {
+        string path = file(binary("abc"));
+        # positional calls without the option
+        ReadOnlyFile f(path, "UTF-8");
+        assertEq("raise", f.getEncodingErrors());
+        assertEq("UTF-8", f.getEncoding());
+        f.setEncodingErrors(ENCODING_ERRORS_LATIN1);
+        assertEq("latin1", f.getEncodingErrors());
+        f.setEncodingErrors("keep");
+        assertEq(ENCODING_ERRORS_KEEP, f.getEncodingErrors());
+        # the option is copied
+        ReadOnlyFile f2 = f.copy();
+        assertEq("keep", f2.getEncodingErrors());
+        assertEq("UTF-8", f2.getEncoding());
+        # no argument is the default
+        f.setEncodingErrors();
+        assertEq(ENCODING_ERRORS_RAISE, f.getEncodingErrors());
+        # the option stays when the file is opened again
+        f.setEncodingErrors("latin1");
+        f.open(path);
+        assertEq("latin1", f.getEncodingErrors());
+
+        assertEq("keep", new ReadOnlyFile(path, NOTHING, "keep").getEncodingErrors());
+        assertEq("latin1", new ReadOnlyFile(path, encoding_errors: "latin1").getEncodingErrors());
+        File wf("UTF-8");
+        assertEq("raise", wf.getEncodingErrors());
+        File wf2(NOTHING, "keep");
+        assertEq("keep", wf2.getEncodingErrors());
+        assertEq("keep", wf2.copy().getEncodingErrors());
+
+        assertThrows("ENCODING-ERRORS-ERROR", "unknown encoding_errors value 'bogus'; expecting one of: 'raise', "
+            "'latin1', 'keep'", sub () { new ReadOnlyFile(path, NOTHING, "bogus"); });
+        assertThrows("ENCODING-ERRORS-ERROR", sub () { new File(NOTHING, "RAISE"); });
+        assertThrows("ENCODING-ERRORS-ERROR", \f.setEncodingErrors(), "");
+        assertThrows("ENCODING-ERRORS-ERROR", \ReadOnlyFile::readTextFile(), (path, NOTHING, -1, "x"));
+        # a failed call leaves the option as it was
+        assertEq("latin1", f.getEncodingErrors());
+        # the value is matched in any encoding
+        f.setEncodingErrors(convert_encoding("keep", "UTF-16LE"));
+        assertEq("keep", f.getEncodingErrors());
+    }
+
+    readAll() {
+        # valid text is the same with every option
+        foreach string mode in ("raise", "latin1", "keep") {
+            ReadOnlyFile f(file(binary("aé€😀\n")), "UTF-8", mode);
+            string s = f.read(-1);
+            assertEq("aé€😀\n", s, mode);
+            assertEq("UTF-8", s.encoding(), mode);
+        }
+        # an invalid byte, an overlong form, a surrogate, a code point above U+10FFFF, a character cut off at the end
+        foreach list<auto> c in ((<6162ff63>, 2), (<61c0af>, 1), (<6161eda080>, 2), (<f4908080>, 0), (<61e282>, 1),
+                (<c3a961e2>, 3)) {
+            string path = file(c[0]);
+            assertThrows("INVALID-ENCODING", sprintf("^ReadOnlyFile::read\\(\\): the text read is not valid UTF-8: "
+                "invalid byte sequence at byte offset %d$", c[1]),
+                sub () { new ReadOnlyFile(path, "UTF-8").read(-1); });
+            string s = new ReadOnlyFile(path, "UTF-8", "latin1").read(-1);
+            assertEq("ISO-8859-1", s.encoding());
+            assertEq(c[0], binary(s));
+            s = new ReadOnlyFile(path, "UTF-8", "keep").read(-1);
+            assertEq("UTF-8", s.encoding());
+            assertEq(c[0], binary(s));
+        }
+        # a character across the 4K blocks the file is read in
+        binary b = binary(strmul("a", 4095) + "é" + strmul("b", 10));
+        assertEq(b, binary(new ReadOnlyFile(file(b), "UTF-8").read(-1)));
+        # an invalid byte after a long ASCII run
+        b = binary(strmul("a", 10000)) + <ff>;
+        string path = file(b);
+        assertThrows("INVALID-ENCODING", "byte offset 10000$", sub () { new ReadOnlyFile(path, "UTF-8").read(-1); });
+    }
+
+    readChars() {
+        # an unpaired surrogate is a code unit of its own: the characters after it are read from a code unit boundary
+        {
+            string p = file(<00dc3dd800de4100>);
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::read\\(\\): the text read is not valid UTF-16LE: invalid "
+                "byte sequence at byte offset 0$", sub () { new ReadOnlyFile(p, "UTF-16LE").read(2); });
+            ReadOnlyFile f(p, "UTF-16LE", "keep");
+            assertEq(<00dc3dd800de>, binary(f.read(2)));
+            assertEq("A", convert_encoding(f.read(1), "UTF-8"));
+            f = new ReadOnlyFile(p, "UTF-16LE", "latin1");
+            string s = f.read(2);
+            assertEq("ISO-8859-1", s.encoding());
+            assertEq(<00dc3dd800de>, binary(s));
+            s = f.read(1);
+            assertEq("UTF-16LE", s.encoding());
+            assertEq("A", convert_encoding(s, "UTF-8"));
+        }
+        string path = file(<61ff62c3a9>);
+        assertThrows("INVALID-ENCODING", "^ReadOnlyFile::read\\(\\): the text read is not valid UTF-8: invalid byte "
+            "sequence at byte offset 1$", sub () { new ReadOnlyFile(path, "UTF-8").read(3); });
+        # with "keep" and "latin1", the invalid byte is read as a character of its own
+        {
+            ReadOnlyFile f(path, "UTF-8", "keep");
+            string s = f.read(3);
+            assertEq(<61ff62>, binary(s));
+            assertEq("UTF-8", s.encoding());
+            assertEq("é", f.read(1));
+        }
+        {
+            ReadOnlyFile f(path, "UTF-8", "latin1");
+            string s = f.read(2);
+            assertEq(<61ff>, binary(s));
+            assertEq("ISO-8859-1", s.encoding());
+            # valid text after it is tagged with the encoding of the file
+            s = f.read(2);
+            assertEq("bé", s);
+            assertEq("UTF-8", s.encoding());
+        }
+        # a character cut off by the end of the file
+        path = file(<61e282>);
+        assertThrows("INVALID-ENCODING", "byte offset 1$", sub () { new ReadOnlyFile(path, "UTF-8").read(5); });
+        assertEq(<61e282>, binary(new ReadOnlyFile(path, "UTF-8", "keep").read(5)));
+        assertEq("ISO-8859-1", new ReadOnlyFile(path, "UTF-8", "latin1").read(5).encoding());
+        # the characters before the cut are returned when they are all that is read
+        assertEq("a", new ReadOnlyFile(path, "UTF-8").read(1));
+        # STREAM-ENCODING-ERROR is no longer raised
+        try {
+            new ReadOnlyFile(file(<ff>), "UTF-8").read(1);
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INVALID-ENCODING", ex.err);
+        }
+    }
+
+    readLine() {
+        string path = file(<610a62ff630a64e2>);
+        {
+            ReadOnlyFile f(path, "UTF-8");
+            assertEq("a\n", f.readLine());
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readLine\\(\\): the line read is not valid UTF-8: "
+                "invalid byte sequence at byte offset 1$", \f.readLine());
+            # the last line ends in a character cut off by the end of the file
+            assertThrows("INVALID-ENCODING", "byte offset 1$", \f.readLine());
+        }
+        {
+            ReadOnlyFile f(path, "UTF-8", "latin1");
+            string l = f.readLine();
+            assertEq("a\n", l);
+            assertEq("UTF-8", l.encoding());
+            l = f.readLine(False);
+            assertEq(<62ff63>, binary(l));
+            assertEq("ISO-8859-1", l.encoding());
+            l = f.readLine();
+            assertEq(<64e2>, binary(l));
+            assertEq("ISO-8859-1", l.encoding());
+        }
+        {
+            ReadOnlyFile f(path, "UTF-8", "keep");
+            f.readLine();
+            string l = f.readLine();
+            assertEq(<62ff630a>, binary(l));
+            assertEq("UTF-8", l.encoding());
+        }
+        # a line in UTF-16LE with a character cut off by the end of the file, and a surrogate pair
+        path = file(<3dd800de0a0062>);
+        {
+            ReadOnlyFile f(path, "UTF-16LE");
+            assertEq("😀", convert_encoding(f.readLine(False), "UTF-8"));
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readLine\\(\\): the line read is not valid UTF-16LE: "
+                "invalid byte sequence at byte offset 0$", \f.readLine());
+        }
+        # the option is applied after the setting is changed
+        {
+            ReadOnlyFile f(path, "UTF-16LE");
+            f.readLine();
+            f.setEncodingErrors("keep");
+            assertEq(<62>, binary(f.readLine()));
+        }
+    }
+
+    readLineMarker() {
+        string path = file(<61ff7c627c>);
+        ReadOnlyFile f(path, "UTF-8");
+        assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readLine\\(\\): the line read is not valid UTF-8: invalid "
+            "byte sequence at byte offset 1$", \f.readLine(), (True, "|"));
+        assertEq("b|", f.readLine(True, "|"));
+        f.setPos(0);
+        f.setEncodingErrors("latin1");
+        string l = f.readLine(False, "|");
+        assertEq(<61ff>, binary(l));
+        assertEq("ISO-8859-1", l.encoding());
+    }
+
+    getChar() {
+        # the whole character is checked (qore#6620): a lead byte followed by a byte that cannot continue it
+        string path = file(<e24142>);
+        {
+            ReadOnlyFile f(path, "UTF-8");
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::getchar\\(\\): the character read is not valid UTF-8: "
+                "invalid byte sequence at byte offset 0$", \f.getchar());
+            # the byte that cannot continue the sequence is not consumed in a file that can seek
+            assertEq("A", f.getchar());
+            assertEq("B", f.getchar());
+        }
+        {
+            ReadOnlyFile f(path, "UTF-8", "keep");
+            string c = f.getchar();
+            assertEq(<e2>, binary(c));
+            assertEq("UTF-8", c.encoding());
+            assertEq("A", f.getchar());
+        }
+        {
+            ReadOnlyFile f(path, "UTF-8", "latin1");
+            string c = f.getchar();
+            assertEq(<e2>, binary(c));
+            assertEq("ISO-8859-1", c.encoding());
+            assertEq("A", f.getchar());
+        }
+        # on a pipe, which cannot seek, the byte is consumed
+        {
+            hash<PipeInfo> pipe = File::getPipe();
+            pipe.write.write(<e24142>);
+            pipe.write.close();
+            pipe.read.setEncoding("UTF-8");
+            ReadOnlyFile r = pipe.read;
+            assertThrows("INVALID-ENCODING", "byte offset 0$", \r.getchar());
+            assertEq("B", r.getchar());
+        }
+        # an invalid lead byte, an overlong form, a surrogate
+        foreach binary b in (<ff>, <80>, <c0af>, <eda080>, <f49080>) {
+            string p = file(b);
+            assertThrows("INVALID-ENCODING", "byte offset 0$", sub () { new ReadOnlyFile(p, "UTF-8").getchar(); });
+        }
+        # a character cut off by the end of the file
+        path = file(<61f09f98>);
+        {
+            ReadOnlyFile f(path, "UTF-8");
+            assertEq("a", f.getchar());
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::getchar\\(\\): the character read is not valid UTF-8",
+                \f.getchar());
+            assertEq(NOTHING, f.getchar());
+        }
+        # valid characters of every length
+        {
+            ReadOnlyFile f(file(binary("aé€😀")), "UTF-8");
+            assertEq(("a", "é", "€", "😀"), (map f.getchar(), xrange(4)));
+            assertEq(NOTHING, f.getchar());
+        }
+        # a surrogate pair in UTF-16LE and UTF-16BE is one character
+        {
+            ReadOnlyFile f(file(<3dd800de41000a00>), "UTF-16LE");
+            assertEq("😀", convert_encoding(f.getchar(), "UTF-8"));
+            assertEq("A", convert_encoding(f.getchar(), "UTF-8"));
+        }
+        {
+            ReadOnlyFile f(file(<d83dde000041>), "UTF-16BE");
+            assertEq("😀", convert_encoding(f.getchar(), "UTF-8"));
+            assertEq("A", convert_encoding(f.getchar(), "UTF-8"));
+        }
+        # an unpaired surrogate is not a character where the UTF-16 encodings check surrogates: the whole code unit is
+        # read in either byte order, so that the next character is read from a code unit boundary
+        {
+            foreach hash<auto> c in ({"enc": "UTF-16BE", "data": <dc000041>, "unit": <dc00>},
+                    {"enc": "UTF-16LE", "data": <00dc4100>, "unit": <00dc>}) {
+                string p = file(c.data);
+                ReadOnlyFile f(p, c.enc);
+                assertThrows("INVALID-ENCODING", "^ReadOnlyFile::getchar\\(\\): the character read is not valid "
+                    + c.enc + ": invalid byte sequence at byte offset 0$", \f.getchar());
+                assertEq("A", convert_encoding(f.getchar(), "UTF-8"), c.enc);
+                f = new ReadOnlyFile(p, c.enc, "keep");
+                assertEq(c.unit, binary(f.getchar()), c.enc);
+                assertEq("A", convert_encoding(f.getchar(), "UTF-8"), c.enc);
+            }
+        }
+        # an unpaired high surrogate followed by a character: the character is read next, in either byte order
+        foreach hash<auto> c in ({"enc": "UTF-16LE", "data": <3dd841004200>, "unit": <3dd8>},
+                {"enc": "UTF-16BE", "data": <d83d00410042>, "unit": <d83d>}) {
+            string p = file(c.data);
+            ReadOnlyFile f(p, c.enc);
+            assertThrows("INVALID-ENCODING", "byte offset 0$", \f.getchar());
+            assertEq(("A", "B"), (map convert_encoding(f.getchar(), "UTF-8"), xrange(2)), c.enc);
+            f = new ReadOnlyFile(p, c.enc, "latin1");
+            string s = f.getchar();
+            assertEq(c.unit, binary(s), c.enc);
+            assertEq("ISO-8859-1", s.encoding(), c.enc);
+            assertEq("A", convert_encoding(f.getchar(), "UTF-8"), c.enc);
+            # a read of characters returns exactly the characters requested
+            f = new ReadOnlyFile(p, c.enc, "keep");
+            assertEq(c.unit, binary(f.read(1)), c.enc);
+            assertEq("A", convert_encoding(f.read(1), "UTF-8"), c.enc);
+        }
+        {
+            ReadOnlyFile f(file(<e282414243>), "UTF-8", "keep");
+            assertEq(<e282>, binary(f.read(2)));
+            assertEq("AB", f.read(2));
+        }
+        # a UTF-16 code unit cut off by the end of the file
+        {
+            ReadOnlyFile f(file(<4100d8>), "UTF-16LE");
+            assertEq("A", convert_encoding(f.getchar(), "UTF-8"));
+            assertThrows("INVALID-ENCODING", "not valid UTF-16LE", \f.getchar());
+        }
+        # FILE-GETCHAR-ERROR is no longer raised
+        try {
+            new ReadOnlyFile(file(<ff>), "UTF-8").getchar();
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INVALID-ENCODING", ex.err);
+        }
+    }
+
+    readTextFile() {
+        string path = file(<616263ff>);
+        assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readTextFile\\(\\): the text read is not valid UTF-8: "
+            "invalid byte sequence at byte offset 3$", \ReadOnlyFile::readTextFile(), (path, "UTF-8"));
+        string s = ReadOnlyFile::readTextFile(path, "UTF-8", -1, "latin1");
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(<616263ff>, binary(s));
+        s = File::readTextFile(path, encoding_errors: "keep");
+        assertEq(<616263ff>, binary(s));
+        # the characters within max_file_len are checked
+        assertEq("abc", ReadOnlyFile::readTextFile(path, "UTF-8", 3));
+        assertThrows("INVALID-ENCODING", \ReadOnlyFile::readTextFile(), (path, "UTF-8", 4));
+        # an empty file
+        assertEq("", ReadOnlyFile::readTextFile(file(binary()), "UTF-8"));
+        # US-ASCII is checked
+        path = file(<61e9>);
+        assertThrows("INVALID-ENCODING", "not valid US-ASCII: invalid byte sequence at byte offset 1$",
+            \ReadOnlyFile::readTextFile(), (path, "US-ASCII"));
+        assertEq("aé", ReadOnlyFile::readTextFile(path, "US-ASCII", -1, "latin1"));
+        # a single-byte encoding has no invalid bytes
+        s = ReadOnlyFile::readTextFile(file(<80a0ff>), "ISO-8859-1");
+        assertEq(<80a0ff>, binary(s));
+        assertEq("ISO-8859-1", s.encoding());
+        s = ReadOnlyFile::readTextFile(file(<80a0ff>), "WINDOWS-1252", -1);
+        assertEq(<80a0ff>, binary(s));
+        # a UTF-16 byte order mark is removed before the text is checked; the offset is in the text returned
+        path = file(<fffe610062>);
+        assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readTextFile\\(\\): the text read is not valid UTF-16LE: "
+            "invalid byte sequence at byte offset 2$", \ReadOnlyFile::readTextFile(), (path, "UTF-16"));
+        s = ReadOnlyFile::readTextFile(path, "UTF-16", -1, "latin1");
+        assertEq(<610062>, binary(s));
+        assertEq("ISO-8859-1", s.encoding());
+        s = ReadOnlyFile::readTextFile(file(<feff00610062>), "UTF-16");
+        assertEq("ab", convert_encoding(s, "UTF-8"));
+        # a UTF-8 byte order mark is a valid character
+        assertEq("﻿a", ReadOnlyFile::readTextFile(file(<efbbbf61>), "UTF-8"));
+    }
+
+    #! returns the output of a poll read
+    private auto poll(ReadOnlyFile f, string path, int max = -1) {
+        FilePollOperation op = f.startPollRead(path, True, max);
+        while (*hash<SocketPollInfo> info = op.continuePoll()) {
+            Socket::poll((info,), 1s);
+        }
+        return op.getOutput();
+    }
+
+    pollRead() {
+        string path = file(<61c3a9ff>);
+        ReadOnlyFile f(path, "UTF-8");
+        assertThrows("INVALID-ENCODING", "^ReadOnlyFile::startPollRead\\(\\): the text read is not valid UTF-8: "
+            "invalid byte sequence at byte offset 3$", \poll(), (f, path));
+        # a character cut off by the number of bytes read is not an error
+        string s = poll(f, path, 2);
+        assertEq(<61c3>, binary(s));
+        assertEq("UTF-8", s.encoding());
+        # the bytes before the cut are checked
+        path = file(<ff61c3a9>);
+        assertThrows("INVALID-ENCODING", "byte offset 0$", \poll(), (f, path, 3));
+        f.setEncodingErrors("latin1");
+        s = poll(f, path);
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(<ff61c3a9>, binary(s));
+        f.setEncodingErrors("keep");
+        assertEq("UTF-8", poll(f, path).encoding());
+        assertEq("aé", poll(f, file(<61c3a9>)));
+    }
+
+    fileLineIterator() {
+        string path = file(<610a62ff0a630a>);
+        {
+            FileLineIterator i(path, "UTF-8");
+            assertEq("raise", i.getEncodingErrors());
+            assertTrue(i.next());
+            assertEq("a", i.getValue());
+            assertThrows("INVALID-ENCODING", "^FileLineIterator::next\\(\\): the line read is not valid UTF-8: invalid "
+                "byte sequence at byte offset 1 \\(line 2\\)$", \i.next());
+        }
+        {
+            FileLineIterator i(path, "UTF-8", NOTHING, True, NOTHING, "latin1");
+            list<string> l = map $1, i;
+            assertEq((<61>, <62ff>, <63>), (map binary($1), l));
+            assertEq(("UTF-8", "ISO-8859-1", "UTF-8"), (map $1.encoding(), l));
+            # the option is copied
+            FileLineIterator i2 = i.copy();
+            assertEq("latin1", i2.getEncodingErrors());
+            assertEq(3, (map $1, i2).size());
+        }
+        {
+            FileLineIterator i(path, "UTF-8", encoding_errors: "keep");
+            assertEq("keep", i.getEncodingErrors());
+            list<string> l = map $1, i;
+            assertEq((<61>, <62ff>, <63>), (map binary($1), l));
+            assertEq(("UTF-8", "UTF-8", "UTF-8"), (map $1.encoding(), l));
+        }
+        assertThrows("ENCODING-ERRORS-ERROR", sub () { new FileLineIterator(path, NOTHING, NOTHING, True, NOTHING,
+            "x"); });
+        # positional calls without the option
+        FileLineIterator i(path, "UTF-8", "\n", False);
+        assertTrue(i.next());
+        assertEq("a\n", i.getValue());
+    }
+
+    fileLineIteratorUtf16() {
+        # lines in UTF-16 are read in it and converted to UTF-8, as before
+        string path = file(binary(convert_encoding("a😀\nb\r\nc", "UTF-16LE")));
+        {
+            FileLineIterator i(path, "UTF-16LE");
+            assertEq("UTF-8", i.getEncoding());
+            list<string> l = map $1, i;
+            assertEq(("a😀", "b", "c"), l);
+            assertEq(("UTF-8", "UTF-8", "UTF-8"), (map $1.encoding(), l));
+        }
+        # with a byte order mark
+        path = file(<fffe> + binary(convert_encoding("x\ny", "UTF-16LE")));
+        assertEq(("x", "y"), (map $1, new FileLineIterator(path, "UTF-16")));
+        # with a marker
+        path = file(binary(convert_encoding("x|y", "UTF-16BE")));
+        assertEq(("x", "y"), (map $1, new FileLineIterator(path, "UTF-16BE", "|")));
+
+        # a line that ends in a code unit cut off by the end of the file
+        path = file(<61000a0062>);
+        {
+            FileLineIterator i(path, "UTF-16LE");
+            assertTrue(i.next());
+            assertEq("a", i.getValue());
+            assertThrows("INVALID-ENCODING", "^FileLineIterator::next\\(\\): the line read is not valid UTF-16LE: "
+                "invalid byte sequence at byte offset 0 \\(line 2\\)$", \i.next());
+        }
+        {
+            # the line tagged ISO-8859-1 is converted to UTF-8
+            FileLineIterator i(path, "UTF-16LE", encoding_errors: "latin1");
+            assertEq(("a", "b"), (map $1, i));
+        }
+        {
+            # with "keep", the line is converted to UTF-8 without a check, as before
+            FileLineIterator i(path, "UTF-16LE", encoding_errors: "keep");
+            assertTrue(i.next());
+            assertThrows("ENCODING-CONVERSION-ERROR", \i.next());
+        }
+    }
+
+    otherEncodings() {
+        # Shift_JIS: a lead byte followed by a byte that is not a trail byte
+        string path = file(<41822730>);
+        assertThrows("INVALID-ENCODING", "the text read is not valid \\S+: invalid byte sequence at byte offset 1$",
+            sub () { new ReadOnlyFile(path, "SHIFT_JIS").read(-1); });
+        assertEq("ISO-8859-1", new ReadOnlyFile(path, "SHIFT_JIS", "latin1").read(-1).encoding());
+        # valid Shift_JIS
+        binary sj = binary(convert_encoding("日本\n", "SHIFT_JIS"));
+        assertEq("日本\n", convert_encoding(new ReadOnlyFile(file(sj), "SHIFT_JIS").readLine(), "UTF-8"));
+        # EUC-JP: a lead byte followed by an ASCII byte
+        path = file(<41a441>);
+        assertThrows("INVALID-ENCODING", "byte offset 1$", sub () { new ReadOnlyFile(path, "EUC-JP").read(-1); });
+        # US-ASCII lines
+        path = file(<610a62e90a>);
+        ReadOnlyFile f(path, "US-ASCII");
+        assertEq("a\n", f.readLine());
+        assertThrows("INVALID-ENCODING", "not valid US-ASCII: invalid byte sequence at byte offset 1$", \f.readLine());
+        f.setPos(0);
+        f.setEncodingErrors("latin1");
+        f.readLine();
+        assertEq("bé\n", f.readLine());
+        # ISO-8859-1 lines are unchanged in every mode
+        foreach string mode in ("raise", "latin1", "keep") {
+            ReadOnlyFile f1(file(<e90aff>), "ISO-8859-1", mode);
+            assertEq(<e90a>, binary(f1.readLine()), mode);
+            assertEq(<ff>, binary(f1.readLine()), mode);
+        }
+    }
+
+    largeCountAndAscii() {
+        # a very large number of characters reads the data there is, with no allocation for the number
+        foreach string enc in ("UTF-8", "UTF-16LE", "UTF-32LE", "ISO-8859-1") {
+            binary b = binary(convert_encoding("AB", enc));
+            string p = file(b);
+            foreach int n in (4611686018427387904, 2305843009213693952, 9223372036854775807, 1152921504606846976) {
+                ReadOnlyFile f(p, enc);
+                assertEq("AB", convert_encoding(f.read(n), "UTF-8"), sprintf("%s %d", enc, n));
+                assertEq(NOTHING, f.read(n));
+                assertEq("AB", convert_encoding(ReadOnlyFile::readTextFile(p, enc, n), "UTF-8"));
+            }
+        }
+        # US-ASCII is checked byte by byte; the bytes after an invalid byte are read next, as in UTF-8
+        foreach string enc in ("US-ASCII", "UTF-8") {
+            ReadOnlyFile f(file(<804142>), enc);
+            assertThrows("INVALID-ENCODING", "not valid " + enc + ": invalid byte sequence at byte offset 0$",
+                \f.read(), 3);
+            assertEq("AB", f.read(-1), enc);
+        }
+    }
+
+    fileLineIteratorBomAndLines() {
+        # a byte order mark is only resolved at the start of the file: after it, U+FEFF is a character
+        foreach string enc in ("UTF-16LE", "UTF-16BE", "UTF-16", "UTF-32LE", "UCS-2BE") {
+            binary b = binary(convert_encoding("x\n\ufeffy\n", enc));
+            assertEq(("x", "\ufeffy"), (map $1, new FileLineIterator(file(b), enc)), enc);
+        }
+        assertEq(("x", "\ufffeAB"), (map $1, new FileLineIterator(file(<0078000afffe00410042000a>), "UTF-16")));
+
+        # the line number goes on after a line that raised an exception, and the file is not read again
+        FileLineIterator i(file(<610a62ff0a630a640a>), "UTF-8");
+        assertTrue(i.next());
+        assertEq(("a", 1), (i.getValue(), i.index()));
+        assertThrows("INVALID-ENCODING", "\\(line 2\\)$", \i.next());
+        assertTrue(i.next());
+        assertEq(("c", 3), (i.getValue(), i.index()));
+        assertTrue(i.next());
+        assertEq(("d", 4), (i.getValue(), i.index()));
+        assertFalse(i.next());
+        # after the end, the file is read again from its start
+        assertTrue(i.next());
+        assertEq(("a", 1), (i.getValue(), i.index()));
+
+        # reset() after an exception reads the file again from its start
+        i = new FileLineIterator(file(<610a620aff>), "UTF-8");
+        assertTrue(i.next());
+        assertTrue(i.next());
+        assertThrows("INVALID-ENCODING", "\\(line 3\\)$", \i.next());
+        i.reset();
+        assertTrue(i.next());
+        assertEq(("a", 1), (i.getValue(), i.index()));
+    }
+
+    #! ISO-2022-JP, which every platform has
+    statefulEncodings() {
+        string enc = "ISO-2022-JP";
+        binary good = binary(convert_encoding("ab 日本\nx\n", enc));
+        assertEq("ab 日本\n", convert_encoding(new ReadOnlyFile(file(good), enc).readLine(), "UTF-8"));
+        assertEq("ab 日本\nx\n", convert_encoding(ReadOnlyFile::readTextFile(file(good), enc), "UTF-8"));
+    }
+
+    #! a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    statefulInvalidBytes() {
+        string enc = "ISO-2022-JP";
+        binary bad = binary(convert_encoding("ab 日本", enc)) + <ff0a>;
+        *string reason = encoding_decodes_invalid(enc, bad);
+        if (reason) {
+            testSkip(reason);
+        }
+        string path = file(bad);
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { new ReadOnlyFile(path, enc).readLine(); });
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", \ReadOnlyFile::readTextFile(), (path, enc));
+        # with "latin1", the bytes read are tagged ISO-8859-1
+        string s = new ReadOnlyFile(path, enc, "latin1").readLine();
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(bad.substr(0, s.size()), binary(s));
+        # with "keep", the line is tagged without a check
+        s = new ReadOnlyFile(path, enc, "keep").readLine();
+        assertEq(enc, s.encoding());
+        assertEq(bad, binary(s));
+
+        # with "latin1", the whole line that is not valid is returned, and the lines after it are read as before
+        binary lines = <1b244224221b28420a1b244224ff1b28420a410a>;
+        path = file(lines);
+        {
+            ReadOnlyFile f(path, enc, "latin1");
+            list<string> l = (f.readLine(False), f.readLine(False), f.readLine(False));
+            assertEq("あ", convert_encoding(l[0], "UTF-8"));
+            assertEq(<1b244224ff1b2842>, binary(l[1]));
+            assertEq("ISO-8859-1", l[1].encoding());
+            assertEq("A", convert_encoding(l[2], "UTF-8"));
+            assertEq(NOTHING, f.readLine());
+        }
+        {
+            # a read of characters returns the bytes up to and including the next line feed
+            ReadOnlyFile f(path, enc, "latin1");
+            f.readLine();
+            string c = f.read(2);
+            assertEq(<1b244224ff1b28420a>, binary(c));
+            assertEq("ISO-8859-1", c.encoding());
+            assertEq("A", convert_encoding(f.read(1), "UTF-8"));
+        }
+        {
+            # with "raise", the exception gives the class, the method and the byte offset of the invalid sequence in
+            # the bytes read, and the rest of the line is skipped
+            ReadOnlyFile f(path, enc);
+            f.readLine();
+            assertThrows("INVALID-ENCODING", "^ReadOnlyFile::readLine\\(\\): the line read is not valid ISO-2022-JP: "
+                "invalid byte sequence at byte offset 3$", \f.readLine());
+            assertEq("A", convert_encoding(f.readLine(False), "UTF-8"));
+        }
+    }
+}

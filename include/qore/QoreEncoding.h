@@ -210,6 +210,9 @@ class QoreString;
  */
 class QoreEncodingManager {
 private:
+   // the private implementation of the registration of encodings (qore#6826)
+   friend class qore_encoding_manager_private;
+
    DLLLOCAL static encoding_map_t emap;
    DLLLOCAL static const_encoding_map_t amap;
    DLLLOCAL static QoreThreadLock mutex;
@@ -227,6 +230,13 @@ public:
    DLLEXPORT static void addAlias(const QoreEncoding* qcs, const char* alias);
 
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
+   /** @since %Qore 3.0 for code that is not trusted (qore_caller_is_untrusted(): sandboxed or restricted code), a
+       name that %Qore does not know creates an encoding only if it is a label that untrusted data may select, or a
+       plain name that iconv converts both ways and whose letters and digits are not those of a known encoding (whose
+       encoding it gives: iconv ignores punctuation in names); any other name gives the shared encoding
+       @c "X-QORE-UNREGISTERED", which iconv cannot convert, so that such code cannot grow the process-wide table of
+       encodings without bound (issue #6826)
+   */
    DLLEXPORT static const QoreEncoding* findCreate(const char* name);
 
    //! finds an encoding if it exists (also looks up against alias names); returns nullptr if it does not
@@ -255,6 +265,45 @@ public:
 
 DLLEXPORT size_t q_get_byte_len(const QoreEncoding* enc, const char* p, const char* end, size_t c, ExceptionSink* xsink);
 DLLEXPORT qore_offset_t q_get_char_len(const QoreEncoding* enc, const char* p, size_t valid_len, ExceptionSink* xsink);
+
+//! Returns the byte offset of the first byte sequence that is not valid in the given encoding, or -1 if the text is
+//! valid
+/** The check of the text readers of %Qore (see @ref encoding_errors): UTF-8 is checked as RFC 3629 defines it (a
+    surrogate, an overlong form or a code point above U+10FFFF is not valid), the other multi-byte encodings with their
+    character functions, US-ASCII byte by byte, a stateful encoding with a conversion; a single-byte encoding has no
+    invalid bytes; in an encoding without a byte order (the generic \c UTF-16, or a Unicode encoding created on the
+    fly such as \c UTF-32), a byte order mark at the start gives the byte order of the text, as when it is converted,
+    and text without one is checked in the encoding's own byte order (big-endian for \c UTF-16)
+
+    @param enc the encoding of the text
+    @param p the text
+    @param len the size of the text in bytes
+
+    @return the byte offset of the first byte sequence that is not valid, also of a character cut off by the end of
+    the text, or -1 if the text is valid
+
+    @since %Qore 3.0
+*/
+DLLEXPORT qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len);
+
+//! Raises an \c INVALID-ENCODING exception if the given text is not valid in its encoding
+/** The text is checked as q_get_invalid_text_offset() checks it, for input that has to be valid text where it enters
+    the program (ex: the strings of a parser); the description of the exception is
+    <tt>"<where>: the <what> is not valid <encoding>: invalid byte sequence at byte offset <offset>"</tt>
+
+    @param enc the encoding of the text
+    @param p the text
+    @param len the size of the text in bytes
+    @param where the function or method that checks the text, for the exception (ex: \c "parse_json()")
+    @param what what the text is, for the exception (ex: \c "JSON text")
+    @param xsink for the \c INVALID-ENCODING exception
+
+    @return 0 if the text is valid, -1 if an exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where,
+        const char* what, ExceptionSink* xsink);
 
 //! the QoreEncodingManager object
 DLLEXPORT extern QoreEncodingManager QEM;

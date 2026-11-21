@@ -38,6 +38,7 @@
 #include "qore/intern/UnicodeByteOrder.h"
 #include "qore/intern/InputStreamLineIterator.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/StringReaderHelper.h"
 
 #include <cctype>
 #include <cerrno>
@@ -876,9 +877,9 @@ const RE_DupNames = PCRE2_DUPNAMES;
 hashdecl Qore::RegexMatchInfo {
     //! Full match text (\c $0)
     string match;
-    //! Byte offset of the match start in the target string
+    //! Byte offset of the match start in the UTF-8 representation of the subject
     int offset;
-    //! Byte length of the match
+    //! Byte length of the match in the UTF-8 representation of the subject
     int length;
     //! Captured groups (\c $1, \c $2, ...); @ref nothing if no capturing groups
     *list<*string> groups;
@@ -1819,15 +1820,36 @@ nothing get_encoding() [flags=RUNTIME_NOOP] {
 
     @return a string corresponding to the string argument converted to the encoding given
 
+    When the string is already in the encoding given, it is not converted: it is returned unchanged if it is valid in
+    the encoding, and \c INVALID-ENCODING is raised otherwise (a conversion to another encoding raises
+    \c ENCODING-CONVERSION-ERROR for text that is not valid).  The text is checked as the text readers check it (see
+    @ref encoding_errors) in US-ASCII, in the multi-byte encodings such as UTF-8 or Shift_JIS, in the Unicode
+    encodings such as UTF-16LE, and in the stateful encodings such as UTF-7; in a single-byte encoding, every byte is
+    a character
+
     @par Example:
     @code{.py}
 string enc = convert_encoding(str, "iso-8859-1");
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different @ref character_encoding "character encodings" and an error occurs during encoding conversion
+    @throw INVALID-ENCODING the string is in the encoding given and is not valid in it; the message gives the byte
+    offset of the first invalid byte sequence
+
+    @since %Qore 3.0 a string already in the encoding given is checked
  */
 string convert_encoding(string str, string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   return str->convertEncoding(QEM.findCreate(encoding), xsink);
+   const QoreEncoding* enc = QEM.findCreate(encoding);
+   if (enc == str->getEncoding()) {
+      // the string is not converted, but it must be valid in its encoding as converted text is
+      qore_offset_t off = q_string_invalid_offset(*str);
+      if (off >= 0) {
+         q_raise_invalid_read_text(xsink, nullptr, "convert_encoding", "string", enc, off);
+         return QoreValue();
+      }
+      return str->refSelf();
+   }
+   return str->convertEncoding(enc, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

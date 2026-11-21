@@ -1,7 +1,9 @@
 # Freeing retired derived types and the declarations they name
 
-Issue: [#6419](https://github.com/qoretechnologies/qore/issues/6419) (step (a): design only; nothing here is
-implemented).  Related: #5790 (declaration retirement), #5765 (generic caches), #6421 (guard profile type identity).
+Issue: [#6419](https://github.com/qoretechnologies/qore/issues/6419).  Steps (a) (design), (b) (type parameter types),
+1a (epochs) and 1b/1c (freeing declarations, quiescent waits) are implemented; see "Stages 1b and 1c: what was built"
+for what differs from the proposal below.  Related: #5790 (declaration retirement), #5765 (generic caches), #6421
+(guard profile type identity).
 
 File and line references are to develop 4706551f7c.
 
@@ -302,6 +304,270 @@ loop with no blocking call, or a foreign thread inside an entry.
 - **Found by the inventory and handled separately** (not derived types): the type arguments that a call reference
   or a closure holds did not keep their declarations; they keep them since #6489 (`QoreTypeDeclRefs`), as values
   and objects do since #5790.
+
+## Stages 1b and 1c: what was built
+
+Stage 1b (freeing declarations) and stage 1c (quiescent waits) ship together: without 1c, the main thread runs Qore
+code for its whole run and holds back every retirement.
+
+### Tombstones (`lib/QoreTypeTombstone.cpp`)
+
+**Deviation from the proposal above.** The proposal said a retired declaration matches no value except values of an
+equal declaration, "of which none exist", and that a name-only tombstone matches the same set.  It does not: another
+Program parsed from the same source has equal declarations, and today a value typed with a deleted Program's
+declarations (`list<Foo>`, `list<hash<HD>>`, `list<E>`) accepts their values, and an empty `list<Foo>` is a
+`list<Base>` of the new Program.  A name-only tombstone would have broken that reload pattern, so the tombstones
+reproduce the equality of the declaration (decision by prof, recorded for David):
+
+| Kind | Equality the type checks use | The tombstone keeps |
+|---|---|---|
+| class | `qore_class_private::equal()`: class ID, or name and signature hash | the name, path and signature hash; the tombstones of the base classes (with their access and virtual flags, and the parameterized parent types); the type parameters with the tombstones of their bounds and defaults; the raw-acceptance flags |
+| hashdecl | `typed_hash_decl_private::equal()`: name and members, member types compared with `QoreTypeInfo::equal()` | the name, path and type parameters; the members, with the tombstones of their types and their defaults when they are simple values; the parent's tombstone; a concrete declaration of a generic hashdecl is that of the generic hashdecl's tombstone with the tombstones of its type arguments |
+| enum | `qore_enum_decl_private::parseEqual()`: name, base type and members | the name, path, base type and members |
+
+- A tombstone is a real, empty, builtin (`sys`) declaration, so it is never retired, and the existing type check code
+  runs on it unchanged.
+- Tombstones are **interned by a fingerprint** of the properties above (back references in cycles are written as the
+  distance from the top of the fingerprint's stack, and the fingerprint of a declaration that refers back to nothing
+  outside it is reused, so a hierarchy that reaches a declaration by many paths is fingerprinted once), so a Program created and deleted repeatedly from the same source adds no
+  tombstone after the first deletion.
+- The recursion ends at builtin declarations and builtin types, which are referenced directly; a user declaration is
+  always tombstoned, live or not, so a tombstone never points to a user declaration and keeps nothing alive.
+- The tombstone of each declaration is cached in its `QoreTypeOwner` (`type_owner_tombstone`).  The tombstones of a
+  deleted Program's declarations that derived types name, and of the concrete declarations of its generic hashdecls
+  (`HD<X>`, which the generic hashdecl's cache holds), are made in `~QoreTypeOwnerBatch()` before any declaration of
+  the Program is released, since a tombstone is made from what the declaration names (the bounds of its type
+  parameters, for example), which can be freed before the declaration is retired.  The bounds and defaults of a
+  class's type parameters are now also among the names that a surviving class keeps (`getTypeOwnerNames()`).
+  A parse that fails removes its declarations (`qore_program_private::internParseRollback()`) in a batch of the same
+  kind (`qore_ns_private::getRollbackTypeOwners()`: the pending declarations of the namespaces that existed, and every
+  declaration of the namespaces the parse added); they name each other's types without references as well, and the
+  lists free them in hash order.
+- What cannot be tombstoned (a type parameter of a function signature, an unknown kind of derived type that names a
+  user declaration, nesting deeper than 64): no tombstone is made, the pointer is not orphaned, and the declaration is
+  marked unfreeable (`type_owner_unfreeable`): it is kept until library cleanup, as before.
+- Not reproduced: the `orig` identity shortcut of hashdecl equality (the structural comparison that follows it gives
+  the same result for the copies of one declaration), a member default that is not a simple value (a plain hash
+  converted to the hashdecl through a kept value gets no such default), and `injectedClass`.
+
+### Orphaning
+
+- The orphanable fields are read with acquire loads: `QoreTypeSpec::u` through `uTi()`, `uQc()`, `uHd()` and `uEd()`
+  (the union is `mutable` and the stores are `__atomic` stores, so the `const` spec members could stay const);
+  `QoreOrphanablePtr<T>` for `QoreParameterizedClassTypeInfo::base_class` and `type_args`,
+  `QoreUnionTypeInfo::members`, `QoreComplexCodeTypeInfo::returnType` and `paramTypes`, and
+  `QoreWildcardTypeInfo::bound`; vectors are returned as read-only views (`QoreOrphanablePtrVecView`).
+- A gap found in review: the conversions of `softlist<T>` captured the element type in lambdas.  They read it from a
+  shared orphanable cell now.  `QoreComplexReferenceTypeInfo`'s hard reference type, made on demand, is orphaned with
+  its parent.
+- **A retired derived type is orphaned from the declaration being retired.**  Its pointers to that declaration and
+  to its own types are repointed to the tombstone.  Its pointers to other user declarations, which are alive, are
+  left as they are, because code that compares declarations by identity must still find them.  (An earlier version
+  orphaned every user declaration at once, and the substitution of `T` in `Box<*Foo>::set(T)` failed after `Foo`'s
+  retirement, as the base class had become the tombstone of `Box`.)  They are recorded
+  (`retired_derived_naming`: declaration to retired derived types) and orphaned when that declaration is retired in
+  turn.  On the destructor path (a declaration destroyed, not retired), the destroyed declaration's own pointers are
+  left, as before; they are compared by address and never read, as the declaration can be partly destroyed.
+- The order is: the purge removes the derived types from the caches (under `ctl`), the orphaning stores run outside
+  the lock (the tombstones are made under their own registry lock, which is taken before `ctl`), then the epoch is
+  incremented and recorded for the derived types and, after `retireTypeOwner()`, for the declaration.  An epoch
+  recorded is therefore always after the orphaning stores that it covers.
+
+### Publishing the epoch
+
+The 1a publish (`exchange(load(epoch))`) had a gap: a scan made between the thread's load of the global epoch and its
+store reads 0 and frees, while the thread goes on with an epoch from before the retirement and can read the pointer
+before it was orphaned.  `qore_publish_type_epoch()` stores the epoch and loads the global epoch again: in the total
+order of sequentially consistent operations, a scan that read the slot before the store is ordered before the second
+load, which then reads the retirement's epoch and synchronizes with its orphaning stores.
+
+### The free (`qore_type_retirement_free()`)
+
+A retired declaration is freed when:
+
+1. its epoch is recorded (its derived types are orphaned) and every thread's epoch is 0 or at least it;
+2. it is not unfreeable, and no declaration keeps it (`type_owner_kept_by`): a retired hashdecl that names it in its
+   members (the former "forever named" marks, now counted per keeper and released when the keeper is freed), or a
+   concrete declaration of a generic hashdecl whose type arguments name it (`HD<Foo>`, whose members name `Foo`'s types
+   without references; `qore_type_owner_keep_type_args()`);
+3. only its retirement holds a reference to it (the reflection API and #6489's references keep it).
+
+The scan runs at the outermost exit of a thread from Qore code
+(`ProgramThreadCountContextHelper::restoreContext()`, `~QoreProgramContextHelper()`), at the end of each quiescent wait
+and from the debug hook `dbg_type_retirement_free()`; not after a retirement, as the retiring thread usually runs
+Qore code since before it (it holds the retirement back itself) and can hold locks of the Program being deleted.  It
+never waits; a free that releases a keeper rescans.  The
+freed declaration is released through its normal last-reference path (`qore_type_owner_released()` returns false for
+it), so its destructor runs the same purges and dispatch-epoch bumps as any other free.
+
+From the start of library cleanup (`qore_cleanup()`, once every thread has ended: `qore_type_retirement_shutdown()`),
+the declarations retired (those of the modules' Programs, which are deleted then) are kept until library cleanup frees
+them, as before: no tombstone is made and nothing is orphaned or freed, as the process ends.
+
+### Quiescent waits (1c)
+
+`QoreTypeQuiescentWaitHelper` stores 0 in the thread's slot before the wait and publishes the epoch again after it,
+unless the thread runs an unsafe frame (below); then it frees what can be freed.
+
+| Wait | Where | Review |
+|---|---|---|
+| `Queue::get()`, `shift()`, `pop()` (also the result Queue of every synchronous `Socket` operation, which the async I/O controller runs) | `qore_queue_private::waitReadIntern()`, around the condition wait only | the queue lock is held; no type is read in the wait; the room and consume notifiers, which can run code, run after the lock and outside the quiescence |
+| `Condition::wait()` | `condition_wait_impl()` | the smart lock is released and taken again inside; no type is read |
+| `Counter::waitForZero()` | both variants | no type is read |
+| `WaitGroup::wait()` | | no type is read |
+| `thread_join()` | around `QoreThreadList::joinThread()` | no type is read |
+| `sleep()`, `usleep()`, `Socket::poll()`'s sleep, the file lock retry | `qore_cancellable_sleep()` | no type is read |
+| file, stream and backquote I/O | `qore_quiescent_cancellable_poll()` in `QoreFile.cpp`, `InputStream.cpp`, `OutputStream.cpp`, `BackquoteNode.cpp` | no type is read; not in `qore_cancellable_poll()` itself, as the AOT jobserver wait uses it in the middle of a compilation |
+
+Not quiescent: the lock waits (`Mutex`, `RWLock`, `VLock`, `SmartMutex`, the lvalue locks), the `Queue` write waits,
+and every wait of library code that is not listed.
+
+### Frames that hold types read through derived types (the audit)
+
+A wait is quiescent only if no frame of the thread holds a pointer that it read through a derived type and uses after
+the wait.  The audit of `lib/` found:
+
+| # | Holder | Handling |
+|---|---|---|
+| 1 | the call's inferred type arguments (`CodeEvaluationHelper::type_param_instantiation`, current as `runtime_type_param_instantiation`), read from the arguments' derived types (`T` = `Foo` from a `list<Foo>`) | unsafe frame |
+| 2 | the substituted return type (`setReturnTypeInfo()`), read through the receiver's type arguments or #1 | unsafe frame (only in a frame with a receiver type or type arguments) |
+| 3 | `LocalVarValue::type_substitution_cache` | reset when the slot is set for a new variable (`LocalVarValue::set()`), so it never outlives its frame; filled only in unsafe frames |
+| 4 | the parameter types substituted for default argument processing (`Function.cpp`) | unsafe frame (the receiver is set before the arguments are processed) |
+| 5 | `BGThreadParams::type_param_inst` and `receiver_type_info`, copied to a new thread, which publishes a later epoch | the new thread's frame is unsafe, and `BGThreadParams` holds `QoreExternalTypeDeclRefs` on what they name, as the starting thread's epoch is not inherited |
+| 6, 7 | `QoreHashIterator::value_type` (from the iterate operator, `HashIterator`, `HashPairIterator` and their reverse forms): kept for the iterator's lifetime, so a persistent holder | `QoreTypeDeclPin`: references to the user declarations that the type names (no allocation and no lock for a type that names none) |
+| 8 | the element types of `QoreListIterator`, `SingleValueIterator`, `QoreChannelIterator` (read only through the virtual `getElementType()`) | `QoreTypeDeclPin` |
+| 9 | hmap and hmap-select: the common value type, which can outlive the last value of it (a duplicate key replaces it) | `QoreTypeDeclPin`, set when the type changes |
+| 10 | running specialized code (IR, JIT) for `Box<Foo>`, whose IR and code embed `Foo`'s types; the running call holds the specialization, not `Foo` | unsafe frame: every entry into generic code goes through a frame that sets a receiver type or type arguments |
+| 11 | closures and call references made in generic code (`QoreClosureTypeContext`) | #6489 (`QoreTypeDeclRefs`), which must land with or before this; the closure's frame is unsafe while it runs |
+
+The frames that set a receiver type whose type arguments name user declarations (`QoreTypeInfo::isUnsafeReceiver()`,
+one load of a flag set when the parameterized class type is made: a plain class receiver, the type of the object's
+class, and a builtin generic such as `Queue<int>` are not counted), or infer type arguments that name user
+declarations, are counted in `ThreadData::type_unsafe_frames` (`qore_type_unsafe_frame_add()`): `CodeEvaluationHelper` (when it sets a receiver type or infers type arguments),
+`QoreClosureTypeContextHelper`, the JIT's `ReceiverTypeInfoGuard` and `TypeParamContextHelper`,
+`BGTypeParamInstantiationHelper` and `HashDeclDefaultReceiverHelper`.  The count is changed only in generic code.  The
+IR and AOT specialization guards of the lowering (`Function.cpp`, `QoreAOT.cpp`) and `IRClosureSpecializationGuard`
+run no user code and are not counted.
+
+An ordinary call runs develop's code in `CodeEvaluationHelper`: the frame is marked only in branches that generic calls
+take.
+- An explicit receiver is tested in `substituteCallerReceiverTypeParams()` with the value that it tested before: the
+  contains-type-parameter cache of `QoreTypeInfo` (-1 not known yet, 1 or 0) also holds `QTI_CTP_UNSAFE_RECEIVER`, so
+  the test of a value that is not 0 takes the receivers that can contain a type parameter or name user declarations;
+  the type of a plain class is 0, and the other readers of the cache (the IR and JIT coercions of local variables)
+  are unchanged.
+- The receiver of a call with an object only (`setObjectReceiverTypeInfo()`, inlined as
+  `qore_get_object_receiver_type_info()` was) is tested in the branch of an object instantiated with type arguments.
+- Inferred type arguments are scanned after the test for a generic variant (`setTypeParamInstantiation()`).
+- The mark and the restoration of the caller's type parameter instantiation share one byte (`generic_frame`), which the
+  destructor tests once, as it tested the restoration before; `markTypeUnsafe()` is out of line and cold.
+- `examples/test/qore/classes/type-retirement-unsafe-frames.qtest` checks the count in each kind of frame.
+
+The acquire loads of the pointers of a `QoreTypeSpec` are not moved before a test, merged into a conditional move or
+removed by the compiler, as the plain loads before them were: a getter whose callers usually find another kind loads
+only after its test, and `getComplexHash()` and `getComplexList()`, which hash and list types ask, load first and select
+(the union is always wholly set); they still take an instruction or two more than the plain loads on some paths.  The
+rows of the AST interpreter's and the JIT's assignments to local variables depended on the inlining of
+`LocalVar::tryGetLValue()` and of `getLValue()` in the JIT runtime, which the compiler stopped doing when the unity
+chunks that compile them grew: `tryGetLValue()` is always inlined, and the JIT runtime uses `getLValueInline()`;
+`getLValue()` itself is left to the compiler, which calls it from the IR interpreter's `execute()` (forcing it inline
+there raised the register pressure of that function).
+
+Checked and safe (no type read through a derived type held across user code): foreach; the functional value types of
+select, streaming and range; map, select and mapselect (every value is kept in the result); sort with a callback; the
+list and hash pseudo-methods; `LValueHelper` (index expressions are evaluated before the lvalue is navigated); the fold
+and retype loops (the element type is read again in each iteration, and the hash being built pins its hashdecl); the
+type checks themselves; the casts; references (`lvalue_ref` reads its target type through its derived type each time);
+implicit argument types (parse time only).
+
+### Threads that read types without a Program context
+
+The orphaning and the tombstone creation run with the thread's epoch published (`QoreTypeEpochEntryHelper`), also
+when the thread is outside Qore code.  Code in a thread that has no `ThreadData` (a foreign thread that is not
+registered) cannot publish an epoch: a module that type-checks values in such a thread must register it and enter a
+Program.
+
+The audit of the threads that run without a Program context (the threads of `q_start_thread()` and the foreign
+threads have `ThreadData` and no Program):
+
+| Thread | Type work | Handling |
+|---|---|---|
+| the JIT's background compile thread (`QoreJIT::bgCompileThreadLoop()`; a raw thread, no `ThreadData`) | lowers queued IR, whose types the enqueuing thread read (a specialization for `Box<Foo>` names `Foo`'s types) | each work item holds a `QoreTypeEpochHold` armed with the enqueuing thread's epoch, which the scan counts as a thread, until the item is compiled or cancelled |
+| async I/O threads and callback workers (`AsyncIoControllerPriv.cpp`) | builtin hashdecls with user objects as members; builtin call references | the user classes are those of live objects, which reference them; no derived type that names a user declaration is read |
+| ONNX async threads (`modules/ml`) | `hash<auto>` lists of user hashes | builtin types only |
+| `ThreadPool` cancel code, the signal thread's exception handling, the release of thread resources | dereferences, exception printing | no type check of a derived type |
+| AOT batch workers (`qcc`) | code generation from the parsed Program | the Program outlives them, and no Program is deleted meanwhile |
+
+Debug builds assert that a runtime type check (`QoreTypeInfo::acceptInputInternImpl()`) of a derived type that names
+a user declaration directly is made in a thread that publishes an epoch (`qore_type_check_epoch_assert()`); a
+declaration's own type is not checked, as it is read from an owner that keeps the declaration.  Modules outside this
+repository that check values in threads of their own (registered with `q_register_foreign_thread()`) must enter a
+Program for it.
+
+### Bounding and reporting the delay
+
+A long native call, or a thread blocked in a wait inside generic code with type arguments, delays the frees; it never
+makes them unsafe.  `dbg_type_retirement_info()` reports the pending, freeable and freed declarations and the
+tombstones; `dbg_type_retirement_blockers()` names the threads that hold the newest retirement back.
+
+### Measured
+
+Release RSS growth per Program generation (`measure.q` of step (b) with a quiescent point, `usleep(1)`, after each
+generation, as a server thread reaches when it waits; 5000 generations after 200; GCC 15.2):
+
+|Program|1a (`92cf90db85`)|1b+1c|
+|---|---|---|
+|a plain class|0.00 KiB|0.00 KiB|
+|a generic class and hashdecl, unused|1.38 KiB|1.37 KiB|
+|generic values of its own classes|10.47 KiB|4.34 KiB|
+
+Debug builds count no retired declaration left per generation (`dbg_type_retention_breakdown()`); what is left is
+six retired derived types per generation of the last Program (two type parameter types, two complex list types, a
+complex hash type, `Box<Foo>`), which stage 2 would free.  Without a quiescent point (a thread that never waits and
+never leaves Qore code), nothing is freed before the thread does, as before.
+
+Callgrind instructions per iteration (`rows.sh` plus `bench-generic.q`, `bench-guardprof.q` and `bench-pseudo.q`, the
+minimum of 5 allocation layouts, GCC 15.2, Release; the fix built with `-g`, which does not change the code),
+develop `f446244fba` and the head at paths of equal length:
+
+|Row|ast develop|ast fix|ir develop|ir fix|jit develop|jit fix|
+|---|---|---|---|---|---|---|
+|fc|14025|14025 (+0)|2893|2894 (+1)|315|315 (+0)|
+|sc|13944|13946 (+2)|8119|8120 (+1)|3387|3381 (-6)|
+|m|16362|16363 (+1)|10259|10260 (+1)|4946|4937 (-9)|
+|fs|16674|16675 (+1)|9389|9389 (+0)|4553|4548 (-5)|
+|mp|24334|24335 (+1)|14813|14816 (+3)|2042|2042 (+0)|
+|mm|63232|63245 (+13)|44659|44661 (+2)|23520|23488 (-32)|
+|tc|14875|14875 (+0)|14228|14234 (+6)|2218|2216 (-2)|
+|tl|14545|14552 (+7)|7184|7186 (+2)|3044|3046 (+2)|
+|tl0|14194|14201 (+7)|6534|6537 (+3)|1856|1855 (-1)|
+|th|16228|16235 (+7)|12899|12914 (+15)|8445|8454 (+9)|
+|go|34651|34725 (+74)|33525|33679 (+154)|24694|24822 (+128)|
+|hd|19115|19094 (-21)|13112|13110 (-2)|6114|6114 (+0)|
+|gp|29967|29980 (+13)|31980|31988 (+8)|17096|17103 (+7)|
+|pv|9650|9655 (+5)|7845|7867 (+22)|2906|2913 (+7)|
+|pl|8955|8960 (+5)|3740|3740 (+0)|258|258 (+0)|
+|pt|9308|9313 (+5)|6062|6070 (+8)|3229|3236 (+7)|
+
+`go` (an object of a generic class with a class type argument) pays its unsafe frame; the other rows pay the
+acquire loads of the `QoreTypeSpec` getters (an instruction or two on some paths) and the remaining shifts of the
+compiler's inlining in the unity chunks (see above).
+
+### Known limits and risks
+
+- A declaration whose tombstone cannot be made is kept until library cleanup, as before: one nested deeper than
+  `QORE_TOMBSTONE_MAX_DEPTH` (64) declarations and types (ex: a class at the top of a chain of 40 diamonds, which is 80
+  classes deep), and the kinds listed above.  A fingerprint stops as soon as it fails, as the declarations on its path
+  are not memoized: a walk that went on would follow every path of a chain of diamonds.
+- A frame counted as unsafe whose `CodeEvaluationHelper` constructor ends with a C++ exception (`std::bad_alloc`)
+  after it was counted leaves the count raised: the thread's waits are not quiescent afterwards, which delays frees
+  and never makes them unsafe.
+- A declaration destroyed rather than retired (a class deleted with its class object, builtin declarations of an
+  unloaded module) leaves the pointers that retired derived types have to it, as before.
+- Out-of-tree modules that type-check values in threads of their own must enter a Program (debug builds assert it for
+  derived types that name user declarations).
+- The three stack-limit tests of `qore/threads` (`frame-check-stack`, `parse-stack-boundary`, `small-thread-stack`)
+  overflow their deliberately small stacks under ThreadSanitizer's larger frames; there is no TSan report.
 
 ## Costs (estimates, to be measured)
 

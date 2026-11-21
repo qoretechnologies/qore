@@ -64,6 +64,7 @@ class StatementBlock;
 class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
+class LVList;
 class QoreIRInstruction;
 class FunctionalOperator;
 class ContextStatement;
@@ -1136,7 +1137,33 @@ enum class QoreIROpcode : uint16_t {
     //! `PushTempMark` instructions.
     PushTempMarkPair = 440,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (441, 442, ...)
+    /** Gives the value of a return statement whose block cleanups ran handlers out of line past the inline cap with
+        the value that the last of their return statements handed over, if any (#6137)
+
+        operands[0] = the value of the return, or no operand for a return without a value; the result is a reference
+        of its own to the value that a handler handed over to the frame's handed-over return (see
+        QoreIRScopeExitInstruction::hand_over_return), which the instruction takes from it, if one did, or to the
+        operand otherwise (no value without an operand).  As in the AST interpreter, where a return statement in a
+        handler replaces the return value of the function (ReturnStatement::execImpl()).  The lowering releases the
+        operand after it, as the value that the handler's return replaced, and checks the result against the declared
+        return type.  See qore_rt_take_handed_over_return().
+    */
+    TakeHandedOverReturn = 441,
+
+    /** Releases the value that the handlers run out of line past the inline cap handed over to the frame's
+        handed-over return, if any (#6137)
+
+        No operands, no result.  Emitted where a return statement in a handler lowered inline replaces the value of a
+        return whose block cleanups have run such handlers, as that return replaces the value that they handed over.
+        The release can raise an exception (a destructor).  See qore_rt_release_handed_over_return().  With an
+        operand, the result of a ScopeExit past the cap, it releases nothing and only clears that result for the IR
+        interpreter, as the first instruction of the return that the result branches to (#6552).
+    */
+    ReleaseHandedOverReturn = 442,
+    //! Release an operator source loaded from a local unless the load read through a reference.
+    ReleasePlainLocalRead = 443,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1145,8 +1172,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::PushTempMarkPair);
-static_assert(QORE_IR_MAX_OPCODE == 440, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
+static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1501,6 +1528,8 @@ static constexpr uint8_t QORE_IR_KEEP_GIVES_REFSELF = 4;
 //! after the release of the locals of a block costs no dispatch of its own on the normal path; the check runs as before
 //! when an exception is pending (qore#6371)
 static constexpr uint8_t QORE_IR_STEPS_OVER_CHECK = 8;
+//! UninstantiateLocal releases a function body's local that may run a destructor in the caller's statement.
+static constexpr uint8_t QORE_IR_BODY_LOCAL_CLEANUP = 16;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -1608,6 +1637,7 @@ enum class QoreIRReleaseCheck : uint8_t {
                 //!< release itself (the container gets the handler) and emits nothing for it
     Native,     //!< a kept check of a call's or a Phi's value: native code releases the previous value at the start
                 //!< of the call's continuation or of the Phi's block, where it checks the sink
+    IndexedElement, //!< checks only the preceding indexed-map element release when that load owns its value
 };
 
 class QoreIRInstruction {
@@ -1640,8 +1670,26 @@ public:
     // debug line-change gate below reports the wrong line
     int32_t cached_start_line;
     QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
-    const QoreProgramLocation* loc = nullptr;
+    //! the value that the instruction defines; declared here, in the padding after the 16-bit intrinsic, so that the
+    //! runtime location (stmt_loc) adds no size to the instruction: a larger instruction changed the sizes that the
+    //! IR of every function allocates, and with them the state of the heap that the code allocates from afterwards
+    //! (qore#6646)
     QoreIRValue result{};
+    //! the source location of the instruction: of the expression or the statement that it was lowered from (the
+    //! call site of a call, the line of the debugger's step events and of native debug information)
+    const QoreProgramLocation* loc = nullptr;
+    //! the runtime location of the instruction: the location of the innermost statement whose code it is, which the
+    //! AST interpreter makes the thread's runtime location while the statement runs (AbstractStatement::exec()), and
+    //! which exceptions take (see @ref exception_location "the location of an exception"); nullptr for code outside
+    //! the statements of the function, which keeps the runtime location that it finds (qore#6646)
+    /** Set by the IR builder from the statement being lowered (QoreIRBuilder::setStatementLocation()); an instruction
+        that an analysis creates in place of another takes the location of the one it replaces.  The IR interpreter
+        and native code store it when it changes, not when the line changes: a statement and the statement or block
+        that contains it can start on the same line.  AOT images record it (QORE_AOT_STATEMENT_LOCATIONS_VERSION);
+        the IR of an image of an earlier format takes it from the instruction's own location
+        (qore_ir_set_deserialized_statement_locations()).
+    */
+    const QoreProgramLocation* stmt_loc = nullptr;
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     // For list/hash creation instructions; for CheckReturnValue, the declared return type
@@ -2347,6 +2395,9 @@ public:
     bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    //! Prepared by interpreter analysis. A paired mutation or iterator can borrow a cached plain source.
+    enum class Borrow : uint8_t { None, Mutation, Iterator };
+    Borrow interpreter_borrow = Borrow::None;
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
     uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
 };
@@ -3998,6 +4049,8 @@ public:
 
     QoreIRValue iterable;               //!< List value or iterable expression result
     FunctionalOperator* iterator_func;  //!< Optional functional operator for lazy evaluation
+    //! Interpreter-only: a plain source borrow ends here, at the adjacent ReleasePlainLocalRead.
+    bool interpreter_ends_source_borrow = false;
 };
 
 //! Advances iterator and branches based on done status
@@ -4118,6 +4171,22 @@ public:
     */
     bool trim = false;
     uint32_t keep_handlers = 0;  //!< the number of handlers of the scope that a trim keeps registered
+    //! true if the scope is left by the block cleanups of a return statement past the inline cap of handlers (#6137)
+    /** The handlers of the scope run out of line, as with inline_lowered false, and the values of their return
+        statements (QoreIROpcode::HandlerReturn, also of the handlers of their blocks) replace the frame's handed-over
+        return, releasing the value before, as the AST interpreter's handlers replace the return value of the function
+        (ReturnStatement::execImpl()); the return statement takes it with QoreIROpcode::TakeHandedOverReturn.  The
+        operands are the value of the return and the value that it took a reference of its own to, if any (none for a
+        return without a value), which the first hand-over of a run releases in their slots, as the AST interpreter
+        releases the value that a return replaces.  Without it, a handler's return replaces a value only while an
+        exception or a thread_exit unwinds the scope.
+
+        Outside the block cleanups of a return statement (at the end of a block, a break or a continue in the body of a
+        handler lowered inline), the instruction has a result: a bool that is true if a value was handed over in this
+        run, on which the lowering branches to the return of the value (QoreIRLowering::lowerHandedOverReturn(),
+        #6552), as the AST interpreter's handler's return ends the code around it as a return statement there would.
+    */
+    bool hand_over_return = false;
     //! the paths of a debugger's request that the last handler that the instruction ran ended with (#6201): the
     //! request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()); nullptr if the
     //! code has no step events
@@ -4474,8 +4543,8 @@ public:
 
     //! Transient (never serialized): when set, the outlined helper may signal
     //! an in-region `return` via qore_rt_outline_signal_return(); after the
-    //! call (and its exception check) the lowering consumes the flag with
-    //! qore_rt_outline_take_return() and branches here — a synthesized
+    //! call the lowering consumes the flag with qore_rt_outline_take_return().
+    //! If the exception check succeeds and the flag was set, it branches here — a synthesized
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
@@ -4496,6 +4565,15 @@ public:
         (qore#6545), or if a reference, a closure or code evaluated through the AST can reach it
     */
     std::vector<const LocalVar*> written_shared_locals;
+    //! Transient (never serialized): true for the call of an outlined function-body helper, false for an
+    //! init-expression helper
+    /** On an exception, the result of the call of a function-body helper is the value of a return or of a handler's
+        return of the helper that the exception interrupted, which the coordinator holds as the value of its own
+        return until after its locals (see QoreIRToLLVM::outline_held_return, qore#6650)
+    */
+    bool function_body = false;
+    //! The extracted helper takes the saved caller statement of the owning function for root-local cleanup.
+    bool takes_body_entry_location = false;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
@@ -4825,6 +4903,8 @@ public:
     /** Empty for every other function; see getAOTSymbolOwner().
     */
     std::string aot_symbol_owner;
+    //! Transient native helper signature, set only when the helper releases one of its owner's root locals.
+    bool takes_body_entry_location = false;
     //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
     uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.
@@ -5036,6 +5116,12 @@ public:
         (issue #5890); empty otherwise.
     */
     mutable std::unordered_map<const void*, uint8_t> aot_native_local_flags;
+    //! Locals whose value the standard AOT entry owns. The availability flags above also describe optimized-away
+    //! writes and locals that the code caches while continuing to assign their runtime variable.
+    mutable std::unordered_set<const void*> aot_private_body_locals;
+    //! The root declarations of a body compiled with private AOT storage. A null list keeps the original
+    //! runtime storage for code with access to debugger functions and for entries without scope information.
+    const LVList* aot_private_root_scope = nullptr;
 
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
@@ -5071,6 +5157,15 @@ public:
     // IR or JIT execution, so that AST Invoke callbacks can find them on the
     // thread-local variable stack.
     std::vector<LocalVar*> all_body_locals;
+
+    //! Enclosing statement for a local's destruction on unwinding. A function-body local uses the caller's statement.
+    std::unordered_map<const LocalVar*, const QoreProgramLocation*> local_unwind_locations;
+
+    //! True for a mapped function-root local that finalizes at the saved caller statement.
+    bool releasesLocalAtCaller(const LocalVar* var) const {
+        auto it = local_unwind_locations.find(var);
+        return it != local_unwind_locations.end() && !it->second;
+    }
 
     // Subset of all_body_locals that are NOT IR-only: must be pre-instantiated by
     // evalTiered() so AST Invoke callbacks can find them on the thread-local stack.
@@ -5271,6 +5366,10 @@ public:
     */
     static bool collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
         std::unordered_set<const void*>& locals);
+    //! Collects the locals of this compiled handler and its statement tree, including nested handlers.
+    /** @return false when part of the handler can access unknown locals */
+    bool collectHandlerBodyLocals(const StatementBlock* code, std::unordered_set<const void*>& locals) const;
+
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
@@ -5531,6 +5630,10 @@ public:
         one only; not serialized: IR read back closes the innermost one (#5968)
     */
     std::unordered_map<const QoreIRInstruction*, uint32_t> catch_exit_depths;
+    //! true for IR read from an image of a format that does not carry the temp scopes of its instructions
+    //! (QORE_AOT_TEMP_SCOPES_VERSION): their ids are all 0, and the verification does not follow the temp scopes on
+    //! the paths of exceptions (qore#6742)
+    bool temp_scope_ids_unknown = false;
     //! true if the function has a catch block without an exit block whose statements can raise an exception (or
     //! run a thread_exit) that leaves the frame without closing it
     /** Set by the lowering and read by the LLVM lowering, whose exception exits of the frame then close the catch
