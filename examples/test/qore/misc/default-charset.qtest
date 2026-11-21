@@ -8,8 +8,10 @@
 # function that formats text are ASCII in it.  An encoding that is not (UTF-16, UTF-32, EBCDIC, Shift_JIS) is
 # refused at startup: given with --charset or QORE_CHARSET, Qore exits with an error (status 1); given by the locale
 # (LANG), which is not specific to Qore, Qore prints an error and uses UTF-8, as for an encoding that iconv does not
-# know.  Each of the three sources is tested.  ARGV and QORE_ARGV, which are made from the command line before the
-# default encoding is set, are tagged with it as ENV is (issue #7045).
+# know.  Each of the three sources is tested.  With QORE_TEST_VALGRIND set, each refused encoding and an invalid
+# option also run under valgrind, which must find nothing lost in the process that exits at startup (issue #7000).
+# ARGV and QORE_ARGV, which are made from the command line before the default encoding is set, are tagged with it as
+# ENV is (issue #7045).
 
 %modern
 %no-child-restrictions
@@ -41,6 +43,7 @@ class DefaultCharsetTest inherits QUnit::Test {
         addTestCase("QORE_CHARSET", \testEnv());
         addTestCase("LANG", \testLang());
         addTestCase("ARGV and QORE_ARGV take the default encoding", \testArgvEncoding());
+        addTestCase("valgrind: nothing is lost at a startup exit", \testValgrind());
         set_return_value(main());
     }
 
@@ -107,6 +110,44 @@ class DefaultCharsetTest inherits QUnit::Test {
             "binary(ARGV[0]).toHex(), ARGV[0].isEncodingValid());' \"$(printf '\\303\\251')\" 2>&1", libqore_dir,
             libqore_dir, qore_bin);
         assertEq("UTF-8 UTF-8 c3a9 True", backquote(cmd), "UTF-8");
+    }
+
+    #! the encodings that are refused as the default encoding, given with --charset and with QORE_CHARSET
+    const Refused = ("UTF-16", "UTF-16LE", "UTF-32", "UTF-32LE", "UTF-32BE", "UCS-2", "UCS-2LE", "SHIFT_JIS");
+
+    #! the process exits at startup without anything lost under valgrind (issue #7000)
+    /** ARGV and QORE_ARGV are made from the command line before the library is initialized; a refused default
+        encoding and an invalid option end the process with exit() at startup, which released neither
+    */
+    testValgrind() {
+        if (!ENV.QORE_TEST_VALGRIND) {
+            testSkip("set QORE_TEST_VALGRIND to run the children under valgrind");
+        }
+        if (!backquote("command -v valgrind 2>/dev/null").val()) {
+            testSkip("valgrind is not installed");
+        }
+        # the children run with -b (no signal handling), as valgrind needs; the leak kinds that the issue reports
+        # are errors, so a leak gives exit status 99
+        string vg = "valgrind --leak-check=full --show-leak-kinds=definite,indirect "
+            "--errors-for-leak-kinds=definite,indirect --error-exitcode=99";
+        list<list<auto>> runs = ();
+        foreach string enc in (Refused) {
+            runs += ((enc + " (--charset)", "", vg + " " + qore_bin + " -b --charset=" + enc, 1),);
+            runs += ((enc + " (QORE_CHARSET)", "QORE_CHARSET=" + enc, vg + " " + qore_bin + " -b", 1),);
+        }
+        runs += (("an invalid option", "", vg + " " + qore_bin + " -b --no-such-option", 1),);
+        runs += (("ISO-8859-2 (--charset)", "", vg + " " + qore_bin + " -b --charset=ISO-8859-2", 0),);
+        runs += (("WINDOWS-1250 (QORE_CHARSET)", "QORE_CHARSET=WINDOWS-1250", vg + " " + qore_bin + " -b", 0),);
+        foreach list<auto> run in (runs) {
+            string cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE %s QORE_PCRE2_NO_JIT=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -e 'print(get_default_encoding());' 2>&1; echo \" rc=$?\"", run[1],
+                libqore_dir, libqore_dir, run[2]);
+            string out = backquote(cmd);
+            *list<string> m = (out =~ x/^(.*) rc=([0-9]+)\n$/s);
+            assertTrue(exists m, run[0] + ": exit status: " + out);
+            assertEq(run[3], int(m[1]), run[0] + ": exit status (99: valgrind found a leak): " + out);
+            assertNRegex("(definitely|indirectly) lost: [1-9]", m[0], run[0]);
+        }
     }
 
     testLang() {

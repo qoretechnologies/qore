@@ -1699,6 +1699,9 @@ DLLLOCAL void delete_global_variables();
     not set yet; the bytes of the command line are in the default encoding of the process
 */
 DLLLOCAL void qore_tag_argv_encoding();
+//! releases ARGV and QORE_ARGV, which qore_setup_argv() makes before qore_init(), before a startup error ends the
+//! process with exit() (qore#7000)
+DLLLOCAL void qore_release_argv();
 DLLLOCAL void init_lib_intern(char* env[]);
 //! runs the one-time initializations of the network code when the library is initialized (see QoreForkHandlers.h)
 DLLLOCAL void qore_network_init_once();

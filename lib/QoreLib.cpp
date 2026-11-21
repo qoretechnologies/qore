@@ -2074,12 +2074,20 @@ void init_lib_intern(char* env[]) {
 #endif
 }
 
+void qore_release_argv() {
+    if (QORE_ARGV) {
+        QORE_ARGV->deref(nullptr);
+        QORE_ARGV = nullptr;
+    }
+    if (ARGV) {
+        ARGV->deref(nullptr);
+        ARGV = nullptr;
+    }
+}
+
 void delete_global_variables() {
     QORE_TRACE("delete_global_variables()");
-    if (QORE_ARGV)
-        QORE_ARGV->deref(0);
-    if (ARGV)
-        ARGV->deref(0);
+    qore_release_argv();
     if (ENV)
         ENV->deref(0);
 }
