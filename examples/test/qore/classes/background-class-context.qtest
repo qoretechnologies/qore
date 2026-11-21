@@ -11,6 +11,8 @@ class TestClass {
     public {
         int counter;
         string name;
+        #! decremented when a method called in a background thread has set the counter, which the test waits for
+        *Counter done;
     }
 
     constructor() {
@@ -20,6 +22,9 @@ class TestClass {
 
     setCounter(int c) {
         counter = c;
+        if (done) {
+            done.dec();
+        }
     }
 
     int getCounterValue() {
@@ -37,9 +42,11 @@ class BackgroundClassContextTest inherits QUnit::Test {
 
     testBackgroundModifyInstance() {
         TestClass tc();
+        tc.done = new Counter(1);
         # Test: Background operator modifies instance variable
         background tc.setCounter(999);
-        usleep(100ms);
+        # the background thread has set the counter (qore#7113: a sleep did not wait for it under load)
+        tc.done.waitForZero();
         assertEq(999, tc.getCounterValue(), "background should modify instance var");
     }
 
@@ -60,9 +67,10 @@ class BackgroundClassContextTest inherits QUnit::Test {
 
     testBackgroundCallMethod() {
         TestClass tc();
+        tc.done = new Counter(1);
         # Test: Background operator calls instance method
         background tc.setCounter(777);
-        usleep(100ms);
+        tc.done.waitForZero();
         assertEq(777, tc.counter, "background should call method that modifies instance var");
     }
 }
