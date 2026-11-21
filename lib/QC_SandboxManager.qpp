@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxPollOps.h"
+#include "qore/intern/QoreObjectIntern.h"
 
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
@@ -1691,6 +1692,99 @@ class Shared {
 */
 static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
     return qore_caller_creates_shared_objects();
+}
+
+//! Marks an object as shared by every %Program of the process, so that sandboxed code cannot change or delete it
+/** Trusted library code marks an object that it shares with every %Program (in a constant or a static variable of a
+    module, or a cache), typically in the object's constructor when createsSharedObjects() returns @ref True.  Then
+    code that a sandbox governs (see isProcessWideRegistrationAllowed()):
+    - cannot change a member of the object: an assignment to it or to an element of the value that it holds (also in
+      a nested container), the other operators that change an lvalue (such as \c +=, \c push, \c splice,
+      \c remove and \c delete), a write through a reference to the member, and the \c += operator with a hash on the
+      object raise a \c SHARED-OBJECT-ERROR exception before anything is changed; reading the members, also through a
+      reference, is not affected
+    - cannot delete the object with the \c delete operator (\c SHARED-OBJECT-ERROR)
+
+    The code of the object's own class hierarchy (the class of the object, a class that it inherits or a class that
+    inherits it) that trusted code declared can still change the members, also in a call for sandboxed code, so that
+    the object can maintain its state (for example, caches that it builds on first use); a method of such a class
+    that changes the object on behalf of its caller checks with checkSharedObjectChange().
+
+    An object held in a member of a shared object is a separate object: it is shared only if it is marked itself.  A
+    copy of a shared object is not shared unless it is marked; an object that \c Serializable::deserialize() creates
+    runs no constructor, so it is not marked by one.
+
+    The mark cannot be removed.  It only restricts sandboxed code, so any code can set it.
+
+    @param obj the object to mark as shared
+
+    @par Example:
+    @code{.py}
+class SharedSchema {
+    public {
+        string base_path;
+    }
+
+    constructor() {
+        # an object that trusted code creates may be shared by every Program
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(self);
+        }
+    }
+}
+    @endcode
+
+    @see
+    - isSharedObject()
+    - checkSharedObjectChange()
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::shareObject(object obj) {
+    qore_object_private::get(*const_cast<QoreObject*>(obj))->setShared();
+}
+
+//! Returns @ref True if the object is marked as shared by every %Program of the process
+/** @param obj the object to check
+
+    @return @ref True if the object is marked as shared by every %Program of the process; see shareObject()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_object_private::get(*obj)->isShared();
+}
+
+//! Raises an exception if the calling code is sandboxed and the object is shared by every %Program of the process
+/** For a method of a shared object's class that changes the object on behalf of its caller: code of the object's
+    own class can change its members also in a call for sandboxed code (see shareObject()), so such a method refuses
+    the change itself.
+
+    It decides as isProcessWideRegistrationAllowed() does: if the sandbox that governs the code cannot be resolved,
+    the change is refused.
+
+    @param obj the object that the caller changes
+    @param what what is changed, for the exception (ex: \c "set the base path")
+
+    @throw SHARED-OBJECT-ERROR the object is shared (see shareObject()), and code that is sandboxed or acts for
+    sandboxed code tried to change it
+
+    @par Example:
+    @code{.py}
+setBasePath(string base_path) {
+    SandboxManager::checkSharedObjectChange(self, "set the base path");
+    self.base_path = base_path;
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkSharedObjectChange(object obj, string what) {
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    qore_object_private::get(*const_cast<QoreObject*>(obj))->checkSharedMethodChange(str->c_str(), xsink);
 }
 
 //! Returns the ID of the caller %Program: the %Program whose code called the running code

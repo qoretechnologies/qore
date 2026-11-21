@@ -564,6 +564,39 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_shared_objects Shared Objects
+
+    An object that trusted library code creates and keeps for every %Program of the process (in a constant, a static
+    variable or a cache of a module) is shared by the code of every tenant.  Trusted code marks such an object with
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()", usually in its constructor when
+    @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" returns @ref True.  Code
+    that is sandboxed or acts for sandboxed code (as decided for @ref sandbox_process_wide_registries "registrations")
+    then cannot change the object's members, in any form of write (assignment, the other operators that change an
+    lvalue, \c remove and \c delete of a member or a slice of members, a write through a reference to a member,
+    the \c += operator with a hash on the object, a write to an element of a container that a member holds), nor
+    delete the object with the \c delete operator: each raises \c SHARED-OBJECT-ERROR before anything is changed.
+    Reading the members is not affected.
+
+    The code of the object's own class hierarchy that trusted code declared can still change the object, also in a
+    call for sandboxed code, so that the object maintains its own state, such as the caches that it builds on first
+    use; a method of such a class that changes the object on behalf of its caller refuses sandboxed code with
+    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()".  A class that
+    sandboxed code declares is never the object's own class, even when it inherits it.
+
+    The REST and AsyncAPI schemas of the \c Swagger, \c OpenApi3 and \c AsyncApi modules and their schema objects
+    are marked in this way when trusted code creates them, so that a tenant cannot change a schema that a module
+    shares, such as the schema of a REST application, for every other tenant; a tenant can change the schemas that it
+    creates itself.
+
+    An object held in a member of a shared object is a separate object: it is protected only if it is marked itself
+    (the schema objects of a shared schema are).  The mark is not copied with the object: a copy is marked only if its
+    class marks it again, as the schema classes do when trusted code makes the copy.  An object that
+    \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
+    it: trusted code that shares a deserialized object marks it with
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.
+
+    @since %Qore 3.0
+
     @subsection sandbox_isolation_domains Isolation Domains (Tenants)
 
     A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with
@@ -1755,6 +1788,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
+    |\c SHARED-OBJECT-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change or delete a @ref sandbox_shared_objects "shared object"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

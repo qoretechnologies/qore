@@ -294,6 +294,54 @@ public:
     //! chain consumes stack that can push deep recursion past the stack guard).
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
 
+    //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
+    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of the
+        object's own class hierarchy that trusted code declared; see checkSharedChange().  Set before the object is
+        published to other Programs, and read with relaxed ordering on every member write.
+    */
+    std::atomic<bool> shared_object{false};
+
+    //! Marks the object as shared by every Program of the process; see shared_object
+    DLLLOCAL void setShared() {
+        shared_object.store(true, std::memory_order_release);
+    }
+
+    //! Returns true if the object is marked as shared by every Program of the process; see shared_object
+    DLLLOCAL bool isShared() const {
+        return shared_object.load(std::memory_order_relaxed);
+    }
+
+    //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
+    /** Code that a sandbox governs cannot change an object that trusted code marked as shared, unless it is the code
+        of the object's own class hierarchy that trusted code declared, which keeps the object's state (such as its
+        lazily built caches) also in a call for sandboxed code.
+
+        @param mem the member to change, or nullptr if the whole object is deleted or its members are changed together
+        @param class_ctx the class context of the running code, or nullptr if it has none
+        @param xsink for the exception
+        @param del true if the object is deleted
+    */
+    DLLLOCAL int checkSharedChange(const char* mem, const qore_class_private* class_ctx, ExceptionSink* xsink,
+            bool del = false) const {
+        if (!shared_object.load(std::memory_order_relaxed)) [[likely]] {
+            return 0;
+        }
+        return checkSharedChangeIntern(mem, class_ctx, xsink, del);
+    }
+
+    //! checkSharedChange() for an object marked as shared
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedChangeIntern(const char* mem, const qore_class_private* class_ctx,
+            ExceptionSink* xsink, bool del) const;
+
+    //! Returns 0 if the calling code can change the object in a method, or raises SHARED-OBJECT-ERROR and returns -1
+    /** For SandboxManager::checkSharedObjectChange(): code that a sandbox governs cannot change a shared object, also
+        through the methods of its class
+
+        @param what what is changed, for the exception
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data,
             const QoreTypeInfo* n_instantiated_type = nullptr);
 

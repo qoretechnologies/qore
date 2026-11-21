@@ -4169,7 +4169,9 @@
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
     - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
-      %Program of the process (see @ref dataprovider_v3_12 "DataProvider v3.12"; issues #6843, #6863)
+      %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
+      @ref sandbox_shared_objects "shared object" or delete it (see @ref dataprovider_v3_12 "DataProvider v3.12";
+      issues #6843, #6863)
 
     @section qore_2_2_1 Qore 2.2.1
 

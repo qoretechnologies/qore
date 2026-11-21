@@ -1227,6 +1227,11 @@ public:
         return write_protected;
     }
 
+    //! Returns true if the value of a reference is only read: the path is resolved without changing anything
+    DLLLOCAL bool isReadValueOnly() const {
+        return read_value_only;
+    }
+
     DLLLOCAL LValueHelper(LValueHelper&& o);
 
     // to scan objects after initialization
