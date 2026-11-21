@@ -9,8 +9,9 @@
 # getter without arguments of the module's public classes, which can build a value that the module shares on first
 # use, and reads every public constant that holds an object; tenant B, another sandboxed Program, then tries to
 # change each data type, data field and REST schema action set (through its request fields) that it got: every change
-# must be refused, as the objects are shared by every Program of the process.  A module that cannot be loaded here
-# (a missing binary module or external dependency) is reported as a skip with its reason.
+# must be refused, as the objects are shared by every Program of the process.  A module that cannot be loaded here, or
+# an accessor that a sandboxed Program cannot use, fails the test with its reason: a module that is not checked could
+# share objects that sandboxed code can change.
 
 const SharedTypeObjectsParts = 4;
 
@@ -84,7 +85,7 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
 
     #! checks the modules of a part: every SharedTypeObjectsParts-th module of the sorted list
     private checkPart(int p) {
-        list<string> skipped = ();
+        list<string> unchecked = ();
         list<string> changed = ();
         int checked = 0;
         int i = 0;
@@ -92,15 +93,13 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
             if ((i++ % SharedTypeObjectsParts) + 1 != p) {
                 continue;
             }
-            *string skip = checkModule(mod, \changed, \checked);
-            if (skip) {
-                skipped += skip;
+            *string reason = checkModule(mod, \changed, \checked);
+            if (reason) {
+                unchecked += reason;
             }
         }
-        if (skipped) {
-            # the modules that this environment cannot check are reported, so that the gap is visible
-            printf("SKIPPED (%d):\n%s\n", skipped.size(), foldl $1 + "\n" + $2, skipped);
-        }
+        # every module and every accessor must have been checked
+        assertEq((), unchecked, "modules or accessors that could not be checked");
         # every change must have been refused
         assertEq((), changed, sprintf("%d objects checked", checked));
     }
@@ -150,20 +149,34 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
         list<string> rv = ();
         foreach string f in (files) {
             *string cls;
+            # true while the lines are in a private member block of the class, whose constants are not public
+            bool private_block;
             foreach string line in (File::readTextFile(f).split("\n")) {
                 if (*string c = (line =~ x/^\s*public\s+class\s+([A-Za-z0-9_]+)/)[0]) {
                     cls = c;
+                    private_block = False;
                 } else if (line =~ /^\s*(class|namespace)\s/ || line =~ /^\s*public\s+namespace\s/) {
                     remove cls;
                 }
                 if (!cls) {
                     continue;
                 }
+                if (line =~ /^\s{4}(public|private(:internal|:hierarchy)?)\s*\{/) {
+                    private_block = line !~ /^\s{4}public/;
+                    continue;
+                }
+                if (line =~ /^\s{4}\}/) {
+                    private_block = False;
+                    continue;
+                }
+                # a static method without an access modifier is public
                 if (*list<*string> g = (line =~ x/^\s{4}static\s+\*?([A-Za-z0-9_:<>, ]+)\s+(get[A-Za-z0-9_]*)\(\)\s*\{/)) {
-                    if (g[0] !~ /^(string|int|bool|float|number|date|binary|code|softlist<string>|list<string>)$/) {
+                    if (g[0] !~ /^(string|int|bool|float|number|date|binary|code|softlist<string>|list<string>)$/
+                            && g[0] !~ /\bprivate\b/) {
                         rv += sprintf("%s::%s()", cls, g[1]);
                     }
-                } else if (*string k = (line =~ x/^\s{8}const\s+([A-Za-z0-9_]+)\s*=\s*new\s/)[0]) {
+                } else if (!private_block
+                        && (*string k = (line =~ x/^\s{8}const\s+([A-Za-z0-9_]+)\s*=\s*new\s/)[0])) {
                     rv += sprintf("%s::%s", cls, k);
                 }
             }
@@ -171,7 +184,7 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
         return rv;
     }
 
-    #! checks the shared objects of a module, and returns the reason why it was skipped, if it was
+    #! checks the shared objects of a module, and returns the reason why it or some of its accessors could not be checked
     private *string checkModule(string mod, reference<list<string>> changed, reference<int> checked) {
         try {
             load_module(mod);
@@ -193,7 +206,7 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
         }
         get_code += "    return rv;\n}\n";
         hash<auto> values;
-        *string skip;
+        *string reason;
         try {
             a.parse(get_code, "tenant-a");
             values = a.callFunction("get");
@@ -213,7 +226,7 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
                 }
             }
             if (unusable) {
-                skip = sprintf("module %y: accessors that a sandboxed Program cannot use here: %y", mod, unusable);
+                reason = sprintf("module %y: accessors that a sandboxed Program cannot use here: %y", mod, unusable);
             }
         }
         # tenant B tries to change them
@@ -228,6 +241,6 @@ class SharedTypeObjectsModulesBase inherits QUnit::Test {
                 }
             }
         }
-        return skip;
+        return reason;
     }
 }
