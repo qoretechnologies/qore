@@ -6302,8 +6302,7 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
             }
         }
     }
-    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
-    if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
+    if (!cache_enabled || !ctx || !type_path || !*type_path) {
         return qore_rt_resolve_full_type_path(type_path, op, xsink);
     }
 
@@ -6329,6 +6328,12 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
             && front_entry.path_address == type_path
             && front_entry.receiver_type_info == receiver_type_info) {
         return front_entry.type_info;
+    }
+
+    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached:
+    // the path is scanned for one only when the front cache does not have it, as no such path is ever put in it
+    if (qore_aot_type_path_has_signature_type_param(type_path)) {
+        return qore_rt_resolve_full_type_path(type_path, op, xsink);
     }
 
     // the context's map is keyed by the receiver's type and the serial of its class; nothing is cached for a context

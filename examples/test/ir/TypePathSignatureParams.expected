@@ -1,0 +1,7 @@
+sum: 4032
+last: s63bC
+element types: list<int> list<string>
+box element types: list<int> list<string>
+a D for *C: RUNTIME-TYPE-ERROR
+a string for an int instantiation: RUNTIME-OVERLOAD-ERROR
+nothing for *C: null
