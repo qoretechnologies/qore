@@ -319,7 +319,7 @@ public class AbstractDataField inherits Qore::Serializable {
         /** Such a field can be shared by every Program of the process, so sandboxed code cannot change it
             (qore#6843); see checkChange()
         */
-        transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        transient bool shared_object = SandboxManager::createsSharedObjects();
     }
 
     private {
@@ -415,7 +415,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.12
     */
     copy() {
-        shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        shared_object = SandboxManager::createsSharedObjects();
     }
 
     private checkChange() {

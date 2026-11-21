@@ -467,7 +467,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         /** Such a type can be shared by every Program of the process (in a constant or a static variable of a
             module), so sandboxed code cannot change it (qore#6843); see checkChange()
         */
-        transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        transient bool shared_object = SandboxManager::createsSharedObjects();
 
         #! True once freeze() has marked the type as shared; see freeze()
         transient bool frozen;
@@ -1298,7 +1298,7 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         @since DataProvider 3.12
     */
     copy() {
-        shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        shared_object = SandboxManager::createsSharedObjects();
         frozen = False;
     }
 

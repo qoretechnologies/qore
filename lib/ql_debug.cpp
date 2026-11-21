@@ -27506,6 +27506,14 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
     qore_sandbox_dbg_fail_next_budgets(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
+//! Makes the next count resolutions of the sandbox that governs the thread fail as if no memory could be allocated
+/** Tests that code that marks what trusted code creates as shared fails closed (qore#6843)
+*/
+static QoreValue f_dbg_sandbox_fail_next_resolutions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_sandbox_resolutions(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
 #endif
 
 #ifdef DEBUG
@@ -27787,6 +27795,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_resolutions", f_dbg_sandbox_fail_next_resolutions,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,

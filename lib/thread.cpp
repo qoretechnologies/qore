@@ -6622,11 +6622,31 @@ bool qore_calling_code_is_untrusted() {
     return !!(td->current_pgm->getParseOptions() & restricting);
 }
 
-bool qore_caller_is_sandboxed() {
+#ifdef DEBUG
+//! the number of sandbox resolutions in qore_caller_sandbox_state() that fail as if no memory could be allocated
+static std::atomic<int> dbg_fail_sandbox_resolutions{0};
+
+void qore_dbg_fail_next_sandbox_resolutions(int count) {
+    dbg_fail_sandbox_resolutions.store(count > 0 ? count : 0);
+}
+
+//! Returns true if a sandbox resolution must fail (debug builds, for tests)
+static bool qore_dbg_fail_sandbox_resolution() {
+    int count = dbg_fail_sandbox_resolutions.load();
+    while (count > 0) {
+        if (dbg_fail_sandbox_resolutions.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+int qore_caller_sandbox_state() {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
     if (!td) {
-        return false;
+        return 0;
     }
     // under a module initialization barrier, the code that loads library code does not create what the
     // initialization of the library code creates (see QoreModuleInitSandboxBarrierHelper); under a lift it does
@@ -6635,14 +6655,14 @@ bool qore_caller_is_sandboxed() {
     // a sandboxed caller that a parse or module load in another Program hid from the walk below; not one that called
     // library code whose initialization runs now (see QoreCallerSandboxHelper)
     if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
-        return true;
+        return 1;
     }
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
     // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
     // are walked as in find_thread_sandbox_stack_ref_intern()
     if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
         if (qore_program_is_sandboxed(td->current_pgm)) {
-            return true;
+            return 1;
         }
     }
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
@@ -6650,22 +6670,32 @@ bool qore_caller_is_sandboxed() {
             break;
         }
         if (qore_program_is_sandboxed(ch->getOldProgram())) {
-            return true;
+            return 1;
         }
     }
     if (!mib && td->current_pgm != td->call_program_context
         && qore_program_is_sandboxed(td->call_program_context)) {
-        return true;
+        return 1;
     }
     // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
     // runs and the sandbox inherited by the thread, as for interrupts and resource limits
     try {
+#ifdef DEBUG
+        if (qore_dbg_fail_sandbox_resolution()) {
+            throw std::bad_alloc();
+        }
+#endif
         ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(), nullptr);
-        return static_cast<bool>(sm);
+        return sm ? 1 : 0;
     } catch (std::bad_alloc&) {
-        // the sandbox cannot be resolved: what the code creates is not trusted
-        return true;
+        // the sandbox cannot be resolved: each caller fails closed in its own direction
+        return -1;
     }
+}
+
+bool qore_caller_is_sandboxed() {
+    // fails closed: code whose governing sandbox cannot be resolved is not trusted
+    return qore_caller_sandbox_state() != 0;
 }
 
 bool qore_program_is_library_module(const QoreProgram* pgm) {

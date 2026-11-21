@@ -1438,7 +1438,7 @@ public namespace RestSchemaValidator {
             /** Such a schema can be shared by every Program of the process, so sandboxed code cannot replace its
                 types (qore#6843)
             */
-            transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+            transient bool shared_object = SandboxManager::createsSharedObjects();
         }
 
         public {

@@ -1526,6 +1526,39 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     return !qore_caller_is_sandboxed();
 }
 
+//! Returns @ref True if what the current thread's code creates may be shared by every %Program of the process
+/** Trusted infrastructure that marks the objects it creates for the calling code as shared or not uses it: an object
+    that code which no sandbox governs creates may be shared by every %Program (in a constant or a static variable of
+    a module), so sandboxed code must not change it.
+
+    It decides as isProcessWideRegistrationAllowed() does, but fails closed in the other direction: if the sandbox
+    that governs the code cannot be resolved, it returns @ref True, so that the object is treated as shared and
+    sandboxed code cannot change it, where isProcessWideRegistrationAllowed() returns @ref False, so that the
+    registration is refused.
+
+    It reveals only whether the calling code is sandboxed, so it is not restricted itself.
+
+    @return @ref True if the code is not sandboxed or its sandbox cannot be resolved, @ref False if it is sandboxed or
+    acts for sandboxed code
+
+    @par Example:
+    @code{.py}
+class Shared {
+    private {
+        # sandboxed code cannot change an object that trusted code creates
+        transient bool shared_object = SandboxManager::createsSharedObjects();
+    }
+}
+    @endcode
+
+    @see isProcessWideRegistrationAllowed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
+    return qore_caller_creates_shared_objects();
+}
+
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
 /** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
     that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as

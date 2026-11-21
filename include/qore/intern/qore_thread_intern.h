@@ -1747,6 +1747,27 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
 
+//! returns 1 if the calling code is sandboxed (see qore_caller_is_sandboxed()), 0 if not, and -1 if the governing
+//! sandbox cannot be resolved for lack of memory
+/** For callers that must fail closed in the other direction than qore_caller_is_sandboxed(): code that marks what
+    the calling code creates as shared (which sandboxed code cannot change) treats an unknown caller as trusted, so
+    that the object is shared (see qore_caller_creates_shared_objects())
+*/
+DLLLOCAL int qore_caller_sandbox_state();
+
+//! returns true if what the calling code creates may be shared by every Program: the code is not sandboxed, or the
+//! governing sandbox cannot be resolved (fails closed: such an object is treated as shared, which sandboxed code
+//! cannot change)
+DLLLOCAL inline bool qore_caller_creates_shared_objects() {
+    return qore_caller_sandbox_state() != 1;
+}
+
+#ifdef DEBUG
+//! Makes the next \a count resolutions of the sandbox that governs the thread in qore_caller_sandbox_state() fail as
+//! if no memory could be allocated (debug builds, for tests)
+DLLLOCAL void qore_dbg_fail_next_sandbox_resolutions(int count);
+#endif
+
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
 /** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if
