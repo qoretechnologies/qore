@@ -8882,6 +8882,34 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Returns the number of bytes of a client-side HTTP/3 stream's data that the peer has acknowledged
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForQuicClientStreamDrain()) can tell from it whether the peer still takes the data: a wait during which
+    the count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int acked = sock.getQuicClientStreamAckedBytes(stream_id);
+    @endcode
+
+    @param stream_id the stream ID
+
+    @return the acknowledged byte count, or -1 if the stream has no data record or there is no QUIC session
+
+    @since %Qore 3.0
+*/
+int Socket::getQuicClientStreamAckedBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicClientStreamAckedBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_quic_client_stream_acked(s, stream_id, xsink);
+}
+
 //! Waits for a client-side HTTP/3 streaming body buffer to drain
 /** @par Example:
     @code{.py}

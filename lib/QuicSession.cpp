@@ -3710,6 +3710,20 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
     return closed_.load(std::memory_order_acquire) ? -1 : 1;
 }
 
+int64_t QuicSession::streamAckedBytes(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end()) {
+        return -1;
+    }
+    int64_t acked = static_cast<int64_t>(it->second.acked_total);
+#ifdef DEBUG
+    // tests simulate a peer that takes the data of a held stream a little at a time
+    acked += qore_dbg_quic_simulated_stream_progress(stream_id);
+#endif
+    return acked;
+}
+
 int QuicSession::streamSendFlushed(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streaming_body_data_.find(stream_id);
@@ -6678,6 +6692,7 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
         sbd.front_acked += datalen;
+        sbd.acked_total += datalen;
         bool released = false;
         while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
             sbd.front_acked -= sbd.sent_bufs.front().size();

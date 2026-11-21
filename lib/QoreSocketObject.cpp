@@ -1098,6 +1098,7 @@ public:
         StreamTrailers,
         MaxDatagramSize,
         DatagramSupported,
+        FirstSessionStreamAcked,
     };
 
     DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
@@ -1177,6 +1178,10 @@ public:
             case Action::DatagramSupported:
                 setDatagramSupported(xsink);
                 break;
+
+            case Action::FirstSessionStreamAcked:
+                setFirstSessionStreamAcked();
+                break;
         }
 
         if (*xsink) {
@@ -1224,6 +1229,11 @@ private:
             xsink->raiseException(err, desc, (long long)session_id);
         }
         return session;
+    }
+
+    DLLLOCAL void setFirstSessionStreamAcked() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(sock);
+        output = session ? session->streamAckedBytes(stream_id) : static_cast<int64_t>(-1);
     }
 
     DLLLOCAL void setFirstSessionClosed() {
@@ -7034,6 +7044,17 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(this, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
+}
+
+int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_quic_query(s,
+        new QoreSocketObjectQuicQueryPollOperation(s,
+            QoreSocketObjectQuicQueryPollOperation::Action::FirstSessionStreamAcked, 0, stream_id),
+        "getQuicClientStreamAckedBytes", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->getAsBigInt();
 }
 
 int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
