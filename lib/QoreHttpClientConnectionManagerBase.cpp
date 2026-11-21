@@ -715,13 +715,9 @@ bool HttpClientConnectionManagerBase::isCancelPending() {
 }
 
 bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
-    QoreValue err = xsink.getExceptionErr();
-    if (err.getType() != NT_STRING) {
-        return false;
-    }
-    const char* e = err.get<const QoreStringNode>()->c_str();
-    return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
-        || !strcmp(e, "SOCKET-CLOSED");
+    // the error code can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper e(xsink.getExceptionErr());
+    return e == "HTTP1-CONNECTION-CLOSED" || e == "HTTP2-CONNECTION-CLOSED" || e == "SOCKET-CLOSED";
 }
 
 bool HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(ExceptionSink& xsink) {

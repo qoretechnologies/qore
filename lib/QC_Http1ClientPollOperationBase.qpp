@@ -1878,8 +1878,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             return 0;
         };
         QoreValue conn_val = response_headers->getKeyValue("connection");
+        // the values can be inline short strings, which have no node (issue #7038)
         if (conn_val.getType() == NT_STRING) {
-            if (inspect_connection(*conn_val.get<const QoreStringNode>())) {
+            if (inspect_connection(**QoreStringNodeValueHelper(conn_val))) {
                 return nullptr;
             }
         } else if (conn_val.getType() == NT_LIST) {
@@ -1889,7 +1890,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     return nullptr;
                 }
                 QoreValue item = li.getValue();
-                if (item.getType() == NT_STRING && inspect_connection(*item.get<const QoreStringNode>())) {
+                if (item.getType() == NT_STRING && inspect_connection(**QoreStringNodeValueHelper(item))) {
                     return nullptr;
                 }
             }

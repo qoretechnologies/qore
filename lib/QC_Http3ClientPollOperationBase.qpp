@@ -954,8 +954,9 @@ int Http3ClientPollOperationPriv::waitForExtendedConnectSettings(ExceptionSink* 
     // connection, and the operation is closed with it, so that a retry finds a new connection
     if (rc == QuicSession::SettingsWait::Closed || isClosed()) {
         const char* err = session->raiseSettingsWaitCloseError(xsink);
-        QoreValue desc = xsink->getExceptionDesc();
-        setSubmitError(err, desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
+        // the description can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper desc(xsink->getExceptionDesc());
+        setSubmitError(err, desc ? desc.c_str() : "");
         return -1;
     }
     return 0;
@@ -1075,8 +1076,8 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // RFC 9220: an extended CONNECT request waits for the server's SETTINGS, which say whether it may be sent
     if (headers) {
-        QoreValue protocol = headers->getKeyValue(":protocol");
-        if (protocol.getType() == NT_STRING && !protocol.get<const QoreStringNode>()->empty()
+        // the value can be an inline short string, which has no node (issue #7038)
+        if (!QoreStringDataHelper(headers->getKeyValue(":protocol")).empty()
                 && waitForExtendedConnectSettings(xsink)) {
             action->deref(xsink);
             return -1;
@@ -1111,15 +1112,11 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         // a request refused because the QUIC connection is closed (by its idle timer, locally or by the peer) was
         // not sent: the connection is closed now, so that a retry finds a new one
         if (*xsink) {
-            QoreValue err = xsink->getExceptionErr();
-            if (err.getType() == NT_STRING) {
-                const char* err_str = err.get<const QoreStringNode>()->c_str();
-                if (!strcmp(err_str, "HTTP3-IDLE-CLOSE") || !strcmp(err_str, "HTTP3-LOCAL-CLOSE")
-                        || !strcmp(err_str, "HTTP3-PEER-CLOSE")) {
-                    QoreValue desc = xsink->getExceptionDesc();
-                    setSubmitError(err_str, desc.getType() == NT_STRING
-                        ? desc.get<const QoreStringNode>()->c_str() : "");
-                }
+            // the error code and description can be inline short strings, which have no node (issue #7038)
+            QoreStringDataHelper err(xsink->getExceptionErr());
+            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-LOCAL-CLOSE" || err == "HTTP3-PEER-CLOSE") {
+                QoreStringDataHelper desc(xsink->getExceptionDesc());
+                setSubmitError(err.c_str(), desc ? desc.c_str() : "");
             }
         }
         action->deref(xsink);
@@ -1584,11 +1581,11 @@ bool Http3ClientPollOperationPriv::getStoredError(std::string& err, std::string&
     if (!error_info) {
         return false;
     }
-    QoreValue ev = error_info->getKeyValue("err");
-    QoreValue dv = error_info->getKeyValue("desc");
-    err = ev.getType() == NT_STRING ? ev.get<const QoreStringNode>()->c_str() : "HTTP3-CONNECTION-CLOSED";
-    desc = dv.getType() == NT_STRING ? dv.get<const QoreStringNode>()->c_str()
-        : "connection closed before request could be submitted";
+    // the values can be inline short strings, which have no node (issue #7038)
+    QoreStringDataHelper ev(error_info->getKeyValue("err"));
+    QoreStringDataHelper dv(error_info->getKeyValue("desc"));
+    err = ev ? ev.c_str() : "HTTP3-CONNECTION-CLOSED";
+    desc = dv ? dv.c_str() : "connection closed before request could be submitted";
     return true;
 }
 
@@ -1703,16 +1700,17 @@ void Http3ClientPollOperationPriv::MigrationRequest::takeError(ExceptionSink& xs
     if (!ex) {
         return;
     }
-    QoreValue errv = ex->getKeyValue("err");
-    if (errv.getType() == NT_STRING) {
-        err = errv.get<const QoreStringNode>()->c_str();
+    // the values can be inline short strings, which have no node (issue #7038)
+    QoreStringDataHelper errv(ex->getKeyValue("err"));
+    if (errv) {
+        err = errv.c_str();
     }
     if (err.empty()) {
         err = "QUIC-MIGRATION-ERROR";
     }
-    QoreValue descv = ex->getKeyValue("desc");
-    if (descv.getType() == NT_STRING) {
-        desc = descv.get<const QoreStringNode>()->c_str();
+    QoreStringDataHelper descv(ex->getKeyValue("desc"));
+    if (descv) {
+        desc = descv.c_str();
     }
     arg = ex->getKeyValue("arg").refSelf();
 }

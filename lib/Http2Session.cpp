@@ -1154,7 +1154,8 @@ size_t qore_http_stream_value_body_size(const QoreValue& v) {
         case NT_BINARY:
             return body.get<const BinaryNode>()->size();
         case NT_STRING:
-            return body.get<const QoreStringNode>()->size();
+            // the body can be an inline short string, which has no node (issue #7038)
+            return QoreStringDataHelper(body).size();
         default:
             return 0;
     }

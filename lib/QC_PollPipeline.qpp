@@ -965,13 +965,15 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
         const pcre2_code* code = re.get();
         // a string in another encoding is matched in UTF-8
         TempEncodingHelper str;
-        if (v.getType() == NT_STRING) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
-            if (s->getEncoding() == QCS_UTF8) {
-                subject = s->c_str();
-                len = s->size();
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper data(v);
+        if (data) {
+            if (data.getEncoding() == QCS_UTF8) {
+                subject = data.c_str();
+                len = data.size();
             } else {
-                if (!str.set(s, QCS_UTF8, xsink)) {
+                // note: safe; an inline short string is in UTF-8, so a string in another encoding has a node
+                if (!str.set(v.get<const QoreStringNode>(), QCS_UTF8, xsink)) {
                     return;
                 }
                 subject = str->c_str();
