@@ -40,6 +40,7 @@
 
 //! represents an X509 certificate, reference-counted, dynamically-allocated only
 class QoreSSLCertificate : public AbstractPrivateData, public QoreSSLBase {
+    friend class qore_ssl_certificate_ops;
 friend class SSLSocketHelper;
 public:
     //! creates the object from a pointer to an X509 data structure, the QoreSSLCertificate object takes ownership of the X509 pointer
@@ -139,8 +140,6 @@ protected:
 private:
     //! private implementation of the class
     struct qore_sslcert_private* priv;
-
-    DLLLOCAL QoreValue doPurposeValue(int id, int ca) const;
 
     //! this function is not implemented
     DLLLOCAL QoreSSLCertificate(const QoreSSLCertificate&) = delete;

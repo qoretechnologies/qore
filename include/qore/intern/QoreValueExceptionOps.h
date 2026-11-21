@@ -82,6 +82,11 @@ public:
         return getExceptionImpl(b);
     }
 
+    //! appends text in its own encoding to the description of the last exception, converting it (qore#6741)
+    /** @return -1 if there is no exception or its description is not a string, 0 if the text was appended
+    */
+    DLLLOCAL int appendLastDescription(const QoreString& text);
+
     DLLLOCAL static void defaultExceptionHandler(QoreException* e);
 
     DLLLOCAL static void defaultWarningHandler(QoreException* e);

@@ -157,7 +157,8 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     if (left.getType() == NT_VARREF && right.getType() == NT_STRING) {
         const VarRefNode* vrn = left.get<const VarRefNode>();
         if (vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf()) {
-            QoreParseInitializerTarget::parseUse(parse_get_class(), right.get<const QoreStringNode>()->c_str(), loc);
+            QoreStringDataHelper name(right);
+            QoreParseInitializerTarget::parseUse(parse_get_class(), name.c_str(), loc);
         }
     }
 

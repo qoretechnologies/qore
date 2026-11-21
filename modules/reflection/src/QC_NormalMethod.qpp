@@ -49,7 +49,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethod_call_VoVV_impl(Lexi
 
     // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
     // a confusing exception
-    if (check_call(obj, *m->m, xsink)) {
+    if (check_call(caller, obj, *m->m, xsink)) {
         return QoreValue();
     }
 
@@ -98,7 +98,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethod_callArgs_VoC15_soft
 
     // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
     // a confusing exception
-    if (check_call(obj, *m->m, xsink)) {
+    if (check_call(caller, obj, *m->m, xsink)) {
         return QoreValue();
     }
 

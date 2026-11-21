@@ -37,6 +37,7 @@
 
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreFtpClient.h>
+#include "qore/intern/QoreIoClassesOps.h"
 
 DLLEXPORT extern qore_classid_t CID_FTPCLIENT;
 DLLLOCAL extern QoreClass* QC_FTPCLIENT;
@@ -53,7 +54,7 @@ public:
     using AbstractPrivateData::deref;
     DLLLOCAL virtual void deref(ExceptionSink *xsink) {
         if (ROdereference()) {
-            cleanup(xsink);
+            qore_ftp_client_ops(this).cleanup(xsink);
             delete this;
         }
     }

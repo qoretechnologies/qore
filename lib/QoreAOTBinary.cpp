@@ -13720,6 +13720,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // QoreStringNode: string literal constant (e.g., "" as constructor arg)
+    // note: safe; the node of the expression, whose inline short string is written above (!expr.hasNode())
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         if (qore_aot_string_needs_value(str->c_str(), str->size(), str->getEncoding())) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));

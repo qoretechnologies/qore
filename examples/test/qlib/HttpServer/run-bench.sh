@@ -69,9 +69,9 @@ run_one() {
     # Extract metrics
     local rps lat_avg lat_p99 errors
     rps=$(printf '%s\n' "$output" | grep "Requests/sec:" | awk '{print $2}')
-    lat_avg=$(printf '%s\n' "$output" | grep "Latency" | head -1 | awk '{print $2}')
-    lat_p99=$(printf '%s\n' "$output" | awk '/Latency Distribution/{found=1} found && /99%/{print $2; exit}')
-    errors=$(printf '%s\n' "$output" | grep "Socket errors:" | head -1 || true)
+    lat_avg=$(printf '%s\n' "$output" | grep "Latency" | sed -n 1p | awk '{print $2}')
+    lat_p99=$(printf '%s\n' "$output" | awk '/Latency Distribution/{found=1} found && !n && /99%/{print $2; n = 1}')
+    errors=$(printf '%s\n' "$output" | awk '/Socket errors:/ && !n {print; n = 1}')
 
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true

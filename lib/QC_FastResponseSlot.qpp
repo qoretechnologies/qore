@@ -148,7 +148,8 @@ nothing FastResponseSlot::setDefaults(hash<auto> headers) [flags=NAMED_ARGS] {
                 v.getFullTypeName());
             return QoreValue();
         }
-        TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringNodeValueHelper t(v, QCS_UTF8, xsink);
         if (*xsink) {
             return QoreValue();
         }

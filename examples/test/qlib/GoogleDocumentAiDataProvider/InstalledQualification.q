@@ -2,6 +2,7 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 # No source prepend: this helper qualifies fresh installed artifacts only.
 %modern
+%requires ../../LiveProviderTest.qm
 %requires GoogleDocumentAiDataProvider
 %requires ProviderIndex
 %requires FsUtil

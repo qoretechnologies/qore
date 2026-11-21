@@ -361,7 +361,7 @@ sub t() { DataProviderModuleLoader::loadModule(\"RcFileApiFail\"); }",
     return (\"trusted cached: \" + sprintf(\"%y\", t.getDatasource() == ds),);
 }",
         "restricted": "%requires SqlUtil
-# another datasource object on the same database, with the same description
+# another datasource object on the same database, with the same key
 class RcOtherDatasource inherits AbstractDatasource {
     private {
         Datasource ds;
@@ -403,8 +403,8 @@ class RcOtherDatasource inherits AbstractDatasource {
 list<string> sub run(*string arg) {
     list<string> l = ();
     RcOtherDatasource ods(\"sqlite3:@\" + arg);
-    l += \"same description: \" + sprintf(\"%y\", AbstractSqlUtilBase::makeDatasourceDesc(ods)
-        == AbstractSqlUtilBase::makeDatasourceDesc(new Datasource(\"sqlite3:@\" + arg)));
+    l += \"same key: \" + sprintf(\"%y\", AbstractSqlUtilBase::makeDatasourceKey(ods)
+        == AbstractSqlUtilBase::makeDatasourceKey(new Datasource(\"sqlite3:@\" + arg)));
     l += \"cached table: \" + attempt(auto sub () {
         return TableCache::getCached(ods, \"rc_t1\").getDatasource() == ods ? \"own datasource\" : \"other datasource\";
     });
@@ -417,7 +417,7 @@ list<string> sub run(*string arg) {
     });
     # the cache cannot be read by its key
     l += \"cache get: \" + attempt(auto sub () {
-        return call_static_method(\"SqlUtil::TableCache\", \"get\", AbstractSqlUtilBase::makeDatasourceDesc(ods),
+        return call_static_method(\"SqlUtil::TableCache\", \"get\", AbstractSqlUtilBase::makeDatasourceKey(ods),
             \"rc_t1\");
     });
     ods.rollback();
@@ -425,7 +425,7 @@ list<string> sub run(*string arg) {
 }",
         "trusted_post": "%requires SqlUtil
 list<string> sub run(*string arg) {
-    string desc = AbstractSqlUtilBase::makeDatasourceDesc(new Datasource(\"sqlite3:@\" + arg));
+    string desc = AbstractSqlUtilBase::makeDatasourceKey(new Datasource(\"sqlite3:@\" + arg));
     list<string> l = ();
     foreach string name in ((\"rc_t1\", \"rc_t2\")) {
         *AbstractTable t = TableCache::get(desc, name);

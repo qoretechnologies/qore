@@ -249,7 +249,7 @@ QoreReplWebSocketHandler handler();
 
 # Optionally add authentication
 handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
-    return hdr."x-api-key" == "secret123";
+    return http_get_field(hdr, "x-api-key") == "secret123";
 });
 
 # Add to HTTP server
@@ -359,7 +359,7 @@ QoreReplWebSocketHandler handler({"parse_options": sandbox_options});
 
 # Add authentication for additional security
 handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
-    return hdr."x-api-key" == "secret123";
+    return http_get_field(hdr, "x-api-key") == "secret123";
 });
 
 # Add to HTTP server

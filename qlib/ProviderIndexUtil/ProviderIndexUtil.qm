@@ -154,6 +154,8 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - the internal state and helpers of @ref ProviderIndexUtil::ProviderIndexUtil "ProviderIndexUtil" are not visible
+      to subclasses (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - errors that are written to @ref Qore::stderr "stderr" without a logger are left out when the module's code has no
       terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

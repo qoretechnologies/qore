@@ -7973,6 +7973,38 @@ public:
         }
     }
 
+    //! Raises SANDBOX-ISOLATION-ERROR and returns -1 if a Program that the debugger of \a dpgm is bound to is
+    //! refused by the isolation of the thread's trusted build (qore#6958)
+    DLLLOCAL static int checkProgramIsolation(QoreDebugProgram* dpgm, ExceptionSink* xsink) {
+        return dpgm->priv->checkProgramIsolation(xsink);
+    }
+
+    DLLLOCAL int checkProgramIsolation(ExceptionSink* xsink) {
+        // nothing to check outside a trusted build that a tenant entered
+        if (!qore_sandbox_isolation_active()) {
+            return 0;
+        }
+        // referenced under the lock and checked after it is released: a check does not run under the lock that
+        // the callbacks of the debugger take
+        std::vector<QoreProgram*> pgms;
+        {
+            QoreAutoRWReadLocker al(&tlock);
+            pgms.reserve(qore_program_map.size());
+            for (auto& i : qore_program_map) {
+                i.first->ref();
+                pgms.push_back(i.first);
+            }
+        }
+        int rc = 0;
+        for (QoreProgram* pgm : pgms) {
+            if (!rc && qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+                rc = -1;
+            }
+            pgm->deref(xsink);
+        }
+        return rc;
+    }
+
     DLLLOCAL QoreListNode* getAllProgramObjects() {
         QoreAutoRWReadLocker al(&tlock);
         printd(5, "qore_debug_program_private::getAllProgramObjects(), this: %p\n", this);

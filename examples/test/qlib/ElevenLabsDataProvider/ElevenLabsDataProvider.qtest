@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires RestClientIo
@@ -876,9 +877,10 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
 
     testIntegration() {
         # Integration tests run only when ELEVENLABS_API_KEY is set
-        *string api_key = ENV.ELEVENLABS_API_KEY;
+        *string api_key = LiveProvider::get("elevenlabs", "ELEVENLABS_API_KEY");
         if (!api_key) {
-            testSkip("set ELEVENLABS_API_KEY to run integration tests");
+            testSkip(LiveProvider::enabled("elevenlabs") ? "set ELEVENLABS_API_KEY to run integration tests"
+                : LiveProvider::skipReason("elevenlabs", "ELEVENLABS_API_KEY"));
         }
 
         ElevenLabsDataProvider::ElevenLabsDataProvider real_dp({"apikey": api_key});

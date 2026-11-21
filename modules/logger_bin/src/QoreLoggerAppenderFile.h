@@ -57,6 +57,9 @@ public:
     //! Returns the current filename
     DLLLOCAL QoreValue getFileName(ExceptionSink* xsink) const;
 
+    //! sets the name of the file that is opened next (qore#6839)
+    DLLLOCAL void setFileName(const QoreStringNode* filename, ExceptionSink* xsink);
+
     //! Processes open, close, and log events with the file and ignores all other events
     DLLLOCAL void processEventImpl(ExceptionSink* xsink, int64 type, const QoreValue params);
 

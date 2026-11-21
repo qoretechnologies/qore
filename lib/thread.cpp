@@ -88,6 +88,8 @@
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QC_AbstractConnectionPool.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxPollOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <string.h>
 
@@ -740,6 +742,10 @@ public:
     //! which the cleanup closes to other threads, stay open to it; see qore_close_module_programs().  Only the thread
     //! itself reads or writes it
     unsigned module_cleanup_delegate = 0;
+    //! the number of times that the thread was refused entry into the Program of a module because the module cleanup
+    //! had closed the Programs of the modules to it (see qore_module_entry_refusals()); only the thread itself reads or
+    //! writes it
+    uint64_t module_entry_refusals = 0;
     int tid;
     //! the number of Programs whose data the thread deletes; see qore_reference_program_needs_entry()
     unsigned pgm_teardown_depth = 0;
@@ -999,6 +1005,9 @@ public:
     size_t stack_limit;
     //! the thread's q_thread_stack_limit_tls, once bound (see bindStackLimitTls())
     std::atomic<size_t>* stack_limit_tls = nullptr;
+    //! the limit that the floor of a destructor at the stack limit replaced, and the floor (qore#6861)
+    size_t destructor_floor_old_limit = 0;
+    size_t destructor_floor_limit = 0;
     // this thread's stack size for error reporting
     size_t stack_size;
     // the primary thread only: where its stack starts (the highest address of a stack that grows down) and its full
@@ -1113,7 +1122,7 @@ public:
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
-            tpd(new ThreadProgramData(this)),
+            tpd(new ThreadProgramData(this, ptid)),
             foreign(n_foreign),
             try_reexport(false),
             finalizing(false),
@@ -2533,7 +2542,8 @@ bool ThreadProgramData::dbgWaitReleased(int64 id, int64 timeout_ms) {
 #endif
 
 int ThreadProgramData::gettid() {
-    return td->tid;
+    // not td->tid: the thread's data is freed when the thread ends, while Programs can still hold this object
+    return tid;
 }
 
 class ThreadCleanupNode {
@@ -2986,8 +2996,8 @@ ThreadCleanupList::~ThreadCleanupList() {
     }
 }
 
-void ThreadCleanupList::exec() {
-    class ThreadCleanupNode* w = head;
+void qore_thread_cleanup_list_ops::execImpl(ThreadCleanupList* b) {
+    class ThreadCleanupNode* w = b->head;
     while (w) {
         w->func(w->arg);
         w = w->next;
@@ -3052,6 +3062,66 @@ size_t linux_get_stack_start_pos() {
 }
 #endif
 
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+// sets the floor for a destructor whose stack check failed (see destructor_stack_floor, qore#6861) and returns true if
+// the stack position is above it; called by the failing stack checks only, so that a destructor costs nothing more
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool destructor_stack_floor(ThreadData* td, size_t pos, size_t reserve) {
+    // only while a destructor runs, and once: the destructors that it runs share the floor
+    unsigned depth = q_object_destructor_depth();
+    if (!depth || q_destructor_floor_depth() || !td->stack_limit) {
+        return false;
+    }
+    // a sandbox's stack is never extended: not in a call into a sandbox with a stack size limit, whatever the
+    // object, whether its limit is the limit in force or not (a deferred deletion's elided stack moves the limit, and
+    // a call that starts with less stack left than its limit does not apply it), nor where a sandbox's stack is closed
+    if (td->sandbox_budgets.isStackLost() || td->sandbox_budgets.isStackLimitLost()
+        || td->sandbox_budgets.hasStackBudget()) {
+        return false;
+    }
+    size_t old_limit = td->stack_limit;
+#ifdef STACK_DIRECTION_DOWN
+    size_t floor = old_limit > QORE_DESTRUCTOR_STACK_SLICE ? old_limit - QORE_DESTRUCTOR_STACK_SLICE : 1;
+#else
+    size_t floor = old_limit < SIZE_MAX - QORE_DESTRUCTOR_STACK_SLICE ? old_limit + QORE_DESTRUCTOR_STACK_SLICE
+        : SIZE_MAX;
+#endif
+    td->destructor_floor_old_limit = old_limit;
+    td->destructor_floor_limit = floor;
+    td->setStackLimit(floor);
+    q_set_destructor_floor_depth(depth);
+#ifdef STACK_DIRECTION_DOWN
+    return floor <= pos && pos - floor >= reserve;
+#else
+    return floor >= pos && floor - pos >= reserve;
+#endif
+}
+#endif
+
+//! Raises the exception of a call whose stack is beyond the thread's limit
+/** A sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack because its
+    limits cannot be enforced, or because the code of another tenant was entered in a trusted build (qore#6536).  Out
+    of line and cold, so that the stack check of every call stays small
+
+    @return -1
+*/
+static __attribute__((noinline, cold)) int raise_stack_limit(ExceptionSink* xsink, ThreadData* td) {
+    if (td->sandbox_budgets.isIsolationRefused()) {
+        td->sandbox_budgets.raiseIsolation(xsink, "call");
+        return -1;
+    }
+    if (td->sandbox_budgets.isStackLost()) {
+        td->sandbox_budgets.raiseLost(xsink, "call");
+        return -1;
+    }
+    if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
+        QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
+        return -1;
+    }
+    xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
+        "(%lu bytes)", td->getUsableStackSize());
+    return -1;
+}
+
 static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
@@ -3076,19 +3146,13 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
-        // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack
-        // because its limits cannot be enforced
-        if (td->sandbox_budgets.isStackLost()) {
-            td->sandbox_budgets.raiseLost(xsink, "call");
-            return -1;
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+        // a destructor runs on a slice of the stack guard (qore#6861)
+        if (destructor_stack_floor(td, pos, 0)) {
+            return 0;
         }
-        if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
-            QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
-            return -1;
-        }
-        xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-            "(%lu bytes)", td->getUsableStackSize());
-        return -1;
+#endif
+        return raise_stack_limit(xsink, td);
     }
 
     return 0;
@@ -3115,18 +3179,14 @@ int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
 #endif
         return 0;
     }
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+    // a destructor runs on a slice of the stack guard (qore#6861)
+    if (destructor_stack_floor(td, pos, reserve)) {
+        return 0;
+    }
+#endif
     // the frame does not fit: raised as check_stack_intern() raises it for the limit
-    if (td->sandbox_budgets.isStackLost()) {
-        td->sandbox_budgets.raiseLost(xsink, "call");
-        return -1;
-    }
-    if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
-        QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
-        return -1;
-    }
-    xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-        "(%lu bytes)", td->getUsableStackSize());
-    return -1;
+    return raise_stack_limit(xsink, td);
 }
 #endif
 
@@ -3188,6 +3248,18 @@ bool q_thread_stack_smaller_than_default() {
     return td->stack_size < q_thread_get_stack_size();
 #else
     return false;
+#endif
+}
+
+void q_destructor_stack_floor_leave() {
+#if defined(QORE_MANAGE_STACK) && QORE_DESTRUCTOR_STACK_SLICE > 0
+    ThreadData* td = thread_data.get();
+    // the helpers that move the limit restore it in the reverse order; a limit set for the thread itself while the
+    // destructor ran (enforcePrimaryStackSize()) is kept
+    if (td->stack_limit == td->destructor_floor_limit) {
+        td->setStackLimit(td->destructor_floor_old_limit);
+    }
+    td->destructor_floor_old_limit = td->destructor_floor_limit = 0;
 #endif
 }
 
@@ -5564,13 +5636,147 @@ void qore_module_uncounted_exit(ThreadData* td) {
 }
 
 //! raises the exception of an entry into a module's Program that qore_close_module_programs() refuses
-static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ExceptionSink* xsink) {
-    xsink->raiseException("PROGRAM-ERROR", "the Program of a module cannot be entered by another thread while the "
-        "modules are deleted at the end of the process");
+//! the description of the exception that refuses an entry into the Program of a module once the module cleanup has
+//! closed them (see qore_module_entry_refusals_only())
+static const char* QORE_MODULE_PROGRAMS_CLOSED_DESC = "the Program of a module cannot be entered by another thread "
+    "while the modules are deleted at the end of the process";
+
+static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* td, ExceptionSink* xsink) {
+    ++td->module_entry_refusals;
+    xsink->raiseException("PROGRAM-ERROR", QORE_MODULE_PROGRAMS_CLOSED_DESC);
+}
+
+//! returns true if the value is a string equal to the given one
+static bool qore_value_is_string(const QoreValue& v, const char* str) {
+    // the value can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper sv(v);
+    return sv && !strcmp(sv.c_str(), str);
+}
+
+bool qore_module_entry_refusals_only(ExceptionSink* xsink) {
+    // the ExceptionSink operations are in the library's ops class (#4380)
+    QoreException* e = qore_exception_sink_ops(xsink).getException();
+    if (!e) {
+        return false;
+    }
+    for (; e; e = e->next) {
+        if (!qore_value_is_string(e->err, "PROGRAM-ERROR") || !qore_value_is_string(e->desc,
+                QORE_MODULE_PROGRAMS_CLOSED_DESC)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void qore_close_module_programs() {
     module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
+}
+
+namespace {
+//! the work that the module cleanup has handed over and that has not ended (qore#6928)
+/** Its lock is a leaf lock (QFLR_LEAF): its holders only count and signal.  None of the work counted exists in a
+    child process created with fork(), so the child handler resets the count.
+*/
+struct QoreModuleCleanupWork : public QoreForkHandler {
+    DLLLOCAL QoreModuleCleanupWork() : QoreForkHandler(QFLR_LEAF, "module_cleanup_work") {
+    }
+
+    void prepare() noexcept override {
+        lock.lock();
+    }
+
+    void parent() noexcept override {
+        lock.unlock();
+    }
+
+    void child() noexcept override {
+        // only the forking thread is left, which holds the lock since prepare(); a waiter of the parent does not exist
+        // in the child, so the condition is initialized again
+        qore_condition_ops(&cond).reinitAfterFork();
+        count = 0;
+        forked = true;
+#ifdef DEBUG
+        dbg_held = false;
+#endif
+        lock.unlock();
+    }
+
+    QoreThreadLock lock;
+    QoreCondition cond;
+    //! true in a child process created with fork(): work that the forking thread held when the count was reset can
+    //! end in it, which is not counted
+    bool forked = false;
+    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
+    size_t count = 0;
+#ifdef DEBUG
+    //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
+    bool dbg_held = false;
+#endif
+
+    //! Returns the state, which is never destroyed: work can end in a thread that runs after static destruction
+    static QoreModuleCleanupWork& get() {
+        static QoreModuleCleanupWork* state = new QoreModuleCleanupWork;
+        return *state;
+    }
+};
+}
+
+void qore_module_cleanup_work_begin() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    ++work.count;
+}
+
+void qore_module_cleanup_work_end() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    if (!work.count) {
+        // work of the forking thread that ended in the child, after the count was reset there
+        assert(work.forked);
+        return;
+    }
+    if (!--work.count) {
+        work.cond.broadcast();
+    }
+}
+
+#ifdef DEBUG
+void qore_dbg_module_cleanup_work_held() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    work.dbg_held = true;
+    work.cond.broadcast();
+}
+#endif
+
+void qore_module_cleanup_drain_work() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    SafeLocker sl(work.lock);
+#ifdef DEBUG
+    // the work that the test hook holds, also while the cleanup waits, runs now (see
+    // dbg_async_io_hold_module_cleanup_work())
+    work.dbg_held = true;
+#endif
+    while (true) {
+#ifdef DEBUG
+        if (work.dbg_held) {
+            work.dbg_held = false;
+            sl.unlock();
+            qore_dbg_release_held_module_cleanup_work("the module cleanup waits for its work", false);
+            sl.lock();
+            continue;
+        }
+#endif
+        if (!work.count) {
+            break;
+        }
+        work.cond.wait(work.lock);
+    }
+}
+
+uint64_t qore_module_entry_refusals() {
+    ThreadData* td = thread_data.get();
+    return td ? td->module_entry_refusals : 0;
 }
 
 bool qore_module_cleanup_delegation() {
@@ -5871,7 +6077,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
             // enter their Programs (see qore_close_module_programs()); the cleanup waits for the threads that
             // entered before
             if (pp->module_lifetime.load(std::memory_order_acquire) && qore_module_programs_closed(td)) {
-                qore_raise_module_programs_closed(xsink);
+                qore_raise_module_programs_closed(td, xsink);
                 return;
             }
             // try to increment thread count
@@ -5949,6 +6155,19 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     }
 }
 
+bool ProgramThreadCountContextHelper::enterSandboxedProgram(ThreadData* td, ExceptionSink* xsink,
+        qore_program_private* pp) {
+    enterSandboxBudgets(td, pp);
+    // the code of another tenant does not run in a trusted build that a tenant called (qore#6536)
+    if (td->sandbox_budgets.isIsolationRefused()) {
+        td->sandbox_budgets.raiseIsolation(xsink, "entering a Program");
+        restoreContext();
+        restore = false;
+        return true;
+    }
+    return false;
+}
+
 void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
         qore_program_private* pp, bool runtime) {
 #ifdef DEBUG
@@ -5959,8 +6178,8 @@ void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSin
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
-    if (pp->hasSandboxManager()) {
-        enterSandboxBudgets(td, pp);
+    if (pp->hasSandboxManager() && enterSandboxedProgram(td, xsink, pp)) {
+        return;
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
@@ -7236,30 +7455,116 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
+int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->sandbox_budgets.currentIsolation()) {
+        return 0;
+    }
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    qore_program_private::get(*pgm)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+    for (const QoreSandboxManager* sm : {*own, *creator}) {
+        if (!sm) {
+            continue;
+        }
+        if (const std::string* domain = td->sandbox_budgets.isolationRefuses(sm)) {
+            const std::string* caller = td->sandbox_budgets.currentIsolation()->callerDomain();
+            // the operation names what is refused (parsing, committing, accessing a Program); a mixed value is named
+            // as such (see qore_isolation_domain_is_mixed())
+            auto name = [] (const std::string* d) -> const char* {
+                return !d ? "" : (qore_isolation_domain_is_mixed(*d) ? "(more than one)" : d->c_str());
+            };
+            xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: a Program of isolation domain '%s' cannot be used "
+                "in a trusted build that sandboxed code of isolation domain '%s' called", operation, name(domain),
+                name(caller));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+bool qore_sandbox_isolation_active() {
+    ThreadData* td = thread_data.get();
+    return td && td->sandbox_budgets.currentIsolation();
+}
+
+QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm, ExceptionSink* xsink) {
+    assert(obj && pgm);
+    // another tenant's Program is not used as the container of a module in a trusted build that a tenant called;
+    // checked before the container is taken from its object, which deletes the object (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+        return nullptr;
+    }
+    QoreObject* o = const_cast<QoreObject*>(obj);
+    // the reference that the object held is the caller's now; held here until the object is deleted, so that it is
+    // released if the deletion throws
+    ReferenceHolder<QoreProgram> rv(reinterpret_cast<QoreProgram*>(o->getAndClearPrivateData(CID_PROGRAM, xsink)),
+        xsink);
+    if (!rv) {
+        if (!*xsink) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED", "the Program object given as the container of a module "
+                "has already been deleted");
+        }
+        return nullptr;
+    }
+    o->doDelete(xsink);
+    return rv.release();
+}
+
+const std::string* qore_sandbox_build_caller_domain() {
+    ThreadData* td = thread_data.get();
+    const QoreSandboxIsolation* iso = td ? td->sandbox_budgets.currentIsolation() : nullptr;
+    return iso ? iso->callerDomain() : nullptr;
+}
+
+bool qore_sandbox_isolation_refused_slow() {
+    return qore_sandbox_check_isolation(nullptr, "") != 0;
+}
+
+int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->sandbox_budgets.isIsolationRefused()) {
+        return 0;
+    }
+    if (xsink) {
+        td->sandbox_budgets.raiseIsolation(xsink, operation);
+    }
+    return -1;
+}
+
 QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers)
         : callers(callers) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
+    QoreSandboxManager* own_ptr = nullptr;
+    QoreSandboxManager* creator_ptr = nullptr;
+    if (creator) {
+        qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    }
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
     try {
         td->sandbox_budgets.suspendCharge(callers);
     } catch (std::bad_alloc&) {
         return;
     }
-    started = true;
-    tid = td->tid;
-    if (!creator) {
+    // the code of other tenants does not run in the build (qore#6536); a build whose isolation cannot be recorded is
+    // not established, and the call fails
+    try {
+        td->sandbox_budgets.setIsolation(callers, *own, *creator_sm);
+    } catch (std::bad_alloc&) {
+        td->sandbox_budgets.resumeCharge();
         return;
     }
+    started = true;
+    tid = td->tid;
     // the creator's sandboxes, entered as ProgramThreadCountContextHelper enters them: a budget of the creator's
     // call below the floor (its own code called the capability) is charged again, else a budget is started; a budget
     // that cannot be recorded fails the build at its next cancellation point (see QoreSandboxBudgetStack::lose())
-    QoreSandboxManager* own_ptr;
-    QoreSandboxManager* creator_ptr;
-    qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
-    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
-    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
     if (own) {
         td->sandbox_budgets.enterBuildOwn(tid, *own, this);
     }
@@ -7476,10 +7781,6 @@ int qore_push_sandbox_policy_barrier() {
 
 QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     ThreadData* td = thread_data.get();
-    if (capture_budgets && td) {
-        td->sandbox_budgets.capture(budgets);
-        in_build = td->sandbox_budgets.inBuild();
-    }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
     ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
@@ -7516,14 +7817,26 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
             inherited_only = !qore_scope_creator_is_sandboxed();
         }
     }
+    // the budgets and the isolation are referenced last, after everything else that can throw, as the destructor does
+    // not run then; capture() itself references nothing unless it succeeds, and the managers are still held above
+    if (capture_budgets && td) {
+        td->sandbox_budgets.capture(budgets);
+        in_build = td->sandbox_budgets.inBuild();
+    }
     manager = current.release();
     policy_manager = policy.release();
     provenance_manager = provenance.release();
     provenance_policy_manager = provenance_policy.release();
+    if (capture_budgets && td) {
+        isolation = td->sandbox_budgets.currentIsolation();
+        if (isolation) {
+            isolation->ref();
+        }
+    }
 }
 
 QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
-        : module_cleanup_delegate(module_cleanup_delegate) {
+        : module_cleanup_delegate(module_cleanup_delegate), module_cleanup_work(module_cleanup_delegate) {
     if (!src) {
         return;
     }
@@ -7534,6 +7847,10 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    isolation = src->isolation;
+    if (isolation) {
+        isolation->ref();
+    }
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }
@@ -7557,6 +7874,9 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
 
 QoreSandboxContext::~QoreSandboxContext() {
     qore_sandbox_budgets_deref(budgets);
+    if (isolation) {
+        isolation->deref();
+    }
     if (manager) {
         manager->deref(nullptr);
     }
@@ -7724,13 +8044,16 @@ QoreSandboxTrustedPolicyHelper::~QoreSandboxTrustedPolicyHelper() {
 QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx) {
     ThreadData* td = thread_data.get();
     if (td) {
-        old_ctx = td->sandbox_context;
-        old_pgm_ctx = td->sandbox_context_pgm_ctx;
-        td->sandbox_context = &ctx;
-        td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
+        if (ctx.manager || ctx.policy_manager || !ctx.isolation) {
+            old_ctx = td->sandbox_context;
+            old_pgm_ctx = td->sandbox_context_pgm_ctx;
+            td->sandbox_context = &ctx;
+            td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
+            applied = true;
+        }
         active = true;
-        // the operation continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build);
+        // the operation continues the call that started it, under the same budgets and isolation
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation);
     }
 }
 
@@ -7738,8 +8061,10 @@ QoreSandboxContextHelper::~QoreSandboxContextHelper() {
     if (active) {
         ThreadData* td = thread_data.get();
         td->sandbox_budgets.leave(td->tid, this);
-        td->sandbox_context = old_ctx;
-        td->sandbox_context_pgm_ctx = old_pgm_ctx;
+        if (applied) {
+            td->sandbox_context = old_ctx;
+            td->sandbox_context_pgm_ctx = old_pgm_ctx;
+        }
     }
 }
 
@@ -7747,13 +8072,17 @@ int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInhe
     assert(xsink);
     std::unique_ptr<QoreInheritedSandbox> sbx(new QoreInheritedSandbox);
     if (!sbx->ctx.manager && !sbx->ctx.policy_manager) {
-        // no sandbox governs the starting code
+        // no sandbox governs the starting code; a thread that a trusted build entered by a tenant starts keeps the
+        // isolation of the build, so the code of other tenants does not run in it (qore#6536)
+        if (sbx->ctx.isolation) {
+            rv = std::move(sbx);
+        }
         return 0;
     }
     // the thread is counted against the limit of the manager that governs everything but policy checks; the
     // policy manager differs only under a policy barrier, which does not change who started the thread
     if (QoreSandboxManager* sm = sbx->ctx.manager) {
-        if (sm->acquireThreadSlot(xsink)) {
+        if (qore_sandbox_manager_ops(sm).acquireThreadSlot(xsink)) {
             return -1;
         }
         sm->ref();
@@ -7769,7 +8098,7 @@ QoreInheritedSandbox::~QoreInheritedSandbox() {
 
 void QoreInheritedSandbox::releaseSlot() {
     if (counted) {
-        counted->releaseThreadSlot();
+        qore_sandbox_manager_ops(counted).releaseThreadSlot();
         counted->deref(nullptr);
         counted = nullptr;
     }
@@ -7783,11 +8112,15 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
     if (td) {
         old_ctx = td->inherited_sandbox_context;
         old_start_ctx = td->thread_start_sandbox_context;
-        td->inherited_sandbox_context = ctx;
-        td->thread_start_sandbox_context = ctx;
+        // a context that only keeps the isolation of a trusted build (see QoreInheritedSandbox::capture()) governs
+        // nothing
+        if (ctx->manager || ctx->policy_manager) {
+            td->inherited_sandbox_context = ctx;
+            td->thread_start_sandbox_context = ctx;
+        }
         active = true;
         // the thread continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx->budgets, this, ctx->in_build);
+        td->sandbox_budgets.attach(td->tid, ctx->budgets, this, ctx->in_build, ctx->isolation);
     }
 }
 
@@ -7847,7 +8180,8 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
         active = true;
         // the task continues the call that submitted it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this, capture.ctx->in_build);
+        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this, capture.ctx->in_build,
+            capture.ctx->isolation);
     }
 }
 
@@ -7878,6 +8212,10 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
     printd(5, "ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper() current_pgm: %p " \
         "new_pgm: %p\n", td->current_pgm, pgm);
     if (pgm != td->current_pgm) {
+        // the commit runs code of the Program, which may not be another tenant's in a trusted build (qore#6536)
+        if (qore_sandbox_check_program_isolation(pgm, xsink, "committing code")) {
+            return;
+        }
         // try to increment thread count
         if (qore_program_private::lockParsing(*pgm, xsink))
             return;
@@ -7951,6 +8289,11 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     if (!pgm)
         return;
 
+    // the code of another tenant is not parsed in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "parsing code")) {
+        return;
+    }
+
     // attach to and lock program for parsing
     if (qore_program_private::lockParsing(*pgm, xsink))
         return;
@@ -7974,6 +8317,11 @@ void ProgramRuntimeParseContextHelper::switchTo(QoreProgram* pgm) {
 ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
         bool no_wait) : restore(false) {
     if (!pgm) {
+        return;
+    }
+
+    // the code of another tenant is not parsed in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "parsing code")) {
         return;
     }
 
@@ -8065,6 +8413,10 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
         bool read_only) : xsink(xsink), restore(false) {
     ThreadData* td = thread_data.get();
     if (pgm != td->current_pgm) {
+        // the Program of another tenant is not accessed in a trusted build that a tenant called (qore#6536)
+        if (qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+            return;
+        }
         bool with_context = true;
         if (read_only) {
             // a reader enters a Program that code parsed in it refuses the thread without its context (qore#6752)
@@ -8183,6 +8535,33 @@ void qore_thread_program_teardown_leave() {
     ThreadData* td = thread_data.get();
     assert(td && td->pgm_teardown_depth > 0);
     --td->pgm_teardown_depth;
+}
+
+bool qore_program_has_policy_sandbox(QoreProgram* pgm) {
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    // the quick test, without the lock: no sandbox at all
+    if (!pp->hasSandboxManager()) {
+        return false;
+    }
+    // a manager of its own, or the policy manager of the code that created it; not the sandbox of the code that
+    // created it alone, as a Program created under a system-policy capability has: the policy of that code does not
+    // apply to it (see qore_program_private::creator_policy_manager)
+    QoreSandboxManager* own;
+    QoreSandboxManager* creator;
+    pp->getSandboxManagerRefs(own, creator, true);
+    const bool rv = own || creator;
+    if (own) {
+        own->deref(nullptr);
+    }
+    if (creator) {
+        creator->deref(nullptr);
+    }
+    return rv;
+}
+
+QoreProgram* qore_thread_current_program_if_any() {
+    ThreadData* td = thread_data.get();
+    return td ? td->current_pgm : nullptr;
 }
 
 QoreProgram* getProgram() {
@@ -9153,7 +9532,7 @@ int q_deregister_foreign_thread() {
     int tid = td->tid;
 
     // run any thread cleanup functions
-    tclist.exec();
+    qore_thread_cleanup_list_ops(tclist).exec();
 
     assert(xsink.isException() || !td->active_exceptions);
 
@@ -9210,7 +9589,7 @@ int q_deregister_reserved_foreign_thread() {
     xsink.handleExceptions();
 
     // run any thread cleanup functions
-    tclist.exec();
+    qore_thread_cleanup_list_ops(tclist).exec();
 
     assert(xsink.isException() || !td->active_exceptions);
 
@@ -9767,7 +10146,7 @@ namespace {
                 printd(4, "q_run_thread(): thread terminating");
 
                 // run any cleanup functions
-                tclist.exec();
+                qore_thread_cleanup_list_ops(tclist).exec();
 
                 assert(xsink.isException() || !td->active_exceptions);
 
@@ -10006,7 +10385,7 @@ namespace {
                 printd(4, "thread terminating");
 
                 // run any cleanup functions
-                tclist.exec();
+                qore_thread_cleanup_list_ops(tclist).exec();
 
                 // the thread's data is deleted next; the inherited sandbox stops counting the thread here
                 cleanup_delegate.reset();
@@ -10068,6 +10447,18 @@ QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
     reaper; Qore code that runs afterwards (the destructors of the objects of a Program that outlives the modules: see
     qore_program_private::clearRemainingPrograms()) cannot start a thread at all (qore#6045)
 */
+//! raises SANDBOX-ISOLATION-ERROR if the sandboxes of different tenants govern the code that starts a thread
+/** Such code belongs to no tenant, and the thread would keep their composite for good (qore#7009)
+*/
+static int q_check_thread_start_isolation(ExceptionSink* xsink) {
+    if (QoreSandboxComposition::callerIsMixed()) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "code that the sandboxes of more than one isolation domain "
+            "govern together cannot start a thread");
+        return -1;
+    }
+    return 0;
+}
+
 static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
     if (qore_thread_start_closed.load(std::memory_order_acquire)
             || (qore_shutdown.load(std::memory_order_relaxed) && !(flags & QTF_EXTERNAL_LIFECYCLE))) {
@@ -10075,7 +10466,7 @@ static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
             "up");
         return -1;
     }
-    return 0;
+    return q_check_thread_start_isolation(xsink);
 }
 
 //! raises THREAD-CREATION-FAILURE if a background thread cannot be started because the library is being cleaned up
@@ -10089,7 +10480,7 @@ static int q_check_background_start_allowed(ExceptionSink* xsink) {
             "up");
         return -1;
     }
-    return 0;
+    return q_check_thread_start_isolation(xsink);
 }
 
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
@@ -11286,7 +11677,7 @@ bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& bu
     assert(tid > 0 && tid < MAX_QORE_THREADS);
     AutoLocker al(lck);
     // only the thread itself flags a memory limit, so that needs no lock, but it is checked here as well
-    if (budgets.findExpired() || qore_sb_find_over_limit()) {
+    if (budgets.findExpired() || budgets.isIsolationRefused() || qore_sb_find_over_limit()) {
         return false;
     }
     entry[tid].clearCancelState(QCR_SANDBOX_LIMIT);
@@ -12043,6 +12434,13 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
     unsigned bits = thread_list.getCancelBits(tid);
     // an expired sandbox call budget first: it cannot be cleared by the thread and ends the whole call
     if (check_sandbox && (bits & QCR_SANDBOX_LIMIT) && td) {
+        // code of another tenant entered in a trusted build: it must not run (qore#6536)
+        if (td->sandbox_budgets.isIsolationRefused()) {
+            if (xsink) {
+                td->sandbox_budgets.raiseIsolation(xsink, operation);
+            }
+            return true;
+        }
         if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
             if (xsink) {
                 td->sandbox_budgets.raise(budget, xsink, operation);

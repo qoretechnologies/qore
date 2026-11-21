@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -138,7 +139,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Lemlist client for integration tests
     private setupConnection() {
-        *string apikey = m_options.apikey ?? ENV.LEMLIST_API_KEY;
+        *string apikey = LiveProvider::get("lemlist", "LEMLIST_API_KEY", m_options.apikey);
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API key provided (use -k option or LEMLIST_API_KEY env var)\n");

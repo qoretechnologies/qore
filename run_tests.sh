@@ -1660,6 +1660,28 @@ core_has_test_mark() {
     LC_ALL=C tr -c 'A-Za-z0-9_=.' '\n' < "$1" 2>/dev/null | grep -qxF "QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
 }
 
+# The bound in seconds of a debugger run that prints the stacks of a test: a debugger can hang (debuginfod lookups, a
+# damaged core), and must not hang the run (qore#6893)
+DEBUGGER_TIMEOUT=${QORE_TEST_DEBUGGER_TIMEOUT:-120}
+
+# Runs the debugger command given after the bound in seconds, ending it when the bound has passed (TIMEOUT_CMD, with
+# SIGKILL 10 s after its signal); its output says if it did
+run_debugger() {
+    _bound=$1
+    shift
+    if [ -z "$TIMEOUT_CMD" ]; then
+        "$@"
+        return
+    fi
+    $TIMEOUT_CMD -k 10 $_bound "$@"
+    _debugger_exit=$?
+    # GNU timeout: 124, or 137 after the SIGKILL; BusyBox timeout: 143 (SIGTERM)
+    case $_debugger_exit in
+        124|137|143) echo "*** the debugger did not end within $_bound s; it was ended ***" ;;
+    esac
+    return $_debugger_exit
+}
+
 # Sets CORE_FILE to the core the current test left (see list_new_test_cores())
 find_test_core() {
     CORE_FILE=""
@@ -1672,13 +1694,11 @@ find_test_core() {
         if [ -z "$NEW_CORES" ]; then
             continue
         fi
-        if [ "$TEST_JOBS" -le 1 ]; then
-            CORE_FILE=$(printf '%s\n' "$NEW_CORES" | head -1)
-            break
-        fi
-        # Tests that run at the same time (TEST_JOBS > 1) write their cores to the same places, so a new core is the
-        # test's only when its name has the process ID of the test as a part of its own (core.%e.%p.%t on Linux CI,
-        # core.%P on macOS CI), or when it holds the test's mark: the core of a process that the test started
+        # Other programs, and tests that run at the same time (TEST_JOBS > 1), write their cores to the same places
+        # (a kernel core directory can be shared, e.g. /tmp), so a new core is the test's only when its name has the
+        # process ID of the test as a part of its own (core.%e.%p.%t on Linux CI, core.%P on macOS CI), or when it
+        # holds the test's mark: the core of a process that the test started.  A new core that is neither is not the
+        # test's, also in a serial run: no core is reported then, rather than another program's (qore#6893)
         if [ -n "$TEST_PID" ]; then
             CORE_FILE=$(printf '%s\n' "$NEW_CORES" | awk -v pid="$TEST_PID" \
                 '{ n = split($0, path, "/"); m = split(path[n], part, ".") }
@@ -2830,16 +2850,19 @@ run_with_watchdog() {
     # a parallel run writes the output of the test to its log (TEST_LOG).  The test runs in a process group of its
     # own (see exec_in_test_group()); the mark is in its environment from the start, so that the process has it also
     # before the command that makes the group has replaced itself with the test
+    # Linux libqore records the kernel's sender PID when the test's default signal handler exits with
+    # 128 + signal. The parent PID makes the diagnostic specific to the test itself.
+    QORE_TEST_SIGNAL_PARENT="$RUNNER_SHELL_PID"
     if [ -n "$TEST_LOG" ]; then
         (
             QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
-            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK QORE_TEST_SIGNAL_PARENT
             exec_in_test_group "$@"
         ) 4>&- >> "$TEST_LOG" 2>&1 &
     else
         (
             QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
-            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK QORE_TEST_SIGNAL_PARENT
             exec_in_test_group "$@"
         ) 4>&- &
     fi
@@ -3243,7 +3266,8 @@ EOF
         if [ -n "$TIMEOUT_CORE" ]; then
             echo "*** Core dump of the test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
             BT_FILE="$CORE_DIR/backtrace-`test_artifact_name "$test"`-timeout.txt"
-            gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
+            run_debugger $DEBUGGER_TIMEOUT gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" \
+                "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
             head -500 "$BT_FILE"
         fi
     fi
@@ -3263,7 +3287,7 @@ EOF
                 # resulting SIGPIPE kills tee and gdb, so the saved artifact is truncated too.  The
                 # crashing thread is printed LAST by "thread apply all bt", so it is exactly what
                 # such a truncation loses; dump it first so it survives both the file and the head.
-                gdb -batch -ex "bt full" -ex "thread apply all bt full" -ex "quit" \
+                run_debugger $DEBUGGER_TIMEOUT gdb -batch -ex "bt full" -ex "thread apply all bt full" -ex "quit" \
                     "$QORE" "$CORE_FILE" > "$BT_FILE" 2>&1
                 head -500 "$BT_FILE"
                 # Move core to artifact directory for CI collection (don't delete)
@@ -3275,8 +3299,8 @@ EOF
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 # the crashing thread first, as the head of the file is what the log shows
-                lldb --batch -c "$CORE_FILE" "$QORE" -o "thread backtrace" -o "thread backtrace all" \
-                    > "$BT_FILE" 2>&1
+                run_debugger $DEBUGGER_TIMEOUT lldb --batch -c "$CORE_FILE" "$QORE" -o "thread backtrace" \
+                    -o "thread backtrace all" > "$BT_FILE" 2>&1
                 head -500 "$BT_FILE"
                 # a macOS core holds the whole address space (gigabytes); the macOS CI machine cannot upload
                 # artifacts, and a few cores would fill its disk
@@ -3287,7 +3311,9 @@ EOF
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_ARTIFACT_NAME}.txt"
                 # Filter out thread creation/exit noise (both glibc [New Thread] and musl [New LWP] formats)
-                gdb -batch -ex run -ex "bt full" -ex "thread apply all bt full" -ex quit \
+                # the test runs again under the debugger: its own time limit and the debugger's bound
+                run_debugger `expr $THIS_TEST_TIMEOUT + $DEBUGGER_TIMEOUT` \
+                    gdb -batch -ex run -ex "bt full" -ex "thread apply all bt full" -ex quit \
                     --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 \
                     | grep -v '^\[New Thread\|^\[Thread.*exited\]\|^\[New LWP\|^\[LWP.*exited\]\|^\[Detaching' \
                     > "$BT_FILE"
@@ -3297,8 +3323,10 @@ EOF
                 # SIGABRT raised without a message (e.g. a libpthread or malloc integrity check)
                 if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
                     REPORT=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/qore*.ips 2>/dev/null | head -1)
-                    # tests that run at the same time: the newest report of the test's process
-                    if [ "$TEST_JOBS" -gt 1 ] && [ -n "$TEST_PID" ]; then
+                    # the newest report of the test's process: other qore processes, and tests that run at the same
+                    # time, write reports there too (qore#6893); the newest report is taken only when the test's
+                    # process ID is not known
+                    if [ -n "$TEST_PID" ]; then
                         REPORT=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/qore*.ips 2>/dev/null \
                             | while read -r r; do if grep -q "\"pid\" *: *$TEST_PID," "$r"; then echo "$r"; break; fi; done)
                     fi
@@ -3317,7 +3345,9 @@ EOF
                 if [ -n "$CI" ] && sudo -n true 2>/dev/null; then
                     LLDB="sudo -n -E lldb"
                 fi
-                $LLDB --batch -o run -k "thread backtrace all" -k quit \
+                # the test runs again under the debugger: its own time limit and the debugger's bound
+                run_debugger `expr $THIS_TEST_TIMEOUT + $DEBUGGER_TIMEOUT` \
+                    $LLDB --batch -o run -k "thread backtrace all" -k quit \
                     -- $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT > "$BT_FILE" 2>&1
                 head -500 "$BT_FILE"
             else

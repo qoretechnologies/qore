@@ -46,7 +46,7 @@ server.start();
     @code{.py}
 # Use callback authentication
 code auth_callback = sub (hash<auto> cx, hash<auto> hdr) returns bool {
-    return hdr."x-api-key" == "secret123";
+    return http_get_field(hdr, "x-api-key") == "secret123";
 };
 
 QoreReplWebSocketHandler handler({"auth_callback": auth_callback});
@@ -235,7 +235,7 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         @par Example
         @code{.py}
 handler.setAuthCallback(sub (hash<auto> cx, hash<auto> hdr) returns bool {
-    return hdr."x-api-key" == "secret123";
+    return http_get_field(hdr, "x-api-key") == "secret123";
 });
         @endcode
     */

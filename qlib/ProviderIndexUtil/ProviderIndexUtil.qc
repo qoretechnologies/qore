@@ -423,7 +423,7 @@ hashdecl IndexStateInfo {
 public class ProviderIndexUtil {
     public {}
 
-    private {
+    private:internal {
         #! Global data provider index
         static *hash<DataProviderIndexInfo> index;
 
@@ -623,7 +623,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
         @throw PROVIDER-INDEX-ERROR the calling thread is reading the index
     */
-    static private waitForIndexReaders(string action) {
+    static private:internal waitForIndexReaders(string action) {
         # do not replace the state while another thread is reading the index into it
         while (initializing || raw_metadata_loading || metadata_initializing || app_metadata_initializing
                 || action_metadata_initializing) {
@@ -642,7 +642,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     }
 
     #! Returns @ref True if the current thread is one of the threads in the given map of names to thread IDs
-    static private bool hasThread(hash<string, int> tids) {
+    static private:internal bool hasThread(hash<string, int> tids) {
         int tid = gettid();
         foreach int t in (tids.iterator()) {
             if (t == tid) {
@@ -686,7 +686,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     #! Discards the in-memory index state; the next lookup initializes it again; must be called with the lock held
     /** The cache edits made by the process are discarded too
     */
-    static private resetIndexState() {
+    static private:internal resetIndexState() {
         remove index;
         initialized = False;
         raw_appinfomap = {};
@@ -719,7 +719,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     /** The cache edits made by the process are applied to the new state, so an app, action, or removal from the
         cache is not lost when the index is read or reloaded
     */
-    static private installIndexState(hash<IndexStateInfo> state) {
+    static private:internal installIndexState(hash<IndexStateInfo> state) {
         index = state.index;
         raw_appinfomap = state.raw_appinfomap;
         raw_actioninfomap = state.raw_actioninfomap;
@@ -765,7 +765,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     }
 
     #! Sets the given indexed action in the in-memory index; must be called with the lock held
-    static private setCachedActionIntern(hash<auto> action) {
+    static private:internal setCachedActionIntern(hash<auto> action) {
         index.actioninfomap{action.app}{action.action} = action;
         index.top_actioninfomap{action.app + "/" + action.action} = action;
         # an index that does not record the declarations is not completed by one action
@@ -787,7 +787,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
         Actions added by the process win over indexed actions with the same name
     */
-    static private mergeIndexedActions(string app, *hash<auto> actions) {
+    static private:internal mergeIndexedActions(string app, *hash<auto> actions) {
         index.actioninfomap{app} = (actions ?? {}) + (index.actioninfomap{app} ?? {});
         foreach hash<auto> action in (index.actioninfomap{app}.pairIterator()) {
             index.top_actioninfomap{app + "/" + action.key} = action.value;
@@ -1016,7 +1016,7 @@ if (published && published.sha256 != ProviderIndexUtil::getIndexSha256()) {
         metadata has no known digest; if neither the manifest nor the apps of a canonical index file are known, the
         apps are those of the routing app map
     */
-    static private hash<string, *string> getIndexAppDigests(*hash<DataProviderMetadataCacheManifest> manifest,
+    static private:internal hash<string, *string> getIndexAppDigests(*hash<DataProviderMetadataCacheManifest> manifest,
             *hash<string, bool> canonical_apps, *hash<string, hash<string, bool>> appmap) {
         if (manifest) {
             return (map {$1.key: $1.value.sha256}, manifest.apps.pairIterator()) ?? {};
@@ -1064,18 +1064,18 @@ if (published && published.sha256 != ProviderIndexUtil::getIndexSha256()) {
     }
 
     #! Returns the info of all cached apps
-    static private *hash<string, hash<auto>> getAllAppInfo() {
+    static private:internal *hash<string, hash<auto>> getAllAppInfo() {
         return getConsistent(\ProviderIndexUtil::checkAllAppMetadata(), auto sub () { return index.appinfomap; });
     }
 
     #! Returns the cached actions of the given app
-    static private *hash<string, hash<auto>> getAppActions(string app) {
+    static private:internal *hash<string, hash<auto>> getAppActions(string app) {
         return getConsistent(sub () { checkActionMetadata(app); },
             auto sub () { return index.actioninfomap{app}; });
     }
 
     #! Returns all cached actions, keyed by \c "<app>/<action>"
-    static private *hash<string, hash<auto>> getAllActions() {
+    static private:internal *hash<string, hash<auto>> getAllActions() {
         return getConsistent(\ProviderIndexUtil::checkAllActionMetadata(),
             auto sub () { return index.top_actioninfomap; });
     }
@@ -1089,7 +1089,7 @@ if (published && published.sha256 != ProviderIndexUtil::getIndexSha256()) {
         If the index is reloaded after @a check was called, it is called again for the reloaded index, so the
         metadata of two indexes is never mixed
     */
-    static private auto getConsistent(code<nothing()> check, code<auto()> get) {
+    static private:internal auto getConsistent(code<nothing()> check, code<auto()> get) {
         while (True) {
             int gen = index_generation;
             check();
@@ -1258,7 +1258,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
     }
 
     #! Returns the factory info of the index, reading it on first use
-    static private *hash<string, hash<auto>> getFactoryInfoMap() {
+    static private:internal *hash<string, hash<auto>> getFactoryInfoMap() {
         checkDataIndex();
         m.lock();
         on_exit m.unlock();
@@ -1278,7 +1278,7 @@ if (!info && !ProviderIndexUtil::hasIndexedFactoryInfo()) {
         metadata cache, it is read from any canonical index file, and the error is reported by
         @ref getIndexReadError()
     */
-    static private *hash<string, hash<auto>> readProcessFactoryInfo() {
+    static private:internal *hash<string, hash<auto>> readProcessFactoryInfo() {
         *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
         if (manifest) {
             if (!manifest.factories) {
@@ -1397,7 +1397,7 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetAppFailur
     }
 
     #! Returns the failures recorded by the index, reading them on first use
-    static private *hash<string, list<hash<auto>>> getFailureMap() {
+    static private:internal *hash<string, list<hash<auto>>> getFailureMap() {
         checkDataIndex();
         m.lock();
         on_exit m.unlock();
@@ -1415,7 +1415,7 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetAppFailur
     /** @return the failures, or @ref nothing if the index does not record them, or if they cannot be read, in which
         case the error is reported by @ref getIndexReadError()
     */
-    static private *hash<string, list<hash<auto>>> readProcessFailureInfo() {
+    static private:internal *hash<string, list<hash<auto>>> readProcessFailureInfo() {
         *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
         if (!manifest.failures) {
             return;
@@ -1426,14 +1426,14 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetAppFailur
     #! Returns @ref True if the given action declares an alternative to its app's scheme connection
     /** @param action an action in serialized, indexed, or registered form
     */
-    static private bool declaresConnectionAlternative(*hash<auto> action) {
+    static private:internal bool declaresConnectionAlternative(*hash<auto> action) {
         return exists action.metadata.connection_alternative;
     }
 
     #! Returns the app to action map of the actions declaring an alternative to their app's scheme connection
     /** @param actioninfomap the app to action map of all actions
     */
-    static private hash<string, hash<string, bool>> getConnectionAlternativeMap(*hash<auto> actioninfomap) {
+    static private:internal hash<string, hash<string, bool>> getConnectionAlternativeMap(*hash<auto> actioninfomap) {
         hash<string, hash<string, bool>> rv = {};
         foreach hash<auto> app in (actioninfomap.pairIterator()) {
             foreach hash<auto> action in (app.value.pairIterator()) {
@@ -1586,7 +1586,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns the action summaries of all apps, or of the given app, keyed by app, then by action
-    static private hash<string, hash<string, hash<auto>>> getActionSummaries(*string app) {
+    static private:internal hash<string, hash<string, hash<auto>>> getActionSummaries(*string app) {
         return getConsistent(\ProviderIndexUtil::checkActionSummaries(),
             auto sub () { return getActionSummariesIntern(app); });
     }
@@ -1594,7 +1594,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     #! Returns the action summaries of all apps, or of the given app, with the cache edits applied
     /** Must be called with the lock held
     */
-    static private hash<string, hash<string, hash<auto>>> getActionSummariesIntern(*string app) {
+    static private:internal hash<string, hash<string, hash<auto>>> getActionSummariesIntern(*string app) {
         hash<string, hash<string, hash<auto>>> rv = {};
         list<string> apps = exists app ? (app,) : keys (action_summaries + live_action_summaries);
         foreach string name in (apps) {
@@ -1620,7 +1620,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @return the matching actions, restored; @ref nothing if there are no actions to match; an action whose metadata
         cannot be read is left out
     */
-    static private *list<hash<auto>> searchActions(*string app, code<bool(hash<auto>)> match) {
+    static private:internal *list<hash<auto>> searchActions(*string app, code<bool(hash<auto>)> match) {
         while (True) {
             int gen = index_generation;
             hash<string, hash<string, hash<auto>>> summaries = getActionSummaries(app);
@@ -1696,7 +1696,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns code that matches actions whose descriptions match the given regular expression
-    static private code<bool(hash<auto>)> getRegexMatch(string regex_pattern, int regex_options) {
+    static private:internal code<bool(hash<auto>)> getRegexMatch(string regex_pattern, int regex_options) {
         return bool sub (hash<auto> action) {
             return regex(action.short_desc ?? "", regex_pattern, regex_options)
                 || regex(action.desc ?? "", regex_pattern, regex_options);
@@ -1704,7 +1704,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns code that matches actions whose descriptions contain the given substring
-    static private code<bool(hash<auto>)> getSubstrMatch(string substr, bool ignore_case) {
+    static private:internal code<bool(hash<auto>)> getSubstrMatch(string substr, bool ignore_case) {
         if (ignore_case) {
             substr = substr.upr();
             return bool sub (hash<auto> action) {
@@ -1964,7 +1964,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Checks if the data provider index has been populated
-    static private checkDataIndex() {
+    static private:internal checkDataIndex() {
         if (initialized) {
             return;
         }
@@ -2030,7 +2030,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         app remain deferred until they are needed, since the actions of all apps take many times the memory of
         their app info
     */
-    static private checkRawMetadataIndex(*string app = NOTHING, bool actions = True) {
+    static private:internal checkRawMetadataIndex(*string app = NOTHING, bool actions = True) {
         int gen = index_generation;
         checkDataIndex();
         if (!initialized || !raw_metadata_deferred || (app && raw_metadata_app_loaded{app})
@@ -2097,7 +2097,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Ensures that the shared metadata deserialization context has been initialized
-    static private bool checkMetadataContext() {
+    static private:internal bool checkMetadataContext() {
         if (metadata_initialized) {
             return True;
         }
@@ -2144,7 +2144,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Ensures that app metadata for the given app has been deserialized
-    static private checkAppMetadata(string app) {
+    static private:internal checkAppMetadata(string app) {
         int gen = index_generation;
         checkRawMetadataIndex(app);
         if (!initialized || app_metadata_initialized{app} || !checkMetadataContext()) {
@@ -2192,7 +2192,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Ensures that action metadata for the given app has been deserialized
-    static private checkActionMetadata(string app) {
+    static private:internal checkActionMetadata(string app) {
         int gen = index_generation;
         checkRawMetadataIndex(app);
         if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
@@ -2247,7 +2247,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     /** @param raw_actions the app's serialized actions
         @param restored the app's actions restored on their own, or that could not be restored
     */
-    static private hash<string, hash<auto>> getUnrestoredActions(hash<string, hash<auto>> raw_actions,
+    static private:internal hash<string, hash<auto>> getUnrestoredActions(hash<string, hash<auto>> raw_actions,
             *hash<string, bool> restored) {
         if (!restored) {
             return raw_actions;
@@ -2263,7 +2263,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @return the actions just restored and those restored on their own before, in index order; an action that
         could not be restored is left out
     */
-    static private hash<auto> getRestoredAppActions(string app, hash<string, hash<auto>> raw_actions,
+    static private:internal hash<auto> getRestoredAppActions(string app, hash<string, hash<auto>> raw_actions,
             *hash<auto> restored) {
         if (!action_restored{app}) {
             return restored ?? {};
@@ -2287,7 +2287,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @param app the app name
         @param action the action name
     */
-    static private checkSingleActionMetadata(string app, string action) {
+    static private:internal checkSingleActionMetadata(string app, string action) {
         int gen = index_generation;
         checkRawMetadataIndex(app);
         if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
@@ -2340,7 +2340,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Ensures that all app metadata has been deserialized
-    static private checkAllAppMetadata() {
+    static private:internal checkAllAppMetadata() {
         int gen = index_generation;
         # the actions of each app are loaded only when needed
         checkRawMetadataIndex(NOTHING, False);
@@ -2393,7 +2393,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Ensures that all action metadata has been deserialized
-    static private checkAllActionMetadata() {
+    static private:internal checkAllActionMetadata() {
         int gen = index_generation;
         checkRawMetadataIndex();
         if (!initialized || !checkMetadataContext()) {
@@ -2455,7 +2455,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         them read from the metadata of each of its apps, without restoring any type description, and an index
         without a metadata cache from the metadata in memory
     */
-    static private checkActionSummaries() {
+    static private:internal checkActionSummaries() {
         int gen = index_generation;
         checkDataIndex();
         if (!initialized || action_summaries_loaded || !checkMetadataContext()) {
@@ -2541,7 +2541,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         action summary file cannot be read, the error is reported by @ref getIndexReadError(), and the summaries are
         read from the metadata of each app, as for an index that predates the file
     */
-    static private *hash<string, hash<string, hash<auto>>> readCachedActionSummaries() {
+    static private:internal *hash<string, hash<string, hash<auto>>> readCachedActionSummaries() {
         *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
         if (!manifest) {
             return;
@@ -2580,7 +2580,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @throw PROVIDER-INDEX-ERROR the file does not match its size or digest, or is not a hash of apps
     */
-    static private hash<auto> readActionSummaryFile(string path, hash<auto> info) {
+    static private:internal hash<auto> readActionSummaryFile(string path, hash<auto> info) {
         binary data = readIndexFileBinary(path);
         if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
             throw "PROVIDER-INDEX-ERROR", "the file does not match the size and digest recorded in the metadata "
@@ -2594,7 +2594,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return the action-level members of the action, with the \c option_names and \c has_expressions members
     */
-    static private hash<auto> getSerializedActionSummary(hash<auto> action) {
+    static private:internal hash<auto> getSerializedActionSummary(hash<auto> action) {
         # a typed hash cannot lose members
         hash<auto> rv = {} + action;
         rv -= ActionSummaryExcludedKeys;
@@ -2613,7 +2613,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @throw PROVIDER-INDEX-ERROR the summaries of an app are not a hash
     */
-    static private hash<string, hash<string, hash<auto>>> castActionSummaries(hash<auto> serialized,
+    static private:internal hash<string, hash<string, hash<auto>>> castActionSummaries(hash<auto> serialized,
             hash<MetadataDeserializeContext> ctx) {
         hash<string, hash<string, hash<auto>>> rv = {};
         foreach hash<auto> app in (serialized.pairIterator()) {
@@ -2642,7 +2642,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns the given serialized action summary as a DataProviderIndexedActionSummaryInfo hash
-    static private hash<auto> castActionSummary(hash<auto> summary, hash<MetadataDeserializeContext> ctx) {
+    static private:internal hash<auto> castActionSummary(hash<auto> summary, hash<MetadataDeserializeContext> ctx) {
         return ctx.action_summary_th.doCastWithOverrides(summary, {
             "path_vars": (summary.path_vars
                 ? ctx.path_vars_th.doCastValues(summary.path_vars)
@@ -2651,7 +2651,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns the casts of the processing and billing metadata of a serialized app or action (qore#6736)
-    static private hash<auto> getProcessingBillingOverrides(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+    static private:internal hash<auto> getProcessingBillingOverrides(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
         return {
             "processing": (info.processing ? ctx.processing_th.doCast(info.processing) : NOTHING),
             "billing": (info.billing ? ctx.billing_th.doCast(info.billing) : NOTHING),
@@ -2665,7 +2665,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available
     */
-    static private binary packActionSummaryChunk(hash<auto> summaries) {
+    static private:internal binary packActionSummaryChunk(hash<auto> summaries) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
 %else
@@ -2680,7 +2680,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or the file does not hold a hash
     */
-    static private hash<auto> unpackActionSummaryChunk(binary data) {
+    static private:internal hash<auto> unpackActionSummaryChunk(binary data) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
 %else
@@ -2697,7 +2697,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns an empty data provider index with all map fields initialized
-    static private hash<DataProviderIndexInfo> createEmptyDataProviderIndex() {
+    static private:internal hash<DataProviderIndexInfo> createEmptyDataProviderIndex() {
         return <DataProviderIndexInfo>{
             "factorymap": {},
             "appmap": {},
@@ -3084,7 +3084,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     #! Returns the names of the maps written first to the canonical index file, in the order written
     /** @param factory_info @ref True if the index records factory info
     */
-    static private list<string> getCanonicalMapNames(bool factory_info) {
+    static private:internal list<string> getCanonicalMapNames(bool factory_info) {
         list<string> rv = ("factorymap", "appmap", "schememap", "appinfomap");
         # an index that does not record factory info has no factoryinfomap member, as in earlier versions
         if (factory_info) {
@@ -3099,7 +3099,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         identically
         @param names the maps to write, in the order written
     */
-    static private writeCanonicalMaps(code<nothing(string)> write, hash<auto> maps,
+    static private:internal writeCanonicalMaps(code<nothing(string)> write, hash<auto> maps,
             list<string> names = ("factorymap", "appmap", "schememap", "appinfomap")) {
         foreach string key in (names) {
             write(make_yaml({key: ((key == "appinfomap" || key == "factoryinfomap")
@@ -3120,7 +3120,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
         @return the app's stored type table, if its option type descriptions refer to one
     */
-    static private *hash<auto> writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions,
+    static private:internal *hash<auto> writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions,
             bool first) {
         if (first) {
             write("actioninfomap:\n");
@@ -3137,7 +3137,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     /** @param h the map
         @param sort_values if @ref True, the keys of hash values are sorted too
     */
-    static private *hash<auto> sortIndexMap(*hash<auto> h, bool sort_values) {
+    static private:internal *hash<auto> sortIndexMap(*hash<auto> h, bool sort_values) {
         if (!h) {
             return h;
         }
@@ -3208,7 +3208,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
         @since ProviderIndexUtil 1.2
     */
-    static private binary packMetadataCacheChunk(string app, *hash<auto> app_info, *hash<auto> actions) {
+    static private:internal binary packMetadataCacheChunk(string app, *hash<auto> app_info, *hash<auto> actions) {
         return packStoredMetadataCacheChunk(app, app_info, exists actions
             ? IndexedTypeGraphForm::getStoredForm(actions)
             : NOTHING);
@@ -3350,7 +3350,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
         @return the packed manifest
     */
-    static private binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks,
+    static private:internal binary packMetadataCacheManifest(hash<string, DataProviderMetadataCacheChunkInfo> chunks,
             *hash<DataProviderMetadataCacheChunkInfo> factories, *hash<DataProviderMetadataCacheChunkInfo> summaries,
             *hash<DataProviderMetadataCacheChunkInfo> failures) {
         hash<DataProviderMetadataCacheManifest> manifest = <DataProviderMetadataCacheManifest>{
@@ -3398,7 +3398,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @note Errors are logged and ignored: failing to remove a stale file must never fail an index write, because
         the index itself is already published at this point.
     */
-    static private removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
+    static private:internal removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
             *string manifest_sha256, bool canonical, *string factories_sha256, *string summaries_sha256,
             *string failures_sha256) {
         *string dir = tryGetIndexDir();
@@ -3442,7 +3442,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     }
 
     #! Removes a stale index file, logging any error
-    static private removeIndexFile(string path) {
+    static private:internal removeIndexFile(string path) {
         try {
             unlink(path);
         } catch (hash<ExceptionInfo> ex) {
@@ -3642,7 +3642,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param unpack @ref True to unpack the metadata, @ref False to only verify it
         @param per_app optional code called with each app's metadata; see readSerializedDataProviderIndex()
     */
-    static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack,
+    static private:internal *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack,
             *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
 %ifdef NoMsgPack
         return;
@@ -3767,7 +3767,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @throw any error reading the files
     */
-    static private *hash<CompactIndexInfo> readCompactIndex(string dir) {
+    static private:internal *hash<CompactIndexInfo> readCompactIndex(string dir) {
         string routing_path = getIndexPath("routing", dir);
         if (!is_file(routing_path)) {
             return;
@@ -3798,24 +3798,24 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Parses a routing index
-    static private *hash<DataProviderRoutingIndexInfo> parseRoutingIndex(binary data) {
+    static private:internal *hash<DataProviderRoutingIndexInfo> parseRoutingIndex(binary data) {
         return cast<*hash<DataProviderRoutingIndexInfo>>(parse_yaml(data.toString("UTF-8")));
     }
 
     #! Returns @ref True if the routing index has a supported version and matches its checksum
-    static private bool checkRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
+    static private:internal bool checkRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
         return routing.version >= MinRoutingIndexVersion && routing.version <= RoutingIndexVersion
             && routing.routing_sha256
                 == digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex();
     }
 
     #! Returns @ref True if the given metadata cache version can be read
-    static private bool checkMetadataCacheVersion(*int version) {
+    static private:internal bool checkMetadataCacheVersion(*int version) {
         return exists version && version >= MinMetadataCacheVersion && version <= MetadataCacheVersion;
     }
 
     #! Returns @ref True if a canonical index file was published with the given routing index
-    static private bool isCanonicalRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
+    static private:internal bool isCanonicalRoutingIndex(hash<DataProviderRoutingIndexInfo> routing) {
         # a version 2 routing index was always published with a canonical index file
         return routing.version < 3 || routing.canonical_yaml;
     }
@@ -3879,7 +3879,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the index state; the state of an index that is not published, or that cannot be read, has no apps,
         in which case the error is reported by @ref getIndexReadError()
     */
-    static private hash<IndexStateInfo> readIndexState(bool eager) {
+    static private:internal hash<IndexStateInfo> readIndexState(bool eager) {
         # each read of the index reports its own errors
         clearIndexReadError();
         hash<IndexStateInfo> rv = getEmptyIndexState();
@@ -3924,7 +3924,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the state of an index with no apps
-    static private hash<IndexStateInfo> getEmptyIndexState() {
+    static private:internal hash<IndexStateInfo> getEmptyIndexState() {
         return <IndexStateInfo>{
             "index": createEmptyDataProviderIndex(),
         };
@@ -3938,7 +3938,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return the size of the routing index
     */
-    static private int writeRoutingDataProviderIndex(*hash<auto> h, *string cache_sha256, *string data_sha256,
+    static private:internal int writeRoutingDataProviderIndex(*hash<auto> h, *string cache_sha256, *string data_sha256,
             *int data_size) {
         hash<auto> sidecar = getRoutingIndexPayload(h) + {
             "version": RoutingIndexVersion,
@@ -3962,7 +3962,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     /** @param err the error code
         @param desc the error description
     */
-    static private setIndexReadError(string err, string desc) {
+    static private:internal setIndexReadError(string err, string desc) {
         recordIndexReadError(sprintf("%s: %s", err, desc));
         log(LoggerLevel::LevelError, "Error reading the data provider index: %s: %s", err, desc);
     }
@@ -3973,7 +3973,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @param err the error, as \c "<code>: <description>"
     */
-    static private recordIndexReadError(string err) {
+    static private:internal recordIndexReadError(string err) {
         if (reload_tid == gettid()) {
             reload_read_error = err;
         } else {
@@ -3982,7 +3982,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Clears the error reading a published index; see recordIndexReadError()
-    static private clearIndexReadError() {
+    static private:internal clearIndexReadError() {
         if (reload_tid == gettid()) {
             remove reload_read_error;
         } else {
@@ -4001,7 +4001,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         read if there is one; the returned routing index has a metadata cache with a supported version, or was
         published with a canonical index file; any error is reported by @ref getIndexReadError()
     */
-    static private *hash<DataProviderRoutingIndexInfo> readValidRoutingIndex(*reference<*string> sha256) {
+    static private:internal *hash<DataProviderRoutingIndexInfo> readValidRoutingIndex(*reference<*string> sha256) {
         # skip silently when the index env var is not configured, as in readIndex()
         if (!ENV{ProviderIndexEnvVar}.val()) {
             return;
@@ -4079,7 +4079,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the canonical routing payload for sidecar checksumming
-    static private hash<auto> getRoutingIndexPayload(*hash<auto> h) {
+    static private:internal hash<auto> getRoutingIndexPayload(*hash<auto> h) {
         return {
             "factorymap": h.factorymap ?? {},
             "appmap": h.appmap ?? {},
@@ -4088,7 +4088,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the payload covered by the routing sidecar checksum
-    static private hash<auto> getRoutingIndexChecksumPayload(*hash<auto> h) {
+    static private:internal hash<auto> getRoutingIndexChecksumPayload(*hash<auto> h) {
         hash<auto> rv = getRoutingIndexPayload(h) + {
             "version": h.version,
         };
@@ -4121,7 +4121,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param app an optional app name; when present, only that app's metadata is read
         @param actions if @ref False and no app is given, only the info of every app is read from the cache
     */
-    static private hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app, bool actions = True) {
+    static private:internal hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app, bool actions = True) {
         bool failed;
         *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app, actions || exists app, \failed);
         if (cache && !failed) {
@@ -4149,7 +4149,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         case the error is reported by @ref getIndexReadError(); a file larger than @ref getMaxCanonicalIndexSize()
         is not read
     */
-    static private *hash<DataProviderIndexInfo> readCanonicalDataProviderIndex() {
+    static private:internal *hash<DataProviderIndexInfo> readCanonicalDataProviderIndex() {
         # a missing canonical index file is the normal state of an index published without one; it must not clear
         # an error reading the metadata cache
         if (!ENV{ProviderIndexEnvVar}.val()) {
@@ -4181,7 +4181,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the metadata read, or @ref nothing if no metadata cache is published, or if its manifest cannot be
         read
     */
-    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app, bool actions,
+    static private:internal *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app, bool actions,
             reference<bool> failed) {
         *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
         if (!manifest) {
@@ -4201,7 +4201,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return the metadata read
     */
-    static private hash<DataProviderIndexInfo> readMetadataCacheChunks(hash<DataProviderMetadataCacheManifest> manifest,
+    static private:internal hash<DataProviderIndexInfo> readMetadataCacheChunks(hash<DataProviderMetadataCacheManifest> manifest,
             *string app, bool actions, reference<bool> failed) {
         hash<DataProviderIndexInfo> rv = createEmptyDataProviderIndex();
         if (!app && !actions) {
@@ -4230,7 +4230,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Reads and validates the metadata cache manifest of the process's index once per process
-    static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifest() {
+    static private:internal *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifest() {
         if (metadata_cache_manifest_checked) {
             return metadata_cache_manifest;
         }
@@ -4250,7 +4250,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the manifest, or @ref nothing if it cannot be read, in which case the error is reported by
         @ref getIndexReadError()
     */
-    static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifestFile(string sha256,
+    static private:internal *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifestFile(string sha256,
             int version, bool report = True) {
 %ifdef NoMsgPack
         if (report) {
@@ -4294,7 +4294,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the chunk, or @ref nothing if it cannot be read, in which case the error is reported by
         @ref getIndexReadError()
     */
-    static private *hash<DataProviderIndexInfo> readMetadataCacheChunk(string app,
+    static private:internal *hash<DataProviderIndexInfo> readMetadataCacheChunk(string app,
             hash<DataProviderMetadataCacheChunkInfo> info, int version) {
         *string path;
         try {
@@ -4320,7 +4320,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the factory info, or @ref nothing if it cannot be read, in which case the error is reported by
         @ref getIndexReadError()
     */
-    static private *hash<string, hash<auto>> readFactoryInfoChunk(hash<auto> info, int version, *string dir) {
+    static private:internal *hash<string, hash<auto>> readFactoryInfoChunk(hash<auto> info, int version, *string dir) {
         *string path;
         try {
             path = getMetadataCacheChunkPath("", info.sha256, version, dir);
@@ -4344,7 +4344,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available
     */
-    static private binary packFactoryInfoChunk(hash<auto> factoryinfomap) {
+    static private:internal binary packFactoryInfoChunk(hash<auto> factoryinfomap) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
 %else
@@ -4360,7 +4360,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available
     */
-    static private hash<string, hash<auto>> unpackFactoryInfoChunk(binary data) {
+    static private:internal hash<string, hash<auto>> unpackFactoryInfoChunk(binary data) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
 %else
@@ -4376,7 +4376,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return the failures, or @ref nothing if they cannot be read, in which case the error is reported by
         @ref getIndexReadError()
     */
-    static private *hash<string, list<hash<auto>>> readFailureInfoChunk(hash<auto> info, int version, *string dir) {
+    static private:internal *hash<string, list<hash<auto>>> readFailureInfoChunk(hash<auto> info, int version, *string dir) {
         *string path;
         try {
             path = getMetadataCacheChunkPath("", info.sha256, version, dir);
@@ -4401,7 +4401,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or a failure is not a valid
         @ref ProviderIndexFailureInfo record
     */
-    static private binary packFailureInfoChunk(hash<auto> failuremap) {
+    static private:internal binary packFailureInfoChunk(hash<auto> failuremap) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
 %else
@@ -4422,7 +4422,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @throw PROVIDER-INDEX-ERROR MessagePack support is not available, or the file does not hold a hash of lists
         of valid @ref ProviderIndexFailureInfo records
     */
-    static private hash<string, list<hash<auto>>> unpackFailureInfoChunk(binary data) {
+    static private:internal hash<string, list<hash<auto>>> unpackFailureInfoChunk(binary data) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read data provider metadata";
 %else
@@ -4451,7 +4451,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Reconstructs typed app and action metadata in a serialized data provider index
-    static private *hash<DataProviderIndexInfo> deserializeDataProviderIndex(*hash<DataProviderIndexInfo> rv) {
+    static private:internal *hash<DataProviderIndexInfo> deserializeDataProviderIndex(*hash<DataProviderIndexInfo> rv) {
         if (!rv) {
             return;
         }
@@ -4486,7 +4486,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Creates the shared context used to reconstruct typed provider metadata
-    static private hash<MetadataDeserializeContext> createMetadataDeserializeContext() {
+    static private:internal hash<MetadataDeserializeContext> createMetadataDeserializeContext() {
         # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
         load_module("DataProvider");
         load_module("MapperUtil");
@@ -4524,7 +4524,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Reconstructs one typed app metadata hash
-    static private hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+    static private:internal hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
         return ctx.app_info_th.doCastWithOverrides(info, getProcessingBillingOverrides(info, ctx) + (
             info.connection_options
             ? {
@@ -4550,7 +4550,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return \c DataProvider::DataProviderIndexedActionInfo hashes keyed by app and then by action; every app in
         @a actioninfomap is present, but an action whose metadata cannot be read is logged and omitted
     */
-    static private hash<auto> deserializeActionsWithContext(
+    static private:internal hash<auto> deserializeActionsWithContext(
             hash<string, hash<string, hash<auto>>> actioninfomap,
             hash<MetadataDeserializeContext> ctx) {
         hash<auto> rv;
@@ -4569,6 +4569,24 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         return rv;
     }
 
+    #! Returns the given action as stored in the index as a DataProviderIndexedActionInfo hash
+    /** For the tests of the index format, which inherit the class
+
+        @param action the action as stored in the index
+
+        @return a \c DataProvider::DataProviderIndexedActionInfo hash
+
+        @throw PERMISSION-DENIED the calling code is restricted from loading modules or from reflection, which the
+        restoration uses (qore#7044)
+    */
+    static private hash<auto> restoreIndexedAction(hash<auto> action) {
+        if (SandboxManager::isCallerRestricted(DOM_MODULE | DOM_REFLECTION)) {
+            throw "PERMISSION-DENIED", "the calling code may not restore an indexed action, as it is restricted from "
+                "loading modules or from reflection";
+        }
+        return getIndexedAction(action, createMetadataDeserializeContext(), True);
+    }
+
     #! Returns the given action as a DataProviderIndexedActionInfo hash
     /** @param action the action as stored in the index, or a registered action
         @param ctx the prepared deserialization context
@@ -4577,7 +4595,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return a \c DataProvider::DataProviderIndexedActionInfo hash
     */
-    static private hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
+    static private:internal hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
             *bool indexed) {
         # the type description tables of the action's chunk, if it stores its type descriptions in tables; a
         # registered action is a typed hash without this key
@@ -4619,7 +4637,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @return a \c DataProvider::DataTypeInfo hash; a description that refers to the types of the app's type table
         gives the table in \c type_graph
     */
-    static private hash<auto> getOptionTypeInfo(hash<auto> action, string name, hash<auto> option,
+    static private:internal hash<auto> getOptionTypeInfo(hash<auto> action, string name, hash<auto> option,
             hash<MetadataDeserializeContext> ctx, *IndexedTypeTable types) {
         # a registered action's option is a typed hash without this key; an option of a chunk that stores its type
         # descriptions in tables refers to its description by its position, which can be 0
@@ -4659,7 +4677,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return a \c DataProvider::IndexedDataProviderInfo hash
     */
-    static private hash<auto> deserializeDataProviderInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+    static private:internal hash<auto> deserializeDataProviderInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
         hash<auto> rv;
         foreach hash<auto> i in (info.pairIterator()) {
             if (i.key == "bulk_read_shapes" || i.key == "bulk_create_shapes" || i.key == "bulk_upsert_shapes") {
@@ -4708,7 +4726,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns indexed event or message info, with the types described by plain data
-    static private hash<auto> deserializeDataProviderMessages(hash<auto> messages,
+    static private:internal hash<auto> deserializeDataProviderMessages(hash<auto> messages,
             hash<MetadataDeserializeContext> ctx) {
         return map {
             $1.key: ctx.dp_msg_info_th.doCast({
@@ -4719,12 +4737,12 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the description of the type with the given base type name from the index
-    static private hash<auto> getTypeInfoForName(*string name, hash<MetadataDeserializeContext> ctx) {
+    static private:internal hash<auto> getTypeInfoForName(*string name, hash<MetadataDeserializeContext> ctx) {
         return ctx.type_info_map{name} ?? ctx.type_info_map."auto";
     }
 
     #! Returns the map used to deserialize data provider shapes from the provider index
-    static private hash<auto> getDataProviderShapeMap() {
+    static private:internal hash<auto> getDataProviderShapeMap() {
         return {
             "RowRecords": Constant::forName("DataProvider::DataProviderShape::RowRecords").getValue(),
             "1": Constant::forName("DataProvider::DataProviderShape::RowRecords").getValue(),
@@ -4738,7 +4756,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Deserialize a data provider shape from the provider index
-    static private auto deserializeDataProviderShape(auto shape, hash<auto> shape_map) {
+    static private:internal auto deserializeDataProviderShape(auto shape, hash<auto> shape_map) {
         if (exists shape_map{shape.toString()}) {
             return shape_map{shape.toString()};
         }
@@ -4746,7 +4764,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Writes the index to the configured directory
-    static private hash<ProviderIndexInfo> writeIndex(*hash<auto> h, string type, date delta, hash<auto> summary) {
+    static private:internal hash<ProviderIndexInfo> writeIndex(*hash<auto> h, string type, date delta, hash<auto> summary) {
         string path = getIndexPath(type);
         string yaml = make_yaml(h, BlockStyle);
         writeFileAtomic(path, yaml);
@@ -4765,8 +4783,14 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @param path the target path
         @param contents the contents to write
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain (qore#7044)
     */
     static private writeFileAtomic(string path, data contents) {
+        if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", "the calling code may not write files, as it is restricted from the FILESYSTEM "
+                "functional domain";
+        }
         string tmp_path = sprintf("%s.tmp.%d.%d", path, getpid(), gettid());
         # ensure that the temporary file is removed if the write or the rename fails
         on_error {
@@ -4787,7 +4811,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Reads the index from the configured directory
-    static private *hash<auto> readIndex(string type, bool quiet = False) {
+    static private:internal *hash<auto> readIndex(string type, bool quiet = False) {
         # Skip silently when the index env var is not configured — this is
         # the default in tests and non-Qorus deployments, not an error.
         # Check the env directly to avoid tryGetIndexDir()'s WARN log.
@@ -5019,7 +5043,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the status of a file of the configured index, as hstat() does; see initIndexFileReader()
-    static private *hash<StatInfo> statIndexFile(string path) {
+    static private:internal *hash<StatInfo> statIndexFile(string path) {
         if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
             return reader("stat", path);
         }
@@ -5027,7 +5051,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the contents of a file of the configured index as binary data; see initIndexFileReader()
-    static private binary readIndexFileBinary(string path) {
+    static private:internal binary readIndexFileBinary(string path) {
         if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
             return reader("binary", path);
         }
@@ -5035,7 +5059,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the contents of a file of the configured index as a string; see initIndexFileReader()
-    static private string readIndexFileText(string path) {
+    static private:internal string readIndexFileText(string path) {
         if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
             return reader("text", path);
         }
@@ -5052,7 +5076,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param version the metadata cache version; the manifest of a version before 5 has a fixed name
         @param dir the index directory; if not given, the configured index directory
     */
-    static private string getMetadataCachePath(string sha256, int version = MetadataCacheVersion, *string dir) {
+    static private:internal string getMetadataCachePath(string sha256, int version = MetadataCacheVersion, *string dir) {
         if (version < 5) {
             return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDir(True), DirSep);
         }
@@ -5066,7 +5090,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         app's name instead of its own
         @param dir the index directory; if not given, the configured index directory
     */
-    static private string getMetadataCacheChunkPath(string app, string sha256, int version = MetadataCacheVersion,
+    static private:internal string getMetadataCacheChunkPath(string app, string sha256, int version = MetadataCacheVersion,
             *string dir) {
         return sprintf("%s%sqore-data-index-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep,
             version < 5 ? digest("sha256", app).toHex() : sha256);
@@ -5153,7 +5177,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @return an actionable error description if the directory cannot be used, otherwise @ref nothing
     */
-    static private *string checkIndexDirAccess(string dir) {
+    static private:internal *string checkIndexDirAccess(string dir) {
         # NOTE: is_writable() on a directory verifies that a file can actually be created in it, which requires
         # both the write and the execute (traverse) bits
         if (is_readable(dir) && is_writable(dir)) {

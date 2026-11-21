@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -88,17 +89,17 @@ public class GorgiasDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Gorgias client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.GORGIAS_CONNECTION;
+        *string conn_name = LiveProvider::get("gorgias", "GORGIAS_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("gorgias", "GORGIAS_CONNECTION", m_options.conn);
             if (conn instanceof GorgiasRestClient::GorgiasRestConnection) {
                 client = (cast<GorgiasRestClient::GorgiasRestConnection>(conn)).getAsync(True);
             }
             return;
         }
         # Allow direct token + subdomain for testing without Qorus
-        *string token = ENV.GORGIAS_TOKEN;
-        *string subdomain = ENV.GORGIAS_SUBDOMAIN;
+        *string token = LiveProvider::get("gorgias", "GORGIAS_TOKEN");
+        *string subdomain = LiveProvider::get("gorgias", "GORGIAS_SUBDOMAIN");
         if (token && subdomain) {
             client = new GorgiasRestClient::GorgiasRestClientIo({
                 "subdomain": subdomain,
@@ -275,11 +276,11 @@ public class GorgiasDataProviderTest inherits QUnit::Test {
     connectionPingTests() {
         skipIfNoCredentials();
 
-        *string conn_name = m_options.conn ?? ENV.GORGIAS_CONNECTION;
+        *string conn_name = LiveProvider::get("gorgias", "GORGIAS_CONNECTION", m_options.conn);
         if (!conn_name) {
             testSkip("no connection name available for ping test");
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("gorgias", "GORGIAS_CONNECTION", m_options.conn);
         hash<auto> ping_result = conn.ping(True);
         assertEq(True, ping_result.ok, "connection ping succeeded");
 

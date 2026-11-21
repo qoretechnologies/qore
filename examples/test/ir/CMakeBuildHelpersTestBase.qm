@@ -349,7 +349,7 @@ public class CMakeBuildTest inherits QUnit::Test {
     }
 
     private:internal static int determineBuildJobs() {
-        *string jobs = ENV{BuildJobsVar};
+        *string jobs = ENV{BuildJobsVar}; # live-provider-optin: BuildJobsVar, the number of build jobs
         if (exists jobs && jobs != "") {
             if (jobs !~ /^[0-9]+$/ || jobs.toInt() < 1) {
                 throw "BUILD-JOBS-ERROR", sprintf("%s=%y is not a positive integer", BuildJobsVar, jobs);
@@ -438,11 +438,20 @@ public class GenericQccObjectTest inherits CMakeBuildTest {
         own path and the paths of its sources in its cache and in what it generates, so it cannot be copied to
         another path, and every scenario builds its own.
 
-        The first build has a source rewritten while the batch bootstrap publishes it, and the project is configured
-        again after it, so the baseline is the same for every scenario: the initial sources, published by one
-        rebuild of the group, then reconfigured.
+        There are two kinds of baseline, which hold the same sources and the same build tree when they are done: the
+        initial sources, published by the batch bootstrap of the group, then reconfigured.
+        - the plain baseline (the default): the first build is one batch bootstrap of the group
+        - with \a bootstrap_move: the first build has a source rewritten while the batch bootstrap publishes it
+          (qcc's input validation test hook), so the group is rebuilt once; the first build checks that it is
+          rebuilt exactly once, without a retry loop.  Only CMakeBuildHelpers-generic-bootstrap-move.qtest builds
+          this baseline: the other scenarios rely on it for that check, and none of them depends on the rebuild
+          (each ran on the plain baseline as on this one, qore#6894), which took about half of the time of the
+          baseline
+
+        @param root the directory of the project
+        @param bootstrap_move if @ref True, a source is rewritten during the first build's publication
     */
-    private hash<GenericQccProject> buildGenericBaseline(string root) {
+    private hash<GenericQccProject> buildGenericBaseline(string root, bool bootstrap_move = False) {
         string src_dir = root + "/src";
         string build_dir = root + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1011,38 +1020,45 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "unqualified constants in static constructor defaults become build prerequisites: "
                 + direct);
 
-        string initial_provider = read(provider);
-        write(provider, replace(initial_provider,
-            "return StaticConst + \":\" + StaticText;",
-            "return \"transient-bootstrap\";"));
-        string bootstrap_replacement = src_dir + "/bootstrap-provider-replacement.qc";
-        string bootstrap_validation_marker = build_dir
-            + "/qcc-bootstrap-input-validation.marker";
-        write(bootstrap_replacement, initial_provider);
-        requireQccTestHooks();
-        # qcc moves the source itself when it reaches its input validation (its test hook runs the command
-        # there, synchronously), so the change happens exactly between the parse and the publication
-        string build1 = run(sprintf(
-            "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
-            "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
-            "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
-            "cmake --build %s -- -j%d",
-            shellQuote(bootstrap_validation_marker), shellQuote(provider),
-            shellQuote(sprintf("cp %s %s", shellQuote(bootstrap_replacement), shellQuote(provider))),
-            shellQuote(build_dir), buildJobs()));
-        assertTrue(is_file(bootstrap_validation_marker), "qcc reached its input validation hook: " + build1);
+        string build1;
+        if (bootstrap_move) {
+            string initial_provider = read(provider);
+            write(provider, replace(initial_provider,
+                "return StaticConst + \":\" + StaticText;",
+                "return \"transient-bootstrap\";"));
+            string bootstrap_replacement = src_dir + "/bootstrap-provider-replacement.qc";
+            string bootstrap_validation_marker = build_dir
+                + "/qcc-bootstrap-input-validation.marker";
+            write(bootstrap_replacement, initial_provider);
+            requireQccTestHooks();
+            # qcc moves the source itself when it reaches its input validation (its test hook runs the command
+            # there, synchronously), so the change happens exactly between the parse and the publication
+            build1 = run(sprintf(
+                "QORE_QCC_TEST_INPUT_VALIDATION_MARKER=%s "
+                "QORE_QCC_TEST_INPUT_VALIDATION_SOURCE=%s "
+                "QORE_QCC_TEST_INPUT_VALIDATION_COMMAND=%s "
+                "cmake --build %s -- -j%d",
+                shellQuote(bootstrap_validation_marker), shellQuote(provider),
+                shellQuote(sprintf("cp %s %s", shellQuote(bootstrap_replacement), shellQuote(provider))),
+                shellQuote(build_dir), buildJobs()));
+            assertTrue(is_file(bootstrap_validation_marker), "qcc reached its input validation hook: " + build1);
+            # A source rewritten by an agent outside the build is the only reason a
+            # publication can be refused; the group is rebuilt exactly once rather
+            # than converged on by repeated per-file attempts.
+            assertTrue(build1.find(
+                    "qcc batch inputs moved during compilation; rebuilding the group once")
+                    != -1,
+                "source edit during batch publication rebuilds the shared parse once: "
+                    + build1);
+            assertEq(-1, build1.find("retrying ("),
+                "input-change handling never enters a retry loop: " + build1);
+        } else {
+            build1 = run(buildCommand(build_dir));
+            assertEq(-1, build1.find("moved during compilation"),
+                "the plain baseline's sources do not change during its first build: " + build1);
+        }
         assertTrue(build1.find("batch bootstrapping cmake-smoke (24 sources)") != -1,
             "clean object-group build uses one shared-parse batch bootstrap: " + build1);
-        # A source rewritten by an agent outside the build is the only reason a
-        # publication can be refused; the group is rebuilt exactly once rather
-        # than converged on by repeated per-file attempts.
-        assertTrue(build1.find(
-                "qcc batch inputs moved during compilation; rebuilding the group once")
-                != -1,
-            "source edit during batch publication rebuilds the shared parse once: "
-                + build1);
-        assertEq(-1, build1.find("retrying ("),
-            "input-change handling never enters a retry loop: " + build1);
         assertTrue(build1.find("script aggregate .qo") != -1,
             "clean object-group build emits its script aggregate during bootstrap: " + build1);
         assertEq(-1, build1.find("qcc --script-aggregate: QORE_CMAKE_SCRIPT_SMOKE"),

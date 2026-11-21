@@ -3517,6 +3517,7 @@ static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result
         case NT_STRING: {
             if (!entry->isNothing()) {
                 QoreStringValueHelper str(*entry);
+                // note: safe; the result is the string node made by qore_rt_new_list_selector_result()
                 qore_string_private::get(*const_cast<QoreStringNode*>(result.get<const QoreStringNode>()))
                     ->concat(*str);
             }
@@ -6326,8 +6327,7 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
             }
         }
     }
-    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
-    if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
+    if (!cache_enabled || !ctx || !type_path || !*type_path) {
         return qore_rt_resolve_full_type_path(type_path, op, xsink);
     }
 
@@ -6353,6 +6353,12 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
             && front_entry.path_address == type_path
             && front_entry.receiver_type_info == receiver_type_info) {
         return front_entry.type_info;
+    }
+
+    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached:
+    // the path is scanned for one only when the front cache does not have it, as no such path is ever put in it
+    if (qore_aot_type_path_has_signature_type_param(type_path)) {
+        return qore_rt_resolve_full_type_path(type_path, op, xsink);
     }
 
     // the context's map is keyed by the receiver's type and the serial of its class; nothing is cached for a context
@@ -8665,7 +8671,7 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
         return;
     }
     if (!class_ctx) {
-        helper.vl.addMemberNotification(obj, key);
+        qore_auto_vlock_ops(helper.vl).addMemberNotification(obj, key);
     }
     // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
     if (const ReferenceNode* ref = helper.getReference()) {
@@ -12622,6 +12628,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
+            // note: safe; the node of the value, read under arg.hasNode() above
             const auto* str = static_cast<const QoreStringNode*>(node);
             return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }
@@ -12657,6 +12664,8 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     }
 
     // Handle string
+    // note: safe; the node of arg, whose inline short string returns above (!arg.hasNode()); the caller gives strings
+    // in both representations to qore_fast_length() and qore_fast_strlen() first
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         return toBits(static_cast<int64_t>(str->length()));
     }
@@ -16044,6 +16053,10 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 qore_rt_catch_unwind(jit_obe_handlers[i].catch_depth, xsink);
             }
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+                // every handler starts in the location of the run, not in the one that the handler before it left:
+                // the caller stored the caller's statement of its function there if a handler's frame takes it as its
+                // body's entry location (QoreIRToLLVM::emitHandlerRunLocation(), qore#6831)
+                loc_restore.restore();
                 // Instantiate exception for on_error blocks as an implicit arg
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -20802,6 +20815,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
@@ -24839,8 +24853,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* cl
                 method_name);
             return toBits(QoreValue());
         }
+        // by identity, as SelfFunctionCallNode::evalUnresolvedQualified() (qore#7036)
         bool priv;
-        if (!self->getClass()->getClass(*qc, priv)) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
             xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
                 "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
             return toBits(QoreValue());

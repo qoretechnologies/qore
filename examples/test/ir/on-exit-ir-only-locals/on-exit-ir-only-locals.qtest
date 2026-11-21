@@ -1,0 +1,241 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of handlers that run out of line with IR-only locals
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OnExitIrOnlyLocalsTest
+
+#! issue #5951: a local that only on_exit, on_error and on_success handlers reference is IR-only
+/** A local that a handler references was kept on the runtime local stack in the optimized execution modes, because a
+    handler that runs out of line (on an exception or a thread_exit) finds it there; every store and load of the local
+    went through the runtime, and the IR interpreter did not inline a call of the function.  Such a local is now
+    IR-only: a handler that runs inline on a normal exit uses the function's own storage, the IR interpreter's handler
+    frame takes over the slot of the local, and the native code puts the local on the runtime stack only while the
+    handlers run out of line.
+
+    on-exit-ir-only-locals.q reads and assigns such locals in handlers on normal exits, on exceptions caught in the
+    function and leaving it, on a thread_exit, in a recursion, with native numbers, and with objects whose destructors
+    must run when a handler replaces them; its output must be that of the AST interpreter in every execution mode, on
+    the IR tier, with synchronous JIT compilation and as AOT executables.  The JIT code of the functions whose locals
+    only handlers reference must use the runtime local stack only in the blocks that run when a handler is pending.
+*/
+class OnExitIrOnlyLocalsTest inherits QUnit::Test {
+    public {
+        #! the runtime calls that use the runtime local stack
+        const LocalStackCalls = (
+            "qore_rt_instantiate_local",
+            "qore_rt_uninstantiate_local",
+            "qore_rt_assign_local",
+            "qore_rt_assign_local_no_coerce",
+            "qore_rt_load_local",
+            "qore_rt_load_local_raw",
+            "qore_rt_sync_local",
+        );
+
+        #! the prefix of the names of the blocks that run handlers out of line when one is pending
+        const PendingBlockPrefix = "obe.pending";
+
+        #! the functions whose locals only handlers reference, by the pattern of their native names
+        const CheckedFunctions = (
+            "^normal_exit[@_]",
+            "^throw_out[@_]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("on_exit handlers with IR-only locals", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        addTestCase("JIT code keeps the locals IR-only", \jitCodeTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode, on the IR tier and with synchronous JIT compilation, and checks that it
+    #! gives the output of the AST interpreter
+    modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+        assertEq(exp, ExecModeHarness::run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s", env, qore_bin,
+            scriptPath())), "jit (synchronous)");
+    }
+
+    #! compiles the script with qcc and checks that the executables give the output of the AST interpreter
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("on-exit-ir-only-locals-aot-");
+        foreach int opt in (0, 3) {
+            string exe = sprintf("%s/on-exit-ir-only-locals-O%d", dir.path, opt);
+            string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("qcc -O%d compiles the script: %s", opt, out));
+            assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), sprintf("qcc -O%d", opt));
+        }
+    }
+
+    #! checks the LLVM code that the JIT compiles for the script
+    jitCodeTest() {
+        TmpFile err("on-exit-ir-only-locals-jit-", ".ll");
+        string out = backquote(sprintf("%s %s QORE_DUMP_LLVM_IR=1 QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s 2>%s",
+            env, ExecModeHarness::TraceEnv, qore_bin, scriptPath(), err.path));
+        assertEq(expected(), out, "the script runs with the LLVM code dumped");
+        checkCode(ReadOnlyFile::readTextFile(err.path), "JIT");
+    }
+
+    #! checks that the functions of the script use the runtime local stack only in the blocks that run when a handler
+    #! is pending (their locals are IR-only), and that each of them has such a block
+    /** A block runs only when a handler is pending if it is a pending block of the lowering (its name starts with
+        \c PendingBlockPrefix) or if every edge into it is the "pending" edge of a branch on the pending flag or comes
+        from such a block: LLVM merges the pending blocks of several exits into one block of another name when their
+        code is the same, as it is with the table-driven code of the handlers (qore#6110), so the name is not enough.
+    */
+    private checkCode(string code, string label) {
+        # the calls of the protocol in pending blocks, by function
+        hash<string, int> pending_calls = {};
+        # the calls outside of a pending block
+        list<string> misplaced = ();
+
+        # the blocks of the function being read, in order: name -> the names of the blocks that branch to it
+        hash<string, list<string>> preds = {};
+        # the calls of the protocol of each block
+        hash<string, list<string>> calls = {};
+        # the edges that a branch on the pending flag takes when a handler is pending: "from>to"
+        hash<string, bool> pending_edges = {};
+        *string func;
+        string block;
+        foreach string line in (code.split("\n")) {
+            *list<*string> m = (line =~ x/^define [^@]*@"?([^"(]+)"?\(/);
+            if (m) {
+                func = m[0];
+                block = "entry";
+                preds = {"entry": ()};
+                calls = {};
+                pending_edges = {};
+                continue;
+            }
+            if (line =~ /^}/) {
+                if (func && func !~ /_obe_[0-9]+$/) {
+                    # the blocks that run only when a handler is pending
+                    hash<string, bool> gated = {};
+                    foreach string name in (keys preds) {
+                        if (name.equalPartial(PendingBlockPrefix)) {
+                            gated{name} = True;
+                        }
+                    }
+                    bool changed = True;
+                    while (changed) {
+                        changed = False;
+                        foreach string name in (keys preds) {
+                            if (gated{name} || preds{name}.empty()) {
+                                continue;
+                            }
+                            bool all_gated = True;
+                            foreach string pred in (preds{name}) {
+                                if (!pending_edges{pred + ">" + name} && !gated{pred}) {
+                                    all_gated = False;
+                                    break;
+                                }
+                            }
+                            if (all_gated) {
+                                gated{name} = True;
+                                changed = True;
+                            }
+                        }
+                    }
+                    foreach hash<auto> i in (calls.pairIterator()) {
+                        foreach string callee in (i.value) {
+                            if (gated{i.key}) {
+                                ++pending_calls{func};
+                            } else {
+                                misplaced += sprintf("%s: %s: %s", func, i.key, callee);
+                            }
+                        }
+                    }
+                }
+                remove func;
+                continue;
+            }
+            # the native functions of the handlers themselves run the protocol only for handlers nested in them
+            if (!func || func =~ /_obe_[0-9]+$/ || !checked(func)) {
+                continue;
+            }
+            m = (line =~ x/^([-A-Za-z0-9_.$]+):(.*)$/);
+            if (m) {
+                block = m[0];
+                preds{block} = ();
+                *list<*string> pm = (m[1] =~ x/preds = (.*)$/);
+                if (pm) {
+                    foreach string pred in (pm[0].split(", ")) {
+                        preds{block} += trim(pred, "% ");
+                    }
+                }
+                continue;
+            }
+            m = (line =~ x/br i1 %[A-Za-z_.]*pending[0-9]*, label %([-A-Za-z0-9_.$]+), label/);
+            if (m) {
+                pending_edges{block + ">" + m[0]} = True;
+                continue;
+            }
+            *string callee = (line =~ x/call [^@]*@([A-Za-z0-9_]+)\(/)[0];
+            if (!callee || !inlist(callee, LocalStackCalls)) {
+                continue;
+            }
+            if (!calls{block}) {
+                calls{block} = ();
+            }
+            calls{block} += callee;
+        }
+        assertEq((), misplaced, label + ": the functions use the runtime local stack only in blocks that run "
+            "when a handler is pending");
+        foreach string pattern in (CheckedFunctions) {
+            list<string> funcs = select keys pending_calls, regex($1, pattern);
+            assertGt(0, funcs.size(), sprintf("%s: %s puts its locals on the runtime stack for its pending handlers",
+                label, pattern));
+        }
+    }
+
+    #! returns True if the native function is one whose code is checked (see CheckedFunctions)
+    private static bool checked(string func) {
+        foreach string pattern in (CheckedFunctions) {
+            if (regex(func, pattern)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/on-exit-ir-only-locals.q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string expected() {
+        string out = backquote(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+        return out;
+    }
+}

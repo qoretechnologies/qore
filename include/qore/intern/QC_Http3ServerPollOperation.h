@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <atomic>
 #include <chrono>
@@ -173,7 +174,7 @@ public:
             // is released by the standard internal_members deref path.  Pushed
             // without waiting, even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
-            queue->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
             return;
         }

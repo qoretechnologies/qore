@@ -1,0 +1,6 @@
+A's object called by A: domain-a none created started domain-a ran domain-a domain-a
+A's object called by B: SANDBOX-ISOLATION-ERROR none SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR domain-a SANDBOX-ISOLATION-ERROR
+B's object called by A: SANDBOX-ISOLATION-ERROR none SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR SANDBOX-ISOLATION-ERROR domain-b SANDBOX-ISOLATION-ERROR
+B's object called by B: domain-b none created started domain-b ran domain-b domain-b
+A's object called by N: domain-a none created started domain-a ran domain-a domain-a
+N's object called by A: domain-a none created started domain-a ran none domain-a

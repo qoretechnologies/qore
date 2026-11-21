@@ -179,11 +179,11 @@ class MssqlColumnTypesTest inherits QUnit::Test {
 
     #! returns the datasource of the run's database on SQL Server, or nothing if the connection string is not set
     private *Datasource datasource(string var) {
-        if (!ENV{var}.val()) {
+        if (!ENV{var}.val()) { # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             testSkip(var + " is not set");
         }
         try {
-            Datasource ds(ENV{var});
+            Datasource ds(ENV{var}); # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             ds.open();
             if (MssqlDatabase::isSybase(ds)) {
                 testSkip("the database is Sybase, not SQL Server");
@@ -192,8 +192,9 @@ class MssqlColumnTypesTest inherits QUnit::Test {
             if (ex.err == "TEST-SKIPPED-EXCEPTION") {
                 rethrow;
             }
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
+        # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
         Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlColumnTypes"));
         ds.open();
         return ds;

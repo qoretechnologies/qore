@@ -9,6 +9,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires ConnectionProvider
 %requires QoreRagTypes
@@ -198,7 +199,7 @@ public class UnstructuredRestClientTest inherits QUnit::Test {
     }
 
     constructor() : Test("UnstructuredRestClient Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.UNSTRUCTURED_CONNECTION;
+        conn_name = LiveProvider::get("unstructured", "UNSTRUCTURED_CONNECTION", m_options.conn);
 
         addTestCase("connection scheme registered", \connectionSchemeTest());
         addTestCase("connection requires an API key", \connectionRequiresApikeyTest());
@@ -646,6 +647,7 @@ public class UnstructuredRestClientTest inherits QUnit::Test {
     }
 
     private livePingTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         assertEq("unstructured", conn.getType());
         hash<auto> ping = conn.ping(True);
@@ -654,6 +656,7 @@ public class UnstructuredRestClientTest inherits QUnit::Test {
     }
 
     private livePartitionTextTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         object client = conn.getAsync();
         list<hash<auto>> elt_list = client.partitionText(

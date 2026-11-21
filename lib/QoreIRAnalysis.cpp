@@ -9294,8 +9294,11 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
                 if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure) {
                     local_cow_candidates.insert(local_inst->local);
+                    // a local that a handler references can be given any value by the handler when it runs out of
+                    // line, on an exception path that the dataflow does not see (#5951)
                     if (func.ir_only_locals.count(
-                            reinterpret_cast<const void*>(local_inst->local))) {
+                            reinterpret_cast<const void*>(local_inst->local))
+                            && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                         candidate_locals.insert(local_inst->local);
                     }
                     if (inst->opcode == QoreIROpcode::StoreLocal
@@ -9612,7 +9615,9 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure
                         && local_inst->local->getTypeInfo() == stringTypeInfo
                         && func.ir_only_locals.count(
-                            reinterpret_cast<const void*>(local_inst->local))) {
+                            reinterpret_cast<const void*>(local_inst->local))
+                        // a handler that runs out of line can give a local that it references any value (#5951)
+                        && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                     candidate_locals.insert(local_inst->local);
                 }
             }

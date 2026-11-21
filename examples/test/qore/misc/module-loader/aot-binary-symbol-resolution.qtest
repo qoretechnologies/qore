@@ -231,7 +231,7 @@ extern \"C\" const char* qore_aot_runtime_identity;
 
 struct AotLoadCounter {
     AotLoadCounter() {
-        const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
+        const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\"); // # live-provider-optin: the counter file that the test sets
         if (!path) {
             return;
         }
@@ -246,7 +246,7 @@ struct AotLoadCounter {
 static AotLoadCounter load_counter;
 
 static void aotSingleMapInit(QoreModuleInitContext&, ExceptionSink&) {
-    const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
+    const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\"); // # live-provider-optin: the counter file that the test sets
     if (!path) {
         return;
     }

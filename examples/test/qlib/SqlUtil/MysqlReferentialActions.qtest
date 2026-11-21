@@ -8,6 +8,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires MysqlSqlUtil
+%requires ./TestRunIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -208,7 +209,7 @@ class MysqlReferentialActionsTest inherits QUnit::Test {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DBI:MYSQL:CONNECT-ERROR") {
-                testSkip(sprintf("no MySQL connection: %s", ex.desc));
+                TestRun::failOrSkipConnect("no MySQL connection", ex);
             }
             rethrow;
         }

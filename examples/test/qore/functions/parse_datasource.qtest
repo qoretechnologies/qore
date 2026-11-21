@@ -17,6 +17,7 @@ public class ParseDatasourceTest inherits QUnit::Test {
         addTestCase("makeConfigString", \testMakeConfigString());
         addTestCase("make_datasource_string", \testMakeDatasourceString());
         addTestCase("round trip", \testRoundTrip());
+        addTestCase("host and port", \portTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -44,37 +45,25 @@ public class ParseDatasourceTest inherits QUnit::Test {
             "type": "sqlite3",
             "db": ":memory:",
         }, parse_datasource("sqlite3:@:memory:"));
+        # a database name can have colons
         assertEq({
             "type": "test",
             "user": "a",
             "db": "b:x",
-            "host": "c:x",
-        }, parse_datasource("test:a@b:x%c:x"));
-        assertEq({
-            "type": "test",
-            "user": "a",
-            "db": "b",
-            "host": "c:x",
-        }, parse_datasource("test:a@b%c:x"));
-        assertEq({
-            "user": "a",
-            "db": "b:x",
-            "host": "c:x",
-        }, parse_datasource("a@b:x%c:x"));
+            "host": "c",
+        }, parse_datasource("test:a@b:x%c"));
         assertEq({
             "user": "a",
             "db": "b",
-            "host": "c:x",
-        }, parse_datasource("a@b%c:x"));
-
-        assertEq({
-            "user": "a",
-            "db": "b",
-            "host": "c:x",
+            "host": "c",
+            "port": 5,
             "options": {
-                "abc@xyz:1234": "123",
+                "abc": "x@yz:1234",
             },
-        }, parse_datasource("a@b%c:x{abc@xyz:1234=123}"));
+        }, parse_datasource("a@b%c:5{abc=x@yz:1234}"));
+        # an option name with '@' is refused, as a '{' in a password can make a part of it an option name (issue #6988)
+        assertThrows("DATASOURCE-PARSE-ERROR", "an option name in the option specification has '@'",
+            \parse_datasource(), "a@b%c:5{abc@xyz:1234=123}");
 
         assertEq({
             "type": "d",
@@ -91,6 +80,54 @@ public class ParseDatasourceTest inherits QUnit::Test {
         assertThrows("DATASOURCE-PARSE-ERROR", "missing hostname", sub() { parse_datasource("a@b%"); });
         assertThrows("DATASOURCE-PARSE-ERROR", "missing hostname", sub() { parse_datasource("a@b%{}"); });
         assertThrows("DATASOURCE-PARSE-ERROR", "invalid characters present", sub() { parse_datasource("a@b%c:12x2"); });
+    }
+
+    #! the host ends at the first ":", which gives a port from 1 to 65535; an IPv6 address is in brackets (issue #6997)
+    portTest() {
+        assertEq({"type": "pgsql", "user": "u", "pass": "p", "db": "db", "host": "h", "port": 1},
+            parse_datasource("pgsql:u/p@db%h:1"));
+        assertEq({"type": "pgsql", "user": "u", "pass": "p", "db": "db", "host": "h", "port": 65535},
+            parse_datasource("pgsql:u/p@db%h:65535"));
+        assertEq({"type": "pgsql", "user": "u", "pass": "p", "db": "db", "host": "h"},
+            parse_datasource("pgsql:u/p@db%h"));
+        # an explicit port 0, a port larger than 65535, negative or not a number
+        map assertThrows("DATASOURCE-PARSE-ERROR", "invalid port number", \parse_datasource(), $1), (
+            "pgsql:u/p@db%h:0", "pgsql:u/p@db%h:00", "pgsql:u/p@db%h:65536", "pgsql:u/p@db%h:99999999999",
+            "pgsql:u/p@db%h:", "pgsql:u/p@db%[::1]:", "pgsql:u/p@db%[::1]:0", "pgsql:u/p@db:0",
+            "pgsql:u/p@db%h:0{min=1}",
+        );
+        map assertThrows("DATASOURCE-PARSE-ERROR", "invalid characters present in port number",
+            \parse_datasource(), $1), (
+            "pgsql:u/p@db%h:-1", "pgsql:u/p@db%h:abc", "pgsql:u/p@db%h:5x", "pgsql:u/p@db%h:x", "a@b%c:x",
+            "a@b%c:x{abc=x@yz:1234}", "pgsql:u/p@db%fe80::1:5432",
+        );
+        # the errors do not show the user, password or database (issue #6961)
+        foreach string bad in ("pgsql:secretu/secretp@secretdb%h:0", "pgsql:secretu/secretp@secretdb%h:x",
+                "pgsql:secretu/secretp@secretdb%[::1", "pgsql:secretu/secretp@secretdb%:5") {
+            try {
+                parse_datasource(bad);
+                assertTrue(False, bad);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("DATASOURCE-PARSE-ERROR", ex.err);
+                assertEq(-1, ex.desc.find("secret"), "no user, password or database in the error");
+            }
+        }
+        # an IPv6 address without brackets
+        assertThrows("DATASOURCE-PARSE-ERROR", "missing hostname", \parse_datasource(), "pgsql:u/p@db%::1");
+        assertThrows("DATASOURCE-PARSE-ERROR", "unrecognized characters", \parse_datasource(), "pgsql:u/p@db%[::1]x");
+        # an IPv6 address in brackets
+        assertEq({"type": "pgsql", "user": "u", "pass": "p", "db": "db", "host": "::1", "port": 5432},
+            parse_datasource("pgsql:u/p@db%[::1]:5432"));
+        assertEq({"type": "pgsql", "user": "u", "pass": "p", "db": "db", "host": "fe80::1"},
+            parse_datasource("pgsql:u/p@db%[fe80::1]"));
+        assertEq({"type": "pgsql", "db": "db", "host": "::1", "port": 5432, "options": {"min": "1"}},
+            parse_datasource("pgsql:@db%[::1]:5432{min=1}"));
+        assertThrows("DATASOURCE-PARSE-ERROR", "missing IPv6 address", \parse_datasource(), "pgsql:u/p@db%[::1");
+        assertThrows("DATASOURCE-PARSE-ERROR", "missing IPv6 address", \parse_datasource(), "pgsql:u/p@db%[]:5");
+        # an IPv6 host is given in brackets, which parses back to the same hash
+        string str = make_datasource_string({"type": "pgsql", "db": "db", "host": "::1", "port": 5432});
+        assertEq("pgsql:@db%[::1]:5432", str);
+        assertEq({"type": "pgsql", "db": "db", "host": "::1", "port": 5432}, parse_datasource(str));
     }
 
     testMakeConfigString() {

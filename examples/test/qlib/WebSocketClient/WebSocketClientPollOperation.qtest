@@ -202,6 +202,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("WebSocketClient::disconnect() runs the close handshake", \clientDisconnectCloseHandshakeTest());
         addTestCase("WebSocketClient::disconnect() ends at the close timeout when the server does not answer",
             \clientDisconnectUnansweredCloseTest());
+        addTestCase("WebSocketClient's timeout option is the close timeout of disconnect()",
+            \clientTimeoutCloseTimeoutTest());
         addTestCase("a close frame without a status code has the close code 1005", \noStatusCloseTest());
         addTestCase("1005 and 1006 are never sent in a close frame", \reservedCloseCodeTest());
         addTestCase("poll state machine", \pollStateMachineTest());
@@ -665,11 +667,17 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
     }
 
     #! WebSocketClient::disconnect() ends the connection with code 1006 when the server does not answer its close
+    /** The close timeout is that of the connection's operation, which the client's \c timeout option sets when it
+        connects: it is set to 250 ms once the client is connected, so that the connect, which the \c timeout option
+        bounds too, has the default timeout, as the handshake can take longer than 250 ms on a loaded machine
+        (qore#6956: the connect failed with "no response received")
+    */
     clientDisconnectUnansweredCloseTest() {
         RawWsServer server("hold", WSCC_NormalClosure, "");
-        WebSocketClient wsc(sub (auto msg) {}, {"url": "ws://127.0.0.1:" + server.port, "timeout": 250ms});
+        WebSocketClient wsc(sub (auto msg) {}, {"url": "ws://127.0.0.1:" + server.port});
         wsc.connect();
         object op = wsc.getPollOperation();
+        op.setCloseTimeout(250);
         # the server answers only once the client has given up
         on_exit server.releaseClose();
 
@@ -677,11 +685,34 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         # clock while disconnect() waits (a VM's time synchronization) must not change the elapsed time
         int start = clock_get_monotonic_us();
         wsc.disconnect(WSCC_NormalClosure);
-        assertGe(250ms, microseconds(clock_get_monotonic_us() - start),
-            "disconnect() waits for the server's close frame for the close timeout");
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
+        assertGe(250ms, elapsed, "disconnect() waits for the server's close frame for the close timeout");
+        # the close timeout of the operation ends it, not the default close timeout of 15 s
+        assertLt(10s, elapsed, "disconnect() ends at the close timeout that was set");
         assertEq(WSOP_Close, server.received.get(HangGuard), "the server receives the client's close frame");
         assertFalse(wsc.isOpen(), "the connection is closed");
         assertEq("closed", op.getState(), "the operation ends closed");
+        assertEq(1006, op.getCloseCode(), "no close frame was received from the server");
+        assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");
+    }
+
+    #! The client's timeout option is the close timeout of its connection, and so of disconnect()
+    /** The option bounds the connect too: it is long enough for a connect on a loaded machine (qore#6956).  Without
+        the option as the operation's close timeout, the close would wait for the default close timeout of 15 s, and
+        disconnect() would end at its own bound (twice the option) with the reason "aborted", which the assertion of
+        the reason tells apart
+    */
+    clientTimeoutCloseTimeoutTest() {
+        RawWsServer server("hold", WSCC_NormalClosure, "");
+        WebSocketClient wsc(sub (auto msg) {}, {"url": "ws://127.0.0.1:" + server.port, "timeout": 3s});
+        wsc.connect();
+        object op = wsc.getPollOperation();
+        on_exit server.releaseClose();
+        int start = clock_get_monotonic_us();
+        wsc.disconnect(WSCC_NormalClosure);
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
+        assertGe(3s, elapsed, "disconnect() waits for the server's close frame for the client's timeout");
+        assertLt(10s, elapsed, "disconnect() ends at the client's timeout");
         assertEq(1006, op.getCloseCode(), "no close frame was received from the server");
         assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");
     }

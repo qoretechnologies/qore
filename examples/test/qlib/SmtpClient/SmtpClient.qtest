@@ -11,6 +11,7 @@
 %requires ConnectionProvider
 %requires SmtpClient
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 
 %exec-class SmtpClientTest
 
@@ -25,10 +26,10 @@ public class SmtpClientTest inherits QUnit::Test {
         const OptionColumn = 22;
 
         # Environment variables for live testing
-        *string smtpHost = ENV.SMTP_TEST_HOST;
-        *string smtpPort = ENV.SMTP_TEST_PORT;
-        *string testUser = ENV.SMTP_TEST_USER;
-        *string testPass = ENV.SMTP_TEST_PASS;
+        *string smtpHost = LiveProvider::get("smtp", "SMTP_TEST_HOST");
+        *string smtpPort = LiveProvider::get("smtp", "SMTP_TEST_PORT");
+        *string testUser = LiveProvider::get("smtp", "SMTP_TEST_USER");
+        *string testPass = LiveProvider::get("smtp", "SMTP_TEST_PASS");
     }
 
     constructor() : Test("SmtpClientTest", "1.0", \ARGV, MyOpts) {

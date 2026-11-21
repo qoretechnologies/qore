@@ -1445,6 +1445,11 @@ public:
     DLLEXPORT void doDeref() final;
 };
 
+//! the Qore library provides AbstractQoreProgramExternalDataEx, whose callbacks report errors in an ExceptionSink
+/** @since %Qore 3.0
+*/
+#define _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX 1
+
 typedef std::list<AbstractStatement*> AbstractStatementList_t;
 typedef std::list<int> TidList_t;
 

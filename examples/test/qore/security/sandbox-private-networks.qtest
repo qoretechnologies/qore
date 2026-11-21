@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxPrivateNetworksTest
+
+#! SandboxManager::blockPrivateNetworks() blocks every address that is not a public unicast destination (issue #6858)
+/** Some non-public ranges stayed reachable, and an IPv6 address that embeds an IPv4 address by translation was not
+    judged by the IPv4 address
+*/
+class SandboxPrivateNetworksTest inherits QUnit::Test {
+    private {
+        SandboxManager sm();
+        Program sandboxed;
+    }
+
+    #! the code of the sandboxed Program
+    const Source = "%modern
+auto sub check(string addr) {
+    try {
+        SandboxManager::checkNetworkConnect(addr, 443);
+        return \"ALLOWED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub connect(string addr, int port) {
+    try {
+        Socket s();
+        s.connect(sprintf(\"[%s]:%d\", addr, port), 2s);
+        s.close();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub bind(string addr) {
+    try {
+        Socket s();
+        s.bindINET(addr, \"0\");
+        s.close();
+        return \"BOUND\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    #! an address in each blocked range
+    const Blocked = (
+        # IPv4
+        "0.0.0.1", "0.255.255.255", "10.0.0.1", "100.64.0.1", "100.127.255.254", "127.0.0.1", "169.254.169.254",
+        "172.16.0.1", "172.31.255.254", "192.0.0.1", "192.0.2.1", "192.88.99.1", "192.168.1.1", "198.18.0.1",
+        "198.19.255.254", "198.51.100.1", "203.0.113.1", "224.0.0.1", "239.255.255.250", "240.0.0.1",
+        "255.255.255.255",
+        # IPv6
+        "::1", "64:ff9b:1::1", "100::1", "2001:2::1", "2001:db8::1", "3fff::1", "fc00::1", "fd12:3456::1", "fe80::1",
+        "fec0::1", "ff02::1", "ff05::2",
+        # outside the global unicast range 2000::/3, and the IETF protocol assignments 2001::/23 but Teredo
+        "100:0:0:1::1", "5f00::1", "4000::1", "64:ff9b:0:0:1::1", "::ffff:0:0:0:1", "2001:1::1", "2001:5::1",
+        "2001:10::1", "2001:1ff::1",
+        # the unspecified addresses go to the local host
+        "0.0.0.0", "::",
+    );
+
+    #! IPv6 addresses that embed a blocked IPv4 address
+    const Embedded = (
+        # IPv4-mapped (already judged by the IPv4 address before) and IPv4-compatible, also with a last byte of 0 or 1
+        "::ffff:10.0.0.1", "::ffff:169.254.169.254", "::10.0.0.1", "::127.0.0.1", "::10.0.0.0", "::192.168.1.1",
+        # the well-known NAT64 prefix
+        "64:ff9b::a00:1", "64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe",
+        # 6to4
+        "2002:a00:1::1", "2002:7f00:1::1", "2002:c0a8:101::1",
+        # Teredo: the client address 10.0.0.1, stored inverted
+        "2001:0:4136:e378:8000:63bf:f5ff:fffe",
+    );
+
+    #! public unicast addresses, also embedded: the policy allows them
+    const Public = (
+        "8.8.8.8", "1.1.1.1", "100.128.0.1", "172.32.0.1", "198.20.0.1", "2606:4700:4700::1111",
+        "64:ff9b::808:808", "2002:808:808::1", "::ffff:8.8.8.8", "::8.8.8.8",
+        # Teredo with the public client address 8.8.8.8, stored inverted
+        "2001:0:4136:e378:8000:63bf:f7f7:f7f7",
+    );
+
+    constructor() : Test("SandboxPrivateNetworks", "1.0", \ARGV) {
+        addTestCase("every non-public range is blocked", \blocked());
+        addTestCase("an IPv6 address is judged by the IPv4 address that it embeds", \embedded());
+        addTestCase("public addresses are allowed", \publicAddresses());
+        addTestCase("a blocked range takes precedence over allowed ranges", \allowedRanges());
+        addTestCase("ranges on IPv6 translation prefixes apply to the address as given", \translationPrefixes());
+        addTestCase("connections through an embedded form are refused", \connections());
+        addTestCase("binds", \binds());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        sandboxed = new Program(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse(Source, "sandboxed");
+    }
+
+    blocked() {
+        foreach string addr in (Blocked) {
+            assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("check", addr), addr);
+        }
+    }
+
+    embedded() {
+        foreach string addr in (Embedded) {
+            assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("check", addr), addr);
+        }
+    }
+
+    publicAddresses() {
+        foreach string addr in (Public) {
+            assertEq("ALLOWED", sandboxed.callFunction("check", addr), addr);
+        }
+    }
+
+    #! an allowed range that covers a blocked range does not allow it
+    allowedRanges() {
+        SandboxManager m();
+        m.setNetworkDefaultPolicy(False);
+        m.addNetworkAllowedIPRange("0.0.0.0/0");
+        m.addNetworkAllowedIPRange("::/0");
+        m.blockPrivateNetworks();
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(m);
+        p.parse(Source, "allowed-ranges");
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "100.64.0.1"));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "64:ff9b::a00:1"));
+        assertEq("ALLOWED", p.callFunction("check", "8.8.8.8"));
+    }
+
+    #! a host's denied range on a translation prefix denies addresses that embed a public IPv4 address, and an allowed
+    #! range on it allows them
+    translationPrefixes() {
+        SandboxManager deny();
+        deny.setNetworkDefaultPolicy(True);
+        map deny.addNetworkDeniedIPRange($1), ("64:ff9b::/96", "2002::/16", "2001::/32", "::ffff:0:0/96");
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(deny);
+        p.parse(Source, "deny-prefixes");
+        foreach string addr in (("64:ff9b::808:808", "2002:808:808::1", "2001:0:4136:e378:8000:63bf:f7f7:f7f7",
+                "::ffff:8.8.8.8")) {
+            assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", addr), addr);
+        }
+        assertEq("ALLOWED", p.callFunction("check", "8.8.8.8"));
+
+        SandboxManager allow();
+        allow.setNetworkDefaultPolicy(False);
+        allow.addNetworkAllowedIPRange("64:ff9b::/96");
+        p = new Program(PO_NEW_STYLE);
+        p.setSandboxManager(allow);
+        p.parse(Source, "allow-prefix");
+        assertEq("ALLOWED", p.callFunction("check", "64:ff9b::808:808"));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "8.8.4.4"));
+    }
+
+    #! a connection through an embedded form of a loopback address does not reach a local listener
+    connections() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+        # the listener is reachable without a sandbox
+        Socket s();
+        s.connect(sprintf("[::ffff:127.0.0.1]:%d", port), 2s);
+        s.close();
+        foreach string addr in (("::ffff:127.0.0.1", "64:ff9b::7f00:1", "2002:7f00:1::1", "::127.0.0.1", "::1")) {
+            assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("connect", addr, port), addr);
+        }
+    }
+
+    #! a bind to the unspecified address binds every interface, and is not a destination: it is not blocked; a bind to a
+    #! loopback address is not, but another form that embeds one is
+    binds() {
+        assertEq("BOUND", sandboxed.callFunction("bind", "0.0.0.0"));
+        assertEq("BOUND", sandboxed.callFunction("bind", "127.0.0.1"));
+        assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("bind", "100.64.0.1"));
+        assertNeq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("bind", "::ffff:127.0.0.1"));
+        assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("bind", "2002:7f00:1::1"));
+        assertEq("NETWORK-ACCESS-DENIED", sandboxed.callFunction("bind", "64:ff9b::7f00:1"));
+    }
+}

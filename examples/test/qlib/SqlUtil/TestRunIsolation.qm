@@ -145,8 +145,9 @@ public class TestRun {
 
     #! Returns a text, such as an exception's description, with the passwords of the datasource strings in it masked
     /** A datasource string's password is between its user's \c "/" and the last \c "@" before its database; a
-        message about a datasource string, such as the description of \c DATASOURCE-PARSE-ERROR, quotes the whole
-        string, and is printed where others can read it (CI job logs)
+        message about a datasource string can quote the whole string (Qore's own messages do not since qore#6961,
+        but those of drivers, servers or older Qore versions can), and is printed where others can read it (CI job
+        logs)
 
         @param text the text
         @param connstrs datasource strings whose passwords are masked wherever they are in the text, also when the
@@ -164,10 +165,270 @@ public class TestRun {
                 text = replace(text, pass, "****");
             }
         }
-        # the password of any other datasource string: "user/password@" at the start, after a driver name, a quote or
-        # a space
-        text =~ s/(^|[:"' ])([^:\/@"' ]+)\/[^@"' ]*@/$1$2\/****@/g;
+        # the user and password of any other datasource string: "user/password@" at the start, after a driver name, a
+        # quote or a space, as libqore masks them in its errors (qore#6961)
+        text =~ s/(^|[:"' ])[^:\/@"' ]+\/[^@"' ]*@/$1****\/****@/g;
         return text;
+    }
+
+    #! Returns a datasource string for messages: its driver, host and port, with its user, password and database
+    #! always masked, whatever their values
+    /** A masked user, password or database that showed only when it equals another value would tell the reader
+        that it does, so all three are masked unconditionally; the host and the port are kept, as they are what a
+        connection error is about
+
+        @param connstr the datasource string; one that cannot be parsed is described as \c "driver:****" if it starts
+        with a valid driver name, else as \c "****"; a missing driver name, or one with other characters than
+        <tt>[A-Za-z0-9_-]</tt>, is shown as \c "****", as libqore masks datasource strings in its errors (qore#6961)
+
+        @return the description, ex: <tt>mysql:****&#47;****@****%%127.0.0.1:3306</tt>
+    */
+    static string describeDatasource(string connstr) {
+        hash<auto> config;
+        try {
+            config = parse_datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            *string driver = (connstr =~ x/^([A-Za-z0-9_-]+):/)[0];
+            return driver ? driver + ":****" : "****";
+        }
+        string shown = sprintf("%s:****/****@****", TestRun::isDriverName(config.type) ? config.type : "****");
+        if (config.host) {
+            shown += "%" + config.host;
+            if (config.port) {
+                shown += ":" + config.port;
+            }
+        }
+        return shown;
+    }
+
+    #! Returns True if the value is a valid driver name, which a description of a datasource can show
+    private static bool isDriverName(auto type) {
+        return type.typeCode() == NT_STRING && type.val() && type =~ /^[A-Za-z0-9_-]+$/;
+    }
+
+    #! Returns the reason to report when the database of a datasource string set in an environment variable cannot
+    #! be connected to
+    /** @param var the name of the environment variable
+        @param connstr the datasource string
+        @param ex the exception of the connection
+
+        @return <tt>precondition failure: </tt><em>var</em><tt> is set to "</tt><em>datasource</em><tt>", but no
+        connection to its database can be opened: </tt><em>error</em>, with the datasource described by
+        describeDatasource() and the user, password and database of the datasource masked in the error as well
+    */
+    static string getPreconditionFailure(string var, string connstr, hash<ExceptionInfo> ex) {
+        string desc = ex.desc ?? "";
+        # the user, password and database of this datasource string and of every other one in a QORE_DB_CONNSTR*
+        # variable, as a driver's error can name those of another connection (ex: the admin connection of an
+        # isolation module); the longest first, so that one that contains another is masked whole
+        list<string> secrets = ();
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+        foreach string cs in ((connstr,) + (map ENV{$1}, keys ENV, $1 =~ /^QORE_DB_CONNSTR/ && ENV{$1}.typeCode()
+                == NT_STRING)) {
+            try {
+                hash<auto> config = parse_datasource(cs);
+                secrets += select (config.user, config.pass, config.db), $1;
+            } catch (hash<ExceptionInfo> pex) {
+            }
+        }
+        foreach string secret in (sort_descending(secrets, int sub (string a, string b) {
+                return a.size() <=> b.size(); })) {
+            desc = replace(desc, secret, "****");
+        }
+        return TestRun::maskSecrets(sprintf("precondition failure: %s is set to %y, but no connection to its "
+            "database can be opened: %s: %s; start the server or unset %s", var, TestRun::describeDatasource(connstr),
+            ex.err, desc, var), connstr);
+    }
+
+    #! Returns the name of the environment variable that a datasource string was given in
+    /** @param connstr the datasource string
+
+        @return the name of the first \c QORE_DB_CONNSTR* environment variable, in alphabetical order, whose value is
+        the datasource string, or <tt>"the datasource string"</tt> if none is
+    */
+    static string getVariable(string connstr) {
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+        foreach string var in (sort(keys ENV)) {
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+            if (var =~ /^QORE_DB_CONNSTR/ && ENV{var} == connstr) {
+                return var;
+            }
+        }
+        return "the datasource string";
+    }
+
+    #! Fails the current test case because the database of a datasource string cannot be connected to
+    /** For the isolation modules, which are given the datasource string of an environment variable: the variable is
+        found by its value (getVariable())
+
+        @param connstr the datasource string
+        @param ex the exception of the connection
+
+        @throw TEST-EXCEPTION always, with the reason of getPreconditionFailure(), which QUnit reports as a failure
+        of the current test case
+    */
+    static failUnreachable(string connstr, hash<ExceptionInfo> ex) {
+        throw "TEST-EXCEPTION", TestRun::getPreconditionFailure(TestRun::getVariable(connstr), connstr, ex);
+    }
+
+    #! Returns an open datasource for the datasource string in an environment variable, or fails the test case
+    /** A database outage is not a reason to skip: when the variable is set and no connection can be opened, this
+        raises \c TEST-EXCEPTION, which QUnit reports as a failure of the current test case, with the reason of
+        getPreconditionFailure() (qore#6885, qore#6934)
+
+        @param var the name of the environment variable
+        @param connstr the datasource string to open, ex: that of a run's own database or schema given by an
+        isolation module for the variable's string; the variable's value if not given
+
+        @return the open datasource
+
+        @throw TEST-EXCEPTION no connection can be opened; a datasource string that cannot be parsed, a driver that
+        cannot be loaded or a variable that is not set raise their own exceptions
+    */
+    static Datasource openOrFail(string var, *string connstr) {
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+        connstr = connstr ?? getenv(var) ?? ENV{var};
+        if (!connstr) {
+            throw "DATASOURCE-ERROR", sprintf("%s is not set", var);
+        }
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            throw "TEST-EXCEPTION", TestRun::getPreconditionFailure(var, connstr, ex);
+        }
+        return ds;
+    }
+
+    #! Returns the reason to report for a connection error of a database driver
+    /** The QORE_DB_CONNSTR* variable is found by the driver that raised the error (\c DBI:PGSQL:, \c DBI:MYSQL:,
+        \c DBI:ORACLE: or \c TDS-, the \c freetds and \c sybase drivers): when exactly one variable set for that
+        driver gives a datasource string, the reason is its precondition failure (getPreconditionFailure()), as a
+        database outage is not a reason to skip (qore#6934); else it is the prefix and the error code, without the
+        driver's message, which can name the user and the database
+
+        @param prefix the text of the reason to skip, ex: \c "no DB connection"
+        @param ex the exception of the connection
+
+        @return the reason
+    */
+    static string getConnectFailureReason(string prefix, hash<auto> ex) {
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            return ex.desc;
+        }
+        *list<string> drivers;
+        if (ex.err =~ /^DBI:PGSQL:/) {
+            drivers = ("pgsql",);
+        } else if (ex.err =~ /^DBI:MYSQL:/) {
+            drivers = ("mysql",);
+        } else if (ex.err =~ /^DBI:ORACLE:/) {
+            drivers = ("oracle",);
+        } else if (ex.err =~ /^TDS-/) {
+            drivers = ("freetds", "sybase");
+        }
+        if (drivers) {
+            list<string> vars = ();
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+            foreach string var in (sort(keys ENV)) {
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                if (var !~ /^QORE_DB_CONNSTR/ || !ENV{var}.val() || var =~ /_SYS$/) {
+                    continue;
+                }
+                try {
+                    # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                    if (inlist(parse_datasource(ENV{var}).type, drivers)) {
+                        vars += var;
+                    }
+                } catch (hash<ExceptionInfo> pex) {
+                }
+            }
+            # the variable of the driver (ex: QORE_DB_CONNSTR_PGSQL) is the one a test of the driver reads, before
+            # the generic QORE_DB_CONNSTR; variables with the same datasource string are one
+            list<string> own = select vars, $1 =~ /^QORE_DB_CONNSTR_(PGSQL|MYSQL|MARIADB|ORACLE|FREETDS|SYBASE)$/;
+            if (own) {
+                vars = own;
+            }
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+            if (vars && (map {ENV{$1}: True}, vars).size() == 1) {
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                return TestRun::getPreconditionFailure(vars[0], ENV{vars[0]}, ex);
+            }
+            # more than one variable of the driver: the error is that of one of them
+            if (vars) {
+                string names = join(" or ", vars);
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                string reason = TestRun::getPreconditionFailure(names, ENV{vars[0]}, ex);
+                # the datasource of each variable, masked
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                return replace(reason, sprintf("%s is set to %y", names, TestRun::describeDatasource(ENV{vars[0]})),
+                    # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
+                    sprintf("%s are set (%s)", names, join(", ", map TestRun::describeDatasource(ENV{$1}), vars)));
+            }
+        }
+        return sprintf("%s: %s", prefix, ex.err);
+    }
+
+    #! Fails the current test case for a connection error of a database driver, or skips it
+    /** @param prefix the text of the reason to skip, ex: \c "no DB connection"
+        @param ex the exception of the connection
+
+        @throw TEST-EXCEPTION the error is that of the datasource string of a variable (getConnectFailureReason())
+        @throw TEST-SKIPPED-EXCEPTION otherwise: the test case is skipped with the prefix and the error code
+    */
+    static failOrSkipConnect(string prefix, hash<auto> ex) {
+        TestRun::skipOrFail(TestRun::getConnectFailureReason(prefix, ex));
+    }
+
+    #! Skips the current test case with the reason, or fails it if the reason holds a precondition failure
+    /** For a test that records the error of its database setup as the reason to skip its test cases: when the
+        error was the precondition failure of a database that cannot be connected to (getPreconditionFailure()),
+        the test case fails with it instead, as a database outage is not a reason to skip (qore#6934)
+
+        @param reason the reason to skip
+
+        @throw TEST-EXCEPTION the reason holds a precondition failure: the test case fails with it
+        @throw TEST-SKIPPED-EXCEPTION otherwise: the test case is skipped with the reason
+    */
+    static skipOrFail(string reason) {
+        int i = reason.find("precondition failure: ");
+        if (i >= 0) {
+            throw "TEST-EXCEPTION", reason.substr(i);
+        }
+        throw "TEST-SKIPPED-EXCEPTION", reason;
+    }
+
+    #! Raises the exception again if it is a precondition failure (getPreconditionFailure())
+    /** For a test that catches the errors of its database setup to skip: a database that cannot be connected to is
+        not a reason to skip (qore#6934)
+
+        @param ex the exception caught
+    */
+    static rethrowPrecondition(hash<auto> ex) {
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+
+    #! Runs the database setup of a test outside its test cases, and returns the precondition failure it raised
+    /** A test that sets up its database in its constructor, before QUnit runs its test cases, cannot fail a test
+        case there: it runs the setup with this function, and when it returns a reason, adds a test case that fails
+        with it (ex: <tt>addTestCase("the database can be connected to", sub () { fail(reason); })</tt>), so that a
+        database that cannot be connected to is a failure of the test, not an unhandled exception
+
+        @param setup the setup code
+
+        @return the precondition failure (getPreconditionFailure()) if the setup raised one, else no value; any
+        other exception is raised
+    */
+    static *string guardSetup(code setup) {
+        try {
+            setup();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+                return ex.desc;
+            }
+            rethrow;
+        }
     }
 
     #! Returns the letters and digits of a string, in lower case, at most the given number of them

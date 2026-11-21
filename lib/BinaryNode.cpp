@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -408,23 +409,23 @@ bool BinaryNode::getAsBoolImpl() const {
     return !empty();
 }
 
-void BinaryNode::checkOffset(qore_offset_t& offset) const {
+void qore_binary_node_ops::checkOffsetImpl(BinaryNode* b, qore_offset_t& offset) {
     if (offset < 0) {
-        offset = len + offset;
+        offset = b->len + offset;
         if (offset < 0)
             offset = 0;
         return;
     }
-    if ((size_t)offset > len)
-        offset = len;
+    if ((size_t)offset > b->len)
+        offset = b->len;
     return;
 }
 
-void BinaryNode::checkOffset(qore_offset_t& offset, qore_offset_t& num) const {
-    checkOffset(offset);
+void qore_binary_node_ops::checkOffsetImpl(BinaryNode* b, qore_offset_t& offset, qore_offset_t& num) {
+    qore_binary_node_ops(b).checkOffset(offset);
 
     if (num < 0) {
-        num = len + num - offset;
+        num = b->len + num - offset;
         if (num < 0)
             num = 0;
         return;
@@ -432,7 +433,7 @@ void BinaryNode::checkOffset(qore_offset_t& offset, qore_offset_t& num) const {
 }
 
 void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, BinaryNode* extract) {
-    checkOffset(offset, length);
+    qore_binary_node_ops(this).checkOffset(offset, length);
     //printd(5, "BinaryNode::splice(offset=" QSD ", length=" QSD ", priv->len=" QSD ")\n", offset, length, len);
 
     if (offset == (qore_offset_t)len || !length)
@@ -460,7 +461,7 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, BinaryNode* 
 
 void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* data, size_t data_len, BinaryNode* extract) {
     //printd(5, "BinaryNode::splice() before offset: %lld length: %lld (len: %lld data_len: %lld)\n", offset, length, len, data_len);
-    checkOffset(offset, length);
+    qore_binary_node_ops(this).checkOffset(offset, length);
 
     if (offset == (qore_offset_t)len) {
         if (!data_len)
@@ -518,7 +519,7 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
 int BinaryNode::substr(BinaryNode& b, qore_offset_t offset) const {
     printd(5, "BinaryNode::substr(offset: " QLLD ") this: %p len: " QLLD ")\n", (int64)offset, this, (int64)len);
 
-    checkOffset(offset);
+    qore_binary_node_ops(this).checkOffset(offset);
     if (offset == (qore_offset_t)len)
         return -1;
 
@@ -529,7 +530,7 @@ int BinaryNode::substr(BinaryNode& b, qore_offset_t offset) const {
 int BinaryNode::substr(BinaryNode& b, qore_offset_t offset, qore_offset_t length) const {
     printd(5, "BinaryNode::substr(offset: " QLLD ", length: " QLLD ") this: %p len: " QLLD "\n", (int64)offset, (int64)length, this, (int64)len);
 
-    checkOffset(offset, length);
+    qore_binary_node_ops(this).checkOffset(offset, length);
 
     if (offset == (qore_offset_t)len)
         return -1;

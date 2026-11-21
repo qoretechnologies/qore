@@ -1839,7 +1839,18 @@ WebSocketClient ws(\event(), {
         plus the following keys; its \c timeout option (default: 15 seconds) also bounds the close handshake: a
         close started by the client waits for the server's close frame, as RFC 6455 section 5.5.1 requires, at most
         this time, and the connection then ends with the close code 1006 and the reason
-        <tt>"close handshake timed out"</tt>
+        <tt>"close handshake timed out"</tt>.  The \c timeout option also bounds the connection of a connect, over
+        HTTP/1.1, HTTP/2 and HTTP/3 alike, including the retries of its connection: each attempt to connect ends at
+        the \c connect_timeout (default: 30 seconds), a connection that could not be established is retried up to
+        \c max_request_retries times (default: 3), and when the \c timeout runs out first, the connect fails with
+        \c HTTPCLIENT-TIMEOUT, which names the target and gives the error of the attempt before the last, if any.
+        Without \c connect_timeout, the default \c timeout therefore ends the first attempt, and a server that does
+        not answer is not retried; when a connect should fail over to a new attempt in its time, set
+        \c connect_timeout below <tt>timeout / (max_request_retries + 1)</tt>, so that every attempt fits in it (the
+        \c connect_timeout is also the time that a connect waits for another connect or disconnect in progress; see
+        @ref websocketclient_lifecycle).  The timeout bounds the connection, not the handshake on it: the answer to an
+        HTTP/2 or HTTP/3 extended CONNECT is waited for at most the \c timeout once it was sent, and the HTTP/1.1
+        Upgrade that the \c "auto" mode then falls back to has a time (and retries) of its own
         - \c asyncapi: the path or URL to an AsyncAPI schema file for message validation; only used if
           \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
         - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
@@ -1849,6 +1860,8 @@ WebSocketClient ws(\event(), {
         - \c extensions: a list of @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" instances
           to offer to the server (e.g., @ref WebSocketUtil::PerMessageDeflateExtension for compression)
         - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c max_request_retries: the number of times that a connect retries a connection that could not be
+          established, all within the \c timeout (default: 3; 0 disables the retries)
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
@@ -5729,6 +5742,12 @@ ws.setEventQueue();
         ensureHcioMgr();
 
         int retries = 0;
+        # the timeout option bounds the connection of the connect as a whole, as for an HTTP/1.1 connect
+        # (HttpClientConnectionManager::acquireAndStartStreaming()): the acquisition of each attempt's connection and
+        # the wait for it to become ready share one deadline, and no attempt starts once it has passed (qore#6850)
+        *int deadline = timeout_ms > 0 ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING;
+        # the connection error of the last attempt that was retried, which a timeout of the connect then reports
+        *hash<ExceptionInfo> retried_error;
         while (True) {
             # not after the destructor began, also not as a retry; the destructor shuts the manager down, which ends
             # the acquisition
@@ -5740,7 +5759,34 @@ ws.setEventQueue();
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
-            HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
+            HttpClientIo::HttpClientStreamHandle stream;
+            try {
+                stream = hcio_mgr.acquireStream(http_opts.url, NOTHING, getConnectTimeLeft(deadline));
+            } catch (hash<ExceptionInfo> ex) {
+                if (handshake_canceled) {
+                    rethrow;
+                }
+                # the deadline ended the acquisition: final, with the error of an attempt retried before it
+                if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                    if (retried_error) {
+                        throwRetriedConnectTimeout(ex, retried_error);
+                    }
+                    rethrow;
+                }
+                # a connection that could not be established is retried on a fresh one while there is time, as an
+                # HTTP/1.1 connect retries it
+                if (retries < getHcioMaxConnectRetries() && !connectDeadlinePassed(deadline)
+                        && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                    ++retries;
+                    logInfo("WebSocket connection error (%s: %s); retrying on a fresh connection (%d/%d)",
+                        ex.err, ex.desc, retries, getHcioMaxConnectRetries());
+                    retried_error = ex;
+                    continue;
+                }
+                rethrow;
+            }
+            # the waits for the connection to become ready end at the deadline too
+            stream.setRequestDeadline(deadline, timeout_ms);
 
             if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
                 logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
@@ -5755,6 +5801,17 @@ ws.setEventQueue();
                 # the destructor canceled the handshake: neither retried nor taken for a server that cannot tunnel
                 # WebSocket
                 if (handshake_canceled) {
+                    rethrow;
+                }
+                # the deadline bounds the connection: a connection that was not ready by then ends the connect, without
+                # a retry or a fallback (the stream's flag decides, not the clock: a wait can end up to a clock tick
+                # before the deadline); once the CONNECT has been sent, the connection was established, and the
+                # handshake's answer (also a timeout, which the read of the response has a time of its own for) is
+                # handled as before: an HTTP/1.1 fallback gets a time of its own
+                if (stream.requestDeadlineExpired() || (!stream.isSubmitted() && connectDeadlinePassed(deadline))) {
+                    if (ex.err == "HTTPCLIENT-TIMEOUT" && retried_error) {
+                        throwRetriedConnectTimeout(ex, retried_error);
+                    }
                     rethrow;
                 }
                 # A connection that died while it was still being established (e.g. a
@@ -5782,6 +5839,7 @@ ws.setEventQueue();
                     # connection at checkout and creates a fresh one
                     remove hcio_stream;
                     remove hcio_frame_queue;
+                    retried_error = ex;
                     continue;
                 }
                 # The HTTP connection itself negotiated fine, but the RFC 8441/9220
@@ -5802,12 +5860,49 @@ ws.setEventQueue();
                     is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc);
                 # discard the failed H2/H3 stream and manager so the H1 path opens a
                 # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
+                # in the time that is left if the connection was not established (qore#6850), else with a time of its
+                # own, as the read of the CONNECT's response had
+                *int fallback_deadline = stream.isSubmitted() ? NOTHING : deadline;
                 remove hcio_stream;
                 remove hcio_frame_queue;
                 remove hcio_mgr;
-                return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+                return connectHttp1WebSocketViaHcio(hdr, \info, reconnect, fallback_deadline);
             }
         }
+    }
+
+    #! Returns the time left until the deadline of a connect, for an acquisition of its connection
+    /** @param deadline the deadline of the connect on the monotonic clock, in microseconds, if any
+
+        @return the milliseconds left, rounded up and at least 1 (an acquisition with 0 would not be bounded), or
+        @ref nothing without a deadline
+
+        @since WebSocketClient 2.5
+    */
+    private static *int getConnectTimeLeft(*int deadline) {
+        if (!deadline) {
+            return;
+        }
+        int left_us = deadline - clock_get_monotonic_us();
+        return left_us > 0 ? (left_us + 999) / 1000 : 1;
+    }
+
+    #! Returns @ref True if the deadline of a connect has passed
+    /** @since WebSocketClient 2.5
+    */
+    private static bool connectDeadlinePassed(*int deadline) {
+        return deadline && clock_get_monotonic_us() >= deadline;
+    }
+
+    #! Raises the timeout of a connect with the error of the attempt retried before it (qore#6849, #6850)
+    /** @param ex the timeout
+        @param retried_error the error of the attempt before the one that the timeout ended
+
+        @since WebSocketClient 2.5
+    */
+    private static throwRetriedConnectTimeout(hash<ExceptionInfo> ex, hash<ExceptionInfo> retried_error) {
+        throw ex.err, HttpClientIo::HttpClientConnectionManager::getRetriedTimeoutDesc(ex.desc, retried_error),
+            HttpClientIo::HttpClientConnectionManager::getRetriedTimeoutArg(ex.arg, retried_error);
     }
 
     #! Returns the number of times the WebSocket CONNECT handshake retries a dead connection
@@ -6022,7 +6117,7 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private hash<auto> connectHttp1WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
-            *bool reconnect) {
+            *bool reconnect, *int deadline) {
         http2_websocket = False;
         http3_websocket = False;
         logDebug("Using HttpClientIo for HTTP/1.1 WebSocket handshake (101 Upgrade)");
@@ -6062,7 +6157,9 @@ ws.setEventQueue();
         checkHandshakeCanceled(hcio_mgr);
         {
             on_exit clearHandshakeMgr();
-            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
+            # a fallback from an HTTP/2 or HTTP/3 connect has the time left of the connect (qore#6850)
+            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False, NOTHING,
+                deadline);
         }
 
         # Read the 101 response headers from the Channel
@@ -6892,7 +6989,11 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "Connect Timeout",
                 "short_desc": "Connect timeout in milliseconds",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Connection timeout to use in milliseconds",
+                "desc": "Connection timeout to use in milliseconds for each attempt to connect (default: 30 "
+                    "seconds); a failed attempt is retried up to 3 times, all within the I/O `timeout`, which also "
+                    "bounds the connect.\n\n"
+                    "Without this option, the default `timeout` ends the first attempt, so a server that does not "
+                    "answer is not retried; to let a connect fail over to a new attempt, set it below `timeout / 4`.",
             },
             "data": <DataProviderOptionInfo>{
                 "display_name": "Data Serialization",
@@ -6994,7 +7095,8 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "I/O Timeout",
                 "short_desc": "Maximum time a single I/O operation can take in milliseconds",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Maximum time a single I/O operation can take in milliseconds",
+                "desc": "Maximum time a single I/O operation can take in milliseconds; it also bounds a connect, "
+                    "including the retries of its connection (see `connect_timeout`)",
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "Authorization Token",

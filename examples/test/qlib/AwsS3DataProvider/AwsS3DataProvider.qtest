@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires Logger
 %requires HttpServerUtil
@@ -1304,11 +1305,14 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
     #! Returns the connection named on the command line, or skips the test
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.AWS_S3_CONNECTION;
+        *string conn_name = LiveProvider::get("aws", "AWS_S3_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
-            testSkip("no connection specified; use -c,--connection=ARG or set AWS_S3_CONNECTION");
+            testSkip(LiveProvider::enabled("aws") ?
+                "no connection specified; use -c,--connection=ARG or set AWS_S3_CONNECTION"
+                    : LiveProvider::skipReason("aws", "AWS_S3_CONNECTION"));
             return;
         }
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         if (conn.getType() != "s3") {
             throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"s3\"", conn_name,

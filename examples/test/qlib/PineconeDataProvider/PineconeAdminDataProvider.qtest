@@ -22,6 +22,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires RestSchemaActions
 %requires RestClientIo
 %requires json
@@ -64,8 +65,10 @@ class PineconeAdminProviderTest inherits QUnit::Test {
         addTestCase("project and API key request payloads", \requestTest());
         addTestCase("API key reference data enumerates projects", \referenceTest());
         addTestCase("reference partitions reject invalid declarations and cycles", \referenceErrorsTest());
-        if (ENV.PINECONE_ADMIN_LIVE_TEST && (ENV.PINECONE_ADMIN_CONNECTION
-                || (ENV.PINECONE_CLIENT_ID && ENV.PINECONE_CLIENT_SECRET))) {
+        if (LiveProvider::get("pinecone", "PINECONE_ADMIN_LIVE_TEST") && (
+            LiveProvider::get("pinecone", "PINECONE_ADMIN_CONNECTION")
+                || (LiveProvider::get("pinecone", "PINECONE_CLIENT_ID") &&
+                    LiveProvider::get("pinecone", "PINECONE_CLIENT_SECRET")))) {
             addTestCase("live: authenticate and create/delete an isolated project", \liveTest());
         }
         set_return_value(main());
@@ -166,10 +169,14 @@ class PineconeAdminProviderTest inherits QUnit::Test {
         }
     }
     private liveTest() {
-        AbstractConnection c = ENV.PINECONE_ADMIN_CONNECTION ? get_connection(ENV.PINECONE_ADMIN_CONNECTION)
+        *string conn_name = LiveProvider::get("pinecone", "PINECONE_ADMIN_CONNECTION");
+        # live-provider-optin: the connection name comes from LiveProvider
+        AbstractConnection c = conn_name ? get_connection(conn_name)
             : new PineconeAdminRestConnection("pinecone-admin-live", "Admin integration test",
-                PineconeAdminRestConnection::DefaultUrl, {}, {"oauth2_client_id": ENV.PINECONE_CLIENT_ID,
-                    "oauth2_client_secret": ENV.PINECONE_CLIENT_SECRET});
+                PineconeAdminRestConnection::DefaultUrl, {}, {
+                    "oauth2_client_id": LiveProvider::get("pinecone", "PINECONE_CLIENT_ID"),
+                    "oauth2_client_secret": LiveProvider::get("pinecone", "PINECONE_CLIENT_SECRET"),
+                });
         assertTrue(c.ping(True).ok);
         PineconeAdminRestConnection bad("pinecone-admin-invalid", "negative Admin ping",
             PineconeAdminRestConnection::DefaultUrl, {}, {"oauth2_client_id": "qore-invalid-client",
