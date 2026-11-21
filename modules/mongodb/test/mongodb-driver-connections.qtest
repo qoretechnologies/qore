@@ -376,9 +376,19 @@ class MongoDbDriverConnectionsTest inherits QUnit::Test {
         assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));
         assertRegex("MONGODB-OIDC", ex.desc);
         # a client made with an environment by code that no sandbox governs, used by sandboxed code: k8s reads a
-        # token file, so the old code connects without contacting an endpoint (with a user name, as above)
-        MongoClient client(sprintf("mongodb://user@127.0.0.1:%d/?authMechanism=MONGODB-OIDC&authMechanismProperties="
-            "ENVIRONMENT:k8s&%s", server.getPort(), Timeouts));
+        # token file, so the old code connects without contacting an endpoint; libmongoc 1 refuses a user name with the
+        # k8s environment, and libmongoc 2 requires one with this mechanism, so the URI follows the version
+        string k8s_opts = sprintf("127.0.0.1:%d/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:k8s&%s",
+            server.getPort(), Timeouts);
+        MongoClient client;
+        try {
+            client = new MongoClient("mongodb://" + k8s_opts);
+        } catch (hash<ExceptionInfo> uex) {
+            if (uex.err != "MONGODB-CLIENT-ERROR" || uex.desc !~ /requires username/) {
+                rethrow;
+            }
+            client = new MongoClient("mongodb://user@" + k8s_opts);
+        }
         ex = p.callFunction("ping_client", client);
         assertTrue(exists ex);
         assertRegex("NETWORK-ACCESS-DENIED", ex.desc, sprintf("%y", ex));
