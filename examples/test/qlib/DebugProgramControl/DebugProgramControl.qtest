@@ -185,6 +185,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("a thread stops as the last client disconnects: it continues", \stopAsClientDisconnectsTest());
         addTestCase("integration", \integrationTests());
         addTestCase("a created program is returned when its thread has entered it", \createEntersProgramTest());
+        addTestCase("a program ended while the create command waits for its thread ends", \terminateWhileCreateTest());
         set_return_value(main());
     }
 
@@ -647,6 +648,58 @@ public class DebugProgramControlTest inherits QUnit::Test {
         connected = False;
         d.ended.waitForZero();
         assertEq(0, d.ended.getCount());
+    }
+
+    #! a program that another client ends while the create command waits for its thread to enter it ends: the thread
+    #! ends when it enters the program (qore#7117)
+    terminateWhileCreateTest() {
+        TmpDir tmp("qore-dpc-test-");
+        string path = tmp.path + "/loop.q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nint n;\nwhile (True) {\n    ++n;\n}\n");
+        f.close();
+
+        HeldLaunchDebugProgramControl d();
+        d.registerConnection(CX);
+        hash<auto> other = {"id": 2};
+        d.registerConnection(other);
+        Counter created(1);
+        *hash<auto> ret;
+        background sub () {
+            on_exit created.dec();
+            ret = d.processCommand(CX, {"cmd": "program//create", "filename": path, "args": ()});
+        }();
+        on_exit {
+            # the program is ended, also when an assertion fails, and the clients disconnect, so that a thread that
+            # stops at its end continues
+            if (d.release.getCount()) {
+                d.release.dec();
+            }
+            if (d.ended.getCount()) {
+                d.terminateProgram(d.pc);
+            }
+            d.unregisterConnection(CX);
+            d.unregisterConnection(other);
+            d.ended.waitForZero();
+            created.waitForZero();
+        }
+        # the thread is held before it enters the program, and the create command waits for it
+        d.held.waitForZero();
+        d.entryWait.waitForZero();
+        # another client ends the program
+        string pgm_id = string(d.pc.getProgramId());
+        hash<auto> tr = d.processCommand(other, {"cmd": "program/" + pgm_id + "/terminate"});
+        assertEq("ok", tr.result, sprintf("%y", tr));
+        assertTrue(d.isTerminating(d.pc.getProgramId()));
+        # the thread enters the program and ends there, so the create command returns and the run ends
+        d.release.dec();
+        created.waitForZero();
+        assertEq(DebugResponseType::Response, ret.type, sprintf("%y", ret));
+        # the thread stops where it leaves the program until the clients resume it; they disconnect
+        d.unregisterConnection(CX);
+        d.unregisterConnection(other);
+        assertTrue(d.ended.waitForZero(30s) == 0, "the run of the program has ended");
     }
 
     integrationTests() {
