@@ -966,14 +966,16 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
 
     #! Creates the TLS socket for an HTTP client operation with the ownership of each supplied credential
     Socket sub http_client_tls_socket(hash<auto> url_info, *SSLCertificate cert, *SSLPrivateKey key) {
-        Socket sock = url_info.bound_tls_cert || url_info.bound_tls_key
-            ? Socket::forHttpClientHandshake(url_info.bound_tls_cert ? cert : NOTHING,
-                url_info.bound_tls_key ? key : NOTHING)
+        # An ordinary target may be a UrlInfo hashdecl without credential metadata.
+        bool bound_cert = cert && url_info.hasKey("bound_tls_cert") && url_info.bound_tls_cert;
+        bool bound_key = key && url_info.hasKey("bound_tls_key") && url_info.bound_tls_key;
+        Socket sock = bound_cert || bound_key
+            ? Socket::forHttpClientHandshake(bound_cert ? cert : NOTHING, bound_key ? key : NOTHING)
             : new Socket();
-        if (cert && !url_info.bound_tls_cert) {
+        if (cert && !bound_cert) {
             sock.setCertificate(cert);
         }
-        if (key && !url_info.bound_tls_key) {
+        if (key && !bound_key) {
             sock.setPrivateKey(key);
         }
         return sock;
