@@ -1888,10 +1888,23 @@ DLLLOCAL int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* e
 DLLLOCAL void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port);
 
 //! appends the description of a datasource for a message, with its user name, password and database name masked
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); \a host_len is the byte length of \a host,
+    so that a host with a NUL character is not shown (qore#6988)
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const char* driver, const char* host, size_t host_len, int port);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
 /** See q_ds_append_masked(QoreString&, const char*, const char*, int); the values in use of the datasource are read,
     so the caller must be able to read them (as for Datasource::getUsernameStr())
 */
 DLLLOCAL void q_ds_append_masked(QoreString& str, const Datasource& ds);
+
+//! appends the description of a datasource for a message with its pending host and port, read together (qore#6988)
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); the pending host and port are read in one
+    critical section, so that the description never pairs the host with a port set for another; never raises an
+    exception
+*/
+DLLLOCAL void q_ds_append_masked_pending(QoreString& str, const Datasource& ds);
 
 //! appends the description of a datasource string that cannot be parsed for a message, with no part that can contain a credential
 /** The string is described as <tt>driver:****</tt> if it starts with a valid driver name followed by \c ':', or as

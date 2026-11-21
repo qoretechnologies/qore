@@ -567,7 +567,8 @@ abstract string AbstractDatasource::getDriverName();
 
     @return the masked description of the datasource, made from getDriverName(), getHostName() and getPort(); the
     driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with \c "****"
-    otherwise
+    otherwise; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":",
+    \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
 
     @par Example:
     @code{.py}
@@ -583,7 +584,7 @@ throw "TABLE-ERROR", sprintf("table %y does not exist in %s", name, desc);
 
     @since %Qore 3.0
 */
-string AbstractDatasource::getMaskedDescription() [flags=RET_VALUE_ONLY] {
+string AbstractDatasource::getMaskedDescription() {
     ValueHolder driver(self->evalMethod("getDriverName", nullptr, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -602,7 +603,7 @@ string AbstractDatasource::getMaskedDescription() [flags=RET_VALUE_ONLY] {
     QoreStringDataHelper host_str(*host);
     int64 port_val = port->getType() == NT_INT ? port->getAsBigInt() : 0;
     QoreStringNodeHolder rv(new QoreStringNode);
-    q_ds_append_masked(**rv, driver_str.c_str(), host_str.c_str(),
+    q_ds_append_masked(**rv, driver_str.c_str(), host_str.c_str(), host_str.size(),
         (port_val > 0 && port_val <= 65535) ? static_cast<int>(port_val) : 0);
     return rv.release();
 }

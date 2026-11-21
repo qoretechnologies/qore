@@ -58,9 +58,12 @@ public class ParseDatasourceTest inherits QUnit::Test {
             "host": "c",
             "port": 5,
             "options": {
-                "abc@xyz:1234": "123",
+                "abc": "x@yz:1234",
             },
-        }, parse_datasource("a@b%c:5{abc@xyz:1234=123}"));
+        }, parse_datasource("a@b%c:5{abc=x@yz:1234}"));
+        # an option name with '@' is refused, as a '{' in a password can make a part of it an option name (issue #6988)
+        assertThrows("DATASOURCE-PARSE-ERROR", "an option name in the option specification has '@'",
+            \parse_datasource(), "a@b%c:5{abc@xyz:1234=123}");
 
         assertEq({
             "type": "d",
@@ -96,7 +99,7 @@ public class ParseDatasourceTest inherits QUnit::Test {
         map assertThrows("DATASOURCE-PARSE-ERROR", "invalid characters present in port number",
             \parse_datasource(), $1), (
             "pgsql:u/p@db%h:-1", "pgsql:u/p@db%h:abc", "pgsql:u/p@db%h:5x", "pgsql:u/p@db%h:x", "a@b%c:x",
-            "a@b%c:x{abc@xyz:1234=123}", "pgsql:u/p@db%fe80::1:5432",
+            "a@b%c:x{abc=x@yz:1234}", "pgsql:u/p@db%fe80::1:5432",
         );
         # the errors do not show the user, password or database (issue #6961)
         foreach string bad in ("pgsql:secretu/secretp@secretdb%h:0", "pgsql:secretu/secretp@secretdb%h:x",

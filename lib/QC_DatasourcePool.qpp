@@ -1093,7 +1093,9 @@ string DatasourcePool::getDriverName() [flags=CONSTANT] {
     for a datasource in exception messages and logs
 
     @return the masked description of the datasource, made from the driver name and the host and port that will be
-    used for the next connection to the server (as set in the constructor)
+    used for the next connection to the server (as set in the constructor), which are read together; a host name is
+    shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":", \c "[" and \c "]", and is
+    replaced with \c "****" otherwise; see @ref datasource_secrets
 
     @par Example:
     @code{.py}
@@ -1106,9 +1108,9 @@ string desc = pool.getMaskedDescription();
     @since %Qore 3.0
 */
 string DatasourcePool::getMaskedDescription() [flags=CONSTANT] {
-    SimpleRefHolder<QoreStringNode> host(ds->getPendingHostName());
     QoreStringNodeHolder rv(new QoreStringNode);
-    q_ds_append_masked(**rv, ds->getDriverName(), host ? host->c_str() : nullptr, ds->getPendingPort());
+    // the host and port are read together (qore#6988)
+    ds->appendMaskedPendingDesc(**rv);
     return rv.release();
 }
 

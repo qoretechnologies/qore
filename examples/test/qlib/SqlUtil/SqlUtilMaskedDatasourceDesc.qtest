@@ -83,6 +83,29 @@ class ScriptedDatasource inherits AbstractDatasource {
     int getCapabilities() { return 0; }
 }
 
+#! a datasource with the connection values given, for the keys of makeDatasourceKey()
+class KeyDatasource inherits ScriptedDatasource {
+    private {
+        *string user;
+        *string db;
+        *string host;
+        *int port;
+    }
+
+    constructor(string driver, *string user, *string db, *string host, *int port)
+            : ScriptedDatasource(driver, driver, 1, auto sub (string m, string sql, *list<auto> args) {}) {
+        self.user = user;
+        self.db = db;
+        self.host = host;
+        self.port = port;
+    }
+
+    *string getUserName() { return user; }
+    *string getDBName() { return db; }
+    *string getHostName() { return host; }
+    *int getPort() { return port; }
+}
+
 class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
     public {
         const User = "u_SECRET1";
@@ -104,6 +127,7 @@ class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
 
     constructor() : Test("SqlUtilMaskedDatasourceDesc", "1.0", \ARGV) {
         addTestCase("AbstractSqlUtilBase::makeDatasourceDesc() and makeDatasourceKey()", \descAndKey());
+        addTestCase("makeDatasourceKey() is never the same for two connections", \keyInjective());
         addTestCase("the table cache keys connections with the same description apart", \tableCacheKey());
         addTestCase("SQLite TABLE-ERROR", \sqlite3TableError());
         addTestCase("SQLite descriptions of a table and option errors", \sqlite3Descriptions());
@@ -137,6 +161,46 @@ class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
         assertEq(sprintf("pgsql:****/****@****%%%s:%d", Host, Port), desc);
         # the key identifies the connection: it has the user name and the database name
         assertEq(sprintf("pgsql:%s@%s%%%s:%d", User, Db, Host, Port), AbstractSqlUtilBase::makeDatasourceKey(ds));
+    }
+
+    #! the key is never the same for connections that differ in any of their values, also when the values have the
+    #! separators of the key (qore#6988)
+    keyInjective() {
+        list<list<auto>> values = (
+            # a user name with '@' and a database name with '@'
+            ("pgsql", "a@b", "c"),
+            ("pgsql", "a", "b@c"),
+            # a database name with '%' and a host
+            ("pgsql", "u", "d%h"),
+            ("pgsql", "u", "d", "h"),
+            # a host with ':' and a port
+            ("pgsql", "u", "d", "h:1"),
+            ("pgsql", "u", "d", "h", 1),
+            # a database name with ':' and a port
+            ("pgsql", "u", "d:1"),
+            ("pgsql", "u", "d", NOTHING, 1),
+            # a driver name with ':'
+            ("a:b", "c", "d"),
+            ("a", "b:c", "d"),
+            # escape characters
+            ("pgsql", "a\\", "@b"),
+            ("pgsql", "a\\@", "b"),
+            ("pgsql", "a", "\\@b"),
+            ("pgsql", "a\\:", "b"),
+        );
+        hash<string, list<auto>> seen;
+        foreach list<auto> l in (values) {
+            string key = AbstractSqlUtilBase::makeDatasourceKey(new KeyDatasource(l[0], l[1], l[2], l[3], l[4]));
+            assertNothing(seen{key}, sprintf("%y and %y have different keys: %y", seen{key}, l, key));
+            seen{key} = l;
+        }
+        assertEq(values.size(), seen.size());
+        # a key without separators in its values is the same as before
+        assertEq("pgsql:u@d%h:1", AbstractSqlUtilBase::makeDatasourceKey(new KeyDatasource("pgsql", "u", "d", "h", 1)));
+        assertEq("pgsql:@d", AbstractSqlUtilBase::makeDatasourceKey(new KeyDatasource("pgsql", NOTHING, "d")));
+        # separators are escaped
+        assertEq("pgsql:a\\@b@c\\%d%h\\:1", AbstractSqlUtilBase::makeDatasourceKey(new KeyDatasource("pgsql", "a@b",
+            "c%d", "h:1")));
     }
 
     tableCacheKey() {
