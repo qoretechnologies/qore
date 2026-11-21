@@ -1222,6 +1222,22 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
         constructor(hash<auto> opts0, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+            initClient(opts0, shared_mgr);
+        }
+
+        #! Creates a client with TLS credentials already read by its connection
+        /** @param opts0 the normal client options, including the original credential locations
+            @param shared_mgr optional connection manager, as in the two-argument constructor
+            @param credentials parsed client credentials for a newly created manager; these objects are never
+            stored in the options returned by getConstructorOptions()
+        */
+        constructor(hash<auto> opts0, *HttpClientIo::HttpClientConnectionManager shared_mgr,
+                hash<RestClient::RestConnectionTlsCredentials> credentials) {
+            initClient(opts0, shared_mgr, credentials);
+        }
+
+        private:internal initClient(hash<auto> opts0, *HttpClientIo::HttpClientConnectionManager shared_mgr,
+                *hash<RestClient::RestConnectionTlsCredentials> credentials) {
             # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
             # validation and normalization below mutate the local 'opts' but saved_opts
             # preserves the caller's original intent for sibling construction
@@ -1510,7 +1526,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     cookie_jar = new HttpClientIo::CookieJar();
                 }
             } else {
-                mgr = buildConnectionManager(opts);
+                mgr = buildManager(opts, credentials);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
                 cookie_jar = mgr.getCookieJar();
             }
@@ -5213,6 +5229,11 @@ rest.addSensitiveHeaders("Qorus-Token");
             @return a new HttpClientConnectionManager configured from the options
         */
         static HttpClientIo::HttpClientConnectionManager buildConnectionManager(hash<auto> opts) {
+            return buildManager(opts, NOTHING);
+        }
+
+        private:internal static HttpClientIo::HttpClientConnectionManager buildManager(hash<auto> opts,
+                *hash<RestClient::RestConnectionTlsCredentials> credentials) {
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -5275,8 +5296,8 @@ rest.addSensitiveHeaders("Qorus-Token");
                 mgr_opts.enable_http3 = False;
             }
             # Load TLS client cert + private key for mutual TLS (mTLS)
-            *SSLCertificate client_cert = RestClientIo::loadSslCertificate(opts);
-            *SSLPrivateKey client_pk = RestClientIo::loadSslPrivateKey(opts);
+            *SSLCertificate client_cert = credentials.cert ?? RestClientIo::loadSslCertificate(opts);
+            *SSLPrivateKey client_pk = credentials.key ?? RestClientIo::loadSslPrivateKey(opts);
             if (client_cert) {
                 mgr_opts.client_cert = client_cert;
             }

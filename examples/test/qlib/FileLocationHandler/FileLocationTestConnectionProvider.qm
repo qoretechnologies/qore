@@ -84,6 +84,9 @@ module FileLocationTestConnectionProvider {
 */
 
 public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {
+    if (name == "rest-tls" && FileLocationTestDataProvider::TestStore::rest_tls) {
+        return FileLocationTestDataProvider::TestStore::rest_tls;
+    }
     *hash<auto> conf = ConnectionMap(){name};
     if (!conf) {
         throw "CONNECTION-ERROR", sprintf("connection %y is unknown to the test connection provider; known "
@@ -205,6 +208,9 @@ public namespace FileLocationTestDataProvider {
 #! In-memory state shared between the test and the providers
 public class TestStore {
     public {
+        #! REST connection created by the trusted TLS fixture before entering its restricted Program
+        static *ConnectionProvider::AbstractConnection rest_tls;
+
         #! key -> content
         static hash<string, data> files;
 
