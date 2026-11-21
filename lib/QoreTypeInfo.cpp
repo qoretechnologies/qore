@@ -3502,47 +3502,15 @@ public:
         #6126)
     */
     DLLLOCAL static bool add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
-        if (!ti || depth > 64 || ti->namesNoDeclarations()) {
-            return false;
-        }
-        bool found = false;
-        for (const QoreReturnSpec& rs : ti->return_vec) {
-            const QoreTypeSpec& spec = rs.spec;
-            if (const TypedHashDecl* hd = spec.getHashDecl()) {
-                get(p).addHashDecl(hd);
-                found = true;
-            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
-                get(p).addClass(pti->getBaseClass());
-                found = true;
-                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
-                    add(p, arg, depth + 1);
-                }
-            } else if (const QoreClass* qc = spec.getClass()) {
-                get(p).addClass(qc);
-                found = true;
-            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
-                get(p).addEnum(ed);
-                found = true;
-            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
-                found |= add(p, wti->getBound(), depth + 1);
-            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
-                found |= add(p, elem, depth + 1);
-            }
-        }
-        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
-            found |= add(p, cti->getReturnType(), depth + 1);
-            for (const QoreTypeInfo* param : cti->getParamTypes()) {
-                found |= add(p, param, depth + 1);
-            }
-        }
-        // the walk of a type that finds no declaration never finds one (an orphaned pointer is repointed to a
-        // tombstone of the same kind only), so later references of it need neither the type lock nor this walk; only
-        // the root of the walk is marked: a type nested in it is walked with less depth left, so its walk can have
-        // been cut short by the depth limit, which a later walk from it would not reach
-        if (!found && !depth) {
-            ti->setNamesNoDeclarations();
-        }
-        return found;
+        return walk<false>(&p, ti, depth);
+    }
+
+    //! Returns true if the walk of \a ti finds a declaration, ignoring the marks and without referencing anything
+    /** A debug build checks the marks that it relies on with it (see qore_type_names_no_declarations()); the caller
+        holds the type lock
+    */
+    DLLLOCAL static bool probe(const QoreTypeInfo* ti) {
+        return walk<true>(nullptr, ti, 0);
     }
 
     DLLLOCAL ~qore_type_decl_refs_private() {
@@ -3558,6 +3526,68 @@ public:
     }
 
 private:
+    //! The walk of add() (\a Probe false) and probe() (\a Probe true: no reference is taken, no mark is read or set)
+    template <bool Probe>
+    DLLLOCAL static bool walk(std::unique_ptr<qore_type_decl_refs_private>* p, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return false;
+        }
+        if (!Probe && ti->namesNoDeclarations()) {
+#ifdef DEBUG
+            // a wrong mark would drop references that the type needs: a debug build checks every mark it relies on
+            assert(!probe(ti));
+#endif
+            return false;
+        }
+        bool found = false;
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                if (!Probe) {
+                    get(*p).addHashDecl(hd);
+                }
+                found = true;
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                if (!Probe) {
+                    get(*p).addClass(pti->getBaseClass());
+                }
+                found = true;
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    walk<Probe>(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                if (!Probe) {
+                    get(*p).addClass(qc);
+                }
+                found = true;
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                if (!Probe) {
+                    get(*p).addEnum(ed);
+                }
+                found = true;
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                found |= walk<Probe>(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                found |= walk<Probe>(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            found |= walk<Probe>(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                found |= walk<Probe>(p, param, depth + 1);
+            }
+        }
+        // the walk of a type that finds no declaration never finds one (an orphaned pointer is repointed to a
+        // tombstone of the same kind only), so later references of it need neither the type lock nor this walk; only
+        // the root of the walk is marked, also when the walk stopped at the depth limit (a later walk from the root
+        // stops at the same types, so it finds none, as before): a type nested in it is walked with less depth left,
+        // so its walk can have been cut short where a later walk from it would not be
+        if (!Probe && !found && !depth) {
+            ti->setNamesNoDeclarations();
+        }
+        return found;
+    }
+
     DLLLOCAL static qore_type_decl_refs_private& get(std::unique_ptr<qore_type_decl_refs_private>& p) {
         if (!p) {
             p.reset(new qore_type_decl_refs_private);
@@ -3592,10 +3622,28 @@ private:
     }
 };
 
+//! Returns true if \a ti is null or marked as naming no declaration (QoreTypeInfo::namesNoDeclarations())
+/** A debug build checks the mark with a walk of the type under the type lock, so that a wrong mark fails a debug run
+    (issue #6126)
+*/
+static bool qore_type_names_no_declarations(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return true;
+    }
+    if (!ti->namesNoDeclarations()) {
+        return false;
+    }
+#ifdef DEBUG
+    AutoLocker al(ctl);
+    assert(!qore_type_decl_refs_private::probe(ti));
+#endif
+    return true;
+}
+
 QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
     // a type known to name no declaration (ex: *int) has nothing to reference, so neither the lock nor the walk of
     // the type is needed (issue #6126)
-    if (!ti || ti->namesNoDeclarations()) {
+    if (qore_type_names_no_declarations(ti)) {
         return;
     }
     // nothing is allocated for a type without declarations, such as a builtin type
@@ -3621,7 +3669,7 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
     // nor a walk of the types is needed (issue #6126)
     bool names = false;
     for (const QoreTypeInfo* ti : types) {
-        if (ti && !ti->namesNoDeclarations()) {
+        if (!qore_type_names_no_declarations(ti)) {
             names = true;
             break;
         }
@@ -3642,7 +3690,7 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
-    if (!ti || ti->namesNoDeclarations()) {
+    if (qore_type_names_no_declarations(ti)) {
         return;
     }
     std::unique_ptr<qore_type_decl_refs_private> p(priv);

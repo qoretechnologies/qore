@@ -20,6 +20,10 @@
 0/10 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(int)>', but got type 'string' instead
 0/11 empty: null
 0/11 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(object<Foo0>)>', but got type 'string' instead
+0/12 empty: null
+0/12 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*int', but got type 'string' instead
+0/13 empty: null
+0/13 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo0>', but got type 'string' instead
 1/0 empty: null
 1/0 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo1>', but got type 'string' instead
 1/1 empty: null
@@ -42,6 +46,10 @@
 1/10 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(int)>', but got type 'string' instead
 1/11 empty: null
 1/11 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(object<Foo1>)>', but got type 'string' instead
+1/12 empty: null
+1/12 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*int', but got type 'string' instead
+1/13 empty: null
+1/13 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo1>', but got type 'string' instead
 2/0 empty: null
 2/0 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo2>', but got type 'string' instead
 2/1 empty: null
@@ -64,4 +72,8 @@
 2/10 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(int)>', but got type 'string' instead
 2/11 empty: null
 2/11 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*code<int(object<Foo2>)>', but got type 'string' instead
+2/12 empty: null
+2/12 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*int', but got type 'string' instead
+2/13 empty: null
+2/13 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo2>', but got type 'string' instead
 deleted-library: PROGRAM-ERROR

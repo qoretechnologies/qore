@@ -1,6 +1,7 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # qore#6126: captured storage and references bind the substituted type of every kind of type that names a type
-# parameter (type parameters, unions, typed code, containers, parameterized classes and hashdecls), a type that names no
+# parameter (type parameters, unions, typed code, containers, parameterized classes, wildcard bounds and hashdecls), with
+# class, enum and builtin type arguments; a type that names no
 # declaration and one that does are bound alternately by the same declaration, and type arguments that are typed code
 # types with and without a declaration in their signature are bound.
 %modern
@@ -11,6 +12,8 @@ class Box<T> {
 }
 hashdecl HBox<T> { *T v; }
 class Foo { }
+class SubFoo inherits Foo { }
+enum Color { Red = 1, Green = 2 }
 
 code sub mkParam<T>() { *T v; return auto sub (auto x) { v = x; return v; }; }
 code sub mkUnion<T>() { *union<T, bool> v; return auto sub (auto x) { v = x; return v; }; }
@@ -19,6 +22,16 @@ code sub mkList<T>() { *list<T> v; return auto sub (auto x) { v = x; return v; }
 code sub mkSoftList<T>() { *softlist<T> v; return auto sub (auto x) { v = x; return v; }; }
 code sub mkPlainSoftList<T>() { softlist<T> v = (); return auto sub (auto x) { v = x; return v; }; }
 code sub mkHash<T>() { *hash<string, T> v; return auto sub (auto x) { v = x; return v; }; }
+# a wildcard type argument bounded by the type parameter (Box<? extends T>); only boxes that the type accepts are given,
+# as the wildcard's bound is not substituted (#7152)
+code sub mkWildBox<T>() { *Box<? extends T> v; return auto sub (auto x) { v = x; return v ? "set" : v; }; }
+# an enum type argument with a plain T (*T with an enum type argument accepts any value: #7144)
+code sub mkPlainParam<T>() { T v; return auto sub (auto x) { v = x; return v; }; }
+code sub mkPlainRef<T>() {
+    T v;
+    reference<T> r = \v;
+    return auto sub (auto x) { r = x; return v; };
+}
 code sub mkBox<T>() { Box<T> v; return auto sub (auto x) { v = x; return v.v; }; }
 code sub mkHBox<T>() { *hash<HBox<T>> v; return auto sub (auto x) { v = x; return v ? v.v : NOTHING; }; }
 code sub mkRef<T>() {
@@ -56,6 +69,8 @@ code sub mkIntCodeArg<T>() { *T v; return auto sub (auto x) { v = x; return v ? 
 # made before the loop: a Box constructor called in the arguments below raises a type error (#7136)
 Box<int> intBox(1);
 Box<string> stringBox("a");
+Box<SubFoo> subFooBox(new SubFoo());
+Box<Foo> fooBox(new Foo());
 for (int iteration = 0; iteration < 3; ++iteration) {
     printf("iteration %d\n", iteration);
     check("param<int>", mkParam<int>(), NOTHING, 1, "2", "x", 1.5);
@@ -72,6 +87,9 @@ for (int iteration = 0; iteration < 3; ++iteration) {
     check("param<code<int(int)>>", mkIntCodeArg<code<int(int)>>(), NOTHING, intCode());
     check("hash<string, int>", mkHash<int>(), NOTHING, {"a": 1}, {"a": "x"});
     check("Box<int>", mkBox<int>(), intBox, stringBox, 1);
+    check("Box<? extends Foo>", mkWildBox<Foo>(), NOTHING, subFooBox, fooBox, 1);
+    check("plain<Color>", mkPlainParam<Color>(), Color::Red, 2, "x");
+    check("plain ref<Color>", mkPlainRef<Color>(), Color::Green, "x");
     check("HBox<int>", mkHBox<int>(), NOTHING, cast<hash<HBox<int>>>({"v": 2}), {"v": 2}, 1);
     check("ref<int>", mkRef<int>(), NOTHING, 1, "2", "x");
     check("ref<Foo>", mkRef<Foo>(), NOTHING, 1);

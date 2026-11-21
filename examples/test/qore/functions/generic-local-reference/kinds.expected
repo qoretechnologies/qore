@@ -13,6 +13,9 @@ param<code<int(Foo)>>: null | 7
 param<code<int(int)>>: null | 3
 hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
 Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+Box<? extends Foo>: null | "set" | "set" | RUNTIME-TYPE-ERROR
+plain<Color>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+plain ref<Color>: 2 | RUNTIME-TYPE-ERROR
 HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<Foo>: null | RUNTIME-TYPE-ERROR
@@ -32,6 +35,9 @@ param<code<int(Foo)>>: null | 7
 param<code<int(int)>>: null | 3
 hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
 Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+Box<? extends Foo>: null | "set" | "set" | RUNTIME-TYPE-ERROR
+plain<Color>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+plain ref<Color>: 2 | RUNTIME-TYPE-ERROR
 HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<Foo>: null | RUNTIME-TYPE-ERROR
@@ -51,6 +57,9 @@ param<code<int(Foo)>>: null | 7
 param<code<int(int)>>: null | 3
 hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
 Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+Box<? extends Foo>: null | "set" | "set" | RUNTIME-TYPE-ERROR
+plain<Color>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+plain ref<Color>: 2 | RUNTIME-TYPE-ERROR
 HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
 ref<Foo>: null | RUNTIME-TYPE-ERROR

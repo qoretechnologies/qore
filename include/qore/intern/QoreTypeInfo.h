@@ -157,7 +157,9 @@ public:
         arguments of parameterized classes, wildcard bounds and the signatures of typed code, but not the target of a
         reference type nor more than 64 levels); the declarations that a type names are fixed when the type is made
         (an orphaned pointer is repointed to a tombstone declaration of the same kind only), so the walk of such a type
-        never finds one, and the references of the type are made without the lock and without a walk
+        never finds one, and the references of the type are made without the lock and without a walk; a type is marked
+        also when its walk stopped at the depth limit, as a later walk stops at the same types and finds none, as
+        before.  A debug build checks every mark that it relies on with a walk of the type
     */
     DLLLOCAL bool namesNoDeclarations() const {
         return names_no_decl_cache.load(std::memory_order_relaxed) == 1;
