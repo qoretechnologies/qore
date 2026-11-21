@@ -532,6 +532,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
         }
     }
 
+    // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
+    // created the object (qore#7033)
+    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
+
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);
     const std::string& index_str = i->second.index;
@@ -609,8 +613,8 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             QoreClassMemberIterator mi(ci.get());
             while (mi.next()) {
                 const QoreExternalNormalMember& m = mi.getMember();
-                // skip members marked as transient
-                if (m.isTransient()) {
+                // skip members marked as transient, and the non-public members that the calling code may not read
+                if (m.isTransient() || (!non_public && m.getAccess() != Public)) {
                     continue;
                 }
                 const char* mname = mi.getName();

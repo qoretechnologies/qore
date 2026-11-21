@@ -1,0 +1,388 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - member reads of JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The code of a class that sandboxed code declared cannot read a non-public member of an object that its sandbox did
+# not create (issue #7033): a subclass reaches the private members of its base classes on every object of the
+# hierarchy, so without the rule a tenant's subclass could read the private state of an object that the host or
+# another tenant created.  A direct read (also a dynamic one and a call through a member that holds code) is refused
+# with SANDBOX-OBJECT-ACCESS-ERROR; a read of the whole object (keys, iteration, conversion to a hash, slices, the last
+# key, formatting and serialization) gives the public members only; a copy of an object keeps the ownership of the
+# source, in every execution mode of the tenant's code and in a qcc-compiled host.  The tenant's own objects, the
+# members of self, public members, code safety sandboxes and trusted code are not affected.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class SandboxPrivateMemberReadTest
+
+#! the class whose private members the tenants' subclass reads; declared by trusted code, the Programs that it
+#! creates inherit it
+public class Target inherits Serializable {
+    public {
+        int pub = 1;
+    }
+
+    private {
+        int n = 42;
+        string s = "secret";
+        transient code cb = string sub () { return "secret-code"; };
+    }
+}
+
+#! the code of the tenants (and of a trusted Program, where it is not restricted)
+const TenantSource = "%modern
+#! the read forms
+const Forms = (
+    \"direct\", \"dynamic\", \"expression\", \"closure-member\", \"copy\",
+    \"keys\", \"cast\", \"plus\", \"iterator\", \"slice\", \"last-key\", \"format\", \"serialize\",
+    \"member-names\", \"size\", \"elements\",
+    \"public\",
+);
+
+class TSub inherits Target {
+    #! reads the object with the given form; returns the value read or the exception code
+    static string run(string form, Target w) {
+        try {
+            switch (form) {
+                case \"direct\": return sprintf(\"%d\", w.n);
+                case \"dynamic\": return w.(\"s\");
+                case \"expression\": return sprintf(\"%d\", w.n + 1);
+                case \"closure-member\": return w.cb();
+                case \"copy\": { Target c = w.copy(); return c.s; }
+                case \"keys\": return (keys w).join(\",\");
+                case \"cast\": return (keys hash(w)).join(\",\");
+                case \"plus\": return (keys (w + {})).join(\",\");
+                case \"iterator\": return (map $1, new ObjectKeyIterator(w)).join(\",\");
+                case \"slice\": return (keys w{\"pub\", \"s\"}).join(\",\");
+                case \"last-key\": return w.lastKey();
+                case \"format\": return sprintf(\"%y\", w) =~ /secret/ ? \"secret\" : \"hidden\";
+                case \"serialize\": return sprintf(\"%y\", Serializable::serializeToData(w)) =~ /secret/ ? \"secret\"
+                    : \"hidden\";
+                case \"member-names\": return w.keys().join(\",\");
+                case \"size\": return sprintf(\"%d\", w.size());
+                case \"elements\": return sprintf(\"%d\", elements w);
+                case \"public\": return sprintf(\"%d\", w.pub);
+                default: throw \"UNKNOWN-FORM\", form;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! reads the members of self
+    string readSelf() {
+        try {
+            return sprintf(\"%d %s %s %s %s\", n, self.(\"s\"), cb(), (keys self).join(\",\"), self.copy().s);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! reads the object with every form and returns the results
+hash<string, string> sub run_all(Target w, int count = 2) {
+    hash<string, string> rv;
+    foreach string form in (Forms) {
+        hash<string, bool> r;
+        for (int i = 0; i < count; ++i) {
+            r{TSub::run(form, w)} = True;
+        }
+        rv{form} = (keys r).join(\"|\");
+    }
+    return rv;
+}
+
+#! formats the object outside of a class (no class context)
+string sub format_object(Target w) {
+    return sprintf(\"%y\", w) =~ /secret/ ? \"secret\" : \"hidden\";
+}
+
+#! the member names and the number of members of the object outside of a class (no class context)
+string sub names_object(Target w) {
+    return sprintf(\"%s|%d|%d\", w.keys().join(\",\"), w.size(), elements w);
+}
+
+Target sub make_target() {
+    return new Target();
+}
+
+TSub sub make_sub() {
+    return new TSub();
+}
+
+string sub read_self(TSub t) {
+    return t.readSelf();
+}
+
+#! a copy of an object that the tenant gets
+Target sub copy_target(Target w) {
+    return w.copy();
+}
+
+#! reads in a thread that the tenant starts
+hash<string, string> sub run_all_background(Target w) {
+    Queue q();
+    background q.push(run_all(w));
+    return q.get();
+}
+";
+
+#! the host compiled with qcc: it runs a tenant, whose code it reads from the file given as its argument
+const AotHostSource = "%modern
+public class Target inherits Serializable {
+    public {
+        int pub = 1;
+    }
+
+    private {
+        int n = 42;
+        string s = \"secret\";
+        transient code cb = string sub () { return \"secret-code\"; };
+    }
+}
+
+class HostSub inherits Target {
+    static string read(Target w) {
+        try {
+            return sprintf(\"%d %s %s\", w.n, w.(\"s\"), w.cb());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setSandboxManager(new SandboxManager());
+p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"tenant\");
+Target host_obj();
+hash<string, string> r = p.callFunction(\"run_all\", host_obj);
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-host.%s=%s\\n\", i.key, i.value);
+}
+r = p.callFunction(\"run_all\", p.callFunction(\"make_target\"));
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-own.%s=%s\\n\", i.key, i.value);
+}
+printf(\"host-on-host=%s\\n\", HostSub::read(host_obj));
+printf(\"host-on-tenant=%s\\n\", HostSub::read(p.callFunction(\"make_target\")));
+";
+
+class SandboxPrivateMemberReadTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the exception of a refused read
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the results of every form on an object whose non-public members the reader may read
+        const Owned = {
+            "direct": "42",
+            "dynamic": "secret",
+            "expression": "43",
+            "closure-member": "secret-code",
+            "copy": "secret",
+            "keys": "pub,n,s,cb",
+            # hash() and ObjectKeyIterator are builtin code, which reads the object without the reader's class
+            # context, so the public members only
+            "cast": "pub",
+            "plus": "pub,n,s,cb",
+            "iterator": "pub",
+            "slice": "pub,s",
+            "last-key": "cb",
+            "format": "secret",
+            "serialize": "secret",
+            "member-names": "pub,n,s,cb",
+            "size": "4",
+            "elements": "4",
+            "public": "1",
+        };
+
+        #! the results of every form on an object that the reader's sandbox did not create
+        const Refused = {
+            "direct": Err,
+            "dynamic": Err,
+            "expression": Err,
+            "closure-member": Err,
+            # the copy keeps the ownership of the source object
+            "copy": Err,
+            # the public members only, as code outside the class sees them
+            "keys": "pub",
+            "cast": "pub",
+            "plus": "pub",
+            "iterator": "pub",
+            "slice": "PRIVATE-MEMBER",
+            "last-key": "pub",
+            "format": "hidden",
+            "serialize": "hidden",
+            # the names and the number of the public members only
+            "member-names": "pub",
+            "size": "1",
+            "elements": "1",
+            "public": "1",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed private member read", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant reads in " + mode, getTenantTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    #! creates a Program with the tenants' code
+    private static Program tenant(string mode, bool sandboxed = True, int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        if (sandboxed) {
+            SandboxManager sm();
+            if (level != QSEL_TENANT_ISOLATION) {
+                sm.setEnforcementLevel(level);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+
+        Target host_obj();
+        Target b_obj = b.callFunction("make_target");
+
+        assertEq(Refused, a.callFunction("run_all", host_obj, count), mode + ": A on the host's object");
+        assertEq(Refused, a.callFunction("run_all", b_obj, count), mode + ": A on B's object");
+        assertEq("hidden", a.callFunction("format_object", host_obj), mode + ": A formats the host's object");
+        assertEq("pub|1|1", a.callFunction("names_object", host_obj), mode + ": A on the host's object's names");
+        assertEq("pub,n,s,cb|4|4", a.callFunction("names_object", a.callFunction("make_target")),
+            mode + ": A on its own object's names");
+        assertEq(Refused, a.callFunction("run_all_background", host_obj), mode + ": A's thread");
+
+        # a copy that the tenant makes of an object that it does not own is not its own
+        Target host_copy = a.callFunction("copy_target", host_obj);
+        assertEq(Refused, a.callFunction("run_all", host_copy, count), mode + ": A on its copy of the host's object");
+
+        # the tenant's own objects, also its copies of them, and self
+        Target a_obj = a.callFunction("make_target");
+        assertEq(Owned, a.callFunction("run_all", a_obj, count), mode + ": A on its own object");
+        assertEq(Owned, a.callFunction("run_all", a.callFunction("copy_target", a_obj), count),
+            mode + ": A on its copy of its own object");
+        assertEq(Owned, a.callFunction("run_all", a.callFunction("make_sub"), count),
+            mode + ": A on its own subclass object");
+        assertEq("42 secret secret-code pub,n,s,cb secret", a.callFunction("read_self", a.callFunction("make_sub")),
+            mode + ": A on self");
+        assertEq(Owned, b.callFunction("run_all", b_obj, count), mode + ": B on its own object");
+
+        # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
+        Program safe = tenant(mode, True, QSEL_CODE_SAFETY);
+        assertEq(Owned, safe.callFunction("run_all", host_obj, count), mode + ": code safety on the host's object");
+        # but an isolated tenant is, on the objects of code-safety code too
+        assertEq(Refused, a.callFunction("run_all", safe.callFunction("make_target"), count),
+            mode + ": A on a code-safety tenant's object");
+    }
+
+    trustedTest() {
+        Program t = tenant("ast", False);
+        Target host_obj();
+        Program a = tenant("ast");
+        Target a_obj = a.callFunction("make_target");
+        assertEq(Owned, t.callFunction("run_all", host_obj), "trusted code on the host's object");
+        assertEq(Owned, t.callFunction("run_all", a_obj), "trusted code on a tenant's object");
+        assertEq("secret", t.callFunction("format_object", a_obj), "trusted code formats a tenant's object");
+        assertEq("pub,n,s,cb|4|4", t.callFunction("names_object", host_obj), "trusted code on the names");
+        # the trusted copy of a tenant's object stays the tenant's
+        assertEq(Owned, a.callFunction("run_all", a_obj.copy()), "a tenant on a trusted copy of its object");
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-private-member-read-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, TenantSource);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        int status;
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir,
+            libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe, tenant_src), \status);
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected;
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            expected{"tenant-on-host." + i.key} = i.value;
+        }
+        foreach hash<auto> i in (Owned.pairIterator()) {
+            expected{"tenant-on-own." + i.key} = i.value;
+        }
+        expected."host-on-host" = "42 secret secret-code";
+        expected."host-on-tenant" = "42 secret secret-code";
+        assertEq(expected, results, "compiled host output:\n" + out);
+        assertEq(0, status);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

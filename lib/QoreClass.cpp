@@ -7762,6 +7762,10 @@ QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, c
     }
     const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
     qore_object_private* obj_priv = qore_object_private::get(*self);
+    // the sandboxed read rule (qore#7033)
+    if (obj_priv->checkSandboxedMemberRead(nme, class_ctx, class_ctx, xsink)) {
+        return QoreValue();
+    }
     QoreValue mv{};
     bool exists = false;
     {
@@ -7815,6 +7819,10 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
     if (mi) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*self);
+        // the sandboxed read rule (qore#7033)
+        if (obj_priv->checkSandboxedMemberRead(nme, class_ctx, class_ctx, xsink)) {
+            return QoreValue();
+        }
         QoreValue mv{};
         bool exists = false;
         {
@@ -8129,6 +8137,11 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
     ReferenceHolder<QoreObject> self(new QoreObject(cls, object_pgm, (QoreHashNode*)nullptr), xsink);
     qore_object_private* self_priv = qore_object_private::get(**self);
     qore_object_private* old_priv = qore_object_private::get(*old);
+    // the copy holds the state of the source object, so it keeps the source's creation provenance, also when that is
+    // none (an object of trusted code), instead of that of the code that copies it: copying does not give sandboxed
+    // code an object of its own with the state of an object that its sandbox did not create (qore#7033); the copy is
+    // not shared with any other code yet
+    self_priv->setCopyProvenance(*old_priv);
     if (self_priv->copyData(xsink, *old_priv)) {
         return nullptr;
     }

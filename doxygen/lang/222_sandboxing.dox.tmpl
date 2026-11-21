@@ -575,7 +575,16 @@ authenticate();
       sandboxed code calls it: such a class changes the state of an object only through its own API
     - code that only sandboxes at the enforcement level of code safety (@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY")
       govern: the owner rules apply only to the code of a tenant (see @ref sandbox_enforcement_level)
-    - reads, which the rule does not cover
+
+    The code of such a class cannot read a non-public member of such an object either, with the same exemptions: a
+    direct read (also a dynamic one, \c obj.(name), and a call through a member that holds code) is refused with
+    \c SANDBOX-OBJECT-ACCESS-ERROR, and a read of the whole object (the member hash and its keys, iterators, slices, the
+    first and last key, \c exists, the member names of \c <object>::keys() and the member count of
+    \c <object>::size() and \c elements) sees the public members only, as code outside the class does.  Formatting an
+    object with \c %%y and serializing it, which do not depend on a class context, show the non-public members only to
+    trusted code and to sandboxed code whose sandbox created the object.  A copy of an object (\c copy()) keeps the
+    creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
+    an object of its own with the state of an object that its sandbox did not create.
 
     Trusted code that changes state of an object that other code relies on for its caller can decide in the same way
     for the code that calls it: @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()" refuses a sandboxed

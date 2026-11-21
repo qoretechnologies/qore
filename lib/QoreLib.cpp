@@ -1230,7 +1230,7 @@ public:
             case NT_OBJECT: {
                 // any exception here is ignored; the format pass reports it
                 ExceptionSink xs;
-                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false));
+                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyDataForCaller(&xs, false));
                 xs.clear();
                 if (data) {
                     hash_iter.reset(new ConstHashIterator(data.get()));
@@ -1317,7 +1317,7 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
         case NT_OBJECT: {
             // any exception here is ignored; the format pass reports it
             ExceptionSink xs;
-            QoreHashNodeHolder h(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false),
+            QoreHashNodeHolder h(qore_object_private::get(*val.get<const QoreObject>())->copyDataForCaller(&xs, false),
                 &xs);
             xs.clear();
             if (h) {

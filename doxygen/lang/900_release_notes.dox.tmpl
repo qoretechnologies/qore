@@ -1590,6 +1590,12 @@
     @ref Qore::SandboxManager::checkObjectOwnedByCaller(); see @ref sandbox_object_ownership
     (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>).
 
+    @par Sandboxed Code Reads Only the Non-Public State of the Objects That Its Sandbox Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot read a non-public member of an object
+    that its sandbox did not create, whole-object reads show it the public members only, and a copy keeps the source's
+    ownership; see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/7033">issue 7033</a>).
+
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
     pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and

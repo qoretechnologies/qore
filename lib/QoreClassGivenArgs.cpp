@@ -50,6 +50,11 @@ bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreO
     }
     const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
     qore_object_private* obj_priv = qore_object_private::get(*self);
+    // the sandboxed read rule (qore#7033)
+    if (obj_priv->checkSandboxedMemberRead(nme, class_ctx, class_ctx, xsink)) {
+        rv = QoreValue();
+        return true;
+    }
     QoreValue mv{};
     bool exists = false;
     {
