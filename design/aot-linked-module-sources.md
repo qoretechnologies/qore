@@ -98,8 +98,11 @@ requires another module of the tree.  A link that leads into another source tree
 a link, is used as found, as is any module that an installed libqore (one without a `CMakeCache.txt` next to it)
 loads, and a link to a module outside the `qlib-qmod` directory of a build (one compiled by hand).  The directory of
 libqore is resolved when the library is initialized, as the path that the dynamic linker gives can be relative (a
-relative `LD_LIBRARY_PATH` entry) and the program can change its working directory; libqore reads its
-`CMakeCache.txt` once per process, at the first `.qmod` link it finds.  A libqore that a multi-configuration
+relative `LD_LIBRARY_PATH` entry) and the program can change its working directory; `qore_init()` gives the module
+manager the path it resolves for its check of duplicate libraries, as glibc's `dladdr()` reads every dynamic symbol of
+libqore (about 460K instructions).  libqore reads its `CMakeCache.txt` once per process (about 30K instructions), at
+the first `.qmod` link or missing `.qmod` path of a module search; an installed libqore tries to open it once there,
+and its module searches then look no further than before.  A libqore that a multi-configuration
 generator puts in a directory of each configuration (`build/Release/`) has no `CMakeCache.txt` next to it and uses
 the links as found.
 

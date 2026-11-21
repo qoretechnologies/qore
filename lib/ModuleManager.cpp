@@ -943,13 +943,23 @@ static const std::string* qore_libqore_dir = nullptr;
 /** The path that the dynamic linker gives for the library can be relative (a library found through a relative
     \c LD_LIBRARY_PATH entry on Linux): it is resolved when the library is initialized, before the program can
     change its working directory, as the module directories are (see QoreModuleManager::setTrustedModuleDirs()).
+
+    @param lib_path the physical path of this libqore if the caller has it (qore_init() resolves it for its check of
+    duplicate libraries), or nullptr: dladdr() is then called, which costs as much as the rest of the module manager's
+    initialization with glibc, whose dladdr() reads every dynamic symbol of the library
 */
-static void qore_init_libqore_dir() {
-    Dl_info info;
-    if (!dladdr(reinterpret_cast<void*>(&qore_init_libqore_dir), &info) || !info.dli_fname) {
-        return;
+static void qore_init_libqore_dir(const char* lib_path) {
+    std::string lib;
+    if (lib_path && *lib_path) {
+        // canonical unless realpath() failed for it
+        lib = *lib_path == '/' ? std::string(lib_path) : qore_module_physical_path(lib_path);
+    } else {
+        Dl_info info;
+        if (!dladdr(reinterpret_cast<void*>(&qore_init_libqore_dir), &info) || !info.dli_fname) {
+            return;
+        }
+        lib = qore_module_physical_path(info.dli_fname);
     }
-    std::string lib = qore_module_physical_path(info.dli_fname);
     size_t sep = lib.rfind('/');
     if (sep != std::string::npos && sep && !qore_libqore_dir) {
         qore_libqore_dir = new std::string(lib.substr(0, sep));
@@ -961,7 +971,8 @@ static void qore_init_libqore_dir() {
     the build was configured from (\c CMAKE_HOME_DIRECTORY).  An installed libqore, or one copied elsewhere, has no
     \c CMakeCache.txt next to it and is in no build tree; nor is one that a multi-configuration generator puts in a
     directory of each configuration (<tt>build/Release/</tt>).  The \c CMakeCache.txt is read once per process, at
-    the first AOT module that is a symbolic link (see qore_own_build_qmod()).
+    the first AOT module that is a symbolic link or the first missing AOT module path of a module search (see
+    qore_own_build_qmod() and qore_find_build_qmod()).
 */
 static const QoreOwnBuildTree& qore_own_build_tree() {
     // allocated once and never freed (see qore_libqore_dir)
@@ -2843,7 +2854,7 @@ void ModuleManager::addAutoModuleDirList(const char* strlist) {
     assert(false);
 }
 
-void QoreModuleManager::init(bool se) {
+void QoreModuleManager::init(bool se, const char* lib_path) {
     // setup possible user module keys
     QoreModuleDefContext::vset.insert("desc");
     QoreModuleDefContext::vset.insert("version");
@@ -2865,7 +2876,7 @@ void QoreModuleManager::init(bool se) {
     setTrustedModuleDirs();
 #ifndef _Q_WINDOWS
     // the build tree of this libqore, for the AOT modules linked into its source tree (qore#7030)
-    qore_init_libqore_dir();
+    qore_init_libqore_dir(lib_path);
 #endif
 }
 

@@ -698,7 +698,12 @@ public:
     DLLLOCAL ~QoreModuleManager() {
     }
 
-    DLLLOCAL void init(bool se);
+    //! Initializes the module manager
+    /** @param se show module errors
+        @param lib_path the physical path of this libqore if the caller has resolved it (see qore_init()), else
+        nullptr; used to find the build tree of the library (qore#7030)
+    */
+    DLLLOCAL void init(bool se, const char* lib_path = nullptr);
     DLLLOCAL void delUser();
     DLLLOCAL void cleanup();
 
