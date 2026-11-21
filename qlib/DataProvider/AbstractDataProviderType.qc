@@ -1308,7 +1308,17 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     private freezeImpl() {
     }
 
-    private checkChange(string what) {
+    #! Raises an exception if the caller cannot change this type, because it is shared by every Program of the process
+    /** For the methods of subclasses that change the type; public, so that a subclass declared in a sandboxed Program
+        can call it
+
+        @param what what is changed, for the error message
+
+        @throw SANDBOX-REGISTRATION-ERROR the type is shared, and the caller cannot change shared objects
+
+        @since DataProvider 3.12
+    */
+    checkChange(string what) {
         if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
             SandboxManager::checkProcessWideRegistration(sprintf("change the %s of data type %y, which is shared "
                 "by every Program of the process", what, getName()));

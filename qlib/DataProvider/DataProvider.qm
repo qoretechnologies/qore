@@ -1750,6 +1750,20 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - the methods that subclasses call are public, so that a subclass declared in a sandboxed Program, which cannot
+      use the private methods of the library's classes, can call them:
+      @ref DataProvider::AbstractDataProvider::checkOptions() "AbstractDataProvider::checkOptions()",
+      @ref DataProvider::AbstractDataProvider::logCaughtError() "logCaughtError()",
+      @ref DataProvider::AbstractDataProvider::processSearchParameters() "processSearchParameters()" and
+      @ref DataProvider::AbstractDataProvider::getWrappedExceptionArg() "getWrappedExceptionArg()";
+      @ref DataProvider::AbstractDataProviderType::checkChange() "AbstractDataProviderType::checkChange()";
+      @ref DataProvider::AbstractDataProviderRecordIterator::doMemberGate() "AbstractDataProviderRecordIterator::doMemberGate()"
+      and @ref DataProvider::AbstractDataProviderRecordIterator::matchGeneric() "matchGeneric()";
+      @ref DataProvider::AbstractWatchDataProviderBase::isStopping() "AbstractWatchDataProviderBase::isStopping()" and
+      @ref DataProvider::AbstractWatchDataProviderBase::logPollError() "logPollError()";
+      @ref DataProvider::AbstractTimestampWatchDataProvider::getEventName() "AbstractTimestampWatchDataProvider::getEventName()"
+      and @ref DataProvider::AbstractTimestampWatchDataProvider::getWatchRecordTimestamp() "getWatchRecordTimestamp()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - added optional processing-locality and billing-model metadata to apps and actions: the \c processing
       (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo") and \c billing
       (@ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo") fields of
