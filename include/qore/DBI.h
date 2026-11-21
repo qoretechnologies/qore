@@ -715,6 +715,10 @@ public:
 
         @return the DBIDriver found or 0 if not found and was not loaded
 
+        @note a name that is not a valid driver name (one that has other characters than ASCII letters, digits,
+        \c '_' and \c '-', such as a datasource string or a path) is not looked up or loaded, and nullptr is returned
+        without an exception (since %Qore 3.0)
+
         @see ModuleManager
     */
     DLLEXPORT DBIDriver* find(const char* name) const;
@@ -725,6 +729,10 @@ public:
         @param xsink Qore-language exceptions saved here if any occur
 
         @return the DBIDriver found or 0 if not found and was not loaded
+
+        @note a name that is not a valid driver name (one that has other characters than ASCII letters, digits,
+        \c '_' and \c '-', such as a datasource string or a path) is not looked up or loaded, and nullptr is returned
+        without an exception (since %Qore 3.0)
 
         @see ModuleManager
     */
@@ -741,6 +749,9 @@ DLLEXPORT extern DBIDriverList DBI;
 //! parses a datasource string and returns a hash of the component parts
 /** @param ds the datasource string in the default encoding; the strings of the hash returned are in the default
     encoding, in which a datasource keeps its connection values (ex: Datasource::setPendingDBName())
+
+    @note the exception raised for a string that cannot be parsed does not show the string, which can contain a user
+    name, a password and a database name; only its driver name is shown (since %Qore 3.0)
 */
 DLLEXPORT QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink);
 

@@ -59,6 +59,12 @@ DatasourceConfig::DatasourceConfig(DBIDriver* n_driver, const char* n_user, cons
         opts(n_opts ? n_opts->hashRefSelf() : nullptr), q(n_q), arg(n_arg) {
 }
 
+QoreString DatasourceConfig::getMaskedDesc() const {
+    QoreString str;
+    q_ds_append_masked(str, driver->getName(), host.c_str(), port);
+    return str;
+}
+
 DatasourceConfig::DatasourceConfig(const DatasourceConfig& old,
         const std::shared_ptr<const qore_ds_option_setter>& copier) :
         driver(old.driver), user(old.user), pass(old.pass), db(old.db), encoding(old.encoding), host(old.host),
@@ -166,9 +172,9 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
     assert(!(a && !q));
 
     // create minimum datasources if possible
-    printd(5, "DatasourcePool::DatasourcePool(driver: %p user: %s pass: %s db: %s charset: %s host: %s min: %d max: %d port: %d) pool: %p\n",
-            ndsl, user ? user : "(null)", pass ? pass : "(null)", db ? db : "(null)", charset ? charset : "(null)",
-            hostname ? hostname : "(null)", min, max, port, pool.get());
+    // the user name, the password and the database name are not shown (qore#6961)
+    printd(5, "DatasourcePool::DatasourcePool(driver: %p charset: %s host: %s min: %d max: %d port: %d) pool: %p\n",
+            ndsl, charset ? charset : "(null)", hostname ? hostname : "(null)", min, max, port, pool.get());
 
     init(xsink);
     forkRegister();
@@ -332,10 +338,10 @@ void DatasourcePool::cleanup(ExceptionSink* xsink) {
    sl.unlock();
 
 #ifndef DEBUG_1
-   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction with connection %d; transaction will be automatically rolled back and the datasource returned to the pool", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid, i->second);
+   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s: TID %d terminated while in a transaction with connection %d; transaction will be automatically rolled back and the datasource returned to the pool", config.getMaskedDesc().c_str(), tid, i->second);
 #else
    QoreString* sql = getAndResetSQL();
-   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d terminated while in a transaction; transaction will be automatically rolled back and the datasource returned to the pool\n%s", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid, sql ? sql->getBuffer() : "<no data>");
+   xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s: TID %d terminated while in a transaction; transaction will be automatically rolled back and the datasource returned to the pool\n%s", config.getMaskedDesc().c_str(), tid, sql ? sql->getBuffer() : "<no data>");
    if (sql)
       delete sql;
 #endif
@@ -371,11 +377,11 @@ void DatasourcePool::destructor(ExceptionSink* xsink) {
 
     for (unsigned j = 0; j < cmax; ++j) {
         if (j != curr && pool[j]->isInTransaction())
-            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: TID %d deleted DatasourcePool while TID %d using connection %d/%d was in a transaction", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), q_gettid(), tid_list[j], j + 1, cmax);
+            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s: TID %d deleted DatasourcePool while TID %d using connection %d/%d was in a transaction", config.getMaskedDesc().c_str(), q_gettid(), tid_list[j], j + 1, cmax);
     }
 
     if (i != tmap.end() && pool[curr]->isInTransaction()) {
-        xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s:%s@%s: TID %d deleted DatasourcePool while in a transaction; transaction will be automatically rolled back", pool[0]->getDriverName(), config.getUser().c_str(), config.getDb().c_str(), tid);
+        xsink->raiseException("DATASOURCEPOOL-LOCK-EXCEPTION", "%s: TID %d deleted DatasourcePool while in a transaction; transaction will be automatically rolled back", config.getMaskedDesc().c_str(), tid);
         sl.unlock();
 
         // execute rollback on Datasource before releasing to pool
@@ -625,17 +631,15 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
         wait_total += (q_get_monotonic_us() - warn_start);
 
         if (!valid) {
-            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: DatasourcePool deleted while TID %d waiting " \
-                "on a connection to become free", getDriverName(), config.getUser().c_str(),
-                config.getDb().c_str(), tid);
+            xsink->raiseException("DATASOURCEPOOL-ERROR", "%s: DatasourcePool deleted while TID %d waiting " \
+                "on a connection to become free", config.getMaskedDesc().c_str(), tid);
             return nullptr;
         }
 
         if (rc && tl_timeout_ms) {
-            xsink->raiseException("DATASOURCEPOOL-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource pool after " \
+            xsink->raiseException("DATASOURCEPOOL-TIMEOUT", "%s: TID %d timed out on datasource pool after " \
                 "waiting " QLLD " millisecond%s for a free connection (max %d connections in use)",
-                                getDriverName(), config.getUser().c_str(),
-                                config.getDb().c_str(), tid,
+                                config.getMaskedDesc().c_str(), tid,
                                 tl_timeout_ms, tl_timeout_ms == 1 ? "" : "s", max);
             return nullptr;
         }
@@ -777,7 +781,7 @@ int DatasourcePool::commit(ExceptionSink* xsink) {
     if (!dpah)
         return -1;
 
-    //printd(5, "DatasourcePool::commit() this: %p ds: %p: %s@%s\n", this, *dpah, dpah->getUsername(), dpah->getDBName());
+    //printd(5, "DatasourcePool::commit() this: %p ds: %p\n", this, *dpah);
 
     return dpah->commit(xsink);
 }

@@ -128,7 +128,7 @@ class TestRunIsolationTest inherits QUnit::Test {
 
     private masking() {
         string pw = "Secret-pw-9";
-        # a datasource string that cannot be parsed (its port is not a number), as quoted in a message
+        # a datasource string that cannot be parsed (its port is not a number)
         string bad = "mysql:user/" + pw + "@db%host:12x";
         string msg;
         *hash<auto> config;
@@ -138,7 +138,9 @@ class TestRunIsolationTest inherits QUnit::Test {
             msg = ex.desc;
         }
         assertNothing(config, "the datasource string cannot be parsed");
-        assertNeq(-1, msg.find(pw), "the message quotes the password");
+        # Qore's message does not quote the string (qore#6961); a message of other code, such as a driver's, can
+        assertEq(-1, msg.find(pw), "Qore's message does not quote the password");
+        msg = sprintf("invalid characters present in port number in '%s'", bad);
         assertEq(-1, TestRun::maskSecrets(msg, bad).find(pw));
         # without the datasource string: the "user/password@" form
         assertEq(-1, TestRun::maskSecrets(msg).find(pw));

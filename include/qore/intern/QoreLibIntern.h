@@ -40,6 +40,7 @@
 
 class MethodVariantBase;
 class RuntimeConfig;
+class Datasource;
 
 //#define _QORE_CYCLE_CHECK 1
 #ifdef _QORE_CYCLE_CHECK
@@ -1856,6 +1857,47 @@ DLLLOCAL int q_ds_value_to_default(TempEncodingHelper& value, const QoreString* 
     @return the hash of the component parts, or nullptr if an exception was raised
 */
 DLLLOCAL QoreHashNode* q_parse_datasource_string(const QoreString& ds, ExceptionSink* xsink);
+
+//! the text that replaces the user name, the password and the database name of a datasource in messages (qore#6961)
+#define QORE_DS_MASK "****"
+
+//! returns true if the given string can be the name of a DBI driver (qore#6961)
+/** A DBI driver name has only ASCII letters, digits, \c '_' and \c '-', and is not empty; any other string, such as a
+    datasource string, which can contain a user name, a password and a database name, or a path, is never looked up
+    as a driver or loaded as a module, and is never shown in an exception
+*/
+DLLLOCAL bool q_dbi_valid_driver_name(const char* name);
+
+//! raises \a err for a DBI driver name that is not valid (see q_dbi_valid_driver_name()), without showing it
+/** @return -1
+*/
+DLLLOCAL int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
+/** The description has the form <tt>driver:****</tt><tt>/****</tt><tt>\@****[%host[:port]]</tt>, as in the database
+    test helpers (qore#6934): the user name, the password and the database name are always replaced with
+    \ref QORE_DS_MASK, whether they are set or not, so that a message shows none of them, and not whether they are set;
+    the driver name is shown only if it is a valid driver name (see q_dbi_valid_driver_name()), as otherwise it can be
+    a datasource string; the host and port are shown if set (qore#6961)
+
+    @param str the string to append the description to
+    @param driver the driver name, if any
+    @param host the host name, if any
+    @param port the port, if any
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); the values in use of the datasource are read,
+    so the caller must be able to read them (as for Datasource::getUsernameStr())
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const Datasource& ds);
+
+//! appends the description of a datasource string that cannot be parsed for a message, with no part that can contain a credential
+/** The string is described as <tt>driver:****</tt> if it starts with a valid driver name followed by \c ':', or as
+    \c "****" otherwise (qore#6961)
+*/
+DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the
