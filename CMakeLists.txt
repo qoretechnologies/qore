@@ -81,6 +81,10 @@ if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
     message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
 endif ()
 
+option(QORE_COMPILE_RACE_GUARD
+       "Compile libqore through tools/compile-race-guard.py, so that a source edited while its object compiles (minutes for a single compilation unit) is compiled again by the next build (see design/compile-race-guard.md)"
+       ON)
+
 option(ENABLE_ALLOC_TRACKING
        "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
        OFF)
@@ -193,6 +197,7 @@ set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacrosIntern.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/QoreCompileRaceGuard.cmake")
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 # The third-party source archives that the build may download, with their pinned versions and SHA-256 checksums, are
@@ -2641,6 +2646,8 @@ if (SINGLE_COMPILATION_UNIT)
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
+# an edit made while a libqore object compiles must not be lost (issue #6951)
+qore_compile_race_guard(libqore)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
@@ -3060,6 +3067,7 @@ add_executable(qore-ir-phase0-smoke EXCLUDE_FROM_ALL
     examples/test/ir/phase0_metadata_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
 add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity)
+qore_compile_race_guard(qore-ir-phase0-smoke)
 target_compile_definitions(qore-ir-phase0-smoke PRIVATE
     _QORE_LIB_INTERN
     HAVE_UNIX_CONFIG_H
