@@ -1,0 +1,256 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - object formatting by JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Formatting an object as a string shows its non-public members only to trusted code and to sandboxed code whose
+# sandbox created the object (issue #7063): under tenant isolation, a tenant that formats an object that the host or
+# another tenant created (%y, %Y, %N, %n, vsprintf(), also an object in a list or a hash, which QUnit's assertion
+# messages use as well) sees its public members only, in every execution mode of the tenant's code and in a
+# qcc-compiled host; its own objects, code-safety sandboxes and trusted code are not affected.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class SandboxObjectFormatTest
+
+#! the class whose private member the tenants format; declared by trusted code
+public class Target {
+    public {
+        string pub = "visible";
+    }
+
+    private {
+        string s = "secret";
+    }
+}
+
+#! the code of the tenants (and of a trusted Program, where it is not restricted)
+const TenantSource = "%modern
+#! the formatting forms
+const Forms = (
+    \"%y\", \"%Y\", \"%N\", \"%n\", \"vsprintf\", \"list\", \"hash\", \"%s\", \"concat\",
+);
+
+#! formats the object with the given form; returns what the result shows of the object
+string sub show(string form, Target w) {
+    string str;
+    switch (form) {
+        case \"%y\": str = sprintf(\"%y\", w); break;
+        case \"%Y\": str = sprintf(\"%Y\", w); break;
+        case \"%N\": str = sprintf(\"%N\", w); break;
+        case \"%n\": str = sprintf(\"%n\", w); break;
+        case \"vsprintf\": str = vsprintf(\"%N\", (w,)); break;
+        case \"list\": str = sprintf(\"%N\", (1, w)); break;
+        case \"hash\": str = sprintf(\"%y\", {\"a\": w}); break;
+        case \"%s\": str = sprintf(\"%s\", w); break;
+        case \"concat\": str = \"x\" + w; break;
+        default: throw \"UNKNOWN-FORM\", form;
+    }
+    return (str =~ /secret/ ? \"private\" : \"\") + (str =~ /visible/ ? \"public\" : \"\");
+}
+
+#! the subclass that formats the object in its own code
+class TSub inherits Target {
+    static hash<string, string> showAll(Target w) {
+        return map {$1: show($1, w)}, Forms;
+    }
+}
+
+#! formats the object with every form, outside of a class and in the code of the tenant's subclass
+hash<string, string> sub show_all(Target w, int count = 2) {
+    hash<string, string> rv;
+    for (int i = 0; i < count; ++i) {
+        rv = map {$1: show($1, w)}, Forms;
+        rv += map {(\"class \" + $1.key): $1.value}, TSub::showAll(w).pairIterator();
+    }
+    return rv;
+}
+
+Target sub make_target() {
+    return new Target();
+}
+";
+
+#! the host compiled with qcc: it runs a tenant, whose code it reads from the file given as its argument
+const AotHostSource = "%modern
+public class Target {
+    public {
+        string pub = \"visible\";
+    }
+
+    private {
+        string s = \"secret\";
+    }
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setSandboxManager(new SandboxManager());
+p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"tenant\");
+hash<string, string> r = p.callFunction(\"show_all\", new Target());
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-host.%s=%s\\n\", i.key, i.value);
+}
+r = p.callFunction(\"show_all\", p.callFunction(\"make_target\"));
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-own.%s=%s\\n\", i.key, i.value);
+}
+printf(\"host=%s\\n\", sprintf(\"%y\", new Target()) =~ /secret/ ? \"private\" : \"hidden\");
+";
+
+class SandboxObjectFormatTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the forms that show the members of the object
+        const MemberForms = ("%y", "%Y", "%N", "%n", "vsprintf", "list", "hash");
+
+        #! the forms that show no members of the object
+        const OtherForms = ("%s", "concat");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed object formatting", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant formats in " + mode, getTenantTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns what every form shows of an object
+    /** @param members what the forms that show the members of the object show
+    */
+    private static hash<string, string> expect(string members) {
+        hash<string, string> rv = (map {$1: members}, MemberForms) + (map {$1: ""}, OtherForms);
+        return rv + (map {("class " + $1.key): $1.value}, rv.pairIterator());
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    #! creates a Program with the tenants' code
+    private static Program tenant(string mode, bool sandboxed = True, int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        if (sandboxed) {
+            SandboxManager sm();
+            if (level != QSEL_TENANT_ISOLATION) {
+                sm.setEnforcementLevel(level);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+
+        assertEq(expect("public"), a.callFunction("show_all", new Target(), count), mode + ": A on the host's object");
+        assertEq(expect("public"), a.callFunction("show_all", b.callFunction("make_target"), count),
+            mode + ": A on B's object");
+        assertEq(expect("privatepublic"), a.callFunction("show_all", a.callFunction("make_target"), count),
+            mode + ": A on its own object");
+
+        # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
+        Program safe = tenant(mode, True, QSEL_CODE_SAFETY);
+        assertEq(expect("privatepublic"), safe.callFunction("show_all", new Target(), count),
+            mode + ": code safety on the host's object");
+    }
+
+    trustedTest() {
+        Program t = tenant("ast", False);
+        Program a = tenant("ast");
+        assertEq(expect("privatepublic"), t.callFunction("show_all", new Target()),
+            "trusted code on the host's object");
+        assertEq(expect("privatepublic"), t.callFunction("show_all", a.callFunction("make_target")),
+            "trusted code on a tenant's object");
+        # the test's own formatting, as QUnit's assertion messages use it
+        assertRegex("secret", sprintf("%N", a.callFunction("make_target")), "the host formats a tenant's object");
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-object-format-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, TenantSource);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        int status;
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir,
+            libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe, tenant_src), \status);
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z%A-Z .-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected;
+        foreach hash<auto> i in (expect("public").pairIterator()) {
+            expected{"tenant-on-host." + i.key} = i.value;
+        }
+        foreach hash<auto> i in (expect("privatepublic").pairIterator()) {
+            expected{"tenant-on-own." + i.key} = i.value;
+        }
+        expected.host = "private";
+        assertEq(expected, results, "compiled host output:\n" + out);
+        assertEq(0, status);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}
