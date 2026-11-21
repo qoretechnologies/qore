@@ -3526,6 +3526,10 @@ public:
         return access;
     }
 
+    //! returns true if the method inherits a public variant of an ancestor through a public path that none of its
+    //! own variants overrides (qore#7074); defined in QoreClass.cpp
+    DLLLOCAL bool hasInheritedPublicVariant() const;
+
     DLLLOCAL virtual const QoreClass* getClass() const {
         return qc;
     }

@@ -4255,6 +4255,7 @@ struct RuntimeFindCommittedMethodLookup : InternalEdgeCutForContext {
     which the run-time lookups do not see from outside its class, and an abstract method, which another class of the
     hierarchy implements) leave the parent classes to be searched
 */
+
 static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
     if (!m) {
         return LookupVisit::Descend;
@@ -4263,7 +4264,14 @@ static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
     if (ma == Public) {
         return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
     }
-    return ma == Private ? LookupVisit::Skip : LookupVisit::Descend;
+    if (ma == Private) {
+        // a private method that inherits a public variant of an ancestor through a public path is the method that is
+        // called: the call selects the inherited variant for its arguments, as a call resolved at parse time does,
+        // and the variant's own access is checked when it is selected (qore#7074)
+        return qore_method_private::get(*m)->getFunction()->hasInheritedPublicVariant() ? LookupVisit::Found
+            : LookupVisit::Skip;
+    }
+    return LookupVisit::Descend;
 }
 
 //! the committed method of the name of the class itself (as qore_class_private::findLocalCommittedMethod() and
@@ -12971,4 +12979,28 @@ const QoreClass* QoreClassDestructorHierarchyIterator::get() const {
 
 bool QoreClassDestructorHierarchyIterator::isVirtual() const {
     return priv->isVirtual();
+}
+
+bool MethodFunctionBase::hasInheritedPublicVariant() const {
+    // a method has the variants of the methods of the same name of its ancestors (the inherited variants of the
+    // language documentation); one of them that is public, on a public path, and that no variant of the method itself
+    // overrides with the same signature, can be called from outside the class hierarchy: a private variant of the
+    // same signature overrides it (qore#6062)
+    for (IList::const_iterator i = ilist.begin() + 1, e = ilist.end(); i != e; ++i) {
+        if (i->access != Public) {
+            continue;
+        }
+        const VList& ancestor_variants = static_cast<const MethodFunctionBase*>(i->func)->vlist;
+        for (vlist_t::const_iterator vi = ancestor_variants.begin(), ve = ancestor_variants.end(); vi != ve; ++vi) {
+            if (METHVB_const(*vi)->getAccess() != Public) {
+                continue;
+            }
+            const AbstractFunctionSignature* vs;
+            if (QoreFunction::parseCompareResolvedSignature(vlist, (*vi)->getSignature(), vs)
+                    != QTI_IDENT) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
