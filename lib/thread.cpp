@@ -62,6 +62,7 @@
 #include "qore/intern/Variable.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreSandboxLimits.h"
 
 // to register object types
@@ -11037,12 +11038,21 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
     if (*xsink || !nl) {
         return QoreValue();
     }
-    // a call of a closure or call reference that code restricted from thread control created is not started in
-    // another thread, whichever code starts it (qore#7056); the copy holds the value of the callee
-    if (nl->getType() == NT_FUNCREFCALL
-            && qore_check_thread_callable(nl->get<const CallReferenceCallNode>()->getExp(), QDOM_THREAD_CONTROL,
+    // a call of a closure or call reference, or of a method of an object of a class, that code restricted from
+    // thread control authored is not started in another thread, whichever code starts it (qore#7056, qore#7087);
+    // the copy holds the value of the callee and of the object
+    if (nl->getType() == NT_FUNCREFCALL) {
+        if (qore_check_thread_callable(nl->get<const CallReferenceCallNode>()->getExp(), QDOM_THREAD_CONTROL,
                 "background operator", xsink)) {
-        return QoreValue();
+            return QoreValue();
+        }
+    } else if (nl->getType() == NT_OPERATOR) {
+        const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(nl->getInternalNode());
+        if (call && call->getExpression().getType() == NT_OBJECT
+                && qore_check_thread_callable(call->getExpression(), QDOM_THREAD_CONTROL, "background operator",
+                    xsink)) {
+            return QoreValue();
+        }
     }
 
     int tid = get_thread_entry();
@@ -11078,7 +11088,7 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 }
 
 QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, int callee, ExceptionSink* xsink) {
     if (q_check_background_start_allowed(xsink)) {
         return QoreValue();
     }
@@ -11113,12 +11123,15 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         ExceptionSink* xsink;
     } value_releaser(helper, xsink);
     for (size_t i = 0; i < num; ++i) {
-        // the callee of the expression is one of the values, but which one is not known here: every closure and call
-        // reference that the thread takes is checked, which refuses more than the AST interpreter, which checks only
-        // the callee of a call of a closure or call reference (ex: "background f(c, x + 1)" with a closure c of code
-        // that may not control threads, which f runs in the new thread) (qore#7056)
+        // the callee of a call of a closure or call reference is checked, as the AST interpreter checks it
+        // (qore#7087); a value that is only an argument is module code's to give to the code that it calls, as for a
+        // closure of the module that calls it; when the starting code does not say which value is the callee (a
+        // compiled module), every closure and call reference is checked, which refuses more than the AST
+        // interpreter (ex: "background f(c, x + 1)" with a closure c of code that may not control threads) (qore#7056)
+        // the object of a call of a method is the callee as well (its class's code runs)
         qore_type_t t = values[i].getType();
-        if ((t == NT_RUNTIME_CLOSURE || t == NT_FUNCREF)
+        if ((t == NT_RUNTIME_CLOSURE || t == NT_FUNCREF || t == NT_OBJECT)
+                && (callee == QBH_CALLEE_UNKNOWN || callee == static_cast<int>(i))
                 && qore_check_thread_callable(values[i], QDOM_THREAD_CONTROL, "background operator", xsink)) {
             return QoreValue();
         }

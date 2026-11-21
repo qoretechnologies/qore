@@ -77,6 +77,37 @@ probe("module background, computed argument", RunOrRefuse + 'string sub t() {
     return run(sub (Counter done) { ThreadEscapeHelper::runInBackgroundWithArg(sub (int x) { done.dec(); }, 1); });
 }');
 
+# the callee is module code that the new thread runs with arguments that it computes, one of which is a closure of the
+# restricted code: the module calls it there, as for a closure of the module that calls it (qore#7087); a compiled
+# module, whose code does not give the callee, refuses it (see the test)
+probe("module background, module function with a closure argument", RunOrRefuse + 'string sub t() {
+    return run(sub (Counter done) {
+        ThreadEscapeHelper::runModuleFunctionWithArgs(sub (int x) { done.dec(); }, 1);
+    });
+}');
+
+# a call reference of the restricted code as the callee, with an argument that the new thread computes
+probe("module background, call reference with a computed argument", RunOrRefuse + 'Counter done(1);
+sub dec(int x) { done.dec(); }
+string sub t() {
+    return run(sub (Counter d) { ThreadEscapeHelper::runInBackgroundWithArg(\dec(), 1); });
+}');
+
+# a method of an object of a class of the restricted code, called by module code on a new thread
+const ObjClass = 'class O {
+    private { Counter done; }
+    constructor(Counter done) { self.done = done; }
+    run() { done.dec(); }
+    runWith(int x) { done.dec(); }
+}
+';
+probe("module background, method of an own object", RunOrRefuse + ObjClass + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runMethodInBackground(new O(done)); });
+}');
+probe("module background, method of an own object with a computed argument", RunOrRefuse + ObjClass + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runMethodInBackgroundWithArg(new O(done), 1); });
+}');
+
 # the private helpers of the HTTP controller are internal: a subclass cannot call them
 probe("subclass runOnThreadOfItsOwn", 'class X inherits HttpServerAsyncIo::HttpAsyncSocketIoController {
     constructor(AsyncSocketIoController c) : HttpAsyncSocketIoController(c) {}

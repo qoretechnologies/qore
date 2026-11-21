@@ -25,7 +25,11 @@
     that may not control threads but may use the thread classes can use a pool, code that may not use them cannot.
 
     thread-escape-callables.q probes each path in a restricted Program; its output must be the expected one in every
-    execution mode, on the IR tier and as a qcc executable.
+    execution mode, on the IR tier and as a qcc executable: the background operator checks the callee of a call (a
+    closure, a call reference, or the object of a call of a method) in every mode, also when the new thread computes
+    the arguments of the call (qore#7087).  The helper module is loaded from its source in every case; the code of a
+    module compiled with qcc does not give the callee of such a call yet, and refuses every closure and call reference
+    of restricted code that the expression takes (qore#7087).
 */
 class ThreadEscapeCallablesTest inherits QUnit::Test {
     public {
@@ -37,6 +41,10 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
             "lent ThreadPool, restricted task: ran\n"
             "module background: PERMISSION-DENIED\n"
             "module background, computed argument: PERMISSION-DENIED\n"
+            "module background, module function with a closure argument: ran\n"
+            "module background, call reference with a computed argument: PERMISSION-DENIED\n"
+            "module background, method of an own object: PERMISSION-DENIED\n"
+            "module background, method of an own object with a computed argument: PERMISSION-DENIED\n"
             "subclass runOnThreadOfItsOwn: PARSE-EXCEPTION\n"
             "subclass peer lookup: PARSE-EXCEPTION\n"
             "submitToHandlerPool: PERMISSION-DENIED\n"

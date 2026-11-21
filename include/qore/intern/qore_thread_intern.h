@@ -319,12 +319,21 @@ enum QoreBackgroundHelperSelf : uint8_t {
     @param values the value of each parameter, borrowed: the thread takes references of its own
     @param num the number of parameters and values
     @param self_mode how the thread uses the object of the starting code
+    @param callee the index of the value that is the callee of a call of a closure or call reference that the
+    expression is (which is checked as the AST interpreter checks the callee; qore#7087), QBH_NO_CALLEE if the
+    expression has no such callee among the values, or QBH_CALLEE_UNKNOWN if the starting code does not say (the
+    code of a compiled module: every closure and call reference of the values is checked then, qore#7056)
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
 */
 DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink);
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, int callee, ExceptionSink* xsink);
+
+//! the callee of a background helper's expression is not known: every closure and call reference is checked
+#define QBH_CALLEE_UNKNOWN -1
+//! the expression of a background helper has no callee among its values to check
+#define QBH_NO_CALLEE -2
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.

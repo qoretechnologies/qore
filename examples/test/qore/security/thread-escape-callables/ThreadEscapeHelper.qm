@@ -17,6 +17,27 @@ public namespace ThreadEscapeHelper {
         background c(x + 1);
     }
 
+    #! runs a function of the module on a new thread with arguments that the new thread computes: the function calls
+    #! the callable that it is given there (the callee is module code)
+    public sub runModuleFunctionWithArgs(code<nothing(int)> c, int x) {
+        background callWith(c, x + 1);
+    }
+
+    #! calls a callable with an argument
+    public sub callWith(code<nothing(int)> c, int x) {
+        c(x);
+    }
+
+    #! calls a method of an object that it is given on a new thread
+    public sub runMethodInBackground(object o) {
+        background o.run();
+    }
+
+    #! calls a method of an object that it is given on a new thread with an argument that the new thread computes
+    public sub runMethodInBackgroundWithArg(object o, int x) {
+        background o.runWith(x + 1);
+    }
+
     #! runs a callable on a thread pool of the module and waits for it
     public sub runOnPool(code<nothing()> c) {
         ThreadPool tp(1);

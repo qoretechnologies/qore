@@ -12315,6 +12315,7 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard_v2(
 // --- DotEval with pre-evaluated base helper ---
 
 #include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
@@ -25237,9 +25238,55 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
     return rv;
 }
 
+//! returns the index of the helper's parameter that is the callee of the call of a closure or call reference that the
+//! background expression is, or QBH_NO_CALLEE (qore#7087)
+/** The callee is a local variable of the starting code that the expression uses, which is one of the helper's
+    parameters; the AST interpreter checks the value of such a callee (do_op_background()), and a callee that it does
+    not resolve when the thread starts, as any other expression, is not checked there either
+*/
+static int qore_background_helper_callee(const QoreIRBackgroundInstruction& inst) {
+    // the instruction keeps the background operator; its expression is the one that the new thread evaluates
+    QoreValue expr = inst.expr;
+    if (expr.getType() == NT_OPERATOR) {
+        const QoreBackgroundOperatorNode* op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+            expr.getInternalNode());
+        if (op) {
+            expr = op->getExp();
+        }
+    }
+    // the callee of a call of a closure or call reference, or the object of a call of a method
+    QoreValue callee;
+    if (expr.getType() == NT_FUNCREFCALL) {
+        callee = expr.get<const CallReferenceCallNode>()->getExp();
+    } else if (expr.getType() == NT_OPERATOR) {
+        const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(
+            expr.getInternalNode());
+        if (!call) {
+            return QBH_NO_CALLEE;
+        }
+        callee = call->getExpression();
+    } else {
+        return QBH_NO_CALLEE;
+    }
+    if (callee.getType() != NT_VARREF) {
+        return QBH_NO_CALLEE;
+    }
+    const VarRefNode* vr = callee.get<const VarRefNode>();
+    qore_var_t vt = vr->getType();
+    if (vt != VT_LOCAL && vt != VT_CLOSURE && vt != VT_LOCAL_TS) {
+        return QBH_NO_CALLEE;
+    }
+    for (size_t i = 0, e = inst.helper_params.size(); i < e; ++i) {
+        if (inst.helper_params[i] == vr->ref.id) {
+            return static_cast<int>(i);
+        }
+    }
+    return QBH_NO_CALLEE;
+}
+
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, int callee, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -25250,7 +25297,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        self_mode, xsink));
+        self_mode, callee, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -25259,7 +25306,7 @@ QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& ins
     QoreBackgroundHelperCode code;
     code.ir = inst.helper_ir.get();
     return do_op_background_helper(code, inst.helper_params.data(), values, inst.helper_params.size(),
-        inst.helper_uses_self, xsink);
+        inst.helper_uses_self, qore_background_helper_callee(inst), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
@@ -25270,7 +25317,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundIn
     code.ir = inst->helper_ir.get();
     code.jit_fn = helper_fn;
     return qore_background_helper_start(code, inst->helper_params.data(), values, nvalues, inst->helper_uses_self,
-        xsink);
+        qore_background_helper_callee(*inst), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
@@ -25289,8 +25336,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     code.aot_ctx = ctx;
     // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
     assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
+    // the compiled code does not give the callee: every closure and call reference is checked (qore#7056, qore#7087)
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), QBH_CALLEE_UNKNOWN, xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

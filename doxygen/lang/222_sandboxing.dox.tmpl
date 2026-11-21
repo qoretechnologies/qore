@@ -200,10 +200,13 @@ Program p(opts);
     control threads (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") authored is refused with
     \c PERMISSION-DENIED by the APIs that run code in another thread, whichever code passes it on, with or without a
     @ref Qore::SandboxManager "SandboxManager" (since %Qore 3.0):
-    - a call of a closure or call reference with the @ref background "background" operator (ex: \c "background c()"
-      in module code that was given \c c); when the new thread computes the arguments of the call, the IR, JIT and
-      compiled execution modes refuse any closure or call reference of such code that the expression takes, also
-      one that is only an argument (ex: \c "background f(c, x + 1)"), which the AST interpreter does not refuse
+    - a call of a closure or call reference, or of a method of an object of a class of such a %Program, with the
+      @ref background "background" operator (ex: \c "background c()" or \c "background o.m()" in module code that
+      was given \c c or \c o), in every execution mode; a closure that is only an argument of the call (ex:
+      \c "background f(c, x + 1)") is given by the code that starts the thread to the code that it calls, and is not
+      refused; the code of a module compiled with \c qcc does not give the callee when the new thread computes the
+      arguments of the call, and refuses every closure and call reference of such code that the expression takes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
     - @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", its timers and
       @ref Qore::AsyncIoController::setTimerCallback() "setTimerCallback()", and
       @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
@@ -227,8 +230,7 @@ Program p(opts);
       of its own in another thread, which then calls the code of its caller, is how a module calls back its callers
       (a server handler, an event callback, a timer of the module) and is not refused
 
-    These are the APIs that the rule covers: code that the %Program authors can still run in another thread through
-    other APIs, such as a @ref background "background" call of a method of an object of a class of the %Program.
+    These are the APIs that the rule covers.
 
     Module code that runs code that it is given in another thread through a queue of its own checks it with
     @ref Qore::check_thread_callable() "check_thread_callable()", as the handler pool of
