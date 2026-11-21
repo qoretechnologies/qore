@@ -109,6 +109,11 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 
 // forward reference to private class implementation
 class qore_class_private;
+
+//! returns the methods of a method map in the order in which they were declared (issue #7169)
+/** The iteration order of the map itself is not defined: see qore_method_private::decl_seq
+*/
+DLLLOCAL std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m);
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 
@@ -6422,10 +6427,26 @@ public:
     const QoreClass* parent_class;
     MethodFunctionBase* func;
     bool static_flag, all_user;
+    //! the order in which the method was declared; the methods of a class are enumerated in this order (issue #7169)
+    /** The method maps of a class are hash maps, whose iteration order depends on the number of times that the
+        class was copied (a copy inserts the methods in the order of the map that it copies), so the order of a
+        class that was copied once more is another one, as is that of a class that is compiled.  A method that is
+        copied keeps the sequence of the method that it is copied from.
+    */
+    uint64_t decl_seq;
 
     DLLLOCAL qore_method_private(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
-            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true) {
+            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true),
+            decl_seq(nextDeclSeq()) {
         assert(parent_class == n_func->getClass());
+    }
+
+    //! returns the next declaration sequence number
+    DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! returns the declaration sequence number of the method
+    DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {
+        return m.priv->decl_seq;
     }
 
     DLLLOCAL ~qore_method_private() {

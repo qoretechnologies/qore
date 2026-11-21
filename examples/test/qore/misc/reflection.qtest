@@ -3571,7 +3571,7 @@ class ReflectionTest inherits QUnit::Test {
                 ++count;
             }
             assertEq(2, count);
-            assertEq("pub", c.getStaticMethods()[1].call(1));
+            assertEq("pub", c.getStaticMethods()[0].call(1), "static methods are in declaration order");
 
             # getMethods() returns special methods, getStaticMethods() does not
             assertEq(("constructor", "copy", "destructor", "intM", "intStatic", "privM", "pubM", "pubStatic"),

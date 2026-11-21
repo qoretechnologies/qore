@@ -7459,20 +7459,22 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 state.classes.push_back({cls, priv, ns_idx});
 
                 // Collect user methods for this class
-                for (auto& mi : priv->hm) {
+                // in the order in which they were declared: the loader creates the methods of a class in the order
+                // of the binary, and the enumeration of a class's methods follows that order (issue #7169)
+                for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
                     if (cancelled()) {
                         return false;
                     }
-                    if (mi.second->isUser()) {
-                        state.methods.push_back({mi.second, class_idx, false});
+                    if (m->isUser()) {
+                        state.methods.push_back({m, class_idx, false});
                     }
                 }
-                for (auto& mi : priv->shm) {
+                for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
                     if (cancelled()) {
                         return false;
                     }
-                    if (mi.second->isUser()) {
-                        state.methods.push_back({mi.second, class_idx, true});
+                    if (m->isUser()) {
+                        state.methods.push_back({m, class_idx, true});
                     }
                 }
             }
