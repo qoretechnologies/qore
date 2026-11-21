@@ -952,7 +952,7 @@ QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
     ConstHashIterator i(opts);
     while (i.next()) {
         if (dd && dd->isOptionShowable(i.getKey())) {
-            rv->setKeyValue(i.getKey(), i.getReferencedValue(), nullptr);
+            rv->setKeyValue(i.getKey(), i.getReferenced(), nullptr);
         } else {
             rv->setKeyValue(i.getKey(), new QoreStringNode(QORE_DS_MASK), nullptr);
         }
