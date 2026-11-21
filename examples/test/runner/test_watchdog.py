@@ -98,17 +98,57 @@ def session_processes(sid):
     return pids
 
 
+def wait_for_exit(pid, timeout=60):
+    """Waits until the given process has ended, for at most the time given: for its exit event (a pidfd on Linux, a
+    kqueue elsewhere), not for a time; only where neither exists is it checked every 50 ms.  A process that has ended
+    but has not been waited for (a zombie) has ended."""
+    if hasattr(os, "pidfd_open"):
+        try:
+            fd = os.pidfd_open(pid)
+        except ProcessLookupError:
+            return
+        except OSError as e:
+            if e.errno not in (errno.ENOSYS, errno.EPERM):
+                raise
+        else:
+            try:
+                select.select([fd], [], [], timeout)
+            finally:
+                os.close(fd)
+            return
+    elif hasattr(select, "kqueue"):
+        kq = select.kqueue()
+        try:
+            event = select.kevent(pid, filter=select.KQ_FILTER_PROC, flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                                  fflags=select.KQ_NOTE_EXIT)
+            try:
+                kq.control([event], 1, timeout)
+            except ProcessLookupError:
+                pass
+        finally:
+            kq.close()
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+
+
 def end_session(process):
     """Kills every process of the session of a command started with start_in_session() and waits for the command
 
     The session, not the command's process group: the runner runs its tests and its watchdog's reader under timeout,
     which puts each of them in a process group of its own.  The processes that a test of the run starts in a session of
-    their own are not in it; the runner ends them.
+    their own are not in it; the runner ends them.  Each process that is killed is waited for until it has ended (see
+    wait_for_exit()), and the session is listed again, until it has no process left (zombies are not listed), or
+    until a list is the same as the one before, whose processes did not end within the time of the waits.
     """
     killed = None
     while True:
         pids = set(session_processes(process.pid)) - {os.getpid()}
-        # a list that the kills did not change has only processes that end (their kill is delivered) or zombies
         if not pids or pids == killed:
             break
         for pid in pids:
@@ -116,6 +156,8 @@ def end_session(process):
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+        for pid in pids:
+            wait_for_exit(pid)
         killed = pids
     process.wait()
 

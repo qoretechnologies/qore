@@ -49,12 +49,24 @@ def stand_in_build(build, source_dir, commit):
     """Makes a stand-in build in the given directory, configured from source_dir, that names the given commit"""
     build.mkdir(parents=True, exist_ok=True)
     (build / "hash").write_text(commit + "\n")
-    # qore: names the commit for --version, and runs the test file it is given as a shell script
+    # qore: names the commit for --version: that of the libqore it loads, the first in LD_LIBRARY_PATH that has one, or
+    # else the one next to it, as a qore linked with libqore finds it; with a version latch, it waits for it first (a
+    # libqore that hangs in its initialization).  It runs the test file it is given as a shell script.
     write_script(build / "qore", """\
         #!/bin/sh
         if [ "$1" = --version ]; then
+            if [ -n "$VERSION_LATCH" ]; then
+                read -r line < "$VERSION_LATCH"
+            fi
+            lib=$(dirname "$0")
+            for dir in `echo "$LD_LIBRARY_PATH" | tr : ' '`; do
+                if [ -f "$dir/libqore.so" ] && [ -f "$dir/hash" ]; then
+                    lib=$dir
+                    break
+                fi
+            done
             echo "QORE stand-in"
-            echo "  git hash: `cat "$(dirname "$0")/hash"`"
+            echo "  git hash: `cat "$lib/hash"`"
             exit 0
         fi
         for arg in "$@"; do
@@ -178,7 +190,7 @@ class BuildMatchTest(unittest.TestCase):
         # an edit that was not built
         (self.tree / "lib/a.cpp").write_text("int a = 1;\n")
         os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
-        self.assert_refused(self.run_runner(), "1 files of the build changed since the build was made (from commit "
+        self.assert_refused(self.run_runner(), "1 file(s) of the build changed since the build was made (from commit "
                             + self.commit, "    lib/a.cpp")
 
     def test_a_commit_checked_out_after_the_build_is_refused(self):
@@ -240,7 +252,7 @@ class BuildMatchTest(unittest.TestCase):
         other = self.base / "other-build"
         stand_in_build(other, self.tree, OTHER_COMMIT)
         self.assert_refused(self.run_runner(QORE_QCC_EXECUTABLE=str(other / "qcc")),
-                            "the qcc that the tests use (%s/qcc) comes from the build in %s, made from commit %s, not %s"
+                            "the qcc that the tests use (%s/qcc): from the build in %s, made from commit %s, not %s"
                             % (other, other.resolve(), OTHER_COMMIT, self.commit))
         # a qcc without a qore next to it cannot be told to be the build's
         lone = self.base / "lone"
@@ -255,7 +267,7 @@ class BuildMatchTest(unittest.TestCase):
         other = self.base / "other-build"
         stand_in_build(other, self.tree, OTHER_COMMIT)
         self.assert_refused(self.run_runner(QORE_TEST_QMOD_DIR=str(other / "qlib-qmod")),
-                            "the .qmod files in %s/qlib-qmod comes from the build in" % other.resolve())
+                            "the .qmod files in %s/qlib-qmod: from the build in" % other.resolve())
         # a qlib/*.qmod link into another build
         (self.tree / "qlib/Mod.qmod").symlink_to(other / "qlib-qmod/Mod.qmod")
         self.assert_refused(self.run_runner(), "the qlib/*.qmod links into %s" % other)
@@ -263,6 +275,101 @@ class BuildMatchTest(unittest.TestCase):
         (self.tree / "qlib/Mod.qmod").unlink()
         (self.tree / "qlib/Mod.qmod").symlink_to(self.build / "qlib-qmod/Mod.qmod")
         self.assert_runs(self.run_runner())
+
+    def test_another_libqore_in_the_library_path_does_not_name_the_build_s_commit(self):
+        # the caller's LD_LIBRARY_PATH names another libqore (the image's own, older Qore in a CI job): the build's
+        # qore names the commit of the libqore that the tests load, the build's, which the runner puts first
+        other = self.base / "other-lib"
+        other.mkdir()
+        (other / "libqore.so").touch()
+        (other / "hash").write_text(OTHER_COMMIT + "\n")
+        self.assert_runs(self.run_runner(LD_LIBRARY_PATH=str(other)))
+        # a qcc of another build directory of the same commit: the qore next to it names the commit of its own libqore
+        companion = self.base / "companion-build"
+        stand_in_build(companion, self.tree, self.commit)
+        self.assert_runs(self.run_runner(LD_LIBRARY_PATH=str(other), QORE_QCC_EXECUTABLE=str(companion / "qcc")))
+
+    def test_a_qore_that_hangs_is_ended(self):
+        # qore --version waits for a latch that nothing writes (a libqore that hangs in its initialization): the
+        # check ends it after its time limit and refuses the run
+        latch = self.base / "version-latch"
+        os.mkfifo(latch)
+        self.assert_refused(self.run_runner(VERSION_LATCH=str(latch), QORE_TEST_BUILD_CHECK_WAIT="1"),
+                            "does not name the commit it was made from")
+
+    def test_a_reconfigure_after_an_edit_does_not_hide_it(self):
+        # CMakeCache.txt and .ninja_log are written by a configure and by any ninja command, without a build of
+        # libqore: an edit of libqore's source that came after libqore is refused all the same
+        (self.tree / "lib/a.cpp").write_text("int a = 5;\n")
+        os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+        for name in ("CMakeCache.txt", ".ninja_log"):
+            (self.build / name).touch()
+            os.utime(self.build / name, (LATER + 10, LATER + 10))
+        self.assert_refused(self.run_runner(), "    lib/a.cpp")
+
+    def test_a_cmake_file_is_compared_with_the_configuration(self):
+        (self.tree / "cmake").mkdir()
+        (self.tree / "cmake/Foo.cmake").write_text("# changed\n")
+        os.utime(self.tree / "cmake/Foo.cmake", (LATER, LATER))
+        git(self.tree, "add", "cmake/Foo.cmake")
+        self.assert_refused(self.run_runner(), "    cmake/Foo.cmake")
+        os.utime(self.build / "CMakeCache.txt", (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+
+    def test_a_source_is_compared_with_its_object_file(self):
+        # a binary module's source and a test program's source that the build compiles: each is compared with its
+        # object file, which make writes again without linking libqore again
+        for source, obj in (("modules/m/src/m.cpp", "modules/m/CMakeFiles/m.dir/src/m.cpp.o"),
+                            ("examples/test/qore/x/y.cpp", "CMakeFiles/y-test.dir/examples/test/qore/x/y.cpp.o")):
+            with self.subTest(source=source):
+                (self.tree / source).parent.mkdir(parents=True, exist_ok=True)
+                (self.tree / source).write_text("// changed\n")
+                git(self.tree, "add", source)
+                os.utime(self.tree / source, (LATER, LATER))
+                (self.build / obj).parent.mkdir(parents=True, exist_ok=True)
+                (self.build / obj).touch()
+                os.utime(self.build / obj, (BUILD_TIME, BUILD_TIME))
+                self.assert_refused(self.run_runner(), "    " + source)
+                os.utime(self.build / obj, (LATER + 10, LATER + 10))
+                self.assert_runs(self.run_runner())
+
+    def test_files_that_the_build_makes_nothing_from_are_not_compared(self):
+        # a binary module's tests, and a source under examples/ that CMake does not compile (no object file)
+        for path in ("modules/m/test/m.qtest", "examples/test/cmake/samples/sample.cpp"):
+            (self.tree / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.tree / path).write_text("// changed\n")
+            git(self.tree, "add", path)
+            os.utime(self.tree / path, (LATER, LATER))
+        self.assert_runs(self.run_runner())
+
+    def test_git_s_messages_are_not_file_names(self):
+        # a git that warns on a diff that works: its message is not taken for a changed file (which led to the tree's
+        # root, which a CI job changes when it makes crash-dumps/); git runs without fetching (GIT_NO_LAZY_FETCH)
+        real_git = shutil.which("git")
+        lazy = self.base / "lazy-fetch"
+        write_script(self.bin / "git", f"""\
+            #!/bin/sh
+            echo "$GIT_NO_LAZY_FETCH" >> '{lazy}'
+            echo "warning: a message of git" >&2
+            exec '{real_git}' "$@"
+            """)
+        os.utime(self.tree, (LATER, LATER))
+        self.assert_runs(self.run_runner())
+        self.assertEqual({"1"}, set(lazy.read_text().split()))
+
+    def test_qmod_links_are_read_with_a_readlink_of_one_file(self):
+        # BusyBox's readlink takes one file: the links into another build are found all the same
+        other = self.base / "other-build"
+        stand_in_build(other, self.tree, OTHER_COMMIT)
+        for name in ("Mod", "Src"):
+            (self.tree / ("qlib/%s.qmod" % name)).symlink_to(other / ("qlib-qmod/%s.qmod" % name))
+        real_readlink = shutil.which("readlink")
+        write_script(self.bin / "readlink", f"""\
+            #!/bin/sh
+            [ $# -eq 1 ] || {{ echo "usage: readlink FILE" >&2; exit 1; }}
+            exec '{real_readlink}' "$@"
+            """)
+        self.assert_refused(self.run_runner(), "the qlib/*.qmod links into %s" % other)
 
     def archive(self, marker):
         """Makes a copy of the tree without its repository, with the given .git-archive-revision (None: none)"""
