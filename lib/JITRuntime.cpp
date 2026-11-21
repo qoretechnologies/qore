@@ -12646,6 +12646,11 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     // Equivalent to: int size(any val) { ... }
     QoreValue arg = fromBits(arg_bits);
 
+    // Handle an inline short string: its length in characters, as for a string node below
+    if (arg.isShortString()) {
+        return qore_fast_length(arg_bits, xsink);
+    }
+
     // Handle null/nothing
     if (!arg.hasNode()) {
         return toBits(0);
@@ -12664,8 +12669,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     }
 
     // Handle string
-    // note: safe; the node of arg, whose inline short string returns above (!arg.hasNode()); the caller gives strings
-    // in both representations to qore_fast_length() and qore_fast_strlen() first
+    // note: safe; the node of arg, whose inline short string returns above (arg.isShortString())
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         return toBits(static_cast<int64_t>(str->length()));
     }
