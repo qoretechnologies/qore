@@ -1,12 +1,17 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# an operation that the module cleanup cancels submits a follow-up operation from its onComplete(), which ends on its
-# own ("done") or never ("pending"); the onComplete() items of the cleanup's work are held with a test hook of a debug
-# build until the cleanup releases them (qore#7027)
-# arguments: "done" or "pending"
+# the module cleanup cancels an operation whose onComplete() submits it again ("chain"), or the cleanup submits
+# operations and timers itself ("timeout-done", "no-timeout"), also in the windows of its drain ("window-a",
+# "window-b", "window-c"); the onComplete() items of the cleanup's work are held with a test hook of a debug build
+# until the cleanup releases them (qore#7027)
+# arguments: the mode
 
 %requires CleanupFollowUp
 
-Holder::start(ARGV[0] == "done");
+string mode = ARGV[0];
+# the drain releases the held step results after (a) or before (b) its cancel round, and the held timer callbacks
+# after its scan of the timers (c)
+call_function("dbg_async_io_module_cleanup_drain_releases", {"window-a": 2, "window-b": 1, "window-c": 4}{mode} ?? 0);
+Holder::start(mode);
 printf("started\n");
 call_function("dbg_async_io_hold_module_cleanup_work", True);

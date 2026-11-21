@@ -71,6 +71,23 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         const ExecModes = ("ast", "ir", "jit");
 
         const Protocols = ("h1", "h2", "h3");
+
+        #! the output of the work of the module cleanup by follow-up mode, before the user modules have been deleted
+        const FollowUpExpected = {
+            # an operation's onComplete() cannot submit it again
+            "chain": "first onComplete: canceled: True\nfirst resubmit refused: ASYNC-IO-SHUTDOWN-ERROR",
+            # an operation with a timeout that the cleanup submits is waited for
+            "timeout-done": "timeout onComplete: canceled: null",
+            # an operation without a timeout that the cleanup submits is canceled
+            "no-timeout": "no-timeout onComplete: canceled: True",
+            # (a) its step is in flight when the cleanup cancels it
+            "window-a": "window-a onComplete: canceled: True",
+            # (b) it reaches its goal after the cleanup's wait and before its cancel round
+            "window-b": "window-b onComplete: canceled: null",
+            # (c) a timer fires after the cleanup's scan of the timers: its callback is held, and released when the
+            # cleanup waits for it
+            "window-c": "held module cleanup work: 1 released \\(the module cleanup waits for its work\\)\ntimer ran",
+        };
     }
 
     private {
@@ -112,7 +129,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             }
         }
         foreach string mode in (ExecModes) {
-            foreach string follow_up in ("done", "pending") {
+            foreach string follow_up in (FollowUpExpected.keyIterator()) {
                 string m = mode;
                 string f = follow_up;
                 addTestCase(sprintf("%s: an operation that work of the module cleanup submits (%s) ends before a module's "
@@ -192,23 +209,23 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
 
-    #! the onComplete() of an operation that the cleanup cancels submits a follow-up operation, which reaches its goal
-    #! on its own (done) or never (pending): the cleanup waits for its onComplete() too, which runs before the user
-    #! modules have been deleted, or the cleanup cancels it (qore#7027)
+    #! the work of the module cleanup submits operations and timers: the cleanup waits for those with a timeout and
+    #! cancels the others, an operation that it canceled cannot submit another one, and each ends before the user
+    #! modules have been deleted, also in the windows of the cleanup's drain (qore#7027)
     private runFollowUpCase(string mode, string follow_up) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            testSkip("the work is held with a test hook of a debug build");
+            testSkip("the work is held with test hooks of a debug build");
         }
         int status;
         string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", shellQuote(module_dir),
             shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
             + "followup-client.qr"), follow_up), \status);
         assertEq(0, status, out);
-        assertRegex("(^|\n)started\n", out, "the first operation is submitted: " + out);
-        assertRegex("(?s)\nfirst onComplete: canceled: True\n.*\nfollow-up onComplete: canceled: "
-            + (follow_up == "done" ? "null" : "True") + "\n.*held module cleanup work: the hold ends \\(the user modules "
-            "have been deleted\\)\n", out, "the follow-up operation ends before the user modules have been deleted: "
-            + out);
+        assertRegex("(^|\n)started\n", out, "the mode is prepared: " + out);
+        # the work ends before the cleanup goes on with the next module (FollowUpOps), whose data it then deletes
+        assertRegex("(?s)\n" + FollowUpExpected{follow_up} + "\n.*follow-up ops cleared\n.*held module cleanup work: "
+            "the hold ends \\(the user modules have been deleted\\)\n", out, "the work ends before the cleanup goes on "
+            "with the next module: " + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }

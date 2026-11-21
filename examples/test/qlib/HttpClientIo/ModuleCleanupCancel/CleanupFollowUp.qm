@@ -2,83 +2,68 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# a module whose operation, canceled by the module cleanup, submits a follow-up operation from its onComplete(): work
-# of the cleanup that submits an operation (qore#7027); see ModuleCleanupCancel.qtest
+# a module whose data the module cleanup deletes at the end of the process: its destructor cancels an operation
+# whose onComplete() submits another one, or submits operations and timers itself, which the cleanup waits for or
+# cancels (qore#7027); see ModuleCleanupCancel.qtest
 
 %modern
 
+%requires FollowUpOps
+
 module CleanupFollowUp {
     version = "1.0";
-    desc = "an operation canceled by the module cleanup submits a follow-up operation";
+    desc = "the module cleanup waits for or cancels the operations of its work";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
 }
 
 public namespace CleanupFollowUp {
-public const Owner = "module-cleanup-follow-up";
-
-#! an operation that never reaches its goal, or that reaches it in its first step (\a done)
-public class FollowUpOperation inherits AbstractPollOperation<auto> {
-    private {
-        EventNotifier notifier;
-        bool done;
-        bool reached = False;
-        string label;
-        *EventNotifier follow_up_notifier;
-        *bool follow_up_done;
-    }
-
-    #! creates the operation, which waits for \a notifier, which is never notified, unless it is \a done in its first
-    #! step; \a follow_up_done set: its onComplete() submits a follow-up operation
-    constructor(EventNotifier notifier, string label, bool done, *bool follow_up_done) {
-        self.notifier = notifier;
-        self.label = label;
-        self.done = done;
-        self.follow_up_done = follow_up_done;
-    }
-
-    string getGoal() {
-        return "done";
-    }
-
-    string getState() {
-        return reached ? "done" : "pending";
-    }
-
-    bool goalReached() {
-        return reached;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (done) {
-            reached = True;
-            return NOTHING;
-        }
-        # waits for data that does not come
-        return <SocketPollInfo>{"socket": notifier, "events": SOCK_POLLIN};
-    }
-
-    onComplete(hash<SocketPollResultInfo> result) {
-        printf("%s onComplete: canceled: %y\n", label, result.canceled);
-        flush();
-        if (exists follow_up_done) {
-            # work of the cleanup submits an operation of its own
-            follow_up_notifier = new EventNotifier();
-            AsyncIoController::submit(<SocketPollOperationInfo>{
-                "sock": follow_up_notifier,
-                "spop": new FollowUpOperation(follow_up_notifier, "follow-up", follow_up_done),
-                "owner": Owner + "-follow-up",
-                "to": -1s,
-            });
-        }
-    }
-}
-
-#! cancels the first operation when the module cleanup deletes the module's data
+#! does the work of the mode in the module cleanup, when it deletes the module's data
 public class Canceller {
+    private {
+        string mode;
+        EventNotifier notifier();
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
     destructor() {
-        AsyncIoController::cancelByOwner(Owner);
+        switch (mode) {
+            case "chain":
+                # the operation's onComplete() submits it again
+                AsyncIoController::cancelByOwner("module-cleanup-follow-up-first");
+                break;
+            case "timeout-done":
+                # an operation with a timeout that the cleanup submits is waited for: it reaches its goal
+                submit_operation(notifier, "timeout", True, False, 30s);
+                break;
+            case "no-timeout":
+                # an operation without a timeout that the cleanup submits is canceled
+                submit_operation(notifier, "no-timeout", False, False, -1s);
+                break;
+            case "window-a":
+            case "window-b":
+                # the step of the operation is held in flight; the cleanup releases it after (a) or before (b) its
+                # cancel round
+                call_function("dbg_async_io_hold_step_results", True);
+                submit_operation(notifier, mode, mode == "window-b", False, -1s);
+                call_function("dbg_async_io_wait_held_step_results", 1, 20s);
+                call_function("dbg_async_io_hold_step_results", False);
+                break;
+            case "window-c":
+                # a timer fires and its callback is held; the cleanup dispatches it after its scan of the timers
+                call_function("dbg_async_io_hold_timer_callbacks", True);
+                AsyncIoController::addTimerDelay(0s, sub () {
+                    printf("timer ran\n");
+                    flush();
+                });
+                call_function("dbg_async_io_wait_held_timer_callbacks", 1, 20s);
+                call_function("dbg_async_io_hold_timer_callbacks", False);
+                break;
+        }
     }
 }
 
@@ -88,16 +73,13 @@ public class Holder {
         static *Canceller canceller;
     }
 
-    #! submits the first operation; \a follow_up_done: whether the follow-up operation reaches its goal on its own
-    static start(bool follow_up_done) {
+    #! prepares the mode: the chain mode submits the first operation
+    static start(string mode) {
         notifier = new EventNotifier();
-        canceller = new Canceller();
-        AsyncIoController::submit(<SocketPollOperationInfo>{
-            "sock": notifier,
-            "spop": new FollowUpOperation(notifier, "first", False, follow_up_done),
-            "owner": Owner,
-            "to": -1s,
-        });
+        canceller = new Canceller(mode);
+        if (mode == "chain") {
+            submit_operation(notifier, "first", False, True, -1s);
+        }
     }
 }
 }

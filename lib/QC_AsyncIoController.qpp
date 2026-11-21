@@ -327,6 +327,23 @@ AsyncIoController::copy() {
     for an operation implemented in C++ whose continuePoll() runs on the I/O thread while its getState() is
     implemented in %Qore (%Qore code does not run on the I/O thread, where the controller reads the state of such an
     operation)
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled (its @ref Qore::AbstractPollOperation::abort() "abort()" or
+    @ref Qore::AbstractPollOperation::onComplete() "onComplete()"); see @ref asynciocontroller_module_cleanup
+
+    @par At the End of the Process
+    @anchor asynciocontroller_module_cleanup
+    When the process ends, the modules are deleted one after the other, and the destructors of the objects in their
+    data run (a connection that a module keeps is closed, for example).  The operations that these destructors
+    cancel end before the next module is deleted, and so do the operations that they submit:
+    - an operation that such a destructor submits with a timeout (\c to, or the default timeout) is waited for, at
+      most for its timeout: a destructor that must finish its work at the end of the process (send a close frame, log
+      out, flush a log) gives its operation a timeout
+    - an operation that such a destructor submits without a timeout (a \c to of zero or less) and a timer that it
+      adds are canceled before the next module is deleted
+    - the work of an operation that the end of the process canceled cannot submit another operation: an
+      @ref Qore::AbstractPollOperation::onComplete() "onComplete()" that submits its operation again (a reader that
+      re-arms itself, a retry) gets an \c ASYNC-IO-SHUTDOWN-ERROR exception, so that the process ends
 
     @note The steps of the operation that run on callback workers, such as
     @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" and
@@ -372,6 +389,8 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid (see
     @ref Qore::AsyncIoController::submit() "submit()"), or the operation uses an
     @ref AbstractPollOperation::onComplete() "onComplete()" callback, or if called from the async I/O thread
+    @throw ASYNC-IO-SHUTDOWN-ERROR called by the work of an operation that the end of the process canceled; see
+    @ref asynciocontroller_module_cleanup
 
     @since %Qore 3.0
 */
@@ -776,6 +795,9 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
     @note The deadline is a time of the system clock: a step of the system clock (a VM's time synchronization, a manual
     change) moves the time at which the timer fires; use @ref addTimerDelay() for a timer that fires after an interval
 
+    @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
+    the next module is deleted; see @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -825,6 +847,9 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @note The deadline is a time of the system clock: a step of the system clock (a VM's time synchronization, a manual
     change) moves the time at which the timer fires; use @ref addTimerDelay() for a timer that fires after an interval
 
+    @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
+    the next module is deleted; see @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -870,6 +895,9 @@ int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); 
         to deliver through the @ref setTimerCallback() handler
     @return the unique timer ID, which @ref cancelTimer() takes
 
+    @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
+    the next module is deleted; see @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -912,6 +940,9 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
         to deliver through the @ref setTimerCallback() handler
     @param owner the owner identifier to tag the timer's callback dispatch with
     @return the unique timer ID, which @ref cancelTimer() takes
+
+    @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
+    the next module is deleted; see @ref asynciocontroller_module_cleanup
 
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data

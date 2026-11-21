@@ -260,10 +260,28 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   gets a counted copy when the cleanup cancels it; a command that an I/O thread creates while it processes a command
   of the cleanup is the cleanup's too; a counted work item that no callback worker can run (none runs and none can be
   started) has its references released at once, as `stop()` releases them, as `stop()` comes after the cleanup; and a
-  child process created with `fork()` starts with no work counted.  Not covered: an operation that work of the
-  cleanup submits and that ends on its own, without being canceled for the cleanup (its context is delegated but not
-  counted): counting every operation that such work submits would make the cleanup wait for operations that never end
-  (a listener), so its `onComplete()` can still run after a module's Program has been deleted.  A debug test that holds step results or releases
+  child process created with `fork()` starts with no work counted.
+  Operations and timers that the cleanup's own work starts (qore#7027, `ModuleCleanupCancel.qtest`, follow-up cases;
+  documented under `asynciocontroller_module_cleanup`):
+  - an operation that the cleanup thread (a destructor) or work that it waits for (a ThreadPool task) submits with a
+    timeout is counted (`submit()` gives it a counted context) and waited for, at most for its timeout: "finish on
+    shutdown" work (a close frame, a log flush) gives its operation a timeout
+  - an operation submitted without a timeout and a timer that such work adds have a delegated but uncounted context:
+    each drain, once the count is zero, cancels them for the cleanup
+    (`AsyncIoControllerPriv::cancelModuleCleanupUncounted()`: the timers first, then a `CancelByProgram` command
+    without a Program on each I/O thread, which also reports the operations whose step is in flight), so that their
+    `onComplete()` is counted work, and repeats; it ends when a round cancels nothing and the count is still zero
+    after it: the round is a command round-trip with every I/O thread, so an operation that completed on its own and
+    a timer that fired before an I/O thread processed it have their items queued, and counted
+    (`AsyncWorkItem::module_cleanup_work`, set when an item with a delegated but uncounted context is queued)
+  - the work of an operation that the cleanup canceled (its `abort()`, `onComplete()` and the release of its
+    references, on a callback worker) cannot submit another operation: `submit()` raises `ASYNC-IO-SHUTDOWN-ERROR`, so
+    an `onComplete()` that re-arms itself cannot make the end of the process wait forever
+  - the three windows of the drain (a step in flight at the cancel, an operation that completes after the wait and
+    before the cancel round, a timer that fires after the scan of the timers) are pinned by debug hooks
+    (`dbg_async_io_module_cleanup_drain_releases()` with the step-result and timer-callback holds): their work ends
+    before the cleanup goes on with the next module, which a drain that does not report in-flight cancels or does not
+    check its count after the round gets wrong  A debug test that holds step results or releases
   with the other test hooks must release them before the end of the process, as the cleanup waits for the work they
   keep.  A debug build's `dbg_async_io_hold_module_cleanup_work()` hook holds the `onComplete()` items until the
   cleanup releases them, when it waits for its work (or else after the user modules have been deleted), which makes

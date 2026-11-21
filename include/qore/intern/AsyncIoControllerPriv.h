@@ -305,6 +305,16 @@ DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<cons
     return ctx && ctx->module_cleanup_delegate;
 }
 
+//! Returns true if @a ctx belongs to work of the module cleanup that the cleanup does not count (qore#7027)
+/** An operation, a timer or a work item that work of the cleanup submitted, whose context it captured
+    (QoreSandboxContext::module_cleanup_delegate without QoreSandboxContext::module_cleanup_work): the cleanup counts
+    its work items when they are queued, and cancels the operations and timers when it waits for its work
+    (AsyncIoControllerPriv::cancelModuleCleanupUncounted())
+*/
+DLLLOCAL inline bool async_io_module_cleanup_uncounted(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_work;
+}
+
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
 //! and the thread does not run the module cleanup or work that the cleanup handed over
 /** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
@@ -360,6 +370,11 @@ public:
         //! For DT_ABORT: the task in native_task delivers the result after abort() (see
         //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
         bool after_abort_on_complete = false;
+        //! Counts the item as work of the module cleanup if its context is delegated but not counted (qore#7027)
+        /** Set when the item is queued (see async_io_module_cleanup_uncounted()): the item of an operation that work
+            of the cleanup submitted and that ended on its own, which the cleanup waits for as it waits for its own
+        */
+        QoreModuleCleanupWorkFlag module_cleanup_work;
 #ifdef DEBUG
         //! Debug-only: the item was held by the dbg_async_io_hold_module_cleanup_work() test hook; the worker writes on
         //! stderr when it has ended (qore#6928)
@@ -1177,6 +1192,16 @@ public:
     */
     DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
 
+    //! Cancels for the module cleanup the operations and timers of work of the cleanup that it does not count
+    /** Called by the module cleanup when it waits for its work (qore_module_cleanup_drain_work()), on its own thread:
+        an operation or timer whose context is delegated but not counted (async_io_module_cleanup_uncounted()), which
+        work of the cleanup submitted, would otherwise run its onComplete() or callback after the Program of its
+        module has been deleted; canceled for the cleanup, its onComplete() is counted work of the cleanup (qore#7027)
+
+        @return the number of operations and timers canceled
+    */
+    DLLLOCAL size_t cancelModuleCleanupUncounted(ExceptionSink* xsink);
+
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
 
@@ -1523,6 +1548,9 @@ private:
         QoreHashNode* info_result = nullptr;
         //! Accumulated PollInfos (CancelByProgram), guarded by pinfos_lock
         std::vector<PollInfo> cancel_pinfos;
+        //! The operations of a CancelByProgram without a Program (cancelModuleCleanupUncounted()) whose cancel waits
+        //! for their step in flight (pending_aborts), which are canceled too (qore#7027)
+        std::atomic<size_t> in_flight_canceled{0};
         //! Protects cancel_pinfos against concurrent appends from I/O threads
         QoreThreadLock pinfos_lock;
 
@@ -2358,13 +2386,21 @@ public:
     */
     DLLLOCAL static void dbgHoldStepResults(bool hold);
 
-    //! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (qore#6928)
-    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook: such an item (a canceled operation's
-        onComplete() with QoreSandboxContext::module_cleanup_delegate) is held instead of queued until the module
+    //! Debug-only: holds the onComplete() and timer work items that the module cleanup hands over from now on
+    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook (qore#6928, qore#7027): such an item (a canceled
+        operation's onComplete() or a timer's callback with QoreSandboxContext::module_cleanup_delegate) is held
+        instead of queued until the module
         cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
         the cleanup lets it
     */
     DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
+
+    //! Debug-only: the held test-hook work that the drain of the module cleanup releases (QDMCDP_* flags, qore#7027)
+    /** QDMCDP_BEFORE_CANCEL_ROUND: the step results held by dbg_async_io_hold_step_results(), before the drain's cancel
+        round; QDMCDP_WAIT_AFTER_CANCEL: the same, when the drain waits after a cancel round; QDMCDP_AFTER_TIMER_SCAN:
+        the timer callbacks held by dbg_async_io_hold_timer_callbacks(), after the round's scan of the timers
+    */
+    DLLLOCAL static void dbgModuleCleanupDrainReleases(int flags);
 
     //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);

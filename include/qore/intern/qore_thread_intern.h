@@ -1990,6 +1990,12 @@ DLLLOCAL void qore_close_module_programs();
 */
 DLLLOCAL void qore_module_cleanup_drain_work();
 
+//! Cancels for the module cleanup the operations and timers of its work that it does not count; returns their number
+/** See AsyncIoControllerPriv::cancelModuleCleanupUncounted() (qore#7027); returns 0 if there is no asynchronous I/O
+    controller
+*/
+DLLLOCAL size_t qore_async_io_cancel_module_cleanup_uncounted();
+
 #ifdef DEBUG
 //! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held
 /** \a by names the stage of the module cleanup that releases them, which is written on stderr with their number if
@@ -2000,6 +2006,20 @@ DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end
 //! Debug-only: the test hook has held a work item: wakes the module cleanup if it waits for its work, which releases
 //! it (see qore_module_cleanup_drain_work())
 DLLLOCAL void qore_dbg_module_cleanup_work_held();
+
+//! Debug-only: the points of the module cleanup's drain where it releases held test-hook work
+enum : int {
+    //! before its cancel round: the step results held
+    QDMCDP_BEFORE_CANCEL_ROUND = 1,
+    //! when it waits after a cancel round: the step results held
+    QDMCDP_WAIT_AFTER_CANCEL = 2,
+    //! after the scan of the timers in its cancel round: the timer callbacks held
+    QDMCDP_AFTER_TIMER_SCAN = 4,
+};
+
+//! Debug-only: the module cleanup's drain reaches \a point (a QDMCDP_* value); see
+//! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
+DLLLOCAL void qore_dbg_module_cleanup_drain_point(int point);
 #endif
 
 //! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread

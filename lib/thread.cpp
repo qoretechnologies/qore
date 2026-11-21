@@ -5514,7 +5514,20 @@ void qore_dbg_module_cleanup_work_held() {
 }
 #endif
 
-void qore_module_cleanup_drain_work() {
+//! returns the count of the work of the cleanup
+static size_t qore_module_cleanup_work_count() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.count;
+}
+
+//! waits until the count of the work of the cleanup is zero; see qore_module_cleanup_drain_work()
+static void qore_module_cleanup_wait_work(bool after_cancel) {
+#ifdef DEBUG
+    if (after_cancel) {
+        qore_dbg_module_cleanup_drain_point(QDMCDP_WAIT_AFTER_CANCEL);
+    }
+#endif
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
     SafeLocker sl(work.lock);
 #ifdef DEBUG
@@ -5536,6 +5549,23 @@ void qore_module_cleanup_drain_work() {
             break;
         }
         work.cond.wait(work.lock);
+    }
+}
+
+void qore_module_cleanup_drain_work() {
+    // the work that the cleanup counts ends, and can submit operations and timers of its own, which it does not count
+    // (their context is captured from it): these are canceled for the cleanup, whose onComplete() is then counted, and
+    // so on until none is left, so that no work of the cleanup outlives the module it runs in (qore#7027)
+    // The round is a command round-trip with every I/O thread: an operation that completed on its own before an I/O
+    // thread processed it has its onComplete() queued, and so counted, and so has a timer that fired; so the drain
+    // ends only when a round cancels nothing and the count is still zero after it
+    bool after_cancel = false;
+    while (true) {
+        qore_module_cleanup_wait_work(after_cancel);
+        after_cancel = qore_async_io_cancel_module_cleanup_uncounted() > 0;
+        if (!after_cancel && !qore_module_cleanup_work_count()) {
+            break;
+        }
     }
 }
 
