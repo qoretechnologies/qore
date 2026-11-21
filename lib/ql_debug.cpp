@@ -8423,6 +8423,87 @@ public:
         s->close();
     }
 
+#ifndef _Q_WINDOWS
+    //! The socket of the UNIX connection that runUnixConnectCloseBeforeAdopt() closes
+    static inline qore_socket_private* unix_close_sock = nullptr;
+
+    //! Closes the socket right before the UNIX connection gives it its descriptor, as another thread can
+    static void closeBeforeUnixAdopt() {
+        qore_dbg_unix_connect_before_adopt.store(nullptr, std::memory_order_release);
+        unix_close_sock->close_internal();
+    }
+
+    //! A UNIX socket connection whose socket is closed right before the connection gives it its descriptor fails as
+    //! closed and leaves the socket closed (qore#7156)
+    /** A listener on a UNIX socket of the test's own accepts; a debug hook (qore_dbg_unix_connect_before_adopt) closes
+        the socket between the creation of the connection's descriptor and the socket's adoption of it, which is
+        refused with the socket's close lock held.
+    */
+    static void runUnixConnectCloseBeforeAdopt(UnitTestCounters& c) {
+        const std::string when = " (UNIX connection closed before its descriptor is taken)";
+        ExceptionSink xsink;
+        const char* tmp = getenv("TMPDIR");
+        std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-unix-close-" + std::to_string(getpid());
+        ::unlink(path.c_str());
+        int lfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        struct Closer {
+            int fd;
+            std::string path;
+            ~Closer() {
+                ::close(fd);
+                ::unlink(path.c_str());
+            }
+        } closer{lfd, path};
+        struct sockaddr_un sun = {};
+        sun.sun_family = AF_UNIX;
+        strncpy(sun.sun_path, path.c_str(), sizeof(sun.sun_path) - 1);
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sun), sizeof(sun)) && !::listen(lfd, 4);
+        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
+        if (!ok) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        sock->ref();
+        unix_close_sock = qore_socket_private::get(*sock->priv->socket);
+        struct HookReset {
+            ~HookReset() {
+                qore_dbg_unix_connect_before_adopt.store(nullptr, std::memory_order_release);
+            }
+        } hook_reset;
+        qore_dbg_unix_connect_before_adopt.store(closeBeforeUnixAdopt, std::memory_order_release);
+        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, path.c_str(), sock);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        if (!xsink) {
+            op->setSelf(*op_obj);
+            qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+            qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
+        }
+        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
+        if (!xsink) {
+            ReferenceHolder<QoreHashNode> poll(op->continuePoll(&xsink), &xsink);
+        }
+        UT_ASSERT(c, !qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire),
+            ("the socket was closed before its descriptor was taken" + when).c_str());
+        {
+            bool raised = (bool)xsink;
+            QoreStringValueHelper err(raised ? xsink.getExceptionErr() : QoreValue());
+            UT_ASSERT(c, raised && !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                ("the connection fails as closed" + when).c_str());
+        }
+        xsink.clear();
+        UT_ASSERT(c, sock->getPollableDescriptor() < 0, ("the closed socket stays closed" + when).c_str());
+        op_obj = nullptr;
+        sock->close();
+        xsink.clear();
+    }
+#endif
+
     //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
     /** A contract test (qore#7003), not a reproduction: no path of the library can give a socket a new descriptor
         between the read of its descriptor and its replacement, as the paths that give a socket a descriptor run with
@@ -24517,6 +24598,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 3, true);
+#ifndef _Q_WINDOWS
+    AsyncIoDescriptorHoldTest::runUnixConnectCloseBeforeAdopt(c);
+#endif
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);

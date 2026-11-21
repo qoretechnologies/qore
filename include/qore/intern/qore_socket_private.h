@@ -1258,6 +1258,9 @@ private:
     std::string name;
     struct sockaddr_un addr;
     int state = SCIPS_CONNECT;
+    //! The @ref qore_socket_private::fd_generation "generation" of the socket's descriptor since the connection gave
+    //! it one (or since it started): a close of the socket changes it, and the connection then fails (qore#7156)
+    uint32_t sock_gen = 0;
 
     DLLLOCAL int doConnect(ExceptionSink* xsink);
 
@@ -5345,6 +5348,11 @@ DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_in_resolve;
 /** For the C++ unit tests of the replacement of a failed attempt's descriptor by another attempt's (qore#7003)
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_fail_held_attempt;
+
+//! Debug builds: if set, called by a UNIX socket connection right before it gives the socket its descriptor
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0
