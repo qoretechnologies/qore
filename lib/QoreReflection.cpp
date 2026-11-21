@@ -143,6 +143,12 @@ bool qore_type_get_code_param_types(const QoreTypeInfo* ti, type_vec_t& params) 
     return true;
 }
 
+const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti) {
+    const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
+    // a copy kept with the type, whose elements are orphaned with the type's own (issue #6936)
+    return code_type ? code_type->getLegacyParamTypes() : nullptr;
+}
+
 bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
     const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
     return code_type && code_type->hasVarArgs();
@@ -169,6 +175,20 @@ bool qore_type_get_type_arguments(const QoreTypeInfo* ti, type_vec_t& args) {
         return true;
     }
     return false;
+}
+
+const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+    const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
+    if (parameterized_type) {
+        // a copy kept with the type, whose elements are orphaned with the type's own (issue #6936)
+        return parameterized_type->getLegacyTypeArgs();
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
+        // the hashdecl's own vector, as before
+        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+    }
+    return nullptr;
 }
 
 bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {
