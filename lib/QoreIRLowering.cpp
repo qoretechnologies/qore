@@ -19181,6 +19181,8 @@ static bool analyzeStringJoinFoldPattern(const QoreValue& fold_expr, QoreValue& 
     }
     const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(inner->getLeft().getInternalNode());
     QoreValue candidate = inner->getRight();
+    // note: safe; a separator that is not a string node, also an inline short string, gives false: the fold is not
+    // lowered as a join, and runs as written
     if (!arg1 || arg1->getOffset() != 0
             || !dynamic_cast<const QoreStringNode*>(candidate.getInternalNode())) {
         return false;

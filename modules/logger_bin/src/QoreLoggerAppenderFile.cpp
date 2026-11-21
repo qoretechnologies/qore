@@ -120,12 +120,13 @@ void QoreLoggerAppenderFile::openFile(ExceptionSink* xsink) {
         return;
     }
 
-    const QoreStringNode* filename = fn->get<const QoreStringNode>();
+    // the member can hold an inline short string, assigned by Qore code
+    QoreStringDataHelper filename(*fn);
     // a path with a NUL character would be cut at the NUL character
-    if (q_check_path(*filename, "FILE-OPEN2-ERROR", xsink)) {
+    if (q_check_path(filename.c_str(), filename.size(), "FILE-OPEN2-ERROR", xsink)) {
         return;
     }
-    f->open2(xsink, filename->c_str(), (int)DEFAULT_OPEN_FLAGS, 0644, f->getEncoding());
+    f->open2(xsink, filename.c_str(), (int)DEFAULT_OPEN_FLAGS, 0644, f->getEncoding());
 }
 
 void QoreLoggerAppenderFile::closeFile(ExceptionSink* xsink) {

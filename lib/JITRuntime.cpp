@@ -12635,6 +12635,8 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     }
 
     // Handle string
+    // note: safe; the node of arg, whose inline short string returns above (!arg.hasNode()); the caller gives strings
+    // in both representations to qore_fast_length() and qore_fast_strlen() first
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         return toBits(static_cast<int64_t>(str->length()));
     }

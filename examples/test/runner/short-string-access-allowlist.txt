@@ -1,4 +1,5 @@
-# The reads of a string value as a QoreStringNode in lib/ and include/ that test_short_string_access.py cannot see to
-# be safe, and why an inline short string cannot reach them (issue #7038).  Format, one per line:
+# The reads of a string value as a QoreStringNode in lib/, include/ and modules/ that test_short_string_access.py
+# cannot see to be safe, and why an inline short string cannot reach them (issues #7038, #7062).  Format, one per
+# line:
 # <path> | <code of the line, as in the source> | <reason>
 # Prefer a "// note: safe; <reason>" comment just before the read, which stays with the code.
