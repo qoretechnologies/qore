@@ -340,7 +340,8 @@ static int socket_check_head_response(bool head, const QoreHashNode* headers, co
     if (!head) {
         return 0;
     }
-    if (body.getType() == NT_STRING ? !body.get<const QoreStringNode>()->empty()
+    // the body can be an inline short string, which has no node (issue #7038)
+    if (body.getType() == NT_STRING ? !QoreStringDataHelper(body).empty()
             : (body.getType() == NT_BINARY && body.get<const BinaryNode>()->size())) {
         xsink->raiseException(err, "the response to a HEAD request has no message body");
         return -1;
@@ -6859,7 +6860,8 @@ nothing Socket::setHttpFastExtraHeaders(*hash<auto> headers) [flags=NAMED_ARGS] 
                     v.getFullTypeName());
                 return QoreValue();
             }
-            TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            // the value can be an inline short string, which has no node (issue #7038)
+            QoreStringNodeValueHelper t(v, QCS_UTF8, xsink);
             if (*xsink) {
                 return QoreValue();
             }

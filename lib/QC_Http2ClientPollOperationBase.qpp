@@ -2523,6 +2523,7 @@ int Http2ClientPollOperationBase::submitRequest(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2584,6 +2585,7 @@ int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, strin
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2662,6 +2664,7 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2731,6 +2734,7 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();

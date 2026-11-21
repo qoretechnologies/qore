@@ -3497,6 +3497,7 @@ static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result
         case NT_STRING: {
             if (!entry->isNothing()) {
                 QoreStringValueHelper str(*entry);
+                // note: safe; the result is the string node made by qore_rt_new_list_selector_result()
                 qore_string_private::get(*const_cast<QoreStringNode*>(result.get<const QoreStringNode>()))
                     ->concat(*str);
             }
@@ -12598,6 +12599,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
+            // note: safe; the node of the value, read under arg.hasNode() above
             const auto* str = static_cast<const QoreStringNode*>(node);
             return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }

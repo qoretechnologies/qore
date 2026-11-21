@@ -19721,6 +19721,7 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     assert(data->getType() == NT_STRING);
+    // note: safe; the header data read from the socket is a string node made here
     SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
     ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
         QORE_SOURCE_SOCKET), xsink);

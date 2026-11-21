@@ -1877,8 +1877,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             return 0;
         };
         QoreValue conn_val = response_headers->getKeyValue("connection");
+        // the values can be inline short strings, which have no node (issue #7038)
         if (conn_val.getType() == NT_STRING) {
-            if (inspect_connection(*conn_val.get<const QoreStringNode>())) {
+            if (inspect_connection(**QoreStringNodeValueHelper(conn_val))) {
                 return nullptr;
             }
         } else if (conn_val.getType() == NT_LIST) {
@@ -1888,7 +1889,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     return nullptr;
                 }
                 QoreValue item = li.getValue();
-                if (item.getType() == NT_STRING && inspect_connection(*item.get<const QoreStringNode>())) {
+                if (item.getType() == NT_STRING && inspect_connection(**QoreStringNodeValueHelper(item))) {
                     return nullptr;
                 }
             }
@@ -4037,6 +4038,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4098,6 +4100,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4186,6 +4189,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4243,6 +4247,7 @@ nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS
         return QoreValue();
     }
     if (data->getType() == NT_STRING) {
+        // note: safe; qpp makes a node of an inline short string for a *data parameter
         priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink);
         return QoreValue();
     }
@@ -4306,6 +4311,7 @@ int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();

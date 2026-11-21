@@ -2010,6 +2010,7 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
         rv = client->sendAndStream(method->c_str(), pstr, headers,
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             *static_cast<const QoreStringNode*>(body), *ohrh, xsink);
     } else {
         const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
@@ -2565,6 +2566,7 @@ nothing HTTPClient::send(Qore::OutputStream[OutputStream] output_stream, *data b
     OptHashRefHelper ohrh(info, xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
+        // note: safe; qpp makes a node of an inline short string for a *data parameter
         client->sendWithOutputStream(method->c_str(), pstr, headers, *static_cast<const QoreStringNode*>(body),
             read_response_body, *ohrh, timeout_ms, receive_callback, self, *output_stream, xsink);
     } else {

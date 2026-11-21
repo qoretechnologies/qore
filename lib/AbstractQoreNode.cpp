@@ -219,6 +219,7 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     if (references.load() > 10000000 || references.load() <= 0){
         if (type == NT_STRING) {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s) (val=\"%s\")\n",
+                    // note: safe; this is the string node itself, not a value
                     this, references.load(), getTypeName(), ((QoreStringNode*)this)->getBuffer());
         } else {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s)\n", this,

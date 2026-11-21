@@ -1868,6 +1868,7 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
     }
     SimpleRefHolder<SimpleValueQoreNode> rv(qore_decode_http_body(ct, body, assumed));
     if (rv->getType() == NT_STRING) {
+        // note: safe; rv is the node made by qore_decode_http_body()
         const QoreStringNode* str = static_cast<const QoreStringNode*>(*rv);
         // the check of <string>::isEncodingValid() and of the "latin1" mode: also a byte that is not a character of
         // a single-byte encoding (ex: 0x81 in windows-1252) is not valid

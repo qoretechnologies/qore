@@ -1405,6 +1405,7 @@ nothing WebSocketClientPollOperationBase::sendPing(*data payload) [flags=NAMED_A
                 payload_len = bin->size();
             }
         } else if (t == NT_STRING) {
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(payload);
             if (str->size() > 0) {
                 payload_ptr = str->c_str();
@@ -1440,6 +1441,7 @@ nothing WebSocketClientPollOperationBase::sendPong(*data payload) [flags=NAMED_A
                 payload_len = bin->size();
             }
         } else if (t == NT_STRING) {
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(payload);
             if (str->size() > 0) {
                 payload_ptr = str->c_str();

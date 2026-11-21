@@ -406,9 +406,8 @@ static void convert_response_body_limit_error(int64 max_size, ExceptionSink* xsi
     if (!*xsink) {
         return;
     }
-    QoreValue err = xsink->getExceptionErr();
-    if (err.getType() != NT_STRING
-            || strcmp(err.get<const QoreStringNode>()->c_str(), "DECOMPRESSION-LIMIT-EXCEEDED")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(xsink->getExceptionErr()) != "DECOMPRESSION-LIMIT-EXCEEDED") {
         return;
     }
     xsink->clear();
@@ -3222,14 +3221,16 @@ struct qore_httpclient_priv {
     */
     DLLLOCAL std::string getBodyContentType(const QoreHashNode& ans, QoreValue ct) const {
         std::string rv;
-        if (ct.getType() == NT_STRING) {
-            rv = ct.get<const QoreStringNode>()->c_str();
+        // the values can be inline short strings, which have no node (issue #7038)
+        QoreStringDataHelper ct_str(ct);
+        if (ct_str) {
+            rv = ct_str.c_str();
         }
-        QoreValue ce = ans.getKeyValue("content-encoding");
-        if (ce.getType() != NT_STRING) {
+        QoreStringDataHelper ce(ans.getKeyValue("content-encoding"));
+        if (!ce) {
             return rv;
         }
-        const char* start = ce.get<const QoreStringNode>()->c_str();
+        const char* start = ce.c_str();
         while (*start == ' ' || *start == '\t') {
             ++start;
         }
@@ -3582,9 +3583,10 @@ struct qore_httpclient_priv {
         // and the peer may have closed the connection after rejecting it
         {
             std::string sent;
-            QoreValue v = nh->getKeyValue(auth_hdr);
-            if (v.getType() == NT_STRING) {
-                sent = v.get<const QoreStringNode>()->c_str();
+            // the value can be an inline short string, which has no node (issue #7038)
+            QoreStringDataHelper v(nh->getKeyValue(auth_hdr));
+            if (v) {
+                sent = v.c_str();
             } else if (code == 407) {
                 // the credentials that the connection manager sends to the proxy with every request
                 sent = getConnMgrProxyAuthorization();
@@ -4109,10 +4111,12 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "options hash; got type \"%s\" instead", key, n.getTypeName());
             return -1;
         }
-        if (q_check_path(*n.get<const QoreStringNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringValueHelper path_str(n);
+        if (q_check_path(**path_str, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
-        const char* path = n.get<const QoreStringNode>()->c_str();
+        const char* path = path_str->c_str();
         if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
                 "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
@@ -8897,12 +8901,11 @@ public:
         // HTTP/2 and HTTP/3 carry no reason phrase; the blocking request derives the standard one from the status
         // code (see HttpClientConnectionManagerBase::request()), so the same message is reported here
         QoreValue smv = resp->getKeyValue("status_message");
+        // the message can be an inline short string, which has no node (issue #7038)
         SimpleRefHolder<QoreStringNode> derived_message(smv.getType() == NT_STRING
-            ? nullptr
+            ? QoreStringNodeValueHelper(smv).getReferencedValue()
             : new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(code)));
-        const QoreStringNode* status_message = smv.getType() == NT_STRING
-            ? smv.get<const QoreStringNode>()
-            : *derived_message;
+        const QoreStringNode* status_message = *derived_message;
         const char* msg = status_message && !status_message->empty() ? status_message->c_str() : "<no message>";
 
         SimpleRefHolder<QoreStringNode> loc(resp_headers
@@ -10244,14 +10247,15 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 
         const char* ptr = nullptr;
         size_t len = 0;
+        // the body can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper body_str(body_val);
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
             ptr = static_cast<const char*>(bin->getPtr());
             len = bin->size();
-        } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
-            ptr = str->c_str();
-            len = str->size();
+        } else if (body_str) {
+            ptr = body_str.c_str();
+            len = body_str.size();
         }
         if (len) {
             SafeLocker sl(priv->m);

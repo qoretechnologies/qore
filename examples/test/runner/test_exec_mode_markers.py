@@ -338,6 +338,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   without an execution mode
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
         #   without an execution mode
+        # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
+        #   as qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -395,6 +397,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
                                  "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
+                                 "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
