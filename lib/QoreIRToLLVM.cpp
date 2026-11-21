@@ -3629,7 +3629,10 @@ void QoreIRToLLVM::emitAssignedClosureLocalInstantiation(const LocalVar* root_lo
 
 void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func) {
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
-    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    llvm::IRBuilder<> storage(entry, entry->begin());
+    // Only an admitted native invocation owns its parameter references. The guard and debugger
+    // forwarding path return without the body's local cleanup.
+    llvm::IRBuilder<> init(locals_entry->getTerminator());
     // A boxed IR-only body local owns its alloca value for the whole function:
     // every write that replaces the value stores an owned reference.  Register
     // the ownership here, before any block is lowered, rather than at the first
@@ -3668,7 +3671,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         bool is_native_bool = native_bool_locals.count(key) > 0;
         llvm::Type* alloca_type = is_native_float ? double_type
             : is_native_bool ? i1_type : i64_type;
-        llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(alloca_type, nullptr, "local");
+        llvm::AllocaInst* alloca = storage.CreateAlloca(alloca_type, nullptr, "local");
 
         // Approach B fast entry: initialize param allocas from LLVM function arguments
         if (fast_entry_args) {
@@ -3677,17 +3680,17 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 llvm::Value* arg_val = fa_it->second;
                 BatchCalleeParamKind arg_kind = getFastEntryArgKind(key);
                 if (is_native_int && arg_kind == BatchCalleeParamKind::NativeInt) {
-                    alloca_builder.CreateStore(arg_val, alloca);
+                    init.CreateStore(arg_val, alloca);
                     local_allocas[key] = LocalCacheSlot(alloca);
                     continue;
                 }
                 if (is_native_float && arg_kind == BatchCalleeParamKind::NativeFloat) {
-                    alloca_builder.CreateStore(arg_val, alloca);
+                    init.CreateStore(arg_val, alloca);
                     local_allocas[key] = LocalCacheSlot(alloca);
                     continue;
                 }
                 if (is_native_bool && arg_kind == BatchCalleeParamKind::NativeBool) {
-                    alloca_builder.CreateStore(arg_val, alloca);
+                    init.CreateStore(arg_val, alloca);
                     local_allocas[key] = LocalCacheSlot(alloca);
                     continue;
                 }
@@ -3698,7 +3701,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     if (llvm::AllocaInst* ref_flag = localReferenceFlag(key, llvm_func)) {
                         auto is_ref_fn = module.getOrInsertFunction("qore_rt_value_is_reference",
                                 llvm::FunctionType::get(llvm::Type::getInt8Ty(ctx), {i64_type}, false));
-                        alloca_builder.CreateStore(alloca_builder.CreateCall(is_ref_fn, {arg_val}), ref_flag);
+                        init.CreateStore(init.CreateCall(is_ref_fn, {arg_val}), ref_flag);
                     }
                 };
                 // an `any` or a plain `auto!` parameter strips the complex type of a list or hash argument, as the
@@ -3707,7 +3710,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 // has the type `auto`, its lvalue type is `auto!` (qore#6059)
                 const bool strip_any = q_type_strips_complex_type(var->getTypeInfoForLValue());
                 if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
-                    alloca_builder.CreateStore(arg_val, alloca);
+                    init.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     local_allocas[key] = LocalCacheSlot(alloca);
                     continue;
@@ -3717,34 +3720,34 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 // for cleanup safety (Return does incref, cleanup does decref).
                 auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
                         llvm::FunctionType::get(void_type, {i64_type}, false));
-                alloca_builder.CreateCall(incref_fn, {arg_val});
+                init.CreateCall(incref_fn, {arg_val});
 
                 if (is_native_int) {
                     auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_int, {arg_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_int, {arg_val});
+                    init.CreateStore(native_val, alloca);
                     // Native int: incref'd value cleaned up via preinstantiated_entry_loads
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else if (is_native_float) {
                     auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                             llvm::FunctionType::get(double_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_float, {arg_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_float, {arg_val});
+                    init.CreateStore(native_val, alloca);
                     // Native float: incref'd value cleaned up via preinstantiated_entry_loads
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else if (is_native_bool) {
-                    llvm::Value* native_val = alloca_builder.CreateICmpEQ(arg_val,
+                    llvm::Value* native_val = init.CreateICmpEQ(arg_val,
                         llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                    alloca_builder.CreateStore(native_val, alloca);
+                    init.CreateStore(native_val, alloca);
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else {
                     if (strip_any) {
                         auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
                                 llvm::FunctionType::get(i64_type, {i64_type}, false));
-                        arg_val = alloca_builder.CreateCall(strip_fn, {arg_val});
+                        arg_val = init.CreateCall(strip_fn, {arg_val});
                     }
-                    alloca_builder.CreateStore(arg_val, alloca);
+                    init.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     // NaN-boxed: track alloca for load+decref at exit.  Combined with
                     // decref-before-store in StoreLocal, handles param reassignment.
@@ -3756,13 +3759,13 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
             }
             // Not a fast entry param → initialize to default (body local)
             if (is_native_int) {
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+                init.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
             } else if (is_native_float) {
-                alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+                init.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
             } else if (is_native_bool) {
-                alloca_builder.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
+                init.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
             } else {
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                init.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
                 register_owned_ir_local(key, alloca);
             }
             local_allocas[key] = LocalCacheSlot(alloca);
@@ -3786,9 +3789,9 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
             // Pre-instantiated and NOT IR-only: initialize from runtime stack
             llvm::AllocaInst* boxed_cleanup = nullptr;
             if (!is_native_int && !is_native_float && !is_native_bool) {
-                boxed_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr,
+                boxed_cleanup = storage.CreateAlloca(i64_type, nullptr,
                         "preinst_cleanup");
-                alloca_builder.CreateStore(
+                init.CreateStore(
                         llvm::ConstantInt::get(i64_type, VAL_NOTHING), boxed_cleanup);
                 preinstantiated_entry_cleanup_allocas.push_back(boxed_cleanup);
                 preinstantiated_entry_cleanup_by_local[key] = boxed_cleanup;
@@ -3806,53 +3809,53 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
             }
             if (aot_mode) {
                 // a reference held by a local of no reference type is cached as it is (see emitLocalCacheLoad())
-                llvm::Value* init_val = take_param ? emitParamTake(key, alloca_builder, module)
-                    : emitLocalCacheLoad(key, alloca_builder, module);
+                llvm::Value* init_val = take_param ? emitParamTake(key, init, module)
+                    : emitLocalCacheLoad(key, init, module);
                 if (is_native_int) {
                     auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_int, {init_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_int, {init_val});
+                    init.CreateStore(native_val, alloca);
                 } else if (is_native_float) {
                     auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                             llvm::FunctionType::get(double_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_float, {init_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_float, {init_val});
+                    init.CreateStore(native_val, alloca);
                 } else if (is_native_bool) {
-                    llvm::Value* native_val = alloca_builder.CreateICmpEQ(init_val,
+                    llvm::Value* native_val = init.CreateICmpEQ(init_val,
                         llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                    alloca_builder.CreateStore(native_val, alloca);
+                    init.CreateStore(native_val, alloca);
                 } else {
-                    alloca_builder.CreateStore(init_val, alloca);
+                    init.CreateStore(init_val, alloca);
                 }
                 if (boxed_cleanup) {
-                    alloca_builder.CreateStore(init_val, boxed_cleanup);
+                    init.CreateStore(init_val, boxed_cleanup);
                 } else {
                     preinstantiated_entry_loads.push_back(init_val);
                 }
             } else {
                 // see above
-                llvm::Value* init_val = take_param ? emitParamTake(key, alloca_builder, module)
-                    : emitLocalCacheLoad(key, alloca_builder, module);
+                llvm::Value* init_val = take_param ? emitParamTake(key, init, module)
+                    : emitLocalCacheLoad(key, init, module);
                 if (is_native_int) {
                     auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_int, {init_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_int, {init_val});
+                    init.CreateStore(native_val, alloca);
                 } else if (is_native_float) {
                     auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                             llvm::FunctionType::get(double_type, {i64_type}, false));
-                    llvm::Value* native_val = alloca_builder.CreateCall(to_float, {init_val});
-                    alloca_builder.CreateStore(native_val, alloca);
+                    llvm::Value* native_val = init.CreateCall(to_float, {init_val});
+                    init.CreateStore(native_val, alloca);
                 } else if (is_native_bool) {
-                    llvm::Value* native_val = alloca_builder.CreateICmpEQ(init_val,
+                    llvm::Value* native_val = init.CreateICmpEQ(init_val,
                         llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                    alloca_builder.CreateStore(native_val, alloca);
+                    init.CreateStore(native_val, alloca);
                 } else {
-                    alloca_builder.CreateStore(init_val, alloca);
+                    init.CreateStore(init_val, alloca);
                 }
                 if (boxed_cleanup) {
-                    alloca_builder.CreateStore(init_val, boxed_cleanup);
+                    init.CreateStore(init_val, boxed_cleanup);
                 } else {
                     preinstantiated_entry_loads.push_back(init_val);
                 }
@@ -3860,13 +3863,13 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         } else {
             // Body local: initialize to default value
             if (is_native_int) {
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+                init.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
             } else if (is_native_float) {
-                alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+                init.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
             } else if (is_native_bool) {
-                alloca_builder.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
+                init.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
             } else {
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                init.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
                 register_owned_ir_local(key, alloca);
             }
         }
@@ -3885,10 +3888,10 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     && block_scoped_locals.count(key)
                     && var->closureUse()
                     && !ir_only_body_locals.count(key)) {
-                llvm::AllocaInst* flag = alloca_builder.CreateAlloca(i1_type, nullptr,
+                llvm::AllocaInst* flag = storage.CreateAlloca(i1_type, nullptr,
                         "closure_pre_inst_active");
                 // Starts as true: evalTiered pre-instantiated this var before execute()
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i1_type, 1), flag);
+                init.CreateStore(llvm::ConstantInt::get(i1_type, 1), flag);
                 closure_pre_inst_flags[key] = flag;
             }
         }
@@ -16093,6 +16096,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     fused_fresh_container_inits = 0;
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
+    locals_entry = nullptr;
     aot_call_target_contexts.clear();
     aot_cross_module_targets.clear();
     cross_module_call_state_storage = nullptr;
@@ -16295,6 +16299,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         stack_overflow_bb = llvm::BasicBlock::Create(ctx,
                 "stack_overflow", llvm_func, first_ir_bb);
 
+        // Parameter cache setup runs once, before local instantiation, on the admitted native path.
+        locals_entry = llvm::BasicBlock::Create(ctx, "locals_entry", llvm_func, first_ir_bb);
+        llvm::BranchInst::Create(first_ir_bb, locals_entry);
+
         builder->SetInsertPoint(stack_check_bb);
         const BatchCalleeInfo* debug_callee = nullptr;
         if (aot_mode && is_fast_entry && batch_callees && func.source_variant) {
@@ -16320,7 +16328,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         if (debug_callee) {
             llvm::BasicBlock* slow = llvm::BasicBlock::Create(ctx, "aot_entry_slow", llvm_func, first_ir_bb);
             debug_fast_entry_bb = llvm::BasicBlock::Create(ctx, "aot_debug_entry", llvm_func, first_ir_bb);
-            builder->CreateCondBr(ok, first_ir_bb, slow, llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+            builder->CreateCondBr(ok, locals_entry, slow, llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
             builder->SetInsertPoint(slow);
             builder->CreateCondBr(builder->CreateICmpSLT(err, llvm::ConstantInt::get(i32_type, 0)),
                 stack_overflow_bb, debug_fast_entry_bb);
@@ -16330,7 +16338,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
         } else {
-            builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+            builder->CreateCondBr(ok, locals_entry, stack_overflow_bb);
         }
 
         builder->SetInsertPoint(stack_overflow_bb);
@@ -20587,10 +20595,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (it == local_allocas.end()) {
                 // Create alloca in entry block for this local
                 llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
-                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                llvm::IRBuilder<> storage(entry, entry->begin());
+                llvm::IRBuilder<> init(locals_entry->getTerminator());
                 llvm::Type* alloca_type = is_native_float ? double_type
                     : is_native_bool ? i1_type : i64_type;
-                llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(alloca_type, nullptr, "local");
+                llvm::AllocaInst* alloca = storage.CreateAlloca(alloca_type, nullptr, "local");
                 // For pre-instantiated locals (tiered compilation: params, argvid, selfid,
                 // body locals), initialize from the Qore runtime stack so the JIT sees
                 // the values set up by the calling convention.  For other locals (nested
@@ -20604,21 +20613,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // AOT body local: runtime stack slot exists but starts as NOTHING;
                         // avoid an entry qore_rt_load_local_aot() and reload after stores.
                         if (is_native_int) {
-                            alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+                            init.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
                         } else if (is_native_float) {
-                            alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+                            init.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
                         } else if (is_native_bool) {
-                            alloca_builder.CreateStore(llvm::ConstantInt::get(i1_type, 0), alloca);
+                            init.CreateStore(llvm::ConstantInt::get(i1_type, 0), alloca);
                         } else {
-                            alloca_builder.CreateStore(
+                            init.CreateStore(
                                     llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
                         }
                     } else if (aot_mode) {
                         llvm::AllocaInst* boxed_cleanup = nullptr;
                         if (!is_native_int && !is_native_float && !is_native_bool) {
-                            boxed_cleanup = alloca_builder.CreateAlloca(i64_type,
+                            boxed_cleanup = storage.CreateAlloca(i64_type,
                                     nullptr, "preinst_cleanup");
-                            alloca_builder.CreateStore(
+                            init.CreateStore(
                                     llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                                     boxed_cleanup);
                             preinstantiated_entry_cleanup_allocas.push_back(
@@ -20628,37 +20637,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         // a reference held by a local of no reference type is cached as it is (see
                         // emitLocalCacheLoad())
-                        llvm::Value* init_val = emitLocalCacheLoad(key, alloca_builder, module);
+                        llvm::Value* init_val = emitLocalCacheLoad(key, init, module);
                         if (is_native_int) {
                             // Convert NaN-boxed value from runtime to native int
                             // Use ensureIntType (safe in entry block context)
                             auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                                     llvm::FunctionType::get(i64_type, {i64_type}, false));
-                            llvm::Value* native_val = alloca_builder.CreateCall(to_int, {init_val});
-                            alloca_builder.CreateStore(native_val, alloca);
+                            llvm::Value* native_val = init.CreateCall(to_int, {init_val});
+                            init.CreateStore(native_val, alloca);
                         } else if (is_native_float) {
                             auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                                     llvm::FunctionType::get(double_type, {i64_type}, false));
-                            llvm::Value* native_val = alloca_builder.CreateCall(to_float, {init_val});
-                            alloca_builder.CreateStore(native_val, alloca);
+                            llvm::Value* native_val = init.CreateCall(to_float, {init_val});
+                            init.CreateStore(native_val, alloca);
                         } else if (is_native_bool) {
-                            llvm::Value* native_val = alloca_builder.CreateICmpEQ(init_val,
+                            llvm::Value* native_val = init.CreateICmpEQ(init_val,
                                 llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                            alloca_builder.CreateStore(native_val, alloca);
+                            init.CreateStore(native_val, alloca);
                         } else {
-                            alloca_builder.CreateStore(init_val, alloca);
+                            init.CreateStore(init_val, alloca);
                         }
                         if (boxed_cleanup) {
-                            alloca_builder.CreateStore(init_val, boxed_cleanup);
+                            init.CreateStore(init_val, boxed_cleanup);
                         } else {
                             preinstantiated_entry_loads.push_back(init_val);
                         }
                     } else {
                         llvm::AllocaInst* boxed_cleanup = nullptr;
                         if (!is_native_int && !is_native_float && !is_native_bool) {
-                            boxed_cleanup = alloca_builder.CreateAlloca(i64_type,
+                            boxed_cleanup = storage.CreateAlloca(i64_type,
                                     nullptr, "preinst_cleanup");
-                            alloca_builder.CreateStore(
+                            init.CreateStore(
                                     llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                                     boxed_cleanup);
                             preinstantiated_entry_cleanup_allocas.push_back(
@@ -20667,26 +20676,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     boxed_cleanup;
                         }
                         // see above
-                        llvm::Value* init_val = emitLocalCacheLoad(key, alloca_builder, module);
+                        llvm::Value* init_val = emitLocalCacheLoad(key, init, module);
                         if (is_native_int) {
                             auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                                     llvm::FunctionType::get(i64_type, {i64_type}, false));
-                            llvm::Value* native_val = alloca_builder.CreateCall(to_int, {init_val});
-                            alloca_builder.CreateStore(native_val, alloca);
+                            llvm::Value* native_val = init.CreateCall(to_int, {init_val});
+                            init.CreateStore(native_val, alloca);
                         } else if (is_native_float) {
                             auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                                     llvm::FunctionType::get(double_type, {i64_type}, false));
-                            llvm::Value* native_val = alloca_builder.CreateCall(to_float, {init_val});
-                            alloca_builder.CreateStore(native_val, alloca);
+                            llvm::Value* native_val = init.CreateCall(to_float, {init_val});
+                            init.CreateStore(native_val, alloca);
                         } else if (is_native_bool) {
-                            llvm::Value* native_val = alloca_builder.CreateICmpEQ(init_val,
+                            llvm::Value* native_val = init.CreateICmpEQ(init_val,
                                 llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                            alloca_builder.CreateStore(native_val, alloca);
+                            init.CreateStore(native_val, alloca);
                         } else {
-                            alloca_builder.CreateStore(init_val, alloca);
+                            init.CreateStore(init_val, alloca);
                         }
                         if (boxed_cleanup) {
-                            alloca_builder.CreateStore(init_val, boxed_cleanup);
+                            init.CreateStore(init_val, boxed_cleanup);
                         } else {
                             preinstantiated_entry_loads.push_back(init_val);
                         }
@@ -20694,13 +20703,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     // Initialize to default: 0 for native int, 0.0 for native float, NOTHING for boxed
                     if (is_native_int) {
-                        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+                        init.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
                     } else if (is_native_float) {
-                        alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+                        init.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
                     } else if (is_native_bool) {
-                        alloca_builder.CreateStore(llvm::ConstantInt::get(i1_type, 0), alloca);
+                        init.CreateStore(llvm::ConstantInt::get(i1_type, 0), alloca);
                     } else {
-                        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                        init.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
                     }
                 }
                 local_allocas[key] = LocalCacheSlot(alloca);
