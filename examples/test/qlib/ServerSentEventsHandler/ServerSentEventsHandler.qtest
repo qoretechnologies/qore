@@ -436,7 +436,7 @@ class MyObserver inherits Observer {
     }
 
     hash<SseMessageInfo> wait() {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
 
         m.lock();
         on_exit m.unlock();
@@ -445,7 +445,7 @@ class MyObserver inherits Observer {
             ++waiting;
             cond.wait(m, 1s);
             --waiting;
-            date d = now_us() - start;
+            date d = microseconds(clock_get_monotonic_us()) - start;
             if (d > 10s) {
                 throw "ERROR", sprintf("no matching data received in timeout; l: %y", l);
             }
@@ -459,7 +459,7 @@ class MyObserver inherits Observer {
 
     # Wait for the connected event to ensure the client is fully ready
     waitForConnected() {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
 
         m.lock();
         on_exit m.unlock();
@@ -470,7 +470,7 @@ class MyObserver inherits Observer {
                     return;
                 }
             }
-            date d = now_us() - start;
+            date d = microseconds(clock_get_monotonic_us()) - start;
             if (d > 10s) {
                 throw "ERROR", sprintf("connected event not received in timeout; l: %y", l);
             }

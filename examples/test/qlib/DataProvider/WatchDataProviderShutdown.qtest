@@ -403,9 +403,9 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
         assertEq(1, prov.poll_counter.getCount(), "pollOnce() entered once");
 
         # Stop should complete promptly because cancelPollOperation() unblocks the gate
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         prov.stopEvents();
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(prov.cancel_called, "cancelPollOperation() was called");
         # Should complete in well under 2 seconds (not waiting for poll interval)
@@ -493,9 +493,9 @@ class WatchDataProviderShutdownTest inherits QUnit::Test {
         assertTrue(prov.poll_count >= 1, "at least one poll completed");
 
         # Stop should complete promptly because the condition broadcast wakes the sleep
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         prov.stopEvents();
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(prov.cancel_called, "cancelPollOperation() was called");
         # Should not wait for the 60s poll interval

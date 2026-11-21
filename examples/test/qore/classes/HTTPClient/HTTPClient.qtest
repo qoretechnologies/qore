@@ -607,10 +607,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
     }
 
     private pollSocketOperation(SocketPollOperation spop, date max_wait = 20s) {
-        date start = now();
+        date start = microseconds(clock_get_monotonic_us());
         while (*hash<SocketPollInfo> info = spop.continuePoll()) {
             Socket::poll((info,), 50ms);
-            if (now() - start > max_wait) {
+            if (microseconds(clock_get_monotonic_us()) - start > max_wait) {
                 fail(sprintf("poll timeout waiting for %s (state: %s)", spop.getGoal(), spop.getState()));
             }
         }
@@ -729,7 +729,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 string msg = sprintf("%s %s", c.label ?? c.opts.http_version ?? "negotiate", api);
                 hold_tls = c.hold ?? False;
                 HTTPClient hc(c.opts + {"connect_timeout": 1s, "timeout": 60s});
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 *hash<ExceptionInfo> err;
                 try {
                     if (api == "sync") {
@@ -745,7 +745,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     err = ex;
                 }
                 # the transport deadline fails the request, not the caller's backstop wait
-                assertLt(20s, now_us() - start, msg);
+                assertLt(20s, microseconds(clock_get_monotonic_us()) - start, msg);
                 *string expected = c.err;
                 if (c.opts.url == tls_url) {
                     # the client's connection is closed, so that a handshake that did not complete ends at once
@@ -886,7 +886,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             on_exit done.dec();
             try {
-                Socket conn = server.accept(5s);
+                Socket conn = server.accept(30s);
                 on_exit conn.close();
 
                 req = conn.readHTTPHeader(5s);
@@ -1797,10 +1797,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
     #! Drives a poll operation on this thread until it completes and returns its output
     static auto drivePoll(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 30s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - microseconds(clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

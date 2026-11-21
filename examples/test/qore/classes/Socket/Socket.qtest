@@ -2275,8 +2275,8 @@ class SocketTest inherits QUnit::Test {
         SocketPollOperation server_op = peer.startPollUpgradeServerToSSL();
         SocketPollOperation client_op = client.startPollUpgradeClientToSSL();
 
-        date deadline = now_us() + 15s;
-        while ((!server_op.goalReached() || !client_op.goalReached()) && now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(15s);
+        while ((!server_op.goalReached() || !client_op.goalReached()) && clock_get_monotonic_us() < deadline) {
             list<hash<SocketPollInfo>> poll_list = ();
 
             if (!server_op.goalReached()) {
@@ -2541,7 +2541,7 @@ class SocketTest inherits QUnit::Test {
         s.bindINET("127.0.0.1", 0);
         s.listen();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         list<hash<SocketPollInfo>> ready = Socket::poll((
             <SocketPollInfo>{
                 "events": SOCK_POLLIN,
@@ -2549,7 +2549,7 @@ class SocketTest inherits QUnit::Test {
                 "poll_timeout_ms": 25,
             },
         ), 5s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(0, ready.size());
         assertTrue(elapsed < 1s, "poll_timeout_ms should wake before caller timeout");
@@ -3516,7 +3516,7 @@ class SocketTest inherits QUnit::Test {
             }
             rethrow;
         }
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         bool got_socket_closed = False;
         try {
             accepted.recv(1, 500ms);
@@ -3527,7 +3527,7 @@ class SocketTest inherits QUnit::Test {
                 printf("fdGenerationTest: got %s: %s\n", ex.err, ex.desc);
             }
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(got_socket_closed,
             "recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT) when fd_generation "
@@ -3872,9 +3872,9 @@ class SocketTest inherits QUnit::Test {
     /** Fails the test instead of waiting forever if the goal is not reached in time.
     */
     private auto drivePollOperation(AbstractPollOperation op) {
-        date deadline = now_us() + 10s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(10s);
         while (!op.goalReached()) {
-            if (now_us() > deadline) {
+            if (clock_get_monotonic_us() > deadline) {
                 fail(sprintf("poll operation %y did not reach its goal", op.getState()));
             }
             *hash<SocketPollInfo> info = op.continuePoll();

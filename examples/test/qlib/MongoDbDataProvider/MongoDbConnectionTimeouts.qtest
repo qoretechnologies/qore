@@ -138,9 +138,9 @@ public class MongoDbConnectionTimeoutsTest inherits QUnit::Test {
 
         MongoDbDataProvider::MongoDbConnection c("m", "silent server",
             sprintf("mongodb://localhost:%d/db", port), {}, {"ping_timeout": 3s});
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<auto> rv = c.ping();
-        date delta = now_us() - start;
+        date delta = microseconds(clock_get_monotonic_us() - start);
 
         assertFalse(rv.ok, "the ping failed rather than hanging");
         assertTrue(delta < 8s, sprintf("the ping was bounded by ping_timeout (took %y)", delta));

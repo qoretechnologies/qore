@@ -616,9 +616,9 @@ public class Pop3ClientFetchTest inherits QUnit::Test {
 
     #! Drive a poll operation to completion via manual poll loop
     private drivePollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         while (!op.goalReached()) {
-            if ((now_us() - start) > to) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > to) {
                 throw "POLL-TIMEOUT", "poll operation timed out";
             }
             *hash<SocketPollInfo> pi = op.continuePoll();
