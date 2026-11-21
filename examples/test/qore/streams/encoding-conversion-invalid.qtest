@@ -599,6 +599,15 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             ("SJIS//IGNORE", <41812042>, -1), ("Shift_JIS//TRANSLIT", <41f04042>, -1), ("MS932", <41f04042>, 3),
             ("SJIS-WIN", <41f04042>, 3),
         );
+        # the definition is found by the letters and digits of the name, as musl's iconv ignores all punctuation in
+        # names: the Shift_JIS forms are selected by their name, whether or not the platform's iconv knows the
+        # spelling; the other families where the platform's iconv converts the encoding by that spelling (musl)
+        foreach list<auto> c in (("Shift.JIS", <8140>, True), ("MS.932", <f040>, True), ("S.J.I.S", <8140>, True),
+                ("GB.2312", <b0a1>), ("EUC.JP", <8ea1>)) {
+            if (c[2] || converts(c[0])) {
+                assertEq(1, binary_to_string(c[1], c[0]).length(), c[0] + ": a character of the definition");
+            }
+        }
         list<string> unavailable = ();
         foreach list<auto> c in (defined) {
             string label = c[0] + " " + c[1].toHex();

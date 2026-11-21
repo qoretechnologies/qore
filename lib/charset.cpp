@@ -1701,16 +1701,12 @@ const struct {
 };
 #undef QORE_MULTIBYTE_FAMILY
 
-// returns the name in upper case without "-", "_" and " ", as iconv implementations match names (ex: "EUCJP" is
-// "EUC-JP" for glibc), and without any conversion flags after "//"
+// returns the letters and digits of the name in upper case (qore_encoding_name_key()), without any conversion flags
+// after "//": iconv implementations ignore punctuation in names (ex: "EUCJP" is "EUC-JP" for glibc; musl ignores all
+// of it, so "Shift.JIS" is Shift_JIS there), and every spelling that iconv accepts must find the definition of its
+// family (qore#6796)
 static std::string normalize_multibyte_family_name(const std::string& name) {
-    std::string rv;
-    for (char c : name.substr(0, name.find("//"))) {
-        if (c != '-' && c != '_' && c != ' ') {
-            rv += static_cast<char>(toupper(static_cast<unsigned char>(c)));
-        }
-    }
-    return rv;
+    return qore_encoding_name_key(name.substr(0, name.find("//")).c_str());
 }
 
 // returns the family of the encoding of the given name, if Qore knows its definition; any spelling of the name that
