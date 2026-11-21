@@ -7553,8 +7553,10 @@ public:
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         if (!xsink) {
             op->setSelf(*op_obj);
-            op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-            op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+            // the members are private:internal to SocketPollOperationBase (#6839): set them as the library does
+            if (!qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink)) {
+                qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
+            }
         }
         if (!xsink) {
             // the first step starts the connect; the attempt is in progress
