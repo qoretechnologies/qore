@@ -34,6 +34,8 @@
 #include "QC_LoggerEvent.h"
 #include "QC_LoggerLevel.h"
 
+#include <qore/QoreSandboxManager.h>
+
 //! Abstract class that defines the interface for logger events
 /** Event data (@ref LoggerEvent) are formatted before the record is passed to the target
 */
@@ -210,15 +212,28 @@ string LoggerEvent::getMessage() {
 }
 
 //! Returns the time when the application/logger started to calculate relative time
-/**
+/** @return the start time of relative time, which is process-wide
+
+    @note any code can read the start time: only trusted code can change it (see setStartTime()), and it holds no
+    data of any caller
 */
 static date LoggerEvent::getStartTime() {
     return QoreLoggerEvent::getStartTime();
 }
 
 //! Sets the starting time for relative time
-/**
+/** @param time the new start time of relative time for the events of every logger in the process
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the start time,
+    which is process-wide and applies to the log output of every caller (see the sandboxing documentation on
+    process-wide registries and settings)
+
+    @since logger_bin 3.0 code that is sandboxed or acts for sandboxed code cannot change the start time
 */
 static LoggerEvent::setStartTime(date time) {
+    // the start time is process-wide: it changes the relative time in the log output of every caller (qore#6746)
+    if (qore_check_process_wide_registration("change the start time of relative logger time", xsink)) {
+        return QoreValue();
+    }
     QoreLoggerEvent::setStartTime(time);
 }

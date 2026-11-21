@@ -72,10 +72,17 @@ foreach string key in (keys results) {
     @note Tracking adds overhead to every malloc/free call. Use only for debugging.
 
     @throw ALLOC-TRACKING-ERROR if not available on this platform
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot start the tracking
+    session, which is process-wide: it would discard the session of another caller and record the allocations of
+    every caller (see @ref sandbox_process_wide_registries)
 
     @since %Qore 3.0
 */
 nothing start_alloc_tracking() [dom=PROCESS] {
+    // one tracking session for the whole process: refused to sandboxed code (issue #6746)
+    if (qore_check_process_wide_registration("start the allocation tracking session", xsink)) {
+        return QoreValue();
+    }
 #ifdef QORE_HAVE_ALLOC_TRACKING
     qore_alloc_tracking_start();
 #else
@@ -97,10 +104,18 @@ nothing start_alloc_tracking() [dom=PROCESS] {
     - \c frames (list<string>): backtrace frame symbols
 
     @throw ALLOC-TRACKING-ERROR if not available on this platform
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot stop the tracking
+    session, which is process-wide: it would end the session of another caller and return the allocations of every
+    caller (see @ref sandbox_process_wide_registries)
 
     @since %Qore 3.0
 */
 *hash<auto> stop_alloc_tracking() [dom=PROCESS] {
+    // one tracking session for the whole process, whose data covers every caller: refused to sandboxed code (issue
+    // #6746)
+    if (qore_check_process_wide_registration("stop the allocation tracking session", xsink)) {
+        return QoreValue();
+    }
 #ifdef QORE_HAVE_ALLOC_TRACKING
     return qore_alloc_tracking_stop(xsink);
 #else

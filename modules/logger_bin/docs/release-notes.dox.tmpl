@@ -23,4 +23,8 @@
 
     An appender references its layout and filters, and an event its level, arguments and exception information, where
     the garbage collector can follow the references, so a cycle through any of them is collected.
+
+    @ref Qore::Logger::LoggerEvent::setStartTime() "LoggerEvent::setStartTime()" raises
+    \c SANDBOX-REGISTRATION-ERROR for code that is sandboxed or acts for sandboxed code, as the start time of relative
+    time is process-wide and applies to the log output of every caller.
 */
