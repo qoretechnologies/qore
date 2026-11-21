@@ -37,6 +37,10 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         *Datasource admin;
         #! the connection of the tests, whose search_path is the run schema
         *Datasource ds;
+        #! true while the admin connection is open
+        bool admin_open;
+        #! true once cleanup() has run
+        bool cleaned;
         string run_schema;
         string decoy_schema;
         #! a schema outside the search_path whose name must be quoted (upper case letters and a space)
@@ -80,6 +84,8 @@ class PgsqlSearchPathTest inherits QUnit::Test {
                 admin = NOTHING;
                 addTestCase("the database can be connected to", sub () { fail(precondition); });
             }
+            # the objects of the run are dropped in a test case of its own, so that an error shows as a failure
+            addTestCase("the objects of the run are dropped", \cleanup());
             set_return_value(main());
         }
     }
@@ -111,6 +117,7 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             TestRun::failUnreachable(connstr, ex);
         }
+        admin_open = True;
 
         # the run's schema, and a decoy schema dropped with it
         run_schema = PgsqlRunSchema::setup(connstr, "SearchPath");
@@ -276,11 +283,16 @@ class PgsqlSearchPathTest inherits QUnit::Test {
     }
 
     private cleanup() {
+        if (cleaned) {
+            return;
+        }
+        cleaned = True;
         if (ds) {
             ds.rollback();
             ds.close();
         }
-        if (admin && admin.isOpen()) {
+        if (admin_open) {
+            admin_open = False;
             admin.rollback();
             # the schemas with quoted names; the run's schema and the decoy are dropped by teardown()
             if (other_schema) {

@@ -164,9 +164,9 @@ public class TestRun {
                 text = replace(text, pass, "****");
             }
         }
-        # the password of any other datasource string: "user/password@" at the start, after a driver name, a quote or
-        # a space
-        text =~ s/(^|[:"' ])([^:\/@"' ]+)\/[^@"' ]*@/$1$2\/****@/g;
+        # the user and password of any other datasource string: "user/password@" at the start, after a driver name, a
+        # quote or a space, as libqore masks them in its errors (qore#6961)
+        text =~ s/(^|[:"' ])[^:\/@"' ]+\/[^@"' ]*@/$1****\/****@/g;
         return text;
     }
 
@@ -176,7 +176,9 @@ public class TestRun {
         that it does, so all three are masked unconditionally; the host and the port are kept, as they are what a
         connection error is about
 
-        @param connstr the datasource string; one that cannot be parsed is described as \c "<unparsable>"
+        @param connstr the datasource string; one that cannot be parsed is described as \c "driver:****" if it starts
+        with a valid driver name, else as \c "****"; a missing driver name, or one with other characters than
+        <tt>[A-Za-z0-9_-]</tt>, is shown as \c "****", as libqore masks datasource strings in its errors (qore#6961)
 
         @return the description, ex: <tt>mysql:****&#47;****@****%%127.0.0.1:3306</tt>
     */
@@ -185,9 +187,10 @@ public class TestRun {
         try {
             config = parse_datasource(connstr);
         } catch (hash<ExceptionInfo> ex) {
-            return "<unparsable>";
+            *string driver = (connstr =~ x/^([A-Za-z0-9_-]+):/)[0];
+            return driver ? driver + ":****" : "****";
         }
-        string shown = sprintf("%s:****/****@****", config.type ?? "?");
+        string shown = sprintf("%s:****/****@****", TestRun::isDriverName(config.type) ? config.type : "****");
         if (config.host) {
             shown += "%" + config.host;
             if (config.port) {
@@ -195,6 +198,11 @@ public class TestRun {
             }
         }
         return shown;
+    }
+
+    #! Returns True if the value is a valid driver name, which a description of a datasource can show
+    private static bool isDriverName(auto type) {
+        return type.typeCode() == NT_STRING && type.val() && type =~ /^[A-Za-z0-9_-]+$/;
     }
 
     #! Returns the reason to report when the database of a datasource string set in an environment variable cannot
