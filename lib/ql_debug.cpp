@@ -3962,27 +3962,39 @@ static void ut_program_system_option_changes(UnitTestCounters& c) {
     };
     ExceptionSink xsink;
     QoreProgram* pgm = new QoreProgram(QoreParseOptions(PO_NEW_STYLE | PO_IN_MODULE));
-    const QoreParseOptions before = qore_program_private::readParseOptions(*pgm);
-    UT_ASSERT(c, before.hasAny(QoreParseOptions(PO_IN_MODULE)), "system options: the Program has PO_IN_MODULE");
+    // Program::replaceParseOptions() also requires the calling Program to have PO_NO_CHILD_PO_RESTRICTIONS: the checks
+    // run in a host Program that has it, so that they do not depend on how the script that calls run_unit_tests() was
+    // parsed (a %modern script does not have it), and test the refusal of the system option itself
+    QoreProgram* host = new QoreProgram(QoreParseOptions(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS));
+    {
+        ProgramThreadCountContextHelper tch(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "system options: the host Program is entered");
+        xsink.clear();
+        const QoreParseOptions before = qore_program_private::readParseOptions(*pgm);
+        UT_ASSERT(c, before.hasAny(QoreParseOptions(PO_IN_MODULE)), "system options: the Program has PO_IN_MODULE");
 
-    pgm->disableParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
-    UT_ASSERT(c, option_error(xsink), "system options: disableParseOptions() refuses to clear PO_IN_MODULE");
-    pgm->replaceParseOptions(before & ~QoreParseOptions(PO_IN_MODULE), &xsink);
-    UT_ASSERT(c, option_error(xsink), "system options: replaceParseOptions() refuses to clear PO_IN_MODULE");
-    pgm->setParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
-    UT_ASSERT(c, option_error(xsink), "system options: setParseOptions() refuses PO_IN_MODULE");
-    UT_ASSERT(c, qore_program_private::readParseOptions(*pgm) == before,
-        "system options: the refused changes leave the options as they were");
+        pgm->disableParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: disableParseOptions() refuses to clear PO_IN_MODULE");
+        pgm->replaceParseOptions(before & ~QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: replaceParseOptions() refuses to clear PO_IN_MODULE");
+        pgm->setParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: setParseOptions() refuses PO_IN_MODULE");
+        UT_ASSERT(c, qore_program_private::readParseOptions(*pgm) == before,
+            "system options: the refused changes leave the options as they were");
 
-    // a replacement that keeps the option as the Program has it is allowed
-    pgm->replaceParseOptions(before | QoreParseOptions(PO_NO_NETWORK), &xsink);
-    UT_ASSERT(c, !xsink, "system options: a replacement that keeps PO_IN_MODULE is allowed");
-    xsink.clear();
-    UT_ASSERT(c, qore_program_private::readParseOptions(*pgm)
-        == (before | QoreParseOptions(PO_NO_NETWORK)), "system options: the replacement keeps PO_IN_MODULE");
+        // a replacement that keeps the option as the Program has it is allowed
+        pgm->replaceParseOptions(before | QoreParseOptions(PO_NO_NETWORK), &xsink);
+        UT_ASSERT(c, !xsink, "system options: a replacement that keeps PO_IN_MODULE is allowed");
+        xsink.clear();
+        UT_ASSERT(c, qore_program_private::readParseOptions(*pgm)
+            == (before | QoreParseOptions(PO_NO_NETWORK)), "system options: the replacement keeps PO_IN_MODULE");
+    }
 
     pgm->deref(&xsink);
     UT_ASSERT(c, !xsink, "system options: the Program's teardown raises no exception");
+    xsink.clear();
+    host->deref(&xsink);
+    UT_ASSERT(c, !xsink, "system options: the host Program's teardown raises no exception");
     xsink.clear();
 }
 
