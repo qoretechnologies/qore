@@ -4317,6 +4317,16 @@ void* get_thread_data_for_native_calls() {
     return thread_data.get();
 }
 
+void* runtime_thread_data_if_not_in_context(QoreObject* obj, const qore_class_private* cls) {
+    ThreadData* td = thread_data.get();
+    // the data of the thread's RuntimeConfig is looked up by the CalleeContextHelper if not yet known
+    const RuntimeConfig::Impl* rc = td->rc;
+    if (rc && td->current_obj == obj && td->current_class == cls && rc->obj == obj && rc->cls == cls) {
+        return nullptr;
+    }
+    return td;
+}
+
 const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
         const QoreProgramLocation* call_loc, const QoreProgramLocation*& frame_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
@@ -4967,6 +4977,33 @@ void CalleeContextHelper::switchContext(const qore_class_private* cls) {
     rc->cls = cls;
 }
 
+CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, QoreObject* obj, const qore_class_private* cls)
+        : td(static_cast<ThreadData*>(thread_data_ptr)) {
+    assert(td && td == thread_data.get());
+    switchObjectContext(obj, cls);
+}
+
+void CalleeContextHelper::switchObjectContext(QoreObject* obj, const qore_class_private* cls) {
+    // as switchContext(), with the given object
+    if (!td->rc) {
+        td->rc = rc_get_tls_impl();
+    }
+    RuntimeConfig::Impl* rc = td->rc;
+    // nothing to switch: the thread has the context already, as for a method that calls a method of its own object
+    if (td->current_obj == obj && td->current_class == cls && rc->obj == obj && rc->cls == cls) {
+        return;
+    }
+    switched = true;
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    old_rc_obj = rc->obj;
+    old_rc_class = rc->cls;
+    td->current_obj = obj;
+    td->current_class = cls;
+    rc->obj = obj;
+    rc->cls = cls;
+}
+
 void CalleeContextHelper::restoreContext() {
     assert(switched && td->rc);
     td->current_obj = old_obj;
@@ -5093,38 +5130,6 @@ OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
         rc.setObject(old_rc_obj);
         rc.setClass(old_rc_class);
     }
-}
-
-OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj) {
-    do_rc_update = false;
-    if (obj) {
-#ifdef DEBUG
-        old_obj = nullptr;
-#endif
-        set(obj);
-    }
-}
-
-OptionalObjectOnlySubstitutionHelper::~OptionalObjectOnlySubstitutionHelper() {
-    if (subst) {
-        thread_data.get()->current_obj = old_obj;
-        if (do_rc_update) {
-            rc_get_tls_ref().setObject(old_rc_obj);
-        }
-    }
-}
-
-void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
-    assert(!old_obj);
-    assert(!subst);
-    ThreadData* td = thread_data.get();
-    old_obj = td->current_obj;
-    td->current_obj = obj;
-    subst = true;
-    RuntimeConfig& rc = rc_get_tls_ref();
-    old_rc_obj = rc.getObject();
-    rc.setObject(obj);
-    do_rc_update = true;
 }
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,

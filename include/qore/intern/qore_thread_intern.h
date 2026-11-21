@@ -470,6 +470,13 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 //! Returns the current thread's data, for push_native_call_stack_location() and pop_native_call_stack_location()
 /** Native code gets it once when a function is entered, so a direct call makes no thread-local lookup. */
 DLLLOCAL void* get_thread_data_for_native_calls();
+
+//! Returns nullptr if the current thread has the given object and class context, otherwise the thread's data
+/** For the default values of a call (qore#7066), which are evaluated in the context of the code that declared them:
+    the thread's data is given to the CalleeContextHelper that switches to that context.  The thread's context is the
+    one that the access checks read (runtime_get_class()) and the RuntimeConfig's, which must both be the given one
+*/
+DLLLOCAL void* runtime_thread_data_if_not_in_context(QoreObject* obj, const qore_class_private* cls);
 //! Pushes the call stack location of a call that native code makes directly to native code
 /** Returns the thread's current statement and program for the location, and its runtime location (the caller's),
     which pop_native_call_stack_location() restores.
@@ -2860,6 +2867,16 @@ public:
     */
     DLLLOCAL CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls = nullptr);
 
+    //! Switches to the context of code of a class with an object if the thread does not have it
+    /** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+        @param obj the object of the code (the object of a call of a normal method), or nullptr for none
+        @param cls the class of the code, or nullptr for none (a plain function)
+
+        Used for the default values of a call (qore#7066), whose code is evaluated in the context of the code that
+        declared them
+    */
+    DLLLOCAL CalleeContextHelper(void* thread_data_ptr, QoreObject* obj, const qore_class_private* cls);
+
     //! Sets the implicit arguments of the call, as ArgvContextHelper does, and switches to the callee's context if
     //! the thread does not have it
     /** @param argv the implicit arguments, which the helper dereferences when it is destroyed
@@ -2900,6 +2917,7 @@ private:
     ExceptionSink* argv_xsink = nullptr;
 
     DLLLOCAL void switchContext(const qore_class_private* cls);
+    DLLLOCAL void switchObjectContext(QoreObject* obj, const qore_class_private* cls);
     DLLLOCAL void restoreContext();
     DLLLOCAL void restoreArgv();
 };
@@ -2950,31 +2968,6 @@ private:
     const qore_class_private* old_class;
     const qore_class_private* old_rc_class;
     bool subst;
-};
-
-class OptionalObjectOnlySubstitutionHelper {
-public:
-    DLLLOCAL OptionalObjectOnlySubstitutionHelper() : subst(false), do_rc_update(false) {
-#ifdef DEBUG
-        old_obj = nullptr;
-#endif
-    }
-
-    DLLLOCAL OptionalObjectOnlySubstitutionHelper(QoreObject* obj);
-
-    DLLLOCAL ~OptionalObjectOnlySubstitutionHelper();
-
-    DLLLOCAL void set(QoreObject* obj);
-
-    DLLLOCAL operator bool() const {
-        return subst;
-    }
-
-private:
-    bool subst;
-    QoreObject* old_obj;
-    QoreObject* old_rc_obj;
-    bool do_rc_update;
 };
 
 class ThreadSafeLocalVarRuntimeEnvironmentHelper {
