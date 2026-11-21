@@ -1947,6 +1947,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             listener_opts.additional_info = opts.additional_info;
         }
         HttpListener http_listener = getListener(self, lid, listener_opts);
+        # its requests share the QUIC socket of its sessions: their handlers get a socket of their own (qore#6953)
+        http_listener.setQuicListener();
         # Increment listener counter; decremented by HttpListener::listenerStopped()
         # when the listener is stopped/deleted (on_error handles setup failures)
         c.add();
@@ -5125,7 +5127,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                     }
 
-                    hash<auto!> hrv = handler.handleRequest(hview, s, cx, hdr, body);
+                    # the socket that the handler gets (qore#6953)
+                    hash<auto!> hrv = handler.handleRequest(hview, request_helper.handler_sock ?? s, cx, hdr,
+                        body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -5707,7 +5711,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             cx.handler_name, pend);
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
-                        if (sockhandler.start(listener.getID(), sock_cx, hdr, s)) {
+                        if (sockhandler.start(listener.getID(), sock_cx, hdr, request_helper.handler_sock ?? s)) {
                             request_helper.setDedicatedExternal();
                         }
                     } catch (hash<ExceptionInfo> ex) {
@@ -5859,7 +5863,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     try {
                         # an asynchronous HTTP/1.1 WebSocket connection returns as soon as it is set up, and its
                         # handler runs ws_end when it ends; no thread of the handler pool waits for it
-                        externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr, s)
+                        externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr,
+                                request_helper.handler_sock ?? s)
                             && holder.isAccepted();
                         if (externally_managed) {
                             # the connection stays open after the request returns
@@ -6517,6 +6522,15 @@ class HttpPersistentHandlerInfo {
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
+    private:internal {
+        #! True for a QUIC listener, whose requests share the QUIC socket of its sessions (qore#6953)
+        /** Set by the server where it attaches the QUIC socket (setQuicListener()), and never cleared: the handler
+            of each request of a QUIC listener gets an Http3HandlerSocket for its own session and stream, made from
+            the server's own header information of the request
+        */
+        bool quic;
+    }
+
     public {
         # TID of the background listener thread
         int tid;
@@ -7749,6 +7763,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         @since HttpServer 1.7
     */
+    #! Marks the listener as one whose requests share a QUIC socket, that of the HTTP/3 sessions of the listener
+    /** Called by the server when it attaches a QUIC socket to the listener (see HttpServer::addQuicListener()): the
+        handler of each request of the listener then gets an Http3HandlerSocket for its own session and stream
+        instead of the listener's QUIC socket (qore#6953).  The mark cannot be removed.
+
+        @since HttpServer 1.7
+    */
+    setQuicListener() {
+        quic = True;
+    }
+
     HttpServer::HttpListenerInterface getHandlerView() {
         return handler_view;
     }
@@ -7756,10 +7781,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Returns the header information of a request as its handler gets it (\c cx."header-info")
     /** The persistent queue closures of the async I/O controller are for the listener only: it registers the queue
         of a persistent session for its handler, and the entries of the queue refer to the server's own objects, so a
-        handler, which may be sandboxed, does not get them (qore#6921)
+        handler, which may be sandboxed, does not get them (qore#6921); the socket of a streamed body is the one
+        that the handler gets (see RequestHelper::handler_sock; qore#6953)
     */
-    private:internal static hash<auto> getHandlerHeaderInfo(hash<auto> header_info) {
-        return header_info - ("register_persistent_queue", "deregister_persistent_queue");
+    private:internal static hash<auto> getHandlerHeaderInfo(hash<auto> header_info, *Socket handler_sock) {
+        hash<auto> rv = header_info - ("register_persistent_queue", "deregister_persistent_queue");
+        # the socket of a streamed body is the one that the handler gets: that of a QUIC listener's request, or the
+        # request's own socket (qore#6953)
+        if (rv.sock) {
+            rv.sock = handler_sock ?? http_handler_socket(rv.sock, header_info);
+        }
+        return rv;
     }
 
     removeDedicatedSocket(softstring id, *bool managed_externally) {
@@ -8042,12 +8074,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Set user context and header info
         cx.uctx = get_thread_data("uctx");
+        # the socket that the request's handler gets, made from the server's own header information (qore#6953)
+        if (quic) {
+            request_helper.handler_sock = http_handler_socket(s, header_info);
+        }
         # For body_streaming, expose the socket so handlers can read body data
         # incrementally via readQuicStreamDataBlock()
         if (header_info.body_streaming) {
             header_info.sock = s;
         }
-        cx."header-info" = HttpListener::getHandlerHeaderInfo(header_info);
+        cx."header-info" = HttpListener::getHandlerHeaderInfo(header_info, request_helper.handler_sock);
 
         # Add client certificate if requested and available
         if (get_remote_certs) {
@@ -8886,7 +8922,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
-                    end_cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
+                    end_cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info,
+                        quic ? http_handler_socket(s, conn_info.header_info) : NOTHING);
                     end_cx.close = conn_info.header_info.close;
                     hash<HttpAsyncResponseInfo> end_response = <HttpAsyncResponseInfo>{
                         "code": 200,
@@ -8964,10 +9001,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 cx.uctx = get_thread_data("uctx");
+                # the socket that the request's handler gets, made from the server's own header information
+                # (qore#6953)
+                if (quic) {
+                    request_helper.handler_sock = http_handler_socket(s, conn_info.header_info);
+                }
                 if (conn_info.header_info.body_streaming) {
                     conn_info.header_info.sock = s;
                 }
-                cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
+                cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info,
+                    request_helper.handler_sock);
 
                 if (get_remote_certs) {
                     if (conn_info.header_info.http3) {
@@ -9190,10 +9233,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             cx.uctx = get_thread_data("uctx");
+            # the socket that the request's handler gets, made from the server's own header information (qore#6953)
+            if (quic) {
+                request_helper.handler_sock = http_handler_socket(s, conn_info.header_info);
+            }
             if (conn_info.header_info.body_streaming) {
                 conn_info.header_info.sock = s;
             }
-            cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
+            cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info,
+                request_helper.handler_sock);
 
             if (get_remote_certs) {
                 if (conn_info.header_info.http3) {
@@ -9384,6 +9432,368 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
         }
     }
 }
+
+#! Returns the socket of a request as the code of its handler gets it (qore#6953)
+/** Decided by the transport: a socket that is not a QUIC socket is the request's own, and is returned; for a QUIC
+    socket, the listener's, shared by all its HTTP/3 sessions, an Http3HandlerSocket for the request's own session
+    and stream, from the server's own header information of the request.  The listener's socket is never returned:
+    without the session and stream of the request, an exception is raised.
+
+    @param s the socket of the request
+    @param header_info the server's own header information of the request, never the one that its handlers get
+
+    @throw HTTP3-HANDLER-SOCKET-ERROR the socket is a QUIC socket and the request's session and stream are not given
+*/
+Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
+    if (!s.isQuic() || s instanceof Http3HandlerSocket) {
+        return s;
+    }
+    if (!exists header_info.session_id || !exists header_info.stream_id) {
+        throw "HTTP3-HANDLER-SOCKET-ERROR", "the socket of an HTTP/3 request is given to its handler only for its "
+            "own session and stream";
+    }
+    return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id);
+}
+
+#! The socket of an HTTP/3 request as the code of its handler sees it (qore#6953)
+/** The requests of all the HTTP/3 (QUIC) sessions of a listener share one UDP socket, whose QUIC methods take the
+    session (and stream) that they act on.  The code of a request's handler gets this object wherever it gets the
+    socket of its request (the \c s argument of the handler's methods and \c cx."header-info".sock): a socket of its
+    own that is not connected, whose QUIC methods that take a session act on the listener's socket for the handler's
+    own session only, and raise an exception for another session.  Its other methods are those of its own, unconnected
+    socket, except these, which give what concerns the handler's own request: getQuicSessionId(), getSSLCipherName()
+    and getSSLCipherVersion() (those of its session), and isQuic(), isSecure(), isOpen(), getSocketInfo() and
+    getEncoding() (those of the listener's socket).  shutdown() and close() end the handler's own stream, never its
+    session or the listener's socket.  The class is not exported, so no code outside the module can name it.
+*/
+class Http3HandlerSocket inherits Qore::Socket {
+    public {
+        #! @ref True "True" if shutdown() and close() end the handler's own stream; with @ref False "False", they
+        #! only never act on the listener's socket
+        const EndStreamOnClose = True;
+    }
+
+    private:internal {
+        #! the listener's socket, shared by every QUIC session of the listener
+        Socket real;
+        #! the session of the handler's request
+        int session_id;
+        #! the stream of the handler's request
+        int stream_id;
+        #! set when the handler's stream is ended by shutdown() or close()
+        bool ended;
+        #! set by close(): no more I/O on the stream
+        bool closed;
+    }
+
+    #! Creates the object for the given stream of a session of the listener's socket
+    constructor(Socket real, int session_id, int stream_id) {
+        self.real = real;
+        self.session_id = session_id;
+        self.stream_id = stream_id;
+    }
+
+    #! Ends the handler's own stream gracefully, after its pending data; does nothing if it is already ended
+    /** @return 0
+    */
+    int shutdown() {
+        endStream(False);
+        return 0;
+    }
+
+    #! Ends the handler's own stream if it is not ended, and refuses any I/O on it after
+    /** The stream is ended gracefully if it can be, otherwise it is cancelled; never the session or the listener's
+        socket.  Calling it again does nothing.
+
+        @return 0
+    */
+    int close() {
+        endStream(True);
+        closed = True;
+        return 0;
+    }
+
+    #! Returns the session of the handler's request
+    int getQuicSessionId() {
+        return session_id;
+    }
+
+    #! Returns the cipher of the session of the handler's request
+    *string getSSLCipherName() {
+        return real.getQuicSSLCipherName(session_id);
+    }
+
+    #! Returns the cipher version of the session of the handler's request
+    *string getSSLCipherVersion() {
+        return real.getQuicSSLCipherVersion(session_id);
+    }
+
+    #! Returns the value of the listener's socket
+    bool isQuic() {
+        return real.isQuic();
+    }
+
+    #! Returns the value of the listener's socket
+    bool isSecure() {
+        return real.isSecure();
+    }
+
+    #! Returns @ref False "False" once the stream is closed, otherwise the value of the listener's socket
+    bool isOpen() {
+        return !closed && real.isOpen();
+    }
+
+    #! Returns the value of the listener's socket
+    hash<auto> getSocketInfo(bool host_lookup = True) {
+        return real.getSocketInfo(host_lookup);
+    }
+
+    #! Returns the value of the listener's socket
+    string getEncoding() {
+        return real.getEncoding();
+    }
+
+    # the QUIC methods that take a session act on the listener's socket for the handler's own session only
+    AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, *data body) {
+        checkSession(session_id);
+        return real.startPollQuicSendResponse(session_id, stream_id, status_code, headers, body);
+    }
+
+    nothing cancelQuicStream(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.cancelQuicStream(session_id, stream_id);
+    }
+
+    nothing cancelQuicStreamRead(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.cancelQuicStreamRead(session_id, stream_id);
+    }
+
+    nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+        checkSession(session_id);
+        real.submitQuicResponse(session_id, stream_id, status_code, headers, body);
+    }
+
+    nothing submitQuicShutdownNotice(int session_id) {
+        checkSession(session_id);
+        real.submitQuicShutdownNotice(session_id);
+    }
+
+    nothing submitQuicShutdown(int session_id) {
+        checkSession(session_id);
+        real.submitQuicShutdown(session_id);
+    }
+
+    hash<QuicGoawayStateInfo> getQuicSessionGoawayState(int session_id) {
+        checkSession(session_id);
+        return real.getQuicSessionGoawayState(session_id);
+    }
+
+    bool isQuicGoawayReceived(int session_id) {
+        checkSession(session_id);
+        return real.isQuicGoawayReceived(session_id);
+    }
+
+    *SSLCertificate getQuicPeerCertificate(int session_id) {
+        checkSession(session_id);
+        return real.getQuicPeerCertificate(session_id);
+    }
+
+    *string getQuicSSLCipherName(int session_id) {
+        checkSession(session_id);
+        return real.getQuicSSLCipherName(session_id);
+    }
+
+    *string getQuicSSLCipherVersion(int session_id) {
+        checkSession(session_id);
+        return real.getQuicSSLCipherVersion(session_id);
+    }
+
+    AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, InputStream body, *int chunk_size) {
+        checkSession(session_id);
+        return real.startPollQuicSendStreamingResponse(session_id, stream_id, status_code, headers, body, chunk_size);
+    }
+
+    nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        checkSession(session_id);
+        real.submitQuicResponseStreaming(session_id, stream_id, status_code, headers);
+    }
+
+    int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
+        checkSession(session_id);
+        return real.submitQuicStreamWebSocketClose(session_id, stream_id, frame, end_stream);
+    }
+
+    *WebSocketCloseRecord getQuicStreamWebSocketCloseRecord(int session_id, int stream_id) {
+        checkSession(session_id);
+        return real.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        checkSession(session_id);
+        return real.submitQuicStreamData(session_id, stream_id, body, end_stream);
+    }
+
+    int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
+            InputStream body) {
+        checkSession(session_id);
+        return real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
+    }
+
+    int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
+        checkSession(session_id);
+        return real.waitForQuicStreamDrain(session_id, stream_id, timeout_ms);
+    }
+
+    nothing flushQuicPendingData(int session_id) {
+        checkSession(session_id);
+        real.flushQuicPendingData(session_id);
+    }
+
+    nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        checkSession(session_id);
+        real.submitQuicConnectResponse(session_id, stream_id, status_code, headers);
+    }
+
+    *binary readQuicConnectStreamData(int session_id, int stream_id) {
+        checkSession(session_id);
+        return real.readQuicConnectStreamData(session_id, stream_id);
+    }
+
+    *binary readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        checkSession(session_id);
+        return real.readQuicStreamDataBlock(session_id, stream_id, timeout_ms);
+    }
+
+    bool isQuicStreamComplete(int session_id, int stream_id) {
+        checkSession(session_id);
+        return real.isQuicStreamComplete(session_id, stream_id);
+    }
+
+    *hash<auto> getQuicStreamTrailers(int session_id, int stream_id) {
+        checkSession(session_id);
+        return real.getQuicStreamTrailers(session_id, stream_id);
+    }
+
+    nothing cleanupQuicStream(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.cleanupQuicStream(session_id, stream_id);
+    }
+
+    nothing registerQuicConnectStreamQueue(int session_id, int stream_id, Queue queue) {
+        checkSession(session_id);
+        real.registerQuicConnectStreamQueue(session_id, stream_id, queue);
+    }
+
+    nothing deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.deregisterQuicConnectStreamQueue(session_id, stream_id);
+    }
+
+    nothing registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue queue) {
+        checkSession(session_id);
+        real.registerQuicConnectStreamFrameState(session_id, stream_id, queue);
+    }
+
+    nothing deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.deregisterQuicConnectStreamFrameState(session_id, stream_id);
+    }
+
+    nothing resetQuicStream(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.resetQuicStream(session_id, stream_id);
+    }
+
+    nothing setQuicStreamSendLimit(int session_id, int stream_id, int limit) {
+        checkSession(session_id);
+        real.setQuicStreamSendLimit(session_id, stream_id, limit);
+    }
+
+    nothing submitQuicDatagram(int session_id, int stream_id, binary data) {
+        checkSession(session_id);
+        real.submitQuicDatagram(session_id, stream_id, data);
+    }
+
+    *binary readQuicDatagram(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        checkSession(session_id);
+        return real.readQuicDatagram(session_id, stream_id, timeout_ms);
+    }
+
+    nothing registerQuicDatagramQueue(int session_id, int stream_id, Queue queue) {
+        checkSession(session_id);
+        real.registerQuicDatagramQueue(session_id, stream_id, queue);
+    }
+
+    nothing unregisterQuicDatagramQueue(int session_id, int stream_id) {
+        checkSession(session_id);
+        real.unregisterQuicDatagramQueue(session_id, stream_id);
+    }
+
+    int getQuicMaxDatagramSize(int session_id, int stream_id) {
+        checkSession(session_id);
+        return real.getQuicMaxDatagramSize(session_id, stream_id);
+    }
+
+    bool isQuicDatagramSupported(int session_id) {
+        checkSession(session_id);
+        return real.isQuicDatagramSupported(session_id);
+    }
+
+    #! Returns @ref True "True" for the first caller only, which then ends the stream
+    /** Synchronized on the object's own lock, which every object has (no lock is allocated for it), and held only
+        to test and set the flag: the stream is ended outside it
+    */
+    private:internal synchronized bool takeEnd() {
+        if (ended) {
+            return False;
+        }
+        ended = True;
+        return True;
+    }
+
+    #! Ends the stream once, however many threads call shutdown() or close()
+    /** @param cancel_if_needed cancel the stream if it cannot be ended gracefully (close()); otherwise (shutdown())
+        the error of the graceful end is raised
+    */
+    private:internal endStream(bool cancel_if_needed) {
+        if (!takeEnd()) {
+            return;
+        }
+        if (!EndStreamOnClose) {
+            return;
+        }
+        # the end of the stream (FIN) after its pending data
+        try {
+            real.submitQuicStreamData(session_id, stream_id, NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!cancel_if_needed) {
+                rethrow;
+            }
+            real.cancelQuicStream(session_id, stream_id);
+        }
+    }
+
+    #! Raises an exception unless the session is the handler's own and its stream is not closed
+    /** Another session is reported as the listener's socket reports a session that it does not have, so that a
+        handler cannot tell whether another session exists
+    */
+    private:internal checkSession(int session_id) {
+        if (session_id != self.session_id) {
+            if (session_id <= 0) {
+                throw "QUIC-ERROR", sprintf("invalid session_id %d: must be > 0", session_id);
+            }
+            throw "QUIC-SESSION-ERROR", sprintf("session %d not found", session_id);
+        }
+        if (closed) {
+            throw "HTTP3-HANDLER-SOCKET-ERROR", sprintf("the stream (%d) of this HTTP/3 request is closed",
+                stream_id);
+        }
+    }
+}
+
 }
 
 #! Private namespace
@@ -10519,6 +10929,13 @@ class RequestHelper {
             request's result (see HttpListener::processNativeRequest())
         */
         *HttpServerAsyncIo::HttpPersistentRequestEnd persistent_end;
+
+        #! The socket that the handler of the current request of a QUIC listener gets (qore#6953)
+        /** An Http3HandlerSocket, made by the listener from its own header information of the request, before any
+            handler code runs, and kept here, where no handler code can change it; not set for the requests of a TCP
+            listener, whose handlers get the socket of their own connection
+        */
+        *Socket handler_sock;
     }
 
     private {

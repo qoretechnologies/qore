@@ -1,0 +1,469 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) sessions, their streams and WebSocket connections, and sandboxed HTTP handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp3HandlerSocketTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Returns the session of its request's HTTP/3 connection
+class WhoamiHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, string(cx."header-info".session_id));
+    }
+}
+
+#! A WebSocket handler: its HTTP/3 connections are dedicated connections, which end their own stream with the
+#! shutdown() and close() of the socket of their request when they end
+class EndingWsHandler inherits WebSocketHandler {
+    public {
+        Queue q();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        q.push(cx."header-info".http3 ?? False);
+        return new WebSocketConnection(self);
+    }
+}
+
+#! An HTTP/3 handler that uses the socket of its request (qore#6953)
+/** The requests of all the HTTP/3 sessions of a listener share the listener's QUIC socket; the handlers of a
+    sandboxed tenant get a socket of their own that acts on their own session only, however they call its methods;
+    its close() and shutdown() end their own stream, and the session's other streams continue.  The test is
+    fail-first: with the listener's socket, a handler acts beyond its own stream.
+*/
+class HttpServerHttp3HandlerSocketTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's handler: each attempt gives "ok" or the code of the exception raised
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires reflection
+
+string sub try_it(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! the error of an attempt, with the numbers in its description replaced, or \"ok\"
+string sub try_desc(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + regex_subst(ex.desc, \"[0-9]+\", \"N\", RE_Global);
+    }
+}
+
+class TenantH3Handler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        int own = cx.\"header-info\".session_id;
+        if (hdr.path =~ /close$/) {
+            # ends the handler's own stream: the response is not sent
+            s.shutdown();
+            s.close();
+            s.close();
+            return makeResponse(200, \"closed\");
+        }
+        int victim = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
+        hash<string, string> r = {
+            \"session_id\": try_it(sub () {
+                if (s.getQuicSessionId() != own) {
+                    throw \"OTHER-SESSION\";
+                }
+            }),
+            \"own_cipher\": try_it(sub () { s.getQuicSSLCipherName(own); }),
+            \"peer_cert\": try_it(sub () { s.getQuicPeerCertificate(victim); }),
+            \"cipher\": try_it(sub () { s.getQuicSSLCipherName(victim); }),
+            \"goaway_state\": try_it(sub () { s.getQuicSessionGoawayState(victim); }),
+            \"cancel\": try_it(sub () { s.cancelQuicStream(victim, 0); }),
+            \"response\": try_it(sub () { s.submitQuicResponse(victim, 0, 200, NOTHING, \"x\"); }),
+            \"shutdown_notice\": try_it(sub () { s.submitQuicShutdownNotice(victim); }),
+            \"shutdown_session\": try_it(sub () { s.submitQuicShutdown(victim); }),
+            \"is_quic\": s.isQuic() ? \"yes\" : \"no\",
+            # a live session of another client and a session that does not exist give the same error
+            \"live_desc\": try_desc(sub () { s.getQuicSSLCipherName(victim); }),
+            \"missing_desc\": try_desc(sub () { s.getQuicSSLCipherName(victim + 1000000); }),
+        };
+        # the base class's close() and shutdown(), called through reflection, act on the handler's socket's own,
+        # unconnected socket, never the listener's
+        r.reflect_close = try_it(sub () {
+            Class c = Class::forName(\"Socket\");
+            cast<NormalMethod>(c.getMethod(\"close\")).call(s);
+        });
+        r.reflect_shutdown = try_it(sub () {
+            Class c = Class::forName(\"Socket\");
+            cast<NormalMethod>(c.getMethod(\"shutdown\")).call(s);
+        });
+        return makeResponse(200, (map $1.key + \"=\" + $1.value, r.pairIterator()).join(\"\\n\"));
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantH3Handler();
+}
+";
+
+        #! a sandboxed tenant's socket handler for an extended CONNECT stream: ends its connection with the calls that
+        #! end a dedicated connection (the shutdown() and close() of the socket of the request)
+        const TenantDedicatedSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketUtil
+
+class TenantDedicatedHandler inherits AbstractHttpSocketHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) {
+        self.to_host = to_host;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"hdr\": {\"sec-websocket-accept\": ws_get_response_key(hdr.\"sec-websocket-key\")},
+            \"streaming\": True,
+            \"stream_type\": \"websocket\",
+        };
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        # the calls that end a dedicated connection (see setExternallyManaged())
+        try {
+            s.shutdown();
+            s.close();
+            to_host.push(cx.\"header-info\".http3 ? \"ended h3\" : \"ended\");
+        } catch (hash<ExceptionInfo> ex) {
+            to_host.push(ex.err);
+        }
+        return False;
+    }
+}
+
+AbstractHttpSocketHandler sub get_handler(Queue to_host) {
+    return new TenantDedicatedHandler(to_host);
+}
+";
+
+        #! a sandboxed tenant's handler that changes its request's header information before it gets its socket
+        const TenantTamperSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+class TamperHandler inherits AbstractHttpRequestHandler {
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        # the request is not an HTTP/3 one, and is that of another session
+        cx.\"header-info\".http3 = False;
+        cx.\"header-info\".session_id = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
+        cx.\"header-info\".stream_id = 0;
+        remove cx.\"header-info\".sock;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        int victim = cx.\"header-info\".session_id;
+        string r;
+        try {
+            s.submitQuicShutdown(victim);
+            r = \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        string own = s.getQuicSessionId() != victim ? \"yes\" : \"no\";
+        return makeResponse(200, sprintf(\"own=%s shutdown=%s quic=%y\", own, r, s.isQuic()));
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new TamperHandler();
+}
+";
+
+        #! the results of the attack with the handler's own socket: another session is reported as one that does not
+        #! exist, so that the handler cannot tell
+        const AttackResults = {
+            "session_id": "ok",
+            "own_cipher": "ok",
+            "peer_cert": "QUIC-SESSION-ERROR",
+            "cipher": "QUIC-SESSION-ERROR",
+            "goaway_state": "QUIC-SESSION-ERROR",
+            "cancel": "QUIC-SESSION-ERROR",
+            "response": "QUIC-SESSION-ERROR",
+            "shutdown_notice": "QUIC-SESSION-ERROR",
+            "shutdown_session": "QUIC-SESSION-ERROR",
+            "is_quic": "yes",
+            # the same error for a live session of another client as for one that does not exist: no oracle
+            "live_desc": "QUIC-SESSION-ERROR: session N not found",
+            "missing_desc": "QUIC-SESSION-ERROR: session N not found",
+            "reflect_close": "ok",
+            "reflect_shutdown": "ok",
+        };
+    }
+
+    constructor() : QUnit::Test("HTTP/3 handler socket", "1.0", \ARGV) {
+        addTestCase("a sandboxed HTTP/3 handler acts on its own session only", \attackTest());
+        addTestCase("a handler that changes its header information still gets its own socket", \tamperTest());
+        addTestCase("close() and shutdown() end the handler's own stream only", \closeTest());
+        addTestCase("a WebSocket connection over HTTP/3 ends its own stream only", \webSocketTest());
+        addTestCase("a dedicated connection over HTTP/3 ends its own stream only", \dedicatedTest());
+        addTestCase("a look-alike of the handler socket class cannot read the listener's socket", \lookAlikeTest());
+        set_return_value(main());
+    }
+
+    #! The tenant attacks another client's session and the listener's socket through the socket of its request
+    attackTest() {
+        Program tenant = getTenantProgram(TenantSource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        hash<auto> srv = startServer(probe);
+        on_exit delete srv.server;
+
+        # the victim: another client, with its own session
+        HTTPClient victim = getClient(srv.port);
+        on_exit victim.disconnect();
+        int victim_session = victim.get("/whoami").toInt();
+
+        HTTPClient attacker = getClient(srv.port);
+        on_exit attacker.disconnect();
+        hash<string, string> r = parseResult(attacker.get("/probe/attack?victim=" + victim_session));
+        # in one comparison, so that a failure shows every attempt
+        assertEq(AttackResults, r);
+
+        # the victim's session continues, and the listener serves a new client
+        assertEq(string(victim_session), getOrError(victim, "/whoami"), "the victim's session continues");
+        HTTPClient next = getClient(srv.port);
+        on_exit next.disconnect();
+        assertTrue(getOrError(next, "/whoami") =~ /^[0-9]+$/, "the listener serves a new client");
+    }
+
+    #! The socket of a request is made from the server's own header information, by the transport: a handler that
+    #! marks its request as not an HTTP/3 one, and as one of another session, or a client header named like the flag,
+    #! still gets the socket of its own session
+    tamperTest() {
+        Program tenant = getTenantProgram(TenantTamperSource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        hash<auto> srv = startServer(probe);
+        on_exit delete srv.server;
+
+        HTTPClient victim = getClient(srv.port);
+        on_exit victim.disconnect();
+        int victim_session = victim.get("/whoami").toInt();
+
+        HTTPClient attacker = getClient(srv.port);
+        on_exit attacker.disconnect();
+        string r = attacker.get("/probe/tamper?victim=" + victim_session, {"http3": "false"});
+        assertEq("own=yes shutdown=QUIC-SESSION-ERROR quic=True", r);
+        assertEq(string(victim_session), getOrError(victim, "/whoami"), "the victim's session continues");
+    }
+
+    #! The handler's close() and shutdown() end its own stream; the session's other streams continue
+    closeTest() {
+        Program tenant = getTenantProgram(TenantSource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        hash<auto> srv = startServer(probe);
+        on_exit delete srv.server;
+
+        HTTPClient hc = getClient(srv.port);
+        on_exit hc.disconnect();
+        int session = hc.get("/whoami").toInt();
+        # the stream of the request ends without its response
+        string r = getOrError(hc, "/probe/close");
+        assertNeq("closed", r, "the handler's stream ended before its response");
+        # the session's other streams continue: the same client, on its session
+        HTTPClient other = getClient(srv.port);
+        on_exit other.disconnect();
+        assertTrue(getOrError(other, "/whoami") =~ /^[0-9]+$/, "the listener serves another client");
+        assertTrue(getOrError(hc, "/whoami") =~ /^[0-9]+$/, "the client's next request is served");
+        assertTrue(session > 0);
+    }
+
+    #! A WebSocket connection over HTTP/3 (extended CONNECT) ends its own stream, not the listener's socket
+    webSocketTest() {
+        EndingWsHandler ws();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ws", "^ws", NOTHING, ws);
+        server.setHandler("whoami", "^whoami", NOTHING, new WhoamiHandler());
+        int port = addTlsListener(server);
+        server.waitForAsyncIo();
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d/ws", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        wsc.connect();
+        assertTrue(ws.q.get(HangGuard), "the connection is an HTTP/3 one");
+        # the end of the connection ends its own stream (the handler's socket's shutdown() and close())
+        wsc.disconnect();
+        # the listener still serves HTTP/3 requests
+        HTTPClient hc = getClient(port);
+        on_exit hc.disconnect();
+        assertTrue(getOrError(hc, "/whoami") =~ /^[0-9]+$/, "the listener serves a new client");
+    }
+
+    #! A sandboxed dedicated connection (extended CONNECT) ends its own stream with the shutdown() and close() of its
+    #! socket; the listener and its other sessions continue
+    dedicatedTest() {
+        Program tenant = getTenantProgram(TenantDedicatedSource);
+        Queue to_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_handler", to_host);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ded", "^ded", NOTHING, handler);
+        server.setHandler("whoami", "^whoami", NOTHING, new WhoamiHandler());
+        int port = addTlsListener(server);
+        server.waitForAsyncIo();
+
+        # another client's session, open while the connection ends
+        HTTPClient other = getClient(port);
+        on_exit other.disconnect();
+        string other_session = other.get("/whoami");
+
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d/ded", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream can end before the client reads the response
+        }
+        on_exit wsc.disconnect();
+        assertEq("ended h3", to_host.get(HangGuard), "the connection ended its own stream");
+
+        # the other session continues, and the listener serves a new client
+        assertEq(other_session, getOrError(other, "/whoami"), "the other session continues");
+        HTTPClient next = getClient(port);
+        on_exit next.disconnect();
+        assertTrue(getOrError(next, "/whoami") =~ /^[0-9]+$/, "the listener serves a new client");
+    }
+
+    #! A tenant's class with the name and signature of the handler socket class cannot read its members (qore#7036)
+    /** The private members of a class are refused to another class of the same name and signature (qore#7036)
+    */
+    lookAlikeTest() {
+        string src = ReadOnlyFile::readTextFile(get_script_dir() + "/../../../../qlib/HttpServer.qm");
+        *string cls = (src =~ x/(\nclass Http3HandlerSocket inherits Qore::Socket \{.*?\n\}\n)/s)[0];
+        assertTrue(exists cls, "the class is found in the module");
+        # the same declarations; one method's body reads the member of another object
+        cls = replace(cls, "    string getEncoding() {\n        return real.getEncoding();\n    }",
+            "    string getEncoding() {\n        auto o = target;\n        stolen = o.real;\n        return \"x\";\n"
+            + "    }");
+        string tenant_src = "%modern\n%requires HttpServer\n%requires HttpServerUtil\n"
+            "our auto target;\nour auto stolen;\n" + cls + "
+class LookAlikeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string r;
+        try {
+            target = s;
+            Http3HandlerSocket mine(new Socket(), 0, 0);
+            mine.getEncoding();
+            r = stolen instanceof Socket ? \"leaked\" : \"no\";
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        return makeResponse(200, r);
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new LookAlikeHandler();
+}
+";
+        Program tenant = getTenantProgram(tenant_src);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        hash<auto> srv = startServer(probe);
+        on_exit delete srv.server;
+        HTTPClient hc = getClient(srv.port);
+        on_exit hc.disconnect();
+        assertNeq("leaked", hc.get("/probe/steal"), "the look-alike class does not read the listener's socket");
+    }
+
+    #! Starts a server with an HTTP/3 listener, the tenant's probe and the whoami handler
+    private hash<auto> startServer(AbstractHttpRequestHandler probe) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setHandler("probe", "^probe", NOTHING, probe);
+        server.setHandler("whoami", "^whoami", NOTHING, new WhoamiHandler());
+        int port = addTlsListener(server);
+        server.waitForAsyncIo();
+        return {"server": server, "port": port};
+    }
+
+    #! Adds a TLS listener that also serves HTTP/3 on its port and returns the port
+    private static int addTlsListener(HttpServer server) {
+        return server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+    }
+
+    #! Returns an HTTP/3 client of the server
+    private static HTTPClient getClient(int port) {
+        return new HTTPClient({
+            "url": "https://localhost:" + port,
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+    }
+
+    #! Returns the body of a GET request, or the error that it raised
+    private static string getOrError(HTTPClient hc, string path) {
+        try {
+            return hc.get(path);
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Returns the key=value lines of a result as a hash
+    private static hash<string, string> parseResult(string body) {
+        hash<string, string> r;
+        foreach string line in (body.split("\n")) {
+            (*string k, *string v) = (line =~ x/^([^=]+)=(.*)$/);
+            if (exists k) {
+                r{k} = v ?? "";
+            }
+        }
+        return r;
+    }
+
+    #! Returns a sandboxed Program with the given source
+    private Program getTenantProgram(string source) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(source, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}
