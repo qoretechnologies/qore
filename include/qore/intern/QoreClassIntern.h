@@ -123,6 +123,15 @@ DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
 #define QORE_PARAM_CLASS_CHECK_STEP()
 #endif
 
+//! True once the code of a Program in the process is sandboxed (qore_program_private::sandboxed was set); never
+//! cleared
+/** Read without ordering by the writes of non-public object members (qore_object_private::checkMemberAccessGetTypeInfo())
+    before anything else of the sandboxed write rule is looked at (qore#6842): a process in which no code is sandboxed
+    pays a load and a branch for a write of a non-public member of another object than self, and nothing for one of
+    self.  Set before the Program's flag, so that code that finds the flag finds this set too.
+*/
+DLLLOCAL extern std::atomic<bool> qore_sandboxed_code_present;
+
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
     increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused

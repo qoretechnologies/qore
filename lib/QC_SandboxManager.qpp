@@ -1663,6 +1663,73 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     return !qore_caller_is_sandboxed();
 }
 
+//! Returns @ref True if the current thread's code may change the given object as its owner
+/** Code that is trusted may change any object; code that is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") may change an object only if its sandbox created
+    it: if every sandbox manager that governs the code also governed the creation of the object (see
+    @ref sandbox_object_ownership).  The check fails closed: sandboxed code that no sandbox manager governs, and code
+    whose sandbox cannot be resolved, owns no object.
+
+    A setter that replaces state that other code relies on, such as the logger of an object that is shared with other
+    code, uses checkObjectOwnedByCaller() to refuse a caller that does not own the object; trusted infrastructure that
+    changes such state only as a side effect of an operation that it performs for its caller, such as passing a logger
+    on to a child object that it did not create, uses this method to leave the change out.
+
+    It reveals only whether the calling code created the object, so it is not restricted itself.
+
+    @param obj the object to check
+
+    @return @ref True if the code is trusted or its sandbox created \a obj, @ref False if not
+
+    @par Example:
+    @code{.py}
+if (logger && SandboxManager::isObjectOwnedByCaller(child)) {
+    child.setLogger(logger);
+}
+    @endcode
+
+    @see checkObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isObjectOwnedByCaller(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_caller_created_object(*obj);
+}
+
+//! Refuses a change to the given object by sandboxed code whose sandbox did not create it
+/** Decides as isObjectOwnedByCaller() does, and raises an exception if the calling code may not change \a obj as
+    its owner.
+
+    @param obj the object to check
+    @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
+
+    @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change an object that
+    its sandbox did not create
+
+    @par Example:
+    @code{.py}
+setLogger(*LoggerInterface logger) {
+    SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
+    self.logger = logger;
+}
+    @endcode
+
+    @see isObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkObjectOwnedByCaller(object obj, string what) {
+    if (qore_caller_created_object(*obj)) {
+        return QoreValue();
+    }
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "%s an object of class '%s' that its sandbox did not create", str->c_str(), obj->getClassName());
+}
+
 //! Returns the ID of the caller %Program: the %Program whose code called the running code
 /** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a user
     module: library module code that serves a call from a %Program's code, also through more library module code,

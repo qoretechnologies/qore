@@ -99,8 +99,8 @@ public class QdrantDataProvider inherits QdrantDataProviderBase {
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Returns a REST connection from the given options

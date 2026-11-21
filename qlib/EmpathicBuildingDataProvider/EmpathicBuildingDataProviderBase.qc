@@ -119,8 +119,8 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Update any connection used by the data provider
@@ -134,7 +134,10 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
                 "object; got %y instead", self.className(), connobj.className());
         }
         rest = EmpathicBuildingDataProviderBase::getAsyncClient(cast<RestClient::AbstractRestClient>(connobj));
-        rest.setLogger(logger);
+        # the logger is passed on only to a client that the caller may change (issue 6842)
+        if (SandboxManager::isObjectOwnedByCaller(rest)) {
+            rest.setLogger(logger);
+        }
     }
 
     #! Converts a Haltian ms epoch offset to a date/time value

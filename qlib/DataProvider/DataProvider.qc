@@ -2245,7 +2245,8 @@ if (action.data_provider_info) {
             case "connection": {
                 try {
                     object conn = call_function("get_connection", info.name);
-                    if (logger) {
+                    # the logger is passed on only to an object that the caller may change (issue 6842)
+                    if (logger && SandboxManager::isObjectOwnedByCaller(conn)) {
                         conn.setLogger(logger);
                     }
                     return info.subtype.val() ? conn.getDataProvider(info.subtype) : conn.getDataProvider();

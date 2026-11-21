@@ -114,7 +114,8 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
         if (context_store) {
             create.setConversationContextStore(context_store);
         }
-        if (logger) {
+        # the logger is passed on only to an object that the caller may change (issue 6842)
+        if (logger && SandboxManager::isObjectOwnedByCaller(create)) {
             create.setLogger(logger);
         }
         hash<auto> req = sanitizeRequest(args);
@@ -128,7 +129,8 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
             if (context_store) {
                 stream.setConversationContextStore(context_store);
             }
-            if (logger) {
+            # the logger is passed on only to an object that the caller may change (issue 6842)
+            if (logger && SandboxManager::isObjectOwnedByCaller(stream)) {
                 stream.setLogger(logger);
             }
             stream.registerObserver(self);

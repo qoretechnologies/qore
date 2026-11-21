@@ -275,7 +275,8 @@ public class DpqlActionSession {
         }
 
         AbstractDataProvider next_provider = getProviderFromSpec(args.provider, args.subtype);
-        if (logger) {
+        # the logger is passed on only to an object that the caller may change (issue 6842)
+        if (logger && SandboxManager::isObjectOwnedByCaller(next_provider)) {
             next_provider.setLogger(logger);
         }
 

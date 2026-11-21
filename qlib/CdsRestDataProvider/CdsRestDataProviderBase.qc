@@ -193,10 +193,10 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
         if (rest) {
             rest.setLogger(logger);
         }
-        LoggerWrapper::setLogger(logger);
     }
 
     #! Returns an asynchronous REST client created with the options and the connection path of a synchronous one

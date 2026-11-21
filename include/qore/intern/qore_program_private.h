@@ -1423,6 +1423,12 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! Sets @ref sandboxed, and records that sandboxed code exists in the process (qore_sandboxed_code_present)
+    DLLLOCAL void setSandboxedFlag() {
+        qore_sandboxed_code_present.store(true, std::memory_order_release);
+        sandboxed.store(true, std::memory_order_release);
+    }
+
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
         that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());

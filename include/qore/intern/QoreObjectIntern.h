@@ -224,6 +224,21 @@ DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
 class qore_object_private : public RObject {
 public:
+    //! How a write of a non-public member is checked against the sandboxed write rule (qore#6842)
+    enum SandboxWrite : unsigned char {
+        //! the rule is checked for the write (see checkSandboxedMemberWrite())
+        SW_CHECK,
+        //! a write of a member of self (the object of the method or closure whose code writes it), which is always of
+        //! the class of the writing code or of a subclass of it and which the rule allows: not checked, so that the
+        //! write costs nothing more than before the rule existed
+        SW_SELF,
+        //! the writer was checked already (with sandboxedWriterDenied(), before the object lock was taken), and the
+        //! rule allows the write
+        SW_ALLOWED,
+        //! the writer was checked already, and the rule refuses the write
+        SW_DENIED,
+    };
+
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
     //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
@@ -364,10 +379,14 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges the hash into the object; the object's lock is held
+    /** @param sandbox_write how the writes of non-public members are checked against the sandboxed write rule
+        (qore#6842): the result of sandboxedWriterDenied() that the caller decided before it took the lock
+    */
     template <bool Lexical>
     DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, SandboxWrite sandbox_write);
 
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
             LexicalSemanticPolicy policy) const;
@@ -400,6 +419,18 @@ public:
 
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,
             ExceptionSink* xsink);
+
+    //! As getLValue(), for a member of self: the object of the method or closure whose code writes it
+    /** \a class_ctx is the class of that code; the sandboxed write rule allows the write (see
+        checkMemberAccessGetTypeInfo()), so it is not looked at (qore#6842)
+    */
+    DLLLOCAL int getSelfLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+            bool for_remove, ExceptionSink* xsink);
+
+    //! the implementation of getLValue() and getSelfLValue()
+    template <bool SelfWrite>
+    DLLLOCAL int getLValueImpl(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+            bool for_remove, ExceptionSink* xsink);
 
     DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
         // get the current class context
@@ -527,7 +558,18 @@ public:
         return -1;
     }
 
-    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+    //! Checks the access of a write to a member and returns its type
+    /** Used only for writes: a write of a non-public member by the code of a class that sandboxed code declared is
+        checked against the sandboxed write rule as well (qore#6842), as \a SW gives; a template that is not inlined (as
+        the function was before the rule), so that the write of a member of self (SW_SELF) has the code that it had
+        before the rule
+
+        @tparam SW how the write is checked against the sandboxed write rule; a caller that holds the object's lock
+        passes the result of sandboxedWriterDenied() (SW_ALLOWED or SW_DENIED), which it decided before it took the
+        lock, as the rule looks up the sandboxes of the thread
+    */
+    template <SandboxWrite SW>
+    DLLLOCAL QORE_INTERN_NOINLINE int checkMemberAccessGetTypeInfoT(ExceptionSink* xsink, const char* mem,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
             const QoreTypeInfo*& typeInfo) const {
         assert(!member_class_ctx);
@@ -537,6 +579,19 @@ public:
             if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
                 return -1;
+            }
+            // the access check above refuses a non-public member without a class context
+            if (mi->access > Public && class_ctx) {
+                if constexpr (SW == SW_CHECK) {
+                    // a load and a branch while no code in the process is sandboxed
+                    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)
+                            && checkSandboxedMemberWrite(mem, class_ctx, xsink)) {
+                        return -1;
+                    }
+                } else if constexpr (SW == SW_DENIED) {
+                    raiseSandboxedMemberWriteError(mem, class_ctx, xsink);
+                    return -1;
+                }
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
@@ -554,6 +609,62 @@ public:
         return 0;
     }
 
+    //! Checks the access of a write to a member and returns its type, with the sandboxed write rule (SW_CHECK)
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo) const {
+        return checkMemberAccessGetTypeInfoT<SW_CHECK>(xsink, mem, class_ctx, member_class_ctx, typeInfo);
+    }
+
+    //! Checks the access of a write to a member and returns its type, as \a sandbox_write gives
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, SandboxWrite sandbox_write) const {
+        switch (sandbox_write) {
+            case SW_SELF:
+                return checkMemberAccessGetTypeInfoT<SW_SELF>(xsink, mem, class_ctx, member_class_ctx, typeInfo);
+            case SW_ALLOWED:
+                return checkMemberAccessGetTypeInfoT<SW_ALLOWED>(xsink, mem, class_ctx, member_class_ctx, typeInfo);
+            case SW_DENIED:
+                return checkMemberAccessGetTypeInfoT<SW_DENIED>(xsink, mem, class_ctx, member_class_ctx, typeInfo);
+            default:
+                return checkMemberAccessGetTypeInfoT<SW_CHECK>(xsink, mem, class_ctx, member_class_ctx, typeInfo);
+        }
+    }
+
+    //! Checks a write of a non-public member by the code of class \a class_ctx, which has access to it (qore#6842)
+    /** Raises \c SANDBOX-OBJECT-ACCESS-ERROR if sandboxedWriterDenied() refuses the writer; must be called without
+        the object's lock
+
+        @return 0 if the write is allowed, -1 if an exception was raised
+    */
+    DLLLOCAL int checkSandboxedMemberWrite(const char* mem, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
+    //! Returns true if the code of class \a class_ctx may not write the non-public members of the object (qore#6842)
+    /** The code of a class that sandboxed code declared (qore_class_private::isSandboxedCode()) may write a non-public
+        member of an object that is not of that class or of a subclass of it only if its sandbox created the object
+        (qore_sandbox_current_code_created()).  Looks up the sandboxes of the thread: must be called without the
+        object's lock
+
+        @param class_ctx the class of the writing code, or nullptr (no access to non-public members)
+    */
+    DLLLOCAL bool sandboxedWriterDenied(const qore_class_private* class_ctx) const {
+        return class_ctx && qore_sandboxed_code_present.load(std::memory_order_relaxed)
+            && sandboxedWriterDeniedIntern(*class_ctx);
+    }
+
+    //! see sandboxedWriterDenied()
+    DLLLOCAL bool sandboxedWriterDeniedIntern(const qore_class_private& class_ctx) const;
+
+    //! Raises \c SANDBOX-OBJECT-ACCESS-ERROR for a write of a non-public member that the sandboxed write rule refuses
+    DLLLOCAL void raiseSandboxedMemberWriteError(const char* mem, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
+    //! Removes a member and returns its value
+    /** @param check_access false for a member of self (the object of the method or closure whose code removes it),
+        which the sandboxed write rule allows (see checkMemberAccessGetTypeInfo())
+    */
     DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
         bool for_delete = false, bool* exists = nullptr);
 
@@ -944,6 +1055,12 @@ public:
     DLLLOCAL static int getLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
             const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
         return obj.priv->getLValue(key, lvh, class_ctx, for_remove, xsink);
+    }
+
+    //! see getSelfLValue()
+    DLLLOCAL static int getSelfLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
+            const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
+        return obj.priv->getSelfLValue(key, lvh, class_ctx, for_remove, xsink);
     }
 
     //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target

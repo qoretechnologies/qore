@@ -740,6 +740,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     }
 
     if ((new_data && !new_data->empty()) || new_internal_data) {
+        // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+        SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
+
         QoreAutoVarRWWriteLocker al(rml);
 
         if (status == OS_DELETED) {
@@ -747,7 +750,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
             return;
         }
 
-        mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy);
+        mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy,
+            sandbox_write);
     }
 
     if (check_recursive) {
@@ -790,6 +794,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
             class_ctx = nullptr;
         }
+        // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+        SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
 
         QoreAutoVarRWWriteLocker al(rml);
 
@@ -798,7 +804,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
             return;
         }
 
-        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy);
+        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy, sandbox_write);
     }
 
     if (check_recursive) {
@@ -903,7 +909,7 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-        LexicalSemanticPolicy policy) {
+        LexicalSemanticPolicy policy, SandboxWrite sandbox_write) {
     //printd(5, "qore_object_private::merge() obj: %p\n", obj);
 
     QoreHashNode* id = nullptr;
@@ -922,7 +928,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSin
 
             // check member status
             const qore_class_private* member_class_ctx = nullptr;
-            if (checkMemberAccessGetTypeInfo(xsink, hi.getKey(), class_ctx, member_class_ctx, ti)) {
+            if (checkMemberAccessGetTypeInfo(xsink, hi.getKey(), class_ctx, member_class_ctx, ti, sandbox_write)) {
                 return;
             }
 
@@ -994,13 +1000,15 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSin
 
 void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data) {
-    return mergeInternImpl<false>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, {});
+    return mergeInternImpl<false>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, {},
+        sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED);
 }
 
 void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
         LexicalSemanticPolicy policy) {
-    return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy);
+    return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy,
+        sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED);
 }
 
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
@@ -1156,7 +1164,9 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
     }
     const qore_class_private* member_class_ctx = nullptr;
-    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
+    // check_access is false for a member of self (see checkMemberAccessGetTypeInfo())
+    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti,
+            check_access ? SW_CHECK : SW_SELF)) {
         return QoreValue();
     }
 
@@ -1334,6 +1344,9 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
         class_ctx = nullptr;
 
+    // the sandboxed write rule looks up the sandboxes of the thread: decided before the lock is taken (qore#6842)
+    SandboxWrite sandbox_write = sandboxedWriterDenied(class_ctx) ? SW_DENIED : SW_ALLOWED;
+
     // issue #2791: make sure the return hash has type hash<auto> so that types can be stripped if necessary
     QoreHashNode* rvh = new QoreHashNode(autoTypeInfo);
     // in case the lvalue cannot hold a hash, then dereference after the lock is released
@@ -1361,7 +1374,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
         const QoreTypeInfo* mti = nullptr;
         const qore_class_private* member_class_ctx = nullptr;
-        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti)) {
+        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti, sandbox_write)) {
             return;
         }
 
@@ -1489,7 +1502,9 @@ QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* m
     return qore_hash_private::get(*odata)->getValueRef(member);
 }
 
-int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
+template <bool SelfWrite>
+QORE_INTERN_ALWAYS_INLINE int qore_object_private::getLValueImpl(const char* key, LValueHelper& lvh,
+        const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
     lvh.disableMemberWriteBack();
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
@@ -1497,7 +1512,8 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     }
     const QoreTypeInfo* mti = nullptr;
     const qore_class_private* member_class_ctx = nullptr;
-    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
+    if (checkMemberAccessGetTypeInfoT<SelfWrite ? SW_SELF : SW_CHECK>(xsink, key, class_ctx, member_class_ctx,
+            mti)) {
         return -1;
     }
 
@@ -1532,6 +1548,53 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     lvh.setObjectContext(this);
 
     return 0;
+}
+
+int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+        bool for_remove, ExceptionSink* xsink) {
+    return getLValueImpl<false>(key, lvh, class_ctx, for_remove, xsink);
+}
+
+int qore_object_private::getSelfLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx,
+        bool for_remove, ExceptionSink* xsink) {
+    return getLValueImpl<true>(key, lvh, class_ctx, for_remove, xsink);
+}
+
+int qore_object_private::checkSandboxedMemberWrite(const char* mem, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    assert(class_ctx);
+    if (!sandboxedWriterDeniedIntern(*class_ctx)) {
+        return 0;
+    }
+    raiseSandboxedMemberWriteError(mem, class_ctx, xsink);
+    return -1;
+}
+
+bool qore_object_private::sandboxedWriterDeniedIntern(const qore_class_private& class_ctx) const {
+    // the code of a class that trusted code declared
+    if (!class_ctx.isSandboxedCode()) {
+        return false;
+    }
+    // an object of the writing code's class or of a subclass of it: that code is part of the object's class already.
+    // The class is found by its ID, not by qore_class_private::equal(), which also matches a class of another Program
+    // with the same name and signature, such as one that sandboxed code declares to look like a trusted class.  A class
+    // ID is given to a class when it is declared and kept only by the copies of that class (in the Programs that
+    // inherit or import it), which have the source Program of the class: a class with the ID of the writing code's
+    // class is that class, declared by the same sandboxed code (a copy of a trusted class is not sandboxed code, and
+    // its writes returned above)
+    ClassAccess access = Public;
+    if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
+        return false;
+    }
+    return !qore_sandbox_current_code_created(sandbox_provenance);
+}
+
+void qore_object_private::raiseSandboxedMemberWriteError(const char* mem, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    assert(class_ctx);
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
+        "cannot change non-public member '%s' of an object of class '%s' that its sandbox did not create",
+        class_ctx->name.c_str(), mem, theclass->getName());
 }
 
 int qore_object_private::getLValueResolved(const char* key,
@@ -2766,8 +2829,9 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
     }
 
     const qore_class_private* member_class_ctx = nullptr;
-    // check for external access to private members
-    if (priv->checkMemberAccess(key, class_ctx, member_class_ctx, xsink)) {
+    // check for external access to private members, and the sandboxed write rule (qore#6842)
+    const QoreTypeInfo* mti = nullptr;
+    if (priv->checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
         return;
     }
 

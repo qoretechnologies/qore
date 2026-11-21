@@ -554,6 +554,39 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_object_ownership Objects That Other Code Created
+
+    A non-public member of an object (declared \c private, which is the same as \c private:hierarchy) is reachable from
+    the code of every class of the object's hierarchy, on every object of it.  The code of a class that sandboxed code
+    declared (the code of a sandboxed %Program or of a %Program that sandboxed code created) therefore cannot write a
+    non-public member of an object that its sandbox did not create, such as an object that the host, the library or
+    another sandbox created: every form of write is refused with \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object
+    unchanged, from an assignment and the other operators that change a value to the removal of a member, in every
+    execution mode.  A sandbox created an object if every sandbox manager at the
+    @ref sandbox_enforcement_level "enforcement level" of tenant isolation that governs the writing code also governed
+    the creation of the object (see @ref sandbox_provenance); sandboxed code that no sandbox manager governs created no
+    object.  A member declared \c private:internal is reachable only from the class that declares it.
+
+    The rule does not apply to:
+    - a write of a member of \c self, or of an object of the writing code's class or of a subclass of it, whose behavior
+      the code of that class defines already
+    - a write of a public member
+    - the code of a class that trusted code declared, such as the classes of the library and of the host, also when
+      sandboxed code calls it: such a class changes the state of an object only through its own API
+    - code that only sandboxes at the enforcement level of code safety (@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY")
+      govern: the owner rules apply only to the code of a tenant (see @ref sandbox_enforcement_level)
+    - reads, which the rule does not cover
+
+    Trusted code that changes state of an object that other code relies on for its caller can decide in the same way
+    for the code that calls it: @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()" refuses a sandboxed
+    caller whose sandbox did not create the object, with
+    @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()", and the code that
+    passes a logger on to another object as a side effect of an operation leaves it out when
+    @ref Qore::SandboxManager::isObjectOwnedByCaller() "SandboxManager::isObjectOwnedByCaller()" returns @ref False.
+    Trusted code changes any object.
+
+    @since %Qore 3.0
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
@@ -1693,6 +1726,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c SANDBOX-ENFORCEMENT-LEVEL-ERROR|SandboxManager|An invalid @ref sandbox_enforcement_level "enforcement level"
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
+    |\c SANDBOX-OBJECT-ACCESS-ERROR|SandboxManager|Sandboxed code tried to change @ref sandbox_object_ownership "an object that its sandbox did not create"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

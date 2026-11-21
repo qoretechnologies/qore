@@ -5120,6 +5120,19 @@ static QORE_INTERN_ALWAYS_INLINE const QoreTypeInfo* qore_substitute_type_params
         : ti;
 }
 
+//! qore_substitute_type_params_if_needed() with a receiver type, always inlined
+/** For the parameters of a fast call of the JIT runtime (instantiateFastCallParams()), where the compiler inlined
+    qore_substitute_type_params_if_needed(): whether it does so otherwise depends on the size of the whole single
+    compilation unit, which the sandboxed write rule of the object member writes changed (qore#6842; see
+    tools/hot-inlining.txt)
+*/
+static QORE_INTERN_ALWAYS_INLINE const QoreTypeInfo* qore_substitute_type_params_if_needed_inline(
+        const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, receiver_type_info)
+        : ti;
+}
+
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.
     It supports:

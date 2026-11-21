@@ -1097,7 +1097,7 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
         // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
         // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
         // registered, so that nothing has to be undone if the lookup fails (std::bad_alloc: no Program is created)
@@ -1147,7 +1147,7 @@ void qore_program_private::markSandboxedParse() {
     // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
     // is parsed is attached when the code is committed (see getParseCreatorSandbox())
     if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
-        sandboxed.store(true, std::memory_order_release);
+        setSandboxedFlag();
     }
 }
 

@@ -7123,8 +7123,8 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        client.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        client.setLogger(logger);
     }
 
     #! Regstiger a child data provider

@@ -10,6 +10,7 @@
 
 class AbstractQoreNode;
 class ResolvedCallReferenceNode;
+class QoreObject;
 class QoreSandboxContext;
 
 //! Immutable intersections; the constituent managers remain live, referenced policies.
@@ -28,6 +29,28 @@ class QoreProgram;
     module's, the functional-domain restrictions of the creating code are recorded too (qore#6520)
 */
 DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr);
+//! Returns true if the sandboxes that govern the current code governed the creation of an object (qore#6842)
+/** For sandboxed code: true if every sandbox manager that governs the current code (the members of a composition) is
+    one of those that governed the creation of the object, as recorded in its provenance \a creation (the
+    provenance that an object created now would record is compared, see qore_capture_sandbox_provenance()).  False if
+    no manager governs the current code (code that is sandboxed only by its Program's flag), if \a creation is
+    nullptr (an object that trusted code created), and if the sandboxes cannot be resolved: it fails closed.  The
+    caller decides that the code is sandboxed.
+*/
+DLLLOCAL bool qore_sandbox_current_code_created(const QoreSandboxContext* creation);
+//! Returns true if the owner rules apply to the code that \a sm governs: its enforcement level is tenant isolation
+/** The owner rules are the rules that keep the objects that a sandbox's code created apart from the code of other
+    sandboxes: the sandboxed write and read rules of non-public members and the owner checks of
+    SandboxManager::checkObjectOwnedByCaller().  qore_sandbox_current_code_created() decides with the governing managers
+    that the rules apply to only, and code that no such manager governs owns every object.  The one place that decides
+    which sandboxes the rules apply to (QoreSandboxManager::setEnforcementLevel())
+*/
+DLLLOCAL bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm);
+//! Returns true if the calling code may change an object as its owner: trusted code, or sandboxed code whose
+//! sandbox created the object (qore#6842)
+/** The caller is sandboxed as decided by qore_caller_is_sandboxed(); see qore_sandbox_current_code_created()
+*/
+DLLLOCAL bool qore_caller_created_object(const QoreObject& obj);
 //! Records the functional-domain restrictions of the code that creates a call reference to library module code
 /** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520); does
     nothing if \a code_pgm, the Program whose code the reference runs, is not a library module's (or is nullptr) or

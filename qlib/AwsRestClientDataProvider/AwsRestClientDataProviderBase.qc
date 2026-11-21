@@ -41,8 +41,8 @@ public class AwsRestClientDataProviderBase inherits DataProvider::AbstractDataPr
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! This provider opts out of the framework-injected generic API call child

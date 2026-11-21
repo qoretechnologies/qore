@@ -288,6 +288,11 @@ if (laq.isFull()) {
     @tableofcontents
 
     @section logger_v1_1 v1.1
+    - code that is sandboxed or acts for sandboxed code can change the logger of a
+      @ref Logger::LoggerWrapper "LoggerWrapper", and the level of that logger, only if its sandbox created the object
+      (@ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()",
+      @ref Logger::LoggerWrapper::setLevel() "setLevel()", \c incLevel() and \c decLevel(); see
+      @ref sandbox_object_ownership; <a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
       @ref Logger::StdoutAppender "StdoutAppender" writes with @ref Qore::stdout "stdout", which needs terminal I/O only
       when it is written (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -2851,7 +2856,19 @@ public class LoggerWrapper inherits LoggerInterface {
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
+    /** Code that is sandboxed or acts for sandboxed code may change the logger only of an object that its sandbox
+        created (see @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()"),
+        so that it cannot direct the messages that other code logs through an object that it shares into a logger of
+        its own; trusted code may change the logger of any object.  Subclasses that override this method call it
+        before they pass the logger on to other objects.
+
+        @param logger the new logger, or @ref nothing "NOTHING" to clear it
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the logger
+        of an object that its sandbox did not create (since Logger 1.1)
+    */
     setLogger(*LoggerInterface logger) {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         self.logger = logger;
     }
 
@@ -3194,8 +3211,12 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Sets the logging level
     /**
         @param level if nothing then inherits level from parent
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the level
+        of the logger of an object that its sandbox did not create (see setLogger(); since Logger 1.1)
     */
     setLevel(*LoggerLevel level) {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
         *LoggerInterface logger = getLogger();
         if (logger) {
             logger.setLevel(level);
@@ -3205,8 +3226,12 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Sets the logging level
     /**
         @param level the logging level as a string
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the level
+        of the logger of an object that its sandbox did not create (see setLogger(); since Logger 1.1)
     */
     setLevel(string level) {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
         *LoggerInterface logger = getLogger();
         if (logger) {
             logger.setLevel(level);
@@ -3216,8 +3241,12 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Sets the logging level
     /**
         @param level the logging level to set
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the level
+        of the logger of an object that its sandbox did not create (see setLogger(); since Logger 1.1)
     */
     setLevel(int level) {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
         *LoggerInterface logger = getLogger();
         if (logger) {
             logger.setLevel(level);
@@ -3227,8 +3256,12 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Decrement logger level
     /**
         @return current \c LoggerLevel
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the level
+        of the logger of an object that its sandbox did not create (see setLogger(); since Logger 1.1)
     */
     *LoggerLevel decLevel() {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
         *LoggerInterface logger = getLogger();
         if (logger) {
             return logger.decLevel();
@@ -3238,8 +3271,12 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Increment logger level
     /**
         @return current \c LoggerLevel
+
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the level
+        of the logger of an object that its sandbox did not create (see setLogger(); since Logger 1.1)
     */
     *LoggerLevel incLevel() {
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
         *LoggerInterface logger = getLogger();
         if (logger) {
             return logger.incLevel();

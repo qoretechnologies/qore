@@ -3866,7 +3866,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             rethrow "CREATE-CHILD-PROVIDER-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
         }
         AbstractDataProvider child = createChildProviderImpl(name, fields, child_create_options);
-        if (logger && !child.logger) {
+        # the logger is passed on only to a child that the caller may change (issue 6842)
+        if (logger && !child.logger && SandboxManager::isObjectOwnedByCaller(child)) {
             child.setLogger(logger);
         }
         return child;
@@ -4868,7 +4869,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         *AbstractDataProvider child = resolveChildProvider(name);
         if (child) {
             propagateGenericApiCallSuppression(child);
-            if (logger && !child.logger) {
+            # the logger is passed on only to a child that the caller may change (issue 6842)
+            if (logger && !child.logger && SandboxManager::isObjectOwnedByCaller(child)) {
                 child.setLogger(logger);
             }
         }
@@ -4896,7 +4898,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 getName(), getChildProviderNames());
         }
         propagateGenericApiCallSuppression(provider);
-        if (logger && !provider.logger) {
+        # the logger is passed on only to a child that the caller may change (issue 6842)
+        if (logger && !provider.logger && SandboxManager::isObjectOwnedByCaller(provider)) {
             provider.setLogger(logger);
         }
         return provider;
@@ -5089,7 +5092,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             path =~ s/^\/+//;
         }
         map provider = provider.getChildProviderEx($1), path.split("/");
-        if (logger && !provider.logger) {
+        # the logger is passed on only to a child that the caller may change (issue 6842)
+        if (logger && !provider.logger && SandboxManager::isObjectOwnedByCaller(provider)) {
             provider.setLogger(logger);
         }
         return provider;

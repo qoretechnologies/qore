@@ -7536,6 +7536,71 @@ QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm)
     return ctx;
 }
 
+//! Adds the sandbox managers that \a ctx records to \a managers: the members of a composition, or the manager
+static void qore_add_sandbox_context_managers(const QoreSandboxContext& ctx,
+        std::vector<const QoreSandboxManager*>& managers) {
+    for (const QoreSandboxManager* sm : {ctx.manager, ctx.policy_manager, ctx.provenance_manager,
+            ctx.provenance_policy_manager}) {
+        if (!sm) {
+            continue;
+        }
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+            managers.insert(managers.end(), members->begin(), members->end());
+        } else {
+            managers.push_back(sm);
+        }
+    }
+}
+
+bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm) {
+    // only a sandbox at the enforcement level of tenant isolation isolates the objects of its code from other code
+    return sm.getEnforcementLevel() == QSEL_TENANT_ISOLATION;
+}
+
+bool qore_sandbox_current_code_created(const QoreSandboxContext* creation) {
+    try {
+        // the sandboxes that govern the current code, as they would be recorded for an object that it created now
+        // (qore_capture_sandbox_provenance())
+        QoreSandboxContext* current = new QoreSandboxContext(false);
+        std::vector<const QoreSandboxManager*> current_managers;
+        qore_add_sandbox_context_managers(*current, current_managers);
+        current->deref();
+        // sandboxed code that no manager governs: fails closed
+        if (current_managers.empty()) {
+            return false;
+        }
+        // only the managers at the enforcement level of tenant isolation decide; code that only code-safety sandboxes
+        // govern owns every object, as trusted code does
+        current_managers.erase(std::remove_if(current_managers.begin(), current_managers.end(),
+            [](const QoreSandboxManager* sm) { return !qore_sandbox_owner_rules_apply(*sm); }),
+            current_managers.end());
+        if (current_managers.empty()) {
+            return true;
+        }
+        if (!creation) {
+            return false;
+        }
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        for (const QoreSandboxManager* sm : current_managers) {
+            if (std::find(creation_managers.begin(), creation_managers.end(), sm) == creation_managers.end()) {
+                return false;
+            }
+        }
+        return true;
+    } catch (std::bad_alloc&) {
+        // the sandboxes cannot be compared: fails closed
+        return false;
+    }
+}
+
+bool qore_caller_created_object(const QoreObject& obj) {
+    if (!qore_caller_is_sandboxed()) {
+        return true;
+    }
+    return qore_sandbox_current_code_created(qore_object_private::get(obj)->sandbox_provenance);
+}
+
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     assert(!context);
     if (!captured) {

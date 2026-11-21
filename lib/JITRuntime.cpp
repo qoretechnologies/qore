@@ -13840,7 +13840,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // even though the argument itself is already an NT_REFERENCE.
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed_inline(paramTypeInfo, receiver_type_info);
             }
             if (paramTypeInfo && (QoreTypeInfo::hasType(paramTypeInfo)
                     || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
@@ -13892,7 +13892,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // Apply type filter like CodeEvaluationHelper::prepareDefaultArgs(): a typed param is always checked
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed_inline(paramTypeInfo, receiver_type_info);
             }
             if (QoreTypeInfo::hasType(paramTypeInfo) || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
@@ -13925,7 +13925,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             QoreValue val;
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed_inline(paramTypeInfo, receiver_type_info);
             }
             if (QoreTypeInfo::hasType(paramTypeInfo)) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
@@ -17413,7 +17413,8 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
         return -1;
     }
     qore_object_private* obj_private = qore_object_private::get(*obj);
-    if (qore_object_private::getLValue(*obj, member_name, lvh,
+    // a member of self (see qore_object_private::getSelfLValue())
+    if (qore_object_private::getSelfLValue(*obj, member_name, lvh,
             runtime_get_class(), false, xsink)) {
         return -1;
     }

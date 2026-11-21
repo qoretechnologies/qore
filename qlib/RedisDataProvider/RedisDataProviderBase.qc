@@ -47,8 +47,8 @@ public class RedisDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        redis.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        redis.setLogger(logger);
     }
 }
 }

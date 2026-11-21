@@ -1521,6 +1521,9 @@ void QoreSandboxManager::releaseThreadSlotQuiet() {
 
 std::atomic<int> qore_sandbox_interrupt_count{0};
 
+// see QoreClassIntern.h (qore#6842)
+std::atomic<bool> qore_sandboxed_code_present{false};
+
 #ifdef DEBUG
 thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm) = nullptr;
 #endif
@@ -1839,7 +1842,7 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            sandboxed.store(true, std::memory_order_release);
+            setSandboxedFlag();
             any_sandbox_manager.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
@@ -1966,7 +1969,7 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     if (!qore_caller_is_sandboxed()) {
         return 0;
     }
-    sandboxed.store(true, std::memory_order_release);
+    setSandboxedFlag();
     try {
         qore_caller_sandbox_refs(pcs.sm, pcs.policy);
     } catch (std::bad_alloc&) {
@@ -2071,7 +2074,7 @@ bool qore_program_is_sandboxed(const QoreProgram* pgm) {
 }
 
 void qore_program_mark_sandboxed(QoreProgram& pgm) {
-    qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+    qore_program_private::get(pgm)->setSandboxedFlag();
 }
 
 namespace {

@@ -1,0 +1,253 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Only the owner of a LoggerWrapper changes its logger and the logger's level (issue #6842): sandboxed code can change
+# them only if its sandbox created the object, through the setter, a call of the setter with the reflection API
+# and a subclass that writes the member alike; the messages that the host and another tenant log through their own
+# objects reach only their own loggers.  Trusted code changes the logger of any object.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerWrapperOwnerTest
+
+#! records the messages that it is given
+class Recorder inherits LoggerAppenderWithLayout {
+    public {
+        list<string> msgs = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("rec", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push msgs, params.toString();
+        }
+    }
+}
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires Logger
+%requires reflection
+
+class Rec inherits LoggerAppenderWithLayout {
+    public {
+        list<string> msgs = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout(\"r\", new LoggerLayoutPattern(\"%m\")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push msgs, params.toString();
+        }
+    }
+}
+
+class Sub inherits LoggerWrapper {
+    #! writes the logger member of the object
+    static string poke(LoggerWrapper w, LoggerInterface l) {
+        try {
+            w.logger = l;
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+Rec rec();
+Logger mine(\"mine\", LoggerLevel::getLevelInfo());
+mine.addAppender(rec);
+
+#! changes the logger of the object with the given route; returns \"ok\" or the exception code
+string sub change(string route, LoggerWrapper w) {
+    try {
+        switch (route) {
+            case \"setter\":
+                w.setLogger(mine);
+                break;
+            case \"clear\":
+                w.setLogger();
+                break;
+            case \"reflection-call\": {
+                Reflection::Class cls = Reflection::Class::forName(\"LoggerWrapper\");
+                Reflection::NormalMethodVariant v = cls.getNormalMethod(\"setLogger\").getVariants()[0];
+                v.call(w, mine);
+                break;
+            }
+            case \"reflection-member\": {
+                Reflection::Class cls = Reflection::Class::forName(\"LoggerWrapper\");
+                Reflection::NormalMember mem = cls.getMember(\"logger\");
+                mem.setValue(w, mine);
+                break;
+            }
+            case \"subclass\":
+                return Sub::poke(w, mine);
+            case \"set-level\":
+                w.setLevel(\"TRACE\");
+                break;
+            case \"inc-level\":
+                w.incLevel();
+                break;
+            case \"dec-level\":
+                w.decLevel();
+                break;
+            default:
+                throw \"UNKNOWN-ROUTE\", route;
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+LoggerWrapper sub make() {
+    return new LoggerWrapper();
+}
+
+bool sub owns(LoggerWrapper w) {
+    return SandboxManager::isObjectOwnedByCaller(w);
+}
+
+string sub check_owned(LoggerWrapper w) {
+    try {
+        SandboxManager::checkObjectOwnedByCaller(w, \"change\");
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+sub log_msg(LoggerWrapper w, string msg) {
+    w.info(\"%s\", msg);
+}
+
+list<string> sub msgs() {
+    return rec.msgs;
+}
+";
+
+class LoggerWrapperOwnerTest inherits QUnit::Test {
+    public {
+        #! the exception of a refused change
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the routes and the result of each for an object of another owner
+        const Routes = {
+            "setter": Err,
+            "clear": Err,
+            "reflection-call": Err,
+            # the reflection API refuses member writes by sandboxed code already
+            "reflection-member": "REFLECTION-ACCESS-ERROR",
+            "subclass": Err,
+            # the level of the logger of an object of another owner
+            "set-level": Err,
+            "inc-level": Err,
+            "dec-level": Err,
+        };
+    }
+
+    constructor() : QUnit::Test("LoggerWrapper owner", "1.0", \ARGV) {
+        addTestCase("tenants and the host", \ownerTest());
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("code safety", \codeSafetyTest());
+        set_return_value(main());
+    }
+
+    #! creates a tenant
+    private static Program tenant(SandboxManager sm = new SandboxManager()) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        p.run();
+        return p;
+    }
+
+    ownerTest() {
+        Program a = tenant();
+        Program b = tenant();
+
+        Recorder host_rec();
+        Logger host_logger("host", LoggerLevel::getLevelInfo());
+        host_logger.addAppender(host_rec);
+        LoggerWrapper host_obj(host_logger);
+
+        LoggerWrapper b_obj = b.callFunction("make");
+        assertEq("ok", b.callFunction("change", "setter", b_obj), "B sets the logger of its own object");
+
+        assertEq(False, a.callFunction("owns", host_obj));
+        assertEq(False, a.callFunction("owns", b_obj));
+        assertEq(Err, a.callFunction("check_owned", host_obj));
+        assertEq(True, b.callFunction("owns", b_obj));
+        assertEq("ok", b.callFunction("check_owned", b_obj));
+        assertTrue(SandboxManager::isObjectOwnedByCaller(b_obj), "trusted code may change any object");
+
+        foreach hash<auto> i in (Routes.pairIterator()) {
+            assertEq(i.value, a.callFunction("change", i.key, host_obj), "A on the host's object: " + i.key);
+            assertEq(i.value, a.callFunction("change", i.key, b_obj), "A on B's object: " + i.key);
+            assertTrue(host_obj.isLogger(host_logger), "the host's object keeps its logger: " + i.key);
+            assertEq("INFO", host_logger.getLevel().getStr(), "the host's logger keeps its level: " + i.key);
+            host_obj.info("host message via %s", i.key);
+            b.callFunction("log_msg", b_obj, "B message via " + i.key);
+        }
+
+        # the messages reach only their own loggers
+        assertEq((), a.callFunction("msgs"), "A gets no messages");
+        assertEq((map "host message via " + $1, keys Routes), host_rec.msgs, "the host's messages");
+        assertEq((map "B message via " + $1, keys Routes), b.callFunction("msgs"), "B's messages");
+
+        # A changes the logger of its own objects with every route that sandboxed code may use
+        LoggerWrapper a_obj = a.callFunction("make");
+        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "subclass",
+                "clear")) {
+            assertEq("ok", a.callFunction("change", route, a_obj), "A on its own object: " + route);
+        }
+    }
+
+    #! code that a sandbox at the enforcement level of code safety governs owns every object, as trusted code does
+    codeSafetyTest() {
+        SandboxManager sm();
+        sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+        Program safe = tenant(sm);
+        Logger host_logger("host");
+        LoggerWrapper host_obj(host_logger);
+        assertEq(True, safe.callFunction("owns", host_obj));
+        assertEq("ok", safe.callFunction("check_owned", host_obj));
+        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "subclass",
+                "clear")) {
+            assertEq("ok", safe.callFunction("change", route, host_obj), "code safety on the host's object: " + route);
+        }
+        # an isolated tenant does not own the objects of code-safety code
+        Program iso = tenant();
+        LoggerWrapper safe_obj = safe.callFunction("make");
+        assertEq(False, iso.callFunction("owns", safe_obj));
+        assertEq(Err, iso.callFunction("change", "setter", safe_obj));
+    }
+
+    trustedTest() {
+        Program a = tenant();
+        LoggerWrapper a_obj = a.callFunction("make");
+        Recorder rec();
+        Logger logger("host", LoggerLevel::getLevelInfo());
+        logger.addAppender(rec);
+        # trusted code may change the logger of any object, also of one that a tenant created
+        a_obj.setLogger(logger);
+        assertTrue(a_obj.isLogger(logger));
+        a_obj.info("message");
+        assertEq(("message",), rec.msgs);
+        a_obj.setLogger();
+        assertFalse(a_obj.isLogger(logger));
+    }
+}

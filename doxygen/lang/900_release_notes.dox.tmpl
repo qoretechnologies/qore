@@ -1584,6 +1584,12 @@
     (\c QSEL_CODE_SAFETY), as its creator sets with @ref Qore::SandboxManager::setEnforcementLevel() (C++:
     \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
 
+    @par Sandboxed Code Changes Only the Objects That Its Sandbox Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot write a non-public member of an object
+    that its sandbox did not create, and the logger setters check the caller with
+    @ref Qore::SandboxManager::checkObjectOwnedByCaller(); see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>).
+
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
     pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and

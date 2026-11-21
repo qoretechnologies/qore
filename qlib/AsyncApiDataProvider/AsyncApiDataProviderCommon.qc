@@ -45,10 +45,10 @@ public class AsyncApiDataProviderCommon inherits DataProvider::AbstractDataProvi
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
         if (transport) {
             transport.setLogger(logger);
         }
-        LoggerWrapper::setLogger(logger);
     }
 
     #! Returns the AsyncAPI schema

@@ -1,0 +1,601 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - member writes of JIT-compiled and qcc-compiled native code (a module dylib and an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The code of a class that sandboxed code declared cannot write a non-public member of an object that its sandbox did
+# not create (issue #6842): a subclass reaches the private members of its base classes on every object of the
+# hierarchy, so without the rule a tenant's subclass could change the state of an object that the host or another
+# tenant created.  Every write form is refused with SANDBOX-OBJECT-ACCESS-ERROR and leaves the object unchanged, in
+# every execution mode of the tenant's code and in code compiled with qcc; the tenant's own objects, the members of
+# self, public members, and trusted code are not affected.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires Logger
+
+%exec-class SandboxPrivateMemberWriteTest
+
+#! the class whose private members the tenants' subclass writes; declared by trusted code, the Programs that it
+#! creates inherit it
+public class Target {
+    public {
+        int pub = 0;
+    }
+
+    private {
+        int n = 0;
+        list<auto> l = (1, 2);
+        hash<auto> h = {"a": 1};
+        string s = "s";
+        auto r = "r";
+    }
+
+    #! returns the state of the object
+    hash<auto> state() {
+        return {"pub": pub, "n": n, "l": l, "h": h, "s": s, "r": r};
+    }
+}
+
+#! a class that a tenant declares a look-alike of: a class of its own with the same name and signature
+public class Plain {
+    private {
+        int n = 0;
+    }
+
+    int get() {
+        return n;
+    }
+}
+
+#! the code of a tenant that declares classes that look like the host's Plain and the Logger module's LoggerWrapper
+/** A look-alike class has the same name and signature as the class that it imitates, but it is another class: it is
+    not the class of the object, and its writes are refused as those of any class that the tenant declares
+*/
+const LookAlikeSource = "%modern
+%requires Logger
+our object g;
+namespace Evil {
+class Plain {
+    private {
+        int n = 0;
+    }
+
+    int get() {
+        g.n = 99;
+        return n;
+    }
+}
+
+class LoggerWrapper inherits Logger::LoggerInterface {
+    private {
+        transient *Logger::LoggerInterface logger;
+    }
+
+    static poke(object w) {
+        w.logger = new Logger::Logger(\"poked\");
+    }
+}
+}
+
+string sub write_plain(object w) {
+    g = w;
+    try {
+        (new Evil::Plain()).get();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub write_logger_wrapper(object w) {
+    try {
+        Evil::LoggerWrapper::poke(w);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! the code of the tenants (and of a trusted Program, where it is not restricted)
+const TenantSource = "%modern
+#! the write forms
+const Forms = (
+    \"assign\", \"plus-equals\", \"minus-equals\", \"post-inc\", \"pre-dec\", \"push\", \"unshift\", \"splice\",
+    \"extract\", \"remove\", \"delete\", \"nested\", \"dynamic\", \"slice-remove\", \"merge\",
+    \"string-plus-equals\", \"public\",
+);
+
+class TSub inherits Target {
+    #! writes a member of the given object with the given form; returns \"ok\" or the exception code
+    static string run(string form, Target w) {
+        try {
+            switch (form) {
+                case \"assign\": w.n = 1; break;
+                case \"plus-equals\": w.n += 2; break;
+                case \"minus-equals\": w.n -= 3; break;
+                case \"post-inc\": w.n++; break;
+                case \"pre-dec\": --w.n; break;
+                case \"push\": push w.l, 3; break;
+                case \"unshift\": unshift w.l, 0; break;
+                case \"splice\": splice w.l, 0, 1; break;
+                case \"extract\": extract w.l, 0, 1; break;
+                case \"remove\": remove w.r; break;
+                case \"delete\": delete w.r; break;
+                case \"nested\": w.h.x = 2; break;
+                case \"dynamic\": w.(\"s\") = \"dynamic\"; break;
+                case \"slice-remove\": remove w{\"r\", \"s\"}; break;
+                case \"merge\": w += {\"s\": \"merged\"}; break;
+                case \"string-plus-equals\": w.s += \"x\"; break;
+                case \"public\": w.pub = 1; break;
+                default: throw \"UNKNOWN-FORM\", form;
+            }
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigns the reference
+    static setRef(reference<int> r) {
+        r = 5;
+    }
+
+    #! writes the members of self with every form that applies to them
+    string writeSelf() {
+        try {
+            n = 1;
+            n += 2;
+            ++n;
+            push l, 3;
+            splice l, 0, 1;
+            h.x = 2;
+            remove r;
+            self.(\"s\") = \"dynamic\";
+            TSub::setRef(\\n);
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! runs the form n times and returns the results, which are all the same
+string sub run_n(string form, Target w, int count) {
+    hash<string, bool> rv;
+    for (int i = 0; i < count; ++i) {
+        rv{TSub::run(form, w)} = True;
+    }
+    return (keys rv).join(\",\");
+}
+
+#! runs every form on the object
+hash<string, string> sub run_all(Target w, int count = 2) {
+    return map {$1: run_n($1, w, count)}, Forms;
+}
+
+Target sub make_target() {
+    return new Target();
+}
+
+TSub sub make_sub() {
+    return new TSub();
+}
+
+string sub write_self(TSub t) {
+    return t.writeSelf();
+}
+
+#! runs every form on the object in a thread that the tenant starts
+hash<string, string> sub run_all_background(Target w) {
+    Queue q();
+    background q.push(run_all(w));
+    return q.get();
+}
+
+#! calls the code with the object
+hash<string, string> sub call_code(code c, Target w) {
+    return c(w);
+}
+
+#! returns a closure that runs every form on the given object
+code sub get_closure() {
+    return hash<string, string> sub (Target w) { return run_all(w); };
+}
+
+#! runs every form in a Program that the tenant creates: on the given object and on one that the child creates
+hash<string, hash<string, string>> sub run_in_child(string src, Target w) {
+    Program c(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    c.parse(src, \"child\");
+    Target own = c.callFunction(\"make_target\");
+    return {
+        \"given\": c.callFunction(\"run_all\", w),
+        \"own\": c.callFunction(\"run_all\", own),
+    };
+}
+";
+
+#! the forms of the compiled code
+const AotForms = ("assign", "dynamic", "remove", "merge", "slice-remove");
+
+#! the subclass that writes the logger of a LoggerWrapper, in the compiled module and in the compiled host
+const AotWriterClass = "
+    %s inherits Logger::LoggerWrapper {
+        #! writes the logger member of the object with the given form
+        static string poke(string form, Logger::LoggerWrapper w) {
+            try {
+                switch (form) {
+                    case \"assign\": w.logger = new Logger::Logger(\"poked\"); break;
+                    case \"dynamic\": w.(\"logger\") = new Logger::Logger(\"poked\"); break;
+                    case \"remove\": remove w.logger; break;
+                    case \"merge\": w += {\"logger\": new Logger::Logger(\"poked\")}; break;
+                    case \"slice-remove\": remove w{\"logger\",}; break;
+                    default: throw \"UNKNOWN-FORM\", form;
+                }
+                return \"ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+
+        #! writes the logger member of self
+        string pokeSelf() {
+            try {
+                logger = new Logger::Logger(\"self\");
+                remove logger;
+                self.(\"logger\") = new Logger::Logger(\"self\");
+                return \"ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+    }
+";
+
+#! the module compiled with qcc: library code, which is trusted (sandboxed code cannot load native code by its path,
+#! see the trust model of native code)
+const AotModuleSource = "%modern
+%requires Logger
+module PmwProbe {
+    version = \"1.0\";
+    desc = \"private member write probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace PmwProbe {
+" + sprintf(AotWriterClass, "public class ModSub") + "
+    public Logger::LoggerWrapper sub make() {
+        return new Logger::LoggerWrapper(new Logger::Logger(\"own\"));
+    }
+
+    public string sub poke_self() {
+        return new ModSub().pokeSelf();
+    }
+}
+";
+
+#! the tenant code that calls the compiled module, and that writes with a subclass of its own
+const AotTenantSource = "%modern
+%requires Logger
+%requires PmwProbe
+" + sprintf(AotWriterClass, "class TenantSub") + "
+string sub poke(string form, Logger::LoggerWrapper w) { return PmwProbe::ModSub::poke(form, w); }
+string sub poke_own_class(string form, Logger::LoggerWrapper w) { return TenantSub::poke(form, w); }
+Logger::LoggerWrapper sub make() { return PmwProbe::make(); }
+string sub poke_self() { return PmwProbe::poke_self(); }
+";
+
+#! the tenant of the host compiled with qcc, parsed at run time
+const AotHostTenantSource = "%modern
+%requires Logger
+" + sprintf(AotWriterClass, "class TenantSub") + "
+string sub poke(string form, Logger::LoggerWrapper w) { return TenantSub::poke(form, w); }
+Logger::LoggerWrapper sub make() { return new Logger::LoggerWrapper(new Logger::Logger(\"own\")); }
+";
+
+#! the host compiled with qcc: its own compiled subclass writes the objects of a tenant, whose code it reads from
+#! the file given as its argument
+const AotHostSource = "%modern
+%requires Logger
+" + sprintf(AotWriterClass, "class HostSub") + "
+const Forms = (" + (map sprintf("%y", $1), AotForms).join(", ") + ");
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setSandboxManager(new SandboxManager());
+p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"tenant\");
+Logger::Logger host_logger(\"host\");
+Logger::LoggerWrapper host_obj(host_logger);
+foreach string form in (Forms) {
+    printf(\"tenant-on-host.%s=%s\\n\", form, p.callFunction(\"poke\", form, host_obj));
+    printf(\"tenant-on-own.%s=%s\\n\", form, p.callFunction(\"poke\", form, p.callFunction(\"make\")));
+    printf(\"host-on-tenant.%s=%s\\n\", form, HostSub::poke(form, p.callFunction(\"make\")));
+}
+printf(\"host-logger=%s\\n\", host_obj.isLogger(host_logger) ? \"set\" : \"changed\");
+foreach string form in (Forms) {
+    printf(\"host-on-host.%s=%s\\n\", form, HostSub::poke(form, host_obj));
+}
+";
+
+class SandboxPrivateMemberWriteTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the exception of a refused write
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the forms
+        const Forms = (
+            "assign", "plus-equals", "minus-equals", "post-inc", "pre-dec", "push", "unshift", "splice", "extract",
+            "remove", "delete", "nested", "dynamic", "slice-remove", "merge", "string-plus-equals",
+            "public",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed private member write", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant writes in " + mode, getTenantTest(mode));
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("look-alike classes in " + mode, getLookAlikeTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("qcc-compiled module", \aotModuleTest());
+        addTestCase("qcc-compiled host", \aotHostTest());
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    #! returns the look-alike class test of the given execution mode
+    private code getLookAlikeTest(string mode) {
+        return sub () { lookAlikeTest(mode); };
+    }
+
+    #! a class that a tenant declares with the name and signature of a trusted class is not that class (qore#6842)
+    lookAlikeTest(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        p.setSandboxManager(new SandboxManager());
+        p.parse(LookAlikeSource, "look-alike");
+
+        Plain plain();
+        assertEq(Err, p.callFunction("write_plain", plain), mode + ": a look-alike of the host's class");
+        assertEq(0, plain.get(), mode + ": the host's object is unchanged");
+
+        Logger host_logger("host");
+        LoggerWrapper w(host_logger);
+        # refused by the write rule if the look-alike has the access of the class, by the access rules if not
+        assertNeq("ok", p.callFunction("write_logger_wrapper", w), mode + ": a look-alike of LoggerWrapper");
+        assertTrue(w.isLogger(host_logger), mode + ": the host's LoggerWrapper keeps its logger");
+    }
+
+    #! creates a Program with the tenants' code
+    /** @param mode the execution mode of the Program's code
+        @param sandboxed if the Program has a sandbox manager of its own
+        @param after if the manager is set after the code is parsed
+        @param level the enforcement level of the manager
+    */
+    private static Program tenant(string mode, bool sandboxed = True, bool after = False,
+            int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        SandboxManager sm();
+        if (level != QSEL_TENANT_ISOLATION) {
+            sm.setEnforcementLevel(level);
+        }
+        if (sandboxed && !after) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        if (sandboxed && after) {
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! returns the result of every form
+    private static hash<string, string> expect(string result) {
+        return map {$1: $1 == "public" ? "ok" : result}, Forms;
+    }
+
+    #! checks that the private state of a refused object is unchanged
+    private checkUnchanged(Target w, string label) {
+        hash<auto> expected = new Target().state() + {"pub": w.pub};
+        assertEq(expected, w.state(), label + ": the object is unchanged");
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+        # a sandbox set after the code was parsed governs the code that was parsed before
+        Program late = tenant(mode, True, True);
+
+        Target host_obj();
+        Target b_obj = b.callFunction("make_target");
+        Target a_obj = a.callFunction("make_target");
+        Target a_sub = a.callFunction("make_sub");
+
+        assertEq(expect(Err), a.callFunction("run_all", host_obj, count), mode + ": A on the host's object");
+        checkUnchanged(host_obj, mode + ": host's object");
+        assertEq(expect(Err), a.callFunction("run_all", b_obj, count), mode + ": A on B's object");
+        checkUnchanged(b_obj, mode + ": B's object");
+        assertEq(expect(Err), late.callFunction("run_all", host_obj, count),
+            mode + ": a late-sandboxed tenant on the host's object");
+        checkUnchanged(host_obj, mode + ": host's object");
+
+        # the tenant's own objects
+        assertEq(expect("ok"), a.callFunction("run_all", a_obj, count), mode + ": A on its own object");
+        assertEq(expect("ok"), a.callFunction("run_all", a_sub, count), mode + ": A on its own subclass object");
+        assertEq("ok", a.callFunction("write_self", a_sub), mode + ": A on self");
+        assertEq(expect("ok"), b.callFunction("run_all", b.callFunction("make_target"), count),
+            mode + ": B on its own object");
+
+        # a thread that the tenant starts, a closure of the tenant called by trusted code, and a thread that trusted
+        # code starts to call the tenant
+        assertEq(expect(Err), a.callFunction("run_all_background", host_obj), mode + ": A's thread");
+        code closure = a.callFunction("get_closure");
+        assertEq(expect(Err), closure(host_obj), mode + ": A's closure called by trusted code");
+        Queue q();
+        background q.push(a.callFunction("run_all", b_obj));
+        assertEq(expect(Err), q.get(), mode + ": A called in a thread of trusted code");
+        checkUnchanged(b_obj, mode + ": B's object");
+
+        # a Program that the tenant creates
+        hash<string, hash<string, string>> child = a.callFunction("run_in_child", TenantSource, host_obj);
+        assertEq(expect(Err), child.given, mode + ": A's child Program on the host's object");
+        assertEq(expect("ok"), child.own, mode + ": A's child Program on its own object");
+        checkUnchanged(host_obj, mode + ": host's object");
+        # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
+        Program safe = tenant(mode, True, False, QSEL_CODE_SAFETY);
+        Target safe_obj();
+        assertEq(expect("ok"), safe.callFunction("run_all", safe_obj, count),
+            mode + ": code safety on the host's object");
+        assertEq(expect("ok"), safe.callFunction("run_all", b.callFunction("make_target"), count),
+            mode + ": code safety on B's object");
+        # but an isolated tenant is, on the objects of code-safety code too
+        Target safe_own = safe.callFunction("make_target");
+        assertEq(expect(Err), a.callFunction("run_all", safe_own, count),
+            mode + ": A on a code-safety tenant's object");
+    }
+
+    trustedTest() {
+        Program t = tenant("ast", False);
+        Target host_obj();
+        Program a = tenant("ast");
+        Target a_obj = a.callFunction("make_target");
+        assertEq(expect("ok"), t.callFunction("run_all", host_obj), "trusted code on the host's object");
+        assertEq(expect("ok"), t.callFunction("run_all", a_obj), "trusted code on a tenant's object");
+        # the code of a trusted class that the tenant calls is not restricted (it acts for the tenant only through
+        # its own API)
+        assertEq(expect("ok"), a.callFunction("call_code", t.getCallReference("run_all"), host_obj),
+            "trusted code called by a tenant");
+    }
+
+    aotModuleTest() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-private-member-write-aot-");
+        string src = tmp.path + DirSep + "PmwProbe.qm";
+        write(src, AotModuleSource);
+        string qmod = tmp.path + DirSep + "PmwProbe.qmod";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s --module "
+            "--strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qcc_bin, qmod, src));
+        if (!is_file(qmod)) {
+            throw "COMPILE-ERROR", out;
+        }
+        # the compiled module is loaded, not its source
+        unlink(src);
+        load_module(qmod);
+
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(AotTenantSource, "aot-tenant");
+
+        Logger host_logger("host");
+        LoggerWrapper host_obj(host_logger);
+        LoggerWrapper own = p.callFunction("make");
+        foreach string form in (AotForms) {
+            # the tenant's own subclass is refused
+            assertEq(Err, p.callFunction("poke_own_class", form, host_obj), "a tenant's subclass on the host's "
+                "object: " + form);
+            assertTrue(host_obj.isLogger(host_logger), "the host's object keeps its logger: " + form);
+            assertEq("ok", p.callFunction("poke_own_class", form, own), "a tenant's subclass on its own object: "
+                + form);
+            own.setLogger(new Logger("again"));
+        }
+        # the compiled library code is trusted, also when the tenant calls it
+        foreach string form in (AotForms) {
+            assertEq("ok", p.callFunction("poke", form, new LoggerWrapper(host_logger)), "compiled module code "
+                "called by a tenant on the host's object: " + form);
+        }
+        assertEq("ok", p.callFunction("poke_self"), "compiled module code on self");
+    }
+
+    aotHostTest() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-private-member-write-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, AotHostTenantSource);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, exe, src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        int status;
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir,
+            libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe, tenant_src), \status);
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected;
+        foreach string form in (AotForms) {
+            expected += {
+                "tenant-on-host." + form: Err,
+                "tenant-on-own." + form: "ok",
+                "host-on-tenant." + form: "ok",
+                "host-on-host." + form: "ok",
+            };
+        }
+        expected."host-logger" = "set";
+        assertEq(expected, results, "compiled host output:\n" + out);
+        assertEq(0, status);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}
