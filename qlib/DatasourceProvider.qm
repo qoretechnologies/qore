@@ -96,9 +96,10 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
       output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
       @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code has no terminal I/O
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
-    - the script path of the program of a provider module, which appears in exception locations, has the masked
-      description of a datasource string given (see @ref Qore::SQL::mask_datasource(string) "mask_datasource()")
-      instead of the string, which can have a password
+    - the \c DATASOURCE-ERROR exceptions and the script path of the program of a provider module show the masked
+      description (see @ref Qore::SQL::mask_datasource(string) "mask_datasource()") of a string given that is not a
+      plain datasource identifier, such as a datasource string, which can have a user name, a password and a database
+      name, instead of the string
       (<a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>)
 
     @subsection datasourceprovider_1_1 DatasourceProvider 1.1
@@ -151,11 +152,11 @@ string connstr = get_ds_string(str);
                 }
             }
             if (!driver)
-                throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; tried the following datasource provider modules: %y", str, pl);
+                throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; tried the following datasource provider modules: %y", get_ds_desc(str), pl);
         }
 
         if (!driver)
-            throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; there is no driver specification in the string (ex: \"driver:...\") and no datasource provider modules are set in the QORE_DATASOURCE_PROVIDERS environment variable", str);
+            throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; there is no driver specification in the string (ex: \"driver:...\") and no datasource provider modules are set in the QORE_DATASOURCE_PROVIDERS environment variable", get_ds_desc(str));
         return str;
     }
 
@@ -188,14 +189,19 @@ string connstr = get_ds_string(str);
 
 # private, non-exported namespace
 namespace Priv {
+    # returns the string given for messages: a datasource identifier as given, and the masked description of any
+    # other string, such as a datasource string, which can have a user name, a password and a database name
+    # (issue #6988)
+    string sub get_ds_desc(string str) {
+        return (str =~ /[\/@:%]/) ? mask_datasource(str) : str;
+    }
+
     string sub try_get_ds_string(string mod, string str) {
         Program p();
         p.loadModule(mod);
         # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-        # a string with a driver is a datasource string, which can have a user name, a password and a database name;
-        # the script path appears in exception locations, so it has the masked description of the string (issue #6988)
-        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod,
-            (str =~ /^.+:/) ? mask_datasource(str) : str));
+        # the script path appears in exception locations (issue #6988)
+        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod, get_ds_desc(str)));
         return p.callFunction("get_mod_ds_string", str);
     }
 

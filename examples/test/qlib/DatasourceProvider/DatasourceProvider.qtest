@@ -13,6 +13,7 @@ public class DatasourceProviderTest inherits QUnit::Test {
     constructor() : Test("DatasourceProvider Test", "1.0") {
         addTestCase("dsp test", \datasourceProviderTest());
         addTestCase("dsp neg test", \datasourceProviderNegativeTest());
+        addTestCase("dsp masked strings", \datasourceProviderMaskedTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -39,5 +40,31 @@ public class DatasourceProviderTest inherits QUnit::Test {
         p.parse("string sub test(string str) { return get_ds_string(str); }", "");
         assertThrows("DATASOURCE-ERROR", \p.callFunction(), ("test", "X"));
         assertEq("X:", p.callFunction("test", "X:"));
+    }
+
+    # a datasource string that is not matched is not shown in an exception; an identifier is (qore#6988)
+    datasourceProviderMaskedTest() {
+        list<string> secrets = ("u_SECRET1", "p_SECRET2", "d_SECRET3");
+        # a string without a driver that is not matched is not shown in the exception, an identifier is
+        Program np(PO_NEW_STYLE);
+        np.loadModule("DatasourceProvider");
+        np.parse("string sub test(string str) { return get_ds_string(str); }", "");
+        try {
+            np.callFunction("test", "u_SECRET1/p_SECRET2@d_SECRET3");
+            fail("no exception was raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATASOURCE-ERROR", ex.err);
+            string text = sprintf("%s: %y", ex.desc, ex.arg);
+            foreach string secret in (secrets) {
+                assertEq(-1, text.find(secret), secret);
+            }
+        }
+        try {
+            np.callFunction("test", "my_ident");
+            fail("no exception was raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATASOURCE-ERROR", ex.err);
+            assertRegex("\"my_ident\"", ex.desc);
+        }
     }
 }

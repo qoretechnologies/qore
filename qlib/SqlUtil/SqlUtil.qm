@@ -9285,8 +9285,11 @@ int num = l.size();
             The values are kept until the cache is populated again.  Like the rest of the container, the values are not
             synchronized: a cache is populated and used by one thread at a time.
 
-            @param key the key of the value; it must identify the connection (for example, by including
-            @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "the datasource description")
+            @param key the key of the value; it must identify the connection (for example, by including the key
+            given by @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()";
+            not the description given by
+            @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "AbstractSqlUtilBase::getDatasourceDesc()", which
+            is the same for all the connections of a driver to a host and port)
             @param get returns the value; called only if the cache has no value for \a key yet
 
             @return the value

@@ -2589,8 +2589,9 @@
       a SQLite database file name) in exception messages and logs, such as the \c TABLE-ERROR raised for a table
       whose description cannot be read and the option errors of a database object; they now show the masked
       description of the datasource, as the core datasource errors do; the
-      @ref datasourceproviderintro "DatasourceProvider" module no longer puts a datasource string in the script path
-      of the program of a provider module, which appears in exception locations (issue #6988)
+      @ref datasourceproviderintro "DatasourceProvider" module no longer shows a datasource string in its exceptions
+      or in the script path of the program of a provider module; also a datasource string with a port of \c 0 no
+      longer aborts a debug build when it is parsed (issue #6988)
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)

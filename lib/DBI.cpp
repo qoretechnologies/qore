@@ -1123,8 +1123,9 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         }
 
         if (tok == ':') {
+            // the port has at least one digit (see check_datasource_chars()), but can be 0, which is given as is,
+            // as a datasource with no port (qore#6988)
             int port = atoi(str);
-            assert(port);
             h->setKeyValue("port", port, nullptr);
 
             char* pstr = str;

@@ -102,6 +102,8 @@ class DatasourceMaskedDescriptionTest inherits QUnit::Test {
             ("pgsql:" + Creds + "(utf8)%db.example.com:5432{min=2,max=4," + Pass + "=" + User + "}",
                 "pgsql:****/****@****%db.example.com:5432"),
             ("pgsql:" + Creds + "%db.example.com", "pgsql:****/****@****%db.example.com"),
+            # a port of 0 is no port
+            ("pgsql:" + Creds + "%db.example.com:0", "pgsql:****/****@****%db.example.com"),
             ("pgsql:" + Creds, "pgsql:****/****@****"),
             ("pgsql:" + User + "@" + Db, "pgsql:****/****@****"),
             ("pgsql:@" + Db, "pgsql:****/****@****"),
@@ -169,6 +171,8 @@ class DatasourceMaskedDescriptionTest inherits QUnit::Test {
         assertEq(Masked, mask_datasource(sprintf("%s:%s%%%s:%d", Driver, Creds, Host, Port)));
         # a string in another encoding is described in the default encoding
         assertEq("pgsql:****/****@****%db.example.com:5432", mask_datasource(convert_encoding(str, "UTF-16LE")));
+        # a port of 0 is parsed as given
+        assertEq(0, parse_datasource("pgsql:" + Creds + "%h:0").port);
         # named arguments are accepted
         assertEq("pgsql:****/****@****", mask_datasource(datasource: "pgsql:" + Creds));
     }

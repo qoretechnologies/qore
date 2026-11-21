@@ -104,6 +104,7 @@ class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
 
     constructor() : Test("SqlUtilMaskedDatasourceDesc", "1.0", \ARGV) {
         addTestCase("AbstractSqlUtilBase::makeDatasourceDesc() and makeDatasourceKey()", \descAndKey());
+        addTestCase("the table cache keys connections with the same description apart", \tableCacheKey());
         addTestCase("SQLite TABLE-ERROR", \sqlite3TableError());
         addTestCase("SQLite descriptions of a table and option errors", \sqlite3Descriptions());
         addTestCase("PostgreSQL TABLE-ERROR", \pgsqlTableError());
@@ -136,6 +137,33 @@ class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
         assertEq(sprintf("pgsql:****/****@****%%%s:%d", Host, Port), desc);
         # the key identifies the connection: it has the user name and the database name
         assertEq(sprintf("pgsql:%s@%s%%%s:%d", User, Db, Host, Port), AbstractSqlUtilBase::makeDatasourceKey(ds));
+    }
+
+    tableCacheKey() {
+        # two connections whose descriptions are the same, as they differ only in the database
+        AbstractDatasource ds1 = getSqlite3();
+        AbstractDatasource ds2 = getSqlite3();
+        foreach AbstractDatasource ds in ((ds1, ds2)) {
+            ds.exec("create table t1 (id integer primary key)");
+            ds.commit();
+        }
+        assertEq(AbstractSqlUtilBase::makeDatasourceDesc(ds1), AbstractSqlUtilBase::makeDatasourceDesc(ds2));
+        assertTrue(AbstractSqlUtilBase::makeDatasourceKey(ds1) != AbstractSqlUtilBase::makeDatasourceKey(ds2));
+        on_exit {
+            sqlutil_clear_table_cache(ds1);
+            sqlutil_clear_table_cache(ds2);
+        }
+
+        # each connection gets a table of its own
+        assertTrue(sqlutil_get_cached_table(ds1, "t1").getDatasource() == ds1);
+        assertTrue(sqlutil_get_cached_table(ds2, "t1").getDatasource() == ds2);
+        assertTrue(sqlutil_get_cached_table(ds1, "t1").getDatasource() == ds1);
+
+        # discarding the tables of one leaves those of the other
+        sqlutil_clear_table_cache(ds1, "t1");
+        assertNothing(TableCache::get(AbstractSqlUtilBase::makeDatasourceKey(ds1), "t1"));
+        *AbstractTable t = TableCache::get(AbstractSqlUtilBase::makeDatasourceKey(ds2), "t1");
+        assertTrue(t.getDatasource() == ds2);
     }
 
     sqlite3TableError() {
