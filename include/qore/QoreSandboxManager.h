@@ -1243,6 +1243,9 @@ DLLEXPORT QoreProgram* qore_get_caller_program();
 */
 #define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
 
+//! defined if SandboxManager::callGoverned() is available (qore#7052)
+#define _QORE_HAS_SANDBOX_CALL_GOVERNED 1
+
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language

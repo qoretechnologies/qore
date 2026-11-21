@@ -1331,6 +1331,64 @@ static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_
     return qore_create_trusted_build_call(call, xsink);
 }
 
+//! Calls host code that creates objects for a sandboxed %Program, governed by that %Program's sandbox
+/** Trusted host code that builds objects for a sandboxed %Program (a container that creates the data providers or
+    connections of an interface, for example) calls the factory with this method: the factory runs with the host's
+    parse options, so it may create objects whose classes or constructors use functional domains that the governed
+    %Program's own code may not use, and the sandbox of the governed %Program governs the call and the objects that it
+    creates, as their provenance, for their whole life:
+    - its filesystem and network policy applies to their I/O, whoever calls their methods; its interrupts and force
+      terminations reach them, and its limits count them
+    - the work that they start (timers, asynchronous operations, callbacks) belongs to the governed %Program's
+      application (its timers can be cancelled by that %Program's code as its own), not to the host
+    - the objects record the host's functional-domain restrictions (none), not those of the governed %Program:
+      arguments that the governed %Program's code passes to their methods later (URLs, paths) are used with the
+      objects' rights, and are still checked against the sandbox's policy; code that the governed %Program gives them
+      (callbacks) runs as that %Program's code, with its restrictions, also when the factory calls it
+
+    Two axes are kept apart: the functional-domain restrictions of the code that creates an object (here the host's)
+    and the sandbox that governs the object (here the governed %Program's).
+
+    The objects themselves are created in the host's %Program (their %Program is the host's).
+
+    @param factory the host code to call; it must not have been created by code whose functional domains are
+    restricted, or by sandboxed code
+    @param governed the %Program whose sandbox governs the call and the objects that it creates; it must have a
+    sandbox manager (see Program::setSandboxManager()), and it is referenced for the call
+    @param call_args optional arguments for @p factory
+
+    @return the value that @p factory returns
+
+    @throw SANDBOX-CALL-GOVERNED-ERROR the calling code is governed by a sandbox, is sandboxed, or has restricted
+    functional domains; @p factory was created by restricted or sandboxed code; @p governed has no sandbox manager or
+    has been deleted
+
+    Exceptions that @p factory raises are raised unchanged; the sandbox and application of the call are removed on
+    every exit.
+
+    @par Example:
+    @code{.py}
+# a container creates the connection-bound data provider of a sandboxed interface
+AbstractDataProvider sub get_provider(Program interface_pgm, AbstractConnection conn) {
+    return SandboxManager::callGoverned(\conn.getDataProvider(), interface_pgm);
+}
+    @endcode
+
+    @note Use @ref Qore::Option::HAVE_SANDBOX_CALL_GOVERNED "HAVE_SANDBOX_CALL_GOVERNED" to check for the method
+    (\c %ifdef HAVE_SANDBOX_CALL_GOVERNED)
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::callGoverned(code factory, Program governed, *softlist<auto> call_args)
+        [dom=UNCONTROLLED_API] {
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(governed->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return qore_sandbox_call_governed(factory, *pgm, call_args, xsink);
+}
+
 //! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
 /** Trusted infrastructure that does work for sandboxed callers, such as building shared state that every caller then
     uses, cannot do that work on the caller's thread: what it creates there keeps the caller's sandbox (its

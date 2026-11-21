@@ -53,6 +53,15 @@ DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenc
 //! Returns the restrictions of a callable value or object as a mask of parse options (see the public
 //! qore_callable_origin_restrictions()), for code of the library that gates the callables it accepts (qore#7056)
 DLLLOCAL QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v);
+//! Calls host code with the host's parse options under the sandbox of another Program (SandboxManager::callGoverned())
+/** @param factory the host code to call: it must have no restrictions (qore_callable_origin_restrictions_po())
+    @param governed the Program whose sandbox governs the call and whose application the work belongs to (referenced
+    by the caller for the call)
+    @param args the arguments for \a factory
+    @param xsink for exceptions: SANDBOX-CALL-GOVERNED-ERROR if the call is refused, or those of \a factory
+*/
+DLLLOCAL QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, QoreProgram* governed,
+    const QoreListNode* args, ExceptionSink* xsink);
 //! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.
