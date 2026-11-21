@@ -96,6 +96,10 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
       output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
       @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code has no terminal I/O
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - the script path of the program of a provider module, which appears in exception locations, has the masked
+      description of a datasource string given (see @ref Qore::SQL::mask_datasource(string) "mask_datasource()")
+      instead of the string, which can have a password
+      (<a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>)
 
     @subsection datasourceprovider_1_1 DatasourceProvider 1.1
     - added support for the \c get_ds_hash() function
@@ -188,7 +192,10 @@ namespace Priv {
         Program p();
         p.loadModule(mod);
         # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod, str));
+        # a string with a driver is a datasource string, which can have a user name, a password and a database name;
+        # the script path appears in exception locations, so it has the masked description of the string (issue #6988)
+        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod,
+            (str =~ /^.+:/) ? mask_datasource(str) : str));
         return p.callFunction("get_mod_ds_string", str);
     }
 

@@ -1084,6 +1084,34 @@ string DatasourcePool::getDriverName() [flags=CONSTANT] {
    return new QoreStringNode(ds->getDriverName());
 }
 
+//! Returns a description of the datasource for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    the user name, the password and the database name are always replaced with \c "****", whether they are set or
+    not, so that the description shows none of them, and not whether they are set; the host and port are shown if
+    set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use
+    for a datasource in exception messages and logs
+
+    @return the masked description of the datasource, made from the driver name and the host and port that will be
+    used for the next connection to the server (as set in the constructor)
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = pool.getMaskedDescription();
+    @endcode
+
+    @see @ref Qore::SQL::mask_datasource(string) "mask_datasource()"
+
+    @since %Qore 3.0
+*/
+string DatasourcePool::getMaskedDescription() [flags=CONSTANT] {
+    SimpleRefHolder<QoreStringNode> host(ds->getPendingHostName());
+    QoreStringNodeHolder rv(new QoreStringNode);
+    q_ds_append_masked(**rv, ds->getDriverName(), host ? host->c_str() : nullptr, ds->getPendingPort());
+    return rv.release();
+}
+
 //! Returns the real DB driver name if supported by the driver, otherwise the %Qore driver name
 /** @return the real DB driver name if supported by the driver, otherwise the %Qore driver name
 

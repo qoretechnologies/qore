@@ -1899,6 +1899,21 @@ DLLLOCAL void q_ds_append_masked(QoreString& str, const Datasource& ds);
 */
 DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 
+//! appends the masked description of a datasource string for a message (qore#6988)
+/** The string is parsed as with parse_datasource(); the description of a string that can be parsed is made with
+    q_ds_append_masked(QoreString&, const char*, const char*, int) from its driver name, host and port, and that of a
+    string that cannot be parsed with q_ds_append_masked_string(); never raises an exception
+*/
+DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
+
+//! appends the masked description of a datasource hash for a message (qore#6988)
+/** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
+    \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
+    \c "host" value that is not a string is ignored, as is a \c "port" value that is not an integer or a string with
+    an integer; never raises an exception
+*/
+DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
+
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the
     exception raised does not show the string or the position of the NUL character, so that no part of the secret

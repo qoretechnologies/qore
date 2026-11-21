@@ -865,6 +865,67 @@ void q_ds_append_masked_string(QoreString& str, const char* ds) {
     str.concat(QORE_DS_MASK);
 }
 
+// returns the port value of a datasource hash, or 0 if it has none that is valid
+static int q_ds_hash_port(const QoreHashNode* h) {
+    QoreValue v = h->getKeyValue("port");
+    switch (v.getType()) {
+        case NT_INT: {
+            int64 port = v.getAsBigInt();
+            return (port > 0 && port <= 65535) ? static_cast<int>(port) : 0;
+        }
+        case NT_STRING: {
+            const QoreStringNode* str = v.get<const QoreStringNode>();
+            const char* p = str->c_str();
+            if (!*p || str->size() > 5) {
+                return 0;
+            }
+            int port = 0;
+            for (; *p; ++p) {
+                if (*p < '0' || *p > '9') {
+                    return 0;
+                }
+                port = port * 10 + (*p - '0');
+            }
+            return port <= 65535 ? port : 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+// returns the string value of the given key of a datasource hash, or nullptr if it has none
+static const char* q_ds_hash_str(const QoreHashNode* h, const char* key) {
+    QoreValue v = h->getKeyValue(key);
+    return v.getType() == NT_STRING ? v.get<const QoreStringNode>()->c_str() : nullptr;
+}
+
+void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
+    if (!h) {
+        q_ds_append_masked(str, nullptr, nullptr, 0);
+        return;
+    }
+    q_ds_append_masked(str, q_ds_hash_str(h, "type"), q_ds_hash_str(h, "host"), q_ds_hash_port(h));
+}
+
+void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
+    // the string is never shown, and an exception raised parsing it is not raised to the caller
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(q_parse_datasource_string(ds, &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        // the text in the default encoding, as the driver name is looked for in ASCII
+        TempEncodingHelper tmp(ds, QCS_DEFAULT, &xsink);
+        if (xsink) {
+            xsink.clear();
+            str.concat(QORE_DS_MASK);
+            return;
+        }
+        q_ds_append_masked_string(str, tmp->c_str());
+        return;
+    }
+    q_ds_append_masked_hash(str, *h);
+}
+
 /*
   parseDatasource()
   parses strings of the form: driver:user/pass@db(encoding)%host:post{option1,option2=value}

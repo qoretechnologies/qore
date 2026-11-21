@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# the SqlUtil exceptions that describe the datasource, such as the TABLE-ERROR raised for a table whose columns
+# cannot be read, show the masked description of the datasource: its driver, host and port, and none of its user
+# name, password and database name (qore#6988)
+#
+# the SQLite cases use a local database file; the cases of the other drivers use a datasource implemented here that
+# answers the catalog queries of the driver-specific module, so no database server is needed
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilMaskedDatasourceDescTest
+
+#! a datasource that answers queries with the results given by a responder; it needs no server
+class ScriptedDatasource inherits AbstractDatasource {
+    private {
+        string driver;
+        string real_driver;
+        auto server_version;
+        #! returns the result of a query: (method name, SQL, arguments)
+        code responder;
+        bool in_trans;
+    }
+
+    constructor(string driver, string real_driver, auto server_version, code responder) {
+        self.driver = driver;
+        self.real_driver = real_driver;
+        self.server_version = server_version;
+        self.responder = responder;
+    }
+
+    nothing commit() { in_trans = False; }
+    nothing rollback() { in_trans = False; }
+    auto exec(string sql, ...) { return vexec(sql, argv); }
+    auto vexec(string sql, *softlist<auto> vargs) { in_trans = True; return responder("exec", sql, vargs); }
+    auto execRaw(string sql) { return vexec(sql); }
+    auto select(string sql, ...) { return vselect(sql, argv); }
+    auto selectRow(string sql, ...) { return vselectRow(sql, argv); }
+    auto selectRows(string sql, ...) { return vselectRows(sql, argv); }
+    auto selectTyped(string sql, ...) { return vselect(sql, argv); }
+    auto selectRowsTyped(string sql, ...) { return vselectRows(sql, argv); }
+    auto vselect(string sql, *softlist<auto> vargs) { return responder("select", sql, vargs); }
+    auto vselectRow(string sql, *softlist<auto> vargs) { return responder("selectRow", sql, vargs); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { return responder("selectRows", sql, vargs); }
+    auto vselectTyped(string sql, *softlist<auto> vargs) { return vselect(sql, vargs); }
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) { return vselectRows(sql, vargs); }
+    nothing beginTransaction() { in_trans = True; }
+    *string getUserName() { return SqlUtilMaskedDatasourceDescTest::User; }
+    *string getPassword() { return SqlUtilMaskedDatasourceDescTest::Pass; }
+    *string getDBName() { return SqlUtilMaskedDatasourceDescTest::Db; }
+    *string getDBEncoding() { return "utf8"; }
+    *string getOSEncoding() { return "UTF-8"; }
+    *string getHostName() { return SqlUtilMaskedDatasourceDescTest::Host; }
+    *int getPort() { return SqlUtilMaskedDatasourceDescTest::Port; }
+    string getDriverName() { return driver; }
+    string getDriverRealName() { return real_driver; }
+    auto getServerVersion() { return server_version; }
+    auto getClientVersion() { return server_version; }
+    bool inTransaction() { return in_trans; }
+    bool currentThreadInTransaction() { return in_trans; }
+    hash<auto> getConfigHash() {
+        return {
+            "type": driver,
+            "user": SqlUtilMaskedDatasourceDescTest::User,
+            "pass": SqlUtilMaskedDatasourceDescTest::Pass,
+            "db": SqlUtilMaskedDatasourceDescTest::Db,
+            "host": SqlUtilMaskedDatasourceDescTest::Host,
+            "port": SqlUtilMaskedDatasourceDescTest::Port,
+        };
+    }
+    string getConfigString() { return make_datasource_string(getConfigHash()); }
+    int getCapabilities() { return 0; }
+}
+
+class SqlUtilMaskedDatasourceDescTest inherits QUnit::Test {
+    public {
+        const User = "u_SECRET1";
+        const Pass = "p_SECRET2";
+        const Db = "d_SECRET3";
+        const Secrets = (User, Pass, Db);
+
+        const Host = "h-host";
+        const Port = 4321;
+
+        #! the table that is looked up
+        const Table = "no_such_table";
+    }
+
+    private {
+        #! the directory of the SQLite database files
+        string tmp_dir;
+    }
+
+    constructor() : Test("SqlUtilMaskedDatasourceDesc", "1.0", \ARGV) {
+        addTestCase("AbstractSqlUtilBase::makeDatasourceDesc() and makeDatasourceKey()", \descAndKey());
+        addTestCase("SQLite TABLE-ERROR", \sqlite3TableError());
+        addTestCase("SQLite descriptions of a table and option errors", \sqlite3Descriptions());
+        addTestCase("PostgreSQL TABLE-ERROR", \pgsqlTableError());
+        addTestCase("MySQL TABLE-ERROR", \mysqlTableError());
+        addTestCase("MS SQL Server TABLE-ERROR", \mssqlTableError());
+        addTestCase("Sybase TABLE-ERROR", \sybaseTableError());
+        addTestCase("Firebird TABLE-ERROR", \firebirdTableError());
+        addTestCase("Oracle TABLE-ERROR", \oracleTableError());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp_dir = sprintf("%s/sqlutil-masked-desc-%d-%s", tmp_location(), getpid(), get_random_string(8));
+        mkdir(tmp_dir, 0700, True);
+    }
+
+    globalTearDown() {
+        if (tmp_dir && is_dir(tmp_dir)) {
+            foreach string file in (glob(tmp_dir + "/*")) {
+                unlink(file);
+            }
+            rmdir(tmp_dir);
+        }
+    }
+
+    descAndKey() {
+        ScriptedDatasource ds("pgsql", "pgsql", 150000, auto sub (string m, string sql, *list<auto> args) {});
+        string desc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+        checkNoSecrets(desc, "makeDatasourceDesc()");
+        assertEq(sprintf("pgsql:****/****@****%%%s:%d", Host, Port), desc);
+        # the key identifies the connection: it has the user name and the database name
+        assertEq(sprintf("pgsql:%s@%s%%%s:%d", User, Db, Host, Port), AbstractSqlUtilBase::makeDatasourceKey(ds));
+    }
+
+    sqlite3TableError() {
+        AbstractDatasource ds = getSqlite3();
+        AbstractTable t = new Table(ds, Table).getTable();
+        hash<ExceptionInfo> ex = catchEx(sub () { t.describe(); }, "sqlite3 describe");
+        checkTableError(ex, "sqlite3", "sqlite3 describe");
+    }
+
+    sqlite3Descriptions() {
+        AbstractDatasource ds = getSqlite3();
+        ds.exec("create table t1 (id integer primary key)");
+        ds.commit();
+        AbstractTable t = new Table(ds, "t1").getTable();
+        string desc = t.getDesc();
+        checkNoSecrets(desc, "sqlite3 getDesc()");
+        assertRegex("^sqlite3:\\*\\*\\*\\*/\\*\\*\\*\\*@\\*\\*\\*\\*: table t1$", desc);
+        checkNoSecrets(t.getDatasourceDesc(), "sqlite3 getDatasourceDesc()");
+
+        # an option error of the database object is tagged with the masked description, not the database name
+        Database db(ds);
+        checkNoSecrets(db.getDatasourceDesc(), "sqlite3 database getDatasourceDesc()");
+        hash<ExceptionInfo> ex = catchEx(sub () { db.getAlignSql({}, {"no_such_option": True}); },
+            "sqlite3 option error");
+        checkNoSecrets(ex, "sqlite3 option error");
+        assertEq("OPTION-ERROR", ex.err, getText(ex));
+        assertRegex("no_such_option", ex.desc);
+        assertRegex("^sqlite3:\\*\\*\\*\\*", ex.desc);
+    }
+
+    pgsqlTableError() {
+        ScriptedDatasource ds("pgsql", "pgsql", 150000, auto sub (string m, string sql, *list<auto> args) {
+            if (m == "selectRow") {
+                # the default schema
+                if (sql =~ /current_schema/) {
+                    return {"current_schema": "public"};
+                }
+                return;
+            }
+            # no columns
+            if (m == "select") {
+                return {};
+            }
+        });
+        checkTableErrorFor(ds, "pgsql");
+    }
+
+    mysqlTableError() {
+        ScriptedDatasource ds("mysql", "mysql", 80000, auto sub (string m, string sql, *list<auto> args) {
+            if (m == "select") {
+                return {};
+            }
+        });
+        checkTableErrorFor(ds, "mysql");
+    }
+
+    mssqlTableError() {
+        ScriptedDatasource ds("freetds", "freetds", "Microsoft SQL Server 2019",
+                auto sub (string m, string sql, *list<auto> args) {
+            if (m == "selectRow") {
+                # the default schema
+                if (sql =~ /schema_name\(\)/) {
+                    return {"schema": "dbo"};
+                }
+                return;
+            }
+            if (m == "select") {
+                return {};
+            }
+        });
+        checkTableErrorFor(ds, "freetds");
+    }
+
+    sybaseTableError() {
+        ScriptedDatasource ds("freetds", "freetds", "Adaptive Server Enterprise/16.0",
+                auto sub (string m, string sql, *list<auto> args) {
+            if (m == "select") {
+                return {};
+            }
+        });
+        checkTableErrorFor(ds, "freetds");
+    }
+
+    firebirdTableError() {
+        ScriptedDatasource ds("odbc", "Firebird", "3.0", auto sub (string m, string sql, *list<auto> args) {
+            if (m == "select") {
+                return {};
+            }
+        });
+        checkTableErrorFor(ds, "odbc");
+    }
+
+    oracleTableError() {
+        if (!get_module_hash().oracle) {
+            testSkip("the oracle module is not available");
+        }
+        ScriptedDatasource ds("oracle", "oracle", "19.0.0.0", auto sub (string m, string sql, *list<auto> args) {
+            # no system views and no table
+            if (m == "select") {
+                return {};
+            }
+        });
+        # the default schema of the table would be the user name, which names the table; the schema is given
+        hash<ExceptionInfo> ex = catchEx(sub () { new Table(ds, "SCH." + Table).getTable(); }, "oracle");
+        checkTableError(ex, "oracle", "oracle");
+    }
+
+    #! checks the TABLE-ERROR raised for the columns of a table of a scripted datasource
+    private checkTableErrorFor(ScriptedDatasource ds, string driver) {
+        hash<ExceptionInfo> ex = catchEx(sub () {
+            AbstractTable t = new Table(ds, Table).getTable();
+            t.describe();
+        }, driver);
+        checkTableError(ex, driver, driver);
+    }
+
+    #! checks a TABLE-ERROR: it names the table and the problem, and the masked datasource description
+    private checkTableError(hash<ExceptionInfo> ex, string driver, string label) {
+        checkNoSecrets(ex, label);
+        assertEq("TABLE-ERROR", ex.err, sprintf("%s: %s", label, getText(ex)));
+        assertRegex(Table, ex.desc, label);
+        assertRegex("does not exist|cannot retrieve table information", ex.desc, label);
+        assertRegex(driver + ":\\*\\*\\*\\*/\\*\\*\\*\\*@\\*\\*\\*\\*", ex.desc, label);
+    }
+
+    #! returns an open SQLite datasource whose user name, password and database file name are the secrets
+    private AbstractDatasource getSqlite3() {
+%ifdef NoSqlite3
+        testSkip("the sqlite3 module is not available");
+%endif
+        string file = sprintf("%s/%s-%s.db", tmp_dir, Db, get_random_string(8));
+        Datasource ds("sqlite3", User, Pass, file);
+        ds.open();
+        return ds;
+    }
+
+    #! returns the exception raised by the code, or fails the test case
+    private hash<ExceptionInfo> catchEx(code c, string label) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        fail(sprintf("%s: no exception was raised", label));
+        # not reached
+        return <ExceptionInfo>{};
+    }
+
+    #! returns the text of an exception and the exceptions chained to it: their error codes, descriptions and
+    #! arguments
+    private static string getText(*hash<ExceptionInfo> ex) {
+        string text;
+        while (ex) {
+            text += sprintf("%s: %s: %y\n", ex.err, ex.desc, ex.arg);
+            ex = ex.next;
+        }
+        return text;
+    }
+
+    #! checks that an exception and the exceptions chained to it show none of the secrets
+    private checkNoSecrets(hash<ExceptionInfo> ex, string label) {
+        checkNoSecrets(getText(ex), label);
+    }
+
+    #! checks that a string shows none of the secrets
+    private checkNoSecrets(string text, string label) {
+        foreach string secret in (Secrets) {
+            assertEq(-1, text.find(secret), sprintf("%s: %y is shown: %s", label, secret, text));
+        }
+    }
+}

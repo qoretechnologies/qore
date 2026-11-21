@@ -337,6 +337,86 @@ string str = make_datasource_string({
 string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);
 }
+
+//! Returns a description of a datasource string for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    the user name, the password and the database name are always replaced with \c "****", whether they are set or
+    not, so that the description shows none of them, and not whether they are set; the host and port are shown if
+    set; this is the description that %Qore uses for datasources in its own exception messages
+
+    @param datasource a datasource string as accepted by @ref Qore::SQL::parse_datasource() "parse_datasource()"
+
+    @return the masked description of the datasource; a string that cannot be parsed is described as
+    <tt><em>driver</em>:****</tt> if it starts with a valid driver name followed by \c ":", or as \c "****" otherwise;
+    the driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with
+    \c "****" otherwise
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = mask_datasource("pgsql:user/pass@dbname%dbhost.internal:5432");
+    @endcode
+
+    @note
+    - this function never throws an exception, also for a string that cannot be parsed
+    - a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+      text before the first \c ":" is taken as the driver name (see
+      @ref Qore::SQL::parse_datasource() "parse_datasource()"); always give the driver prefix
+
+    @see
+    - @ref Qore::SQL::mask_datasource(hash<auto>) "mask_datasource(hash<auto>)"
+    - @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()"
+
+    @since %Qore 3.0
+*/
+string mask_datasource(string datasource) [flags=CONSTANT,NAMED_ARGS] {
+    QoreStringNodeHolder rv(new QoreStringNode);
+    q_ds_append_masked_string_desc(**rv, *datasource);
+    return rv.release();
+}
+
+//! Returns a description of a datasource hash for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>,
+    made from the \c "type", \c "host" and \c "port" keys of the hash: the user name, the password and the database
+    name are always replaced with \c "****", whether they are set or not, so that the description shows none of
+    them, and not whether they are set; the host and port are shown if set; this is the description that %Qore uses
+    for datasources in its own exception messages
+
+    @param config a @ref datasource_hash "datasource hash"; a \c "type" (driver name) or \c "host" value that is not a
+    string is ignored, as is a \c "port" value that is not an integer or a string with an integer from 1 to 65535;
+    the driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with
+    \c "****" otherwise
+
+    @return the masked description of the datasource
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = mask_datasource({
+    "type": "oracle",
+    "user": "scott",
+    "pass": "tiger",
+    "db": "orcl",
+    "host": "dbhost.internal",
+    "port": 1521,
+});
+    @endcode
+
+    @note this function never throws an exception
+
+    @see
+    - @ref Qore::SQL::mask_datasource(string) "mask_datasource(string)"
+    - @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()"
+
+    @since %Qore 3.0
+*/
+string mask_datasource(hash<auto> config) [flags=CONSTANT,NAMED_ARGS] {
+    QoreStringNodeHolder rv(new QoreStringNode);
+    q_ds_append_masked_hash(**rv, config);
+    return rv.release();
+}
 ///@}
 
 /** @defgroup sql_constants SQL Constants
