@@ -642,7 +642,7 @@ fi
 #   (BUILD_INPUT_PATHSPECS: libqore, the programs, the modules and the CMake files; not the tests, the documentation or
 #   the scripts) must not differ between that commit and the working tree.  When the build was configured from this
 #   very tree (its CMakeCache.txt names it), a file that differs is accepted if what the build makes from it is newer
-#   than it (build_reference_file()): the build then has it (an uncommitted change that was built, or a commit made
+#   than it (build_references()): the build then has it (an uncommitted change that was built, or a commit made
 #   after the build), while a file changed after the build (an edit or a checkout that was not built) is not.  A file
 #   that the build makes nothing from (a source under examples/ or a binary module that CMake does not build here, a
 #   module in qlib that has no .qmod, which is loaded from its source) is not compared.  A new file that git does not
@@ -660,7 +660,7 @@ fi
 
 # The files that the build is made from, as git pathspecs from the root of the tree (decided from the inputs of
 # CMakeLists.txt): not the tests and the documentation of the binary modules; under examples/, the C and C++ sources and
-# CMake files, of which only those that the build compiles count (see build_reference_file())
+# CMake files, of which only those that the build compiles count (see build_references())
 BUILD_INPUT_PATHSPECS="lib include qlib modules cmake CMakeLists.txt :(glob)*.cpp :(glob)*.c :(glob)*.h :(glob)*.in
 :(glob)examples/**/*.cpp :(glob)examples/**/*.cc :(glob)examples/**/*.c :(glob)examples/**/*.h :(glob)examples/**/*.hpp
 :(glob)examples/**/*.qpp :(glob)examples/**/CMakeLists.txt :(glob)examples/**/*.cmake :(exclude,glob)modules/*/test/**
@@ -676,26 +676,33 @@ run_build_check() {
     fi
 }
 
-# Prints the commit that the given qore was built from (its --version's "git hash"), or nothing if it names none.  A
-# qore other than the one the tests use (the second argument, if any, is 1) runs with the libqore next to it first in
-# the library path, if it has one, as its build's tests would
+# Prints the commit that the given qore was built from (its --version's "git hash", which libqore holds), or nothing
+# if it names none.  The qore that the tests use runs with their library path.  Another qore (the second argument is
+# 1: the one next to a qcc or to .qmod files) runs with the libqore next to it first in the library path, if it has one,
+# as its build's tests would, or else without LD_LIBRARY_PATH, so that it loads the libqore that its own loader finds
+# (an installed one): with the tests' path, which comes before its RUNPATH on Linux, it would load the build's libqore
+# and name the build's commit.  It runs in a subshell, so that the shell's own LD_LIBRARY_PATH is left as it is.
 build_git_hash() {
-    hash_lib_path=$LD_LIBRARY_PATH
-    if [ "$2" = 1 ]; then
-        hash_dir=`dirname "$1"`
-        if [ -f "$hash_dir/libqore.so" ] || [ -f "$hash_dir/libqore.dylib" ]; then
-            hash_lib_path="$hash_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    (
+        if [ "$2" = 1 ]; then
+            hash_dir=`dirname "$1"`
+            if [ -f "$hash_dir/libqore.so" ] || [ -f "$hash_dir/libqore.dylib" ]; then
+                LD_LIBRARY_PATH="$hash_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                export LD_LIBRARY_PATH
+            else
+                unset LD_LIBRARY_PATH
+            fi
         fi
-    fi
-    LD_LIBRARY_PATH=$hash_lib_path run_build_check "$1" --version 2>/dev/null \
-        | sed -n 's/^[	 ]*git hash:[	 ]*\([0-9a-f]\{40,64\}\)[	 ]*$/\1/p' | head -1
+        run_build_check "$1" --version 2>/dev/null
+    ) | sed -n 's/^[	 ]*git hash:[	 ]*\([0-9a-f]\{40,64\}\)[	 ]*$/\1/p' | head -1
 }
 
 # Runs git in the tree; safe.directory: a tree that another user owns (a CI job's checkout) is read all the same.
 # The commands read the build's commit and its files only, which a shallow clone of that commit has (see
 # examples/test/runner/test_ci_shallow_clone.py).
 tree_git() {
-    GIT_NO_LAZY_FETCH=1 run_build_check git -c safe.directory='*' -C "$QORE_SOURCE_DIR" "$@"
+    # env: "VAR=value function" would leave the variable set (and exported) in bash
+    run_build_check env GIT_NO_LAZY_FETCH=1 git -c safe.directory='*' -C "$QORE_SOURCE_DIR" "$@"
 }
 
 # Prints the physical path of the given directory, or nothing
@@ -729,57 +736,72 @@ check_companion_build() {
     build_mismatch "$1: from $2, which has no qore that names its commit: they cannot be told to be the build's"
 }
 
-# Prints the first of the given files that exists, or nothing
-first_existing() {
-    for first_file in "$@"; do
-        if [ -e "$first_file" ]; then
-            echo "$first_file"
-            return
+# Adds each of the given files that exists to BUILD_REFS, one per line (a pattern of the shell that matches nothing
+# stays as it is, and does not exist)
+add_build_refs() {
+    for build_ref in "$@"; do
+        if [ -e "$build_ref" ]; then
+            BUILD_REFS="$BUILD_REFS$build_ref
+"
         fi
     done
 }
 
-# Prints the object file that the build compiled from the given source file, or nothing: CMake writes it in the build
-# directory of the source's CMake directory, as <that directory>/CMakeFiles/<target>.dir/<source>.o, so each directory
-# that contains the source is tried
-build_object_file() {
-    object_dir=""
+# Adds the object files that the build compiled from the given source file to BUILD_REFS: CMake writes them in the
+# build directory of the source's CMake directory, as <that directory>/CMakeFiles/<target>.dir/<source>.o (one per
+# target that compiles the source), so each directory that contains the source is tried.  With a second argument, the
+# objects compiled from any source in the given directory instead (for a header or a qpp file of a test program or an
+# example module).
+add_build_objects() {
+    object_prefix=""
     object_rest=$1
     while :; do
-        object=`first_existing "$QORE_BUILD_DIR/${object_dir:+$object_dir/}CMakeFiles/"*.dir/"$object_rest.o"`
-        if [ -n "$object" ]; then
-            echo "$object"
+        if [ -z "$2" ]; then
+            add_build_refs "$QORE_BUILD_DIR/${object_prefix:+$object_prefix/}CMakeFiles/"*.dir/"$object_rest.o"
+        elif [ -n "$object_rest" ]; then
+            add_build_refs "$QORE_BUILD_DIR/${object_prefix:+$object_prefix/}CMakeFiles/"*.dir/"$object_rest"/*.o
+        else
+            add_build_refs "$QORE_BUILD_DIR/$object_prefix/CMakeFiles/"*.dir/*.o
             return
         fi
         case "$object_rest" in
             */*)
-                object_dir=${object_dir:+$object_dir/}${object_rest%%/*}
+                object_prefix=${object_prefix:+$object_prefix/}${object_rest%%/*}
                 object_rest=${object_rest#*/}
                 ;;
-            *) return ;;
+            *)
+                if [ -z "$2" ]; then
+                    return
+                fi
+                object_prefix=${object_prefix:+$object_prefix/}$object_rest
+                object_rest=""
+                ;;
         esac
     done
 }
 
-# Prints the newest object file that the build compiled from a source in the directory of the given file, or nothing
-build_directory_object() {
-    object_source_dir=`dirname "$1"`
-    ls -t "$QORE_BUILD_DIR/CMakeFiles/"*.dir/"$object_source_dir"/*.o 2>/dev/null | head -1
-}
-
-# Prints the file that the build makes from the given changed path (relative to the tree), whose time tells whether
-# the build has the change (see above), or nothing if the build makes nothing from it:
-# - a CMake file: CMakeCache.txt, which CMake writes when it configures the build again;
+# Sets BUILD_REFS to the files that the build makes from the given changed path (relative to the tree), one per line,
+# whose times tell whether the build has the change (see above), or to nothing if the build makes nothing from it; the
+# second argument is 1 if the path exists.  BUILD_REFS_ANY is 1 if the build has the change when it is older than any
+# of them (the objects of a directory, of which a header's change rebuilds some), and 0 if it must be older than all.
+# Each is found with the shell's own commands, so that a diff of many files costs little.
+# - a CMake file: CMakeCache.txt, which CMake writes when it configures the build again (a configure that is not
+#   followed by a build therefore hides a change of a CMake file);
 # - a module in qlib: its .qmod (the build's, or the one that qlib links to), or nothing (it is loaded from its source);
-# - a source file that the build compiles: its object file;
-# - another file of libqore (a header, a qpp file): libqore; of a binary module: its module file, or nothing if the
-#   build has not built it; at the root of the tree: the program it is part of (qcc, qr or qore);
-# - any other file under examples/: the newest object file compiled from its directory (a header of the test programs),
-#   or nothing (the build compiles nothing there)
-build_reference_file() {
+# - a source file that the build compiles: each object file compiled from it, and libqore for a file of libqore;
+# - another file of libqore (a header, a qpp file, a source that is gone): libqore; of a binary module: its module
+#   file, or nothing if the build has not built it; at the root of the tree: the program it is part of;
+# - any other file under examples/: the object files compiled from its directory (a header or a qpp file of a test
+#   program or of an example module), or nothing (the build compiles nothing there).
+# An object file that ccache made a hard link or a clone of (hard_link, file_clone) has the time of the cached object,
+# which may be older than a change that was built: such a build is refused, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs
+# it.
+build_references() {
+    BUILD_REFS=""
+    BUILD_REFS_ANY=0
     case "$1" in
         CMakeLists.txt|*/CMakeLists.txt|*.cmake|cmake/*|*.in)
-            echo "$QORE_BUILD_DIR/CMakeCache.txt"
+            add_build_refs "$QORE_BUILD_DIR/CMakeCache.txt"
             return
             ;;
         qlib/*)
@@ -787,31 +809,69 @@ build_reference_file() {
             ref_module=${ref_module%%/*}
             ref_module=${ref_module%.qm}
             ref_module=${ref_module%.qc}
-            if [ -n "$BUILD_QMOD_DIR" ]; then
-                first_existing "$BUILD_QMOD_DIR/$ref_module.qmod" "$QORE_SOURCE_DIR/qlib/$ref_module.qmod"
+            if [ -n "$BUILD_QMOD_DIR" ] && [ -e "$BUILD_QMOD_DIR/$ref_module.qmod" ]; then
+                add_build_refs "$BUILD_QMOD_DIR/$ref_module.qmod"
             else
-                first_existing "$QORE_SOURCE_DIR/qlib/$ref_module.qmod"
+                add_build_refs "$QORE_SOURCE_DIR/qlib/$ref_module.qmod"
             fi
             return
             ;;
     esac
-    ref_object=`build_object_file "$1"`
-    if [ -n "$ref_object" ]; then
-        echo "$ref_object"
+    if [ "$2" = 1 ]; then
+        add_build_objects "$1"
+    fi
+    case "$1" in
+        lib/*|include/*)
+            add_build_refs "$LIBQORE"
+            return
+            ;;
+    esac
+    if [ -n "$BUILD_REFS" ]; then
         return
     fi
     case "$1" in
-        lib/*|include/*) echo "$LIBQORE" ;;
         modules/*)
             ref_module=${1#modules/}
             ref_module=${ref_module%%/*}
-            ls -t "$QORE_BUILD_DIR/modules/$ref_module"/*.qmod 2>/dev/null | head -1
+            add_build_refs "$QORE_BUILD_DIR/modules/$ref_module/"*.qmod
             ;;
-        examples/*) build_directory_object "$1" ;;
-        qcc-main.cpp) first_existing "$QORE_BUILD_DIR/qcc" "$LIBQORE" ;;
-        qr-*) first_existing "$QORE_BUILD_DIR/qr" "$LIBQORE" ;;
-        *) first_existing "$QORE_BUILD_DIR/qore" "$LIBQORE" ;;
+        examples/*)
+            BUILD_REFS_ANY=1
+            add_build_objects "${1%/*}" directory
+            ;;
+        qcc-main.cpp) add_build_refs "$QORE_BUILD_DIR/qcc" ;;
+        qr-*) add_build_refs "$QORE_BUILD_DIR/qr" ;;
+        *)
+            add_build_refs "$QORE_BUILD_DIR/qore"
+            if [ -z "$BUILD_REFS" ]; then
+                add_build_refs "$LIBQORE"
+            fi
+            ;;
     esac
+}
+
+# Returns 0 if the build has the change of the given file (or directory, for a file that is gone) by the times of the
+# files in BUILD_REFS (see build_references())
+build_has_change() {
+    build_newer=0
+    build_older=0
+    while IFS= read -r build_ref; do
+        if [ -z "$build_ref" ]; then
+            continue
+        fi
+        if [ "$1" -nt "$build_ref" ]; then
+            build_newer=1
+        else
+            build_older=1
+        fi
+    done <<BUILD_REFS_EOF
+$BUILD_REFS
+BUILD_REFS_EOF
+    if [ $BUILD_REFS_ANY -eq 1 ]; then
+        [ $build_older -eq 1 ]
+    else
+        [ $build_newer -eq 0 ]
+    fi
 }
 
 check_build_matches_tree() {
@@ -862,24 +922,25 @@ check_build_matches_tree() {
             if [ -z "$path" ]; then
                 continue
             fi
-            ref=`build_reference_file "$path"`
-            if [ -z "$ref" ]; then
+            # a file that is gone: the directory it was removed from (its nearest one that exists), which is compared
+            # with what the build makes from it (libqore, not the object file that a build leaves behind)
+            file=$QORE_SOURCE_DIR/$path
+            file_exists=1
+            while [ ! -e "$file" ] && [ "$file" != "$QORE_SOURCE_DIR" ]; do
+                file_exists=0
+                file=${file%/*}
+            done
+            build_references "$path" $file_exists
+            if [ -z "$BUILD_REFS" ]; then
                 continue
             fi
-            if [ $same_tree -eq 1 ]; then
-                # a file that is gone: the directory it was removed from (its nearest one that exists)
-                file=$QORE_SOURCE_DIR/$path
-                while [ ! -e "$file" ] && [ "$file" != "$QORE_SOURCE_DIR" ]; do
-                    file=`dirname "$file"`
-                done
-                if [ ! "$file" -nt "$ref" ]; then
-                    continue
-                fi
+            if [ $same_tree -eq 1 ] && build_has_change "$file"; then
+                continue
             fi
             stale_count=$((stale_count + 1))
             stale="$stale    $path
 "
-            # the first ten are enough to tell: each one costs a few commands
+            # the first ten are enough to tell
             if [ $stale_count -ge 10 ]; then
                 stale_count="10 or more"
                 break

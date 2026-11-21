@@ -16,11 +16,14 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
 import textwrap
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import end_session, session_processes  # noqa: E402
 RUN_TESTS = Path(os.environ.get("QORE_RUN_TESTS_SH", str(ROOT / "run_tests.sh"))).resolve()
 
 # the time of the build's files, and of the sources made before it
@@ -159,8 +162,16 @@ class BuildMatchTest(unittest.TestCase):
             "QORE_TEST_DIRS": "tests",
         }
         env.update(variables)
-        result = subprocess.run(["sh", str(RUN_TESTS)], cwd=tree, env=env, capture_output=True, text=True,
-                                timeout=120)
+        # in a session of its own, whose processes are ended once it has ended or when it fails: a runner that does not
+        # limit the time of the check leaves a qore that hangs running (test_a_qore_that_hangs_is_ended())
+        process = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree, env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, start_new_session=True)
+        try:
+            stdout, stderr = process.communicate(timeout=120)
+        finally:
+            end_session(process)
+        self.assertEqual([], session_processes(process.pid), "a process of the run is left")
+        result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
         result.output = result.stdout + result.stderr
         return result
 
@@ -370,6 +381,65 @@ class BuildMatchTest(unittest.TestCase):
             exec '{real_readlink}' "$@"
             """)
         self.assert_refused(self.run_runner(), "the qlib/*.qmod links into %s" % other)
+
+    def test_an_installed_qcc_is_not_the_build_s(self):
+        # a qcc whose qore has no libqore next to it (an installed one) names the commit of the libqore that its own
+        # loader finds, not that of the build's libqore in the tests' library path (which comes first on Linux)
+        installed = self.base / "installed" / "bin"
+        stand_in_build(installed, self.tree, OTHER_COMMIT)
+        (installed / "libqore.so").unlink()
+        self.assert_refused(self.run_runner(QCC=str(installed / "qcc")), "the qcc that the tests use (%s/qcc): from the "
+                            "build in %s, made from commit %s" % (installed, installed.resolve(), OTHER_COMMIT))
+
+    def test_a_header_of_an_example_module_is_compared_with_its_objects(self):
+        # an example module built by add_subdirectory() has its objects in the build directory of its own directory
+        header = self.tree / "examples/test/mod/mod.h"
+        header.parent.mkdir(parents=True)
+        header.write_text("// changed\n")
+        git(self.tree, "add", str(header))
+        os.utime(header, (LATER, LATER))
+        obj = self.build / "examples/test/mod/CMakeFiles/mod.dir/mod.cpp.o"
+        obj.parent.mkdir(parents=True)
+        obj.touch()
+        os.utime(obj, (BUILD_TIME, BUILD_TIME))
+        self.assert_refused(self.run_runner(), "    examples/test/mod/mod.h")
+        os.utime(obj, (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+
+    def test_a_removed_source_is_compared_with_libqore(self):
+        # a source that is removed and built without: the object file that the build leaves behind is not compared
+        obj = self.build / "CMakeFiles/libqore.dir/lib/b.cpp.o"
+        obj.parent.mkdir(parents=True)
+        obj.touch()
+        os.utime(obj, (BUILD_TIME, BUILD_TIME))
+        git(self.tree, "rm", "-q", "lib/b.cpp")
+        os.utime(self.tree / "lib", (LATER, LATER))
+        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+        # not built since
+        os.utime(self.build / "libqore.so", (BUILD_TIME, BUILD_TIME))
+        self.assert_refused(self.run_runner(), "    lib/b.cpp")
+
+    def test_a_source_of_several_targets_is_compared_with_each_object(self):
+        # each target's object must be newer than the source, whichever the shell lists first
+        source = self.tree / "lib/a.cpp"
+        os.utime(source, (LATER, LATER))
+        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
+        for target, when in (("a-test.dir", LATER + 10), ("libqore.dir", BUILD_TIME)):
+            obj = self.build / "CMakeFiles" / target / "lib/a.cpp.o"
+            obj.parent.mkdir(parents=True)
+            obj.touch()
+            os.utime(obj, (when, when))
+        (self.tree / "lib/a.cpp").write_text("int a = 6;\n")
+        os.utime(source, (LATER, LATER))
+        self.assert_refused(self.run_runner(), "    lib/a.cpp")
+
+    def test_the_check_leaves_the_tests_environment_as_it_is(self):
+        # GIT_NO_LAZY_FETCH is for the check's git only: "VAR=value function" leaves it set and exported in bash
+        self.test.write_text("echo 'the test ran'\nif env | grep '^GIT_NO_LAZY_FETCH='; then echo 'leaked'; fi\n")
+        result = self.run_runner()
+        self.assert_runs(result)
+        self.assertNotIn("leaked", result.output)
 
     def archive(self, marker):
         """Makes a copy of the tree without its repository, with the given .git-archive-revision (None: none)"""
