@@ -4829,7 +4829,7 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
-    RuntimeConfig::Impl& rc = rc_get_tls_ref().implRef();
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
     old_rc_obj = rc.obj;
     old_rc_class = rc.cls;
     rc.obj = obj;
@@ -4840,7 +4840,7 @@ ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
     assert(td == thread_data.get());
     td->current_obj = old_obj;
     td->current_class = old_class;
-    RuntimeConfig::Impl& rc = rc_get_tls_ref().implRef();
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
     rc.obj = old_rc_obj;
     rc.cls = old_rc_class;
 }

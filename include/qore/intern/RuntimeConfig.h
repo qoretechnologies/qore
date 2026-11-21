@@ -321,6 +321,11 @@ private:
  */
 class RuntimeConfigObjectHelper {
 public:
+    //! Returns the active thread configuration when switching or restoring its object and class together.
+    DLLLOCAL static RuntimeConfig::Impl& currentThreadImpl() {
+        return rc_get_tls_ref().implRef();
+    }
+
     DLLLOCAL RuntimeConfigObjectHelper(RuntimeConfig& rc,
         QoreObject* new_obj,
         const qore_class_private* new_cls);

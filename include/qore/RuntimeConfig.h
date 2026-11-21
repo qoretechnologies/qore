@@ -116,7 +116,6 @@ private:
     friend class RuntimeConfigCallRefAccess;
     friend class RuntimeConfigLocationHelper;
     friend class RuntimeConfigObjectHelper;
-    friend class ObjectSubstitutionHelper;
     friend class RuntimeConfigClosureHelper;
     friend class RuntimeConfigElementHelper;
     friend class RuntimeConfigStackHelper;
