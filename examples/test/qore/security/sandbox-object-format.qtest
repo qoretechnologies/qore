@@ -23,7 +23,7 @@
 %exec-class SandboxObjectFormatTest
 
 #! the class whose private member the tenants format; declared by trusted code
-public class Target {
+public class Target inherits Serializable {
     public {
         string pub = "visible";
     }
@@ -31,6 +31,13 @@ public class Target {
     private {
         string s = "secret";
     }
+}
+
+#! a function of the host that formats and serializes an object for its caller: the host's code reads its objects as
+#! it did before the rule, also for a sandboxed caller
+string sub host_show(Target w) {
+    string str = sprintf("%y", w) + sprintf("%y", Serializable::serializeToData(w));
+    return str =~ /secret/ ? "private" : "public";
 }
 
 #! the code of the tenants (and of a trusted Program, where it is not restricted)
@@ -175,7 +182,8 @@ class SandboxObjectFormatTest inherits QUnit::Test {
             }
             p.setSandboxManager(sm);
         }
-        p.parse(TenantSource, "tenant");
+        p.importFunction("host_show");
+        p.parse(TenantSource + "string sub call_host_show(Target w) { return host_show(w); }\n", "tenant");
         return p;
     }
 
@@ -190,6 +198,9 @@ class SandboxObjectFormatTest inherits QUnit::Test {
             mode + ": A on B's object");
         assertEq(expect("privatepublic"), a.callFunction("show_all", a.callFunction("make_target"), count),
             mode + ": A on its own object");
+
+        # the host's code formats and serializes the host's objects for the tenant as before
+        assertEq("private", a.callFunction("call_host_show", new Target()), mode + ": the host's code for A");
 
         # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
         Program safe = tenant(mode, True, QSEL_CODE_SAFETY);

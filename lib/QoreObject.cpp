@@ -1642,6 +1642,15 @@ bool qore_object_private::callerReadsNonPublicMembersIntern() const {
     if (class_ctx && !class_ctx->sys && !class_ctx->isSandboxedCode()) {
         return true;
     }
+    // the code of a trusted Program that is not a library module's, such as the host's, reads its objects as it did
+    // before the rule, also for a sandboxed caller; library code that formats or serializes an object for its caller
+    // reads it as its caller
+    if (!class_ctx || class_ctx->sys) {
+        const QoreProgram* pgm = getProgram();
+        if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+            return true;
+        }
+    }
     return qore_caller_created_object(*obj);
 }
 
