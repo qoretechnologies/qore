@@ -52,7 +52,7 @@ MongoDatabase db = client.getDatabase("mydb");
 
     @since mongodb 1.0
 */
-qclass MongoClient [arg=QoreMongoClient* client; ns=mongodb; flags=final];
+qclass MongoClient [arg=QoreMongoClient* client; ns=mongodb; flags=final; dom=NETWORK];
 
 //! Creates a MongoDB client connection from a URI string
 /** @param uri the MongoDB connection URI (e.g., "mongodb://localhost:27017")
