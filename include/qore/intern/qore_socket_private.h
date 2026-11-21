@@ -44,6 +44,7 @@
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 
 #include "qore/intern/Http2Session.h"
 // NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
