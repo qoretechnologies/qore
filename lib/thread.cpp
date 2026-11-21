@@ -4357,6 +4357,8 @@ void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLoc
 
 QoreProgram* set_runtime_call_site_program(QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
+    // the frame of the previous call took the Program that its call set before this call can set one (qore#7101)
+    assert(!td->call_site_pgm);
     QoreProgram* prev = td->call_site_pgm;
     td->call_site_pgm = pgm;
     return prev;
@@ -9604,6 +9606,7 @@ static void leave_background_thread_program(ThreadData* td) {
     assert(!td->callback_caller_pgm);
     assert(!td->current_stack_location.load(std::memory_order_relaxed));
     assert(!td->call_site_loc);
+    assert(!td->call_site_pgm);
     set_thread_current_pgm(td, nullptr);
     td->tlpd = nullptr;
     sync_runtime_config_program(td);
