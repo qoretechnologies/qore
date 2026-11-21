@@ -129,10 +129,12 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         });
         assertEq((1.0, 2.0, 4.0, 24.0, 96.0, 128.0, 256.0, 512.0, 3072.0, 4096.0, 24576.0),
             df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
-        # numbers of different precisions: equal values make one group, different values two, whatever their forms
+        # numbers of different precisions: equal values make one group, different values two, whatever their forms;
+        # zeros at the end of a decimal literal do not change its precision (qore#6976), so the value of another
+        # precision is computed: 1n / 10n has the 128 bits of its operands, 0.1n those of its digits
         number a = 0.1n;
         number a2 = a + 0.000000000000000000000000000000000000000000000000000000000000000000000000000n;
-        number hi = 0.1000000000000000000000000000000000000000000000000000000000000000000000000000n;
+        number hi = 1n / 10n;
         DataFrame::DataFrame n({
             "k": (c'z', a, a2, hi, @nan@n, @nan@n, -@inf@n, @inf@n),
             "v": (1, 2, 4, 8, 16, 32, 64, 128),
