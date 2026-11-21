@@ -2511,6 +2511,14 @@ private:
     */
     DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
 
+    //! Cancels the operation of \a key that the I/O thread has just admitted, if it is work of the module cleanup that
+    //! the cleanup has not canceled and the cleanup has reached its deadline (qore#7027)
+    /** Called on the I/O thread where an operation enters its cache: such an operation would otherwise be canceled
+        only by a later cancel round of the cleanup, which runs only when its wait ends; also named in a warning
+    */
+    DLLLOCAL void cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
+            ExceptionSink* xsink);
+
     //! Returns a name of the operation of \a pinfo for a message of the module cleanup: its class and owner
     DLLLOCAL static std::string moduleCleanupOpName(const PollInfo& pinfo);
 

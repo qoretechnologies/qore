@@ -153,6 +153,23 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
     }
 }
 
+#! an operation whose abort() submits another one
+class AbortingOperation inherits FollowUpOperation {
+    constructor(EventNotifier notifier, string label, *Counter started)
+            : FollowUpOperation(notifier, label, FollowUpGoal::Never, FollowUpAction::None, started) {
+    }
+
+    abort() {
+        try {
+            submit_operation(notifier, label + "-aborted", FollowUpGoal::Never, FollowUpAction::None);
+            printf("%s abort resubmitted\n", label);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s abort resubmit refused: %s\n", label, ex.err);
+        }
+        flush();
+    }
+}
+
 #! an operation for AsyncIoController::exec(), which takes one without an onComplete(): it reaches its goal at once
 class ExecOperation inherits AbstractPollOperation<auto> {
     string getGoal() {
@@ -194,6 +211,15 @@ class Data {
     public {
         static ClearMarker marker();
     }
+}
+
+#! submits an operation whose abort() submits another one; its first step decrements \a started
+public sub submit_aborting_operation(EventNotifier notifier, string label, Counter started) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        "sock": notifier,
+        "spop": new AbortingOperation(notifier, label, started),
+        "owner": "module-cleanup-follow-up-" + label,
+    });
 }
 
 #! submits an operation; with \a started, its first step decrements it

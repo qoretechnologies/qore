@@ -2020,6 +2020,20 @@ DLLLOCAL size_t qore_async_io_cancel_module_cleanup_uncounted(bool deadline = fa
 */
 DLLLOCAL bool qore_module_cleanup_deadline_passed();
 
+//! The kinds of warning of qore_module_cleanup_report_canceled()
+enum : int {
+    //! the operations that had not ended at the deadline
+    QMCRC_AT_DEADLINE = 0,
+    //! the operations that had not ended, canceled by a cancel round after the deadline
+    QMCRC_PAST_DEADLINE = 1,
+    //! an operation that work of the cleanup submitted after the deadline, canceled when an I/O thread admitted it
+    QMCRC_SUBMITTED_AFTER_DEADLINE = 2,
+};
+
+//! Writes a warning on stderr that names the asynchronous I/O operations of the work of the module cleanup that it
+//! canceled at or after its deadline (\a kind: a QMCRC_* value); nothing if \a names is empty (qore#7027)
+DLLLOCAL void qore_module_cleanup_report_canceled(int kind, const std::vector<std::string>& names);
+
 //! Reads and validates the QORE_MODULE_CLEANUP_TIMEOUT environment variable; called by qore_init()
 DLLLOCAL void qore_init_module_cleanup_timeout();
 
@@ -2029,6 +2043,11 @@ DLLLOCAL void qore_init_module_cleanup_timeout();
     there are any; with \a end_hold, the hook holds no more items
 */
 DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
+
+//! Debug-only: holds the calling ThreadPool task of the module cleanup while the
+//! dbg_async_io_hold_module_cleanup_work() test hook holds its work, until the cleanup waits for its work
+//! (\a counted) or the hold ends (qore#7027)
+DLLLOCAL void qore_dbg_hold_module_cleanup_task(bool counted);
 
 //! Debug-only: the test hook has held a work item: wakes the module cleanup if it waits for its work, which releases
 //! it (see qore_module_cleanup_drain_work())

@@ -103,6 +103,12 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
+#ifdef DEBUG
+        // a task of the module cleanup is held by the test hook until the cleanup waits for it (qore#7027)
+        if (sandbox_context.module_cleanup_delegate) {
+            qore_dbg_hold_module_cleanup_task(module_cleanup_work);
+        }
+#endif
         return code->invoke(0, xsink);
     }
 

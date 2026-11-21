@@ -5618,6 +5618,38 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) 
     }
 }
 
+void qore_module_cleanup_report_canceled(int kind, const std::vector<std::string>& names) {
+    if (names.empty()) {
+        // timers only, or the work still counted is the work of operations that the cleanup canceled already
+        return;
+    }
+    char head[256];
+    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process %s its deadline of " QLLD
+        " ms (QORE_MODULE_CLEANUP_TIMEOUT) and canceled the asynchronous I/O operation%s %s:",
+        kind == QMCRC_AT_DEADLINE ? "reached" : "is past", qore_get_module_cleanup_timeout(),
+        names.size() == 1 ? "" : "s",
+        kind == QMCRC_SUBMITTED_AFTER_DEADLINE ? "submitted after it" : "that had not ended");
+    // written with one call, so that the output of other threads does not split it
+    try {
+        std::string msg = head;
+        for (size_t i = 0; i < names.size(); ++i) {
+            msg += i ? ", " : " ";
+            msg += names[i];
+        }
+        msg += '\n';
+        fputs(msg.c_str(), stderr);
+    } catch (std::bad_alloc&) {
+        // without memory for the message, its parts are written one after the other
+        fputs(head, stderr);
+        for (size_t i = 0; i < names.size(); ++i) {
+            fputs(i ? ", " : " ", stderr);
+            fputs(names[i].c_str(), stderr);
+        }
+        fputc('\n', stderr);
+    }
+    fflush(stderr);
+}
+
 //! runs a cancel round of the module cleanup; at or after its deadline, writes a warning that names the operations
 //! that it canceled; returns the number of operations and timers canceled
 /** See qore_async_io_cancel_module_cleanup_uncounted()
@@ -5628,20 +5660,7 @@ static size_t qore_module_cleanup_cancel_round(bool at_deadline) {
     }
     std::vector<std::string> names;
     size_t canceled = qore_async_io_cancel_module_cleanup_uncounted(true, &names);
-    if (names.empty()) {
-        // timers only, or the work still counted is the work of operations that the cleanup canceled already
-        return canceled;
-    }
-    QoreString msg;
-    msg.sprintf("warning: the module cleanup at the end of the process %s its deadline of " QLLD " ms "
-        "(QORE_MODULE_CLEANUP_TIMEOUT) and canceled the asynchronous I/O operation%s that had not ended:",
-        at_deadline ? "reached" : "is past", qore_get_module_cleanup_timeout(), names.size() == 1 ? "" : "s");
-    for (size_t i = 0; i < names.size(); ++i) {
-        msg.concat(i ? ", " : " ");
-        msg.concat(names[i]);
-    }
-    fprintf(stderr, "%s\n", msg.c_str());
-    fflush(stderr);
+    qore_module_cleanup_report_canceled(at_deadline ? QMCRC_AT_DEADLINE : QMCRC_PAST_DEADLINE, names);
     return canceled;
 }
 

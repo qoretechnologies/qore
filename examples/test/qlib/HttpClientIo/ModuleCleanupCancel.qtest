@@ -75,9 +75,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         #! the output of the work of the module cleanup by follow-up mode, before the user modules have been deleted
         const Refused = "ASYNC-IO-SHUTDOWN-ERROR";
 
-        const DeadlineWarning = "warning: the module cleanup at the end of the process (reached|is past) its "
-            "deadline of %d ms \\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operations? that "
-            "had not ended:";
+        const DeadlineWarning = "warning: the module cleanup at the end of the process reached its deadline of %d ms "
+            "\\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operations? that had not ended:";
+
+        const SubmittedAfterWarning = "warning: the module cleanup at the end of the process is past its deadline of "
+            "%d ms \\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operation submitted after it:";
 
         #! the output of the work of the module cleanup by follow-up mode, each before the user modules have been
         #! deleted
@@ -95,24 +97,37 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             # it reaches its goal at once, or later
             "done": ("done onComplete: canceled: null",),
             "pending-done": ("pending-done onComplete: canceled: null",),
-            # and so is the task that its onComplete() submits
-            "done-task": ("done-task onComplete: canceled: null", "done-task task ran"),
+            # and so is the task that its onComplete() submits, which the test hook holds until the cleanup waits for it
+            "done-task": ("done-task onComplete: canceled: null", "held module cleanup work: 1 task released "
+                "\\(the module cleanup waits for its work\\)", "done-task task ran"),
+            # the abort() of an operation that the cleanup cancels when it tears down the Program of its class, on the
+            # thread of the cleanup, cannot submit an operation
+            "abort-teardown": ("teardown abort resubmit refused: " + Refused,),
             # one that does not end is canceled at the deadline, and named in the warning
             "deadline": ("deadline onComplete: canceled: True", sprintf(DeadlineWarning, 300)
                 + " FollowUpOperation \\(owner 'module-cleanup-follow-up-deadline'\\)"),
             # at the deadline: (a) its step is in flight when the cleanup cancels it
             "window-a": ("window-a onComplete: canceled: True", sprintf(DeadlineWarning, 0)
                 + " FollowUpOperation \\(owner 'module-cleanup-follow-up-window-a'\\)"),
-            # (b) it reaches its goal after the cleanup's wait and before its cancel round
-            "window-b": ("window-b onComplete: canceled: null",),
+            # (b) it reaches its goal after the cleanup's wait and before its cancel round; its onComplete(), work that
+            # the cleanup handed over, runs after the deadline and cannot add a timer
+            "window-b": ("window-b onComplete: canceled: null\nwindow-b timer refused: " + Refused,),
             # (c) a timer fires after the cleanup's scan of the timers: its callback is held, and released when the
             # cleanup waits for it
             "window-c": ("held module cleanup work: 1 released \\(the module cleanup waits for its work\\)\n"
                 "timer ran",),
         };
 
+        #! the output of the work of the module cleanup by follow-up mode, each before the user modules have been
+        #! deleted but after the data of FollowUpOps has been cleared: the onComplete() of an operation that the
+        #! teardown of the Program of its class cancels runs after its module's data has been cleared
+        const FollowUpBeforeDeletion = {
+            "abort-teardown": ("teardown onComplete: canceled: True",),
+        };
+
         #! the deadline of the module cleanup by follow-up mode: the option, which takes precedence over the
-        #! environment variable, or the environment variable
+        #! environment variable, or the environment variable; the other modes do not reach their deadline
+        const NoDeadline = "QORE_MODULE_CLEANUP_TIMEOUT=600000 %s";
         const FollowUpDeadline = {
             "deadline": "QORE_MODULE_CLEANUP_TIMEOUT=600000 %s --module-cleanup-timeout=300",
             "window-a": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
@@ -267,7 +282,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             testSkip("the work is held with test hooks of a debug build");
         }
         int status;
-        string out = backquote(sprintf("QORE_MODULE_DIR=%s " + (FollowUpDeadline{follow_up} ?? "%s")
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s " + (FollowUpDeadline{follow_up} ?? NoDeadline)
             + " --exec-mode=%s %s %s 2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode,
             shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep + "followup-client.qr"), follow_up),
             \status);
@@ -279,10 +294,14 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 "ends \\(the user modules have been deleted\\)\n", out, "the work ends before the cleanup goes on "
                 "with the next module: " + out);
         }
+        foreach string expected in (FollowUpBeforeDeletion{follow_up}) {
+            assertRegex("(?s)(^|\n)" + expected + "\n.*held module cleanup work: the hold ends \\(the user modules "
+                "have been deleted\\)\n", out, "the work ends before the user modules have been deleted: " + out);
+        }
         if (!FollowUpDeadline{follow_up}) {
             assertNRegex("QORE_MODULE_CLEANUP_TIMEOUT", out, "the cleanup does not reach its deadline: " + out);
         }
-        if (follow_up =~ /^chain/) {
+        if (follow_up =~ /^(chain|abort)/) {
             assertNRegex("resubmitted|timer added|task submitted", out, "no new work is accepted: " + out);
         }
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
@@ -299,19 +318,21 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             + "ModuleCleanupCancel" + DirSep + "deadline-client.qr")), \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)started\n", out, "the modules are loaded: " + out);
+        # the destructors of the next modules run after the deadline of the first one: one deadline for all of them
         foreach string label in ("deadline-a", "deadline-b", "deadline-c") {
-            assertRegex("(^|\n)" + sprintf(DeadlineWarning, ModulesDeadline) + "[^\n]* FollowUpOperation "
-                "\\(owner 'module-cleanup-follow-up-" + label + "'\\)", out, "the operation is named in a warning: "
-                + out);
+            string warning = label == "deadline-a"
+                ? sprintf(DeadlineWarning, ModulesDeadline)
+                : sprintf(SubmittedAfterWarning, ModulesDeadline);
+            assertRegex("(^|\n)" + warning + " FollowUpOperation \\(owner 'module-cleanup-follow-up-" + label
+                + "'\\)\n", out, "the operation is named in a warning: " + out);
             assertRegex("(?s)(^|\n)" + label + " onComplete: canceled: True\n.*follow-up ops cleared\n", out,
                 "the operation is canceled before the next module is deleted: " + out);
         }
         *list<string> elapsed = (out =~ x/(?:^|\n)the module cleanup took ([0-9]+) ms\n/);
         assertEq(1, elapsed.size(), out);
         int ms = elapsed[0].toInt();
-        # it waited for the deadline once: a deadline per module would take three times as long
+        # it waited for the deadline
         assertGe(ModulesDeadline, ms, out);
-        assertLt(ModulesDeadline * 3, ms, out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }

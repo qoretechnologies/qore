@@ -65,8 +65,9 @@ public class Canceller {
                 # the step of the operation is held in flight; the cleanup, at its deadline, releases it after (a) or
                 # before (b) its cancel round
                 call_function("dbg_async_io_hold_step_results", True);
+                # (b): its onComplete() runs after the deadline, and cannot add a timer then
                 submit_operation(notifier, mode, mode == "window-b" ? FollowUpGoal::AtOnce : FollowUpGoal::Never,
-                    FollowUpAction::None);
+                    mode == "window-b" ? FollowUpAction::Timer : FollowUpAction::None);
                 call_function("dbg_async_io_wait_held_step_results", 1, 20s);
                 call_function("dbg_async_io_hold_step_results", False);
                 break;
@@ -108,6 +109,14 @@ public class Holder {
             Counter started(1);
             submit_operation(notifier, "first", FollowUpGoal::Never, ChainActions{mode} ?? FollowUpAction::None,
                 -1s, started, mode == "chain-release" ? new ReleaseResubmitter(notifier, "first") : NOTHING);
+            if (started.waitForZero(20s)) {
+                throw "FOLLOW-UP-ERROR", "the first step of the operation did not run";
+            }
+        } else if (mode == "abort-teardown") {
+            # nothing cancels the operation before the cleanup tears down the Program of its class (FollowUpOps), which
+            # cancels it on the thread of the cleanup, where its abort() runs
+            Counter started(1);
+            submit_aborting_operation(notifier, "teardown", started);
             if (started.waitForZero(20s)) {
                 throw "FOLLOW-UP-ERROR", "the first step of the operation did not run";
             }

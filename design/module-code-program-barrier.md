@@ -274,8 +274,12 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     condition wait (`qore_module_cleanup_wait_work()`); when it times out, the cleanup sets
     `qore_module_cleanup_deadline_passed()` and runs one cancel round of everything of its work that it has not
     canceled (`async_io_module_cleanup_cancel_match()` with `deadline`), whose `onComplete()` then runs as counted
-    work; after the deadline, its waits are not timed, the operations that it submits are not counted, and each
-    round cancels them, and the operations canceled at or after the deadline are named in a warning on stderr.  An
+    work; after the deadline, its waits are not timed, and an operation of its work that an I/O thread admits is
+    canceled at once (`cancelAdmittedAfterModuleCleanupDeadline()`, where the operation enters the cache: the flag is
+    set before the round sends its commands, so an operation that an I/O thread admits after the round's command, or
+    while it does not read commands yet, sees it; a later round alone would run only when the drain's untimed wait
+    ends, which a synchronous wait for that operation in counted work would prevent); the operations canceled at or
+    after the deadline are named in a warning on stderr (`qore_module_cleanup_report_canceled()`).  An
     operation whose own timeout is renewed as it makes progress (`renewsTimeout()`) does not extend the deadline
   - a timer that such work adds, and an operation that the controller starts for it without `submit()`, have a
     delegated but uncounted context: each drain, once the count is zero, cancels them for the cleanup
@@ -287,11 +291,14 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     `abort()`, `onComplete()`, timer callback or native task item with a delegated but uncounted context is queued;
     the steps of such an operation are not counted, as the cleanup cancels the operation)
   - a task that such work submits with `AsyncIoController::submitTask()` is counted until it ends (`ThreadTask` with
-    `count_module_cleanup`); it is not canceled
+    `count_module_cleanup`); it is not canceled; the `dbg_async_io_hold_module_cleanup_work()` hook holds such
+    tasks too, and the cleanup releases those that it counts when it waits for its work
   - the work of an operation that the cleanup canceled (its `abort()`, its `onComplete()` and the destructors that
     the release of its references runs, marked by `QoreSandboxContext::module_cleanup_canceled`, which
     `applyModuleCleanupCancel()` sets with `ModuleCleanupWork::Canceled`, and by
-    `AsyncIoDeferredRelease::module_cleanup_canceled`), and the cancel rounds themselves, cannot start new
+    `AsyncIoDeferredRelease::module_cleanup_canceled`; also an `abort()` that `doCancelIntern()` calls on the thread
+    that cancels, as when the cleanup tears down a module's Program), and the cancel rounds themselves, cannot start
+    new
     asynchronous work: the %Qore-level `AsyncIoController::submit()`, `addTimer*()` and `submitTask()` raise
     `ASYNC-IO-SHUTDOWN-ERROR` (`checkModuleCleanupNewWork()`), so an `onComplete()` that re-arms itself, a timer that
     re-adds itself or a destructor that resubmits cannot make the end of the process wait forever; nor can the work
