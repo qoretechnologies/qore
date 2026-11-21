@@ -4158,6 +4158,9 @@ private:
    QoreThreadLock pslock;
 
    ThreadData* td;
+   //! the thread's TID, kept here: a Program reads it from its records of a thread that can have ended, whose
+   //! ThreadData has been freed (see qore_program_private::clearProgramThreadData())
+   const int tid;
 
    //! a cached local data of the thread in a Program with module lifetime; see findModuleProgramData()
    struct ModuleProgramDataCacheEntry {
@@ -4188,7 +4191,7 @@ private:
    }
 
 public:
-   DLLLOCAL ThreadProgramData(ThreadData* n_td) : td(n_td) {
+   DLLLOCAL ThreadProgramData(ThreadData* n_td, int n_tid) : td(n_td), tid(n_tid) {
 #ifdef DEBUG
       dbg_id = dbgRegister();
 #endif

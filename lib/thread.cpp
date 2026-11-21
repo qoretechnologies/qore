@@ -1109,7 +1109,7 @@ public:
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
-            tpd(new ThreadProgramData(this)),
+            tpd(new ThreadProgramData(this, ptid)),
             foreign(n_foreign),
             try_reexport(false),
             finalizing(false),
@@ -2529,7 +2529,8 @@ bool ThreadProgramData::dbgWaitReleased(int64 id, int64 timeout_ms) {
 #endif
 
 int ThreadProgramData::gettid() {
-    return td->tid;
+    // not td->tid: the thread's data is freed when the thread ends, while Programs can still hold this object
+    return tid;
 }
 
 class ThreadCleanupNode {
