@@ -127,6 +127,9 @@
     |<tt>--dump-symbols</tt>|Include an nm-like symbol table in dump output
     |<tt>--dump-sections</tt>|Include object and AOT section tables in dump output
 
+    Compiled method calls can transfer a temporary argument directly to the parameter that takes ownership
+    of it. Executables and compiled modules using this entry require a runtime that supports their AOT format.
+
     \c qcc reports each parse error and warning of the code it compiles (of the parse or of its commit) on stderr, in
     the form of other compilers, unless \c --diag-format=json or \c --code-frames selects another form:
     @verbatim

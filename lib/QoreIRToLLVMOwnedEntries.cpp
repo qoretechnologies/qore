@@ -171,7 +171,7 @@ static bool qore_aot_fast_entry_param_takes_ref(const BatchCalleeInfo& info, con
 bool QoreIRToLLVM::callCanTakeOverToFastEntry(const QoreIRInstruction* inst, int arg_start,
         const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo& info) const {
     static constinit QoreEnvFlag disable_env("QORE_DISABLE_AOT_OWNED_FAST_ENTRY");
-    if (info.cross_module || info.preloaded_fast_entry || !info.approach_b_eligible
+    if (info.cross_module || info.preloaded_fast_entry || (!info.approach_b_eligible && !info.guarded_method_entry)
             || arg_start < 0 || disable_env.get()
             || !qore_ir_fast_entry_refuses_given_args(true, variant)) {
         return false;

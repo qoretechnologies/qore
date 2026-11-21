@@ -116,3 +116,9 @@ outside try done
 dtor top
 w written
 after top
+dtor method
+owner returned to invoker
+dtor method
+owner caught by invoker
+dtor method
+override returned to invoker

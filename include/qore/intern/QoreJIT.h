@@ -619,6 +619,7 @@ struct BatchCalleeInfo {
     bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
+    bool guarded_method_entry = false; //!< Local owning entry that requires the declaring method context
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a

@@ -336,6 +336,8 @@ private:
     std::unordered_map<int32_t, std::pair<llvm::Value*, llvm::Value*>> aot_cross_module_targets;
     // The buffer of the state of a call of another module's function, in the function's entry block
     llvm::AllocaInst* cross_module_call_state_storage = nullptr;
+    // Calls in the same activation reuse the buffer after the preceding method returns.
+    llvm::AllocaInst* native_method_context_storage = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.

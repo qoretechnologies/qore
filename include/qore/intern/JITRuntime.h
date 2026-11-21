@@ -1100,6 +1100,14 @@ void qore_rt_push_native_function_context_v1(void* storage, void* thread_data);
 //! Restores the context replaced by qore_rt_push_native_function_context_v1()
 void qore_rt_pop_native_function_context_v1(void* storage);
 
+//! Enters the declaring class and receiver of a local owning method call. A refusal leaves the caller intact.
+int qore_rt_try_enter_native_method_v1(void* storage, QoreAOTContext* ctx, int32_t slot,
+    const void* expected_entry, uint64_t receiver, ExceptionSink* xsink);
+void qore_rt_leave_native_method_v1(void* storage);
+//! Storage reserved by callers of the v1 method entry in their native frame.
+constexpr size_t QORE_RT_NATIVE_METHOD_STATE_SIZE = 256;
+constexpr size_t QORE_RT_NATIVE_METHOD_STATE_ALIGN = 16;
+
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
 

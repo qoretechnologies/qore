@@ -210,5 +210,17 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         # reads and borrows (the call releases it when it returns), w2b() that of its written second parameter
         assertRegex("(?m)^define [^@]*@\"?w2_list_auto__list_auto_[^ (\"]*\\.own\\.10\"?\\(", ir, "w2()");
         assertRegex("(?m)^define [^@]*@\"?w2b_list_auto__list_auto_[^ (\"]*\\.own\\.01\"?\\(", ir, "w2b()");
+        # outside_try calls the same static method, so only inspect calls emitted for in_try.
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?in_try_[^\n]*\n([\s\S]*?)^\}/gm;
+        string in_try_body = bodies.join("\n");
+        assertTrue(in_try_body.size() > 0, "the dump includes the caller");
+        assertEq((True, True), (in_try_body =~ /call [^@\n]*@"?C___static_s_list_auto_[^ ("]*\.own\.1"?\(/,
+            in_try_body =~ /call [^@\n]*@"?C__m_list_auto_[^ ("]*\.own\.1"?\(/),
+            "C::s() and c.m() inside try hand over their temporaries");
+        assertTrue(ir =~ /call [^@\n]*@"?Owner__consume_[^ ("]*\.own\.10"?\(/,
+            "the method that reads self runs with an owning parameter");
+        assertTrue(ir =~ /^declare extern_weak [^@\n]*@qore_rt_try_enter_native_method_v1\(/m
+            && ir =~ /^declare extern_weak [^@\n]*@qore_rt_leave_native_method_v1\(/m,
+            "eager loaders can reach the version check on an older runtime");
     }
 }

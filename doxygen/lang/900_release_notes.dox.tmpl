@@ -565,6 +565,10 @@
     is invalid and unlocked and must be reset before further value access, or closed, so a callback can safely
     replace its parent; see @ref native_member_callback_lvalue "native member callbacks".
 
+    @par Compiled Method Calls Can Transfer Temporary Arguments
+    A program or module built with @ref qcc_tool "qcc" can hand a temporary argument directly to a method that
+    reassigns its parameter and requires a runtime supporting the new AOT format (issue #6860).
+
     @par Binary Modules Implement Module API 2.3
     Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
     \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI

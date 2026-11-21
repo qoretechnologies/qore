@@ -81,11 +81,45 @@ final class F {
     static int sx(list<auto> l) { l = (); log("F::sx written"); throw "FSX"; }
 }
 
-# the static methods of a class that is not final are called through the runtime
+# both method families of a class that can be subclassed
 class C {
     static int s(list<auto> l) { int n = l.size(); l = (); log("s written"); return n; }
     static int sx(list<auto> l) { l = (); log("sx written"); throw "SX"; }
     int m(list<auto> l) { int n = l.size(); l = (); log("m written"); return n; }
+}
+
+class Owner {
+    private { string tag; }
+    constructor(string tag) { self.tag = tag; }
+
+    string consume(list<auto> values, bool fail) {
+        values = ();
+        if (fail) {
+            throw "OWNER-ERROR", tag;
+        }
+        return tag;
+    }
+}
+
+class OtherOwner inherits Owner {
+    constructor() : Owner("other") {}
+    string consume(list<auto> values, bool fail) {
+        values = ();
+        return "override";
+    }
+}
+
+class Invoker {
+    private { string tag = "invoker"; }
+
+    call(Owner target, bool fail) {
+        try {
+            string result = target.consume((0, new T("method")), fail);
+            printf("%s returned to %s\n", result, tag);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s caught by %s\n", ex.desc, tag);
+        }
+    }
 }
 
 sub in_try() {
@@ -207,3 +241,9 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     log("catch " + ex.err);
 }
+
+Invoker invoker();
+Owner owner("owner");
+invoker.call(owner, False);
+invoker.call(owner, True);
+invoker.call(new OtherOwner(), False);

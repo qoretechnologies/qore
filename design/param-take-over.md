@@ -184,13 +184,16 @@ sibling artifact).
   NOTHING and of date kinds); a call whose checks fail is made by the consume path, which binds the parameters from
   the runtime stack and can raise an exception while it binds them, before anything is taken over.
 - The calls that give nothing, and the calls of callees whose parameters take nothing over, call the fast entry as
-  before.  The JIT does not use the copies: its fast entries can be defined in an earlier batch module, which a copy
-  cannot be made from.
+  before. The JIT emits an owning entry in the caller's batch. If an earlier batch already installed the
+  ordinary entry, the compiler builds the owning copy from the callee's cached IR. Calls to the ordinary entry
+  still use its installed definition. Nested handlers of the copy are local to its batch.
 
-A static method has a fast entry only in a final class or if it is a final method, and none in qcc -O0 code that
-keeps its calls for the debugger (`aotPreserveDebugCalls()`) (since 6a26053517, the methods of
-a class that is not final have no fast entry unless context independent), so the calls of the static methods of other
-classes are made by the consume path, as before.
+For a local AOT method that needs its declaring class or receiver, an owning call enters the method context
+before it hands over any argument. `qore_rt_try_enter_native_method_v1` verifies the selected native entry and,
+for an instance method, the receiver's exact class and validity. The method runs with its object, declaring
+class, implicit arguments and parse options. On either return or exception, `qore_rt_leave_native_method_v1`
+restores the surrounding context. A call needing dynamic dispatch, argument filtering or a Program switch uses
+the normal method binder.
 
 ## Measurements (2026-11-15)
 

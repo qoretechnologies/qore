@@ -13400,6 +13400,32 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     if (take_over && !owned_fn) {
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
+    llvm::AllocaInst* method_context = nullptr;
+    if (callee_info.guarded_method_entry) {
+        assert(take_over);
+        llvm::BasicBlock* enter = llvm::BasicBlock::Create(ctx, "aot_method_context", llvm_func);
+        builder->CreateCondBr(can_use_fast_entry, enter, fallback_bb);
+        builder->SetInsertPoint(enter);
+        if (!native_method_context_storage) {
+            llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+            llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+            native_method_context_storage = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+                llvm::ConstantInt::get(i64_type, QORE_RT_NATIVE_METHOD_STATE_SIZE), "method_context");
+            native_method_context_storage->setAlignment(llvm::Align(QORE_RT_NATIVE_METHOD_STATE_ALIGN));
+        }
+        method_context = native_method_context_storage;
+        auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
+            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
+        // Let an older runtime map the executable even with eager symbol binding. It checks the
+        // embedded image version before executing any code that uses the v1 method context.
+        llvm::cast<llvm::Function>(try_enter.getCallee())->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        llvm::Value* expected = module.getOrInsertFunction(callee_info.name,
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false)).getCallee();
+        llvm::Value* entered = builder->CreateCall(try_enter, {method_context, aot_ctx_arg,
+            llvm::ConstantInt::get(i32_type, slot), expected,
+            object_base ? object_base : llvm::ConstantInt::get(i64_type, VAL_NOTHING), xsink_arg});
+        can_use_fast_entry = builder->CreateICmpNE(entered, llvm::ConstantInt::get(i32_type, 0));
+    }
     builder->CreateCondBr(can_use_fast_entry, fast_bb, fallback_bb);
 
     builder->SetInsertPoint(fast_bb);
@@ -13456,6 +13482,12 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     // teardown here and emitted after emitLeaveCrossModuleCall below
     endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
         (!cross_module && releases_given_slots) ? arg_cleanups : nullptr, nargs, summary_nothrow);
+    if (method_context) {
+        auto leave = module.getOrInsertFunction("qore_rt_leave_native_method_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+        llvm::cast<llvm::Function>(leave.getCallee())->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        builder->CreateCall(leave, {method_context});
+    }
     if (cross_module) {
         fast_result = emitLeaveCrossModuleCall(module, llvm_func, callee_info, fast_result, cross_module_skip_bb);
         if (has_arg_cleanups) {
@@ -16136,6 +16168,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_call_target_contexts.clear();
     aot_cross_module_targets.clear();
     cross_module_call_state_storage = nullptr;
+    native_method_context_storage = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();
@@ -24149,7 +24182,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
                                 && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
-                                && it->second.approach_b_eligible
+                                && (it->second.approach_b_eligible || (take_over && it->second.guarded_method_entry))
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastMethodCallEligible(
                                     static_call->getVariant(),
@@ -28458,7 +28491,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
                         && (!it->second.generic_specialized_fast_entry || generic_specialization_matches)
-                        && it->second.approach_b_eligible
+                        && (it->second.approach_b_eligible || (aot_take_over && it->second.guarded_method_entry))
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
@@ -28851,6 +28884,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             int nargs = static_cast<int>(inst->operands.size()) - 1;
+            bool object_take_over = false;
+            FastEntryTakeOver object_slots;
+            std::vector<llvm::Value*> object_given_slots;
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_summary_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
@@ -28982,24 +29018,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "QORE_DISABLE_AOT_OBJECT_METHOD_SUMMARY_IMPORT")) {
                     aot_object_summary_callee = &it->second;
                 }
-                if (base_facts
-                        && base_facts->assigned_state == QoreIRAssignedState::Assigned
-                        && base_facts->never_nothing
-                        && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
-                            == direct_inst->qc
-                        && it != batch_callees->end()
+                object_take_over = call_gives_args && it != batch_callees->end()
+                    && callCanTakeOverToFastEntry(inst, 1, direct_inst->variant, it->second);
+                const bool guarded_method = object_take_over && it->second.guarded_method_entry;
+                const bool known_receiver = base_facts
+                    && base_facts->assigned_state == QoreIRAssignedState::Assigned && base_facts->never_nothing
+                    && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info) == direct_inst->qc;
+                if ((guarded_method || known_receiver) && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
-                        && it->second.approach_b_eligible
                         && it->second.implicit_self_method
-                        && it->second.context_independent_fast_entry
+                        && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
+                            || (object_take_over && it->second.guarded_method_entry))
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args && !object_take_over,
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
@@ -29073,7 +29110,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
-                    has_arg_cleanups);
+                    has_arg_cleanups, 0, object_take_over ? &object_given_slots : nullptr);
+                if (object_take_over && aot_object_batch_callee) {
+                    object_slots = fastEntryTakeOverSlots(direct_inst->variant, *aot_object_batch_callee,
+                        object_given_slots);
+                }
             } else if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
@@ -29572,7 +29613,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         base_boxed, inst->operands[0].id,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
                         "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
-                        aot_object_batch_requires_exact_class);
+                        aot_object_batch_requires_exact_class, nullptr, object_take_over ? &object_slots : nullptr);
                     if (!call_result) {
                         return false;
                     }
@@ -29811,6 +29852,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
 
             int nargs = static_cast<int>(inst->operands.size()) - 1;
+            bool object_take_over = false;
+            FastEntryTakeOver object_slots;
+            std::vector<llvm::Value*> object_given_slots;
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
             const BatchCalleeInfo* aot_object_set_get = nullptr;
@@ -29914,24 +29958,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && !QoreTypeInfo::parseAcceptsReturns(
                             return_type, NT_NOTHING);
                 }
-                if (base_facts
-                        && base_facts->assigned_state == QoreIRAssignedState::Assigned
-                        && base_facts->never_nothing
-                        && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
-                            == invoke_inst->qc
-                        && it != batch_callees->end()
+                object_take_over = call_gives_args && it != batch_callees->end()
+                    && callCanTakeOverToFastEntry(inst, 1, invoke_inst->variant, it->second);
+                const bool guarded_method = object_take_over && it->second.guarded_method_entry;
+                const bool known_receiver = base_facts
+                    && base_facts->assigned_state == QoreIRAssignedState::Assigned && base_facts->never_nothing
+                    && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info) == invoke_inst->qc;
+                if ((guarded_method || known_receiver) && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
-                        && it->second.approach_b_eligible
                         && it->second.implicit_self_method
-                        && it->second.context_independent_fast_entry
+                        && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
+                            || (object_take_over && it->second.guarded_method_entry))
                         && (object_target_non_overridable
                             || !q_env_is_set(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(invoke_inst->variant,
                             generic_specialization_matches)
-                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args,
+                        && qore_ir_fast_entry_operands_need_no_binding(call_gives_args && !object_take_over,
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
@@ -30002,7 +30047,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
-                    has_arg_cleanups);
+                    has_arg_cleanups, 0, object_take_over ? &object_given_slots : nullptr);
+                if (object_take_over) {
+                    object_slots = fastEntryTakeOverSlots(invoke_inst->variant, *aot_object_batch_callee,
+                        object_given_slots);
+                }
             } else if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
@@ -30354,7 +30403,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         base_boxed, inst->operands[0].id,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
                         "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
-                        aot_object_batch_requires_exact_class);
+                        aot_object_batch_requires_exact_class, nullptr, object_take_over ? &object_slots : nullptr);
                     if (!call_result) {
                         return false;
                     }

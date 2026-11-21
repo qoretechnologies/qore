@@ -16939,7 +16939,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
             assert(old_fn->use_empty());
             old_fn->eraseFromParent();
         }
-        if (!info.approach_b_eligible) {
+        if (!info.approach_b_eligible && !info.guarded_method_entry) {
             continue;
         }
         std::vector<llvm::Type*> params;
@@ -17624,6 +17624,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         auto info = aot_batch_callee_map.find(variant);
         if (info != aot_batch_callee_map.end()
                 && !info->second.context_independent_fast_entry) {
+            // Only an owning call that enters the selected method context may use this entry.
+            // Keep it out of ordinary, inherited-self, summary and cross-module fast calls.
+            info->second.guarded_method_entry = true;
             info->second.approach_b_eligible = false;
         }
     }
@@ -22598,7 +22601,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);
                         analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
-                            && analyzed->second.approach_b_eligible;
+                            && (analyzed->second.approach_b_eligible || analyzed->second.guarded_method_entry);
                         if (analyzed != aot_batch_callee_map->end()) {
                             analyzed_fast_entry = &analyzed->second;
                         }
