@@ -2212,9 +2212,12 @@ struct qore_socket_private : public QoreReferenceCounter {
         Mirrors @ref SocketPollOperationBase::getFdGeneration() at the
         socket level rather than the poll-op level.
 
+        Atomic: it is changed with @ref close_m held, and the async I/O controller reads it with the socket's lock
+        held instead (its debug fd swap changes it there too).
+
         @since %Qore 3.0
     */
-    uint32_t fd_generation = 0;
+    std::atomic<uint32_t> fd_generation{0};
 
     //! True if the descriptor is known to be non-blocking, so set_non_blocking(true) needs no system call
     /** Set when the library creates the descriptor (openUNIX(), openINET()) or makes it non-blocking, cleared when the
