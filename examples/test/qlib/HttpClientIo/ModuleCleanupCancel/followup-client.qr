@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# the module cleanup cancels an operation whose onComplete() submits it again ("chain"), or the cleanup submits
-# operations and timers itself ("timeout-done", "no-timeout"), also in the windows of its drain ("window-a",
-# "window-b", "window-c"); the onComplete() items of the cleanup's work are held with a test hook of a debug build
-# until the cleanup releases them (qore#7027)
+# the module cleanup cancels an operation whose onComplete() or release starts new work ("chain" modes), or the
+# cleanup submits operations, tasks and timers itself ("done", "done-task", "pending-done", "deadline"), also in the
+# windows of its drain ("window-a", "window-b", "window-c"); the onComplete() items of the cleanup's work are held with
+# a test hook of a debug build until the cleanup releases them (qore#7027)
 # arguments: the mode
 
 %requires CleanupFollowUp

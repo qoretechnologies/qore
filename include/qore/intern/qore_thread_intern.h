@@ -984,13 +984,22 @@ public:
     */
     DLLLOCAL QoreSandboxContext(bool capture_budgets = true);
 
+    //! The kinds of context of work that the module cleanup waits for; see QoreSandboxContext(const
+    //! QoreSandboxContext*, ModuleCleanupWork)
+    enum class ModuleCleanupWork {
+        //! an operation that work of the cleanup submitted: the cleanup waits for it until its deadline (qore#7027)
+        Submitted,
+        //! an operation that the cleanup canceled: its work cannot start new asynchronous work (qore#7027)
+        Canceled,
+    };
+
     //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
-    //! the module cleanup hands over (@ref module_cleanup_delegate)
-    /** For an operation that the module cleanup cancels: what the operation then runs is part of the cleanup (see
-        qore_close_module_programs()), while its sandbox stays the one of the code that started it.  Takes its own
-        references to the managers and budgets of \a src; may throw std::bad_alloc
+    //! the module cleanup hands over (@ref module_cleanup_delegate) and waits for (@ref module_cleanup_work)
+    /** For an operation that the module cleanup cancels or that its work submits: what the operation then runs is
+        part of the cleanup (see qore_close_module_programs()), while its sandbox stays the one of the code that
+        started it.  Takes its own references to the managers and budgets of \a src; may throw std::bad_alloc
     */
-    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate);
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, ModuleCleanupWork kind);
 
     DLLLOCAL ~QoreSandboxContext();
 
@@ -1032,6 +1041,11 @@ public:
         context, so it exists until the last of them has ended, which the module cleanup waits for (qore#6928)
     */
     QoreModuleCleanupWorkFlag module_cleanup_work;
+    //! True if the context was created for an operation that the module cleanup canceled (qore#7027)
+    /** The operation's work (its abort(), its onComplete(), the release of its references) cannot start new
+        asynchronous work: see AsyncIoControllerPriv::checkModuleCleanupNewWork()
+    */
+    bool module_cleanup_canceled = false;
     //! True if only the sandbox that the capturing thread inherited from the code that started it governed the
     //! capture (no sandboxed Program, continued operation or provenance of its own): host code that ran in a thread
     //! that sandboxed code started.  Such a context does not count for qore_scope_creator_is_sandboxed(),
@@ -1994,7 +2008,20 @@ DLLLOCAL void qore_module_cleanup_drain_work();
 /** See AsyncIoControllerPriv::cancelModuleCleanupUncounted() (qore#7027); returns 0 if there is no asynchronous I/O
     controller
 */
-DLLLOCAL size_t qore_async_io_cancel_module_cleanup_uncounted();
+/** With \a deadline, also the operations that it counts and has not canceled (see
+    qore_module_cleanup_deadline_passed()); their names are then appended to \a names, if given
+*/
+DLLLOCAL size_t qore_async_io_cancel_module_cleanup_uncounted(bool deadline = false,
+        std::vector<std::string>* names = nullptr);
+
+//! Returns true once the module cleanup has reached its deadline (see qore_module_cleanup_drain_work())
+/** After the deadline, the work of the cleanup cannot start new asynchronous work, and the operations that it submits
+    are not waited for (qore#7027)
+*/
+DLLLOCAL bool qore_module_cleanup_deadline_passed();
+
+//! Reads and validates the QORE_MODULE_CLEANUP_TIMEOUT environment variable; called by qore_init()
+DLLLOCAL void qore_init_module_cleanup_timeout();
 
 #ifdef DEBUG
 //! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held
@@ -2029,6 +2056,10 @@ DLLLOCAL void qore_dbg_module_cleanup_drain_point(int point);
     modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
+
+//! Returns true if the calling thread runs work that the module cleanup handed over (QoreModuleCleanupDelegateHelper),
+//! not the cleanup itself (qore#7027)
+DLLLOCAL bool qore_module_cleanup_handed_over_work();
 
 //! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
 //! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true

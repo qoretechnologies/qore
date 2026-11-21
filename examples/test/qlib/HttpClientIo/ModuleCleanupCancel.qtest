@@ -73,21 +73,54 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         const Protocols = ("h1", "h2", "h3");
 
         #! the output of the work of the module cleanup by follow-up mode, before the user modules have been deleted
+        const Refused = "ASYNC-IO-SHUTDOWN-ERROR";
+
+        const DeadlineWarning = "warning: the module cleanup at the end of the process (reached|is past) its "
+            "deadline of %d ms \\(QORE_MODULE_CLEANUP_TIMEOUT\\) and canceled the asynchronous I/O operations? that "
+            "had not ended:";
+
+        #! the output of the work of the module cleanup by follow-up mode, each before the user modules have been
+        #! deleted
         const FollowUpExpected = {
-            # an operation's onComplete() cannot submit it again
-            "chain": "first onComplete: canceled: True\nfirst resubmit refused: ASYNC-IO-SHUTDOWN-ERROR",
-            # an operation with a timeout that the cleanup submits is waited for
-            "timeout-done": "timeout onComplete: canceled: null",
-            # an operation without a timeout that the cleanup submits is canceled
-            "no-timeout": "no-timeout onComplete: canceled: True",
-            # (a) its step is in flight when the cleanup cancels it
-            "window-a": "window-a onComplete: canceled: True",
+            # the work of an operation that the cleanup canceled cannot start new asynchronous work: its onComplete()
+            # cannot submit it again, add a timer or submit a task, and the destructors that the release of its
+            # references runs cannot submit an operation
+            "chain": ("first onComplete: canceled: True\nfirst resubmit refused: " + Refused,),
+            "chain-timer": ("first onComplete: canceled: True\nfirst timer refused: " + Refused,),
+            "chain-task": ("first onComplete: canceled: True\nfirst task refused: " + Refused,),
+            "chain-release": ("first onComplete: canceled: True", "first release resubmit refused: " + Refused),
+            # synchronous work is not refused
+            "chain-exec": ("first onComplete: canceled: True\nfirst exec: canceled: null",),
+            # an operation without a timeout of its own that the cleanup submits is waited for until the deadline:
+            # it reaches its goal at once, or later
+            "done": ("done onComplete: canceled: null",),
+            "pending-done": ("pending-done onComplete: canceled: null",),
+            # and so is the task that its onComplete() submits
+            "done-task": ("done-task onComplete: canceled: null", "done-task task ran"),
+            # one that does not end is canceled at the deadline, and named in the warning
+            "deadline": ("deadline onComplete: canceled: True", sprintf(DeadlineWarning, 300)
+                + " FollowUpOperation \\(owner 'module-cleanup-follow-up-deadline'\\)"),
+            # at the deadline: (a) its step is in flight when the cleanup cancels it
+            "window-a": ("window-a onComplete: canceled: True", sprintf(DeadlineWarning, 0)
+                + " FollowUpOperation \\(owner 'module-cleanup-follow-up-window-a'\\)"),
             # (b) it reaches its goal after the cleanup's wait and before its cancel round
-            "window-b": "window-b onComplete: canceled: null",
+            "window-b": ("window-b onComplete: canceled: null",),
             # (c) a timer fires after the cleanup's scan of the timers: its callback is held, and released when the
             # cleanup waits for it
-            "window-c": "held module cleanup work: 1 released \\(the module cleanup waits for its work\\)\ntimer ran",
+            "window-c": ("held module cleanup work: 1 released \\(the module cleanup waits for its work\\)\n"
+                "timer ran",),
         };
+
+        #! the deadline of the module cleanup by follow-up mode: the option, which takes precedence over the
+        #! environment variable, or the environment variable
+        const FollowUpDeadline = {
+            "deadline": "QORE_MODULE_CLEANUP_TIMEOUT=600000 %s --module-cleanup-timeout=300",
+            "window-a": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
+            "window-b": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
+        };
+
+        #! the deadline in milliseconds of the case of several modules
+        const ModulesDeadline = 1500;
     }
 
     private {
@@ -134,6 +167,12 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             }
         }
         foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: the deadline of the module cleanup bounds the end of the process with several "
+                "modules", mode), sub () { runDeadlineModulesCase(m); });
+        }
+        addTestCase("the deadline of the module cleanup is validated", \runDeadlineValidationCase());
+        foreach string mode in (ExecModes) {
             foreach string follow_up in (FollowUpExpected.keyIterator()) {
                 string m = mode;
                 string f = follow_up;
@@ -165,6 +204,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
         }).port;
+    }
+
+    #! quotes \a arg for a regular expression
+    private static string reQuote(string arg) {
+        return regex_subst(arg, "([][.*+?^$(){}|\\\\])", "\\\\$1", RE_Global);
     }
 
     #! quotes \a arg for the shell
@@ -214,25 +258,94 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
 
-    #! the work of the module cleanup submits operations and timers: the cleanup waits for those with a timeout and
-    #! cancels the others, an operation that it canceled cannot submit another one, and each ends before the user
-    #! modules have been deleted, also in the windows of the cleanup's drain (qore#7027)
+    #! the work of the module cleanup submits operations, timers and tasks: the cleanup waits for the operations and
+    #! tasks until its deadline and cancels the timers, the work of an operation that it canceled cannot start new
+    #! asynchronous work, and each ends before the user modules have been deleted, also in the windows of the
+    #! cleanup's drain (qore#7027)
     private runFollowUpCase(string mode, string follow_up) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the work is held with test hooks of a debug build");
         }
         int status;
-        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", shellQuote(module_dir),
-            shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
-            + "followup-client.qr"), follow_up), \status);
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s " + (FollowUpDeadline{follow_up} ?? "%s")
+            + " --exec-mode=%s %s %s 2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode,
+            shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep + "followup-client.qr"), follow_up),
+            \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)started\n", out, "the mode is prepared: " + out);
         # the work ends before the cleanup goes on with the next module (FollowUpOps), whose data it then deletes
-        assertRegex("(?s)\n" + FollowUpExpected{follow_up} + "\n.*follow-up ops cleared\n.*held module cleanup work: "
-            "the hold ends \\(the user modules have been deleted\\)\n", out, "the work ends before the cleanup goes on "
-            "with the next module: " + out);
+        foreach string expected in (FollowUpExpected{follow_up}) {
+            assertRegex("(?s)(^|\n)" + expected + "\n.*follow-up ops cleared\n.*held module cleanup work: the hold "
+                "ends \\(the user modules have been deleted\\)\n", out, "the work ends before the cleanup goes on "
+                "with the next module: " + out);
+        }
+        if (!FollowUpDeadline{follow_up}) {
+            assertNRegex("QORE_MODULE_CLEANUP_TIMEOUT", out, "the cleanup does not reach its deadline: " + out);
+        }
+        if (follow_up =~ /^chain/) {
+            assertNRegex("resubmitted|timer added|task submitted", out, "no new work is accepted: " + out);
+        }
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! three modules submit an operation that does not end in the destructors that the module cleanup runs: the
+    #! deadline of the cleanup is one for all of them, so the end of the process takes it once, not once per module,
+    #! and each operation is named in a warning (qore#7027)
+    private runDeadlineModulesCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=%d QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            ModulesDeadline, shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "deadline-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the modules are loaded: " + out);
+        foreach string label in ("deadline-a", "deadline-b", "deadline-c") {
+            assertRegex("(^|\n)" + sprintf(DeadlineWarning, ModulesDeadline) + "[^\n]* FollowUpOperation "
+                "\\(owner 'module-cleanup-follow-up-" + label + "'\\)", out, "the operation is named in a warning: "
+                + out);
+            assertRegex("(?s)(^|\n)" + label + " onComplete: canceled: True\n.*follow-up ops cleared\n", out,
+                "the operation is canceled before the next module is deleted: " + out);
+        }
+        *list<string> elapsed = (out =~ x/(?:^|\n)the module cleanup took ([0-9]+) ms\n/);
+        assertEq(1, elapsed.size(), out);
+        int ms = elapsed[0].toInt();
+        # it waited for the deadline once: a deadline per module would take three times as long
+        assertGe(ModulesDeadline, ms, out);
+        assertLt(ModulesDeadline * 3, ms, out);
+        assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! a deadline that is not a non-negative integer number of milliseconds is refused with an error: the option
+    #! stops the process, while the environment variable is ignored
+    private runDeadlineValidationCase() {
+        foreach string value in ("abc", "-5", "1.5", "10ms", "", " 5") {
+            int status;
+            string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=%s %s -e 'printf(\"ran\\n\");' 2>&1",
+                shellQuote(value), shellQuote(qore_bin)), \status);
+            assertEq(0, status, out);
+            assertRegex("(^|\n)error: QORE_MODULE_CLEANUP_TIMEOUT=" + reQuote("'" + value + "'") + " is not valid: "
+                "expecting a non-negative integer number of milliseconds; the default of 5000 ms is used\n", out,
+                value);
+            assertRegex("(^|\n)ran\n", out, value);
+
+            if (value == "") {
+                # an empty value of the option takes the next argument as its value
+                continue;
+            }
+            out = backquote(sprintf("%s --module-cleanup-timeout=%s -e 'printf(\"ran\\n\");' 2>&1",
+                shellQuote(qore_bin), shellQuote(value)), \status);
+            assertNeq(0, status, out);
+            assertRegex("error: invalid --module-cleanup-timeout value " + reQuote("'" + value + "'"), out, value);
+            assertNRegex("(^|\n)ran\n", out, value);
+        }
+        foreach string value in ("0", "250", "600000") {
+            int status;
+            string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=%s %s --module-cleanup-timeout=%s -e "
+                "'printf(\"ran\\n\");' 2>&1", value, shellQuote(qore_bin), value), \status);
+            assertEq(0, status, out);
+            assertEq("ran\n", out, value);
+        }
     }
 
     #! a destructor that the module cleanup runs submits the first asynchronous I/O operation of the process, so the

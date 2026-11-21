@@ -61,7 +61,12 @@ typedef qlist<ThreadPoolThread*> tplist_t;
 class ThreadTask {
 public:
     //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox and options
-    DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
+    /** With \a count_module_cleanup, a task that is part of the module cleanup is counted until it is deleted: the
+        cleanup waits for it before it deletes the next module (an asynchronous I/O controller task, qore#7027)
+    */
+    DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, bool count_module_cleanup = false)
+            : code(c), cancelCode(cc),
+            module_cleanup_work(count_module_cleanup && sandbox_context.module_cleanup_delegate) {
     }
 
     DLLLOCAL ~ThreadTask() {
@@ -122,6 +127,8 @@ protected:
     const QoreSandboxContext sandbox_context;
     //! The run-time parse options of the submitting code (qore#6208)
     const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
+    //! Counts the task as work of the module cleanup until it is deleted, if it was created for it (qore#7027)
+    QoreModuleCleanupWorkFlag module_cleanup_work;
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
@@ -636,9 +643,11 @@ public:
         return 0;
     }
 
-    DLLLOCAL int submit(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, ExceptionSink* xsink) {
+    //! Submits a task; see ThreadTask::ThreadTask() for \a count_module_cleanup
+    DLLLOCAL int submit(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, ExceptionSink* xsink,
+            bool count_module_cleanup = false) {
         // optimistically create the task object outside the lock
-        ThreadTaskHolder task(new ThreadTask(c, cc), xsink);
+        ThreadTaskHolder task(new ThreadTask(c, cc, count_module_cleanup), xsink);
 
         // true if slots of a composition were taken and released again with the lock held
         bool released = false;

@@ -328,22 +328,33 @@ AsyncIoController::copy() {
     implemented in %Qore (%Qore code does not run on the I/O thread, where the controller reads the state of such an
     operation)
     @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
-    cleanup canceled (its @ref Qore::AbstractPollOperation::abort() "abort()" or
-    @ref Qore::AbstractPollOperation::onComplete() "onComplete()"); see @ref asynciocontroller_module_cleanup
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
 
     @par At the End of the Process
     @anchor asynciocontroller_module_cleanup
     When the process ends, the modules are deleted one after the other, and the destructors of the objects in their
     data run (a connection that a module keeps is closed, for example).  The operations that these destructors
-    cancel end before the next module is deleted, and so do the operations that they submit:
-    - an operation that such a destructor submits with a timeout (\c to, or the default timeout) is waited for, at
-      most for its timeout: a destructor that must finish its work at the end of the process (send a close frame, log
-      out, flush a log) gives its operation a timeout
-    - an operation that such a destructor submits without a timeout (a \c to of zero or less) and a timer that it
-      adds are canceled before the next module is deleted
-    - the work of an operation that the end of the process canceled cannot submit another operation: an
+    cancel end before the next module is deleted, and so does the work that they start:
+    - an operation that such a destructor submits (sends a close frame, logs out, flushes a log) is waited for until
+      the deadline of the module cleanup, whatever its own timeout (\c to): one deadline for the whole cleanup, 5
+      seconds after its start by default, set with the \c QORE_MODULE_CLEANUP_TIMEOUT
+      @ref environment_variables "environment variable" or the \c --module-cleanup-timeout option of \c qore, in
+      milliseconds; at the deadline, the operations that have not ended are canceled (their
+      @ref Qore::AbstractPollOperation::onComplete() "onComplete()" runs with a canceled result), and a warning that
+      names them is written on the standard error output; an operation that such a destructor submits after the
+      deadline is canceled at once.  The deadline is not extended by an operation whose own timeout is renewed as it
+      makes progress, such as a connection that keeps receiving data
+    - a task that such a destructor or that work submits (@ref submitTask()) is waited for; it is not canceled
+    - a timer that such a destructor or that work adds is canceled before the next module is deleted
+    - the work of an operation that the end of the process canceled (its
+      @ref Qore::AbstractPollOperation::abort() "abort()", its
+      @ref Qore::AbstractPollOperation::onComplete() "onComplete()", and the destructors that the release of its
+      references runs) cannot start new asynchronous work: an
       @ref Qore::AbstractPollOperation::onComplete() "onComplete()" that submits its operation again (a reader that
-      re-arms itself, a retry) gets an \c ASYNC-IO-SHUTDOWN-ERROR exception, so that the process ends
+      re-arms itself, a retry), adds a timer or submits a task gets an \c ASYNC-IO-SHUTDOWN-ERROR exception, so that
+      the process ends; nor can the work that the cleanup handed over after its deadline.  Synchronous I/O and
+      @ref exec() are not refused
 
     @note The steps of the operation that run on callback workers, such as
     @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" and
@@ -362,6 +373,10 @@ AsyncIoController::copy() {
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
         *bool replace_existing)
         [flags=NAMED_ARGS] {
+    // not refused by the internal submit, which synchronous I/O also uses (qore#7027)
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submit", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -389,9 +404,6 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid (see
     @ref Qore::AsyncIoController::submit() "submit()"), or the operation uses an
     @ref AbstractPollOperation::onComplete() "onComplete()" callback, or if called from the async I/O thread
-    @throw ASYNC-IO-SHUTDOWN-ERROR called by the work of an operation that the end of the process canceled; see
-    @ref asynciocontroller_module_cleanup
-
     @since %Qore 3.0
 */
 static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo> operation_info,
@@ -798,6 +810,10 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
     @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
     the next module is deleted; see @ref asynciocontroller_module_cleanup
 
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -809,6 +825,9 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
 */
 static int AsyncIoController::addTimer(date deadline, auto user_data)
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimer", xsink)) {
+        return 0;
+    }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
             "schedule", xsink)) {
         return 0;
@@ -850,6 +869,10 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
     the next module is deleted; see @ref asynciocontroller_module_cleanup
 
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -861,6 +884,9 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
 */
 static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
         [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimer", xsink)) {
+        return 0;
+    }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
             "schedule", xsink)) {
         return 0;
@@ -898,6 +924,10 @@ int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); 
     @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
     the next module is deleted; see @ref asynciocontroller_module_cleanup
 
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -909,6 +939,9 @@ int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); 
 */
 static int AsyncIoController::addTimerDelay(timeout delay, auto user_data)
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimerDelay", xsink)) {
+        return 0;
+    }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL,
             "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
         return 0;
@@ -944,6 +977,10 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
     @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
     the next module is deleted; see @ref asynciocontroller_module_cleanup
 
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
@@ -955,6 +992,9 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
 */
 static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string owner)
         [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimerDelay", xsink)) {
+        return 0;
+    }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL,
             "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
         return 0;
@@ -1044,6 +1084,12 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 
     @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller submitted code that is not its own
+    @throw ASYNC-IO-SHUTDOWN-ERROR called at the end of the process by the work of an operation that the module
+    cleanup canceled, or by work that the cleanup handed over after its deadline; see
+    @ref asynciocontroller_module_cleanup
+
+    @note A task that a destructor or its work submits at the end of the process, when the modules are deleted, is
+    waited for before the next module is deleted; see @ref asynciocontroller_module_cleanup
 
     @par Module Code and Restricted Callers
     Module code that runs for a caller that may not control threads (a Qorus service, for example, has
@@ -1059,6 +1105,9 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 */
 static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel_callback)
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submitTask", xsink)) {
+        return QoreValue();
+    }
     if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
             "schedule", xsink)
         || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
