@@ -20,17 +20,24 @@ through a typedef or using alias of the type found in the sources.  A read is ac
   not read from a value; or
 - the allowlist (short-string-access-allowlist.txt) names it with a reason.
 
+The sources of the binary modules in this repository (modules/: their C++ and qpp sources, and the C++ helpers of
+their tests) are held to the same rule with the same checks (issue #7062); they take strings from hashes, lists,
+objects, exceptions and the return values of Qore code, all of which can hold inline strings.
+
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
 from pathlib import Path
 import re
+import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
 ALLOWLIST = Path(__file__).resolve().parent / "short-string-access-allowlist.txt"
 SOURCE_DIRS = ("lib", "include")
+#! the sources of the binary modules, which are checked with the same rule as libqore (issue #7062)
+MODULE_DIR = "modules"
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".h", ".hh", ".hpp", ".qpp", ".ypp", ".lpp", ".in"}
 
 #! the type names of a string node, and of a pointer to one; aliases found in the sources are added (find_aliases())
@@ -270,6 +277,21 @@ def find_sites(root):
     return sites
 
 
+def find_module_sites(root):
+    """Returns the unguarded reads in the sources of the binary modules under root (modules/) as (path, line, code);
+    the reads are found with find_unguarded(), as in libqore"""
+    sites = []
+    for path in sorted((root / MODULE_DIR).rglob("*")):
+        if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
+            continue
+        text = path.read_text(errors="replace")
+        if "QoreStringNode" not in text:
+            continue
+        for line, code in find_unguarded(text):
+            sites.append((path.relative_to(root).as_posix(), line, code))
+    return sites
+
+
 def read_allowlist(path):
     """Returns the allowlist entries as (path, code, reason); format: <path> | <code of the line> | <reason>"""
     entries = []
@@ -294,8 +316,18 @@ class ShortStringAccessTest(unittest.TestCase):
             "<reason>\" comment just before it, or add it to " + ALLOWLIST.name + " with the reason:\n"
             + "\n".join("%s:%d: %s" % site for site in sites))
 
+    def test_modules_read_string_values_in_both_representations(self):
+        allowed = {(path, code) for path, code, _ in read_allowlist(ALLOWLIST)}
+        sites = [site for site in find_module_sites(ROOT) if (site[0], site[2]) not in allowed]
+        self.assertEqual([], sites, "a binary module reads a string value as a QoreStringNode without excluding an "
+            "inline short string, for which getType() returns NT_STRING but get<QoreStringNode>() returns nullptr "
+            "(issue #7062); read it with QoreStringDataHelper, or with QoreStringValueHelper or "
+            "QoreStringNodeValueHelper if a string object is needed; if an inline string cannot reach the code, say "
+            "why in a \"// note: safe; <reason>\" comment just before it, or add it to " + ALLOWLIST.name
+            + " with the reason:\n" + "\n".join("%s:%d: %s" % site for site in sites))
+
     def test_allowlist_entries_are_used(self):
-        sites = {(path, code) for path, _, code in find_sites(ROOT)}
+        sites = {(path, code) for path, _, code in find_sites(ROOT) + find_module_sites(ROOT)}
         stale = [(path, code) for path, code, _ in read_allowlist(ALLOWLIST) if (path, code) not in sites]
         self.assertEqual([], stale, "these entries of " + ALLOWLIST.name + " name no unguarded read; remove them")
 
@@ -436,6 +468,22 @@ class ShortStringAccessTest(unittest.TestCase):
             "    return const_cast<QoreStringNode*>(s);\n"
             "}\n")
         self.assertEqual([], find_unguarded(text))
+
+    def test_module_sources_are_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / MODULE_DIR / "m" / "src"
+            src.mkdir(parents=True)
+            (src / "m.qpp").write_text("static int f(const QoreValue& v) {\n"
+                "    return v.get<const QoreStringNode>()->size();\n"
+                "}\n")
+            (src / "safe.cpp").write_text("static size_t f(const QoreValue& v) {\n"
+                "    return QoreStringDataHelper(v).size();\n"
+                "}\n"
+                "// QoreStringNode\n")
+            (src / "other.txt").write_text("v.get<QoreStringNode>()\n")
+            self.assertEqual([("modules/m/src/m.qpp", 2, "return v.get<const QoreStringNode>()->size();")],
+                find_module_sites(root))
 
     def test_comments_and_strings_are_ignored(self):
         text = ("// v.get<QoreStringNode>()->c_str()\n"

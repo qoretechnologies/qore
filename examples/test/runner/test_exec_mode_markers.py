@@ -333,6 +333,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   without an execution mode
         # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
         #   as qcc executables
+        # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
+        #   child processes that set their own --exec-mode and as qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -445,6 +447,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
                                  "modules/dataframe/test/parquet-memory-pool.qtest",
+                                 "modules/dataframe/test/short-string-access.qtest",
+                                 "modules/i18n/test/short-string-access.qtest",
+                                 "modules/logger_bin/test/short-string-access.qtest",
+                                 "modules/tokenizer/test/short-string-access.qtest",
                                  "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest"]),
                          sorted(non_harness_children))
 
