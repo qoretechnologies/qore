@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import select
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -176,6 +177,130 @@ class CompileRaceGuardTest(unittest.TestCase):
         out = self.run_cmake("--build", build)
         self.assertNotIn("Building CXX object", out)
         self.assertEqual(mtime, obj.stat().st_mtime_ns)
+
+
+# A compiler for the fallback tests: prints a line to stdout and to stderr, writes the object and the dependency file
+# as asked, and ends with the given status (a negative one: killed by that signal).
+FAKE_COMPILER = r'''
+import os, signal, sys
+args = sys.argv[1:]
+status, depmode = int(args[0]), args[1]
+obj, dep, src = args[args.index("-o") + 1], args[args.index("-MF") + 1], args[args.index("-c") + 1]
+print("compiler out")
+sys.stdout.flush()
+sys.stderr.write("compiler err\n")
+try:
+    with open(obj, "w") as f:
+        f.write("OBJ\n")
+except OSError:
+    sys.stderr.write("cannot write the object\n")
+    sys.exit(1)
+with open(obj + ".written", "w") as f:
+    f.write(str(os.stat(obj).st_mtime_ns))
+if depmode == "good":
+    with open(dep, "w") as f:
+        f.write(obj + ": " + src + "\n")
+elif depmode == "garbage":
+    with open(dep, "wb") as f:
+        f.write(b"\x00\xff::: \\\n\x80 \\ $$ :\n" * 50)
+elif depmode == "unreadable":
+    with open(dep, "w") as f:
+        f.write(obj + ": " + src + "\n")
+    os.chmod(dep, 0)
+elif depmode == "directory":
+    os.mkdir(dep)
+if status < 0:
+    os.kill(os.getpid(), -status)
+sys.exit(status)
+'''
+
+
+class FallbackTest(unittest.TestCase):
+    """The launcher never changes a build's result: when it fails itself, the compile runs plainly, with the same
+    output and status, and the object stays as the compiler wrote it."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory(prefix="qore-compile-race-")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.fake = self.root / "fake-cc.py"
+        self.fake.write_text(FAKE_COMPILER)
+
+    def compile(self, guarded, status=0, depmode="good", fault=None, edited=False, objdir="obj"):
+        """Runs one compile in a fresh directory; returns (status, stdout, stderr, (object time, time the compiler gave
+        it) or None, start)."""
+        work = self.root / f"w{len(list(self.root.iterdir()))}"
+        work.mkdir()
+        src = work / "src.cpp"
+        src.write_text("int x;\n")
+        if objdir == "obj":
+            (work / "obj").mkdir()
+        obj, dep = work / objdir / "src.o", work / objdir / "src.o.d"
+        if edited:
+            # an input that looks edited during the compile
+            future = time.time_ns() + 100 * 1_000_000_000
+            os.utime(src, ns=(future, future))
+        command = [sys.executable, str(self.fake), str(status), depmode, "-MD", "-MF", str(dep), "-o", str(obj),
+                   "-c", str(src)]
+        if guarded:
+            command = [sys.executable, "-I", "-S", str(GUARD_TOOL), *command]
+        env = dict(os.environ)
+        env.pop("QORE_COMPILE_RACE_GUARD", None)
+        env.pop("QORE_COMPILE_RACE_GUARD_TEST_FAULT", None)
+        if fault:
+            env["QORE_COMPILE_RACE_GUARD_TEST_FAULT"] = fault
+        start = time.time_ns()
+        result = subprocess.run(command, capture_output=True, text=True, timeout=TIMEOUT, env=env, cwd=work)
+        # the object's time: as the launcher left it, and as the compiler wrote it
+        mtime = (obj.stat().st_mtime_ns, int((work / objdir / "src.o.written").read_text())) if obj.exists() else None
+        if dep.exists() and not dep.is_dir():
+            os.chmod(dep, 0o600)
+        return result.returncode, result.stdout, result.stderr, mtime, start
+
+    def assert_plain(self, **kwargs):
+        plain = self.compile(False, **kwargs)
+        guarded = self.compile(True, **kwargs)
+        self.assertEqual(plain[:3], guarded[:3], kwargs)
+        if guarded[3] is not None:
+            # not marked out of date: the object keeps the time the compiler gave it
+            self.assertEqual(guarded[3][1], guarded[3][0], kwargs)
+        return guarded
+
+    def test_plain_compile(self):
+        for status in (0, 1, 3):
+            self.assertEqual(status, self.assert_plain(status=status)[0])
+
+    def test_compiler_killed_by_signal(self):
+        self.assertEqual(-signal.SIGTERM, self.assert_plain(status=-signal.SIGTERM)[0])
+
+    def test_bad_dependency_files(self):
+        for depmode in ("garbage", "unreadable", "directory", "missing"):
+            for status in (0, 1):
+                self.assert_plain(status=status, depmode=depmode)
+                self.assert_plain(status=status, depmode=depmode, edited=True)
+
+    def test_start_time_not_available(self):
+        # no directory for the temporary file that takes the start time (nor for the object)
+        self.assertEqual(1, self.assert_plain(objdir="missing")[0])
+
+    def test_internal_faults(self):
+        for fault in ("start", "signals", "fork", "check", "utime"):
+            for status in (0, 1):
+                self.assert_plain(status=status, fault=fault)
+                self.assert_plain(status=status, fault=fault, edited=True)
+
+    def test_edited_input_marks_the_object(self):
+        # the control: without a fault, the same edited input makes the object out of date
+        status, _, _, (mtime, written), _ = self.compile(True, edited=True)
+        self.assertEqual(0, status)
+        self.assertLess(mtime, written // 1_000_000_000 * 1_000_000_000)
+
+    def test_compiler_not_found(self):
+        result = subprocess.run([sys.executable, "-I", "-S", str(GUARD_TOOL), str(self.root / "no-such-cc"), "-o",
+                                 str(self.root / "x.o"), "-c", "x.cpp"], capture_output=True, text=True,
+                                timeout=TIMEOUT)
+        self.assertEqual(127, result.returncode)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 class DepfileTest(unittest.TestCase):
