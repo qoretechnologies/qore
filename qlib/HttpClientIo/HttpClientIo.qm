@@ -215,6 +215,24 @@ if (state == HttpClientConnectionState::Draining) {
 }
     @endcode
 
+    @section httpclientio_caller_domains Restricted Callers
+
+    The connections and poll operations of the module connect to the hosts that their caller gives and read the CA
+    certificate locations that it gives (\c ssl_ca_file, \c ssl_ca_path), so code restricted from these functional
+    domains cannot create them:
+    - the connections (@ref HttpClientIo::Http1ClientConnection "Http1ClientConnection",
+      @ref HttpClientIo::Http2ClientConnection "Http2ClientConnection",
+      @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection") and poll operations
+      (@ref HttpClientIo::Http1ClientPollOperation "Http1ClientPollOperation",
+      @ref HttpClientIo::Http2ClientPollOperation "Http2ClientPollOperation",
+      @ref HttpClientIo::Http3ClientPollOperation "Http3ClientPollOperation") refuse code restricted from
+      \c NETWORK, and from \c FILESYSTEM if CA certificate locations are given, when they are created: the refusal
+      is made at run time (\c PERMISSION-DENIED), not when the code is parsed
+
+    A connection manager that trusted code creates and gives to restricted code is a capability: it creates the
+    connections that the restricted code asks for, with the options that its creator gave.  Code that runs while it
+    creates one (such as a logger that the restricted code created) cannot create a connection itself.
+
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0

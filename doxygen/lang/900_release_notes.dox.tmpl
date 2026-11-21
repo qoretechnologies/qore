@@ -2519,6 +2519,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a qlib connection that code restricted from its functional domain created gives no client, and the connection
+      and poll operation classes of @ref httpclientiointro "HttpClientIo" refuse such code when they are created; see
+      @ref httpclientio_caller_domains (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>)
     - @ref filelocationhandlerintro "FileLocationHandler" refuses a caller restricted from the functional domain of a
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
