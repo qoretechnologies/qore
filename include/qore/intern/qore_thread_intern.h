@@ -1884,11 +1884,6 @@ DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
     example) has the restrictions of the Program that loaded it and is calling code (qore#6337)
 */
 DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
-//! returns true if the calling code may not use uncontrolled APIs, for the loading of native code (qore#6844)
-/** As qore_caller_restricts_domain(QDOM_UNCONTROLLED_API), but neither a host grant nor a module initialization
-    barrier hides the code that established it or loaded the module: neither lends the loading of native code
-*/
-DLLLOCAL bool qore_caller_restricts_native_code();
 
 //! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
 /** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their

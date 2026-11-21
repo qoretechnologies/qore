@@ -7110,17 +7110,6 @@ static QoreParseOptions qore_get_calling_code_restrictions(ThreadData* td, bool 
         | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, runtime) & ~lent);
 }
 
-bool qore_caller_restricts_native_code() {
-    ThreadData* td = thread_data.get();
-    if (!td) {
-        return false;
-    }
-    // neither a host grant nor the initialization of library module code lends the loading of native code: the code
-    // that loads the module, or that the grant runs for, chooses it (qore#6844)
-    return qore_get_calling_code_restrictions_intern(td, nullptr, nullptr, nullptr, true)
-        .hasAny(QoreParseOptions(QDOM_UNCONTROLLED_API));
-}
-
 bool qore_caller_restricts_domain(int64 domain) {
     // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
@@ -7162,10 +7151,10 @@ bool qore_caller_may_load_native_code() {
     if (td->native_load_restriction && td->native_load_restriction->getBarrierDepth() >= depth) {
         return false;
     }
-    // neither a host grant nor the initialization of library module code lends the loading of native code: the code
-    // that loads the module, or that the grant runs for, chooses it (qore#6844); both rules must allow it
+    // a host grant does not lend the loading of native code (UNCONTROLLED_API is not among the domains that it lends,
+    // see qore_get_calling_code_restrictions()), and the initialization of library module code does not either (the
+    // loader's decision is recorded with its barrier above) (qore#6844)
     return !qore_caller_denied_user_domains(QDOM_UNCONTROLLED_API)
-        && !qore_caller_restricts_native_code()
         && qore_thread_sandbox_allows_uncontrolled_apis(false);
 }
 
