@@ -643,11 +643,11 @@ const std::string* QoreSandboxIsolation::callerDomain() const {
         }
         if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(level->callers)) {
             for (const QoreSandboxManager* sm : *members) {
-                if (const std::string* domain = sm->governingIsolationDomain()) {
+                if (const std::string* domain = QoreSandboxComposition::governingIsolationDomain(sm)) {
                     return domain;
                 }
             }
-        } else if (const std::string* domain = level->callers->governingIsolationDomain()) {
+        } else if (const std::string* domain = QoreSandboxComposition::governingIsolationDomain(level->callers)) {
             return domain;
         }
     }
@@ -674,7 +674,7 @@ const std::string* QoreSandboxIsolation::levelRefuses(const QoreSandboxManager* 
     if (!callers) {
         return nullptr;
     }
-    const std::string* domain = member->governingIsolationDomain();
+    const std::string* domain = QoreSandboxComposition::governingIsolationDomain(member);
     // a sandbox without a domain belongs to no tenant
     if (!domain) {
         return nullptr;
@@ -685,7 +685,7 @@ const std::string* QoreSandboxIsolation::levelRefuses(const QoreSandboxManager* 
         if (sm == member) {
             return true;
         }
-        const std::string* d = sm->governingIsolationDomain();
+        const std::string* d = QoreSandboxComposition::governingIsolationDomain(sm);
         if (!d) {
             return false;
         }
@@ -758,13 +758,13 @@ static bool qore_sandbox_has_isolation_domain(const QoreSandboxManager* sm) {
     }
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
         for (const QoreSandboxManager* member : *members) {
-            if (member->governingIsolationDomain()) {
+            if (QoreSandboxComposition::governingIsolationDomain(member)) {
                 return true;
             }
         }
         return false;
     }
-    return sm->governingIsolationDomain() != nullptr;
+    return QoreSandboxComposition::governingIsolationDomain(sm) != nullptr;
 }
 
 void QoreSandboxBudgetStack::setIsolation(QoreSandboxManager* callers, QoreSandboxManager* own,

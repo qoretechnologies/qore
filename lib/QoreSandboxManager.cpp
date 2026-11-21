@@ -98,6 +98,13 @@ struct qore_fs_security_private {
     //! state of the whole manager, kept here as the composition is, so that the layout of QoreSandboxManager, which is
     //! part of the C++ API, does not change
     std::atomic<bool> uncontrolled_api_allowed{false};
+    //! the isolation domain (tenant) of the QoreSandboxManager, or empty; written only before the manager governs
+    //! code (see QoreSandboxManager::setIsolationDomain(); manager state, kept here for the same reason; qore#6536)
+    std::string isolation_domain;
+    //! true once the manager governs code (see QoreSandboxManager::setGoverns()): the domain cannot be set any more
+    std::atomic<bool> governs{false};
+    //! serializes QoreSandboxManager::setIsolationDomain() and the reads of the domain by getIsolationDomain()
+    std::mutex domain_lock;
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -1271,21 +1278,21 @@ int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xs
             "the isolation domains of its members");
         return -1;
     }
-    std::lock_guard<std::mutex> lck(domain_lock);
-    if (isolation_domain == domain) {
+    std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
+    if (fs_mgr.priv->isolation_domain == domain) {
         return 0;
     }
-    if (!isolation_domain.empty()) {
+    if (!fs_mgr.priv->isolation_domain.empty()) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain of "
-            "the sandbox is already set to '%s'; it cannot be changed", isolation_domain.c_str());
+            "the sandbox is already set to '%s'; it cannot be changed", fs_mgr.priv->isolation_domain.c_str());
         return -1;
     }
-    if (governs.load(std::memory_order_acquire)) {
+    if (fs_mgr.priv->governs.load(std::memory_order_acquire)) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the sandbox already "
             "governs code; its isolation domain must be set before it is given to a Program");
         return -1;
     }
-    isolation_domain = domain;
+    fs_mgr.priv->isolation_domain = domain;
     return 0;
 }
 
@@ -1305,6 +1312,18 @@ std::string qore_caller_isolation_domain() {
     return std::string();
 }
 
+const std::string* QoreSandboxComposition::governingIsolationDomain(const QoreSandboxManager* sm) {
+    // the domain of a manager cannot change once it governs code, so it is read without a lock
+    const std::string& domain = sm->fs_mgr.priv->isolation_domain;
+    return domain.empty() ? nullptr : &domain;
+}
+
+void QoreSandboxComposition::setGoverns(QoreSandboxManager* sm) {
+    // after a concurrent setIsolationDomain() has written the domain
+    std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+    sm->fs_mgr.priv->governs.store(true, std::memory_order_release);
+}
+
 std::string QoreSandboxManager::getIsolationDomain() const {
     if (const auto* managers = QoreSandboxComposition::members(this)) {
         for (const QoreSandboxManager* member : *managers) {
@@ -1315,8 +1334,8 @@ std::string QoreSandboxManager::getIsolationDomain() const {
         }
         return std::string();
     }
-    std::lock_guard<std::mutex> lck(domain_lock);
-    return isolation_domain;
+    std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
+    return fs_mgr.priv->isolation_domain;
 }
 
 void QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm) {
@@ -1329,9 +1348,9 @@ void QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm) {
         return;
     }
     std::string domain = creator->getIsolationDomain();
-    std::lock_guard<std::mutex> lck(sm->domain_lock);
-    assert(!sm->governs.load(std::memory_order_relaxed));
-    sm->isolation_domain = std::move(domain);
+    std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+    assert(!sm->fs_mgr.priv->governs.load(std::memory_order_relaxed));
+    sm->fs_mgr.priv->isolation_domain = std::move(domain);
 }
 
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {
@@ -1737,7 +1756,7 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     // the effective policy: a copy of a composition allows them only if every member does
     result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
     // the copy belongs to the same tenant
-    result->isolation_domain = getIsolationDomain();
+    result->fs_mgr.priv->isolation_domain = getIsolationDomain();
     // Don't copy interrupt state
 
     return result;
@@ -1837,7 +1856,7 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
         }
         if (sm) {
             // its isolation domain is fixed from now on
-            sm->setGoverns();
+            QoreSandboxComposition::setGoverns(sm);
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
@@ -2196,7 +2215,7 @@ QoreSandboxManager* QoreSandboxComposition::combine(const std::vector<QoreSandbo
     }
     // the isolation domains of the members are fixed from now on
     for (QoreSandboxManager* member : flat) {
-        member->setGoverns();
+        QoreSandboxComposition::setGoverns(member);
     }
     auto composition = std::make_shared<const QoreSandboxMembers>(std::move(flat));
     ReferenceHolder<QoreSandboxManager> result(new QoreSandboxManager, nullptr);

@@ -23,6 +23,15 @@ public:
     //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
     //! (qore#6536)
     DLLLOCAL static void inheritIsolationDomain(QoreSandboxManager* sm);
+
+    //! Returns the isolation domain of a manager that governs code, or nullptr if it has none (qore#6536)
+    /** The domain of a manager cannot change once it governs code, so it is read without a lock; a composite has no
+        domain of its own (see its members)
+    */
+    DLLLOCAL static const std::string* governingIsolationDomain(const QoreSandboxManager* sm);
+
+    //! Marks the manager as governing code: its isolation domain is fixed from then on (qore#6536)
+    DLLLOCAL static void setGoverns(QoreSandboxManager* sm);
 };
 
 class QoreProgram;
