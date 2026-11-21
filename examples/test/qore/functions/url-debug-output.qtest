@@ -37,6 +37,7 @@ class UrlDebugOutputTest inherits QUnit::Test {
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write("%new-style\n"
+            # live-provider-optin: the text of a parsed script; the variables are never read (the test checks the debug output of the parser)
             "string url = \"http://\" + ENV.URL_TEST_USER + \":\" + ENV.URL_TEST_PASS + \"@\" + ENV.URL_TEST_HOST "
                 "+ \":8080/path\";\n"
             "hash<UrlInfo> h = parse_url(url);\n"

@@ -222,6 +222,7 @@ public class TestRun {
         # variable, as a driver's error can name those of another connection (ex: the admin connection of an
         # isolation module); the longest first, so that one that contains another is masked whole
         list<string> secrets = ();
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
         foreach string cs in ((connstr,) + (map ENV{$1}, keys ENV, $1 =~ /^QORE_DB_CONNSTR/ && ENV{$1}.typeCode()
                 == NT_STRING)) {
             try {
@@ -246,7 +247,9 @@ public class TestRun {
         the datasource string, or <tt>"the datasource string"</tt> if none is
     */
     static string getVariable(string connstr) {
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
         foreach string var in (sort(keys ENV)) {
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
             if (var =~ /^QORE_DB_CONNSTR/ && ENV{var} == connstr) {
                 return var;
             }
@@ -283,6 +286,7 @@ public class TestRun {
         cannot be loaded or a variable that is not set raise their own exceptions
     */
     static Datasource openOrFail(string var, *string connstr) {
+        # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
         connstr = connstr ?? getenv(var) ?? ENV{var};
         if (!connstr) {
             throw "DATASOURCE-ERROR", sprintf("%s is not set", var);
@@ -324,11 +328,14 @@ public class TestRun {
         }
         if (drivers) {
             list<string> vars = ();
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
             foreach string var in (sort(keys ENV)) {
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                 if (var !~ /^QORE_DB_CONNSTR/ || !ENV{var}.val() || var =~ /_SYS$/) {
                     continue;
                 }
                 try {
+                    # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                     if (inlist(parse_datasource(ENV{var}).type, drivers)) {
                         vars += var;
                     }
@@ -341,15 +348,20 @@ public class TestRun {
             if (own) {
                 vars = own;
             }
+            # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
             if (vars && (map {ENV{$1}: True}, vars).size() == 1) {
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                 return TestRun::getPreconditionFailure(vars[0], ENV{vars[0]}, ex);
             }
             # more than one variable of the driver: the error is that of one of them
             if (vars) {
                 string names = join(" or ", vars);
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                 string reason = TestRun::getPreconditionFailure(names, ENV{vars[0]}, ex);
                 # the datasource of each variable, masked
+                # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                 return replace(reason, sprintf("%s is set to %y", names, TestRun::describeDatasource(ENV{vars[0]})),
+                    # live-provider-optin: the QORE_DB_CONNSTR_* connection strings of the local test databases, not a live provider
                     sprintf("%s are set (%s)", names, join(", ", map TestRun::describeDatasource(ENV{$1}), vars)));
             }
         }

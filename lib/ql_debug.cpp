@@ -19190,7 +19190,8 @@ static QoreValue f_dbg_socket_start_send_to(const QoreListNode* params, RuntimeC
     if (!pgm) {
         return QoreValue();
     }
-    const QoreStringNode* ip = get_param_value(params, 1).get<const QoreStringNode>();
+    // the address can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper ip(get_param_value(params, 1));
     int port = static_cast<int>(HARD_QORE_VALUE_INT(params, 2));
     ProgramThreadCountContextHelper pch(xsink, *pgm, true);
     if (*xsink) {
@@ -19199,8 +19200,8 @@ static QoreValue f_dbg_socket_start_send_to(const QoreListNode* params, RuntimeC
     struct sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip->c_str(), &addr.sin_addr) != 1) {
-        return xsink->raiseException("DBG-SOCKET-ERROR", "invalid IPv4 address '%s'", ip->c_str());
+    if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) != 1) {
+        return xsink->raiseException("DBG-SOCKET-ERROR", "invalid IPv4 address '%s'", ip.c_str());
     }
     // an open UDP socket: bound to an address assigned by the system
     QoreSocket sock;
@@ -20774,7 +20775,9 @@ static QoreValue f_dbg_hold_program_record_change_clear(const QoreListNode* para
 */
 static QoreValue f_dbg_fork_while_program_record_held(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* handler = get_param_value(params, 0).get<const QoreStringNode>();
+    // the handler name can be an inline short string, which has no node (issue #7038); nullptr without one
+    QoreStringDataHelper handler_str(get_param_value(params, 0));
+    const char* handler = handler_str.c_str();
     const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
     ProgramRecordHold& h = program_record_hold();
     {
@@ -20790,7 +20793,7 @@ static QoreValue f_dbg_fork_while_program_record_held(const QoreListNode* params
             xsink->raiseException("DBG-FORK-ERROR", "no thread was parked in the change of the record");
             return QoreValue();
         }
-        h.handler = handler ? handler->c_str() : "";
+        h.handler = handler ? handler : "";
     }
     if (handler) {
         qore_fork_prepare_hook = program_record_fork_hook;

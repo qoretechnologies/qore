@@ -500,7 +500,8 @@ static std::string qore_binary_load_error_missing_module(ExceptionSink& binary_x
     if (arg.getType() != NT_STRING) {
         return std::string();
     }
-    std::string dep = arg.get<const QoreStringNode>()->c_str();
+    // the argument can be an inline short string, which has no node (issue #7038)
+    std::string dep = QoreStringDataHelper(arg).c_str();
     if (dep.empty() || dep == name) {
         return std::string();
     }

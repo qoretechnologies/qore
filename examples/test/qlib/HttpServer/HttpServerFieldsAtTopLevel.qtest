@@ -280,7 +280,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
     }
 
     #! adds a plain HTTP/1.1 listener and returns its port
-    private int addListener(HttpServer hs) {
+    private int addPlainListener(HttpServer hs) {
         int port = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         hs.waitForAsyncIo();
         return port;
@@ -354,7 +354,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             on_exit hs.stop();
 
             # HTTP/1.1
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
             hash<auto> resp = rawRequest(port, "POST /x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
                 "Content-Type: text/plain;charset=utf-8\r\nX-Test: 1\r\nContent-Length: 4\r\n\r\ndata");
             assertEq(200, resp.hdr.status_code, mode + ": HTTP/1.1 request answered");
@@ -404,7 +404,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             EchoHandler handler = echoHandler(mode);
             HttpServer hs = startServer(mode, handler);
             on_exit hs.stop();
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
 
             # a text body: the Transfer-Encoding field is what tells the server that the body is chunked
             hash<auto> resp = rawRequest(port, "POST /x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
@@ -432,7 +432,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             EchoHandler handler = echoHandler(mode);
             HttpServer hs = startServer(mode, handler);
             on_exit hs.stop();
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
 
             # Content-Length and the charset of Content-Type
             binary latin1 = binary(convert_encoding("déjà vu", "ISO-8859-1"));
@@ -472,7 +472,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             TestRestHandler handler = mode == "hand-built" ? new FlatRestHandler() : new TestRestHandler();
             HttpServer hs = startServer(mode, handler);
             on_exit hs.stop();
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
 
             # Accept selects the serialization of the response, and Accept-Encoding its compression
             hash<auto> resp = rawRequest(port, "GET /obj HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
@@ -506,7 +506,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
 
             foreach bool h2 in ((False, True)) {
                 string label = sprintf("%s %s", mode, h2 ? "HTTP/2" : "HTTP/1.1");
-                int port = h2 ? addTlsListener(hs) : addListener(hs);
+                int port = h2 ? addTlsListener(hs) : addPlainListener(hs);
                 Queue msgs();
                 hash<auto> opts = {
                     "url": (h2 ? "wss" : "ws") + "://localhost:" + port,
@@ -540,7 +540,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             ReplaySseHandler handler = mode == "hand-built" ? new FlatSseHandler() : new ReplaySseHandler();
             HttpServer hs = startServer(mode, handler);
             on_exit hs.stop();
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
 
             Socket s();
             s.connect("localhost:" + port, Timeout);
@@ -558,7 +558,7 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
             EchoHandler handler = echoHandler(mode, new TestAuthenticator());
             HttpServer hs = startServer(mode, handler);
             on_exit hs.stop();
-            int port = addListener(hs);
+            int port = addPlainListener(hs);
 
             hash<auto> resp = rawRequest(port, "GET /x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
                 "Authorization: Basic " + make_base64_string("user:pass") + "\r\n\r\n");

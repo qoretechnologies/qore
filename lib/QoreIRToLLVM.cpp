@@ -5616,6 +5616,8 @@ void QoreIRToLLVM::materializeHandlerIRLocals(llvm::Module& module) {
         if (!current_ir_func->handler_ir_locals.count(key) || !ir_only_locals_set || !ir_only_locals_set->count(key)) {
             continue;
         }
+        // raw local cache: the native storage of an IR-only local, read here to publish its value to the runtime
+        // stack for a block exit handler (#5951)
         llvm::Value* alloca = local_allocas.find(key)->second.storage();
         if (aot_mode) {
             auto inst_fn = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
@@ -5685,6 +5687,7 @@ void QoreIRToLLVM::retireHandlerIRLocals(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type}, false));
     for (auto i = materialized_handler_locals.rbegin(), e = materialized_handler_locals.rend(); i != e; ++i) {
         const void* key = *i;
+        // raw local cache: the native storage of a handler-materialized local, which takes the value back (#5951)
         llvm::Value* alloca = local_allocas.find(key)->second.storage();
         // an owned value: the native storage takes the reference
         llvm::Value* val = emitLocalCacheLoad(key, *builder, module);

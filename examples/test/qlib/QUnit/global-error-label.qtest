@@ -230,7 +230,9 @@ class ReportedTest inherits QUnit::Test {
         string cmd;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            # live-provider-optin: the library path variables (LD_LIBRARY_PATH, DYLD_LIBRARY_PATH), no credential
             if (ENV{var}) {
+                # live-provider-optin: the library path variables, passed to the child shell
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }

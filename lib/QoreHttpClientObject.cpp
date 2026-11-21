@@ -7185,7 +7185,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     }
 
     if (response_protocol->getType() == NT_STRING) {
-        const char* protocol = response_protocol->get<const QoreStringNode>()->c_str();
+        // the protocol can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper protocol_str(*response_protocol);
+        const char* protocol = protocol_str.c_str();
         http2_active = !strcmp(protocol, "h2");
         http3_active = !strcmp(protocol, "h3");
     }

@@ -27,9 +27,10 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 %requires ../../../TestInterpreter.qm
-%requires ../../../../../qlib/FsUtil.qm
+%requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
 %exec-class DestructorAtStackLimitTest
