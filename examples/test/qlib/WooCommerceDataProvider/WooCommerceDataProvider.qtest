@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -186,8 +187,8 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
     #! Sets up the WooCommerce client for integration tests
     private setupConnection() {
         *string store_url = m_options.storeurl ?? ENV.WC_STORE_URL;
-        *string consumer_key = m_options.consumerkey ?? ENV.WC_CONSUMER_KEY;
-        *string consumer_secret = m_options.consumersecret ?? ENV.WC_CONSUMER_SECRET;
+        *string consumer_key = LiveProvider::get("woocommerce", "WC_CONSUMER_KEY", m_options.consumerkey);
+        *string consumer_secret = LiveProvider::get("woocommerce", "WC_CONSUMER_SECRET", m_options.consumersecret);
         if (!store_url || !consumer_key || !consumer_secret) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -u/-k/-s options or "

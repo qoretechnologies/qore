@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires ConnectionProvider
 %requires QoreRagTypes
 %requires QoreRagUtils
@@ -27,7 +28,7 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
     }
 
     constructor() : Test("MongoAtlasVectorStore Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.MONGODB_ATLAS_CONNECTION;
+        conn_name = LiveProvider::get("mongodb", "MONGODB_ATLAS_CONNECTION", m_options.conn);
 
         addTestCase("factory registered + lazy-loadable",   \factoryTest());
         addTestCase("constructor validates required config", \constructorValidationTest());
@@ -247,7 +248,7 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
                 "live test");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("mongodb", "MONGODB_ATLAS_CONNECTION", m_options.conn);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("MongoDB Atlas connection ping failed: %s",
             ping.info ?? "no info"));

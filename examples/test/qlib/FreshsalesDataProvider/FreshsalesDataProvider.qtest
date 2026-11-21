@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -95,9 +96,9 @@ public class FreshsalesDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Freshsales client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.FRESHSALES_CONNECTION;
+        *string conn_name = LiveProvider::get("freshsales", "FRESHSALES_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("freshsales", "FRESHSALES_CONNECTION", m_options.conn);
             if (conn instanceof FreshsalesRestClient::FreshsalesRestConnection) {
                 client = (cast<FreshsalesRestClient::FreshsalesRestConnection>(conn))
                     .getAsync(True);
@@ -105,7 +106,7 @@ public class FreshsalesDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string apikey = m_options.apikey ?? ENV.FRESHSALES_API_KEY;
+        *string apikey = LiveProvider::get("freshsales", "FRESHSALES_API_KEY", m_options.apikey);
         *string domain = m_options.domain ?? ENV.FRESHSALES_DOMAIN;
         if (apikey && domain) {
             client = new FreshsalesRestClient::FreshsalesRestClientIo({

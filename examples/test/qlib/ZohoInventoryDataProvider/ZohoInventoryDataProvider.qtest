@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -224,7 +225,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         organizationId = m_options.org_id ?? ENV.ZOHOINVENTORY_ORGANIZATION_ID;
 
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.ZOHOINVENTORY_CONNECTION;
+        *string conn_name = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
@@ -235,7 +236,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
                         "ZOHOINVENTORY_ORGANIZATION_ID env var.\n");
                 }
             }
-            client = get_connection(conn_name).getAsync();
+            client = LiveProvider::connection("zohoinventory", "ZOHOINVENTORY_CONNECTION", m_options.conn).getAsync();
             # Set organization_id on the client for request providers
             if (organizationId) {
                 client.setOrganizationId(organizationId);
@@ -243,10 +244,12 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string client_id = m_options.client_id ?? ENV.ZOHOINVENTORY_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.ZOHOINVENTORY_CLIENT_SECRET;
-        *string refresh_token = m_options.refresh_token ?? ENV.ZOHOINVENTORY_REFRESH_TOKEN;
-        *string token = m_options.token ?? ENV.ZOHOINVENTORY_TOKEN;
+        *string client_id = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_CLIENT_SECRET",
+            m_options.client_secret);
+        *string refresh_token = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_REFRESH_TOKEN",
+            m_options.refresh_token);
+        *string token = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_TOKEN", m_options.token);
 
         # Allow token-only mode: just access token + org_id for quick testing
         if (token && organizationId && (!client_id || !client_secret || !refresh_token)) {

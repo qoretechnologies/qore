@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -139,18 +140,18 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
     #! Sets up the Squarespace client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.SQUARESPACE_CONNECTION;
+        *string conn_name = LiveProvider::get("squarespace", "SQUARESPACE_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = LiveProvider::connection("squarespace", "SQUARESPACE_CONNECTION", m_options.conn).get();
             return;
         }
 
-        *string token = m_options.token ?? ENV.SQUARESPACE_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.SQUARESPACE_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.SQUARESPACE_CLIENT_SECRET;
+        *string token = LiveProvider::get("squarespace", "SQUARESPACE_ACCESS_TOKEN", m_options.token);
+        *string client_id = LiveProvider::get("squarespace", "SQUARESPACE_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("squarespace", "SQUARESPACE_CLIENT_SECRET", m_options.client_secret);
 
         if (!token && (!client_id || !client_secret)) {
             if (m_options.verbose) {

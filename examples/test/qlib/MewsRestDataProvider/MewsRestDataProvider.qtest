@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires MewsRestClient
@@ -248,10 +249,10 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.MEWS_CONNECTION;
+        *string conn_name = LiveProvider::get("mews", "MEWS_CONNECTION", m_options.conn);
         try {
             if (conn_name.val()) {
-                AbstractConnection conn = get_connection(conn_name);
+                AbstractConnection conn = LiveProvider::connection("mews", "MEWS_CONNECTION", m_options.conn);
                 if (!(conn instanceof MewsRestConnection)) {
                     error("connection %y is type %y; expecting \"MewsRestConnection\"", conn_name, conn.className());
                 }

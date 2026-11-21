@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -232,10 +233,10 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         Organization ID is now optional - can be set per-request if needed.
     */
     private setupConnection() {
-        *string access_token = m_options.access_token ?? ENV.ZOHOINVOICE_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.ZOHOINVOICE_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.ZOHOINVOICE_CLIENT_SECRET;
-        *string refresh_token = m_options.refresh_token ?? ENV.ZOHOINVOICE_REFRESH_TOKEN;
+        *string access_token = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_ACCESS_TOKEN", m_options.access_token);
+        *string client_id = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_CLIENT_SECRET", m_options.client_secret);
+        *string refresh_token = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_REFRESH_TOKEN", m_options.refresh_token);
         *string org_id = m_options.org_id ?? ENV.ZOHOINVOICE_ORGANIZATION_ID;
 
         hash<auto> opts = {

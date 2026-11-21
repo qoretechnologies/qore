@@ -12,6 +12,7 @@
 %requires SmtpClient
 %requires Pop3Client
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 
 %exec-class Pop3ClientTest
 
@@ -22,8 +23,8 @@ public class Pop3ClientTest inherits QUnit::Test {
         *string pop3Port = ENV.POP3_TEST_PORT;
         *string smtpHost = ENV.SMTP_TEST_HOST;
         *string smtpPort = ENV.SMTP_TEST_PORT;
-        *string testUser = ENV.POP3_TEST_USER;
-        *string testPass = ENV.POP3_TEST_PASS;
+        *string testUser = LiveProvider::get("pop3", "POP3_TEST_USER");
+        *string testPass = LiveProvider::get("pop3", "POP3_TEST_PASS");
     }
 
     constructor() : Test("Pop3ClientTest", "1.0") {

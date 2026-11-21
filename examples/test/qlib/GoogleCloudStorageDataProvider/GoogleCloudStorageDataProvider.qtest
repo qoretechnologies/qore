@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires DataProvider
 %requires FsUtil
 %requires Mime
@@ -1250,6 +1251,7 @@ public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
             return;
         }
         live_bucket = m_options.bucket;
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         return get_connection(conn_name).getDataProvider();
     }
 
@@ -1270,6 +1272,7 @@ public class GoogleCloudStorageDataProviderTest inherits QUnit::Test {
             testSkip("no connection specified; use -c <connection_name>");
             return;
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(conn_name);
         hash<PingInfo> info = conn.ping(True);
         assertEq(True, info.ok, "ping succeeded");

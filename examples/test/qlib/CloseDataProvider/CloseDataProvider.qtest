@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -146,18 +147,18 @@ public class CloseDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Close client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.CLOSE_CONNECTION;
+        *string conn_name = LiveProvider::get("close", "CLOSE_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("close", "CLOSE_CONNECTION", m_options.conn);
             client = conn.getAsync();
             return;
         }
-        *string token = ENV.CLOSE_TOKEN;
+        *string token = LiveProvider::get("close", "CLOSE_TOKEN");
         if (token) {
             client = new CloseRestClient::CloseRestClientIo({"token": token});
             return;
         }
-        *string apikey = ENV.CLOSE_API_KEY;
+        *string apikey = LiveProvider::get("close", "CLOSE_API_KEY");
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -c option or CLOSE_TOKEN/CLOSE_API_KEY/"

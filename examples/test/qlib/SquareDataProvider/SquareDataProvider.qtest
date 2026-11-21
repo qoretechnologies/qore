@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -176,18 +177,18 @@ public class SquareDataProviderTest inherits QUnit::Test {
     #! Sets up the Square client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.SQUARE_CONNECTION;
+        *string conn_name = LiveProvider::get("square", "SQUARE_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = LiveProvider::connection("square", "SQUARE_CONNECTION", m_options.conn).get();
             return;
         }
 
-        *string token = m_options.token ?? ENV.SQUARE_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.SQUARE_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.SQUARE_CLIENT_SECRET;
+        *string token = LiveProvider::get("square", "SQUARE_ACCESS_TOKEN", m_options.token);
+        *string client_id = LiveProvider::get("square", "SQUARE_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("square", "SQUARE_CLIENT_SECRET", m_options.client_secret);
         locationId = m_options.location_id ?? ENV.SQUARE_LOCATION_ID;
 
         if (!token && (!client_id || !client_secret)) {

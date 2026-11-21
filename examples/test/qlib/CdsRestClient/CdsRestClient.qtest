@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires reflection
 %requires Mime
 %requires MapperUtil
@@ -107,9 +108,9 @@ class CdsTest inherits QUnit::Test {
     }
 
     setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.CDS_CONNECTION;
+        *string conn_name = LiveProvider::get("cds", "CDS_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("cds", "CDS_CONNECTION", m_options.conn);
             if (!(conn instanceof CdsRestConnection)) {
                 error("connection %y is type %y; expecting \"CdsRestConnection\"", conn_name, conn.className());
             }
@@ -121,10 +122,10 @@ class CdsTest inherits QUnit::Test {
         if (!cdsopts.url) {
             error("missing --url or --connection options, CDS_URL or CDS_CONNECTION environment variables");
         }
-        cdsopts.oauth2_client_id = m_options.client_id ?? ENV.CDS_CLIENT_ID;
+        cdsopts.oauth2_client_id = LiveProvider::get("cds", "CDS_CLIENT_ID", m_options.client_id);
         if (!cdsopts.oauth2_client_id)
             error("missing --client_id option or CDS_CLIENT_ID environment variable");
-        cdsopts.oauth2_client_secret = m_options.client_secret ?? ENV.CDS_CLIENT_SECRET;
+        cdsopts.oauth2_client_secret = LiveProvider::get("cds", "CDS_CLIENT_SECRET", m_options.client_secret);
         if (!cdsopts.oauth2_client_secret)
             error("missing --client_secret option or CDS_CLIENT_SECRET environment variable");
         if (cdsopts."timeout")
