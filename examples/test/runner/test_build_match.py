@@ -14,6 +14,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
 import sys
@@ -166,7 +167,7 @@ class BuildMatchFixture(unittest.TestCase):
         (path.parent / (path.name + ".d")).write_text("CMakeFiles/libqore.dir/%s: \\\n %s \\\n /usr/include/stdio.h\n"
                                                     % (obj, " \\\n ".join(names)))
 
-    def run_runner(self, tree=None, build=None, **variables):
+    def runner_env(self, tree=None, build=None, **variables):
         tree = tree or self.tree
         build = build or self.build
         env = {
@@ -180,6 +181,11 @@ class BuildMatchFixture(unittest.TestCase):
             "QORE_TEST_DIRS": "tests",
         }
         env.update(variables)
+        return env
+
+    def run_runner(self, tree=None, build=None, **variables):
+        tree = tree or self.tree
+        env = self.runner_env(tree, build, **variables)
         # in a session of its own, whose processes are ended once it has ended or when it fails: a runner that does not
         # limit the time of the check leaves a qore that hangs running (test_a_qore_that_hangs_is_ended())
         process = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree, env=env, stdout=subprocess.PIPE,
@@ -211,7 +217,6 @@ class BuildMatchFixture(unittest.TestCase):
         git(self.tree, "commit", "-q", "-am", "change " + path)
         os.utime(self.tree / path, (when, when))
         return git(self.tree, "rev-parse", "HEAD")
-
 
 
 class BuildMatchTest(BuildMatchFixture):
@@ -615,6 +620,56 @@ class BuildMatchTest(BuildMatchFixture):
             exec '{real_awk}' "$@"
             """)
         self.assert_refused(self.run_runner(QORE_TEST_BUILD_CHECK_WAIT="1"), "    lib/dead.cpp")
+
+    def test_a_depfile_that_cannot_be_read_makes_every_source_compared(self):
+        # the depfile of the single compilation unit cannot be read (another depfile names a source of lib/): a read
+        # that fails is no end of the file, and every source is compared
+        self.depfile("lib/single-compilation-unit.cpp.o", "lib/a.cpp")
+        self.depfile("lib/JITRuntimeTakeOver.cpp.o", "lib/b.cpp")
+        depfile = self.build / "CMakeFiles/libqore.dir/lib/single-compilation-unit.cpp.o.d"
+        depfile.chmod(0)
+        try:
+            (self.tree / "lib/a.cpp").write_text("int a = 11;\n")
+            os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+            self.assert_refused(self.run_runner(), "    lib/a.cpp")
+        finally:
+            depfile.chmod(0o644)
+
+    def test_a_signal_during_the_check_leaves_no_file(self):
+        # the run is ended by SIGTERM while the check reads the depfiles (a stand-in awk reports that it reads, and
+        # waits until the case lets it go on): the check's temporary files are removed, and the run ends by the signal
+        self.depfile("lib/single-compilation-unit.cpp.o", "lib/a.cpp")
+        (self.tree / "lib/a.cpp").write_text("int a = 12;\n")
+        os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+        reading = self.base / "awk-reading"
+        go_on = self.base / "awk-go-on"
+        os.mkfifo(reading)
+        os.mkfifo(go_on)
+        real_awk = shutil.which("awk")
+        write_script(self.bin / "awk", f"""\
+            #!/bin/sh
+            if [ -n "$QORE_DEP_PREFIX_B" ]; then
+                echo reading > '{reading}'
+                read -r line < '{go_on}'
+            fi
+            exec '{real_awk}' "$@"
+            """)
+        env = self.runner_env()
+        process = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=self.tree, env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, start_new_session=True)
+        try:
+            with open(reading) as f:
+                self.assertEqual("reading\n", f.read())
+            self.assertEqual(1, len(list((self.tree / "tmp").glob("qore-build-depfiles.*"))))
+            process.send_signal(signal.SIGTERM)
+            with open(go_on, "w") as f:
+                f.write("go on\n")
+            stdout, stderr = process.communicate(timeout=120)
+        finally:
+            end_session(process)
+        self.assertEqual(-signal.SIGTERM, process.returncode, stdout + stderr)
+        self.assertEqual([], list((self.tree / "tmp").glob("qore-build-*")))
+        self.assertNotIn("the test ran", stdout + stderr)
 
     def test_without_depfiles_every_source_of_libqore_is_compared(self):
         # Ninja keeps the dependencies in .ninja_deps: a source cannot be told not to be in libqore

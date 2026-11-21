@@ -861,10 +861,12 @@ read_libqore_sources() {
     LIBQORE_SOURCES_READ=1
     LIBQORE_DEPFILES=0
     LIBQORE_SOURCES=""
-    if ! grep -q '^CMAKE_GENERATOR:INTERNAL=.*Makefiles[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+    if ! run_build_check grep -q '^CMAKE_GENERATOR:INTERNAL=.*Makefiles[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null; then
         return
     fi
     depfile_list=`mktemp "${TMPDIR:-/tmp}/qore-build-depfiles.XXXXXX"` || return
+    BUILD_CHECK_FILES="$BUILD_CHECK_FILES $depfile_list"
     if ! run_build_check find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' > "$depfile_list" 2>/dev/null \
             || [ ! -s "$depfile_list" ]; then
         rm -f "$depfile_list"
@@ -897,9 +899,11 @@ read_libqore_sources() {
             }
         }
         BEGIN {
-            while ((getline file < ARGV[1]) > 0) {
+            # a read that fails (a depfile that cannot be read, or that is removed while it is read) ends the read with
+            # an error, so that every source is compared
+            while ((list_rc = (getline file < ARGV[1])) > 0) {
                 # a line ends a token: one that continues ends with a "\" after a space
-                while ((getline line < file) > 0) {
+                while ((line_rc = (getline line < file)) > 0) {
                     if (substr(line, length(line), 1) == "\\") {
                         line = substr(line, 1, length(line) - 1)
                     }
@@ -936,7 +940,13 @@ read_libqore_sources() {
                         add(token)
                     }
                 }
+                if (line_rc < 0) {
+                    exit 1
+                }
                 close(file)
+            }
+            if (list_rc < 0) {
+                exit 1
             }
             exit
         }' "$depfile_list" 2>/dev/null)
@@ -1100,6 +1110,9 @@ check_build_matches_tree() {
         # set -f: the pathspecs are not file name patterns for the shell; git's messages (a warning on a diff that
         # works) are no file names: they are shown only if the diff fails
         build_errors=`mktemp "${TMPDIR:-/tmp}/qore-build-check.XXXXXX"` || build_errors=/dev/null
+        if [ "$build_errors" != /dev/null ]; then
+            BUILD_CHECK_FILES="$BUILD_CHECK_FILES $build_errors"
+        fi
         set -f
         build_changes=`tree_git diff --name-only --no-renames "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>"$build_errors"`
         build_diff_rc=$?
@@ -1116,7 +1129,8 @@ check_build_matches_tree() {
             return
         fi
         # a build configured from this tree: the files that it is newer than are in it
-        build_source=`sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null`
+        build_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null`
         same_tree=0
         LIBQORE_SOURCES_READ=0
         if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
@@ -1365,7 +1379,15 @@ else
 fi
 
 # the build must match the tree, before anything runs: with the library path that the tests get (see above)
+# the check's temporary files (see read_libqore_sources() and check_build_matches_tree()) are removed if a signal ends
+# the run during the check, which comes before the runner's own traps are set
+BUILD_CHECK_FILES=""
+# the run is ended by the signal itself, so that its caller sees why (see runner_signaled())
+for build_check_signal in HUP INT TERM; do
+    trap "rm -f \$BUILD_CHECK_FILES; trap - $build_check_signal; kill -$build_check_signal \$\$" $build_check_signal
+done
 check_build
+trap - HUP INT TERM
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
