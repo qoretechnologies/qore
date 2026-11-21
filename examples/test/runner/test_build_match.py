@@ -309,8 +309,9 @@ class BuildMatchTest(BuildMatchFixture):
                             "the .qmod files in %s/qlib-qmod: from the build in" % other.resolve())
         # a qlib/*.qmod link into another build, which the loader follows
         self.loader_follows_links()
+        (other / "qlib-qmod/Mod.qmod").touch()
         (self.tree / "qlib/Mod.qmod").symlink_to(other / "qlib-qmod/Mod.qmod")
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
         # links into the build itself
         (self.tree / "qlib/Mod.qmod").unlink()
         (self.tree / "qlib/Mod.qmod").symlink_to(self.build / "qlib-qmod/Mod.qmod")
@@ -416,6 +417,7 @@ class BuildMatchTest(BuildMatchFixture):
         other = self.base / "other-build"
         stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
         for name in ("Mod", "Src"):
+            (other / ("qlib-qmod/%s.qmod" % name)).touch()
             (self.tree / ("qlib/%s.qmod" % name)).symlink_to(other / ("qlib-qmod/%s.qmod" % name))
         real_readlink = shutil.which("readlink")
         write_script(self.bin / "readlink", f"""\
@@ -423,7 +425,7 @@ class BuildMatchTest(BuildMatchFixture):
             [ $# -eq 1 ] || {{ echo "usage: readlink FILE" >&2; exit 1; }}
             exec '{real_readlink}' "$@"
             """)
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
 
     def test_an_installed_qcc_is_not_the_build_s(self):
         # a qcc whose qore has no libqore next to it (an installed one) names the commit of the libqore that its own
@@ -551,7 +553,38 @@ class BuildMatchTest(BuildMatchFixture):
         (other / "qlib-qmod/Other.qmod").touch()
         (self.tree / "qlib/Mod.qmod").unlink()
         (self.tree / "qlib/Mod.qmod").symlink_to(other / "qlib-qmod/Other.qmod")
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
+
+    def test_a_link_is_taken_by_the_file_that_it_resolves_to(self):
+        # the loader takes a link's target as the physical path of the file that it resolves to: a link to a qlib-qmod
+        # path that is itself a link to a module elsewhere (another tree's build) is followed, and checked
+        other = self.base / "other-build"
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
+        (other / "modules-elsewhere").mkdir()
+        (other / "modules-elsewhere/Mod.qmod").touch()
+        hop = self.base / "hop"
+        (hop / "qlib-qmod").mkdir(parents=True)
+        (hop / "qlib-qmod/Mod.qmod").symlink_to(other / "modules-elsewhere/Mod.qmod")
+        (self.tree / "qlib/Mod.qmod").symlink_to(hop / "qlib-qmod/Mod.qmod")
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
+
+    def test_a_link_s_path_in_qlib_is_its_own(self):
+        # the loader compares a link's target with its own path in qlib (qlib/Foo/Bar.qmod with qlib-qmod/Foo/Bar.qmod),
+        # not with that of a separated module of its name (qlib-qmod/Bar/Bar.qmod): such a link is followed, and checked
+        other = self.base / "other-build"
+        stand_in_build(other, self.base / "other-tree", OTHER_COMMIT)
+        (other / "qlib-qmod/Bar").mkdir()
+        (other / "qlib-qmod/Bar/Bar.qmod").touch()
+        (self.tree / "qlib/Foo").mkdir()
+        (self.tree / "qlib/Foo/Bar.qmod").symlink_to(other / "qlib-qmod/Bar/Bar.qmod")
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
+        # and a link deeper in qlib to its own path in a qlib-qmod directory is not checked
+        (self.tree / "qlib/Foo/Bar.qmod").unlink()
+        (other / "qlib-qmod/Foo/Sub").mkdir(parents=True)
+        (other / "qlib-qmod/Foo/Sub/Deep.qmod").touch()
+        (self.tree / "qlib/Foo/Sub").mkdir()
+        (self.tree / "qlib/Foo/Sub/Deep.qmod").symlink_to(other / "qlib-qmod/Foo/Sub/Deep.qmod")
+        self.assert_runs(self.run_runner())
 
     def test_links_that_the_loader_follows_are_checked(self):
         # the run's libqore is not in a build of this tree (the CMakeCache.txt next to it names another tree, or there
@@ -561,9 +594,9 @@ class BuildMatchTest(BuildMatchFixture):
         (self.tree / "qlib/Sep/Sep.qmod").unlink()
         (self.tree / "qlib/Sep/Sep.qmod").symlink_to(same / "qlib-qmod/Sep/Sep.qmod")
         self.loader_follows_links()
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % same)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % same.resolve())
         (self.build / "CMakeCache.txt").unlink()
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % same)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % same.resolve())
 
     def test_a_separated_module_s_link_into_another_build_is_refused(self):
         self.separated_module()
@@ -574,7 +607,7 @@ class BuildMatchTest(BuildMatchFixture):
         (other / "qlib-qmod/Sep/Sep.qmod").touch()
         (self.tree / "qlib/Sep/Sep.qmod").unlink()
         (self.tree / "qlib/Sep/Sep.qmod").symlink_to(other / "qlib-qmod/Sep/Sep.qmod")
-        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other.resolve())
 
     def test_a_file_removed_from_a_module_in_qlib_is_not_compared(self):
         # like any file that is gone (a limit that the comment of the check names): the module's directory, which an
