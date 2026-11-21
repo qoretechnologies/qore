@@ -319,6 +319,8 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "re-armed at the end of the process: ASYNC-IO-SHUTDOWN-ERROR", out, "the server stream's refused re-arm, "
             "after the deadline, is logged at the debug level: " + out);
         assertRegex("(^|\n)sse stream created: canceled: True\n", out, "the SSE stream is created: " + out);
+        assertNRegex("notification of the frame was not held", out, "the frame is processed after the deadline: "
+            + out);
         assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
     }
 

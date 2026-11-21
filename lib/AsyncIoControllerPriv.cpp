@@ -1336,6 +1336,8 @@ struct AsyncIoDebugHeldModuleCleanupWork {
     QoreThreadLock lock;
     //! the items held, with the dispatcher that they were queued to
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+    //! signaled when an item is held (dbgWaitHeldModuleCleanupWork())
+    QoreCondition held_cond;
     //! the tasks held (qore_dbg_hold_module_cleanup_task()), signaled when one is released
     QoreCondition task_cond;
     //! the number of tasks held that the module cleanup counts, and of those that it does not
@@ -1388,6 +1390,7 @@ bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
             return false;
         }
         state.held.emplace_back(this, std::move(item));
+        state.held_cond.broadcast();
     }
     // the module cleanup releases it when it waits for its work
     qore_dbg_module_cleanup_work_held();
@@ -1410,6 +1413,28 @@ void qore_dbg_module_cleanup_drain_point(int point) {
         AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(&xsink);
     } else {
         AsyncIoControllerPriv::dbgReleaseHeldStepResults(&xsink);
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(size_t count, const char* class_part, int64 timeout_ms) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+    AutoLocker al(state.lock);
+    while (true) {
+        size_t n = 0;
+        for (auto& i : state.held) {
+            if (!class_part || (i.second.spop_obj && strstr(i.second.spop_obj->getClassName(), class_part))) {
+                ++n;
+            }
+        }
+        if (n >= count) {
+            return true;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        state.held_cond.wait2(state.lock, (remaining_us + 999) / 1000);
     }
 }
 

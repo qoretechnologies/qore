@@ -163,7 +163,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     start() {
         # Pin @c m across this method: see @ref pcm_lock_pin
         Mutex m_pin = m;
-        AutoLock al(m);
+        # messages queued by deferLog() under the lock are emitted after it is released
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
 
         if (stopping) {
             throw "MONITOR-START-ERROR", "cannot start while the monitor is being stopped";
@@ -292,7 +295,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
-        AutoLock al(m);
+        # messages queued by deferLog() under the lock are emitted after it is released
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
         if (*hash<PollInfo> info = cache{name}) {
             # if the connection has already been added, then ignore
             if (info.conn == conn) {
@@ -348,7 +354,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             controller.cancelByOwner("pcm:" + name);
         }
         {
-            AutoLock al(m);
+            # messages queued by deferLog() under the lock are emitted after it is released
+            on_exit flushDeferredLogs();
+            m.lock();
+            on_exit m.unlock();
             addOrUpdateIntern(conn, other, start_pending);
         }
     }
@@ -526,8 +535,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
                 rethrow;
             }
-            log(LoggerLevel::DEBUG, "ping of connection %y not scheduled at the end of the process: %s: %s", name,
-                ex.err, ex.desc);
+            # the monitor lock is held: emitted when it is released
+            deferLog(LoggerLevel::DEBUG, sprintf("ping of connection %y not scheduled at the end of the process: %s: "
+                "%s", name, ex.err, ex.desc));
         }
     }
 

@@ -150,6 +150,11 @@ class Connector {
         # its deadline
         call_function("dbg_async_io_hold_module_cleanup_work", True, True);
         ws.send("again");
+        # the server's notification of the frame is held before the cleanup reaches its deadline (and cancels the
+        # server's connection)
+        if (!call_function("dbg_async_io_wait_held_module_cleanup_work", 1, 20s, "Http2PollOperation")) {
+            printf("the server's notification of the frame was not held\n");
+        }
         # the connections are kept until the cleanup cancels them at its deadline
         Keeper::keep = (server, ws);
 

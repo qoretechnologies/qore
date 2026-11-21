@@ -1985,14 +1985,33 @@ class WebSocketStreamProcessor {
             markClosedOnce();
             return;
         }
-        AutoLock al(close_lock);
-        # the client's close frame may have arrived meanwhile
-        if (closed) {
-            return;
+        *hash<ExceptionInfo> refused;
+        {
+            AutoLock al(close_lock);
+            # the client's close frame may have arrived meanwhile
+            if (closed) {
+                return;
+            }
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
+                    sub () { self.handleCloseTimer(); });
+            } catch (hash<ExceptionInfo> ex) {
+                # at the end of the process, the work of the module cleanup cannot add timers after its deadline
+                # (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream is ended
+                # at once, as without a close timeout (qore#7027)
+                if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                    rethrow;
+                }
+                refused = ex;
+            }
         }
-        AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-        close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
-            sub () { self.handleCloseTimer(); });
+        if (refused) {
+            handler.logDebug("H2/H3 WebSocket close timer not armed at the end of the process: %s: %s", refused.err,
+                refused.desc);
+            endStream(ctx);
+            markClosedOnce();
+        }
     }
 
     #! Ends the stream when the client has not answered the server's close frame within the close timeout
