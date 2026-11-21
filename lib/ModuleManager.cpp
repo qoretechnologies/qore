@@ -71,6 +71,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <climits>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -915,6 +916,303 @@ bool qore_aot_read_module_depfile(const std::string& qmod, std::vector<std::stri
 #endif
 }
 
+#ifndef _Q_WINDOWS
+//! Returns the physical path of a file or directory, or an empty string if it does not exist
+static std::string qore_module_physical_path(const std::string& path) {
+    std::unique_ptr<char, decltype(&free)> resolved(realpath(path.c_str(), nullptr), &free);
+    return resolved ? std::string(resolved.get()) : std::string();
+}
+
+namespace {
+//! The CMake build tree that this libqore was built in, if it is in one (see qore_own_build_tree())
+struct QoreOwnBuildTree {
+    //! the physical path of the build directory, which holds libqore and its \c qlib-qmod directory, or empty
+    std::string build_dir;
+    //! the physical path of the \c qlib directory of the source tree that the build was configured from, or empty
+    std::string source_qlib;
+};
+}
+
+//! The physical path of the directory of this libqore, set by qore_init_libqore_dir() (see qore_own_build_tree())
+/** Allocated once and never freed, so that a module loaded while static objects are destroyed at exit still finds
+    it
+*/
+static const std::string* qore_libqore_dir = nullptr;
+
+//! Sets the physical path of the directory of this libqore; called when the library is initialized
+/** The path that the dynamic linker gives for the library can be relative (a library found through a relative
+    \c LD_LIBRARY_PATH entry on Linux): it is resolved when the library is initialized, before the program can
+    change its working directory, as the module directories are (see QoreModuleManager::setTrustedModuleDirs()).
+
+    @param lib_path the physical path of this libqore if the caller has it (qore_init() resolves it for its check of
+    duplicate libraries), or nullptr: dladdr() is then called, which costs as much as the rest of the module manager's
+    initialization with glibc, whose dladdr() reads every dynamic symbol of the library
+*/
+static void qore_init_libqore_dir(const char* lib_path) {
+    // set by an earlier initialization of the library
+    if (qore_libqore_dir) {
+        return;
+    }
+    std::string lib;
+    if (lib_path && *lib_path) {
+        // canonical unless realpath() failed for it
+        lib = *lib_path == '/' ? std::string(lib_path) : qore_module_physical_path(lib_path);
+    } else {
+        Dl_info info;
+        if (!dladdr(reinterpret_cast<void*>(&qore_init_libqore_dir), &info) || !info.dli_fname) {
+            return;
+        }
+        lib = qore_module_physical_path(info.dli_fname);
+    }
+    size_t sep = lib.rfind('/');
+    if (sep != std::string::npos && sep) {
+        qore_libqore_dir = new std::string(lib.substr(0, sep));
+    }
+}
+
+//! Returns the CMake build tree that this libqore was built in
+/** A libqore in a build tree is in the build directory, which holds the \c CMakeCache.txt that names the source tree
+    the build was configured from (\c CMAKE_HOME_DIRECTORY).  An installed libqore, or one copied elsewhere, has no
+    \c CMakeCache.txt next to it and is in no build tree; nor is one that a multi-configuration generator puts in a
+    directory of each configuration (<tt>build/Release/</tt>).  The \c CMakeCache.txt is read once per process, at
+    the first AOT module that is a symbolic link or the first missing AOT module path of a module search (see
+    qore_own_build_qmod() and qore_find_build_qmod()).
+*/
+static const QoreOwnBuildTree& qore_own_build_tree() {
+    // allocated once and never freed (see qore_libqore_dir)
+    static const QoreOwnBuildTree* tree = []() -> const QoreOwnBuildTree* {
+        // released when it is returned, so that it is freed if the work below throws
+        std::unique_ptr<QoreOwnBuildTree> rv(new QoreOwnBuildTree);
+        if (!qore_libqore_dir) {
+            return rv.release();
+        }
+        // read without blocking on a FIFO with the name of the file, and not inherited by a child process
+        std::string cache_path = *qore_libqore_dir + "/CMakeCache.txt";
+        int fd = open(cache_path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) {
+            return rv.release();
+        }
+        // a deleter of its own: decltype(&fclose) carries attributes of fclose() that GCC warns about
+        struct FileCloser {
+            void operator()(FILE* f) const {
+                fclose(f);
+            }
+        };
+        struct stat sb;
+        std::unique_ptr<FILE, FileCloser> cache;
+        if (!fstat(fd, &sb) && S_ISREG(sb.st_mode)) {
+            cache.reset(fdopen(fd, "r"));
+        }
+        if (!cache) {
+            close(fd);
+            return rv.release();
+        }
+        static const char home_key[] = "CMAKE_HOME_DIRECTORY:INTERNAL=";
+        static const size_t home_key_len = sizeof(home_key) - 1;
+        // the line buffer that getline() allocates
+        struct LineBuffer {
+            char* buf = nullptr;
+            size_t cap = 0;
+            ~LineBuffer() {
+                free(buf);
+            }
+        } line;
+        std::string home;
+        ssize_t len;
+        while ((len = getline(&line.buf, &line.cap, cache.get())) >= 0) {
+            if (static_cast<size_t>(len) > home_key_len && !strncmp(line.buf, home_key, home_key_len)) {
+                home.assign(line.buf + home_key_len, len - home_key_len);
+                while (!home.empty() && (home.back() == '\n' || home.back() == '\r')) {
+                    home.pop_back();
+                }
+                break;
+            }
+        }
+        if (home.empty()) {
+            return rv.release();
+        }
+        std::string source_qlib = qore_module_physical_path(home + "/qlib");
+        if (source_qlib.empty()) {
+            return rv.release();
+        }
+        rv->build_dir = *qore_libqore_dir;
+        rv->source_qlib = std::move(source_qlib);
+        return rv.release();
+    }();
+    return *tree;
+}
+
+//! How an AOT module found in the module path relates to the build tree of this libqore
+enum class QoreBuildQmodLink {
+    //! the module is not a link into another build of this libqore's source tree: it is used as found
+    USE,
+    //! the module is a link into another build: this build's module is used instead
+    OWN,
+    //! the module is a link into another build, and this build has no such module: it is not used
+    SKIP,
+};
+
+//! Returns which AOT module of a build tree the loader uses for one that it found in the module path (qore#7030)
+/** Each build of a source tree links the AOT modules that it builds into the source \c qlib directory
+    (\c QORE_AOT_LINK_SOURCE_MODULES), where the in-tree tests find them first: \c qlib/<name>.qmod, or
+    \c qlib/<name>/<name>.qmod for a module in a directory of its own, links to the same path in the build's
+    \c qlib-qmod directory.  The links are shared by all the builds of the tree (\c build/ and \c build-debug/, for
+    example), and each build points them to its own modules, so they lead to the build that was built last; modules
+    compiled against another libqore and other binary modules fail to load, or run code compiled for another build.
+
+    So when this libqore is in a build tree, a link in its source tree's \c qlib directory that leads elsewhere than
+    to its own module is replaced by the module at the same path in its own \c qlib-qmod directory: a process loads
+    only the modules of the build of its libqore, whichever build linked them last.  If its build has no such module
+    (one that it does not build, or a build without AOT modules), the link is not used, and the loader goes on as if
+    it were not there (it finds the module's source in the same directory).  A module that is not a symbolic link, a
+    link outside the source tree's \c qlib directory (that of another source tree, such as that of a module built
+    outside the Qore source tree), and any module loaded by an installed libqore are used as found.
+
+    @param qmod_path the path of an AOT module found in the module path
+    @param own_path set to the physical path of this build's module for QoreBuildQmodLink::OWN
+
+    @return how the module is used
+*/
+static QoreBuildQmodLink qore_own_build_qmod(const char* qmod_path, std::string& own_path) {
+    // an AOT module (no other file in the module path is linked by a build)
+    size_t qmod_len = strlen(qmod_path);
+    if (qmod_len <= 5 || strcmp(qmod_path + qmod_len - 5, ".qmod")) {
+        return QoreBuildQmodLink::USE;
+    }
+    struct stat lsb;
+    if (lstat(qmod_path, &lsb) || !S_ISLNK(lsb.st_mode)) {
+        return QoreBuildQmodLink::USE;
+    }
+    const QoreOwnBuildTree& tree = qore_own_build_tree();
+    if (tree.build_dir.empty()) {
+        return QoreBuildQmodLink::USE;
+    }
+    // the directory of the link, which must be the source qlib directory or one below it
+    std::string path = qmod_path;
+    size_t sep = path.rfind('/');
+    std::string dir = sep == std::string::npos ? std::string(".") : (sep ? path.substr(0, sep) : std::string("/"));
+    std::string base = sep == std::string::npos ? path : path.substr(sep + 1);
+    std::string link_dir = qore_module_physical_path(dir);
+    if (link_dir.empty()) {
+        return QoreBuildQmodLink::USE;
+    }
+    std::string rel;
+    if (link_dir != tree.source_qlib) {
+        if (link_dir.size() <= tree.source_qlib.size()
+                || link_dir.compare(0, tree.source_qlib.size(), tree.source_qlib)
+                || link_dir[tree.source_qlib.size()] != '/') {
+            return QoreBuildQmodLink::USE;
+        }
+        rel = link_dir.substr(tree.source_qlib.size());
+    }
+    rel += "/";
+    rel += base;
+    // only a link of a build: one to the module at the same path in the qlib-qmod directory of a build
+    std::string target = qore_module_physical_path(path);
+    if (target.empty()) {
+        // a link whose target is gone (the other build was removed): its target as the link names it, so that this
+        // build's module is used
+        char buf[PATH_MAX];
+        ssize_t len = readlink(qmod_path, buf, sizeof(buf));
+        if (len <= 0 || static_cast<size_t>(len) >= sizeof(buf)) {
+            return QoreBuildQmodLink::USE;
+        }
+        target.assign(buf, len);
+        if (target[0] != '/') {
+            target = link_dir + "/" + target;
+        }
+    }
+    static const char qmod_dir[] = "/qlib-qmod";
+    std::string build_rel = qmod_dir + rel;
+    if (target.size() <= build_rel.size()
+            || target.compare(target.size() - build_rel.size(), std::string::npos, build_rel)) {
+        return QoreBuildQmodLink::USE;
+    }
+    std::string own = qore_module_physical_path(tree.build_dir + qmod_dir + rel);
+    if (!own.empty() && own == target) {
+        return QoreBuildQmodLink::USE;
+    }
+    struct stat sb;
+    if (own.empty() || stat(own.c_str(), &sb) || !S_ISREG(sb.st_mode)) {
+        printd(1, "qore_own_build_qmod() '%s' links to '%s', not into this libqore's build '%s', which has no such "
+            "module: not using it\n", qmod_path, target.c_str(), tree.build_dir.c_str());
+        return QoreBuildQmodLink::SKIP;
+    }
+    printd(1, "qore_own_build_qmod() '%s' links to '%s', not into this libqore's build '%s': using '%s'\n",
+        qmod_path, target.c_str(), tree.build_dir.c_str(), own.c_str());
+    own_path = std::move(own);
+    return QoreBuildQmodLink::OWN;
+}
+#endif
+
+//! Applies qore_own_build_qmod() to an AOT module found in the module path
+/** @param path the path of the module found; replaced by the path of this build's module when the module is a link
+    into another build
+    @param found_path set to the path of the module found when \a path is replaced, else left empty: whether the
+    module is library code is decided by the path where it was found, which is in the module path (a link in the
+    source qlib directory), while this build's module is in its qlib-qmod directory, which the module path need not
+    have (see QoreModuleManager::loadBinaryModuleFromPath())
+
+    @return true if the module is not to be used (a link into another build, which this build does not have)
+*/
+static bool qore_skip_other_build_qmod(QoreString& path, QoreString& found_path) {
+#ifdef _Q_WINDOWS
+    return false;
+#else
+    std::string own;
+    switch (qore_own_build_qmod(path.c_str(), own)) {
+        case QoreBuildQmodLink::OWN:
+            found_path = path;
+            path.set(own.c_str());
+            return false;
+        case QoreBuildQmodLink::SKIP:
+            return true;
+        case QoreBuildQmodLink::USE:
+            break;
+    }
+    return false;
+#endif
+}
+
+//! Returns true if the loader uses an AOT module for a path in a module directory, applying qore_own_build_qmod()
+/** @param path the path of the module; replaced by the path of this build's module when it is a link into another
+    build
+    @param found_path set as by qore_skip_other_build_qmod()
+    @param sb set to the status of the module used
+
+    @return true if a module is used: a file at \a path, or this build's module for a link into another build, also
+    when the target of the link is gone (the other build was removed); false if there is none, or if the link is not
+    used (see qore_own_build_qmod())
+*/
+static bool qore_find_build_qmod(QoreString& path, QoreString& found_path, struct stat& sb) {
+    if (!stat(path.c_str(), &sb)) {
+        if (qore_skip_other_build_qmod(path, found_path)) {
+            return false;
+        }
+        return found_path.empty() || !stat(path.c_str(), &sb);
+    }
+#ifdef _Q_WINDOWS
+    return false;
+#else
+    // a link whose target is gone is looked at only by a libqore in a build tree, which has links in its source tree:
+    // otherwise the search looks no further than stat() for a path that does not exist
+    // only an AOT module path (no other file in the module path is linked by a build)
+    size_t len = path.size();
+    if (len <= 5 || strcmp(path.c_str() + len - 5, ".qmod")) {
+        return false;
+    }
+    struct stat lsb;
+    if (qore_own_build_tree().build_dir.empty() || lstat(path.c_str(), &lsb) || !S_ISLNK(lsb.st_mode)) {
+        return false;
+    }
+    if (qore_skip_other_build_qmod(path, found_path) || found_path.empty()) {
+        found_path.clear();
+        return false;
+    }
+    return !stat(path.c_str(), &sb);
+#endif
+}
+
 //! Returns true if a source of an AOT module of a build tree has changed since the module was compiled
 /** A build tree links the AOT modules it builds into the source \c qlib directory (\c QORE_AOT_LINK_SOURCE_MODULES),
     where the in-tree tests find them before the module sources, and the test runner puts the directory of the built
@@ -1229,7 +1527,9 @@ std::string QoreModuleManager::findModuleFileUnlocked(const char* name, QoreProg
                 } else {
                     str.concat(".qmod");
                 }
-                if (exists(str)) {
+                // the module that loadModuleIntern() uses: this build's for a link into another build (qore#7030)
+                QoreString found_link;
+                if (qore_find_build_qmod(str, found_link, sb) && S_ISREG(sb.st_mode)) {
                     return str.c_str();
                 }
             }
@@ -2564,7 +2864,7 @@ void ModuleManager::addAutoModuleDirList(const char* strlist) {
     assert(false);
 }
 
-void QoreModuleManager::init(bool se) {
+void QoreModuleManager::init(bool se, const char* lib_path) {
     // setup possible user module keys
     QoreModuleDefContext::vset.insert("desc");
     QoreModuleDefContext::vset.insert("version");
@@ -2584,6 +2884,10 @@ void QoreModuleManager::init(bool se) {
     }
 
     setTrustedModuleDirs();
+#ifndef _Q_WINDOWS
+    // the build tree of this libqore, for the AOT modules linked into its source tree (qore#7030)
+    qore_init_libqore_dir(lib_path);
+#endif
 }
 
 void QoreModuleManager::setTrustedModuleDirs() {
@@ -3541,6 +3845,29 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             QoreString source_path;
             QoreString separated_path;
             bool source_available = qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path);
+            // a link into another build of the source tree: this build's module is loaded, as when the link is found
+            // in the module path, or its source if this build has none; without a source, it is not loaded
+            // (qore#7030)
+            QoreString own_build_path(raw_path);
+            QoreString found_link;
+            if (qore_skip_other_build_qmod(own_build_path, found_link)) {
+                if (!source_available) {
+                    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(raw_path), "AOT module '%s' "
+                        "for feature '%s' links into another build of the source tree than that of this Qore "
+                        "library, which has no such module, and there is no source module next to it to load "
+                        "instead", raw_path, name);
+                    return nullptr;
+                }
+                const char* src = separated_path.size() ? separated_path.c_str() : source_path.c_str();
+                mi = separated_path.size()
+                    ? loadSeparatedModule(xsink, wsink, src, name, pgm, reexport, pholder.release(), path_pgm,
+                        load_opt, warning_mask)
+                    : loadUserModuleFromPath(xsink, wsink, src, name, pgm, reexport, pholder.release(), path_pgm,
+                        load_opt, warning_mask);
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask,
+                    unlock_lock) ? nullptr : mi;
+            }
+            raw_path = own_build_path.c_str();
             // an AOT module of a build tree named by its path is out of date as when it is found in the module path
             // (see load_source_for_stale_aot_module below): when one of its sources (an included file among them) has
             // changed, its source module is loaded instead, with the same warning
@@ -3596,7 +3923,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             ExceptionSink binary_xsink;
             mi = loadBinaryModuleFromPath(binary_xsink, raw_path, name, reexport, pholder.release(), p,
                 load_opt, mod_desc_func, source_available,
-                &wsink == &xsink ? nullptr : &wsink, warning_mask);
+                &wsink == &xsink ? nullptr : &wsink, warning_mask, found_link.empty() ? nullptr : found_link.c_str());
             if (binary_xsink) {
                 if (qore_binary_load_error_can_fallback_to_source(binary_xsink) && source_available) {
                     if (separated_path.size()) {
@@ -3798,7 +4125,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
 
             //printd(5, "ModuleManager::loadModule(%s) trying binary module: %s\n", name, str.c_str());
-            if (!stat(str.c_str(), &sb)) {
+            // a link into another build of the source tree: this build's module, or none (qore#7030)
+            QoreString found_link;
+            if (qore_find_build_qmod(str, found_link, sb)) {
                 if (mpgm) {
                     // `mpgm` means the caller needs to inject the module INTO a
                     // specific Program container (loadApplyToUserModule and
@@ -3833,7 +4162,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
-                    &wsink == &xsink ? nullptr : &wsink, warning_mask);
+                    &wsink == &xsink ? nullptr : &wsink, warning_mask,
+                    found_link.empty() ? nullptr : found_link.c_str());
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -3877,7 +4207,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             } else {
                 str.concat(".qmod");
             }
-            if (!stat(str.c_str(), &sb)) {
+            // as above (qore#7030)
+            QoreString found_link;
+            if (qore_find_build_qmod(str, found_link, sb)) {
                 if (mpgm) {
                     // As above: `mpgm` means the caller wants to inject
                     // into a specific Program container, which binary
@@ -3906,7 +4238,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
-                    &wsink == &xsink ? nullptr : &wsink, warning_mask);
+                    &wsink == &xsink ? nullptr : &wsink, warning_mask,
+                    found_link.empty() ? nullptr : found_link.c_str());
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -4907,7 +5240,10 @@ void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* p
     }
     auto add = [&files, missing, &cwd](const QoreString& path) {
         struct stat sb;
-        bool found = !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
+        // the module that the loader uses for a link into another build of the source tree (qore#7030)
+        QoreString used(path);
+        QoreString found_link;
+        bool found = qore_find_build_qmod(used, found_link, sb) && S_ISREG(sb.st_mode);
         if (missing) {
             if (!found) {
                 // an absolute path
@@ -4920,8 +5256,8 @@ void QoreModuleManager::getModuleCandidatePaths(const char* name, QoreProgram* p
             return;
         }
         if (found) {
-            char* resolved = realpath(path.c_str(), nullptr);
-            files.emplace_back(resolved ? resolved : path.c_str());
+            char* resolved = realpath(used.c_str(), nullptr);
+            files.emplace_back(resolved ? resolved : used.c_str());
             free(resolved);
         }
     };
@@ -6107,7 +6443,7 @@ static int qore_check_module_file_integrity(const char* path, QoreString& err) {
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
         const char* feature, bool reexport, QoreProgram* mpgm, QoreProgram* path_pgm,
         unsigned load_opt, qore_binary_module_desc_t mod_desc, bool source_available, ExceptionSink* wsink,
-        int warning_mask) {
+        int warning_mask, const char* found_path) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     QoreModuleInfo mod_info;
 
@@ -6124,9 +6460,12 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
 
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
+    // a module that the loader uses in place of the one it found (this build's module for a link into another build,
+    // qore#7030) is library code if the module found is: it is chosen by the build of the library, not by the code
+    // loading it, and its path is canonical
     std::string trusted_path;
-    const bool trusted = isTrustedModulePath(path, &trusted_path);
-    if (trusted) {
+    const bool trusted = isTrustedModulePath(found_path ? found_path : path, &trusted_path);
+    if (trusted && !found_path) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();
     }

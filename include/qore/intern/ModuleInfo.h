@@ -698,7 +698,12 @@ public:
     DLLLOCAL ~QoreModuleManager() {
     }
 
-    DLLLOCAL void init(bool se);
+    //! Initializes the module manager
+    /** @param se show module errors
+        @param lib_path the physical path of this libqore if the caller has resolved it (see qore_init()), else
+        nullptr; used to find the build tree of the library (qore#7030)
+    */
+    DLLLOCAL void init(bool se, const char* lib_path = nullptr);
     DLLLOCAL void delUser();
     DLLLOCAL void cleanup();
 
@@ -1490,12 +1495,15 @@ protected:
         @param wsink the warning sink, if warnings can be raised in it; not the caller's exception sink, as a
         warning raised there would be an error
         @param warning_mask the warnings enabled in \a wsink
+        @param found_path the path where the module was found when the loader loads another file for it: the module
+        of the build of this library for a link into another build of its source tree (qore#7030); whether the
+        module is library code is decided by this path (see isTrustedModulePath())
     */
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
             QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             qore_binary_module_desc_t mod_desc = nullptr, bool source_available = false,
-            ExceptionSink* wsink = nullptr, int warning_mask = 0);
+            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr);
 
     //! Returns the first module request that can be loaded now, from the %try-module requests that failed
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
