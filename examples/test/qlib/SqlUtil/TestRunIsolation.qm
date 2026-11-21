@@ -145,8 +145,9 @@ public class TestRun {
 
     #! Returns a text, such as an exception's description, with the passwords of the datasource strings in it masked
     /** A datasource string's password is between its user's \c "/" and the last \c "@" before its database; a
-        message about a datasource string, such as the description of \c DATASOURCE-PARSE-ERROR, quotes the whole
-        string, and is printed where others can read it (CI job logs)
+        message about a datasource string can quote the whole string (Qore's own messages do not since qore#6961,
+        but those of drivers, servers or older Qore versions can), and is printed where others can read it (CI job
+        logs)
 
         @param text the text
         @param connstrs datasource strings whose passwords are masked wherever they are in the text, also when the

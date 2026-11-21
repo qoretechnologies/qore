@@ -4125,7 +4125,8 @@ class HttpClientIoTest inherits QUnit::Test {
         }
         string got = sprintf("%s: %s", err.err, err.desc);
         assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": got " + got);
-        assertEq("connection establishment timed out", err.desc, label + ": got " + got);
+        assertRegex("^connection establishment timed out: the connection to [^ ]+ was not established before the "
+            "time of the request ran out \\(after a wait of [0-9]+ ms\\)", err.desc, label + ": got " + got);
     }
 
     #! Tests the "notification on close" pattern: submit async notifications while

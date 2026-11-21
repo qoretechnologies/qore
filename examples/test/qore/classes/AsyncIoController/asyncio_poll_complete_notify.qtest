@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child qore processes started without an execution mode
+# test-platform: macos - the async I/O thread and its callback workers with socket operations
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoPollCompleteNotifyTest
+
+#! The AsyncIoController tells an operation that a step pushed items only if it has an onPollComplete() method
+/** A PollPipeline pushes items to its queues (addPushQueue()); the controller called onPollComplete() on it after
+    such a step, although PollPipeline has no such method, and printed METHOD-DOES-NOT-EXIST as an unhandled
+    exception for each one (qore#6804).  Each check runs a child process that runs a pipeline that pushes two lines
+    to a queue with AsyncIoController::exec(), and checks its output and its standard error output.
+*/
+class AsyncIoPollCompleteNotifyTest inherits QUnit::Test {
+    private {
+        #! The child script; its argument selects the operation that runs the pipeline
+        const ChildScript = "%%new-style
+%%require-types
+%%strict-args
+
+# a pipeline that is told when a step pushed items
+class NotifiedPipeline inherits PollPipeline {
+    public {
+        Queue calls();
+    }
+
+    constructor(Socket sock) : PollPipeline(sock) {
+    }
+
+    onPollComplete() {
+        calls.push(1);
+    }
+}
+
+sub main() {
+    string mode = ARGV[0];
+    # a server that sends two lines, and then waits for the client to close the connection
+    Socket listener();
+    listener.bind(\"127.0.0.1:0\");
+    listener.listen(1);
+    int port = listener.getSocketInfo().port;
+    Counter server_done(1);
+    background sub () {
+        on_exit server_done.dec();
+        Socket c = listener.accept(30s);
+        c.send(\"line one\\nline two\\n\");
+        try {
+            c.recv(1, 30s);
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }();
+
+    Socket sock();
+    bool notified = mode == \"notified\" || mode == \"delegating-notified\";
+    PollPipeline p = notified ? new NotifiedPipeline(sock) : new PollPipeline(sock);
+    int qid = p.addQueue();
+    p.addConnect(sprintf(\"127.0.0.1:%%d\", port));
+    p.addRecvUntilBytes(\"\\n\");
+    p.addPushQueue(qid);
+    p.addRecvUntilBytes(\"\\n\");
+    p.addPushQueue(qid);
+
+    *hash<auto> ex;
+    if (mode == \"delegating\" || mode == \"delegating-notified\") {
+        # a DelegatingPollOperation delivers its result to its completion callback, so it is submitted
+        Queue done();
+        DelegatingPollOperation op(p, sub (auto result) { done.push(result); });
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            \"sock\": sock,
+            \"spop\": op,
+            \"owner\": \"poll-complete-test\",
+            \"to\": 30s,
+        });
+        # a timeout fails a child whose operation never ends
+        auto result = done.get(60s);
+        ex = result.ex;
+    } else {
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            \"sock\": sock,
+            \"spop\": p,
+            \"owner\": \"poll-complete-test\",
+            \"to\": 30s,
+        });
+        ex = result.ex;
+    }
+    if (ex) {
+        printf(\"error: %%s: %%s\\n\", ex.err, ex.desc);
+    }
+    # the notifications of the operation, which the I/O thread queues before it delivers the result, have run (and
+    # reported any error)
+    AsyncIoController::flushCallbacks();
+    while (exists (auto item = p.getQueueItem(qid))) {
+        printf(\"item: %%s\", item);
+    }
+    if (notified) {
+        # the notification runs on a callback worker; a timeout fails a child that is never told
+        NotifiedPipeline np = cast<NotifiedPipeline>(p);
+        np.calls.get(60s);
+        print(\"notified\\n\");
+    }
+    sock.close();
+    server_done.waitForZero(30s);
+    print(\"done\\n\");
+}
+
+main();
+";
+    }
+
+    public {
+        TmpDir tmp;
+        string script;
+        string qore_bin;
+    }
+
+    constructor() : Test("AsyncIoPollCompleteNotifyTest", "1.0") {
+        tmp = new TmpDir("asyncio-poll-complete-");
+        script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ChildScript));
+        f.close();
+        qore_bin = TestInterpreter::qore_interpreter();
+
+        addTestCase("a PollPipeline is not told that a step pushed items", \testPipeline());
+        addTestCase("a DelegatingPollOperation of a PollPipeline does not tell it", \testDelegating());
+        addTestCase("a PollPipeline with onPollComplete() is told", \testNotified());
+        addTestCase("a DelegatingPollOperation of a PollPipeline with onPollComplete() tells it",
+            \testDelegatingNotified());
+        set_return_value(main());
+    }
+
+    #! Runs the child script in the given mode; returns its standard output and error output
+    private hash<auto> run(string mode) {
+        string err_file = sprintf("%s/%s.err", tmp.path, mode);
+        string out = backquote(sprintf("%s %s %s 2>%s", qore_bin, script, mode, err_file));
+        return {
+            "out": out,
+            "err": ReadOnlyFile::readTextFile(err_file),
+        };
+    }
+
+    #! Checks that the pipeline pushed both lines and that nothing went to stderr; returns the standard output
+    private string check(string mode) {
+        hash<auto> rv = run(mode);
+        assertEq(-1, rv.err.find("onPollComplete"), sprintf("%s: no onPollComplete() error on stderr: %y", mode,
+            rv.err));
+        assertEq(-1, rv.err.find("METHOD-DOES-NOT-EXIST"), sprintf("%s: no METHOD-DOES-NOT-EXIST on stderr: %y", mode,
+            rv.err));
+        assertEq("", rv.err, sprintf("%s: nothing on stderr", mode));
+        assertTrue(rv.out.find("item: line one\nitem: line two\n") >= 0, sprintf("%s: both lines are pushed: %y",
+            mode, rv.out));
+        assertTrue(rv.out =~ /done\n$/, sprintf("%s: the script ended: %y", mode, rv.out));
+        return rv.out;
+    }
+
+    testPipeline() {
+        check("plain");
+    }
+
+    testDelegating() {
+        check("delegating");
+    }
+
+    testNotified() {
+        string out = check("notified");
+        assertTrue(out.find("notified\n") >= 0, sprintf("onPollComplete() is called: %y", out));
+    }
+
+    testDelegatingNotified() {
+        string out = check("delegating-notified");
+        assertTrue(out.find("notified\n") >= 0, sprintf("onPollComplete() is forwarded: %y", out));
+    }
+}

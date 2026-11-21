@@ -46,17 +46,20 @@ namespace Qore::SQL;
 
     @return a @ref datasource_hash "datasource hash" of the components of a datasource string
 
-    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is not shown in the exception, as it can contain a password
+    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc), or the string contains a NUL character (since %Qore 3.0); the string is not shown in the exception, as it can contain a user name, a password and a database name; only its driver name is shown (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding"; the string is not shown in the exception (since %Qore 3.0)
+
+    @note the string is converted to the @ref default_encoding "default encoding", in which the strings of the hash are returned (since %Qore 3.0)
+    @note a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+    text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+    messages (the password and the database name never are); always give the driver prefix (ex:
+    <tt>oracle:scott/tiger\@orcl</tt>)
 
     @deprecated use parse_datasource() instead; camel-case function names were deprecated in %Qore 0.8.12
  */
 hash parseDatasource(string ds) [flags=RET_VALUE_ONLY,DEPRECATED] {
-    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
-    if (q_check_secret_no_nul(ds->c_str(), ds->size(), "datasource string", "datasource strings",
-            "DATASOURCE-PARSE-ERROR", xsink)) {
-        return QoreValue();
-    }
-    return parseDatasource(ds->c_str(), xsink);
+    // converted to the default encoding and checked for a NUL character first
+    return q_parse_datasource_string(*ds, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -172,21 +175,27 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
     @endcode
 
     @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected
-    character, an invalid port, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is
-    not shown in the exception, as it can contain a password
+    character, an invalid port, etc), or the string contains a NUL character (since %Qore 3.0); the string is not
+    shown in the exception, as it can contain a user name, a password and a database name; only its driver name is
+    shown (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding";
+    the string is not shown in the exception (since %Qore 3.0)
 
-    @note similar to parseDatasource() except uses the standard function naming scheme (i.e. \c "names_like_this()"
-    instead of \c "camelCase()") and does not have a @ref NOOP variant
+    @note
+    - the string is converted to the @ref default_encoding "default encoding", in which the strings of the hash are
+      returned, as a @ref Qore::SQL::Datasource "Datasource" keeps its connection values in it (since %Qore 3.0)
+    - similar to parseDatasource() except uses the standard function naming scheme (i.e. \c "names_like_this()"
+      instead of \c "camelCase()") and does not have a @ref NOOP variant
+    - a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+      text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+      messages (the password and the database name never are); always give the driver prefix (ex:
+      <tt>oracle:scott/tiger\@orcl</tt>)
 
     @since %Qore 0.8.6
 */
 hash<auto> parse_datasource(string datasource) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
-    if (q_check_secret_no_nul(datasource->c_str(), datasource->size(), "datasource string", "datasource strings",
-            "DATASOURCE-PARSE-ERROR", xsink)) {
-        return QoreValue();
-    }
-    return parseDatasource(datasource->getBuffer(), xsink);
+    // converted to the default encoding and checked for a NUL character first
+    return q_parse_datasource_string(*datasource, xsink);
 }
 
 //! Returns a list of strings of DBI drivers currently loaded or @ref nothing if no drivers are loaded

@@ -463,8 +463,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         return GoogleDataProviderBase::getInputSchemaMap(api, api_info);
     }
 
-    #! Creates the input schema map for the given API
-    static hash<string, AbstractDataProviderType> getInputSchemaMap(string api, hash<auto> api_info) {
+    #! Creates the input schema map for the given API (process-wide: only this class's code changes it, issue #6838)
+    private:internal static hash<string, AbstractDataProviderType> getInputSchemaMap(string api,
+            hash<auto> api_info) {
         # create types from the schema
         TypeResolverHelper unresolved();
         hash<string, AbstractDataProviderType> schema = map {
@@ -478,8 +479,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         return input_schema_map{api} = schema;
     }
 
-    #! Creates the output schema map for the given API
-    static hash<string, AbstractDataProviderType> getOutputSchemaMap(string api, hash<auto> api_info) {
+    #! Creates the output schema map for the given API (process-wide: only this class's code changes it, issue #6838)
+    private:internal static hash<string, AbstractDataProviderType> getOutputSchemaMap(string api,
+            hash<auto> api_info) {
         # create types from the schema
         TypeResolverHelper unresolved();
         hash<string, AbstractDataProviderType> schema = map {

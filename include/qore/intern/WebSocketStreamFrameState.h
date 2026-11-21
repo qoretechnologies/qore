@@ -238,6 +238,10 @@ private:
     //! the size of the fragments received of the message being reassembled, checked against the maximum message
     //! size as they arrive (issue #5861)
     size_t fragment_bytes = 0;
+    //! the RSV bits of all the data frames of the message being received (continuation frames included), which the
+    //! connection's code checks against the negotiated extensions; the extensions see only those of the first frame
+    //! (qore#6810)
+    uint8_t message_rsv = 0;
 
     size_t max_message_size = WS_DEFAULT_MAX_FRAME_SIZE;
     int messages_pushed = 0;
@@ -257,11 +261,13 @@ private:
     //! data frames passed to reassembler)
     DLLLOCAL void handleFrame(WsFrame& frame);
 
-    //! Pushes a message hash {type, data, rsv1?, rsv2?, rsv3?, code?, reason?} to msg_queue
+    //! Pushes a message hash {type, data, rsv1?, rsv2?, rsv3?, rsv_bits?, code?, reason?} to msg_queue
     /** For Text/Binary messages the rsv1/rsv2/rsv3 keys carry the RSV bits
         from the first frame of the (possibly fragmented) message — extension
         consumers (e.g. permessage-deflate) need them to decide whether to
-        decompress the payload.  For Close messages, code and reason are set.
+        decompress the payload — and \c rsv_bits the RSV bits of all its frames, in the positions of the first byte
+        of a frame (\c WebSocketUtil::WS_RSV1 etc.), which the connection's code checks against the negotiated
+        extensions (RFC 6455 section 5.2, qore#6810).  For Close messages, code and reason are set.
 
         All keys are simple — the hash shape is compatible with the H1 async
         path for consistency with existing handler code.
@@ -271,9 +277,10 @@ private:
         @param rsv      RSV bits byte from the first frame (bit 2 = RSV1,
                         bit 1 = RSV2, bit 0 = RSV3) — only used for data frames
         @param code     close status code (Close only)
-        @param reason   close reason string (Close only) */
+        @param reason   close reason string (Close only)
+        @param all_rsv  the RSV bits of all the frames of the message, as \a rsv — only used for data frames */
     DLLLOCAL void pushMessage(MessageKind kind, BinaryNode* payload /* ref transferred */,
-        uint8_t rsv = 0, uint16_t code = 0, const char* reason = nullptr);
+        uint8_t rsv = 0, uint16_t code = 0, const char* reason = nullptr, uint8_t all_rsv = 0);
 
     //! Transitions to error state with the given message
     DLLLOCAL void setError(const std::string& msg, uint16_t wire_code = WSCC_ProtocolError);

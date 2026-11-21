@@ -360,10 +360,36 @@ class WebSocketMessageTooBigTest inherits QUnit::Test {
             "close code");
     }
 
+    #! Runs the heartbeats held by the timer hook one at a time until one finds the stream's send buffer full
+    /** The callbacks of the timers that fire are held (\c dbg_async_io_hold_timer_callbacks()), so a heartbeat runs
+        only when the case releases it: the server's close for missed heartbeats, two heartbeat intervals after the
+        first PING that it skips, cannot come before the client's close frame however late the client is.  Before,
+        the client's close frame had to reach the server within those two intervals, a budget that a loaded machine
+        can exceed: the server closed the connection without a close code instead (1005), and the case failed.
+        Another timer whose callback is held runs as well.
+
+        @return the heartbeat message that reports the PING not sent
+    */
+    private string holdHeartbeats() {
+        while (True) {
+            assertTrue(call_function("dbg_async_io_wait_held_timer_callbacks", 1, HangGuard), "a timer fires");
+            # the callbacks have run when this returns
+            call_function("dbg_async_io_release_held_timer_callbacks");
+            while (heartbeat_log.messages.size()) {
+                string msg = heartbeat_log.messages.get();
+                if (msg =~ /PING not sent/) {
+                    return msg;
+                }
+            }
+        }
+    }
+
     #! A heartbeat that finds the stream's send buffer full does not close the connection
     /** A raw HTTP/2 WebSocket client asks for a message far over the stream's backpressure threshold and does not read
         it, so the server's stream send buffer stays full when the heartbeat is due; the connection stays open: the
-        server reads the client's close frame, reports its code and answers it after the message.
+        server reads the client's close frame, reports its code and answers it after the message.  When the client
+        answers, the case runs the heartbeats itself in a debug build (see holdHeartbeats()), and the next heartbeat
+        is due before the client sends its close frame.
     */
     testHeartbeatBufferFull(bool answer) {
         # the messages of an earlier case are not this case's
@@ -391,12 +417,25 @@ class WebSocketMessageTooBigTest inherits QUnit::Test {
         }, True);
         auto rh = stream.readData(HangGuard);
         assertEq(200, rh.status_code ?? rh.headers.":status".toInt(), "the server accepts the WebSocket connection");
+        # the case that answers runs the heartbeats itself (see holdHeartbeats())
+        bool held = answer && Option::HAVE_LIBRARY_DEBUGGING;
+        if (held) {
+            call_function("dbg_async_io_hold_timer_callbacks", True);
+        }
+        on_exit if (held) {
+            call_function("dbg_async_io_hold_timer_callbacks", False);
+            call_function("dbg_async_io_release_held_timer_callbacks");
+        }
         # client frames are masked
         stream.sendData(ws_encode_message("send", WSOP_Text, True));
         # the first heartbeat after the request finds the server's stream send buffer full (a heartbeat before the
         # request may have sent a PING, which is skipped when the frames are read)
         string msg;
-        while ((msg = heartbeat_log.messages.get(HangGuard)) !~ /PING not sent/) {
+        if (held) {
+            msg = holdHeartbeats();
+        } else {
+            while ((msg = heartbeat_log.messages.get(HangGuard)) !~ /PING not sent/) {
+            }
         }
         assertRegex("PING not sent", msg, "the heartbeat PING is not sent while the message is not read, and the "
             "connection is not closed for it");
@@ -407,6 +446,12 @@ class WebSocketMessageTooBigTest inherits QUnit::Test {
             assertRegex("did not answer", msg, "the server closes a client that does not answer its heartbeats");
             assertEq(0, heartbeat_handler.closed.get(HangGuard), "the connection ends without a close frame");
             return;
+        }
+        if (held) {
+            # the client is late with its close frame: the next heartbeat is due first, as with a client that is slow
+            # to answer; it is held until the case has ended
+            assertTrue(call_function("dbg_async_io_wait_held_timer_callbacks", 1, HangGuard), "the next heartbeat is "
+                "due before the client's close frame is sent");
         }
         # the connection is open: the server reads the client's close frame
         stream.sendData(ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));

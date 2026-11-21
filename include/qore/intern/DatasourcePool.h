@@ -142,18 +142,12 @@ public:
     // because invalid options can cause an exception to be thrown
     DLLLOCAL Datasource* get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const;
 
-    //! returns the user name of the connections of the pool, for messages
-    /** Immutable, so it is read without a lock; the values in use of a connection belong to the thread that holds it
-        (qore#6142)
+    //! returns the description of the connections of the pool for messages
+    /** The user name, the password and the database name are masked (see q_ds_append_masked()); the driver name, the
+        host and the port are shown (qore#6961).  Immutable, so it is read without a lock; the values in use of a
+        connection belong to the thread that holds it (qore#6142)
     */
-    DLLLOCAL const std::string& getUser() const {
-        return user;
-    }
-
-    //! returns the database name of the connections of the pool, for messages; see getUser()
-    DLLLOCAL const std::string& getDb() const {
-        return db;
-    }
+    DLLLOCAL QoreString getMaskedDesc() const;
 
     DLLLOCAL void setQueue(Queue* n_q, QoreValue n_arg, ExceptionSink* xsink) {
         if (q)
@@ -202,6 +196,11 @@ protected:
         wait_count,
         wait_max,
         tl_warning_ms;
+
+#ifdef DEBUG
+    //! signalled with the pool lock held when a thread starts to wait for a free connection; see dbgWaitForWaiters()
+    QoreCondition dbg_waiter_cond;
+#endif
 
     int64 tl_timeout_ms,
         stats_reqs,
@@ -326,6 +325,10 @@ public:
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
         qore_condition_ops(static_cast<QoreCondition*>(this)).reinitAfterFork();
+#ifdef DEBUG
+        // a thread of the parent can wait on it in dbgWaitForWaiters()
+        qore_condition_ops(&dbg_waiter_cond).reinitAfterFork();
+#endif
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
     }
@@ -412,6 +415,11 @@ public:
 #ifdef DEBUG
     //! arms a one-shot debug connection abort on the pool-wide context; see lib/ql_debug.cpp
     DLLLOCAL void dbgArmConnectionAbort(const char* op_id, int when);
+
+    //! waits until at least \a count threads wait for a free connection; see lib/ql_debug.cpp
+    /** @return true if that many threads are waiting, false if the timeout expired first
+    */
+    DLLLOCAL bool dbgWaitForWaiters(unsigned count, int timeout_ms);
 #endif
 
     // functions supporting DatasourceStatementHelper

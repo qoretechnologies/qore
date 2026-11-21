@@ -89,12 +89,9 @@ public class ParallelToolDispatcher {
               the \c start_thread capability of the code that creates the
               dispatcher is used, if a host set one (@ref
               Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"), and
-              otherwise the @ref background operator; required with
-              @ref Qore::PO_NO_THREAD_CONTROL and \c max_concurrent > 1 only
-              when the module is loaded by its path
+              otherwise the @ref background operator
 
-        @throw PARALLEL-DISPATCH-ARG-ERROR if a required option is missing or
-            invalid in the current parse context
+        @throw PARALLEL-DISPATCH-ARG-ERROR if an option name is unknown
     */
     constructor(*hash<auto> options) {
         foreach string k in (keys options) {
@@ -108,16 +105,6 @@ public class ParallelToolDispatcher {
         max_total_time_ms = options.max_total_time_ms ?? 120000;
         # without the option, the capability of the code that the host runs, if any (qorus#867)
         start_thread = exists options.start_thread ? options.start_thread : get_thread_capability("start_thread");
-
-%ifdef PO_NO_THREAD_CONTROL
-        if (max_concurrent > 1 && !start_thread) {
-            throw "PARALLEL-DISPATCH-ARG-ERROR",
-                "ParallelToolDispatcher requires the \"start_thread\" option "
-                "when \"max_concurrent\" > 1 in a program with "
-                "PO_NO_THREAD_CONTROL set; see the QoreAgentStrategies module "
-                "documentation for sandbox integration details";
-        }
-%endif
     }
 
     #! Dispatches multiple tool calls in parallel
@@ -190,15 +177,11 @@ public class ParallelToolDispatcher {
                         };
                     }
                 };
-%ifdef PO_NO_THREAD_CONTROL
-                call_function(start_thread, worker);
-%else
                 if (start_thread) {
                     call_function(start_thread, worker);
                 } else {
                     background worker();
                 }
-%endif
             }
 
             # Wait for batch with timeout

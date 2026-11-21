@@ -60,7 +60,8 @@ class StackGuardCaseTest inherits QUnit::Test {
         string common;
     }
 
-    constructor(string name, hash<string, hash<StackCase>> cases, string common = "")
+    #! adds a case for each of @a cases; a test that adds its cases itself gives none and calls testCase() for each
+    constructor(string name, *hash<string, hash<StackCase>> cases, string common = "")
             : QUnit::Test(name, "1.0", \ARGV) {
         self.common = common;
         qore_bin = TestInterpreter::qore_interpreter();

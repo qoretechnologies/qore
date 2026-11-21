@@ -51,6 +51,8 @@
 
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
+#! The close timeout of the cases that test the client's close timeout
+const CloseTimeout = 500ms;
 
 #! A pair of connected TCP sockets: the server side for a poll operation that the test drives, and a raw client
 class SocketPair {
@@ -564,10 +566,13 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
         on_exit handler.release.dec();
         int port = startTlsServer(server, handler);
         Queue queue();
-        WebSocketClient wsc = tlsConnect(protocol, port, queue, {"timeout": 500ms});
+        # the connection is made with the default timeout, and only the close timeout, which is under test, is short:
+        # a connection made under load can take longer (#6899)
+        WebSocketClient wsc = tlsConnect(protocol, port, queue);
         on_exit try { wsc.disconnect(); } catch () {}
         handler.registered_queue.get(HangGuard);
         object op = wsc.getPollOperation();
+        op.setCloseTimeout(CloseTimeout.durationMilliseconds());
 
         wsc.send("BLOCK");
         handler.blocked.waitForZero(HangGuard);
@@ -623,10 +628,13 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
         on_exit handler.release.dec();
         int port = startTlsServer(server, handler);
         Queue queue();
-        WebSocketClient wsc = tlsConnect(protocol, port, queue, {"timeout": 500ms});
+        # the connection is made with the default timeout, and only the close timeout, which is under test, is short:
+        # a connection made under load can take longer (#6899)
+        WebSocketClient wsc = tlsConnect(protocol, port, queue);
         on_exit try { wsc.disconnect(); } catch () {}
         handler.registered_queue.get(HangGuard);
         object op = wsc.getPollOperation();
+        op.setCloseTimeout(CloseTimeout.durationMilliseconds());
 
         wsc.send("BLOCK");
         handler.blocked.waitForZero(HangGuard);
@@ -634,7 +642,7 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
         # system clock while it waits (a VM's time synchronization) must not change the elapsed time
         int start = clock_get_monotonic_us();
         wsc.disconnect(WSCC_NormalClosure);
-        assertGe(500ms, microseconds(clock_get_monotonic_us() - start),
+        assertGe(CloseTimeout, microseconds(clock_get_monotonic_us() - start),
             "disconnect() waits for the server's close frame for the close timeout");
         assertTrue(op.goalReached(), "the close has ended when disconnect() returns");
         assertEq(1006, op.getCloseCode(), "no close frame was received from the server");

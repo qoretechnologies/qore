@@ -804,8 +804,8 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
 
 //! Sets whether code that the sandbox governs may use uncontrolled APIs
 /** Uncontrolled APIs - functions, methods and classes of the @ref Qore::PO_NO_UNCONTROLLED_APIS
-    "uncontrolled API" functional domain, such as the Java classes of the \c jni module and the Python objects of the
-    \c python module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
+    "uncontrolled API" functional domain, such as the Java classes of the \c jni module, the Python objects of the
+    \c python module and the JavaScript programs of the \c v8 module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
     the parse options of the sandbox apply to what they do.  A sandbox that refuses them (the default) refuses the
     code that it governs every call of them at run time, as @ref Qore::PO_NO_UNCONTROLLED_APIS
     "PO_NO_UNCONTROLLED_APIS" does: a call raises \c INVALID-FUNCTION-ACCESS; a system-policy capability of trusted
@@ -820,6 +820,11 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
 
     A host that attaches a sandbox only for its resource limits, interrupts or I/O policy, and trusts the code to use
     uncontrolled APIs, allows them.
+
+    @warning allowing uncontrolled APIs trusts the code with the whole process: the runtimes that they give access to
+    (Java, Python, JavaScript) reach files, processes, the network and the data of every %Program in the process
+    without any sandbox seeing it; never allow them for code that is not trusted, such as the code of a tenant (see
+    @ref sandbox_uncontrolled_api)
 
     @param allow @ref Qore::True "True" to allow code that the sandbox governs to use uncontrolled APIs,
     @ref Qore::False "False" (the default) to refuse them
@@ -962,9 +967,18 @@ nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port,
     - 172.16.0.0/12 (RFC 1918 Class B)
     - 192.168.0.0/16 (RFC 1918 Class C)
     - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-    - ::1/128 (IPv6 localhost)
+    - 0.0.0.0/8 ("this network", which reaches the local host on common platforms; 0.0.0.0 itself is judged as the
+      local host for a connection, and a bind to it is a bind on all interfaces, which the ranges do not decide)
+    - 100.64.0.0/10 (shared address space of carrier-grade NAT)
+    - 224.0.0.0/4 (multicast)
+    - 240.0.0.0/4 (reserved, includes the limited broadcast address 255.255.255.255)
+    - ::1/128 (IPv6 localhost; a connection to the unspecified address :: is judged as one to it)
     - fe80::/10 (IPv6 link-local)
-    - fc00::/7 (IPv6 unique local)
+    - fc00::/7 (IPv6 unique local, includes fd00:ec2::254 of cloud metadata)
+    - ff00::/8 (IPv6 multicast)
+
+    An IPv6 address that embeds an IPv4 address (an IPv4-mapped address, an address of the NAT64 well-known prefix
+    64:ff9b::/96, or a 6to4 address of 2002::/16) is judged by its IPv4 address, for these ranges and every other rule
 
     @note This is essential for SSRF prevention in web applications.
 
@@ -1524,6 +1538,52 @@ static nothing SandboxManager::checkProcessWideRegistration(string what) {
 */
 static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_ONLY] {
     return !qore_caller_is_sandboxed();
+}
+
+//! Returns the ID of the caller %Program: the %Program whose code called the running code
+/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a user
+    module: library module code that serves a call from a %Program's code, also through more library module code,
+    gets the ID of that %Program.  Library code uses it to record the %Program that owns an object that it creates for
+    its caller, and to allow a later change of the object only to code of that %Program (compare with
+    @ref Qore::Program::getProgramId() "Program::getProgramId()").
+
+    The caller is recorded where the code of another %Program is called, in every execution mode, and where a thread
+    is started (the @ref background "background" operator, a thread pool task) for the code that runs later: the
+    caller of code that runs in such a thread is the caller of the code that started it.  Code runs as its own
+    %Program's code: a closure or call reference that a %Program created runs that %Program's code wherever it is
+    called, so library code that it calls gets that %Program's ID; calling another %Program's closure runs that
+    %Program's code.
+
+    The caller is unknown, and the method returns @ref nothing, where the code that the running code serves cannot be
+    identified: in code that a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a
+    thread that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
+    caller must be treated as not being any given %Program.
+
+    It is not a sandbox check: a sandboxed caller that it identifies is still refused by the checks that consider
+    every sandbox that governs the code (see isProcessWideRegistrationAllowed() and isSandboxed()).  It reveals only
+    the ID of a %Program whose code is on the current thread's call stack, so it is not restricted itself.
+
+    @return the ID of the caller %Program, or @ref nothing if it is unknown
+
+    @par Example:
+    @code{.py}
+# the object belongs to the Program of the code that created it
+owner_pgm_id = SandboxManager::getCallerProgramId();
+...
+# only the code of that Program can change it
+if (!exists owner_pgm_id || SandboxManager::getCallerProgramId() != owner_pgm_id) {
+    throw "PERMISSION-DENIED", "only the code that created the object can change it";
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
+    qore_program_id_t id;
+    if (qore_get_caller_program_id(id)) {
+        return QoreValue();
+    }
+    return static_cast<int64>(id);
 }
 
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains

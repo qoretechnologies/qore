@@ -107,16 +107,40 @@
     address is given in brackets (see @ref Qore::SQL::parse_datasource() "parse_datasource()";
     <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>).
 
+    @par Functional Domains for Standard Module Sources
+    Restricted Programs now get a parse error when explicitly loading standard module sources outside the
+    process-wide module path if the source needs a denied @ref function_domains "functional domain".
+
+    @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
+    HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
+    (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
+    (deprecated; see @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()" and
+    @ref httpclient_response_fields; issues #6761, #6811, #6851, #6869).
+
+    @par RestClient Requires the HTTP Fields at the Top Level of a Response
+    @ref restclientintro "RestClient" and the clients built on it raise \c RESTCLIENT-ERROR for the HTTPClient option
+    \c http_fields_at_top_level set to @ref False, as they read the fields of a response at its top level (see
+    @ref restclientv2_7; issue #6869).
+
+    @par The DatasourcePool Warning Callback Gets a Masked Description of the Pool
+    The description of the pool passed to a
+    @ref Qore::SQL::DatasourcePool::setWarningCallback() "DatasourcePool warning callback" shows the driver name, host
+    and port of the pool with its user name, password and database name masked as \c "****" (ex:
+    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of the pool
+    with its password;
+    @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
+    configuration (issue #6961).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
-    The static members in which public classes of the standard modules keep state shared by all of their callers
-    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
-    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
-    6748</a>).
+    The static members in which public classes of the standard modules keep state shared by all of their callers, and
+    the options of an HTTP listener with its TLS keys, are \c private:internal, so no subclass can read them (see
+    @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue 6748</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6848">issue 6848</a>).
 
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
     The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
@@ -1580,6 +1604,12 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par The Caller Program of Library Code
+    Library code can identify the %Program whose code it serves, also through other module code, threads and thread
+    pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and
+    \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
+    (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
@@ -1766,6 +1796,8 @@
     - @ref dataproviderintro "DataProvider" module
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
+      - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
+        or \c removeCatalogChangeListener(); these APIs now declare the \c PROCESS_CONTROL @ref function_domains "functional domain"
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
@@ -1862,6 +1894,10 @@
       - the iterators and the read data provider take the \c "encoding_errors" option (see @ref encoding_errors)
         (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref fixedlengthutil_v1_7 for all changes
+
+    - @ref fsutilintro "FsUtil" module
+      - @ref FsUtil::remove_tree() and @ref FsUtil::TmpDir can remove entries whose names use a different
+        encoding from the process
 
     - @ref ftpclientdataproviderintro "FtpClientDataProvider" module
       - the \c get-file request takes the \c encoding_errors field for text (see @ref encoding_errors)
@@ -2039,6 +2075,13 @@
         and logs
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - a connection that offers OAuth2 with a key as the fallback and is configured with the key does not use the
+        default OAuth2 grant type (<a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
+      - a client with invalid OAuth2 options raises an error when it is created also when it does not connect; an
+        empty required option counts as missing, so such a connection is reported as down, and an unconnected
+        asynchronous client of a connection that awaits authorization is created without logging in (see
+        @ref restclientv2_7 for every change in behavior;
+        <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
@@ -2522,6 +2565,18 @@
     - a parent class or hashdecl given without a namespace path in a namespace is resolved in the namespace of the
       inheriting class or hashdecl (see @ref parent_class_name_resolution and @ref hashdecl_inheritance_rules), where
       one of the same name in another namespace could be inherited instead (issue #6710)
+    - @ref Qore::SQL::Datasource "Datasource", @ref Qore::SQL::DatasourcePool "DatasourcePool" and
+      @ref Qore::SQL::parse_datasource() "parse_datasource()" convert connection values and option names to the
+      @ref default_encoding "default encoding", which drivers read them in, where a value in another encoding kept its
+      bytes; one that it cannot represent raises \c ENCODING-CONVERSION-ERROR, which does not show it (issue #6960)
+    - exceptions about a datasource string, a @ref datasource_hash "datasource hash" or the connection values of a
+      @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" could show its
+      password and other credentials; they now never show its user name, password or database name: an error about a
+      datasource string shows only its driver name, and the errors of a datasource show its driver, host and port with
+      the other values masked as \c "****"; a driver name that is not a valid driver name (only ASCII letters, digits,
+      \c "_" and \c "-"), such as a datasource string given with other connection arguments, is no longer looked up
+      or loaded as a module, and is rejected without being shown (issue #6961); also the debug output of URL parsing
+      no longer shows the URL or its password
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)
@@ -2588,9 +2643,10 @@
     - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
       the inheriting class only in that class, the declaring class and the classes between them, and a member that a
       class also reaches through a public base class is public there (issue #6640)
-    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
-      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
-      (issue #6667)
+    - a bare name in a class resolves only to a visible declaration, so a script that uses an ancestor's
+      @ref pitfalls_private_internal "private:internal member" or a member hidden by
+      @ref private_inheritance "private:internal inheritance" gets a parse error if no other declaration matches
+      (issues #6667 and #6873)
     - a member of a class inherited with @ref private_inheritance "private:internal" is assigned with the type of its
       own declaration in a class that also has a member of the same name from another base class (issue #6670)
     - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
@@ -2619,6 +2675,10 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
+      handler leaves on a server thread (its persistence, its close notification and its user thread context) is
+      kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
+      nor uses it (see @ref httputil1_6 and @ref http1_7; issue #6847)
     - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
       qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
       directive now applies to the variables declared after it (issue #6589)
@@ -2658,6 +2718,8 @@
       interpreters, instead of \c NOTHING (issue #6244)
     - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
       its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
+    - @ref include "%include" resolves quoted relative filenames using the same search order as unquoted filenames
+      (issue #6833)
     - the conditional parse directives (<tt>%%ifdef</tt>, <tt>%%ifndef</tt>, <tt>%%if</tt>, <tt>%%elif</tt>) on a line
       that ends with CRLF are read, and the scanner no longer writes source text that it cannot read to standard
       output: such text is a parse error (issue #6512)
