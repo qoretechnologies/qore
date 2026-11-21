@@ -50,6 +50,10 @@ namespace Qore::SQL;
     @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding"; the string is not shown in the exception (since %Qore 3.0)
 
     @note the string is converted to the @ref default_encoding "default encoding", in which the strings of the hash are returned (since %Qore 3.0)
+    @note a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+    text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+    messages (the password and the database name never are); always give the driver prefix (ex:
+    <tt>oracle:scott/tiger\@orcl</tt>)
 
     @deprecated use parse_datasource() instead; camel-case function names were deprecated in %Qore 0.8.12
  */
@@ -173,6 +177,10 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
       returned, as a @ref Qore::SQL::Datasource "Datasource" keeps its connection values in it (since %Qore 3.0)
     - similar to parseDatasource() except uses the standard function naming scheme (i.e. \c "names_like_this()"
       instead of \c "camelCase()") and does not have a @ref NOOP variant
+    - a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+      text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+      messages (the password and the database name never are); always give the driver prefix (ex:
+      <tt>oracle:scott/tiger\@orcl</tt>)
 
     @since %Qore 0.8.6
 */

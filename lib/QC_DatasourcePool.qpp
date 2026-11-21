@@ -384,6 +384,11 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
 DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @endcode
 
+    @note a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+    text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+    messages (the password and the database name never are); always give the driver prefix (ex:
+    <tt>oracle:scott/tiger\@orcl</tt>)
+
     @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
@@ -1273,14 +1278,15 @@ DatasourcePool::clearWarningCallback() {
 //! sets a connection delay warning callback to be called any time the delay assigning a connection from the pool exceeds the given timeout in milliseconds
 /** @par Example:
     @code{.py}
-code cb = sub (string dsstr, int us, int to) {
-    printf("WARNING: datasource pool %y took %f ms (threshold %d ms) to assign a new connection\n", dsstr, us.toNumber() / 1000n, to);
+code cb = sub (string desc, int us, int to) {
+    # desc shows the driver, host and port of the pool, with the user name, password and database name masked
+    printf("WARNING: datasource pool %s took %f ms (threshold %d ms) to assign a new connection\n", desc, us.toNumber() / 1000n, to);
 };
 ds.setWarningCallback(5s, cb);
     @endcode
 
     @param warning_ms the period of time with a resolution of milliseconds after which the callback will be called if a connection cannot be allocated in the given time period
-    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a argument]) which will be passed a datasource description string for the pool, an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a argument value passed to this method
+    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a argument]) which will be passed a description of the pool for messages, which shows its driver name, host and port, with the user name, password and database name masked as \c "****" (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>; since %Qore 3.0; use @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" for the configuration), an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a argument value passed to this method
     @param argument an optional argument that will be passed to the warning callback
 
     @note that the warning timeout has a resolution of milliseconds, but the actual wait time is reported in microseconds (1 ms = 1000 us)

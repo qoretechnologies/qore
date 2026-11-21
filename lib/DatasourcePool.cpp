@@ -539,11 +539,9 @@ int DatasourcePool::checkWait(int64 wait_total, ExceptionSink* xsink) {
 
     // build argument list
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-    // in case of failure to acquire a connection to get the config string, the warning callback is not called
-    SimpleRefHolder<QoreStringNode> cstr(getConfigString(xsink));
-    if (*xsink)
-        return -1;
-    args->push(cstr.release(), xsink);
+    // the description of the pool has the user name, the password and the database name masked, as it is logged
+    // (qore#6961); it is made from the immutable configuration, without a connection
+    args->push(new QoreStringNode(config.getMaskedDesc()), xsink);
     args->push(wait_total, xsink);
     args->push(tl_warning_ms, xsink);
     args->push(callback_arg.refSelf(), xsink);
@@ -619,6 +617,9 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
         //printd(5, "DatasourcePool::getDSIntern() this: %p tl_timeout_ms: %d max: %d\n", this, tl_timeout_ms, max);
         // otherwise we sleep until a connection becomes available
         ++wait_count;
+#ifdef DEBUG
+        dbg_waiter_cond.broadcast();
+#endif
         // Monotonic clock for the elapsed-time measurement: a realtime clock jump
         // (NTP slewing, VM time sync) between warn_start and the post-wait read
         // would otherwise skew wait_total and cause the warning callback to mis-fire
@@ -1029,6 +1030,17 @@ void DatasourcePool::dbgArmConnectionAbort(const char* op_id, int when) {
         mctx = getOrCreateMutationContext();
     }
     mctx->dbgArmFault(op_id, when);
+}
+
+bool DatasourcePool::dbgWaitForWaiters(unsigned count, int timeout_ms) {
+    AutoLocker al((QoreThreadLock*)this);
+    while (wait_count < count) {
+        // a waiting thread releases the pool lock in its wait, and signals after counting itself with it held
+        if (dbg_waiter_cond.wait((QoreThreadLock*)this, timeout_ms)) {
+            return wait_count >= count;
+        }
+    }
+    return true;
 }
 #endif
 

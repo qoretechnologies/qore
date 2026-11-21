@@ -899,6 +899,11 @@ Datasource::constructor(string driver, *string username, *string password, *stri
 Datasource ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @endcode
 
+    @note a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+    text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+    messages (the password and the database name never are); always give the driver prefix (ex:
+    <tt>oracle:scott/tiger\@orcl</tt>)
+
     @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCE-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
