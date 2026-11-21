@@ -21,7 +21,18 @@
 %exec-class RestConnectionTlsTest
 
 class TlsPeer inherits AbstractHttpRequestHandler {
+    private {
+        *string redirect;
+    }
+
+    constructor(*string redirect) {
+        self.redirect = redirect;
+    }
+
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/redirect" && redirect) {
+            return makeResponse({"Location": redirect}, 302, binary(""));
+        }
         return makeResponse(200, "authenticated", {"Content-Type": "text/plain"});
     }
 }
@@ -31,7 +42,74 @@ class RestConnectionTlsTest inherits QUnit::Test {
         addTestCase("configured credentials", \credentials());
         addTestCase("local credential bindings", \localBindings());
         addTestCase("synchronous caller file policy", \syncFilePolicy());
+        addTestCase("caller-selected native file options", \nativeFileOptions());
+        addTestCase("opaque certificate origin", \opaqueOrigin());
         set_return_value(main());
+    }
+
+    nativeFileOptions() {
+        TmpDir tmp("rest-native-policy-");
+        string url = "http://127.0.0.1";
+        Program caller(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        caller.parse("%requires RestClient\n"
+            "object sub rest(hash<auto> opts) { return new RestClient(opts, True); }"
+            "object sub acquire(object conn) { return conn.get(False); }"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }"
+            "object sub restore(hash<SerializationInfo> saved) { return Serializable::deserialize(saved); }",
+            "restricted-native-options");
+        assertTrue(caller.callFunction("rest", {"url": url}) instanceof RestClient);
+        RestClient explicit_data = caller.callFunction("rest", {"url": url, "ssl_cert_data": TestCertificates::CertPem});
+        assertTrue(explicit_data.getHttpConfig().hasKey("ssl_cert_data"));
+        hash<SerializationInfo> original = Serializable::serializeToData(new HTTPClient({"url": url}));
+        assertTrue(caller.callFunction("restore", original) instanceof HTTPClient);
+        foreach string option in ("ssl_cert_path", "ssl_key_path") {
+            string path = tmp.path + DirSep + option;
+            hash<auto> opts = {"url": url};
+            opts{option} = path;
+            HttpConnection conn("http", "", url, {}, {option: path});
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("rest", opts), option);
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("acquire", conn), option);
+
+            hash<SerializationInfo> saved = original;
+            saved._index{saved._data._index}._class_data."Qore::HTTPClient"{option} = path;
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("restore", saved), option);
+
+            # The ordinary parent's path is retained in its constructor options. A later copy must
+            # check its own caller even when the file has since disappeared.
+            writeFixture(path, option == "ssl_cert_path" ? TestCertificates::CertPem : TestCertificates::KeyPem);
+            RestClient parent(opts, True);
+            assertEq(0, unlink(path));
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", parent, url), option);
+        }
+    }
+
+    opaqueOrigin() {
+        # The second port stays bound but never listens. Only the original origin accepts requests.
+        Socket unused();
+        unused.bindINET("127.0.0.1", 0);
+        string authority = sprintf("//127.0.0.1:%d", unused.getSocketInfo().port);
+        string other = "http:" + authority;
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("origin", new TlsPeer(other));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string origin = sprintf("http://127.0.0.1:%d", port);
+        string denied = "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR";
+        HTTPClient client({"url": origin}, new SSLCertificate(TestCertificates::CertPem), NOTHING);
+        client.setURL(origin + "/base");
+        client.setConnectionPath("/root");
+        assertEq("/root", client.getConnectionPath());
+        foreach string dest in (authority, other) {
+            assertThrows(denied, \client.setConnectionPath(), dest);
+            assertEq("/root", client.getConnectionPath());
+        }
+        foreach string dest in (other, sprintf("http://localhost:%d", port), sprintf("https://127.0.0.1:%d", port)) {
+            assertThrows(denied, \client.setURL(), dest);
+        }
+        assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", other));
+        assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", origin + "/redirect"));
+        assertEq("authenticated", client.sendUrl(NOTHING, "GET", origin + "/ok").body.toString());
     }
 
     private static writeFixture(string path, data value) {
@@ -159,6 +237,7 @@ class RestConnectionTlsTest inherits QUnit::Test {
             "string sub read(string loc) { return FileLocationHandler::getTextFileFromLocation(loc); }", "reader");
         Program sync(PO_NEW_STYLE | PO_NO_FILESYSTEM);
         sync.parse("%requires RestClient\n"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }"
             "hash<auto> sub check(object c) { object client = c.get(False);"
             " hash<auto> config = client.getHttpConfig(); hash<auto> saved = client.getConstructorOptions();"
             " hash<SerializationInfo> state = Serializable::serializeToData(client);"
@@ -176,10 +255,38 @@ class RestConnectionTlsTest inherits QUnit::Test {
         assertFalse(result.wire_key);
         assertEq(cert, result.cert_path);
         assertEq(key, result.key_path);
+        RestClient bound = conn.get(False);
+        RestClientIo bound_async = conn.getAsync(False);
+        foreach hash<auto> opts in (bound.getConstructorOptions(), bound_async.getConstructorOptions()) {
+            assertEq(cert, opts.ssl_cert_path);
+            assertEq(key, opts.ssl_key_path);
+            assertFalse(opts.hasKey("ssl_cert_data"));
+            assertFalse(opts.hasKey("ssl_key_data"));
+        }
+        assertFalse(bound.getHttpConfig().hasKey("ssl_cert_data"));
+        assertFalse(bound.getHttpConfig().hasKey("ssl_key_data"));
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", bound, conn.real_url + "/sibling"));
+        RestClient sync_copy = cast<RestClient>(bound.copyWithUrl(conn.real_url + "/sibling"));
+        assertFalse(sync_copy.getHttpConfig().hasKey("ssl_cert_data"));
+        assertFalse(sync_copy.getHttpConfig().hasKey("ssl_key_data"));
+        assertTrue(bound_async.copyWithUrl(conn.real_url + "/sibling") instanceof RestClientIo);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \bound_async.copyWithUrl(),
+            sprintf("http://127.0.0.1:%d", port));
         RestClient supplied({"url": conn.real_url, "ssl_cert_path": cert, "ssl_key_path": key}, True);
         assertTrue(supplied.getHttpConfig().hasKey("ssl_cert_data"));
         assertTrue(supplied.getHttpConfig().hasKey("ssl_key_data"));
         assertEq(key, supplied.getConstructorOptions().ssl_key_path);
+        RestConnection mixed("mixed", "", conn.getUrl(), {}, {
+            "ssl_cert_path": cert, "ssl_key_data": TestCertificates::KeyPem,
+        });
+        RestClient mixed_sync = mixed.get(False);
+        RestClientIo mixed_async = mixed.getAsync(False);
+        foreach hash<auto> opts in (mixed_sync.getConstructorOptions(), mixed_async.getConstructorOptions()) {
+            assertFalse(opts.hasKey("ssl_cert_data"));
+            assertTrue(opts.hasKey("ssl_key_data"));
+        }
+        assertFalse(mixed_sync.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(mixed_sync.getHttpConfig().hasKey("ssl_key_data"));
         string loc = "conn://rest-tls/content";
         assertEq("authenticated", restricted.callFunction("read", loc));
         assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", cert));
