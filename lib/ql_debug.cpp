@@ -10647,6 +10647,70 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     UT_ASSERT(c, !xsink, "the Program is destroyed");
 }
 
+//! qore#6536: a continuation joined twice keeps the isolation of every build that it continues, also for the code of
+//! the Program that created its build
+/** A continuation captured in build Y while it ran on the thread of build X has the isolation join(Y, X); run on the
+    thread of build Z, its floor is join(join(Y, X), Z).  The creator's sandbox (domain c), allowed by Y and Z, is
+    refused by X alone.
+*/
+static void ut_sandbox_isolation_joined_twice(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreSandboxManager> a(new QoreSandboxManager, &xsink);
+    ReferenceHolder<QoreSandboxManager> creator(new QoreSandboxManager, &xsink);
+    UT_ASSERT(c, !a->setIsolationDomain("a", &xsink) && !creator->setIsolationDomain("c", &xsink),
+        "isolation domains set");
+    xsink.clear();
+
+    // X: a build that tenant a entered, whose own code is host code; Y: a's build of the creator's capability
+    auto level = [&](bool allows_creator) {
+        QoreSandboxIsolation* iso = new QoreSandboxIsolation(*a, nullptr);
+        if (allows_creator) {
+            iso->addCreator(*creator);
+        }
+        return iso;
+    };
+    QoreSandboxIsolation* x = level(false);
+    QoreSandboxIsolation* x_allows = level(true);
+    QoreSandboxIsolation* y = level(true);
+    QoreSandboxIsolation* joined = QoreSandboxIsolation::join(y, x);
+    QoreSandboxIsolation* joined_allows = QoreSandboxIsolation::join(y, x_allows);
+    x->deref();
+    x_allows->deref();
+
+    const int tid = q_gettid();
+    QoreSandboxBudgetList none;
+    char owner;
+    {
+        QoreSandboxBudgetStack stack;
+        // Z: another build of the creator's capability that tenant a entered
+        stack.suspendCharge(*a);
+        stack.setIsolation(*a, nullptr, *creator);
+        UT_ASSERT(c, stack.currentIsolation(), "the build of a tenant has an isolation");
+
+        stack.attach(tid, none, &owner, true, joined);
+        const std::string* domain = stack.isolationRefuses(*creator);
+        UT_ASSERT(c, domain && *domain == "c", "the middle build of a twice-joined continuation refuses the creator");
+        UT_ASSERT(c, !stack.isolationRefuses(*a), "the caller's own sandbox runs in a twice-joined continuation");
+        stack.leave(tid, &owner);
+
+        // the same continuation, where the middle build allows the creator: nothing refuses it
+        stack.attach(tid, none, &owner, true, joined_allows);
+        UT_ASSERT(c, !stack.isolationRefuses(*creator), "every build of the chain allows the creator");
+        stack.leave(tid, &owner);
+
+        // joined once, with Y only: the build of the creator's capability allows its code
+        stack.attach(tid, none, &owner, true, y);
+        UT_ASSERT(c, !stack.isolationRefuses(*creator), "a continuation of the creator's build runs its code");
+        stack.leave(tid, &owner);
+
+        stack.resumeCharge();
+        UT_ASSERT(c, stack.empty(), "the stack is left empty");
+    }
+    joined->deref();
+    joined_allows->deref();
+    y->deref();
+}
+
 //! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
 //! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
 //! thread of a binary module with QoreExternalProgramContextHelper
@@ -22502,6 +22566,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
     ut_sandbox_creator_context(c, rc.getProgram());
+    ut_sandbox_isolation_joined_twice(c);
     ut_datasource_option_commit_window(c);
 #endif
     return make_unit_test_result(c, xsink);
@@ -22936,6 +23001,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
     ut_sandbox_creator_context(c, rc.getProgram());
+    ut_sandbox_isolation_joined_twice(c);
     ut_datasource_option_commit_window(c);
 #endif
     ut_event_loop_remove_recycled_fd(c);

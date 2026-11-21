@@ -531,6 +531,40 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_isolation_domains Isolation Domains (Tenants)
+
+    A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with
+    @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", before it gives them to a
+    %Program.  The domain cannot change afterwards, and only trusted code can set it.  A sandbox that sandboxed code
+    creates or copies belongs to the domain of the sandbox that governs that code.
+
+    The code of one domain never runs for another: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to enter a sandbox of another domain with a \c SANDBOX-ISOLATION-ERROR exception, before any of its
+    code runs.  This holds on every path: code given in the build's arguments or reached through them, code returned
+    by the caller's callbacks, code that the build passes on to a nested build, and code that threads, pool tasks and
+    asynchronous I/O that the build starts run.  These may run in such a build:
+    - the caller's own code, and the code of other sandboxes of the caller's domain (a tenant's other interfaces);
+    - the build's own code (the sandboxes of the %Program that created the capability);
+    - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
+
+    Such a build cannot use a %Program of another domain either, neither its code nor its state: every method of
+    @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl" called on it raises
+    \c SANDBOX-ISOLATION-ERROR before it reads or changes anything (parsing, loading modules, reading or setting global
+    variables, taking call references, introspection), except \c getProgramId(), which only identifies it.  So do
+    the methods of @ref Qore::DebugProgram "DebugProgram" and @ref Qore::Breakpoint "Breakpoint" given its
+    @ref Qore::ProgramControl "ProgramControl", and @ref Qore::load_user_module_with_program()
+    "load_user_module_with_program()" and @ref Qore::Program::loadUserModuleWithProgram()
+    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object is not
+    refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
+    without a domain are not another domain's.
+
+    A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
+    that sets no domains is not affected.
+
+    @note Isolation domains decide which code runs where; they do not by themselves keep a tenant from obtaining
+    another tenant's objects through state that the process shares (see @ref sandbox_module_state)
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
@@ -1663,6 +1697,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality

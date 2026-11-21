@@ -1382,6 +1382,86 @@ int QoreSandboxManager::getMaxThreads() const {
     return sandbox_intersection_limit<int>(this, max_threads.load(), &QoreSandboxManager::getMaxThreads);
 }
 
+int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xsink) {
+    // the domain decides which code may run for which tenant: only the host sets it
+    if (qore_calling_code_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setIsolationDomain(): sandboxed code, or code "
+            "whose functional domains are restricted, cannot set the isolation domain of a sandbox");
+        return -1;
+    }
+    if (!domain || !*domain) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain "
+            "must not be empty");
+        return -1;
+    }
+    if (QoreSandboxComposition::members(this)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): a composite sandbox has "
+            "the isolation domains of its members");
+        return -1;
+    }
+    std::lock_guard<std::mutex> lck(domain_lock);
+    if (isolation_domain == domain) {
+        return 0;
+    }
+    if (!isolation_domain.empty()) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain of "
+            "the sandbox is already set to '%s'; it cannot be changed", isolation_domain.c_str());
+        return -1;
+    }
+    if (governs.load(std::memory_order_acquire)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the sandbox already "
+            "governs code; its isolation domain must be set before it is given to a Program");
+        return -1;
+    }
+    isolation_domain = domain;
+    return 0;
+}
+
+std::string qore_caller_isolation_domain() {
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (governing) {
+        std::string domain = governing->getIsolationDomain();
+        if (!domain.empty()) {
+            return domain;
+        }
+    }
+    // code in a trusted build that a tenant entered works for that tenant, whose sandbox the build's barrier hides
+    // (qore#6536)
+    if (const std::string* domain = qore_sandbox_build_caller_domain()) {
+        return *domain;
+    }
+    return std::string();
+}
+
+std::string QoreSandboxManager::getIsolationDomain() const {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        for (const QoreSandboxManager* member : *managers) {
+            std::string domain = member->getIsolationDomain();
+            if (!domain.empty()) {
+                return domain;
+            }
+        }
+        return std::string();
+    }
+    std::lock_guard<std::mutex> lck(domain_lock);
+    return isolation_domain;
+}
+
+void QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm) {
+    if (!qore_calling_code_is_untrusted()) {
+        return;
+    }
+    // a sandbox that sandboxed code creates belongs to the tenant of that code
+    ReferenceHolder<QoreSandboxManager> creator(qore_find_thread_sandbox_manager_ref(), nullptr);
+    if (!creator) {
+        return;
+    }
+    std::string domain = creator->getIsolationDomain();
+    std::lock_guard<std::mutex> lck(sm->domain_lock);
+    assert(!sm->governs.load(std::memory_order_relaxed));
+    sm->isolation_domain = std::move(domain);
+}
+
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {
     wall_time_limit = ms > 0 ? ms : 0;
 }
@@ -1784,6 +1864,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->mem_account->limit.store(mem_account->limit.load());
     // the effective policy: a copy of a composition allows them only if every member does
     result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
+    // the copy belongs to the same tenant
+    result->isolation_domain = getIsolationDomain();
     // Don't copy interrupt state
 
     return result;
@@ -1882,6 +1964,8 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             return -1;
         }
         if (sm) {
+            // its isolation domain is fixed from now on
+            sm->setGoverns();
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
@@ -2237,6 +2321,10 @@ QoreSandboxManager* QoreSandboxComposition::combine(const std::vector<QoreSandbo
             manager->ref();
             return manager;
         }
+    }
+    // the isolation domains of the members are fixed from now on
+    for (QoreSandboxManager* member : flat) {
+        member->setGoverns();
     }
     auto composition = std::make_shared<const QoreSandboxMembers>(std::move(flat));
     ReferenceHolder<QoreSandboxManager> result(new QoreSandboxManager, nullptr);

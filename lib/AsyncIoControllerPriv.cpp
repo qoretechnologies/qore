@@ -1958,7 +1958,8 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
-    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate) {
+    // also only the isolation of a trusted build that submits the operation (qore#6536)
+    if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -2739,7 +2740,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // (a context kept only for the module cleanup's delegation has no sandbox to apply: the sandbox lookups of the
         // worker then resolve normally)
         std::unique_ptr<QoreSandboxContextHelper> sandbox_guard;
-        if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager)) {
+        // the isolation of a trusted build that submitted the operation holds in its steps as well (qore#6536)
+        if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager
+                || async_item.sandbox_ctx->isolation)) {
             sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
         }
 

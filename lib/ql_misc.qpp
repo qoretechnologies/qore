@@ -3789,16 +3789,24 @@ load_user_module_with_program("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
+    @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
     @since %Qore 0.8.12
  */
-nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
-    if (QoreModuleManager::checkModuleName(*name, xsink)) {
-        // the Program container has been taken from its object and is owned by this call
-        ReferenceHolder<QoreProgram> holder(program, xsink);
+nothing load_user_module_with_program(string name, Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
+    // the container is taken from its object, which is deleted, only if it is not another tenant's Program
+    // (qore#6536)
+    QoreProgram* container = qore_take_module_container(obj_program, *program, xsink);
+    if (!container) {
         return QoreValue();
     }
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), program);
+    // the Program container is owned by this call
+    ReferenceHolder<QoreProgram> holder(container, xsink);
+    if (*xsink || QoreModuleManager::checkModuleName(*name, xsink)) {
+        return QoreValue();
+    }
+    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), holder.release());
 }
 
 //! Reloads an already-loaded %Qore module subject to code injection at run-time into %Qore; the module's code is not imported into the current Program object

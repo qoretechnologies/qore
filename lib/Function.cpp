@@ -1885,6 +1885,10 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     qore_dbg_runtime_chosen_variant = false;
 #endif
     QoreSandboxProvenanceHelper::set(self);
+    // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+    if (getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
+        return;
+    }
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 

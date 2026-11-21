@@ -573,6 +573,37 @@ public:
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
 
+    //! Sets the isolation domain (tenant) of the sandbox; see SandboxManager::setIsolationDomain()
+    /** Only trusted code may set it, only once, and only before the manager governs code (a %Program uses it or it is
+        a part of a composite sandbox)
+
+        @param domain the domain; must not be empty
+        @param xsink for the exceptions: \c SANDBOX-ACCESS-ERROR (sandboxed caller) or \c SANDBOX-CONFIG-ERROR
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLEXPORT int setIsolationDomain(const char* domain, ExceptionSink* xsink);
+
+    //! Returns the isolation domain (tenant) of the sandbox, or an empty string if it has none
+    /** For a composite sandbox, the domain of its first member that has one
+    */
+    DLLEXPORT std::string getIsolationDomain() const;
+
+    //! Returns the isolation domain of a manager that governs code, or nullptr if it has none
+    /** The domain of a manager cannot change once it governs code, so it is read without a lock; a composite has no
+        domain of its own (see its members)
+    */
+    DLLLOCAL const std::string* governingIsolationDomain() const {
+        return isolation_domain.empty() ? nullptr : &isolation_domain;
+    }
+
+    //! Marks the manager as governing code: its isolation domain is fixed from then on
+    DLLLOCAL void setGoverns() {
+        // after a concurrent setIsolationDomain() has written the domain
+        std::lock_guard<std::mutex> lck(domain_lock);
+        governs.store(true, std::memory_order_release);
+    }
+
     //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
     /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
 
@@ -963,6 +994,15 @@ private:
     //! The number of running threads that this sandbox governs and counts against @ref max_threads
     std::atomic<int> active_threads;
 
+    //! The isolation domain (tenant) of the sandbox, or empty; written only before the manager governs code
+    std::string isolation_domain;
+
+    //! True once the manager governs code (see setGoverns()): the isolation domain cannot be set any more
+    std::atomic<bool> governs{false};
+
+    //! Serializes setIsolationDomain() and the reads of the domain by getIsolationDomain()
+    mutable std::mutex domain_lock;
+
     //! Disallow copying via assignment
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
 
@@ -1112,6 +1152,15 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
     @since %Qore 3.0
 */
 DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
+
+//! Returns the isolation domain (the tenant) of the code that calls the library, or an empty string
+/** The domain of the sandbox that governs the calling code (see QoreSandboxManager::setIsolationDomain()), also when
+    that code calls the library through other library code; empty if no sandbox governs it or its sandbox has no
+    domain.  Library code that keeps process-wide state for its callers uses it to keep each tenant's entries apart.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT std::string qore_caller_isolation_domain();
 
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
