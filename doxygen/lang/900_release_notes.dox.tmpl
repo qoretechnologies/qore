@@ -101,6 +101,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Datasource String With an Invalid Port Raises an Error
+    A datasource string whose port is 0, larger than 65535, negative or not a number raises
+    \c DATASOURCE-PARSE-ERROR instead of being parsed with that port or with the port in the host name, and an IPv6
+    address is given in brackets (see @ref Qore::SQL::parse_datasource() "parse_datasource()";
+    <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>); a datasource string with an
+    explicit port 0, which was accepted as a datasource without a port, is now refused.
+
     @par Functional Domains for Standard Module Sources
     Restricted Programs now get a parse error when explicitly loading standard module sources outside the
     process-wide module path if the source needs a denied @ref function_domains "functional domain".
@@ -1243,6 +1250,12 @@
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
     of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
     and database name masked as \c "****", for exception messages and logs (issue #6988).
+
+    @par IPv6 Hosts in Datasource Strings
+    A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
+    @ref Qore::SQL::make_datasource_string() "make_datasource_string()" writes one so (see
+    @ref Qore::SQL::parse_datasource() "parse_datasource()";
+    <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>).
 
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"

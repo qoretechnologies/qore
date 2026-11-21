@@ -1105,38 +1105,57 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         str = p + 1;
 
         if (tok == '%') {
-            p = check_datasource_chars(str, ":");
-            if ((p == str) || !*str) {
-                return parse_error("missing hostname string after '%%' delimeter");
-            }
-
             const char* hstr = str;
-
-            if (p) {
-                tok = *p;
+            tok = '\0';
+            if (*str == '[') {
+                // an IPv6 address in brackets, which has colons of its own (issue #6997)
+                p = strchr(str, ']');
+                if (!p || p == str + 1) {
+                    return parse_error("missing IPv6 address or closing ']' after '%%['");
+                }
                 *p = '\0';
+                hstr = str + 1;
                 str = p + 1;
+                if (*str == ':') {
+                    tok = ':';
+                    ++str;
+                }
             } else {
-                str += strlen(str);
+                // the first ':' after the host gives the port (issue #6997)
+                p = strchr(str, ':');
+                if ((p == str) || !*str) {
+                    return parse_error("missing hostname string after '%%' delimeter");
+                }
+                if (p) {
+                    tok = ':';
+                    *p = '\0';
+                    str = p + 1;
+                } else {
+                    str += strlen(str);
+                }
             }
 
             h->setKeyValue("host", new QoreStringNode(hstr), nullptr);
         }
 
         if (tok == ':') {
-            // the port has at least one digit (see check_datasource_chars()), but can be 0, which is given as is,
-            // as a datasource with no port (qore#6988)
-            int port = atoi(str);
-            h->setKeyValue("port", port, nullptr);
-
+            // a port is a number from 1 to 65535: a port that is 0 (which the Datasource API takes as the default
+            // port), larger, negative or not a number is an error (issue #6997)
             char* pstr = str;
             while (isdigit(*pstr)) {
                 ++pstr;
             }
-
             if (*pstr) {
                 return parse_error("invalid characters present in port number");
             }
+            int port = 0;
+            if (pstr - str <= 5) {
+                port = atoi(str);
+            }
+            if (port < 1 || port > 65535) {
+                return parse_error("invalid port number (the port must be from 1 to 65535)");
+            }
+            h->setKeyValue("port", port, nullptr);
             str = pstr;
         }
 
@@ -1209,7 +1228,12 @@ QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
     QoreStringValueHelper host_str(host_val);
     if (!host_val.isNullOrNothing() && host_val.getType() == NT_STRING
         && host_str->size()) {
-        str->sprintf("%%%s", host_str->c_str());
+        // an IPv6 address has colons of its own: it is given in brackets, as parse_datasource() expects it (issue #6997)
+        if (strchr(host_str->c_str(), ':') && host_str->c_str()[0] != '[') {
+            str->sprintf("%%[%s]", host_str->c_str());
+        } else {
+            str->sprintf("%%%s", host_str->c_str());
+        }
         has_host = true;
     }
 

@@ -161,15 +161,24 @@ namespace Qore::SQL;
 
     @return a @ref datasource_hash "datasource hash" of the components of a datasource string
 
+    @par Host and port
+    The host ends at the first \c ":" after it, which gives the port; an IPv6 address, which has colons of its own,
+    is given in brackets (ex: <tt>%[::1]:5432</tt>), and the \c host key has it without them.  A port is a number
+    from 1 to 65535: a port that is 0, larger than 65535, negative or not a number raises \c DATASOURCE-PARSE-ERROR
+    (since %Qore 3.0).  A string without a port gives no \c port key: the driver's default port is used.  The port
+    argument of the @ref Qore::SQL::Datasource "Datasource" constructor and of
+    @ref Qore::SQL::Datasource::setPort() "Datasource::setPort()" is another interface, where 0 means the default
+    port.
+
     @par Example:
     @code{.py}
 hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:1521{min=4,max=10}");
     @endcode
 
     @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected
-    character, etc), or the string contains a NUL character (since %Qore 3.0); the string is not shown in the
-    exception, as it can contain a user name, a password and a database name; only its driver name is shown (since
-    %Qore 3.0)
+    character, an invalid port, etc), or the string contains a NUL character (since %Qore 3.0); the string is not
+    shown in the exception, as it can contain a user name, a password and a database name; only its driver name is
+    shown (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding";
     the string is not shown in the exception (since %Qore 3.0)
 
