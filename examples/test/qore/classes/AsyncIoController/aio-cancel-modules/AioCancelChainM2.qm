@@ -1,0 +1,68 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module for asyncio_cancel_ownership.qtest: the second module of a chain of module calls, which submits and
+#! cancels async I/O operations
+module AioCancelChainM2 {
+    version = "1.0";
+    desc = "test library module at the end of a chain of module calls that submits and cancels async I/O operations";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace AioCancelChainM2 {
+#! an operation that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+public class Lib {
+    private:internal {
+        static list<EventNotifier> notifiers;
+        static Mutex lck();
+    }
+
+    static auto submit(string owner, string key) {
+        EventNotifier n();
+        {
+            AutoLock al(lck);
+            push notifiers, n;
+        }
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new WaitingOperation(n),
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        });
+    }
+
+    static bool cancelByKey(string key) {
+        return AsyncIoController::cancelByKey(key);
+    }
+}
+}

@@ -88,6 +88,113 @@ class ChainOperation inherits AbstractPollOperation<auto> {
     }
 }
 
+#! an operation that completes at once; its completion, which is the module's code, reports whether it sees the
+#! operations of other code, and submits a waiting operation
+class ReportingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        string follow_key;
+        Queue report;
+    }
+
+    constructor(EventNotifier notifier, string follow_key, Queue report) {
+        self.notifier = notifier;
+        self.follow_key = follow_key;
+        self.report = report;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        EventNotifier n();
+        Lib::keep(n);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new WaitingOperation(n),
+            "owner": follow_key,
+            "key": follow_key,
+            "to": -1s,
+        });
+        # a connection, which the sandbox of the tenant whose callback this is governs
+        *string connect_err;
+        try {
+            Socket s();
+            s.connect("127.0.0.1:1", 10s);
+        } catch (hash<ExceptionInfo> ex) {
+            connect_err = ex.err;
+        }
+        report.push({
+            "canceled": result.canceled,
+            "sees_keys": exists AsyncIoController::getInfo().cache_keys,
+            "connect_err": connect_err,
+        });
+    }
+}
+
+#! an operation that completes at once; its completion, which is the module's code, loads a module
+class LoadingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        string module;
+        Queue loaded;
+    }
+
+    constructor(EventNotifier notifier, string module, Queue loaded) {
+        self.notifier = notifier;
+        self.module = module;
+        self.loaded = loaded;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        try {
+            load_module(module);
+            loaded.push(True);
+        } catch (hash<ExceptionInfo> ex) {
+            loaded.push(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }
+}
+
 public class Lib {
     private:internal {
         static list<EventNotifier> notifiers;
@@ -124,6 +231,39 @@ public class Lib {
             "to": 30s,
         });
         return submitted;
+    }
+
+    #! submits an operation with the given key whose completion reports to the queue returned (see
+    #! ReportingOperation)
+    static Queue submitReporting(string key, string follow_key) {
+        EventNotifier n();
+        keep(n);
+        n.notify();
+        Queue report();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new ReportingOperation(n, follow_key, report),
+            "owner": key + "-reporting",
+            "key": key,
+            "to": 30s,
+        });
+        return report;
+    }
+
+    #! submits an operation whose completion loads the given module; returns a queue that gets True once it is loaded
+    static Queue submitLoading(string key, string module) {
+        EventNotifier n();
+        keep(n);
+        n.notify();
+        Queue loaded();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new LoadingOperation(n, module, loaded),
+            "owner": key,
+            "key": key,
+            "to": 30s,
+        });
+        return loaded;
     }
 
     static bool cancelByKey(string key) {

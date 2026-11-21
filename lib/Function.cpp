@@ -7533,8 +7533,9 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
+        // the application was recorded above: also for module code that calls module code, the application of the
+        // sandboxed caller, not the Program of the calling module (qore#7010)
         o.module_pgm = module_pgm;
-        o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
 }
 

@@ -676,7 +676,8 @@ DLLLOCAL qore_program_id_t runtime_get_sandboxed_module_call_app_id();
 
 //! returns the ID of the application Program that the module code of a call by a sandboxed caller runs for
 /** The caller's application; for module code that calls module code for a sandboxed caller, the one that the calling
-    module code runs for (qore#7010)
+    module code runs for (qore#7010); 0 (none recorded) for module code that calls module code for no recorded
+    application, as a module is no application
 */
 DLLLOCAL qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm);
 

@@ -4177,7 +4177,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         bool step_in_flight = false;
         auto it = t.cache.find(uh);
         if (it != t.cache.end()) {
-            if (sandboxed && it->second.spop_obj != spop_obj && it->second.app_pgm_id != app_id) {
+            if (submitTakesKeyOfOther(sandboxed, app_id, it->second, spop_obj)) {
                 xsink->raiseException("ASYNC-IO-KEY-ERROR", "the key '%s' is in use by an operation of other code",
                     uh.c_str());
                 return nullptr;
@@ -5038,6 +5038,10 @@ void AsyncIoControllerPriv::refuseSubmitOp(Command& cmd, ExceptionSink* xsink) {
     pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
     pinfo.controller = this;
     pinfo.sync_release = std::move(cmd.submit_sync_release);
+    // the abort and the canceled result run in the submitter's sandbox and for its application, as those of a
+    // started operation do
+    pinfo.sandbox_ctx = std::move(cmd.submit_sandbox_ctx);
+    pinfo.app_pgm_id = cmd.submit_app_id;
     // Null command fields to prevent double-deref on
     // command destruction — pinfo.cleanup() owns them now.
     cmd.submit_sock_obj = nullptr;
@@ -5058,11 +5062,8 @@ void AsyncIoControllerPriv::refuseSubmitOp(Command& cmd, ExceptionSink* xsink) {
 }
 
 qore_program_id_t AsyncIoControllerPriv::callerAppId() {
-    // the code of a callback of an operation runs for the application of the operation
-    if (aio_callback_app_set) {
-        return aio_callback_app_id;
-    }
-    // the initialization of library code, and a trusted build, run for no application
+    // the initialization of library code, and a trusted build, run for no application, also in the callback of an
+    // operation of an application
     if (qore_runtime_under_library_init_barrier()) {
         return QORE_NO_PROGRAM_ID;
     }
@@ -5071,7 +5072,22 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
         return app_id;
     }
     QoreProgram* pgm = getProgram();
+    // the code of a callback of an operation runs for the application of the operation, unless it is the sandboxed
+    // code of an application Program, which runs for its own application: the callback of an operation that other
+    // code submitted with an object of sandboxed code does not act for the submitter
+    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_caller_is_sandboxed())) {
+        return aio_callback_app_id;
+    }
     return pgm ? runtime_get_module_call_app_id(pgm) : QORE_NO_PROGRAM_ID;
+}
+
+bool AsyncIoControllerPriv::submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
+        const QoreObject* spop_obj) {
+    if (!sandboxed || pinfo.spop_obj == spop_obj) {
+        return false;
+    }
+    // fails closed: sandboxed code that runs for no known application takes the key of no other operation
+    return app_id == QORE_NO_PROGRAM_ID || !app_id || pinfo.app_pgm_id != app_id;
 }
 
 AioAppRestriction AsyncIoControllerPriv::cancelRestriction(bool& none) {
@@ -9410,9 +9426,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         auto it = t.cache.find(cmd.key);
                         // sandboxed code does not take the key of another application's operation: its operation is
                         // not started, and its result is a canceled result (qore#7010)
-                        if (it != t.cache.end() && cmd.submit_sandboxed
-                                && it->second.spop_obj != cmd.submit_spop_obj
-                                && it->second.app_pgm_id != cmd.submit_app_id) {
+                        if (it != t.cache.end() && submitTakesKeyOfOther(cmd.submit_sandboxed,
+                                cmd.submit_app_id, it->second, cmd.submit_spop_obj)) {
                             refuseSubmitOp(cmd, xsink);
                             break;
                         }

@@ -999,6 +999,22 @@ public:
     //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner (see
     //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())
     DLLLOCAL bool dbgWaitOwnerFlushBlocked(int timeout_ms);
+
+    //! Debug-only: returns true if a submission takes the key of an operation that it may not replace (see
+    //! submitTakesKeyOfOther())
+    /** For the submission of sandboxed code that runs for no known application, which no Qore code reaches today
+    */
+    DLLLOCAL static bool dbgSubmitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id,
+            qore_program_id_t other_app_id, bool same_object) {
+        PollInfo pinfo;
+        pinfo.app_pgm_id = other_app_id;
+        // the identities of the objects only are compared
+        QoreObject* const obj = reinterpret_cast<QoreObject*>(&pinfo);
+        pinfo.spop_obj = same_object ? obj : nullptr;
+        bool rv = submitTakesKeyOfOther(sandboxed, app_id, pinfo, obj);
+        pinfo.spop_obj = nullptr;
+        return rv;
+    }
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -2230,10 +2246,11 @@ private:
         const QoreObject* only_spop_obj = nullptr, const AioAppRestriction& restrict_app = AioAppRestriction());
 
     //! Returns the ID of the application Program that the calling code runs for (qore#7010)
-    /** The application of module code is the application that it runs for (qore#6208, see
-        runtime_get_module_call_app_id()); the code of a callback of an operation runs for the application that the
-        operation was submitted for (see AioCallbackAppScope); the initialization of library code and the code of a
-        trusted build run for no application (QORE_NO_PROGRAM_ID): an operation that they submit belongs to no tenant
+    /** The initialization of library code and the code of a trusted build run for no application
+        (QORE_NO_PROGRAM_ID), also in a callback: an operation that they submit belongs to no tenant.  The application
+        of module code is the application that it runs for (qore#6208, see runtime_get_module_call_app_id()); the code
+        of a callback of an operation runs for the application that the operation was submitted for (see
+        AioCallbackAppScope), except the sandboxed code of an application Program, which runs for its own application
 
         Operations record the application that they are submitted for; code that is sandboxed cancels, flushes and
         replaces only the operations of its own application, as keys and owners can be guessed
@@ -2245,6 +2262,13 @@ private:
         operation
     */
     DLLLOCAL static AioAppRestriction cancelRestriction(bool& none);
+
+    //! Returns true if a submission takes the key of an operation that the submitting code may not replace
+    /** Sandboxed code replaces only an operation of its own application, or its own operation object; if it runs for
+        no known application, it replaces only its own operation object
+    */
+    DLLLOCAL static bool submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
+        const QoreObject* spop_obj);
 
     //! Delivers the canceled result of a submission that is not started, and releases what the command holds
     /** Called on the I/O thread of the command

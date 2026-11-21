@@ -18291,6 +18291,22 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: returns True if a submission takes the key of an operation that it may not replace (qore#7010)
+/** @param sandboxed if the submitting code is sandboxed
+    @param app_id the application that the submitting code runs for; -1 for none (\c QORE_NO_PROGRAM_ID)
+    @param other_app_id the application of the operation with the key; -1 for none
+    @param same_object if the submission is of the operation object with the key
+*/
+static QoreValue f_dbg_async_io_submit_takes_key_of_other(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    auto app = [](int64 id) -> qore_program_id_t {
+        return id < 0 ? QORE_NO_PROGRAM_ID : static_cast<qore_program_id_t>(id);
+    };
+    return AsyncIoControllerPriv::dbgSubmitTakesKeyOfOther(get_param_value(params, 0).getAsBool(),
+        app(get_param_value(params, 1).getAsBigInt()), app(get_param_value(params, 2).getAsBigInt()),
+        get_param_value(params, 3).getAsBool());
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -28247,6 +28263,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 4,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "sandboxed",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "other_app_id",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "same_object");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");

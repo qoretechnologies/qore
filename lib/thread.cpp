@@ -8242,6 +8242,12 @@ qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QorePr
             && td->runtime_po_state.override_pgm == caller_pgm) {
         return td->runtime_po_state.app_pgm_id;
     }
+    // a module is no application: module code that calls module code for no recorded application (the callback of an
+    // operation that a worker thread runs, for example) gives none, and the application is then that of the callback
+    // or of the calling code (see AsyncIoControllerPriv::callerAppId())
+    if (caller_pgm && qore_program_is_module(caller_pgm) && !td->runtime_po_state.module_pgm) {
+        return 0;
+    }
     return runtime_get_module_call_app_id(caller_pgm);
 }
 
