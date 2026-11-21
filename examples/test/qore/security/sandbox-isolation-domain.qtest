@@ -536,6 +536,15 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         # run in the build
         assertEq("text/plain|text/html", a.callFunction("call", BuildCallArgs, (string sub () {
             return Mime::MimeTypeText + "|" + Mime::get_mime_type_from_ext("x.html"); }, ())));
+        # an expression of the other tenant's Program that the host created is not evaluated in the build (it enters
+        # the Program); one of the tenant's own is
+        Program b_expr_pgm = opTarget("b");
+        Expression b_expr = b_expr_pgm.getExpression("f() + 1", "expr");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs,
+            (auto sub (Expression e) { return e.eval(); }, (b_expr,))));
+        Program a_expr_pgm = opTarget("a");
+        Expression a_expr = a_expr_pgm.getExpression("f() + 1", "expr");
+        assertEq(2, a.callFunction("call", BuildCallArgs, (auto sub (Expression e) { return e.eval(); }, (a_expr,))));
         # the Program's ID only identifies it
         assertEq(b_target.getProgramId(), a.callFunction("call", BuildCallArgs, (int sub (Program p) {
             return p.getProgramId(); }, (b_target,))));
