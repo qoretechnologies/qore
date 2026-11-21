@@ -89,6 +89,7 @@ public class DeferredOutputTypesTest inherits QUnit::Test {
             \concurrencyTest());
         addTestCase("a resolved action registered again with its callback is the same action",
             \reregistrationTest());
+        addTestCase("cache recovery reports a diagnostic for a caller without terminal I/O", \recoveryLogTest());
         set_return_value(main());
     }
 
@@ -140,6 +141,24 @@ public class DeferredOutputTypesTest inherits QUnit::Test {
     #! Returns the action as registered, without resolving it
     private hash<DataProviderActionInfo> getStored(string app, string action) {
         return (map $1, DataProviderActionCatalog::getActionsNoInit(app), $1.action == action)[0];
+    }
+
+    recoveryLogTest() {
+        string app = registerFixture(("uncached",));
+        string key = app + "/uncached";
+        Callbacks::failing{key} = CallbackError;
+        on_exit remove Callbacks::failing{key};
+        *LoggerInterface previous = ProviderIndexUtil::getGlobalLogger();
+        RecoveryLogger logger();
+        ProviderIndexUtil::setGlobalLogger(logger);
+        on_exit ProviderIndexUtil::setGlobalLogger(previous);
+
+        Program p(PO_NEW_STYLE | PO_NO_TERMINAL_IO);
+        p.loadModule("DataProvider");
+        p.parse("int sub recover() { return DataProviderActionCatalog::cacheAllRegisteredApps(); }", "recovery");
+        assertTrue(p.callFunction("recover") > 0);
+        string expected = sprintf("[caller Program %d] Data provider app %y:", p.getProgramId(), app);
+        assertTrue((select logger.messages, $1.startsWith(expected)).size() > 0, "the diagnostic identifies the caller");
     }
 
     scopedFailureTest() {
@@ -375,5 +394,18 @@ public class DeferredOutputTypesTest inherits QUnit::Test {
         assertTrue(first.output_type === second_type, "the first reader returns the published type");
         assertEq(2, calls.getCount(), "each reader called the callback once");
         assertEq((), getFailures(app));
+    }
+}
+
+class RecoveryLogger inherits Qore::Logger::Logger {
+    public {
+        list<string> messages();
+    }
+
+    constructor() : Logger("recovery", LoggerLevel::LevelAll) {
+    }
+
+    logArgs(LoggerLevel level, string fmt, *softlist<auto> args) {
+        push messages, vsprintf(fmt, args);
     }
 }

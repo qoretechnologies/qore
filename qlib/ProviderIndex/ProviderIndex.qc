@@ -347,7 +347,16 @@ class ProviderIndexAppTypes {
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
 
+    private:internal static reportModuleDiagnostic(LoggerLevel level, string fmt, ...) {
+        if (*code sink = module_diagnostic_sink) {
+            sink(level, fmt, argv);
+        }
+    }
+
     private:internal {
+        #! Kept by the library; a subclass cannot obtain the host diagnostic sink.
+        static *code module_diagnostic_sink = ProviderIndexUtil::getModuleDiagnosticSink();
+
         #! The batch of this process, if it is an index worker
         static *hash<auto> worker_batch;
 
@@ -519,7 +528,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                 return createDataProviderIndexWithWorkers(index, opts, start);
             }
             # workers return their results with MessagePack
-            ProviderIndexUtil::log(LoggerLevel::LevelWarn, "MessagePack support is not available; the data "
+            ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelWarn, "MessagePack support is not available; the data "
                 "provider index is built in the calling process instead of with %d worker process(es)", opts.workers);
         }
 
@@ -744,12 +753,12 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     names += sprintf("%s%s (%s)", failure.app, exists failure.action ? "/" + failure.action : "",
                         failure.error);
                 }
-                log(LoggerLevel::LevelDebug, "unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
+                ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
                     failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
                     failure.error, failure.description);
             }
         }
-        log(LoggerLevel::LevelWarn, "the data provider index was published with %d app(s) and %d action(s) that could "
+        ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelWarn, "the data provider index was published with %d app(s) and %d action(s) that could "
             "not be initialized and are unavailable in it; %d failure(s): %s%s", summary.failed_apps,
             summary.failed_actions, count, names.join(", "), count > names.size()
                 ? sprintf(", and %d more", count - names.size())
@@ -841,7 +850,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             }
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, dependencies;
-                map log(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), dependencies;
+                map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), dependencies;
             }
             if (app.scheme) {
                 *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(app.scheme);
@@ -855,7 +864,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                 }
                 foreach string dependency in (dependencies) {
                     map index.schememap{$1}{dependency} = True, keys info.schemes;
-                    map log(LoggerLevel::LevelDebug, "Registered scheme %y -> %y", $1, dependency), keys info.schemes;
+                    map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered scheme %y -> %y", $1, dependency), keys info.schemes;
                 }
             }
         }
@@ -1712,12 +1721,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                         }
                         batch = batches[next++];
                     }
-                    log(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
+                    ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
                         map $1.name, batch.items);
                     hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms, generation);
                     # the progress of a build that runs for minutes, for the log of the caller: the apps of the
                     # batch and the seconds it took
-                    log(LoggerLevel::LevelInfo, "index worker %s finished in %.1f s with exit code %y: %d app(s)%s",
+                    ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelInfo, "index worker %s finished in %.1f s with exit code %y: %d app(s)%s",
                         batch.id, run.elapsed.durationSecondsFloat(), run.exit_code, run.result.apps.size(),
                         run.timed_out ? sprintf("; it did not finish within %d ms and was terminated",
                             opts.worker_timeout_ms) : "");
@@ -2336,7 +2345,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             map unlink(dir + DirSep + $1), d.listFiles();
             rmdir(dir);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelWarn, "Unable to remove the index build staging directory %y: %s: %s", dir,
+            ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelWarn, "Unable to remove the index build staging directory %y: %s: %s", dir,
                 ex.err, ex.desc);
         }
     }
@@ -2388,7 +2397,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }
 
             index.factorymap{factory_name} = mod;
-            log(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory_name, mod);
+            ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory_name, mod);
         }
     }
 }

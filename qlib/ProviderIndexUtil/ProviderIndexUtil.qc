@@ -5214,6 +5214,27 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             && SandboxManager::isProcessWideRegistrationAllowed();
     }
 
+    #! Returns the provider diagnostic sink for trusted library initialization
+    /** A library keeps this call reference in a private:internal static, and uses it only for its
+        diagnostic messages. The sink resolves the current logger and caller at the time of each write.
+        A sandboxed or terminal-I/O-restricted caller gets NOTHING. No logger object is returned.
+        The sink takes a level, a format string and its argument list.
+    */
+    static *code getModuleDiagnosticSink() {
+        if (SandboxManager::isProcessWideRegistrationAllowed()
+                && !SandboxManager::isCallerDomainDeniedAtEntry(DOM_TERMINAL_IO)) {
+            return \ProviderIndexUtil::writeModuleDiagnostic();
+        }
+    }
+
+    private:internal static writeModuleDiagnostic(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
+        if (!ProviderIndexUtil::mayUseGlobalLogger()) {
+            *int id = SandboxManager::getCallerProgramId();
+            fmt = (exists id ? sprintf("[caller Program %d] ", id) : "[caller Program unknown] ") + fmt;
+        }
+        ProviderIndexUtil::writeLogArgs(level, fmt, args);
+    }
+
     #! Reports the module's own diagnostic while it handles a lookup
     private:internal static logDiagnostic(Qore::Logger::LoggerLevel level, string fmt, ...) {
         ProviderIndexUtil::writeLogArgs(level, fmt, argv);

@@ -1400,7 +1400,16 @@ public class DataProviderActionCatalog {
         };
     }
 
+    private:internal static reportModuleDiagnostic(LoggerLevel level, string fmt, ...) {
+        if (*code sink = module_diagnostic_sink) {
+            sink(level, fmt, argv);
+        }
+    }
+
     private:internal {
+        #! Kept by the library; a subclass cannot obtain the host diagnostic sink.
+        static *code module_diagnostic_sink = ProviderIndexUtil::getModuleDiagnosticSink();
+
         #! Static builder callback that constructs the framework-injected <tt>make-api-call</tt> action info hash
         /** Signature: <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt>. The builder is
             normally registered once by the @c RestClientDataProvider module's init block via
@@ -4840,7 +4849,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 ProviderIndexUtil::addAppToCache(app);
                 ++count;
             } catch (hash<ExceptionInfo> ex) {
-                ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache data provider app %y: %s: %s",
+                DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError, "Cannot cache data provider app %y: %s: %s",
                     app.name, ex.err, ex.desc);
                 continue;
             }
@@ -4853,7 +4862,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 }
                 # the index cache holds no output types, so an action whose output type cannot be built is
                 # cached all the same; the failure is retained by the catalog
-                ProviderIndexUtil::log(LoggerLevel::LevelError, "Data provider app %y: %s: %s", app.name, ex.err,
+                DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError, "Data provider app %y: %s: %s", app.name, ex.err,
                     ex.desc);
                 actions = DataProviderActionCatalog::getActionsNoInit(app.name);
             }
@@ -4861,7 +4870,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 try {
                     ProviderIndexUtil::addActionToCache(action);
                 } catch (hash<ExceptionInfo> ex) {
-                    ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache action %y for data provider app "
+                    DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError, "Cannot cache action %y for data provider app "
                         "%y: %s: %s", action.action, app.name, ex.err, ex.desc);
                 }
             }
