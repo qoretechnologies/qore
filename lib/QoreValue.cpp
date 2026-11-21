@@ -1076,20 +1076,20 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
         return getEnumMember()->getValue().getAsString(str, format_offset, xsink);
     }
     if (isNothing()) {
-        qore_string_private::get(str)->concat(
+        qore_string_private::get(str)->concatAsciiName(
             (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
-                ? &YamlNullString : &NothingTypeString);
+                ? YamlNullString : NothingTypeString);
         return 0;
     }
     if (isNull()) {
-        qore_string_private::get(str)->concat(&NullTypeString);
+        qore_string_private::get(str)->concatAsciiName(NullTypeString);
         return 0;
     }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
     } else if (isBool()) {
-        qore_string_private::get(str)->concat(getBool() ? &TrueString : &FalseString);
+        qore_string_private::get(str)->concatAsciiName(getBool() ? TrueString : FalseString);
     } else if (isChar()) {
         str.concat("c'");
         SimpleRefHolder<QoreStringNode> ch(makeCharString(getChar(), QCS_UTF8, xsink));

@@ -1645,7 +1645,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     }
 
     if (!size()) {
-        qore_string_private::get(str)->concat(&EmptyListString);
+        qore_string_private::get(str)->concatAsciiName(EmptyListString);
         return 0;
     }
     str.concat("list: (");

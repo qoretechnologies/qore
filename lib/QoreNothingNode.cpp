@@ -55,8 +55,8 @@ QoreValue QoreNothingNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) con
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
 // returns -1 for exception raised, 0 = OK
 int QoreNothingNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(
-        (foff == FMT_YAML_SHORT || foff <= FMT_YAML_LONG) ? &YamlNullString : &NothingTypeString);
+    qore_string_private::get(str)->concatAsciiName(
+        (foff == FMT_YAML_SHORT || foff <= FMT_YAML_LONG) ? YamlNullString : NothingTypeString);
     return 0;
 }
 

@@ -41,7 +41,7 @@ QoreString *QoreShiftOperatorNode::getAsString(bool& del, int foff, ExceptionSin
 }
 
 int QoreShiftOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&shift_str);
+    qore_string_private::get(str)->concatAsciiName(shift_str);
     return 0;
 }
 
