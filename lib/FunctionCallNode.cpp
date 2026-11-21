@@ -1256,9 +1256,9 @@ QoreValue SelfFunctionCallNode::evalUnresolvedQualified(LexicalSemanticPolicy po
     // QoreAOTRuntime.cpp), or of a class that the named class inherits
     const char* name = ns.getIdentifier();
     // by identity: a class with the same name and signature as a class of the object's hierarchy is another class
-    // (qore#7036)
+    // (qore#7036); a private:internal parent class of the class context is one for the context's code (qore#6859)
     bool priv;
-    if (!qc || !qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
+    if (!qc || !qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv, ctx)) {
         xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
             "not inherit the class of the call", ns.ostr, self->getClassName());
         return QoreValue();

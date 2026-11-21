@@ -24729,9 +24729,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* cl
                 method_name);
             return toBits(QoreValue());
         }
-        // by identity, as SelfFunctionCallNode::evalUnresolvedQualified() (qore#7036)
+        // by identity, as SelfFunctionCallNode::evalUnresolvedQualified() (qore#7036, qore#6859)
         bool priv;
-        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv, runtime_get_class())) {
             xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
                 "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
             return toBits(QoreValue());
