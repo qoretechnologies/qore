@@ -292,7 +292,8 @@ const AotTenantSource = "%modern
 " + sprintf(AotWriterClass, "class TenantSub") + "
 string sub poke(string form, Logger::LoggerWrapper w) { return PmwProbe::ModSub::poke(form, w); }
 string sub poke_own_class(string form, Logger::LoggerWrapper w) { return TenantSub::poke(form, w); }
-Logger::LoggerWrapper sub make() { return PmwProbe::make(); }
+Logger::LoggerWrapper sub make() { return new Logger::LoggerWrapper(new Logger::Logger(\"own\")); }
+Logger::LoggerWrapper sub make_in_module() { return PmwProbe::make(); }
 string sub poke_self() { return PmwProbe::poke_self(); }
 ";
 
@@ -543,6 +544,9 @@ class SandboxPrivateMemberWriteTest inherits QUnit::Test {
             assertEq("ok", p.callFunction("poke_own_class", form, own), "a tenant's subclass on its own object: "
                 + form);
             own.setLogger(new Logger("again"));
+            # an object that a function of the compiled module creates for the tenant is not the tenant's own
+            assertEq(Err, p.callFunction("poke_own_class", form, p.callFunction("make_in_module")),
+                "a tenant's subclass on an object that module code made: " + form);
         }
         # the compiled library code is trusted, also when the tenant calls it
         foreach string form in (AotForms) {
