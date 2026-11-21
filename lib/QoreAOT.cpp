@@ -7621,6 +7621,13 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                                 reinterpret_cast<const void*>(linst->local))) {
                         return false;
                     }
+                    // A boxed parameter store can coerce through a slot in the callee's AOT context.
+                    // The native JIT resolves the same type directly.
+                    if (inst->opcode == QoreIROpcode::StoreLocal
+                            && flag == &BatchCalleeInfo::context_independent_fast_entry
+                            && qore_ir_get_scalar_local_kind(linst->local) == BatchCalleeParamKind::Boxed) {
+                        return false;
+                    }
                     break;
                 }
                 case QoreIROpcode::IncrementLocalInt: {
@@ -7685,7 +7692,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
 bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func) {
     // no batch callees: a body that makes a call is not proven free of the context
     static const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> no_callees;
-    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees);
+    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees, nullptr,
+        &BatchCalleeInfo::context_free_body);
 }
 
 bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func) {

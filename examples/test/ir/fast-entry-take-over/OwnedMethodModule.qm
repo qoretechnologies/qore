@@ -25,11 +25,14 @@ public namespace OwnedMethodModule {
             a = NOTHING;
             return 3;
         }
+        static *list<auto> makeArg(int n) {
+            return (n, new Marker());
+        }
         int nested(int n) {
             replaceArg((n, new Marker()));
             try {
                 replaceArg((n, new Marker()));
-                return FinalBox::forgetArg((n, new Marker()));
+                return FinalBox::forgetArg(FinalBox::makeArg(n));
             } catch (hash<ExceptionInfo> e) {
                 rethrow;
             }
