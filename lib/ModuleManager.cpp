@@ -4490,9 +4490,13 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
     } else {
         pholder = mpgm = new QoreProgram(parseOptions);
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
         mpgm->setScriptPath(modulePath.c_str());
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5739,9 +5743,13 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
     } else {
         pholder = mpgm = new QoreProgram(po);
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5884,9 +5892,13 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
     } else {
         pholder = mpgm = new QoreProgram(po);
         qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
+        // the module's Program from now on, also while it is initialized (qore#7077)
+        qore_program_private::get(*mpgm)->module_program.store(true, std::memory_order_release);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see

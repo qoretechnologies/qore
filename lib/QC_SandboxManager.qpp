@@ -1554,9 +1554,16 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     called, so library code that it calls gets that %Program's ID; calling another %Program's closure runs that
     %Program's code.
 
+    A module's %Program is a module's from its creation, also while the module is initialized: the initialization of
+    a module that a %Program loads by its own path serves that %Program.  The initialization of library code (a module
+    from a trusted module directory, not one that a sandboxed %Program loads into a container of its own) creates
+    state that the whole process shares, whoever loads it first, so the code
+    that loads it is not its caller, which would own that state.
+
     The caller is unknown, and the method returns @ref nothing, where the code that the running code serves cannot be
-    identified: in code that a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a
-    thread that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
+    identified: in the initialization of library code and the threads and tasks that it starts, whoever loads it, in code that
+    a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a thread that no code
+    submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
     caller must be treated as not being any given %Program.
 
     It is not a sandbox check: a sandboxed caller that it identifies is still refused by the checks that consider
