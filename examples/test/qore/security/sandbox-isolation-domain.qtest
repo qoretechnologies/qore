@@ -276,6 +276,45 @@ const DebuggerOps = {
     "Breakpoint::assignProgram": sub (ProgramControl pc) { (new Breakpoint()).assignProgram(pc); },
 };
 
+#! the methods of a Breakpoint (except getBreakpointId(), which only identifies it) that the test calls on one
+#! that is assigned to a Program (qore#6958)
+const BoundBreakpointOps = {
+    "setEnabled": sub (Breakpoint b) { b.setEnabled(False); },
+    "getEnabled": sub (Breakpoint b) { b.getEnabled(); },
+    "setPolicy": sub (Breakpoint b) { b.setPolicy(BreakpointPolicyNone); },
+    "getPolicy": sub (Breakpoint b) { b.getPolicy(); },
+    "assignProgram": sub (Breakpoint b) { b.assignProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+    "unassignProgram": sub (Breakpoint b) { b.unassignProgram(); },
+    "getProgram": sub (Breakpoint b) { b.getProgram(); },
+    "assignStatement": sub (Breakpoint b) { b.assignStatement(1); },
+    "unassignStatement": sub (Breakpoint b) { b.unassignStatement(1); },
+    "getStatementIds": sub (Breakpoint b) { b.getStatementIds(); },
+    "getThreadIds": sub (Breakpoint b) { b.getThreadIds(); },
+    "setThreadIds": sub (Breakpoint b) { b.setThreadIds((1,)); },
+    "addThreadId": sub (Breakpoint b) { b.addThreadId(1); },
+    "removeThreadId": sub (Breakpoint b) { b.removeThreadId(1); },
+    "isThreadId": sub (Breakpoint b) { b.isThreadId(1); },
+    "clearThreadIds": sub (Breakpoint b) { b.clearThreadIds(); },
+};
+
+#! the methods of a DebugProgram (except the callbacks) that the test calls on one that a Program was added to
+#! (qore#6958)
+const BoundDebugProgramOps = {
+    "waitForTerminationAndClear": sub (DebugProgram d) { d.waitForTerminationAndClear(); },
+    "getInterruptedCount": sub (DebugProgram d) { d.getInterruptedCount(); },
+    "getAllPrograms": sub (DebugProgram d) { d.getAllPrograms(); },
+    "addProgram": sub (DebugProgram d) { d.addProgram((new Program(PO_NEW_STYLE | PO_ALLOW_DEBUGGER)).getProgram()); },
+    "removeProgram": sub (DebugProgram d) { d.removeProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+    "attachThread": sub (DebugProgram d) { d.attachThread((new Program(PO_NEW_STYLE)).getProgram(), gettid()); },
+    "breakProgramThread": sub (DebugProgram d) {
+        d.breakProgramThread((new Program(PO_NEW_STYLE)).getProgram(), gettid());
+    },
+    "setProgramTerminating": sub (DebugProgram d) {
+        d.setProgramTerminating((new Program(PO_NEW_STYLE)).getProgram());
+    },
+    "breakProgram": sub (DebugProgram d) { d.breakProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+};
+
 #! every instance method of ProgramControl (except getProgramId()) that the test performs (qore#6536)
 const ControlOps = {
     "createEvalProgram": sub (ProgramControl pc) { pc.createEvalProgram(); },
@@ -439,6 +478,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         addTestCase("the code of another tenant has no effect: direct calls, nested and lost calls, parsing",
             \noEffect());
         addTestCase("a build cannot use another tenant's Program: neither its code nor its state", \programOps());
+        addTestCase("a build cannot use another tenant's Program through a debugger object bound to it",
+            \boundDebuggerOps());
         addTestCase("a worker started in a tenant's build runs other work under its submitter's isolation",
             \sharedWorker());
         set_return_value(main());
@@ -548,6 +589,83 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         # the Program's ID only identifies it
         assertEq(b_target.getProgramId(), a.callFunction("call", BuildCallArgs, (int sub (Program p) {
             return p.getProgramId(); }, (b_target,))));
+    }
+
+    boundDebuggerOps() {
+        # the host binds the objects to the Programs (outside any build); a build that tenant A called cannot use
+        # them for another tenant's Program, but can for its own
+        foreach hash<auto> i in (BoundBreakpointOps.pairIterator()) {
+            Program b_pgm = debuggableTarget("b");
+            Breakpoint b_bkpt();
+            b_bkpt.assignProgram(b_pgm.getProgram());
+            b_bkpt.setThreadIds((7,));
+            bool enabled = b_bkpt.getEnabled();
+            int policy = b_bkpt.getPolicy();
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_bkpt)), "Breakpoint::" + i.key);
+            # the breakpoint is unchanged and still assigned to the other tenant's Program
+            assertEq(b_pgm.getProgramId(), b_bkpt.getProgram().getProgramId(), "Breakpoint::" + i.key);
+            assertEq(enabled, b_bkpt.getEnabled(), "Breakpoint::" + i.key);
+            assertEq(policy, b_bkpt.getPolicy(), "Breakpoint::" + i.key);
+            assertEq((7,), b_bkpt.getThreadIds(), "Breakpoint::" + i.key);
+            Program a_pgm = debuggableTarget("a");
+            Breakpoint a_bkpt();
+            a_bkpt.assignProgram(a_pgm.getProgram());
+            assertNotIsolationError(i.value, a_bkpt, "Breakpoint::" + i.key);
+        }
+        foreach hash<auto> i in (BoundDebugProgramOps.pairIterator()) {
+            Program b_pgm = debuggableTarget("b");
+            OpDebugProgram b_dbg();
+            b_dbg.addProgram(b_pgm.getProgram());
+            on_exit b_dbg.removeProgram(b_pgm.getProgram());
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_dbg)), "DebugProgram::" + i.key);
+            # the debugger still has the other tenant's Program
+            assertEq(1, b_dbg.getAllPrograms().size(), "DebugProgram::" + i.key);
+            Program a_pgm = debuggableTarget("a");
+            OpDebugProgram a_dbg();
+            a_dbg.addProgram(a_pgm.getProgram());
+            on_exit a_dbg.removeProgram(a_pgm.getProgram());
+            assertNotIsolationError(i.value, a_dbg, "DebugProgram::" + i.key);
+        }
+        # a debugger bound to the Programs of both tenants is bound to the other tenant's: refused, also for an
+        # operation on the tenant's own Program
+        {
+            Program b_pgm = debuggableTarget("b");
+            Program a_pgm = debuggableTarget("a");
+            OpDebugProgram mixed();
+            mixed.addProgram(a_pgm.getProgram());
+            mixed.addProgram(b_pgm.getProgram());
+            on_exit {
+                mixed.removeProgram(a_pgm.getProgram());
+                mixed.removeProgram(b_pgm.getProgram());
+            }
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (sub (DebugProgram d) { d.getAllPrograms(); }, mixed)));
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (sub (DebugProgram d) { d.removeProgram(a_pgm.getProgram()); }, mixed)));
+            assertEq(2, mixed.getAllPrograms().size());
+        }
+        # an object bound to no Program, or to one that is not another tenant's, is not refused
+        Breakpoint free();
+        assertNotIsolationError(BoundBreakpointOps.getEnabled, free, "Breakpoint::getEnabled (unassigned)");
+        # the breakpoint's ID only identifies it
+        Program b_pgm = debuggableTarget("b");
+        Breakpoint b_bkpt();
+        b_bkpt.assignProgram(b_pgm.getProgram());
+        assertEq(b_bkpt.getBreakpointId(), a.callFunction("call", BuildCallArgs, (int sub (Breakpoint b) {
+            return b.getBreakpointId(); }, (b_bkpt,))));
+    }
+
+    #! a Program of the given domain that allows debugging, with code
+    private Program debuggableTarget(string domain) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setIsolationDomain(domain);
+        Program p(PO_MODERN | PO_ALLOW_DEBUGGER);
+        p.setSandboxManager(m);
+        p.parse("our int x; int sub f() { return 1; }", "debug-target");
+        return p;
     }
 
     #! the operation in a build that tenant A called on its own Program: any error but an isolation error

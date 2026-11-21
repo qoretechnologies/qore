@@ -795,6 +795,10 @@ DLLLOCAL const std::string* qore_sandbox_build_caller_domain();
 //! sandboxes of \a pgm, else returns 0 (qore#6536)
 DLLLOCAL int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink, const char* operation);
 
+//! Returns true if the thread runs a trusted build that has an isolation, in which another tenant's Program is
+//! refused (qore#6536)
+DLLLOCAL bool qore_sandbox_isolation_active();
+
 //! Takes the Program container \a pgm of a module from its object \a obj, which is deleted, after the isolation check
 /** @return the container, which the caller owns, or nullptr with an exception in \a xsink (the object is not deleted
     if the isolation refuses \a pgm; qore#6536)
