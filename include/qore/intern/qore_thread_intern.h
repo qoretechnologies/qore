@@ -4215,6 +4215,9 @@ private:
    //! the thread's TID, kept here: a Program reads it from its records of a thread that can have ended, whose
    //! ThreadData has been freed (see qore_program_private::clearProgramThreadData())
    const int tid;
+   //! true if the thread is a foreign thread, kept here for the same reason: the debugger reads it from a Program's
+   //! records of its threads (canRunDebugCallbacks()), also of a thread that has ended (qore#7103)
+   const bool foreign;
 
    //! a cached local data of the thread in a Program with module lifetime; see findModuleProgramData()
    struct ModuleProgramDataCacheEntry {
@@ -4245,7 +4248,8 @@ private:
    }
 
 public:
-   DLLLOCAL ThreadProgramData(ThreadData* n_td, int n_tid) : td(n_td), tid(n_tid) {
+   DLLLOCAL ThreadProgramData(ThreadData* n_td, int n_tid, bool n_foreign) : td(n_td), tid(n_tid),
+         foreign(n_foreign) {
 #ifdef DEBUG
       dbg_id = dbgRegister();
 #endif
@@ -4346,7 +4350,6 @@ public:
    DLLLOCAL bool saveProgram(bool runtime, bool* first_entry = nullptr);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
-   DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
 
    //! Clears the thread's thread-local data in all Program families without unregistering the thread
    /** Clears the thread-local hash (tld) of each Program family this thread has data in.  Unlike del(), this does
