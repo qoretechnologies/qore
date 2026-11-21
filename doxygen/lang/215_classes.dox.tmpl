@@ -412,7 +412,7 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     of its class: a call from outside the class hierarchy through a variable of a parent class, or resolved at run
     time, on an object of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of
     the name can be called (\c BASE-CLASS-IS-PRIVATE when the method is reached only through private inheritance).\n\n
-    The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.
+    The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.  The default argument values of a method are inside the method's class, with the object of the call as \c self for a normal method, whoever calls the method, and never inside the class of the code that calls it (see @ref function_param_default_values).
 
     @subsection synchronized_methods Synchronized Methods
     Methods declared with the <tt><b>synchronized</b></tt> keyword will only run in one thread at a time.\n\n

@@ -2632,6 +2632,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the default values of a function, method or closure are evaluated in the class context of the code that
+      declared them; they were evaluated in the class context of the caller with its private access, which a default
+      value that uses the private declarations of the caller's class no longer has (see
+      @ref function_param_default_values; <a href="https://github.com/qoretechnologies/qore/issues/7066">issue 7066</a>)
     - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
       a class with only the same name and declarations as another class had the other class's private and
       \c private:internal access to its objects (see @ref private_access_class_identity;

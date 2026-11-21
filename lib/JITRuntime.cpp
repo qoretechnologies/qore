@@ -13879,46 +13879,20 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // Filtering used the callee receiver before its runtime context is installed.
             sig->lv[i]->instantiate(val, paramTypeInfo);
         } else if (i < defaultArgList.size() && defaultArgList[i]) {
-            // Evaluate default argument expression
-            QoreValue val = defaultArgList[i].eval(xsink);
-            if (*xsink) {
-                // Uninstantiate already-instantiated params in reverse
-                for (int j = (int)i - 1; j >= 0; --j) {
-                    sig->lv[j]->uninstantiate(xsink);
-                }
-                return -1;
+            // never reached: the fast call paths take only variants with no default values
+            // (UserVariantBase::isStaticallyFastCallEligible()) and closures given a value for every parameter
+            // (closureDirectArgsNeedNoBinding()); a default value is evaluated in the context of the code that
+            // declared it, not in the caller's, by the generic call path
+            // (CodeEvaluationHelper::prepareDefaultArgsImpl(), qore#7066), which this branch does not set up
+            // a release build refuses the call rather than evaluate the default value in the caller's context
+            assert(false);
+            xsink->raiseException("JIT-ERROR", "internal error: a parameter with a default value reached the fast "
+                "call path, which does not evaluate default values");
+            // Uninstantiate already-instantiated params in reverse
+            for (int j = (int)i - 1; j >= 0; --j) {
+                sig->lv[j]->uninstantiate(xsink);
             }
-
-            // Apply type filter like CodeEvaluationHelper::prepareDefaultArgs(): a typed param is always checked
-            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-            if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
-            }
-            if (QoreTypeInfo::hasType(paramTypeInfo) || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
-                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
-                if (*xsink) {
-                    val.discard(xsink);
-                    // Uninstantiate already-instantiated params in reverse
-                    for (int j = (int)i - 1; j >= 0; --j) {
-                        sig->lv[j]->uninstantiate(xsink);
-                    }
-                    return -1;
-                }
-            }
-
-            // Normalize no-narrow container params like LValueHelper::assign()
-            // does for assignments (matches UserVariantBase::setupCall())
-            sig->lv[i]->applyNoNarrowContainerType(val, xsink);
-            if (*xsink) {
-                val.discard(xsink);
-                for (int j = (int)i - 1; j >= 0; --j) {
-                    sig->lv[j]->uninstantiate(xsink);
-                }
-                return -1;
-            }
-
-            // Filtering used the callee receiver before its runtime context is installed.
-            sig->lv[i]->instantiate(val, paramTypeInfo);
+            return -1;
         } else {
             // Match CodeEvaluationHelper::prepareDefaultArgs() for missing args: a typed param filters the missing
             // value, so a soft list param receives an empty list rather than NOTHING
