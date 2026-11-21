@@ -61,6 +61,23 @@ probe("lent controller, host task", RunOrRefuse + 'string sub t(AsyncSocketIoCon
     return run(sub (Counter done) { c.submitTask(make_host_task(done)); });
 }', (lent_controller, make_host_task));
 
+# a timer of the host's code whose cancel callback is code of the restricted Program: the cancel callback runs on the
+# controller's threads, and is refused as the timer's code is (qore#7087)
+probe("wrapper addTimer, restricted cancel callback", RunOrRefuse + 'string sub t(code make_host_task) {
+    AsyncSocketIoController c();
+    return run(sub (Counter done) { c.addTimer(now_us() + 1ms, make_host_task(done), "probe", sub () {}); });
+}', make_host_task);
+probe("wrapper addTimerDelay, restricted cancel callback", RunOrRefuse + 'string sub t(code make_host_task) {
+    AsyncSocketIoController c();
+    return run(sub (Counter done) { c.addTimerDelay(1ms, make_host_task(done), "probe", sub () {}); });
+}', make_host_task);
+# the same timer with a cancel callback of the host's code is run
+probe("wrapper addTimerDelay, host cancel callback", RunOrRefuse + 'string sub t(code make_host_task) {
+    AsyncSocketIoController c();
+    return run(sub (Counter done) { c.addTimerDelay(1ms, make_host_task(done), "probe", make_host_task(new Counter(1)));
+    });
+}', make_host_task);
+
 # a ThreadPool that the host lends: code that may not control threads may use the thread classes, and so a pool of its
 # own: the pool runs its code (qore#7056)
 ThreadPool lent_pool(2);
