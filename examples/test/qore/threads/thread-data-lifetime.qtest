@@ -190,8 +190,12 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
             release.push(True);
             ended.waitForZero();
         }
-        # the thread has ended; its data was freed at its end at the latest
-        assertEq(0, destroyed.getCount(), "the thread's data was freed");
+        # the thread has left the root's code: the root's teardown at the end of the block (which waits only for the
+        # thread count of the root, released before the thread frees its data) frees the data, unless the ending
+        # thread has already taken it off its map, in which case the thread frees it itself, at the same time as
+        # this thread goes on; so the test waits for the destruction (qore#7012); the wait ends at once when the data
+        # is freed, and the limit is only a bound for a failure
+        assertEq(0, destroyed.waitForZero(60s), "the thread's data was freed");
 
         # now a thread that stays alive outside the root's code: it saves in the root, then parks in this Program
         destroyed = new Counter(1);
