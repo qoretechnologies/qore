@@ -3732,6 +3732,73 @@ static void ut_program_family_thread_data(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! externalDelete() of an object whose deletion has started (qore#7071): it removes the private data that the caller
+//! has deleted, and starts no second deletion
+/** An explicit deletion (QoreObject::doDelete()) marks the object with the deleting thread's TID while the destructor
+    runs and the object's data is released, and the deletion after the last dereference sets in_destructor as well;
+    a module that has deleted the object's private data then (externalDelete()) must leave the deletion to the
+    running one, which must not release the deleted private data
+*/
+static void ut_external_delete_during_deletion_case(UnitTestCounters& c, bool in_destructor, const char* what) {
+    ExceptionSink xsink;
+    QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+    // a weak reference keeps the object allocated, so the test can see its state
+    obj->tRef();
+    qore_object_private* p = qore_object_private::get(*obj);
+    // the module's own reference to the private data, which it releases as it deletes it
+    AbstractPrivateData* pd = obj->getReferencedPrivateData(CID_COUNTER, &xsink);
+    UT_ASSERT(c, pd, (std::string(what) + ": the object has private data").c_str());
+    int tid = q_gettid();
+    // marked as the deletion marks it before its destructor runs
+    {
+        QoreAutoVarRWWriteLocker al(p->rml);
+        p->status = tid;
+        p->in_destructor = in_destructor;
+    }
+    obj->externalDelete(CID_COUNTER, &xsink);
+    int status;
+    bool has_data;
+    {
+        QoreAutoVarRWReadLocker al(p->rml);
+        status = p->status;
+        has_data = p->privateData && p->privateData->checkData(CID_COUNTER);
+    }
+    std::string m(what);
+    UT_ASSERT(c, status == tid, (m + ": externalDelete() starts no second deletion").c_str());
+    UT_ASSERT(c, !has_data, (m + ": the deleted private data is removed from the object").c_str());
+    UT_ASSERT(c, !xsink, (m + ": externalDelete() raises no exception").c_str());
+    xsink.clear();
+    if (has_data) {
+        // without the fix: removed here, so that the deletion below does not release the data that is freed below
+        QoreAutoVarRWWriteLocker al(p->rml);
+        p->privateData->getAndClearPtr(CID_COUNTER);
+    }
+    // the module deletes its private data: its own reference and the object's, which externalDelete() took over
+    if (pd) {
+        pd->deref(&xsink);
+        pd->deref(&xsink);
+    }
+    if (status == tid) {
+        // the running deletion continues: the destructor and the release of the object's data
+        {
+            QoreAutoVarRWWriteLocker al(p->rml);
+            p->in_destructor = false;
+        }
+        p->doDeleteIntern(&xsink);
+        UT_ASSERT(c, !obj->isValid(), (m + ": the running deletion deletes the object").c_str());
+        UT_ASSERT(c, !xsink, (m + ": the deletion raises no exception").c_str());
+        xsink.clear();
+    }
+    obj->deref(&xsink);
+    xsink.clear();
+    obj->tDeref();
+}
+
+static void ut_external_delete_during_deletion(UnitTestCounters& c) {
+    ut_external_delete_during_deletion_case(c, false, "explicit deletion");
+    ut_external_delete_during_deletion_case(c, true, "deletion in the destructor");
+}
+
 static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
@@ -22001,6 +22068,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_external_delete_during_deletion(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
@@ -22406,6 +22474,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_external_delete_during_deletion(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
