@@ -2485,15 +2485,57 @@ bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std
         xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
         return false;
     }
-    QoreStringValueHelper str(p);
-    // the value is passed on as a C string, which would be cut at a NUL character
     QoreStringMaker what("'%s' value", key);
+    // the value is kept in the default encoding
+    QoreStringValueHelper given(p);
+    TempEncodingHelper str;
+    if (q_ds_value_to_default(str, *given, what.c_str(), xsink)) {
+        return false;
+    }
+    // the value is passed on as a C string, which would be cut at a NUL character
     if (secret ? q_check_secret_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)
             : q_check_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)) {
         return false;
     }
     value.assign(str->c_str(), str->size());
     return true;
+}
+
+int q_ds_value_to_default(TempEncodingHelper& value, const QoreString* str, const char* what,
+        ExceptionSink* xsink) {
+    assert(str);
+    assert(xsink);
+    ExceptionSink conv_xsink;
+    if (value.set(str, QCS_DEFAULT, &conv_xsink)) {
+        return 0;
+    }
+    // an exception that is not a conversion error (ex: the cancellation of the thread) is raised as it is
+    // (a string value can be held without a QoreStringNode)
+    QoreStringDataHelper err(conv_xsink.getExceptionErr());
+    if (!err || strcmp(err.c_str(), "ENCODING-CONVERSION-ERROR")) {
+        xsink->assimilate(conv_xsink);
+        return -1;
+    }
+    // a conversion error is replaced with one that says which value cannot be converted without showing it or the
+    // offset of the character that cannot be converted
+    conv_xsink.clear();
+    xsink->raiseException("ENCODING-CONVERSION-ERROR", "the %s cannot be converted from \"%s\" to the default "
+        "encoding \"%s\", in which datasource values are kept", what, str->getEncoding()->getCode(),
+        QCS_DEFAULT->getCode());
+    return -1;
+}
+
+QoreHashNode* q_parse_datasource_string(const QoreString& ds, ExceptionSink* xsink) {
+    TempEncodingHelper str;
+    if (q_ds_value_to_default(str, &ds, "datasource string", xsink)) {
+        return nullptr;
+    }
+    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+    if (q_check_secret_no_nul(str->c_str(), str->size(), "datasource string", "datasource strings",
+            "DATASOURCE-PARSE-ERROR", xsink)) {
+        return nullptr;
+    }
+    return parseDatasource(str->c_str(), xsink);
 }
 
 int q_check_secret_no_nul(const char* str, size_t len, const char* what, const char* what_plural,

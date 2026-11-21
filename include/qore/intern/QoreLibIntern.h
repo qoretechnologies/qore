@@ -1812,15 +1812,50 @@ DLLLOCAL QoreHashNode* statvfs_to_hash(const struct statvfs& statvfs);
 // only called in stage 1 parsing: true means node requires run-time evaluation
 //DLLLOCAL bool needsEval(AbstractQoreNode* n);
 
-//! gets the string value of the given key, if any; raises \a err if the value is not a string or contains a NUL
-/** @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
+//! gets the string value of the given key, if any, in the default encoding; raises \a err if the value is not a string
+//! or contains a NUL, and \c ENCODING-CONVERSION-ERROR if the default encoding cannot represent it
+/** The value is converted to the default encoding, in which datasources keep their connection values (see
+    q_ds_value_to_default(), which raises another exception of the conversion as it is)
+
+    @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
     character
 
-    @return true if the key has a string value with no NUL character, false if not, in which case an exception may
-    have been raised
+    @return true if the key has a string value with no NUL character that could be converted, false if not, in which
+    case an exception may have been raised
 */
 DLLLOCAL bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
         ExceptionSink* xsink, bool secret = false);
+
+//! converts a datasource value to the default encoding
+/** A datasource keeps its connection values (user name, password, database name, database encoding name and
+    hostname) as bytes in the default encoding: the C++ API takes them as C strings (ex:
+    Datasource::setPendingDBName()), returns them tagged with the default encoding (ex:
+    Datasource::getPendingDBName()), and drivers read them in it; a datasource string is parsed into strings in the
+    default encoding (parseDatasource()).  A value given in another encoding (ex: a UTF-8 string literal while the
+    default encoding is ISO-8859-1) is therefore converted before its bytes are used; a value that the default
+    encoding cannot represent raises \c ENCODING-CONVERSION-ERROR instead of being kept as bytes that its encoding tag
+    would misdescribe.  The exception does not show the value, which can be a password or a datasource string with a
+    password.  Another exception of the conversion (ex: \c THREAD-CANCELLED, where the conversion validates its input
+    and is a cancellation point) is raised as it is.
+
+    @param value set to \a str in the default encoding
+    @param str the value
+    @param what the description of the value for the exception (ex: \c "user name")
+    @param xsink for the exception
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int q_ds_value_to_default(TempEncodingHelper& value, const QoreString* str, const char* what,
+        ExceptionSink* xsink);
+
+//! parses a datasource string given in any encoding and returns a hash of its component parts in the default encoding
+/** The string is converted to the default encoding (see q_ds_value_to_default()) and checked for a NUL character,
+    which raises \c DATASOURCE-PARSE-ERROR without showing the string, as it can contain a password; then it is parsed
+    with parseDatasource()
+
+    @return the hash of the component parts, or nullptr if an exception was raised
+*/
+DLLLOCAL QoreHashNode* q_parse_datasource_string(const QoreString& ds, ExceptionSink* xsink);
 
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the

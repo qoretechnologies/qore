@@ -181,12 +181,8 @@ static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sd
             }
 
             QoreStringValueHelper conf(val);
-            // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
-            if (q_check_secret_no_nul(conf->c_str(), conf->size(), "datasource string", "datasource strings",
-                    "DATASOURCE-PARSE-ERROR", xsink)) {
-                return;
-            }
-            ReferenceHolder<QoreHashNode> h(parseDatasource(conf->c_str(), xsink), xsink);
+            // converted to the default encoding and checked for a NUL character first
+            ReferenceHolder<QoreHashNode> h(q_parse_datasource_string(**conf, xsink), xsink);
             if (!h) {
                 assert(*xsink);
                 return;
@@ -278,29 +274,50 @@ DatasourcePool db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 3, 1
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a password is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
     @throw DATASOURCE-PARSE-ERROR the driver argument is a datasource string with a NUL character (since %Qore 3.0); it is not shown in the exception, as it can contain a password
+    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
+    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
+    3.0)
  */
 DatasourcePool::constructor(string driver, *string username, *string password, *string database, *string encoding,
       *string host, softint min_connections = 3, softint max_connections = 10, softint port = 0,
       *Qore::Thread::Queue[Queue] queue, auto argument) {
+   // the strings are kept in the default encoding
+   TempEncodingHelper driver_str, username_str, password_str, database_str, encoding_str, host_str;
+   if (q_ds_value_to_default(driver_str, driver, "driver or datasource string", xsink)
+      || (username && q_ds_value_to_default(username_str, username, "user name", xsink))
+      || (password && q_ds_value_to_default(password_str, password, "password", xsink))
+      || (database && q_ds_value_to_default(database_str, database, "database name", xsink))
+      || (encoding && q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink))
+      || (host && q_ds_value_to_default(host_str, host, "hostname", xsink))) {
+      return;
+   }
+   const QoreString* driver_v = *driver_str;
+   const QoreString* username_v = *username_str;
+   const QoreString* password_v = *password_str;
+   const QoreString* database_v = *database_str;
+   const QoreString* encoding_v = *encoding_str;
+   const QoreString* host_v = *host_str;
+
    // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
    // datasource string with a password, so it is not shown, and neither is the password
-   bool is_ds_string = !port && min_connections == 3 && max_connections == 10 && driver->find(':') != -1;
-   if (q_check_secret_no_nul(driver->c_str(), driver->size(), "driver or datasource string",
+   bool is_ds_string = !port && min_connections == 3 && max_connections == 10 && driver_v->find(':') != -1;
+   if (q_check_secret_no_nul(driver_v->c_str(), driver_v->size(), "driver or datasource string",
          "driver names and datasource strings", is_ds_string ? "DATASOURCE-PARSE-ERROR"
             : "DATASOURCEPOOL-UNSUPPORTED-DATABASE", xsink)
-      || (username && q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", DSPC_ERR,
-         xsink))
-      || (password && q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
+      || (username_v && q_check_no_nul(username_v->c_str(), username_v->size(), "user name", "datasource values",
          DSPC_ERR, xsink))
-      || (database && q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values",
+      || (password_v && q_check_secret_no_nul(password_v->c_str(), password_v->size(), "password",
+         "datasource values", DSPC_ERR, xsink))
+      || (database_v && q_check_no_nul(database_v->c_str(), database_v->size(), "database name",
+         "datasource values", DSPC_ERR, xsink))
+      || (encoding_v && q_check_no_nul(encoding_v->c_str(), encoding_v->size(), "encoding", "datasource values",
          DSPC_ERR, xsink))
-      || (encoding && q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", DSPC_ERR,
-         xsink))
-      || (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", DSPC_ERR, xsink))) {
+      || (host_v && q_check_no_nul(host_v->c_str(), host_v->size(), "hostname", "datasource values", DSPC_ERR,
+         xsink))) {
       return;
    }
    if (is_ds_string) {
-      ReferenceHolder<QoreHashNode> h(parseDatasource(driver->getBuffer(), xsink), xsink);
+      ReferenceHolder<QoreHashNode> h(parseDatasource(driver_v->getBuffer(), xsink), xsink);
       if (!h) {
          assert(*xsink);
          return;
@@ -309,9 +326,10 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
       return;
    }
 
-   DBIDriver *db_driver = DBI.find(driver->getBuffer());
+   DBIDriver *db_driver = DBI.find(driver_v->getBuffer());
    if (!db_driver) {
-      xsink->raiseException("DATASOURCEPOOL-UNSUPPORTED-DATABASE", "no DBI driver can be found for database type '%s'", driver->getBuffer());
+      xsink->raiseException("DATASOURCEPOOL-UNSUPPORTED-DATABASE", "no DBI driver can be found for database type "
+         "'%s'", driver_v->getBuffer());
       return;
    }
 
@@ -331,10 +349,11 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
       return;
    }
 
-   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver, username ? username->getBuffer() : 0,
-                         password ? password->getBuffer() : 0, database ? database->getBuffer() : 0,
-                         encoding ? encoding->getBuffer() : 0, host ? host->getBuffer() : 0, min_connections,
-                         max_connections, port, 0, queue.release(), argument.refSelf()));
+   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver,
+                         username_v ? username_v->getBuffer() : 0, password_v ? password_v->getBuffer() : 0,
+                         database_v ? database_v->getBuffer() : 0, encoding_v ? encoding_v->getBuffer() : 0,
+                         host_v ? host_v->getBuffer() : 0, min_connections, max_connections, port, 0, queue.release(),
+                         argument.refSelf()));
    if (!*xsink)
       self->setPrivate(CID_DATASOURCEPOOL, ds.release());
    else
@@ -355,16 +374,15 @@ DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
     @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); a datasource string with a NUL character is not shown in the exception, as it can contain a password
+    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
+    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
+    3.0)
 
     @since %Qore 0.8.6
  */
 DatasourcePool::constructor(string description, *Qore::Thread::Queue[Queue] queue, auto argument) {
-    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
-    if (q_check_secret_no_nul(description->c_str(), description->size(), "datasource string", "datasource strings",
-            "DATASOURCE-PARSE-ERROR", xsink)) {
-        return;
-    }
-    ReferenceHolder<QoreHashNode> h(parseDatasource(description->getBuffer(), xsink), xsink);
+    // converted to the default encoding and checked for a NUL character first
+    ReferenceHolder<QoreHashNode> h(q_parse_datasource_string(*description, xsink), xsink);
     if (!h) {
         assert(*xsink);
         return;
@@ -394,6 +412,9 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw ENCODING-CONVERSION-ERROR a string value of the hash cannot be converted to the @ref default_encoding
+    "default encoding", in which a datasource keeps its connection values; it is not shown in the exception (since
+    %Qore 3.0)
  */
 DatasourcePool::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
    dsp_constructor_hash(options, self, queue.release(), argument, xsink);
@@ -1175,15 +1196,24 @@ hash<auto> DatasourcePool::getOptionHash() [flags=CONSTANT] {
 /** @param option the option to get
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name contains a NUL character (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the option name cannot be converted to the @ref default_encoding "default
+    encoding" (since %Qore 3.0)
 
     @since %Qore 0.8.6
  */
 auto DatasourcePool::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   // the option name is passed on as a C string, which would be cut at a NUL character
-   if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+   // option names are hash keys in the default encoding
+   TempEncodingHelper option_str;
+   if (q_ds_value_to_default(option_str, option, "option name", xsink)) {
       return QoreValue();
    }
-   return ds->getOption(option->getBuffer(), xsink);
+   const QoreString* option_v = *option_str;
+
+   // the option name is passed on as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(option_v->c_str(), option_v->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+      return QoreValue();
+   }
+   return ds->getOption(option_v->getBuffer(), xsink);
 }
 
 //! Returns a @ref datasource_hash "datasource hash" describing the configuration of the current object
