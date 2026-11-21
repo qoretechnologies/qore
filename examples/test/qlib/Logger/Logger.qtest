@@ -39,6 +39,13 @@ class ReentrantLoggerAppender inherits LoggerAppenderWithLayout {
 class Test inherits QUnit::Test {
     private {
         Counter m_counter();
+        #! the lock of m_helper_ex
+        Mutex m_helper_lock();
+        #! the first exception raised in a helper thread (a failed assertion, for example), raised again in the test
+        /** an exception in a background thread cannot fail the test case by itself: the test thread checks for it after
+            the threads end (checkHelperThreads())
+        */
+        *hash<ExceptionInfo> m_helper_ex;
         #! the base name of the files and directories the test creates in the temporary directory
         /** unique for every run, so that runs on the same host, at the same time or after a run that left files
             behind, never use each other's files
@@ -92,6 +99,17 @@ class Test inherits QUnit::Test {
         LoggerLevel ll1(550, "LOW");
         ll0 = Serializable::deserialize(ll1.serialize());
         assertTrue(ll1.isEqual(ll0));
+
+        # the level and the parent of a logger are serialized with it: they are private:internal members of Logger,
+        # which its serializer reads with the class (qore#6839)
+        Logger parent("parent", LoggerLevel::getLevelWarn());
+        Logger l2("child", LoggerLevel::getLevelDebug());
+        l2.setParent(parent);
+        Logger l3 = Serializable::deserialize(l2.serialize());
+        assertEq("child", l3.getName());
+        assertEq("DEBUG", l3.getLevel().getStr());
+        assertEq("parent", l3.getParent().getName());
+        assertEq("WARN", l3.getParent().getLevel().getStr());
     }
 
     testLoggerLevel() {
@@ -346,10 +364,13 @@ class Test inherits QUnit::Test {
                 "output": "mylogger mylogger Logger" + LoggerLayoutPattern::getLineDelimiter(),
             ),
 
+            # live-provider-optin: a format test of the first and last variables; the value stays in the process
             "%E{"+ENV.firstKey()+"}|%E{"+ENV.lastKey()+"}": (
                 "parsed": (
+                    # live-provider-optin: a format test of the first and last variables; the value stays in the process
                     ("key": "E", "option": ENV.firstKey()),
                     "|",
+                    # live-provider-optin: a format test of the first and last variables; the value stays in the process
                     ("key": "E", "option": ENV.lastKey()),
                 ),
                 "output": ENV.firstValue()+"|"+ENV.lastValue(),
@@ -661,27 +682,53 @@ class Test inherits QUnit::Test {
         }
     }
 
+    #! keeps the first exception of a helper thread
+    private recordHelperFailure(hash<ExceptionInfo> ex) {
+        AutoLock al(m_helper_lock);
+        if (!m_helper_ex) {
+            m_helper_ex = ex;
+        }
+    }
+
+    #! returns True if a helper thread has failed
+    private bool hasHelperFailure() {
+        AutoLock al(m_helper_lock);
+        return exists m_helper_ex;
+    }
+
+    #! fails the test case with the first exception of a helper thread, if any; called after the threads have ended
+    private checkHelperThreads() {
+        *hash<ExceptionInfo> ex;
+        {
+            AutoLock al(m_helper_lock);
+            ex = remove m_helper_ex;
+        }
+        if (ex) {
+            fail(sprintf("a helper thread failed: %s", get_exception_string(ex)));
+        }
+    }
+
     startPostThread(LoggerAppender la) {
         on_exit m_counter.dec();
         try {
             assertTrue(la.post(new LoggerEvent('Logger', 'e', LoggerLevel::getLevelError(), 'ABCDEF')));
-        } catch (hash ex) {
-            printf("Ex: %y\n", ex);
+        } catch (hash<ExceptionInfo> ex) {
+            recordHelperFailure(ex);
         }
     }
 
     startProcessThread(LoggerAppenderStream la) {
+        on_exit m_counter.dec();
         StringOutputStream sos = la.getStreamWriter().getOutputStream();
         try {
             int n = la.getQueue().size();
             sos.reassignThread();
+            on_exit sos.unassignThread();
             la.getQueue().process();
             assertEq(n, sos.getData().split(",").size());
         } catch (hash<ExceptionInfo> ex) {
-            printf("Ex: %y\n", ex);
+            recordHelperFailure(ex);
         }
-        sos.unassignThread();
-        m_counter.dec();
     }
 
     testLoggerAppenderMultiThread() {
@@ -697,6 +744,7 @@ class Test inherits QUnit::Test {
         m_counter.inc();
         int tid = background startPostThread(la);
         m_counter.waitForZero();
+        checkHelperThreads();
         la.getQueue().process();
         assertEq(sprintf("ABCDEF[%d]", tid), sos.getData());
 
@@ -708,10 +756,15 @@ class Test inherits QUnit::Test {
             push tids, background startPostThread(la);
             n--;
         }
-        while (m_counter.getCount() > 0 || !sos.hasData()) {
+        # ends when a helper has failed too, as a failed post can leave no data to wait for
+        while ((m_counter.getCount() > 0 || !sos.hasData()) && !hasHelperFailure()) {
             la.getQueue().process(100ms);
         }
         m_counter.waitForZero();
+        checkHelperThreads();
+        # the loop ends when the last thread is done, but a thread can post its event after the last call above and
+        # end before the loop checks the counter: every event is queued now, so the rest is processed here
+        la.getQueue().process();
         list l2 = ();
         string ls = sos.getData();
 
@@ -734,11 +787,13 @@ class Test inherits QUnit::Test {
             n--;
         }
         m_counter.waitForZero();
+        checkHelperThreads();
         m_counter.inc();
         # "external" stream thread manipulation
         sos.unassignThread();
         background startProcessThread(la);
         m_counter.waitForZero();
+        checkHelperThreads();
         sos.reassignThread();  # for close()
     }
 
@@ -755,6 +810,7 @@ class Test inherits QUnit::Test {
         m_counter.inc();
         int tid = background startPostThread(la);
         m_counter.waitForZero();
+        checkHelperThreads();
         la.getQueue().process();
 
         sos.reassignThread(); # just to get value

@@ -10,6 +10,7 @@
 %requires SqlUtil
 %requires DataProvider
 %requires ./OracleTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -83,7 +84,7 @@ class OracleDpqlInTest inherits QUnit::Test {
 
     varargsTest() {
         if (!table) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         # what the DPQL parser gives
         assertEq((1, 4), ids(DataProvider::parseDpqlExpression("@id in (1, 4)")));
@@ -99,7 +100,7 @@ class OracleDpqlInTest inherits QUnit::Test {
 
     listTest() {
         if (!table) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         assertEq((1, 4), ids(expr((fref("id"), (1, 4)))));
         assertEq((1, 3), ids(expr((fref("name"), ("a", "c")))));

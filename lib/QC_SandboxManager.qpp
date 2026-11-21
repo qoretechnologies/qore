@@ -32,6 +32,8 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QoreSandboxPollOps.h"
+#include "qore/intern/qore_thread_intern.h"
 
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
@@ -221,6 +223,11 @@ SandboxManager sm();
 */
 SandboxManager::constructor() {
     QoreSandboxManager* nsm = new QoreSandboxManager();
+    // a sandbox that sandboxed code creates belongs to the tenant of that code (qore#6536)
+    if (QoreSandboxComposition::inheritIsolationDomain(nsm, xsink)) {
+        nsm->deref(xsink);
+        return;
+    }
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -238,6 +245,11 @@ SandboxManager::destructor() {
 */
 SandboxManager::copy() {
     QoreSandboxManager* nsm = sm->copy();
+    // a copy that sandboxed code makes belongs to the tenant of that code (qore#6536)
+    if (QoreSandboxComposition::inheritIsolationDomain(nsm, xsink)) {
+        nsm->deref(xsink);
+        return;
+    }
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -282,6 +294,65 @@ nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
 */
 int SandboxManager::getMaxThreads() {
     return sm->getMaxThreads();
+}
+
+//! Sets the isolation domain (the tenant) of the sandbox
+/** Code of different isolation domains never runs for each other: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to run code of a sandbox of another domain, on every path (its arguments, values that it reaches
+    through them, threads and other continuations that it starts, nested builds), with a \c SANDBOX-ISOLATION-ERROR
+    exception; see @ref sandbox_isolation_domains.
+
+    A sandbox that sandboxed code creates (or copies) belongs to the domain of the sandbox that governs that code.
+    A sandbox without a domain belongs to none: no code is refused for it, as for every sandbox of a host that does
+    not set domains.
+
+    @param domain the isolation domain; must not be empty
+
+    @par Example:
+    @code{.py}
+SandboxManager sm();
+sm.setIsolationDomain("tenant-a");
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR sandboxed code, or code whose functional domains are restricted, cannot set the
+    isolation domain
+    @throw SANDBOX-CONFIG-ERROR the domain is empty, the sandbox is a composite, its domain is already set to another
+    domain, or it already governs code (it was given to a %Program or is a part of a composite sandbox)
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setIsolationDomain(string domain) [flags=NAMED_ARGS] {
+    TempEncodingHelper str(domain, QCS_UTF8, xsink);
+    if (!str) {
+        return QoreValue();
+    }
+    sm->setIsolationDomain(str->c_str(), xsink);
+}
+
+//! Returns the isolation domain (the tenant) of the sandbox
+/** @return the isolation domain, or @ref nothing if the sandbox has none; for a composite sandbox, the domain that
+    its members with a domain have
+
+    @throw SANDBOX-ISOLATION-ERROR the sandbox combines the sandboxes of different isolation domains, so it belongs to
+    no isolation domain
+
+    @see @ref Qore::SandboxManager::setIsolationDomain() "setIsolationDomain()"
+
+    @since %Qore 3.0
+*/
+*string SandboxManager::getIsolationDomain() {
+    std::string domain = sm->getIsolationDomain();
+    if (domain.empty()) {
+        return QoreValue();
+    }
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager::getIsolationDomain(): the sandbox combines "
+            "the sandboxes of more than one isolation domain, so it belongs to no isolation domain");
+        return QoreValue();
+    }
+    return new QoreStringNode(domain.c_str(), QCS_UTF8);
 }
 
 //! Sets the wall-clock time limit of each call into the sandbox
@@ -960,30 +1031,36 @@ nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port,
     sm->network().addAllowedPortRange(start_port, end_port, protocol);
 }
 
-//! Blocks all private/internal networks (SSRF prevention)
+//! Blocks every address that is not a public unicast destination (SSRF prevention)
 /** Blocks the following ranges:
-    - 127.0.0.0/8 (localhost)
-    - 10.0.0.0/8 (RFC 1918 Class A)
-    - 172.16.0.0/12 (RFC 1918 Class B)
-    - 192.168.0.0/16 (RFC 1918 Class C)
-    - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-    - 0.0.0.0/8 ("this network", which reaches the local host on common platforms; 0.0.0.0 itself is judged as the
-      local host for a connection, and a bind to it is a bind on all interfaces, which the ranges do not decide)
-    - 100.64.0.0/10 (shared address space of carrier-grade NAT)
-    - 224.0.0.0/4 (multicast)
-    - 240.0.0.0/4 (reserved, includes the limited broadcast address 255.255.255.255)
-    - ::1/128 (IPv6 localhost; a connection to the unspecified address :: is judged as one to it)
-    - fe80::/10 (IPv6 link-local)
-    - fc00::/7 (IPv6 unique local, includes fd00:ec2::254 of cloud metadata)
-    - ff00::/8 (IPv6 multicast)
+    - IPv4: 0.0.0.0/8 ("this network", which reaches the local host on common platforms; the unspecified address
+      0.0.0.0 is judged as the loopback address for a connection), 10.0.0.0/8, 172.16.0.0/12
+      and 192.168.0.0/16 (RFC 1918), 100.64.0.0/10 (shared address space, carrier-grade NAT), 127.0.0.0/8
+      (loopback), 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254), 192.0.0.0/24 (IETF protocol
+      assignments), 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24 (documentation), 192.88.99.0/24 (6to4 relay
+      anycast), 198.18.0.0/15 (benchmarking), 224.0.0.0/4 (multicast) and 240.0.0.0/4 (reserved, including the
+      limited broadcast address 255.255.255.255)
+    - IPv6: every address outside the global unicast range 2000::/3 that embeds no IPv4 address, such as the
+      loopback address, unique local (fc00::/7), link-local (fe80::/10), site-local (fec0::/10), multicast
+      (ff00::/8), discard (100::/64) and local-use translation (64:ff9b:1::/48) addresses (the unspecified address
+      is judged as the loopback address for a connection), and in 2000::/3 the IETF protocol assignments
+      (2001::/23 but Teredo) and the documentation ranges (2001:db8::/32 and 3fff::/20)
 
-    An IPv6 address that embeds an IPv4 address (an IPv4-mapped address, an address of the NAT64 well-known prefix
-    64:ff9b::/96, or a 6to4 address of 2002::/16) is judged by its IPv4 address, for these ranges and every other rule
+    An IPv6 address that embeds an IPv4 address is judged by the IPv4 address, for every rule of the sandbox: an
+    IPv4-mapped or IPv4-compatible address, an address of the well-known NAT64 prefix (64:ff9b::/96), a 6to4
+    address (2002::/16), and a Teredo address (2001::/32, by the client address that it carries).  A denied or
+    allowed range of the sandbox applies to the address as given as well as to the IPv4 address that it embeds, so a
+    range on an IPv6 translation prefix keeps its effect.  An address of a network-specific NAT64 prefix cannot be
+    recognized, and is judged as an IPv6 address.
+
+    The rules apply to the resolved address of every connection that the sandbox governs, when it is made, and a
+    denied range takes precedence over the sandbox's allowed hosts and ranges.
 
     @note This is essential for SSRF prevention in web applications.
 
     @note The ranges deny connections and binds to their addresses, except a bind to a loopback address, which can
-    only be reached from the local host; see @ref sandboxing
+    only be reached from the local host; a bind to the unspecified address (0.0.0.0 or ::), which binds every
+    interface, is not denied by them; see @ref sandboxing
 
     @par Example:
     @code{.py}
@@ -1019,7 +1096,7 @@ nothing SandboxManager::allowHTTPSOnly() {
     // it adds 443/TCP to the allowed ports: with no port rule every port is allowed already, so it only restricts
     // the ports then (as it does when 443/TCP is allowed already), but it loosens an allowlist that lacks the port
     // (see qore_sandbox_manager_check_change())
-    if (!sm->network().allowsPort(443, QSEC_NET_TCP)
+    if (!qore_network_security_manager_ops(sm->network()).allowsPort(443, QSEC_NET_TCP)
         && qore_sandbox_manager_check_change(sm, "SandboxManager::allowHTTPSOnly()", xsink)) {
         return QoreValue();
     }
@@ -1082,6 +1159,16 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
       calls, is still checked against its sandbox
     - only filesystem/network policy is affected; interrupt and force-terminate checks
       resolve unchanged, so a barriered call remains cancellable
+    - of the functional-domain restrictions of the calling code, only those of the file system, the network and
+      external information are lent (see isCallerRestricted()); native code is never loaded for the caller through it,
+      and a thread started inside the call for a caller with a sandbox keeps that caller's restrictions
+    - an object of a builtin class records no restrictions of the code that created it: a builtin method (or one of a
+      binary module) that checks its caller when it runs, and that the trusted code calls inside the call, judges the
+      trusted code, also for an object that the caller created
+
+    @note Objects that the code inside the call creates from data that the caller gave (deserialization, for example)
+    are objects of classes that the caller chose, whose code then runs with the lent access: trusted code
+    deserializes such data outside the call
 
     @note Object and callback provenance remains enforced through this barrier. A reference created while
     serving a sandboxed caller retains that caller's policy. Trusted infrastructure needing access beyond that
@@ -1261,12 +1348,18 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       the code of that %Program calls the capability
     - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
       build calls of them is governed by their sandbox
+    - the code of a sandbox of another isolation domain than the caller's (another tenant: see
+      @ref sandbox_isolation_domains) never runs in a build that a sandboxed caller entered: the build raises
+      \c SANDBOX-ISOLATION-ERROR before any of that code runs, also in the threads, pool tasks and asynchronous I/O that
+      it starts and in nested builds
 
     @param call a plain callback (not a bound callback or another capability) of code that no sandbox governs,
     created outside sandbox execution
 
     @return a capability for the fixed callback
 
+    @throw SANDBOX-ISOLATION-ERROR (raised by the capability) the build was to run code of another isolation domain
+    than its sandboxed caller's
     @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the creating code, the creating code is sandboxed, or @p call has
     sandbox provenance, belongs to a sandboxed %Program, or is a bound callback or a capability
 
@@ -1319,6 +1412,70 @@ class MapperContainers {
 */
 static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
     return qore_create_trusted_build_call(call, xsink);
+}
+
+//! Calls host code that creates objects for a sandboxed %Program, governed by that %Program's sandbox
+/** Trusted host code that builds objects for a sandboxed %Program (a container that creates the data providers or
+    connections of an interface, for example) calls the factory with this method: the factory runs with the host's
+    parse options, so it may create objects whose classes or constructors use functional domains that the governed
+    %Program's own code may not use, and the sandbox of the governed %Program governs the call and the objects that it
+    creates, as their provenance, for their whole life:
+    - its filesystem and network policy applies to their I/O, whoever calls their methods; its interrupts and force
+      terminations reach them, and its limits count them
+    - the work that the call starts (timers, asynchronous operations, callbacks added while the factory runs, by host or
+      module code) belongs to the governed %Program's application, not to the host; work that the objects' methods
+      start later belongs to the code that calls them (the code of another %Program that the factory calls keeps its
+      own application)
+    - the objects record the host's functional-domain restrictions (none), not those of the governed %Program:
+      arguments that the governed %Program's code passes to their methods later (URLs, paths) are used with the
+      objects' rights, and are still checked against the sandbox's policy; code that the governed %Program gives them
+      (callbacks) runs as that %Program's code, with its restrictions, also when the factory calls it
+
+    Two axes are kept apart: the functional-domain restrictions of the code that creates an object (here the host's)
+    and the sandbox that governs the object (here the governed %Program's).
+
+    The objects themselves are created in the host's %Program (their %Program is the host's).  A restricted %Program
+    that calls
+    host code which calls this method with a fixed factory of its own is allowed: the calling code is the host's
+    (see isCallerRestricted()); the host decides what its code creates for whom.
+
+    @param factory the host code to call; it must not have been created by code whose functional domains are
+    restricted, or by sandboxed code
+    @param governed the %Program whose sandbox governs the call and the objects that it creates; it must have a
+    sandbox manager (see Program::setSandboxManager()) or the sandbox of the code that created it, and it is referenced
+    for the call
+    @param call_args optional arguments for @p factory
+
+    @return the value that @p factory returns
+
+    @throw SANDBOX-CALL-GOVERNED-ERROR the calling code is governed by a sandbox, is sandboxed, or has restricted
+    functional domains; @p factory was created by restricted or sandboxed code; @p governed has no sandbox manager or
+    has been deleted
+
+    Exceptions that @p factory raises are raised unchanged; the sandbox and application of the call are removed on
+    every exit.
+
+    @par Example:
+    @code{.py}
+# a container creates the connection-bound data provider of a sandboxed interface
+AbstractDataProvider sub get_provider(Program interface_pgm, AbstractConnection conn) {
+    return SandboxManager::callGoverned(\conn.getDataProvider(), interface_pgm);
+}
+    @endcode
+
+    @note Use @ref Qore::Option::HAVE_SANDBOX_CALL_GOVERNED "HAVE_SANDBOX_CALL_GOVERNED" to check for the method
+    (\c %ifdef HAVE_SANDBOX_CALL_GOVERNED)
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::callGoverned(code factory, Program governed, *softlist<auto> call_args)
+        [dom=UNCONTROLLED_API] {
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(governed->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return qore_sandbox_call_governed(factory, *pgm, call_args, xsink);
 }
 
 //! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
@@ -1476,6 +1633,44 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns the @ref sandbox_isolation_domains "isolation domain" (the tenant) of the code that calls the library
+/** Library code that keeps process-wide state for its callers (a registry, a cache) uses it to keep the entries of
+    each tenant apart: the domain of the sandbox that governs the calling code, also when that code calls the library
+    through other library code.
+
+    @return the isolation domain of the sandbox that governs the calling code, or @ref nothing if no sandbox governs
+    it or its sandbox has no domain
+
+    @throw SANDBOX-ISOLATION-ERROR the sandboxes of different tenants govern the calling code together (as when one
+    tenant's code calls code or an object of another tenant): it belongs to no tenant, and nothing that is kept for a
+    tenant may be given to it
+
+    @par Example:
+    @code{.py}
+# a cache whose entries one tenant never sees from another
+*string domain = SandboxManager::getCallerIsolationDomain();
+string key = sprintf("%s:%s", domain ?? "", name);
+    @endcode
+
+    @see @ref Qore::SandboxManager::setIsolationDomain() "setIsolationDomain()"
+
+    @since %Qore 3.0
+*/
+static *string SandboxManager::getCallerIsolationDomain() {
+    std::string domain = qore_caller_isolation_domain();
+    if (domain.empty()) {
+        return QoreValue();
+    }
+    // fails closed: no value names a tenant for code that belongs to none (qore#7009)
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager::getCallerIsolationDomain(): the sandboxes "
+            "of more than one isolation domain govern the calling code together, so it belongs to no isolation "
+            "domain");
+        return QoreValue();
+    }
+    return new QoreStringNode(domain.c_str(), QCS_UTF8);
+}
+
 //! Refuses a change to a process-wide registry of callbacks, hooks, handlers or listeners by sandboxed code
 /** A registry that a module keeps for the whole process (in a static class member or a module variable) is shared by
     the code of every %Program: a module from the module path is loaded once per process, and what its registry holds
@@ -1541,7 +1736,7 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
 }
 
 //! Returns the ID of the caller %Program: the %Program whose code called the running code
-/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a user
+/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a
     module: library module code that serves a call from a %Program's code, also through more library module code,
     gets the ID of that %Program.  Library code uses it to record the %Program that owns an object that it creates for
     its caller, and to allow a later change of the object only to code of that %Program (compare with
@@ -1554,10 +1749,26 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     called, so library code that it calls gets that %Program's ID; calling another %Program's closure runs that
     %Program's code.
 
+    A module's %Program is a module's from its creation, also while the module is initialized: the initialization of
+    a module that a %Program loads by its own path serves that %Program.  The initialization of library code (a module
+    from a trusted module directory, not one that a sandboxed %Program loads into a container of its own) creates
+    state that the whole process shares, whoever loads it first, so the code that loads it is not its caller, which
+    would own that state.
+
+    A trusted build (createTrustedBuildCall()) runs its creator's code: entered by another %Program's code, the code
+    of the %Program that created the capability is that %Program's code, as a closure's is.  A %Program that a build
+    created is a %Program like any other, whose code is its own; a module that a build loaded first serves the code
+    that calls it, as any module does.  The code of a %Program that several tenants can run code in (a shared %Program
+    that a build created, with an expression, for example) identifies no tenant: what it owns is shared by all of
+    them.
+
     The caller is unknown, and the method returns @ref nothing, where the code that the running code serves cannot be
-    identified: in code that a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a
-    thread that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
-    caller must be treated as not being any given %Program.
+    identified: in the initialization of library code and the threads and tasks that it starts, whoever loads it; in
+    the module code of a trusted build that module code created, and in the threads and tasks that it starts
+    (a build creates shared state for whichever caller needs it first, so the code that entered it is not the caller,
+    which would own that state); in a build that its creator's own code entered; and in work that started on a thread
+    that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown caller
+    must be treated as not being any given %Program.
 
     It is not a sandbox check: a sandboxed caller that it identifies is still refused by the checks that consider
     every sandbox that governs the code (see isProcessWideRegistrationAllowed() and isSandboxed()).  It reveals only
@@ -1602,7 +1813,27 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
     of a sandboxed caller that the module code runs with, and those of the modules on the way that are not library code
     (a module loaded by its path, which has the restrictions of the %Program that loaded it first); the options of a
     library module's own %Program do not, and neither
-    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
+    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).  The code of an object
+    or call reference that restricted code created is restricted as its creator is when its code is the code of a
+    module (a library module or one loaded by its path), of a base class of a module that its class inherits, or
+    builtin code; the code of a %Program that is not a module's (the creator's own, or the host's that the host
+    imported) runs with that %Program on the stack, which decides.  An object of a class that inherits a class of a
+    module is restricted in all of its methods, also in those of its own class.
+
+    The same rule decides the declared domains of user module code (see @ref sandbox_caller_domains):
+    - the initialization of library module code is not a call by the code that loads it: the calling code is not
+      looked up past it, while the objects and call references that restricted code created keep their restrictions
+    - the host lends access to the file system, the network and external information
+      (@ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", @ref Qore::DOM_NETWORK "DOM_NETWORK" and
+      @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO") with a policy barrier (callWithSystemPolicy()) or a capability
+      (createSystemPolicyCall()): only the code that runs inside the innermost grant counts for them then, so trusted
+      code can use those resources for a restricted caller, while restricted code that the grant calls back, and the
+      code of the objects and call references that restricted code created, are still restricted (a capability also
+      masks the provenance of the code that ran before it); the other domains are not lent, and neither is the loading
+      of native code (see @ref sandbox_uncontrolled_api).  The code that the grant runs must not have been created
+      for the restricted caller: a closure or call reference that library code creates while it serves the caller
+      keeps the caller's restrictions, so the code is created in the module's initialization, or it is a capability
+      created there
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 
@@ -1626,6 +1857,24 @@ if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
 */
 static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_ONLY] {
     return qore_caller_restricts_domain(domain);
+}
+
+//! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions
+/** Uses the caller check for a function or method declared with \c [dom=...]. A library module's own initialization
+    is checked independently of the Program that loaded it. On an ordinary call, the caller's restrictions apply.
+    Restrictions of code invoked by the initializer are checked as at a declared-domain entry.
+
+    This only queries functional domains. Use isProcessWideRegistrationAllowed() separately when sandboxed code
+    must be excluded even if the sandbox permits the domain. For an operation performed on behalf of a caller,
+    including across initialization, see isCallerRestricted().
+
+    @param domain a bitmask of functional domains
+    @return @ref True if the caller is denied any requested domain
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCallerDomainDeniedAtEntry(softint domain) [flags=RET_VALUE_ONLY] {
+    return qore_caller_denied_user_domains(domain) != 0;
 }
 
 //! Returns @ref True if the current thread's code may use uncontrolled APIs

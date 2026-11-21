@@ -34,6 +34,7 @@
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <cerrno>
 #include <sys/time.h>
@@ -771,24 +772,24 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
     return false;
 }
 
-void QoreQueue::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
-    priv->setConsumeHook(std::move(hook));
+void qore_queue_ops::setConsumeHookImpl(QoreQueue* b, std::shared_ptr<QoreConsumeHook> hook) {
+    b->priv->setConsumeHook(std::move(hook));
 }
 
-std::shared_ptr<QueueItemConsumeHook> QoreQueue::getItemConsumeHook() {
-    return priv->getItemConsumeHook();
+std::shared_ptr<QueueItemConsumeHook> qore_queue_ops::getItemConsumeHookImpl(QoreQueue* b) {
+    return b->priv->getItemConsumeHook();
 }
 
-QoreQueue::TryPushResult QoreQueue::tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max) {
-    return priv->tryPush(xsink, n, ignore_max);
+QoreQueue::TryPushResult qore_queue_ops::tryPushImpl(QoreQueue* b, ExceptionSink* xsink, QoreValue n, bool ignore_max) {
+    return b->priv->tryPush(xsink, n, ignore_max);
 }
 
-void QoreQueue::addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener) {
-    priv->addRoomListener(std::move(listener));
+void qore_queue_ops::addRoomListenerImpl(QoreQueue* b, std::shared_ptr<QoreQueueRoomListener> listener) {
+    b->priv->addRoomListener(std::move(listener));
 }
 
-void QoreQueue::removeRoomListener(const QoreQueueRoomListener* listener) {
-    priv->removeRoomListener(listener);
+void qore_queue_ops::removeRoomListenerImpl(QoreQueue* b, const QoreQueueRoomListener* listener) {
+    b->priv->removeRoomListener(listener);
 }
 
 QoreQueue::QoreQueue(int n_max) : priv(new qore_queue_private(n_max)) {

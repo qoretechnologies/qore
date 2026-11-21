@@ -243,7 +243,7 @@ http {
         *string data_home = ENV.XDG_DATA_HOME;
         if (data_home && data_home[0] == "/") {
             stores = (data_home + "/containers/storage",) + stores;
-        } else if (*string home = ENV.HOME) {
+        } else if (*string home = ENV.HOME) { # live-provider-optin: the podman storage below HOME, a local directory
             stores = (home + "/.local/share/containers/storage",) + stores;
         }
         foreach string store in (stores) {

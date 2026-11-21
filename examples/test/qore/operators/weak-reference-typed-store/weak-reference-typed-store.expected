@@ -1,0 +1,48 @@
+closure *object: set
+closure *object after release: unset destroyed=1
+closure object: set
+closure object after release: unset destroyed=1
+closure *C: set
+closure *C after release: unset destroyed=1
+closure value: C
+closure value: set
+closure value after release: unset destroyed=1
+closure value kept: set set destroyed=0
+closure value released: unset destroyed=1
+closure variable: set
+closure variable after release: unset destroyed=1
+declaration: set const set
+declaration: set
+declaration after release: unset destroyed=1
+const declaration after release: unset
+loop: ["set", "set", "set", "set"]
+loop after release: ["unset", "unset", "unset", "unset"] destroyed=2
+thread closure: set
+thread closure after release: unset destroyed=1
+global *object: set
+global *object after release: unset destroyed=1
+global *C: set
+global *C after release: unset destroyed=1
+thread_local *object: set
+thread_local *object after release: unset destroyed=1
+closure *C refused: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<C>', but got an object of class 'Other' instead
+closure *C refused: unset
+closure object refused NOTHING: RUNTIME-TYPE-ERROR: <lvalue> expects type 'object', but got no value instead
+closure object refused NOTHING: kept
+closure variable *C refused: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<C>', but got an object of class 'Other' instead
+closure variable *C refused: unset
+plain local *C refused: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<C>', but got an object of class 'Other' instead
+plain local *C refused: unset
+global *C refused: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<C>', but got an object of class 'Other' instead
+global *C refused: unset
+thread_local *C refused: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<C>', but got an object of class 'Other' instead
+thread_local *C refused: unset
+plain local *object: set
+plain local *object after release: unset destroyed=1
+closure auto: set
+closure auto after release: unset destroyed=1
+closure *hash: {a: 1}
+closure *list: [1, 2]
+closure opaque: set
+closure opaque after release: set destroyed=0
+done destroyed=17

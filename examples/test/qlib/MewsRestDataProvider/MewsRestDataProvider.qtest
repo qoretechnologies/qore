@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires MewsRestClient
@@ -71,7 +72,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
     mainTest() {
         if (!mews) {
-            testSkip("no connection");
+            testSkip(mrc ? "no connection" : LiveProvider::skipReason("mews", ()));
         }
 
         assertEq("mewsrest", mews.getName());
@@ -111,7 +112,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
     actionTest() {
         if (!mews) {
-            testSkip("no connection");
+            testSkip(mrc ? "no connection" : LiveProvider::skipReason("mews", ()));
         }
 
         try {
@@ -165,7 +166,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
     */
     dateRangeTest() {
         if (!mews) {
-            testSkip("no connection");
+            testSkip(mrc ? "no connection" : LiveProvider::skipReason("mews", ()));
         }
 
         try {
@@ -248,15 +249,16 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.MEWS_CONNECTION;
+        *string conn_name = LiveProvider::get("mews", "MEWS_CONNECTION", m_options.conn);
         try {
             if (conn_name.val()) {
-                AbstractConnection conn = get_connection(conn_name);
+                AbstractConnection conn = LiveProvider::connection("mews", "MEWS_CONNECTION", m_options.conn);
                 if (!(conn instanceof MewsRestConnection)) {
                     error("connection %y is type %y; expecting \"MewsRestConnection\"", conn_name, conn.className());
                 }
                 mrc = conn;
-            } else {
+            } else if (LiveProvider::enabled("mews")) {
+                # the public demo environment is an external service (qore#6964)
                 mrc = new MewsRestConnection({
                     "url": "https://api.mews-demo.com",
                     "name": "demo",
@@ -268,7 +270,9 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
                 });
             }
 
-            mews = new MewsRestDataProvider(mrc.get());
+            if (mrc) {
+                mews = new MewsRestDataProvider(mrc.get());
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (IoTimeoutErrors{ex.err}) {
                 delete mews;

@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-grants.qtest that GrantProbe calls under a host grant
+
+%modern
+
+module GrantOther {
+    domains = "EXTERNAL_INFO";
+    version = "1.0";
+    desc = "test module that another library module calls";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace GrantOther {
+    public bool sub probe() {
+        return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+    }
+
+    #! declares the domain
+    public string sub declared() [dom=EXTERNAL_INFO] {
+        return "OK";
+    }
+
+    public class Obj {
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+        }
+    }
+}

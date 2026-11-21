@@ -105,8 +105,8 @@ int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
         // the end of the stream
         return 0;
     }
-    const QoreStringNode* str = rv->get<const QoreStringNode>();
-    TempEncodingHelper text(str, QCS_UTF8, &xsink);
+    // the string is read in either representation
+    QoreStringValueHelper text(*rv, QCS_UTF8, &xsink);
     if (xsink) {
         setError(xsink, "encoding conversion error");
         return -1;

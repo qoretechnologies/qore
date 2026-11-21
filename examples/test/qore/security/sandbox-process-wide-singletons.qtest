@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxProcessWideSingletonsTest
+
+#! Process-wide settings and sessions of the builtin API that serve every caller refuse sandboxed code (issue #6746)
+/** The default stack size of new threads and the allocation tracking session are one for the whole process: a
+    change by code that is sandboxed or acts for sandboxed code raises \c SANDBOX-REGISTRATION-ERROR, also through a
+    policy barrier, from a background thread and from a Program that sandboxed code created; what the host set stays
+    in effect for every tenant, and trusted code is not affected
+*/
+class SandboxProcessWideSingletonsTest inherits QUnit::Test {
+    public {
+        #! the calls that sandboxed code makes; each must raise SANDBOX-REGISTRATION-ERROR
+        const Calls = {
+            "set_default_thread_stack_size":
+                "set_default_thread_stack_size(HAVE_MANAGE_STACK ? get_default_thread_stack_size() : 1048576);",
+        };
+
+        #! the calls of the allocation tracking functions, which exist only when the library was built with them
+        const AllocTrackingCalls = {
+            "start_alloc_tracking": "start_alloc_tracking();",
+            "stop_alloc_tracking": "stop_alloc_tracking();",
+        };
+    }
+
+    private {
+        #! the calls that this library has
+        hash<string, string> calls = Calls + (HAVE_ALLOC_TRACKING ? AllocTrackingCalls : {});
+    }
+
+    constructor() : Test("process-wide singletons refuse sandboxed code", "1.0", \ARGV) {
+        addTestCase("two tenants cannot change a process-wide setting or session", \tenantsTest());
+        addTestCase("the default thread stack size that the host set stays in effect", \stackSizeTest());
+        addTestCase("trusted code serving sandboxed code under a policy barrier cannot either", \barrierTest());
+        addTestCase("a Program that sandboxed code creates is refused when trusted code calls it",
+            \childProgramTest());
+        addTestCase("a background thread of a tenant is refused", \backgroundTest());
+        addTestCase("trusted code is not refused", \trustedTest());
+        set_return_value(main());
+    }
+
+    tenantsTest() {
+        # the calls that were not refused, with what they raised instead
+        hash<string, string> not_refused = {};
+        foreach string name in ("tenant-a", "tenant-b") {
+            foreach hash<auto> i in (calls.pairIterator()) {
+                Program tenant = SandboxProcessWideSingletonsTest::tenant(name, i.key, i.value);
+                SandboxProcessWideSingletonsTest::check(name + " " + i.key, \not_refused,
+                    sub () { tenant.callFunction("t_" + i.key); });
+            }
+        }
+        assertEq({}, not_refused);
+    }
+
+    stackSizeTest() {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("no stack management");
+        }
+        int size = get_default_thread_stack_size();
+        on_exit set_default_thread_stack_size(size);
+        # the host's setting
+        int host_size = set_default_thread_stack_size(size + 1024 * 1024);
+        Program tenant_a = SandboxProcessWideSingletonsTest::tenant("tenant-a", "set", "set_default_thread_stack_size("
+            "n);", "int n");
+        Program tenant_b = SandboxProcessWideSingletonsTest::tenant("tenant-b", "read",
+            "return get_default_thread_stack_size();");
+        assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant_a.callFunction(), ("t_set", 512 * 1024));
+        # the host's setting stays, for the host and for the other tenant, which can read it
+        assertEq(host_size, get_default_thread_stack_size());
+        assertEq(host_size, tenant_b.callFunction("t_read"));
+    }
+
+    barrierTest() {
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (calls.pairIterator()) {
+            # trusted infrastructure that makes the call for its callers, under a policy barrier
+            code cap = SandboxManager::createSystemPolicyCall(
+                SandboxProcessWideSingletonsTest::trustedCall(i.key));
+            Program tenant = SandboxProcessWideSingletonsTest::tenant("tenant", "run", "c();", "code c");
+            SandboxProcessWideSingletonsTest::check(i.key, \not_refused,
+                sub () { tenant.callFunction("t_run", cap); });
+        }
+        assertEq({}, not_refused);
+    }
+
+    childProgramTest() {
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (calls.pairIterator()) {
+            # a Program that sandboxed code creates has no sandbox manager of its own; trusted code calls it later
+            Program tenant = SandboxProcessWideSingletonsTest::tenant("tenant", "child", "Program p(PO_NEW_STYLE); "
+                "p.parse(\"sub run() { \" + s + \" }\", \"child\"); return p;", "string s");
+            Program child = tenant.callFunction("t_child", i.value);
+            SandboxProcessWideSingletonsTest::check(i.key, \not_refused, sub () { child.callFunction("run"); });
+        }
+        assertEq({}, not_refused);
+    }
+
+    backgroundTest() {
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (calls.pairIterator()) {
+            Program tenant = SandboxProcessWideSingletonsTest::tenant("tenant", "bg", "Queue q(); background "
+                "sub () { try { " + i.value + " q.push(\"no exception\"); } catch (hash<ExceptionInfo> ex) { "
+                "q.push(ex.err); } }(); return q.get();");
+            string err = tenant.callFunction("t_bg");
+            if (err != "SANDBOX-REGISTRATION-ERROR") {
+                not_refused{i.key} = err;
+            }
+        }
+        assertEq({}, not_refused);
+    }
+
+    trustedTest() {
+        # a trusted Program: no sandbox
+        Program trusted(PO_NEW_STYLE);
+        string src = "int sub stack() { int size = get_default_thread_stack_size(); "
+            "return set_default_thread_stack_size(size); }";
+        # allocation tracking exists only when the library was built with it
+        if (HAVE_ALLOC_TRACKING) {
+            src += " bool sub tracking() { start_alloc_tracking(); stop_alloc_tracking(); return True; }";
+        }
+        trusted.parse(src, "trusted");
+        if (HAVE_MANAGE_STACK) {
+            assertEq(get_default_thread_stack_size(), trusted.callFunction("stack"));
+        }
+        if (HAVE_ALLOC_TRACKING) {
+            assertTrue(trusted.callFunction("tracking"));
+        }
+    }
+
+    #! Records the call if it is not refused with SANDBOX-REGISTRATION-ERROR
+    private static check(string name, reference<hash<string, string>> not_refused, code call) {
+        try {
+            call();
+            not_refused{name} = "no exception";
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SANDBOX-REGISTRATION-ERROR") {
+                not_refused{name} = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Returns trusted code that makes the call of the given name
+    private static code trustedCall(string name) {
+        switch (name) {
+            case "set_default_thread_stack_size":
+                return sub () {
+                    set_default_thread_stack_size(HAVE_MANAGE_STACK ? get_default_thread_stack_size() : 1048576);
+                };
+            case "start_alloc_tracking":
+                return sub () { call_function("start_alloc_tracking"); };
+            case "stop_alloc_tracking":
+                return sub () { call_function("stop_alloc_tracking"); };
+        }
+        throw "UNKNOWN-CALL", name;
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("auto sub t_%s(%s) { %s }\n", func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

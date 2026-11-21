@@ -33,6 +33,7 @@
 #define QTP_DEFAULT_RELEASE_MS 5000
 
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <deque>
 #include <optional>
@@ -61,7 +62,12 @@ typedef qlist<ThreadPoolThread*> tplist_t;
 class ThreadTask {
 public:
     //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox and options
-    DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
+    /** With \a count_module_cleanup, a task that is part of the module cleanup is counted until it is deleted: the
+        cleanup waits for it before it deletes the next module (an asynchronous I/O controller task, qore#7027)
+    */
+    DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, bool count_module_cleanup = false)
+            : code(c), cancelCode(cc), count_module_cleanup(count_module_cleanup),
+            module_cleanup_work(count_module_cleanup && sandbox_context.module_cleanup_delegate) {
     }
 
     DLLLOCAL ~ThreadTask() {
@@ -87,6 +93,13 @@ public:
         // This ensures tlpd is set up for thread pool threads
         // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
+#ifdef DEBUG
+        // a task of the module cleanup that the controller runs is held by the test hook until the cleanup waits for
+        // it (qore#7027); before it enters its Program, whose teardown would wait for it
+        if (count_module_cleanup && sandbox_context.module_cleanup_delegate) {
+            qore_dbg_hold_module_cleanup_task(module_cleanup_work);
+        }
+#endif
         // declared before the Program is entered, which can be the Program of a module
         QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         // the submitter's options, installed before the Program is entered, whose thread entry handler and
@@ -100,6 +113,16 @@ public:
         SandboxScope sandbox_scope(sandbox_context);
         // the task's code has the caller of the code that submitted it as its caller (qore#6852)
         QoreCallerProgramScope caller_scope(&caller);
+        // a task that the cleanup counts cannot start another one after its deadline (qore#7027)
+        struct CleanupTaskScope {
+            bool prev;
+            CleanupTaskScope(bool set) : prev(qore_module_cleanup_task_running) {
+                qore_module_cleanup_task_running = prev || set;
+            }
+            ~CleanupTaskScope() {
+                qore_module_cleanup_task_running = prev;
+            }
+        } cleanup_task_scope(module_cleanup_work);
         return code->invoke(0, xsink);
     }
 
@@ -127,6 +150,10 @@ protected:
     const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
     //! the caller Program of the code that submitted the task (qore#6852)
     const QoreCallerProgramCapture caller;
+    //! True for a task of the asynchronous I/O controller, which the module cleanup counts (qore#7027)
+    const bool count_module_cleanup;
+    //! Counts the task as work of the module cleanup until it is deleted, if it was created for it (qore#7027)
+    QoreModuleCleanupWorkFlag module_cleanup_work;
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
@@ -135,7 +162,9 @@ protected:
     class SandboxScope {
     public:
         DLLLOCAL SandboxScope(const QoreSandboxContext& ctx) {
-            if (ctx.manager || ctx.policy_manager) {
+            // the task is work for its submitter: governed by the submitter's sandbox and the isolation of the
+            // trusted build that submitted it, if any (qore#6536)
+            if (ctx.manager || ctx.policy_manager || ctx.isolation) {
                 helper.emplace(ctx);
             }
         }
@@ -375,7 +404,7 @@ protected:
             notify_pending = false;
             sl.unlock();
             // this pool released the slot itself: it does not need to be woken for it
-            sbx->notifyThreadSlotReleased(this);
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased(this);
             sl.lock();
         }
     }
@@ -395,7 +424,7 @@ protected:
         // the limit is a capacity of the pool here, like max: a failure is not an error of any caller
         ExceptionSink slot_xsink;
         bool released = false;
-        int rc = sbx->acquireThreadSlotQuiet(&slot_xsink, released);
+        int rc = qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(&slot_xsink, released);
         if (released) {
             notify_pending = true;
         }
@@ -412,7 +441,7 @@ protected:
     */
     DLLLOCAL void releaseWorkerSlotUnlocked() {
         if (sbx) {
-            sbx->releaseThreadSlotQuiet();
+            qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             notify_pending = true;
         }
     }
@@ -641,15 +670,17 @@ public:
         return 0;
     }
 
-    DLLLOCAL int submit(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, ExceptionSink* xsink) {
+    //! Submits a task; see ThreadTask::ThreadTask() for \a count_module_cleanup
+    DLLLOCAL int submit(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc, ExceptionSink* xsink,
+            bool count_module_cleanup = false) {
         // optimistically create the task object outside the lock
-        ThreadTaskHolder task(new ThreadTask(c, cc), xsink);
+        ThreadTaskHolder task(new ThreadTask(c, cc, count_module_cleanup), xsink);
 
         // true if slots of a composition were taken and released again with the lock held
         bool released = false;
         int rc = submitUnlocked(task, released, xsink);
         if (released) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return rc;
     }
@@ -665,7 +696,7 @@ public:
         // sandbox thread limit raises THREAD-CREATION-FAILURE in the submitting code instead of leaving the task in a
         // pool that cannot start a worker
         if (sbx && !reserved && fh.empty() && ah.empty()) {
-            if (sbx->acquireThreadSlotQuiet(xsink, released)) {
+            if (qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(xsink, released)) {
                 return -1;
             }
             ++reserved;
@@ -717,12 +748,12 @@ public:
             // the thread leaves the pool and ends; its slot is released quietly, and the waiting pools are notified
             // below, without the lock
             if (sbx) {
-                sbx->releaseThreadSlotQuiet();
+                qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             }
         }
 
         if (sbx) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return -1;
     }

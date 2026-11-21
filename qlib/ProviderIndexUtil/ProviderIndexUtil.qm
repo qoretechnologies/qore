@@ -102,6 +102,10 @@ if (!info.reloaded) {
     sandboxed reader then reads the index with its own access; an index that it cannot read is not kept for the
     process.
 
+    The process-wide logger accepts messages from trusted callers with terminal I/O. The module also reports its own
+    diagnostics while serving restricted readers. Reserving pending app modules for initialization requires process
+    control and a trusted caller. A restricted reader can still look up an app and its metadata on demand.
+
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 
     Restoring an indexed action restores the descriptions of its option types and of its data provider info, which
@@ -154,6 +158,11 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - @ref providerindexutil_sandbox "caller permissions" govern access to process-wide logging and initialization
+      (<a href="https://github.com/qoretechnologies/qore/issues/7060">issue 7060</a> and
+      <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
+    - the internal state and helpers of @ref ProviderIndexUtil::ProviderIndexUtil "ProviderIndexUtil" are not visible
+      to subclasses (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - errors that are written to @ref Qore::stderr "stderr" without a logger are left out when the module's code has no
       terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -284,6 +293,10 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       index creation leaves the previous index in place
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled
       modules with API-version suffixes; legacy explicit-path indexes remain readable
+    - @ref ProviderIndexUtil::ProviderIndexUtil::getGlobalLogger() "ProviderIndexUtil::getGlobalLogger()" returns
+      @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the
+      process-wide logger that the host set
+      (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
 
     @section providerindexutil_v1_0 ProviderIndexUtil v1.0
     - initial release

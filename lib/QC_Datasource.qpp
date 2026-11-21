@@ -60,11 +60,17 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
     ReferenceHolder<Queue> q(queue, xsink);
 
     std::string str;
-    bool has_type = check_hash_key(opts, "type", DSC_ERR, str, xsink);
+    // the driver name, user name, password and database name are not shown in an exception (qore#6961)
+    bool has_type = check_hash_key(opts, "type", DSC_ERR, str, xsink, true);
     if (*xsink) return;
 
     if (!has_type) {
         xsink->raiseException(DSC_ERR, "expecting a string value with the 'type' key giving the driver name");
+        return;
+    }
+
+    if (!q_dbi_valid_driver_name(str.c_str())) {
+        q_dbi_raise_invalid_driver_name(xsink, "DATASOURCE-UNSUPPORTED-DATABASE");
         return;
     }
 
@@ -78,7 +84,7 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
 
     ReferenceHolder<ManagedDatasource> ds(new ManagedDatasource(db_driver), xsink);
 
-    bool found = check_hash_key(opts, "user", DSC_ERR, str, xsink);
+    bool found = check_hash_key(opts, "user", DSC_ERR, str, xsink, true);
     if (*xsink) return;
     if (found) ds->setPendingUsername(str.c_str());
 
@@ -86,7 +92,7 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
     if (*xsink) return;
     if (found) ds->setPendingPassword(str.c_str());
 
-    found = check_hash_key(opts, "db", DSC_ERR, str, xsink);
+    found = check_hash_key(opts, "db", DSC_ERR, str, xsink, true);
     if (*xsink) return;
     if (found) ds->setPendingDBName(str.c_str());
 
@@ -127,9 +133,16 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
     self->setPrivate(CID_DATASOURCE, ds.release());
 }
 
-static void create_datasource_from_conf(const QoreString& conf, QoreObject& self, Queue* queue, QoreValue arg,
+static void create_datasource_from_conf(const QoreString& conf_arg, QoreObject& self, Queue* queue, QoreValue arg,
         ExceptionSink* xsink) {
     ReferenceHolder<Queue> holder(queue, xsink);
+
+    // the string is parsed in the default encoding, in which the datasource keeps its connection values
+    TempEncodingHelper conf_str;
+    if (q_ds_value_to_default(conf_str, &conf_arg, "datasource string", xsink)) {
+        return;
+    }
+    const QoreString& conf = **conf_str;
 
     // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
     if (q_check_secret_no_nul(conf.c_str(), conf.size(), "datasource string", "datasource strings",
@@ -762,38 +775,60 @@ qclass Datasource [dom=DATABASE; arg=ManagedDatasource* ds; ns=Qore::SQL; vparen
 Datasource db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 5432);
     @endcode
 
-    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded, or the driver name contains a NUL character (since %Qore 3.0)
-    @throw DATASOURCE-CONSTRUCTOR-ERROR port value is \<= 0, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a password is not shown in the exception
+    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded, or the driver name contains a NUL character (since %Qore 3.0), or the driver argument is not a valid driver name (since %Qore 3.0): a driver name has only ASCII letters, digits, \c "_" and \c "-"; such a string is not looked up, not loaded as a module and not shown in the exception, as it can be a datasource string with credentials
+    @throw DATASOURCE-CONSTRUCTOR-ERROR port value is \<= 0, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a user name, password or database name is not shown in the exception (since %Qore 3.0)
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
     @throw DATASOURCE-PARSE-ERROR the driver argument is a datasource string with a NUL character (since %Qore 3.0); it is not shown in the exception, as it can contain a password
+    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
+    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
+    3.0)
 */
 Datasource::constructor(string driver, *string username, *string password, *string database, *string encoding,
         *string host, *softint port, *hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
-    // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
-    // datasource string with a password, so it is not shown, and neither is the password
-    if (q_check_secret_no_nul(driver->c_str(), driver->size(), "driver or datasource string",
-            "driver names and datasource strings", driver->find('@') != -1 ? "DATASOURCE-PARSE-ERROR"
-                : "DATASOURCE-UNSUPPORTED-DATABASE", xsink)
-        || (username && q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", DSC_ERR,
-            xsink))
-        || (password && q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
-            DSC_ERR, xsink))
-        || (database && q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values",
-            DSC_ERR, xsink))
-        || (encoding && q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", DSC_ERR,
-            xsink))
-        || (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", DSC_ERR, xsink))) {
+    // the strings are kept in the default encoding
+    TempEncodingHelper driver_str, username_str, password_str, database_str, encoding_str, host_str;
+    if (q_ds_value_to_default(driver_str, driver, "driver or datasource string", xsink)
+        || (username && q_ds_value_to_default(username_str, username, "user name", xsink))
+        || (password && q_ds_value_to_default(password_str, password, "password", xsink))
+        || (database && q_ds_value_to_default(database_str, database, "database name", xsink))
+        || (encoding && q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink))
+        || (host && q_ds_value_to_default(host_str, host, "hostname", xsink))) {
         return;
     }
-    if (!port && driver->find('@') != -1) {
-        qore_offset_t colon = driver->find(':');
-        qore_offset_t atsign = driver->find('@');
+    const QoreString* driver_v = *driver_str;
+    const QoreString* username_v = *username_str;
+    const QoreString* password_v = *password_str;
+    const QoreString* database_v = *database_str;
+    const QoreString* encoding_v = *encoding_str;
+    const QoreString* host_v = *host_str;
+
+    // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
+    // datasource string with credentials, so it is not shown, and neither are the user name, the password and the
+    // database name (qore#6961)
+    if (q_check_secret_no_nul(driver_v->c_str(), driver_v->size(), "driver or datasource string",
+            "driver names and datasource strings", driver_v->find('@') != -1 ? "DATASOURCE-PARSE-ERROR"
+                : "DATASOURCE-UNSUPPORTED-DATABASE", xsink)
+        || (username_v && q_check_secret_no_nul(username_v->c_str(), username_v->size(), "user name",
+            "datasource values", DSC_ERR, xsink))
+        || (password_v && q_check_secret_no_nul(password_v->c_str(), password_v->size(), "password",
+            "datasource values", DSC_ERR, xsink))
+        || (database_v && q_check_secret_no_nul(database_v->c_str(), database_v->size(), "database name",
+            "datasource values", DSC_ERR, xsink))
+        || (encoding_v && q_check_no_nul(encoding_v->c_str(), encoding_v->size(), "encoding", "datasource values",
+            DSC_ERR, xsink))
+        || (host_v && q_check_no_nul(host_v->c_str(), host_v->size(), "hostname", "datasource values", DSC_ERR,
+            xsink))) {
+        return;
+    }
+    if (!port && driver_v->find('@') != -1) {
+        qore_offset_t colon = driver_v->find(':');
+        qore_offset_t atsign = driver_v->find('@');
         if (colon < 0 || (atsign < colon)) {
             xsink->raiseException("DATASOURCE-PARSE-ERROR", "driver is missing from the datasource string");
             return;
         }
 
-        ReferenceHolder<QoreHashNode> h(parseDatasource(driver->c_str(), xsink), xsink);
+        ReferenceHolder<QoreHashNode> h(parseDatasource(driver_v->c_str(), xsink), xsink);
         if (!h) {
             assert(*xsink);
             return;
@@ -802,29 +837,37 @@ Datasource::constructor(string driver, *string username, *string password, *stri
         return;
     }
 
-    DBIDriver *db_driver = DBI.find(driver->c_str(), xsink);
+    // a string that is not a driver name, such as a datasource string given with other arguments, is not looked up
+    // and not shown (qore#6961)
+    if (!q_dbi_valid_driver_name(driver_v->c_str())) {
+        q_dbi_raise_invalid_driver_name(xsink, "DATASOURCE-UNSUPPORTED-DATABASE");
+        return;
+    }
+
+    DBIDriver *db_driver = DBI.find(driver_v->c_str(), xsink);
     if (!db_driver) {
         if (!*xsink)
-        xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded", driver->c_str());
+        xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded",
+            driver_v->c_str());
         return;
     }
 
     ReferenceHolder<ManagedDatasource> ds(new ManagedDatasource(db_driver), xsink);
 
-    if (username && !username->empty())
-        ds->setPendingUsername(username->c_str());
+    if (username_v && !username_v->empty())
+        ds->setPendingUsername(username_v->c_str());
 
-    if (password && !password->empty())
-        ds->setPendingPassword(password->c_str());
+    if (password_v && !password_v->empty())
+        ds->setPendingPassword(password_v->c_str());
 
-    if (database && !database->empty())
-        ds->setPendingDBName(database->c_str());
+    if (database_v && !database_v->empty())
+        ds->setPendingDBName(database_v->c_str());
 
-    if (encoding && !encoding->empty())
-        ds->setPendingDBEncoding(encoding->c_str());
+    if (encoding_v && !encoding_v->empty())
+        ds->setPendingDBEncoding(encoding_v->c_str());
 
-    if (host && !host->empty())
-        ds->setPendingHostName(host->c_str());
+    if (host_v && !host_v->empty())
+        ds->setPendingHostName(host_v->c_str());
 
     if (port) {
         if (port < 0) {
@@ -856,20 +899,24 @@ Datasource::constructor(string driver, *string username, *string password, *stri
 Datasource ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @endcode
 
+    @note a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
+    text before the first \c ":" is taken as the driver name, so the user name would be shown as the driver name in
+    messages (the password and the database name never are); always give the driver prefix (ex:
+    <tt>oracle:scott/tiger\@orcl</tt>)
+
     @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCE-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
-    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); a datasource string with a NUL character is not shown in the exception, as it can contain a password
+    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); the datasource string is not shown in the exception, as it can contain a user name, a password and a database name; only its driver name is shown (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
+    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
+    3.0)
 
     @since %Qore 0.8.6
 */
 Datasource::constructor(string description, *Qore::Thread::Queue[Queue] queue, auto argument) {
-    TempEncodingHelper tstr(description, QCS_UTF8, xsink);
-    if (*xsink) {
-        return;
-    }
-
-    create_datasource_from_conf(**tstr, *self, queue.release(), argument, xsink);
+    // converted to the default encoding first
+    create_datasource_from_conf(*description, *self, queue.release(), argument, xsink);
 }
 
 //! Creates a Datasource object from a hash argument giving parameters for the constructor
@@ -905,10 +952,13 @@ Datasource::constructor(string description, *Qore::Thread::Queue[Queue] queue, a
 Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "database", "charset": "utf8", "host": "localhost", "port": 5432);
     @endcode
 
-    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
+    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded, or the \c "type" key is not a valid driver name (since %Qore 3.0): a driver name has only ASCII letters, digits, \c "_" and \c "-"; such a value is not looked up, not loaded as a module and not shown in the exception
     @throw DATASOURCE-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string;
-    port value is \<= 0, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
+    port value is \<= 0, or a string value contains a NUL character (since %Qore 3.0); the values of the \c "type", \c "user", \c "pass" and \c "db" keys are not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw ENCODING-CONVERSION-ERROR a string value of the hash cannot be converted to the @ref default_encoding
+    "default encoding", in which a datasource keeps its connection values; it is not shown in the exception (since
+    %Qore 3.0)
 */
 Datasource::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
     ds_constructor_hash(options, self, queue.release(), argument, xsink);
@@ -1682,19 +1732,29 @@ list<auto> Datasource::getCapabilityList() [flags=CONSTANT] {
 db.setUserName(user);
     @endcode
 
-    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0); the user name is not shown in the exception
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 
     @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
     connection by the code that chose it judges the next connection by it, also when other code opens it (since
     %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setUserName(string username) [flags=NAMED_ARGS] {
-    // the value is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", "DATASOURCE-ERROR",
-            xsink)) {
+    // the value is kept in the default encoding
+    TempEncodingHelper username_str;
+    if (q_ds_value_to_default(username_str, username, "user name", xsink)) {
         return QoreValue();
     }
-    ds->setPendingUsername(username->c_str());
+    const QoreString* username_v = *username_str;
+
+    // the value is passed to the driver as a C string, which would be cut at a NUL character; it is not shown
+    // (qore#6961)
+    if (q_check_secret_no_nul(username_v->c_str(), username_v->size(), "user name", "datasource values",
+            "DATASOURCE-ERROR", xsink)) {
+        return QoreValue();
+    }
+    ds->setPendingUsername(username_v->c_str());
 }
 
 //! Sets the password parameter for the time a connection to the server is established
@@ -1708,18 +1768,27 @@ db.setPassword(pass);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0); the password is not shown in the exception
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 
     @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
     connection by the code that chose it judges the next connection by it, also when other code opens it (since
     %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
+    // the value is kept in the default encoding
+    TempEncodingHelper password_str;
+    if (q_ds_value_to_default(password_str, password, "password", xsink)) {
+        return QoreValue();
+    }
+    const QoreString* password_v = *password_str;
+
     // the value is passed to the driver as a C string, which would be cut at a NUL character; it is not shown
-    if (q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
+    if (q_check_secret_no_nul(password_v->c_str(), password_v->size(), "password", "datasource values",
             "DATASOURCE-ERROR", xsink)) {
         return QoreValue();
     }
-    ds->setPendingPassword(password->c_str());
+    ds->setPendingPassword(password_v->c_str());
 }
 
 //! Sets the database name parameter for the time a connection to the server is established
@@ -1732,19 +1801,29 @@ nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
 db.setDBName(db);
     @endcode
 
-    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0); the database name is not shown in the exception
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 
     @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
     connection by the code that chose it judges the next connection by it, also when other code opens it (since
     %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setDBName(string database) [flags=NAMED_ARGS] {
-    // the value is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values", "DATASOURCE-ERROR",
-            xsink)) {
+    // the value is kept in the default encoding
+    TempEncodingHelper database_str;
+    if (q_ds_value_to_default(database_str, database, "database name", xsink)) {
         return QoreValue();
     }
-    ds->setPendingDBName(database->c_str());
+    const QoreString* database_v = *database_str;
+
+    // the value is passed to the driver as a C string, which would be cut at a NUL character; it is not shown
+    // (qore#6961)
+    if (q_check_secret_no_nul(database_v->c_str(), database_v->size(), "database name", "datasource values",
+            "DATASOURCE-ERROR", xsink)) {
+        return QoreValue();
+    }
+    ds->setPendingDBName(database_v->c_str());
 }
 
 //! Sets the database-specific character encoding name for the next connection to the server
@@ -1760,14 +1839,23 @@ db.setDBCharset(encoding);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 */
 nothing Datasource::setDBCharset(string encoding) [flags=NAMED_ARGS] {
+    // the value is kept in the default encoding
+    TempEncodingHelper encoding_str;
+    if (q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink)) {
+        return QoreValue();
+    }
+    const QoreString* encoding_v = *encoding_str;
+
     // the value is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
+    if (q_check_no_nul(encoding_v->c_str(), encoding_v->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
             xsink)) {
         return QoreValue();
     }
-    ds->setPendingDBEncoding(encoding->c_str());
+    ds->setPendingDBEncoding(encoding_v->c_str());
 }
 
 //! Sets the database-specific character encoding name for the next connection to the server
@@ -1781,14 +1869,23 @@ db.setDBEncoding(encoding);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 */
 nothing Datasource::setDBEncoding(string encoding) [flags=NAMED_ARGS] {
+    // the value is kept in the default encoding
+    TempEncodingHelper encoding_str;
+    if (q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink)) {
+        return QoreValue();
+    }
+    const QoreString* encoding_v = *encoding_str;
+
     // the value is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
+    if (q_check_no_nul(encoding_v->c_str(), encoding_v->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
             xsink)) {
         return QoreValue();
     }
-    ds->setPendingDBEncoding(encoding->c_str());
+    ds->setPendingDBEncoding(encoding_v->c_str());
 }
 
 //! Sets the hostname to use for the next connection to the server
@@ -1802,17 +1899,26 @@ db.setHostName(host);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the value cannot be converted to the @ref default_encoding "default encoding",
+    in which a datasource keeps its connection values; it is not shown in the exception (since %Qore 3.0)
 
     @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
     connection by the code that chose it judges the next connection by it, also when other code opens it (since
     %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setHostName(string host) [flags=NAMED_ARGS] {
-    // the value is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", "DATASOURCE-ERROR", xsink)) {
+    // the value is kept in the default encoding
+    TempEncodingHelper host_str;
+    if (q_ds_value_to_default(host_str, host, "hostname", xsink)) {
         return QoreValue();
     }
-    ds->setPendingHostName(host->c_str());
+    const QoreString* host_v = *host_str;
+
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(host_v->c_str(), host_v->size(), "hostname", "datasource values", "DATASOURCE-ERROR", xsink)) {
+        return QoreValue();
+    }
+    ds->setPendingHostName(host_v->c_str());
 }
 
 //! Sets the port number to use for the connection
@@ -1998,6 +2104,73 @@ string Datasource::getDriverName() [flags=CONSTANT] {
     return new QoreStringNode(ds->getDriver()->getName());
 }
 
+//! Returns a description of the datasource for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    the user name, the password and the database name are always replaced with \c "****", whether they are set or
+    not, so that the description shows none of them, and not whether they are set; the host and port are shown if
+    set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use
+    for a datasource in exception messages and logs
+
+    @return the masked description of the datasource, made from the driver name and the host and port that will
+    be used for the next connection to the server (as set in the constructor or with setHostName() and setPort()),
+    which are read together; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-",
+    \c "_", \c ":", \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = db.getMaskedDescription();
+    @endcode
+
+    @see @ref Qore::SQL::mask_datasource(string) "mask_datasource()"
+
+    @since %Qore 3.0
+*/
+string Datasource::getMaskedDescription() [flags=CONSTANT] {
+    QoreStringNodeHolder rv(new QoreStringNode);
+    // the host and port are read together (qore#6988)
+    ds->appendMaskedPendingDesc(**rv);
+    return rv.release();
+}
+
+//! Sets the name of the connection that the datasource was created for, once
+/** The name identifies the datasource in serialized data: serialized @ref sqlutilintro "SqlUtil" objects keep the name of
+    its connection instead of its configuration, which then has no credentials, and are restored by looking the
+    connection up by name (see @ref sqlutil_serialization).  A connection that creates a datasource sets it (as
+    @ref DbDataProvider::DatasourceConnection "DatasourceConnection" does).
+
+    The name is set once: it cannot be changed once set, so that code that is given the datasource cannot relabel it as
+    another connection; setting the same name again does nothing.  A copy of the datasource has the same name.
+
+    @param name the name of the connection
+
+    @par Example:
+    @code{.py}
+db.setConnectionName("orders");
+    @endcode
+
+    @throw DATASOURCE-CONNECTION-NAME-ERROR the name is empty, or the datasource already has another connection name
+
+    @see getConnectionName()
+
+    @since %Qore 3.0
+*/
+nothing Datasource::setConnectionName(string name) [dom=DATABASE;flags=NAMED_ARGS] {
+    q_ds_set_connection_name(*ds, *name, xsink);
+}
+
+//! Returns the name of the connection that the datasource was created for, if set
+/** @return the name of the connection that the datasource was created for, or @ref nothing if none is set
+
+    @see setConnectionName()
+
+    @since %Qore 3.0
+*/
+*string Datasource::getConnectionName() [flags=CONSTANT] {
+    return q_ds_get_connection_name(*ds);
+}
+
 //! Returns the driver-specific server version data for the current connection
 /** @return the driver-specific server version data for the current connection; see the DBI driver documentation for the return data type and format
 
@@ -2131,15 +2304,24 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name or a string option value contains a NUL character (since %Qore 3.0); option values are not shown in the exception
     @throw DATASOURCE-ERROR the datasource must be open for this call
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw ENCODING-CONVERSION-ERROR the option name cannot be converted to the @ref default_encoding "default
+    encoding" (since %Qore 3.0)
 
     @since %Qore 0.8.6
 */
 Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
-    // the option name is passed on as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+    // option names are hash keys in the default encoding
+    TempEncodingHelper option_str;
+    if (q_ds_value_to_default(option_str, option, "option name", xsink)) {
         return QoreValue();
     }
-    ds->setOption(option->c_str(), value, xsink);
+    const QoreString* option_v = *option_str;
+
+    // the option name is passed on as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(option_v->c_str(), option_v->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+        return QoreValue();
+    }
+    ds->setOption(option_v->c_str(), value, xsink);
 }
 
 //! Returns the current value for the given option
@@ -2151,15 +2333,24 @@ Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
     @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
     continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
+    @throw ENCODING-CONVERSION-ERROR the option name cannot be converted to the @ref default_encoding "default
+    encoding" (since %Qore 3.0)
 
     @since %Qore 0.8.6
 */
 auto Datasource::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    // the option name is passed on as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+    // option names are hash keys in the default encoding
+    TempEncodingHelper option_str;
+    if (q_ds_value_to_default(option_str, option, "option name", xsink)) {
         return QoreValue();
     }
-    return ds->getOption(option->c_str(), xsink);
+    const QoreString* option_v = *option_str;
+
+    // the option name is passed on as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(option_v->c_str(), option_v->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+        return QoreValue();
+    }
+    return ds->getOption(option_v->c_str(), xsink);
 }
 
 //! Returns a @ref datasource_hash "datasource hash" describing the configuration of the current object

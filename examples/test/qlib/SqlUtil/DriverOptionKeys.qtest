@@ -193,12 +193,12 @@ class DriverOptionKeysTest inherits QUnit::Test {
                 "QORE_DB_CONNSTR_JDBC_PGSQL": "pgsql",
                 "QORE_DB_CONNSTR_JDBC_MSSQL": "freetds",
             }.pairIterator()) {
-            if (!ENV{i.key}.val()) {
+            if (!ENV{i.key}.val()) { # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
                 continue;
             }
             ++found;
             # the run's own schema or database, as the table is created
-            string connstr = ENV{i.key};
+            string connstr = ENV{i.key}; # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             switch (i.value) {
                 case "oracle":
                     connstr = OracleRunSchema::getConnectionString(connstr, "DriverOptionKeys");

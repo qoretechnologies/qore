@@ -45,6 +45,7 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cassert>
 #include <cstdio>
@@ -218,6 +219,7 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     if (references.load() > 10000000 || references.load() <= 0){
         if (type == NT_STRING) {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s) (val=\"%s\")\n",
+                    // note: safe; this is the string node itself, not a value
                     this, references.load(), getTypeName(), ((QoreStringNode*)this)->getBuffer());
         } else {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s)\n", this,
@@ -341,19 +343,19 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
     return rv;
 }
 
-QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    if (!needs_eval_flag) {
+QoreValue qore_abstract_node_ops::evalImpl(AbstractQoreNode* b, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {
+    if (!b->needs_eval_flag) {
         needs_deref = false;
-        return this;
+        return b;
     }
 
-    if (eval_check_stack(*this, xsink)) {
+    if (eval_check_stack(*b, xsink)) {
         needs_deref = false;
         return QoreValue();
     }
 
     needs_deref = true;
-    QoreValue rv = evalImpl(rc, needs_deref, xsink);
+    QoreValue rv = b->evalImpl(rc, needs_deref, xsink);
 
     qore_type_t t = rv.getType();
     if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {

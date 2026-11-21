@@ -515,6 +515,8 @@ void qore_rt_instantiate_local(LocalVar* var);
 //! variable stack.  The JIT should call this on every StoreLocal so the Qore
 //! runtime stays in sync.
 void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+//! Assigns a value to a local in a weak or opaque assignment (\a mode: an AssignmentMode), checking its type first
+void qore_rt_assign_local_mode(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
 void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
 //! Assign a NaN-boxed QoreValue to a local variable without type coercion.
@@ -702,6 +704,9 @@ uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink);
 
 //! Store a NaN-boxed QoreValue to a global variable
 void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink);
+//! Assigns a value to a global or thread-local variable in a weak or opaque assignment (\a mode: an AssignmentMode),
+//! checking its type first
+void qore_rt_store_global_mode(Var* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
 
 //! Load from a closure variable; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink);
@@ -2029,6 +2034,8 @@ int64_t qore_rt_load_global_int_aot(QoreAOTContext* ctx, int32_t idx,
 
 //! Store to a global variable via AOT context slot
 void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_store_global_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
+    ExceptionSink* xsink);
 
 //! Load from a thread-local variable via AOT context slot
 uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
@@ -2041,6 +2048,8 @@ uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSin
 
 //! Store to a closure variable via AOT context slot (uses locals array)
 void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
+    ExceptionSink* xsink);
 
 //! Add a native integer delta to a typed local via an AOT local slot
 int64_t qore_rt_add_assign_local_int_aot(QoreAOTContext* ctx, int32_t idx,

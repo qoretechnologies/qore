@@ -103,12 +103,54 @@ class SandboxCaptureApiTest inherits QUnit::Test {
         addTestCase("a capture made in a system-policy call has no policy", \testSystemPolicyCapture());
         addTestCase("host code run for a capture of a sandbox cannot set thread capabilities",
             \testCaptureCapabilityScope());
+        addTestCase("work run for a capture runs for the restrictions of the capturing code",
+            \testCallerRestrictions());
         set_return_value(main());
     }
 
     globalTearDown() {
         map sb_capture_free($1), handles;
         handles = ();
+    }
+
+    #! the work that a native bridge runs for a capture runs for the code that made it: with the functional-domain
+    #! restrictions of the capturing code, not those of the code that started the thread (issue #6844)
+    testCallerRestrictions() {
+        # the code of a module loaded by its path, whose Program does not decide for its calling code, through a call
+        # reference that it creates for unrestricted code (which records no restrictions): no Program that decides is
+        # on the stack of the foreign thread, so only the restrictions of the capture do
+        TmpDir mods("sandbox-capture-probe-");
+        string probe = mods.path + DirSep + "CaptureProbe.qm";
+        {
+            File f();
+            f.open2(probe, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\nmodule CaptureProbe {\n    version = \"1.0\"; desc = \"probe\"; author = \"Qore\";\n"
+                "    url = \"https://qore.org\"; license = \"MIT\";\n}\npublic namespace CaptureProbe {\n"
+                "    public bool sub probe(int dom) { return SandboxManager::isCallerRestricted(dom); }\n"
+                "    public code sub get_ref() { return \\CaptureProbe::probe(); }\n}\n");
+        }
+        load_module(probe);
+        code check = call_function("CaptureProbe::get_ref");
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.parse("%requires cppapiuser\nint sub cap() { return sb_capture(); }", "restricted-capture");
+        int hr = p.callFunction("cap");
+        handles += hr;
+        int hu = sb_capture();
+        handles += hu;
+        assertFalse(check(DOM_FILESYSTEM), "the host is not restricted");
+        assertTrue(sb_capture_foreign_call(hr, check, DOM_FILESYSTEM), "a capture made by restricted code");
+        assertFalse(sb_capture_foreign_call(hu, check, DOM_FILESYSTEM), "a capture made by unrestricted code");
+        # captures of code with other restrictions do not have the same sandbox: their work cannot be combined
+        assertFalse(sb_capture_same(hr, hu), "a restricted and an unrestricted capture");
+        int hr2 = p.callFunction("cap");
+        handles += hr2;
+        assertTrue(sb_capture_same(hr, hr2), "two captures of the same restricted code");
+        # the capture's restrictions are those of the capturing code: not lent beyond them
+        assertFalse(sb_capture_foreign_call(hr, check, DOM_NETWORK), "a domain that the capturing code may use");
+        # on a thread with the host's Program on the stack, the host's Program decides
+        assertFalse(sb_capture_applied_call(hr, bool sub () { return SandboxManager::isCallerRestricted(DOM_FILESYSTEM); }),
+            "the host's Program on the stack");
+        assertFalse(check(DOM_FILESYSTEM), "after the capture");
     }
 
     #! host code that a native bridge runs for a sandboxed submitter's operation (a captured sandbox applied) is

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -88,7 +89,7 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("VertexAiDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.VERTEX_AI_CONNECTION;
+        conn_name = LiveProvider::get("google", "VERTEX_AI_CONNECTION", m_options.conn);
 
         addTestCase("factory + provider info",            \factoryTest());
         addTestCase("app registered with logo + group",   \appTest());
@@ -137,6 +138,7 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
         (free tier eligible).
     */
     private liveVertexAiTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Vertex AI connection ping failed: %s",

@@ -43,7 +43,7 @@ QoreString *QoreSquareBracketsRangeOperatorNode::getAsString(bool &del, int foff
 }
 
 int QoreSquareBracketsRangeOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&op_str);
+    qore_string_private::get(str)->concatAsciiName(op_str);
     return 0;
 }
 

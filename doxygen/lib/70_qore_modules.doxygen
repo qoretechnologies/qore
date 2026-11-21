@@ -589,7 +589,8 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
       copies already made are released, without \c init() having been called on them; an exception raised in
       \c doDeref() is reported to the code that deletes the Program.  The callbacks must raise their errors in the
       sink and never let a C++ exception escape.  A \c copy() that returns \c nullptr without an exception still
-      means that the child does not inherit the data.
+      means that the child does not inherit the data.  A module that also builds with older %Qore versions uses
+      the class when \c _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX is defined.
     - A C++ exception (\c AbstractException) that the callbacks of a class derived from
       AbstractQoreProgramExternalData alone let escape is converted to a %Qore exception as a safety net; a failed
       \c copy() then fails the creation of the child as well.  Before %Qore 3.0, such an exception escaped the

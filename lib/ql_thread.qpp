@@ -1088,10 +1088,22 @@ int stack_size = set_default_thread_stack_size(2 * 1024 * 1024);
     @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size, or the size
     is not larger than the stack that is reserved at the end of each thread's stack for the stack guard (80KB on
     x86_64 and aarch64), which would leave no stack for the thread to run code
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the default
+    thread stack size, which is process-wide and applies to the new threads of every caller (see
+    @ref sandbox_process_wide_registries)
+
+    @note any code can read the setting with get_default_thread_stack_size(): only trusted code can change it, and it
+    holds no data of any caller
 
     @since %Qore 0.9.0
+    @since %Qore 3.0 code that is sandboxed or acts for sandboxed code cannot change the setting
 */
 int set_default_thread_stack_size(int stack_size) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    // the setting is process-wide and applies to the new threads of every caller: refused to sandboxed code (issue
+    // #6746)
+    if (qore_check_process_wide_registration("change the default thread stack size", xsink)) {
+        return QoreValue();
+    }
 #ifdef QORE_MANAGE_STACK
     return q_thread_set_stack_size((size_t)stack_size, xsink);
 #else

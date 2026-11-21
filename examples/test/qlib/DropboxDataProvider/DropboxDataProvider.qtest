@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires DataProvider
@@ -1842,12 +1843,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
     # --- live tests (require -c <connection>) ---
 
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.DROPBOX_CONNECTION;
+        *string conn_name = LiveProvider::get("dropbox", "DROPBOX_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set DROPBOX_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("dropbox", "DROPBOX_CONNECTION", m_options.conn);
         if (conn.getType() != "dropbox") {
             throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"dropbox\"", conn_name,
                 conn.getType());

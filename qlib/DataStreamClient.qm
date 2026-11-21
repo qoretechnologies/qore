@@ -29,6 +29,7 @@
 %requires RestClient >= 1.4
 %requires yaml
 %requires Mime >= 1.7
+%requires HttpUtil
 
 %modern
 
@@ -149,6 +150,9 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @section datastreamclientrelnotes Release Notes
 
     @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - reads the fields of a response from the \c "headers" key of the hash that
+      @ref Qore::HTTPClient "HTTPClient" gives, or from its top level (see @ref HttpUtil::http_get_field()
+      "http_get_field()") (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - a server-side error is described with its location only when the server gives one (issue #6780)
     - fixed requests with headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
       @ref DataStreamClient::DataStreamClient::sendRawStream() "sendRawStream()",
@@ -577,9 +581,9 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         bool send_aborted;
         # our top-level receive callback to save the header and set the chunked flag
         code recv_callback = sub (hash<auto> h) {
-            if (h.hdr) {
+            if (h.hdr && !rhdr) {
                 rhdr = h.hdr;
-                if (h.hdr."transfer-encoding" == "chunked") {
+                if ((h.hdr.headers ?? h.hdr)."transfer-encoding" == "chunked") {
                     chunked = True;
                 } else if (h.send_aborted) {
                     send_aborted = True;
@@ -613,9 +617,9 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
                 send_aborted = False;
                 dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback);
                 recv_callback = sub (hash<auto> h) {
-                    if (h.hdr) {
+                    if (h.hdr && !rhdr) {
                         rhdr = h.hdr;
-                        if (h.hdr."transfer-encoding" == "chunked") {
+                        if ((h.hdr.headers ?? h.hdr)."transfer-encoding" == "chunked") {
                             chunked = True;
                         } else if (h.send_aborted) {
                             send_aborted = True;
@@ -884,7 +888,7 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             req_hdr.Accept = DataStreamMimeTypeYaml;
         }
         hash<auto> h = sendWithSendCallback(scb, method, path, req_hdr, timeout_ms, False, \info);
-        if (ds_is_yaml_type(h."content-type") && h.body) {
+        if (ds_is_yaml_type(h.headers."content-type") && h.body) {
             h.body = parse_yaml(h.body.typeCode() == NT_BINARY ? h.body.toString("utf-8") : h.body);
         }
         return h;
@@ -1108,9 +1112,9 @@ rest.setContentEncoding("gzip");
         bool send_aborted;
         # our top-level receive callback to save the header and set the chunked flag
         code recv_callback = sub (hash<auto> h) {
-            if (h.hdr) {
+            if (h.hdr && !rhdr) {
                 rhdr = h.hdr;
-                if (h.hdr."transfer-encoding" == "chunked") {
+                if ((h.hdr.headers ?? h.hdr)."transfer-encoding" == "chunked") {
                     chunked = True;
                 } else if (h.send_aborted) {
                     send_aborted = True;
@@ -1118,7 +1122,7 @@ rest.setContentEncoding("gzip");
                 # Detect Connect protocol from response Content-Type on first header callback
                 if (!protocol_selected) {
                     protocol_selected = True;
-                    *string ct = h.hdr."content-type";
+                    *string ct = (h.hdr.headers ?? h.hdr)."content-type";
                     if (ct && ct =~ /^application\/connect\+/) {
                         use_connect_recv = True;
                     }
@@ -1153,15 +1157,16 @@ rest.setContentEncoding("gzip");
 
         # we can get a binary response if we received a chunked non-DataStream message
         # in which case we need to decode it here (issue 1438)
+        hash<auto> fields = rhdr.headers ?? rhdr;
         if (rrs.typeCode() == NT_BINARY) {
             *string ce;
             *string ct;
             if (chunked) {
-                ct = rhdr{DataStreamContentType.lwr()} ?? rhdr."content-type";
-                ce = rhdr{DataStreamContentEncoding.lwr()} ?? rhdr."content-encoding";
+                ct = fields{DataStreamContentType.lwr()} ?? fields."content-type";
+                ce = fields{DataStreamContentEncoding.lwr()} ?? fields."content-encoding";
             } else {
-                ct = rhdr."content-type";
-                ce = rhdr."content-encoding";
+                ct = fields."content-type";
+                ce = fields."content-encoding";
             }
             if (ce) {
                 rrs = ds_get_content_decode(ce)(rrs, "utf8");
@@ -1181,7 +1186,7 @@ rest.setContentEncoding("gzip");
 
         hash<auto> rv = rhdr + {"body": rmd};
         # Skip processRestResponse() if data was already deserialized by DataStream or Connect
-        bool datastream = use_connect_recv || (chunked && rhdr.hasKey(DataStreamContentType.lwr()));
+        bool datastream = use_connect_recv || (chunked && fields.hasKey(DataStreamContentType.lwr()));
         if (!datastream) {
             rv = processRestResponse(rv, m, path, \info);
         }

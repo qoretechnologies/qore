@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qdp in a process without a controlling terminal (a new session) and its terminal size query
+# test-exec-mode: children - its checks run in qdp child processes of its own binary started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class QdpNoTtyTest
+
+#! qdp prints descriptions without a controlling terminal (qore#7125)
+/** qdp shortened each description to the width of the terminal, which it asked for unconditionally: without a
+    controlling terminal (output to a pipe or a file in CI, a background job, ssh without a tty) it ended with an
+    unhandled TERMIOS-GET-WINDOW-SIZE-ERROR exception.  The width is the COLUMNS environment variable if it is set,
+    else the terminal's; without a terminal the descriptions are not shortened.  qdp runs here in a new session, which
+    has no controlling terminal.
+*/
+public class QdpNoTtyTest inherits QUnit::Test {
+    public {
+        #! the description of the "copy" child of the file data provider, which is longer than 60 characters
+        const CopyDescRegex = "(?m)^- copy: \\(API\\) File copy data provider; copies files or entire directory trees";
+
+        #! a shortened description
+        const ShortenedRegex = "(?m)\\.\\.\\.$";
+    }
+
+    private {
+        #! the command prefix that runs a command in a new session, or NOTHING if none is available
+        *string session_prefix;
+        TmpDir dir;
+    }
+
+    constructor() : Test("QdpNoTtyTest", "1.0") {
+        dir = new TmpDir("qdp-no-tty-");
+        if (strlen(backquote("command -v setsid 2>/dev/null || true"))) {
+            session_prefix = "setsid ";
+        } else if (strlen(backquote("command -v perl 2>/dev/null || true"))) {
+            session_prefix = "perl -MPOSIX -e 'POSIX::setsid() >= 0 or die \"setsid: $!\\n\"; exec @ARGV or die "
+                "\"exec: $!\\n\"' ";
+        }
+        addTestCase("descriptions without a terminal", \noTtyTest());
+        addTestCase("COLUMNS sets the width", \columnsTest());
+        addTestCase("an invalid COLUMNS is ignored", \invalidColumnsTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    #! runs qdp in a new session with its output in files
+    private hash<auto> runQdp(string args, *string columns) {
+        if (!session_prefix) {
+            testSkip("neither setsid nor perl is available to start a process without a controlling terminal");
+        }
+        string out_path = dir.path + "/out.txt";
+        string err_path = dir.path + "/err.txt";
+        string env = "env -u QORE_DATA_PROVIDERS -u COLUMNS ";
+        if (exists columns) {
+            env += "COLUMNS=" + quote(columns) + " ";
+        }
+        string cmd = sprintf("%s%s%s --enable-debug %s %s > %s 2> %s < /dev/null", env, session_prefix,
+            quote(TestInterpreter::qore_interpreter()), quote(get_script_dir() + "/../../../../bin/qdp"), args,
+            quote(out_path), quote(err_path));
+        int rc = system(cmd);
+        return {
+            "rc": rc,
+            "out": ReadOnlyFile::readTextFile(out_path),
+            "err": ReadOnlyFile::readTextFile(err_path),
+        };
+    }
+
+    private string fileProvider() {
+        return quote("file{root=" + dir.path + "}");
+    }
+
+    noTtyTest() {
+        hash<auto> r = runQdp(fileProvider() + " list-details");
+        assertEq(0, r.rc, "qdp ends normally: " + r.err);
+        assertFalse(regex(r.err, "TERMIOS"), "no terminal error: " + r.err);
+        # the description is not shortened
+        assertRegex(CopyDescRegex, r.out);
+        assertFalse(regex(r.out, ShortenedRegex), "no description is shortened");
+    }
+
+    columnsTest() {
+        hash<auto> r = runQdp(fileProvider() + " list-details", "60");
+        assertEq(0, r.rc, "qdp ends normally: " + r.err);
+        list<string> lines = select r.out.split("\n"), $1.val();
+        assertGt(0, lines.size());
+        foreach string line in (lines) {
+            assertLe(60, line.length(), "line fits in COLUMNS: " + line);
+        }
+        assertRegex("(?m)^- copy: \\(API\\) File copy data provider;.*\\.\\.\\.$", r.out,
+            "the description is shortened");
+    }
+
+    invalidColumnsTest() {
+        foreach string columns in (("0", "abc", "")) {
+            hash<auto> r = runQdp(fileProvider() + " list-details", columns);
+            assertEq(0, r.rc, sprintf("COLUMNS=%y: qdp ends normally: %s", columns, r.err));
+            assertRegex(CopyDescRegex, r.out, sprintf("COLUMNS=%y: not shortened", columns));
+            assertFalse(regex(r.out, ShortenedRegex), sprintf("COLUMNS=%y: no description is shortened", columns));
+        }
+    }
+}

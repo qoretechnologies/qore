@@ -154,11 +154,16 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
-    // an object of a class of library module code records the restrictions of the code that creates it (qore#6520):
-    // the class's source Program, read inline (the namespace's Program only for a class without one)
-    QoreProgram* code_pgm = qore_class_private::get(*oc)->spgm.load(std::memory_order_acquire);
-    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm ? code_pgm
-        : oc->getProgram()));
+    // an object whose code runs where the code that creates it is not on the stack records the restrictions of that
+    // code (qore#6520, qore#6844): the class's source Program, read inline (the namespace's Program only for a class
+    // without one), and whether a base class has the code of another Program
+    const qore_class_private* qc = qore_class_private::get(*oc);
+    QoreProgram* code_pgm = qc->spgm.load(std::memory_order_acquire);
+    if (!code_pgm) {
+        code_pgm = oc->getProgram();
+    }
+    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm,
+        code_pgm && qc->spansPrograms()));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -508,7 +513,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 // must be called in the object write lock
 QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_private* class_ctx) {
     if (cdmap) {
-        cdmap_t::iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::iterator i = cdmap->find(class_ctx->classID);
         if (i != cdmap->end())
             return i->second;
     } else
@@ -518,7 +523,7 @@ QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_privat
 #ifdef DEBUG
     qore_hash_private::get(*id)->is_obj = true;
 #endif
-    cdmap->insert(cdmap_t::value_type(class_ctx->getHash(), id));
+    cdmap->insert(cdmap_t::value_type(class_ctx->classID, id));
     return id;
 }
 
@@ -631,6 +636,11 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
                 &xsink)) {
             return true;
         }
+        // qore#6839: a SocketPollOperation keeps a strong reference to its socket with the operation, where a member
+        // held it before
+        if (qore_socket_poll_op_scan_members(getScanPrivateData(CID_SOCKETPOLLOPERATION), *this, rsh)) {
+            return true;
+        }
         {
             // issue #5590: a Program's thread initialization code and thread entry and exit handlers
             ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(getScanPrivateData(CID_PROGRAM)), &xsink);
@@ -695,6 +705,10 @@ QoreHashNode* qore_object_private::copyData(ExceptionSink* xsink, bool throw_exc
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a constant of the whole process gets no member from any code (qore#6749)
+    if (checkProcessConstantWrite(nullptr, xsink)) {
+        return;
+    }
     // saves source data to merge
     ReferenceHolder<QoreHashNode> new_data(xsink);
 
@@ -710,7 +724,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     {
         QoreSafeVarRWReadLocker sl(o.rml);
 
-        if (status == OS_DELETED) {
+        // the source object's status: a deleted object has no member hash (qore#7055)
+        if (o.status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, o.theclass->getName());
             return;
         }
@@ -720,11 +735,11 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         if (class_ctx && o.cdmap) {
-            cdmap_t::iterator i = o.cdmap->find(class_ctx->getHash());
+            cdmap_t::iterator i = o.cdmap->find(class_ctx->classID);
             if (i != o.cdmap->end()) {
-                // see if the current object supports this class's data
+                // see if the current object supports this class's data: the class itself, by identity (qore#7036)
                 ClassAccess access;
-                if (theclass->priv->getClass(*class_ctx, access)) {
+                if (theclass->priv->getAccessClass(*class_ctx, access)) {
                     new_internal_data = i->second->copy();
                 }
             }
@@ -732,6 +747,11 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     }
 
     bool check_recursive = false;
+
+    // sandboxed code gives no undeclared member to a foreign builtin object (qore#6749)
+    if (new_data && checkForeignBuiltinMemberWrite(nullptr, *new_data, class_ctx, xsink)) {
+        return;
+    }
 
     // the values for members held in external storage are written with their setters, without the object lock
     ReferenceHolder<QoreHashNode> ext(xsink);
@@ -748,6 +768,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy);
+    } else if (raiseIfDeleted(vl, xsink)) {
+        // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
+        return;
     }
 
     if (check_recursive) {
@@ -773,6 +796,10 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a constant of the whole process gets no member from any code (qore#6749)
+    if (!h->empty() && checkMemberWrite(nullptr, h, runtime_get_class(), xsink)) {
+        return;
+    }
     bool check_recursive = false;
 
     // the values for members held in external storage are written with their setters, without the object lock
@@ -799,6 +826,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
         }
 
         mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy);
+    } else if (raiseIfDeleted(vl, xsink)) {
+        // a merge into a deleted object raises also when there is nothing to merge (qore#7055)
+        return;
     }
 
     if (check_recursive) {
@@ -1183,8 +1213,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
         QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-        rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-            : odata->priv->swapKeyValue(key, QoreValue(), this);
+        // a missing member is not created: an empty key would let a later write skip the checks of a new member
+        // (qore#6749), and it would show in the keys of the object
+        bool found;
+        rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
         if (!needs_scan(rv)) {
             return rv;
         }
@@ -1211,6 +1243,17 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bool for_delete, bool* exists) {
     lvh.disableMemberWriteBack();
+    // the lvalue holds this object's lock for writing when it is a member of the object itself (`t.o = t;
+    // remove t.o.a`): the member is taken after the lvalue has released it, as from an object in a local variable,
+    // with the object's own lock and scan (qore#7107)
+    if (qore_auto_vlock_ops(&lvh.vl).getRWL() == &rml) {
+        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
+        return takeMember(lvh.vl.xsink, key, true, for_delete, exists);
+    }
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
@@ -1265,8 +1308,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-        : odata->priv->swapKeyValue(key, QoreValue(), this);
+    // a missing member is not created: an empty key would let a later write skip the checks of a new member
+    // (qore#6749), and it would show in the keys of the object
+    bool found;
+    QoreValue rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
@@ -1324,8 +1369,10 @@ void qore_object_private::takeExternalMembers(QoreLValueGeneric& rv, LValueHelpe
 void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
         bool for_delete) {
     lvh.disableMemberWriteBack();
-    // members held in external storage are taken one at a time, as their accessors and gates run without locks
-    if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors) {
+    // members held in external storage are taken one at a time, as their accessors and gates run without locks; so
+    // are the members of an object whose lock the lvalue holds, as it is a member of the object itself (qore#7107)
+    if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors
+            || qore_auto_vlock_ops(&lvh.vl).getRWL() == &rml) {
         takeExternalMembers(rv, lvh, l, for_delete);
         return;
     }
@@ -1405,14 +1452,14 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, bool lock) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         class_ctx = nullptr;
     }
 
-    QoreSafeVarRWReadLocker sl(rml);
+    QoreSafeVarRWReadLocker sl(rml, lock);
 
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
@@ -1474,19 +1521,105 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
     }
 }
 
-void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
-    return mergeDataToHashImpl<false>(hash, sdh, xsink, {});
+void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        bool lock) const {
+    return mergeDataToHashImpl<false>(hash, sdh, xsink, {}, lock);
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy) const {
-    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy);
+        LexicalSemanticPolicy policy, bool lock) const {
+    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy, lock);
 }
 
 QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* member, const qore_class_private* class_ctx) {
     QoreHashNode* odata = class_ctx ? getCreateInternalData(class_ctx) : data;
     //printd(5, "qore_object_private::getMemberValueRefForInitialization() this: %p mem: '%s' class_ctx: %p %s odata: %p\n", this, member, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a", odata);
     return qore_hash_private::get(*odata)->getValueRef(member);
+}
+
+int qore_object_private::raiseProcessConstantWrite(const char* mem, ExceptionSink* xsink) const {
+    if (mem) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot add member \"%s\" to a constant object of class "
+            "'%s': the object is shared by the whole process, so no code can add members to it", mem,
+            theclass->getName());
+    } else {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot merge members into a constant object of class '%s': "
+            "the object is shared by the whole process, so no code can add members to it", theclass->getName());
+    }
+    return -1;
+}
+
+int qore_object_private::checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
+        const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+    // only an object of a builtin class without a public member list, whose class refuses no undeclared member
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (!cls->sys || theclass->hasPublicMembersInHierarchy()) [[likely]] {
+        return 0;
+    }
+    QoreProgram* cpgm = getProgram();
+    if (pgm == cpgm || !cpgm || !qore_program_is_sandboxed(cpgm)) {
+        return 0;
+    }
+    // only a member that the class does not declare: the C++ code of the class writes its declared members
+    if (mem) {
+        if (cls->runtimeGetMemberInfo(mem, class_ctx)) {
+            return 0;
+        }
+    } else {
+        bool undeclared = false;
+        if (h) {
+            ConstHashIterator i(h);
+            while (i.next()) {
+                if (!cls->runtimeGetMemberInfo(i.getKey(), class_ctx)) {
+                    undeclared = true;
+                    break;
+                }
+            }
+        }
+        if (!undeclared) {
+            return 0;
+        }
+    }
+    if (mem) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "sandboxed code cannot give member \"%s\" to an object of "
+            "builtin class '%s' that it did not create: the object can be shared with other code, which would read "
+            "the member", mem, theclass->getName());
+    } else {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "sandboxed code cannot merge members into an object of builtin "
+            "class '%s' that it did not create: the object can be shared with other code, which would read the "
+            "members", theclass->getName());
+    }
+    return -1;
+}
+
+void qore_object_mark_process_constant(QoreValue v) {
+    switch (v.getType()) {
+        case NT_OBJECT: {
+            // only a system object, which no Program owns: an object that a Program owns, such as one that a
+            // language bridge (the python and jni modules) imports as a constant of a Program, stays that Program's
+            qore_object_private* priv = qore_object_private::get(*v.get<QoreObject>());
+            if (!priv->pgm) {
+                priv->process_constant = true;
+            }
+            break;
+        }
+        case NT_LIST: {
+            ConstListIterator i(v.get<const QoreListNode>());
+            while (i.next()) {
+                qore_object_mark_process_constant(i.getValue());
+            }
+            break;
+        }
+        case NT_HASH: {
+            ConstHashIterator i(v.get<const QoreHashNode>());
+            while (i.next()) {
+                qore_object_mark_process_constant(i.get());
+            }
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
@@ -1520,13 +1653,18 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 
     //printd(5, "qore_object_private::getLValue() this: %p %s::%s type %s for_remove: %d int: %d odata: %p\n", this, theclass->getName(), key, QoreTypeInfo::getName(mti), for_remove, internal_member, odata);
 
-    HashMember* m;
-    if (for_remove) {
-        m = odata->priv->findMember(key);
-        if (!m)
+    HashMember* m = odata->priv->findMember(key);
+    if (!m) {
+        if (for_remove) {
             return -1;
-    } else
-        m = odata->priv->findCreateMember(key);
+        }
+        // a member that the object does not have yet: a constant of the whole process gets none from any code, and
+        // sandboxed code gives none that the class does not declare to a builtin object of other code (qore#6749)
+        if (checkMemberWrite(key, nullptr, class_ctx, xsink)) {
+            return -1;
+        }
+        m = odata->priv->createMemberKnownAbsent(key);
+    }
 
     lvh.setValue(m->val, mti);
     lvh.setObjectContext(this);
@@ -1711,6 +1849,12 @@ void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink
 // runtime class context
 void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val,
         ExceptionSink* xsink) {
+    // a constant of the whole process gets no member from any code (qore#6749); the value is consumed in any case
+    if (process_constant) [[unlikely]] {
+        val.discard(xsink);
+        raiseProcessConstantWrite(key, xsink);
+        return;
+    }
     // a declared member held in external storage is written with its setter; the value is consumed in any case
     {
         const qore_class_private* cls = qore_class_private::get(*theclass);
@@ -1726,11 +1870,14 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
     bool before;
     bool after = needs_scan(val);
 
+    // the value is consumed also if the object was deleted; it is released after the lock (qore#6839)
+    ValueHolder unused_val(xsink);
     {
         QoreSafeVarRWWriteLocker sl(rml);
 
         if (status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, key, theclass->getName());
+            unused_val = val;
             return;
         }
 
@@ -2254,15 +2401,24 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
     {
         QoreAutoVarRWWriteLocker al(priv->rml);
 
-        if (priv->in_destructor || priv->status == OS_DELETED || !priv->privateData)
+        // a deleted object's private data can be being released now, outside the lock: it is left alone
+        if (priv->status == OS_DELETED || !priv->privateData) {
             return;
+        }
 
-        // remove the private data that's already been deleted
-#ifdef DEBUG
-        assert(priv->privateData->getAndClearPtr(key));
-#else
-        priv->privateData->getAndClearPtr(key);
-#endif
+        // remove the private data that the caller has already deleted, also when a deletion of the object is
+        // running, which must not release it again (qore#7071)
+        AbstractPrivateData* pd = priv->privateData->getAndClearPtr(key);
+
+        // an object whose deletion has started (in its destructor after its last dereference, or with the deleting
+        // thread's TID while an explicit deletion runs its destructor and releases its data) is left to that
+        // deletion, which must not run twice (qore#7071)
+        if (priv->in_destructor || priv->status != OS_OK) {
+            return;
+        }
+        assert(pd);
+        (void)pd;
+
         // mark status as in destructor
         priv->status = q_gettid();
     }
@@ -2749,6 +2905,24 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
     return *xsink ? -1 : 0;
 }
 
+QoreValue QoreObject::getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
+        ExceptionSink* xsink) const {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    return priv->getReferencedMemberNoMethodResolvedNoAccessor(key, class_ctx, xsink);
+}
+
+int QoreObject::setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink) {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    priv->setValueIntern(class_ctx, key, val, xsink);
+    return *xsink ? -1 : 0;
+}
+
 void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) {
     QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
@@ -2839,7 +3013,27 @@ QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* v
     return b->priv->getSlice(value_list, xsink);
 }
 
+#ifdef DEBUG
+//! returns true if an access without a class would miss a private:internal member of a system class (qore#6839)
+/** the access goes to the object's main data; a member of the name that is there (written from outside the class,
+    as a class without a member list allows) is what the access means
+*/
+static bool qore_object_misses_internal_member(const qore_object_private* priv, const char* key) {
+    if (!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(key, runtime_get_class())) {
+        return false;
+    }
+    QoreSafeVarRWReadLocker sl(priv->rml);
+    return priv->status != OS_DELETED && !priv->data->existsKey(key);
+}
+#endif
+
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
+    // a write without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would go to the object's main data, where nothing reads it
+    // (qore#6839)
+#ifdef DEBUG
+    assert(!qore_object_misses_internal_member(priv, key));
+#endif
     priv->setValue(key, val, xsink);
 }
 
@@ -2870,6 +3064,11 @@ int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink*
 }
 
 QoreValue QoreObject::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
+    // a read without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would read the object's main data and give no value (qore#6839)
+#ifdef DEBUG
+    assert(!qore_object_misses_internal_member(priv, mem));
+#endif
     return priv->getReferencedMemberNoMethod(mem, xsink);
 }
 

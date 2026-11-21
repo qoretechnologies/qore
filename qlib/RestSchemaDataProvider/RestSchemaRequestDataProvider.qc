@@ -173,7 +173,13 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         if (!record_type) {
-            record_type = getRecordTypeIntern();
+            *hash<string, AbstractDataField> rt = getRecordTypeIntern();
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            if (!DataProvider::mayRegisterShared()) {
+                return rt;
+            }
+            record_type = rt;
         }
         return record_type;
     }
@@ -203,10 +209,10 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             return request_type;
         }
 
-        if (isSwagger()) {
-            return request_type = getSwaggerRequestType();
-        }
-        return request_type = getOpenApi3RequestType();
+        AbstractDataProviderType rt = isSwagger() ? getSwaggerRequestType() : getOpenApi3RequestType();
+        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+        # that caller and is not kept in the instance for the others (qore#7104)
+        return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
     }
 
     private AbstractDataProviderType getSwaggerRequestType() {
@@ -272,7 +278,10 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
         *RestSchemaValidator::AbstractResponseObject response = getSuccessResponse();
         if (response) {
-            return response_type = getResponseTypeFromResponse(response, "success");
+            AbstractDataProviderType rt = getResponseTypeFromResponse(response, "success");
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private
+            # to that caller and is not kept in the instance for the others (qore#7104)
+            return DataProvider::mayRegisterShared() ? (response_type = rt) : rt;
         }
     }
 

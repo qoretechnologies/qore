@@ -56,7 +56,7 @@ users.deleteMany({"age": {"$lt": 18}});
 
     @since mongodb 1.0
 */
-qclass MongoCollection [arg=QoreMongoCollection* collection; ns=mongodb; flags=final];
+qclass MongoCollection [arg=QoreMongoCollection* collection; ns=mongodb; flags=final; dom=NETWORK];
 
 //! Returns the name of this collection
 /** @return the collection name

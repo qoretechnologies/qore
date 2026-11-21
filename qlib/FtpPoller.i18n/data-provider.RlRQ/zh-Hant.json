@@ -24,8 +24,8 @@
           "message": "檔案已上傳至 FTP 伺服器"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "對上傳至 FTP 伺服器的檔案作出回應；動作設定會決定事件是包含檔案資料本身，還是包含本機檔案系統上該檔案位置的連結。無論如何，此事件表示檔案資料已下載並可在本機使用"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "對上傳至 FTP 伺服器的檔案作出回應；動作設定會決定事件是包含檔案資料本身，還是包含本機檔案系統上該檔案位置的連結。無論如何，此事件表示檔案資料已下載並可在本機使用。 將 remote_file_disposition 設為 DELETE 或 MOVE，即可在處理後從遠端目錄移除檔案。若設為 NONE，則適用下列規則。 處理常式必須移動、重新命名或刪除檔案，否則下次輪詢時會再次傳送該檔案。"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

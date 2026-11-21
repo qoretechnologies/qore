@@ -488,8 +488,10 @@ public class NamedArgumentsTest inherits QUnit::Test {
         string key = "QORE_NAMED_ARGS_TEST_ENV";
         unsetenv(name: key);
         setenv(name: key, value: "named-ok");
+        # live-provider-optin: a variable of the test itself
         assertEq("named-ok", getenv(name: key), "environment helpers expose name and value");
         unsetenv(name: key);
+        # live-provider-optin: a variable of the test itself
         assertNothing(getenv(name: key), "environment helpers clean up with named arguments");
 
         assertEq({
@@ -1392,6 +1394,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.submitQuicRequestStreaming(method: \"POST\", path: \"/stream\", headers: headers); "
             "s.sendQuicClientStreamData(stream_id: 0, body: data, end_stream: False); "
             "s.waitForQuicClientStreamDrain(stream_id: 0, timeout_ms: 0); "
+            "s.getQuicClientStreamAckedBytes(stream_id: 0); "
+            "s.getHttp2StreamTakenBytes(stream_id: 1); "
             "s.waitForQuicClientStreamFlushed(stream_id: 0, timeout_ms: 0); "
             "s.cancelQuicStream(session_id: 1, stream_id: 0); "
             "s.submitQuicResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, body: data); "

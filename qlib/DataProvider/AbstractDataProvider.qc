@@ -4076,7 +4076,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @since %DataProvider 3.9
     */
     private logCaughtError(string message, ...) {
-        *LoggerInterface logger = getLogger() ?? DataProvider::getGlobalLogger();
+        # the global logger is read directly, as the message is produced by the module also for sandboxed callers
+        *LoggerInterface logger = getLogger() ?? DataProviderGlobalLogger::logger;
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }

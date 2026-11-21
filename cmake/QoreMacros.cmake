@@ -87,6 +87,16 @@ if (NOT DEFINED QORE_QDX_COMMAND)
 endif ()
 option(QORE_GENERATE_JAVA_BINDINGS "Generate Java bindings with module documentation (requires JNI)" ON)
 
+# Every module's documentation target writes its Java bindings with qjar into the one ${CMAKE_BINARY_DIR}/java
+# tree, so the directory cannot be a BYPRODUCTS of these targets: Ninja requires each output to come from a single
+# rule ("multiple rules generate java"), and a directory output also makes "ninja clean" fail, as it cannot remove a
+# directory that is not empty.  The targets name it as a file to remove in a clean instead, which both generators
+# remove recursively, as a Makefile clean removed the BYPRODUCTS directory before.  The qjar runs of different
+# modules write the classes of their own module only, so they can run in parallel.
+function (_qore_java_bindings_clean _target)
+    set_property(TARGET ${_target} APPEND PROPERTY ADDITIONAL_CLEAN_FILES ${CMAKE_BINARY_DIR}/java)
+endfunction()
+
 # the binary modules that the documentation tools load: qdx requires astparser and Qdx, whose Util module requires
 # yaml, json and reflection, and qjar requires reflection; a documentation target built in the same tree as these
 # modules depends on them, as the tools cannot run before the modules are built
@@ -2421,8 +2431,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             set(_qore_binary_java_step)
             if (QORE_GENERATE_JAVA_BINDINGS)
                 set(_qore_binary_java_step
-                    COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
-                    BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+                    COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name})
             endif()
 
             add_custom_target(${_docs_targ}
@@ -2435,6 +2444,9 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
                 VERBATIM
             )
             add_dependencies(${_docs_targ} ${_module_name})
+            if (QORE_GENERATE_JAVA_BINDINGS)
+                _qore_java_bindings_clean(${_docs_targ})
+            endif()
             if ("${_mod_suffix}" STREQUAL "2")
                 qore_install_module_doxygen_tag("${_module_name}" "${_working_dir}/${_module_name}.tag")
             endif()
@@ -3825,8 +3837,7 @@ MACRO (QORE_USER_MODULE _module_file)
         set(_qore_user_java_step)
         if (QORE_GENERATE_JAVA_BINDINGS)
             set(_qore_user_java_step
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f})
         endif()
 
         # qdx regenerates the base configuration at build time. Keep phase
@@ -3891,6 +3902,10 @@ MACRO (QORE_USER_MODULE _module_file)
             )
             add_dependencies(docs-fast-${f} qore)
         endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+        if (QORE_GENERATE_JAVA_BINDINGS)
+            _qore_java_bindings_clean(docs-${f})
+            _qore_java_bindings_clean(docs-fast-${f})
+        endif()
 
         # Fast documentation skips docs-lang, which normally builds these
         # native tool dependencies before qdx and qjar can load them.

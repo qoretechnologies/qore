@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the dynamic loader's choice of libqore for a program that qcc compiles (LC_RPATH, dyld)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
+%requires FsUtil
+
+%exec-class QccTestLibqoreTest
+
+#! The programs that the tests compile load the libqore of the build under test (issue #7029)
+/** On macOS the dynamic loader ignores \c LD_LIBRARY_PATH, and \c DYLD_LIBRARY_PATH does not reach a program that a
+    protected program such as \c /bin/sh starts: a program compiled with qcc finds libqore through the directory that
+    qcc recorded in it, that of the libqore that qcc loaded.  So the qcc of a test must be the build's: one found in the
+    \c PATH (an installed qcc) compiles programs that load its own libqore.
+
+    The cases use a decoy: a copy of the build's qcc and libqore in a directory of their own, the qcc's recorded
+    library directory changed to the decoy's on macOS, so that the programs it compiles load the decoy libqore.
+*/
+class QccTestLibqoreTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-qcc-test-libqore-");
+        *string build;
+        #! the build's libqore, symbolic links resolved
+        string build_libqore;
+        #! the directory of the decoy qcc
+        string decoy_bin;
+        #! the directory of the decoy libqore
+        string decoy_lib;
+        #! the source of the program that the cases compile: it reports the libqore that it runs with on Linux
+        string program;
+        bool darwin = PlatformOS == "Darwin";
+    }
+
+    constructor() : QUnit::Test("QccTestLibqoreTest", "1.0", \ARGV) {
+        addTestCase("a build without qcc: no qcc from the PATH", \noQccBuildTest());
+        addTestCase("a program compiled by the build's qcc loads the build's libqore", \buildQccTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        build = QoreBuildTree::build_dir();
+        if (!build) {
+            return;
+        }
+        string lib = build + "/" + (darwin ? "libqore.dylib" : "libqore.so");
+        build_libqore = realpath(lib);
+        decoy_bin = tmp.path + "/decoy/bin";
+        decoy_lib = tmp.path + "/decoy/lib";
+        mkdir(decoy_bin, 0755, True);
+        mkdir(decoy_lib, 0755, True);
+        program = tmp.path + "/libqore-probe.q";
+        File f();
+        f.open2(program, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\nif (PlatformOS == \"Linux\") {\n    print(ReadOnlyFile::readTextFile(\"/proc/self/maps\"));\n"
+            "}\n");
+        f.close();
+    }
+
+    #! returns the value quoted for the shell
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! returns the output and status of a shell command, with its error output
+    private hash<auto> run(string cmd) {
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        return {"out": out, "status": rc};
+    }
+
+    #! copies the build's qcc and libqore to the decoy directories; the decoy qcc loads the decoy libqore on macOS
+    private string makeDecoyQcc(string qcc) {
+        string decoy_qcc = decoy_bin + "/qcc";
+        if (is_file(decoy_qcc)) {
+            return decoy_qcc;
+        }
+        string base = basename(build_libqore);
+        list<string> cmds = (
+            sprintf("cp %s %s", shellQuote(realpath(qcc)), shellQuote(decoy_qcc)),
+            sprintf("cp %s %s", shellQuote(build_libqore), shellQuote(decoy_lib + "/" + base)),
+            sprintf("ln -s %s %s", shellQuote(base), shellQuote(decoy_lib + "/" + (darwin ? "libqore.dylib"
+                : "libqore.so"))),
+        );
+        if (is_file(build + "/aot-link.conf")) {
+            cmds += sprintf("cp %s %s", shellQuote(build + "/aot-link.conf"), shellQuote(decoy_lib));
+        }
+        if (darwin) {
+            # libqore's install name is @rpath/libqore.<n>.dylib; the decoy qcc finds it in the decoy directory
+            hash<auto> r = run(sprintf("otool -l %s", shellQuote(qcc)));
+            list<string> rpaths = (r.out =~ x/cmd LC_RPATH\n\s+cmdsize \d+\n\s+path (.*) \(offset \d+\)/g) ?? ();
+            if (r.status || rpaths.size() != 1) {
+                throw "DECOY-ERROR", sprintf("%s records %y, not one library directory: %s", qcc, rpaths, r.out);
+            }
+            cmds += sprintf("install_name_tool -rpath %s %s %s", shellQuote(rpaths[0]), shellQuote(decoy_lib),
+                shellQuote(decoy_qcc));
+            cmds += sprintf("codesign -f -s - %s", shellQuote(decoy_qcc));
+        }
+        foreach string cmd in (cmds) {
+            hash<auto> r = run(cmd);
+            if (r.status) {
+                throw "DECOY-ERROR", sprintf("%s: %s", cmd, r.out);
+            }
+        }
+        return decoy_qcc;
+    }
+
+    #! compiles the probe program with the given qcc; returns the executable
+    /** Without QORE_LIBDIR, which qcc would take libqore from instead of the one that it loaded
+    */
+    private string compile(string qcc, string name) {
+        string exe = tmp.path + "/" + name;
+        hash<auto> r = run(sprintf("env -u QORE_LIBDIR %s -o %s %s", shellQuote(qcc), shellQuote(exe),
+            shellQuote(program)));
+        if (r.status) {
+            throw "COMPILE-ERROR", sprintf("%s: %s", qcc, r.out);
+        }
+        return exe;
+    }
+
+    #! returns the libqore images that the executable loads, symbolic links resolved
+    /** @param env variables for the run of the program, set by the shell itself, so that macOS keeps them
+    */
+    private list<string> loadedLibqore(string exe, string env = "") {
+        hash<auto> r;
+        list<string> paths;
+        if (darwin) {
+            r = run(sprintf("DYLD_PRINT_LIBRARIES=1 %s %s", env, shellQuote(exe)));
+            paths = (r.out =~ x/^dyld\S* (?:<[^>]*> )?(\/.*\/libqore\.[^\/]*dylib)$/mg) ?? ();
+        } else {
+            r = run(sprintf("%s %s", env, shellQuote(exe)));
+            paths = (r.out =~ x/ (\/\S*\/libqore\.so[^\/\s]*)$/mg) ?? ();
+        }
+        assertEq(0, r.status, r.out);
+        list<string> rv = ();
+        foreach string path in (paths) {
+            string p = is_file(path) ? realpath(path) : path;
+            if (!inlist(p, rv)) {
+                rv += p;
+            }
+        }
+        return rv;
+    }
+
+    #! the qcc that TestInterpreter gives a build directory without qcc, with the decoy first in the PATH
+    noQccBuildTest() {
+        *string qcc = checkSetup();
+        if (!qcc) {
+            return;
+        }
+        string decoy_qcc = makeDecoyQcc(qcc);
+        # a build directory without qcc: the build's qore and libqore
+        string stand_in = tmp.path + "/build-without-qcc";
+        mkdir(stand_in);
+        symlink(realpath(build + "/qore"), stand_in + "/qore");
+        symlink(build_libqore, stand_in + "/" + basename(build_libqore));
+        symlink(basename(build_libqore), stand_in + "/" + (darwin ? "libqore.dylib" : "libqore.so"));
+        File f();
+        f.open2(stand_in + "/CMakeCache.txt", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("# a build directory\n");
+        f.close();
+        string probe = tmp.path + "/qcc-probe.q";
+        f = new File();
+        f.open2(probe, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("%%modern\n%%requires %s\nprint(TestInterpreter::qcc_compiler() ?? \"<none>\");\n",
+            realpath(get_script_dir() + "/../TestInterpreter.qm")));
+        f.close();
+        hash<auto> r = run(sprintf("env -u QCC -u QORE_QCC -u QORE_QCC_EXECUTABLE -u QORE_BIN -u QORE_EXECUTABLE "
+            "PATH=%s QORE_BINARY=%s %s %s", shellQuote(decoy_bin + ":" + ENV.PATH), shellQuote(stand_in + "/qore"),
+            shellQuote(stand_in + "/qore"), shellQuote(probe)));
+        assertEq(0, r.status, r.out);
+        string given = trim(r.out);
+        if (given != "<none>" && is_file(given)) {
+            # the programs that the qcc given compiles load the build's libqore
+            assertEq((build_libqore,), loadedLibqore(compile(given, "from-path")),
+                sprintf("a program compiled by the qcc that a build without qcc is given (%s)", given));
+        }
+        assertEq("<none>", given, "the qcc given to the tests of a build without qcc");
+    }
+
+    #! a program compiled by the build's qcc loads the build's libqore, also with the decoy on the fallback path
+    buildQccTest() {
+        *string qcc = checkSetup();
+        if (!qcc) {
+            return;
+        }
+        string exe = compile(qcc, "from-build");
+        assertEq((build_libqore,), loadedLibqore(exe));
+        if (darwin) {
+            makeDecoyQcc(qcc);
+            # the directories that the loader searches when a program records none
+            assertEq((build_libqore,), loadedLibqore(exe, "DYLD_FALLBACK_LIBRARY_PATH=" + shellQuote(decoy_lib)));
+            # the decoy qcc itself compiles programs that load the decoy (the decoy is one)
+            assertEq((realpath(decoy_lib + "/" + basename(build_libqore)),),
+                loadedLibqore(compile(decoy_bin + "/qcc", "from-decoy")));
+        }
+    }
+
+    #! returns the build's qcc, or skips the case
+    private *string checkSetup() {
+        if (!build) {
+            testSkip(QoreBuildTree::no_build_dir_message());
+        }
+        if (!is_file(build + "/qcc")) {
+            testSkip(sprintf("the build in %s has no qcc", build));
+        }
+        return build + "/qcc";
+    }
+}

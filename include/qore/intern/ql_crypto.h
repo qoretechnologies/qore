@@ -102,15 +102,18 @@ public:
     }
 
     DLLLOCAL void getString(QoreString& str) const {
-        for (unsigned i = 0; i < md_len; i++)
-        str.sprintf("%02x", md_value[i]);
+        static constexpr char digits[] = "0123456789abcdef";
+        char hex[2 * sizeof(md_value)];
+        for (unsigned i = 0; i < md_len; ++i) {
+            hex[2 * i] = digits[md_value[i] >> 4];
+            hex[2 * i + 1] = digits[md_value[i] & 15];
+        }
+        str.concat(hex, 2 * md_len);
     }
 
     DLLLOCAL QoreStringNode* getString() const {
         QoreStringNode* str = new QoreStringNode;
-        for (unsigned i = 0; i < md_len; i++)
-        str->sprintf("%02x", md_value[i]);
-
+        getString(*str);
         return str;
     }
 

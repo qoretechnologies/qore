@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -151,7 +152,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Wave client for integration tests
     private setupConnection() {
-        *string token = m_options.token ?? ENV.WAVE_TOKEN;
+        *string token = LiveProvider::get("wave", "WAVE_TOKEN", m_options.token);
         if (!token) {
             if (m_options.verbose) {
                 printf("No token provided (use -t option or WAVE_TOKEN env var)\n");
@@ -161,7 +162,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
         client = new WaveRestClient::WaveRestClientIo({"token": token});
 
         # Try to get business ID from option or by querying
-        businessId = m_options.business_id ?? ENV.WAVE_BUSINESS_ID;
+        businessId = m_options.business_id ?? LiveProvider::get("wave", "WAVE_BUSINESS_ID");
         if (!businessId) {
             # Query for the first business
             try {

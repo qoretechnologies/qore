@@ -18,6 +18,7 @@
 %requires dataframe
 
 %requires DataProviderDataFrame
+%requires ../../../examples/test/qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class DataFrameTest
 
@@ -3312,7 +3313,12 @@ sub invalid_dataframe_api() {
             }
             testSkip(sprintf("driver module unavailable: %s: %s", ex.err, ex.desc));
         }
-        ds.open();
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # a database outage is not a reason to skip (qore#6934)
+            TestRun::failUnreachable(connstr, ex);
+        }
         on_exit {
             ds.close();
         }

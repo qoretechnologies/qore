@@ -557,6 +557,70 @@ string driver = db.getDriverName();
  */
 abstract string AbstractDatasource::getDriverName();
 
+//! Returns a description of the datasource for messages, with the user name, password and database name masked
+/** The description has the form
+    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    the user name, the password and the database name are always replaced with \c "****", whether they are set or
+    not, so that the description shows none of them, and not whether they are set; the host and port are shown if
+    set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use
+    for a datasource in exception messages and logs
+
+    @return the masked description of the datasource, made from getDriverName(), getHostName() and getPort(); the
+    driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with \c "****"
+    otherwise; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":",
+    \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
+
+    @par Example:
+    @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = ds.getMaskedDescription();
+throw "TABLE-ERROR", sprintf("table %y does not exist in %s", name, desc);
+    @endcode
+
+    @throw any exception raised by getDriverName(), getHostName() or getPort() of a subclass; the implementations of
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" throw no exception
+
+    @see @ref Qore::SQL::mask_datasource(string) "mask_datasource()"
+
+    @since %Qore 3.0
+*/
+string AbstractDatasource::getMaskedDescription() {
+    ValueHolder driver(self->evalMethod("getDriverName", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder host(self->evalMethod("getHostName", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder port(self->evalMethod("getPort", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the methods are declared to return these types; a value of any other type is ignored; a string can be an
+    // inline short string, which has no QoreStringNode, so the helpers give the bytes of every representation
+    QoreStringDataHelper driver_str(*driver);
+    QoreStringDataHelper host_str(*host);
+    int64 port_val = port->getType() == NT_INT ? port->getAsBigInt() : 0;
+    QoreStringNodeHolder rv(new QoreStringNode);
+    q_ds_append_masked(**rv, driver_str.c_str(), host_str.c_str(), host_str.size(),
+        (port_val > 0 && port_val <= 65535) ? static_cast<int>(port_val) : 0);
+    return rv.release();
+}
+
+//! Returns the name of the connection that the datasource was created for, if any
+/** The name identifies the datasource in serialized data (see @ref sqlutil_serialization);
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" return the name set
+    with their \c setConnectionName() method; a subclass implemented in %Qore can reimplement this method
+
+    @return the name of the connection that the datasource was created for; this implementation returns @ref nothing
+
+    @since %Qore 3.0
+*/
+*string AbstractDatasource::getConnectionName() {
+    return QoreValue();
+}
+
 //! Returns the driver-specific server version data for the current connection
 /** @return the driver-specific server version data for the current connection
 

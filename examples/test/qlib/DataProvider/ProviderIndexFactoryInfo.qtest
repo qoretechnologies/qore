@@ -66,6 +66,8 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
         addTestCase("a factory info file that is no longer referenced is removed", \staleFileRemovedTest());
         addTestCase("the info without type information matches the factory's", \withoutTypeInfoTest());
         addTestCase("a worker build records the factory info without loading the module", \workerBuildTest());
+        addTestCase("an index build reports the registering module for a caller without terminal I/O",
+            \restrictedBuildLogTest());
         addTestCase("an index build records the info of every registered factory", \buildTest());
         addTestCase("a reader process lists the factories without loading their modules", \readerProcessTest());
         addTestCase("a reader process loads a factory's module for an index without factory info",
@@ -85,13 +87,16 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
     #! Sets a process environment variable until restoreEnv() is called; child processes inherit it
     private setEnv(string var, *string value) {
         if (!saved_env.hasKey(var)) {
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             saved_env{var} = getenv(var);
         }
         if (exists value) {
             setenv(var, value);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             ENV{var} = value;
         } else {
             unsetenv(var);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             remove ENV{var};
         }
     }
@@ -101,9 +106,11 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
         foreach hash<auto> i in (saved_env.pairIterator()) {
             if (exists i.value) {
                 setenv(i.key, i.value);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{i.key} = i.value;
             } else {
                 unsetenv(i.key);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{i.key};
             }
         }
@@ -940,6 +947,30 @@ printf(\"%s\\n\", make_json({
         assertTrue(exists get_module_hash().ProviderIndexFactoryWorkerFixture);
         assertEq(index.factoryinfomap."qoretest-worker",
             ProviderIndexUtil::readSerializedDataProviderIndex(single_dir).index.factoryinfomap."qoretest-worker");
+    }
+
+    restrictedBuildLogTest() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        string mod = "ProviderIndexDiagnosticFixture";
+        string factory = "qoretest-diagnostic";
+        setEnv("QORE_DATA_PROVIDERS", writeFactoryFixture(dir, mod, factory));
+        string index_dir = dir + DirSep + "index";
+        setEnv(ProviderIndexEnvVar, index_dir);
+        *LoggerInterface previous = ProviderIndexUtil::getGlobalLogger();
+        LogCapture capture = captureLog();
+        on_exit ProviderIndexUtil::setGlobalLogger(previous);
+
+        Program p(PO_NEW_STYLE | PO_NO_TERMINAL_IO);
+        p.loadModule("ProviderIndex");
+        p.parse("hash<auto> sub build_index(string dir, hash<ProviderIndexCreateOptions> opts) { "
+            "return ProviderIndex::createDataProviderIndex(NOTHING, dir, opts); }", "index-build");
+        hash<auto> info = p.callFunction("build_index", index_dir, getBuildOptions());
+        assertTrue(info.summary.qualification.complete);
+        string expected = sprintf("[caller Program %d] [module %y] Registered factory %y",
+            p.getProgramId(), mod, factory);
+        assertEq((expected,), capture.getMessages("Registered factory.*qoretest-diagnostic"));
     }
 
     buildTest() {

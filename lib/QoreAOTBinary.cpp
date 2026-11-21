@@ -2981,22 +2981,6 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return rv;
     }
 
-    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
-        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
-        std::string rv = or_nothing ? "*object<" : "object<";
-        rv += pti->getBaseClass() ? qore_aot_encode_class_ref(pti->getBaseClass()) : "";
-        rv += "<";
-        const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (i) {
-                rv += ", ";
-            }
-            rv += getAOTSerializableTypePath(args[i]);
-        }
-        rv += ">>";
-        return rv;
-    }
-
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
         std::string rv = cti->isOrNothing() ? "*code<" : "code<";
         rv += cti->getReturnType() ? getAOTSerializableTypePath(cti->getReturnType()) : "nothing";
@@ -3058,9 +3042,8 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return "*list<auto!>";
     }
 
-    // a union is written with the path of each of its member types; it is checked before the type checks below, which
-    // look at the first member of a union only (QoreTypeInfo::getTypedHash() took union<hash<H>, int> for hash<H>:
-    // qore#5858)
+    // Write declared union members before inspecting the first return type. Both a parameterized class (#7147)
+    // and a hashdecl (#5858) in first position would otherwise be written as the entire union.
     if (const QoreUnionTypeInfo* union_ti = QoreTypeInfo::getUnionType(ti)) {
         // the members as declared, without duplicates (QoreUnionTypeInfo::getMemberTypes())
         type_vec_t members = union_ti->getMemberTypes();
@@ -3080,6 +3063,22 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
             rv += member_path;
         }
         rv += ">";
+        return rv;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
+        std::string rv = or_nothing ? "*object<" : "object<";
+        rv += pti->getBaseClass() ? qore_aot_encode_class_ref(pti->getBaseClass()) : "";
+        rv += "<";
+        const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i) {
+                rv += ", ";
+            }
+            rv += getAOTSerializableTypePath(args[i]);
+        }
+        rv += ">>";
         return rv;
     }
 
@@ -4752,10 +4751,34 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
 
 // ---- QoreAOTBinaryReader ----
 
+//! Reports a decompression of a part of the AOT metadata that starts at \a input
+/** Prints a line if QORE_AOT_TRACE_METADATA_DECOMPRESS is set, so that tests can check that a load decompresses the
+    metadata of an image once (qore#6702)
+
+    @param input the encoded metadata given to QoreAOTBinaryReader::open()
+    @param part "body" (the whole metadata after the header), "string-pool" or "section"; "open" for an open of the
+    metadata whose header and checksum are valid, which is reported too
+    @param index the index of the section, or -1
+    @param size the size of the decompressed data, or of the metadata that is opened
+*/
+static void qore_aot_trace_metadata_decompress(const uint8_t* input, const char* part, long index, size_t size) {
+    static constinit QoreEnvFlag trace_env("QORE_AOT_TRACE_METADATA_DECOMPRESS");
+    if (!trace_env.get()) {
+        return;
+    }
+    if (index < 0) {
+        fprintf(stderr, "[aot-metadata-decompress] input=%p part=%s size=%zu\n", static_cast<const void*>(input),
+            part, size);
+    } else {
+        fprintf(stderr, "[aot-metadata-decompress] input=%p part=%s:%ld size=%zu\n",
+            static_cast<const void*>(input), part, index, size);
+    }
+}
+
 bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error, bool verify_checksum) {
     section_stored_sizes.clear();
-    decompressed_sections.clear();
-    decompressed_string_pool.clear();
+    // the metadata of an earlier open stays with the other readers that share it (qore#6702)
+    decoded.reset();
     checksum_mismatch = false;
     data = in_data;
     total_size = in_size;
@@ -4870,6 +4893,8 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         total_size = in_size;
     }
 
+    qore_aot_trace_metadata_decompress(in_data, "open", -1, in_size);
+
     // Validate opcode compatibility
     if (header.max_opcode_id > QORE_IR_MAX_OPCODE) {
         error = "binary was compiled with Qore "
@@ -4890,18 +4915,23 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         const uint8_t* compressed_start = data + header_size;
         size_t compressed_len = in_size - header_size;
         std::string decomp_error;
+        auto body_ptr = std::make_shared<std::vector<uint8_t>>();
+        std::vector<uint8_t>& body = *body_ptr;
         bool decompressed = header.compression == QORE_AOT_COMPRESSION_ZSTD
-            ? decompressMetadataZstd(compressed_start, compressed_len, decompressed_body, decomp_error)
-            : decompressMetadata(compressed_start, compressed_len, decompressed_body, decomp_error);
+            ? decompressMetadataZstd(compressed_start, compressed_len, body, decomp_error)
+            : decompressMetadata(compressed_start, compressed_len, body, decomp_error);
         if (!decompressed) {
             error = "failed to decompress metadata: " + decomp_error;
             return false;
         }
+        qore_aot_trace_metadata_decompress(in_data, "body", -1, body.size());
+        decoded = std::make_shared<QoreAOTDecodedMetadata>();
+        decoded->body = std::move(body_ptr);
         // Use decompressed data as our working buffer
         // IMPORTANT: After decompression, ptr and data must be consistent!
         // ptr was pointing into section directory, so reset it relative to new buffer
-        data = decompressed_body.data();
-        total_size = static_cast<uint32_t>(decompressed_body.size());
+        data = body.data();
+        total_size = static_cast<uint32_t>(body.size());
         ptr = data;  // Reset ptr to start of decompressed data (start of section directory)
     } else if (header.compression != QORE_AOT_COMPRESSION_NONE
             && header.compression != QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
@@ -4945,13 +4975,16 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD
             && header.reserved == QORE_AOT_COMPRESSION_ZSTD) {
         std::string decomp_error;
-        if (!decompressMetadataZstd(ptr, stored_string_pool_size,
-                decompressed_string_pool, decomp_error)) {
+        auto pool = std::make_shared<std::vector<uint8_t>>();
+        if (!decompressMetadataZstd(ptr, stored_string_pool_size, *pool, decomp_error)) {
             error = "failed to decompress metadata string pool: " + decomp_error;
             return false;
         }
-        string_pool = reinterpret_cast<const char*>(decompressed_string_pool.data());
-        string_pool_size = static_cast<uint32_t>(decompressed_string_pool.size());
+        qore_aot_trace_metadata_decompress(in_data, "string-pool", -1, pool->size());
+        string_pool = reinterpret_cast<const char*>(pool->data());
+        string_pool_size = static_cast<uint32_t>(pool->size());
+        decoded = std::make_shared<QoreAOTDecodedMetadata>();
+        decoded->string_pool = std::move(pool);
     } else {
         if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD
                 && header.reserved != QORE_AOT_COMPRESSION_NONE) {
@@ -4974,7 +5007,13 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     data_area_size = static_cast<uint32_t>((data + total_size) - ptr);
 
     section_stored_sizes.resize(sections.size());
-    decompressed_sections.resize(sections.size());
+    if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
+        if (!decoded) {
+            decoded = std::make_shared<QoreAOTDecodedMetadata>();
+        }
+        decoded->sections.reset(new QoreAOTDecodedMetadata::Section[sections.size()]);
+        decoded->section_count = sections.size();
+    }
     uint64_t sectioned_uncompressed_size = header_size + section_dir_size + 4 + string_pool_size;
 
     // Validate section offsets. Section-compressed headers carry the stored
@@ -5027,6 +5066,70 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     }
 
     return true;
+}
+
+QoreAOTBinaryReaderRef::QoreAOTBinaryReaderRef() = default;
+
+void QoreAOTBinaryReaderRef::set(const QoreAOTBinaryReader& reader, bool strong, const QoreAOTSectionType* keep_types,
+        size_t keep_count) {
+    // the new state is made first and replaces the old one when it is complete, so that an exception leaves this
+    // object as it was
+    std::unique_ptr<QoreAOTBinaryReader> new_shell(new QoreAOTBinaryReader(reader));
+    new_shell->decoded.reset();
+    // the read state of the reader that the copy is made from is not that of a new reader
+    new_shell->wrap_const_ref_in_rcr = false;
+    new_shell->defer_unresolved_const_refs = false;
+    new_shell->expr_native_capture = nullptr;
+
+    std::shared_ptr<QoreAOTDecodedMetadata> new_strong;
+    std::weak_ptr<QoreAOTDecodedMetadata> new_weak;
+    if (!strong) {
+        new_weak = reader.decoded;
+    } else if (reader.decoded && reader.decoded->sections) {
+        // sectioned metadata: the string pool and those of the sections that the later reader reads that the load
+        // has decompressed are kept; the later reader decompresses the others if it reads them
+        const QoreAOTDecodedMetadata& src = *reader.decoded;
+        auto kept = std::make_shared<QoreAOTDecodedMetadata>();
+        kept->string_pool = src.string_pool;
+        kept->sections.reset(new QoreAOTDecodedMetadata::Section[src.section_count]);
+        kept->section_count = src.section_count;
+        for (size_t i = 0; i < keep_count; ++i) {
+            const QoreAOTSectionHeader* sec = reader.findSection(keep_types[i]);
+            if (!sec) {
+                continue;
+            }
+            size_t index = static_cast<size_t>(sec - reader.sections.data());
+            assert(index < src.section_count);
+            if (index >= src.section_count || !src.sections[index].ready.load(std::memory_order_acquire)) {
+                continue;
+            }
+            kept->sections[index].data = src.sections[index].data;
+            kept->sections[index].ready.store(true, std::memory_order_release);
+        }
+        new_strong = std::move(kept);
+    } else {
+        new_strong = reader.decoded;
+    }
+
+    shell = std::move(new_shell);
+    strong_decoded = std::move(new_strong);
+    weak_decoded = std::move(new_weak);
+    needs_decoded = static_cast<bool>(reader.decoded);
+}
+
+QoreAOTBinaryReaderRef::~QoreAOTBinaryReaderRef() = default;
+
+std::unique_ptr<QoreAOTBinaryReader> QoreAOTBinaryReaderRef::lock() const {
+    if (!shell) {
+        return nullptr;
+    }
+    std::shared_ptr<QoreAOTDecodedMetadata> decoded = strong_decoded ? strong_decoded : weak_decoded.lock();
+    if (needs_decoded && !decoded) {
+        return nullptr;
+    }
+    std::unique_ptr<QoreAOTBinaryReader> rv(new QoreAOTBinaryReader(*shell));
+    rv->decoded = std::move(decoded);
+    return rv;
 }
 
 //! Returns true and sets \a error if a read of the section \a name went past its end (qore#6265)
@@ -5084,16 +5187,28 @@ const uint8_t* QoreAOTBinaryReader::getSectionData(const QoreAOTSectionHeader& s
             || section.reserved == QORE_AOT_COMPRESSION_NONE) {
         return data_area + section.offset;
     }
-    auto& decompressed = decompressed_sections[index];
-    if (decompressed.empty()) {
-        std::string error;
-        if (!decompressMetadataZstd(data_area + section.offset, stored_size, decompressed, error)
-                || decompressed.size() != section.size) {
-            decompressed.clear();
-            return nullptr;
+    // the sections are shared by the readers of the open, which can be in several threads (qore#6702)
+    assert(decoded && decoded->sections && index < decoded->section_count);
+    if (!decoded || !decoded->sections || index >= decoded->section_count) {
+        return nullptr;
+    }
+    QoreAOTDecodedMetadata::Section& decompressed = decoded->sections[index];
+    if (!decompressed.ready.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(decoded->section_mutex);
+        if (!decompressed.ready.load(std::memory_order_relaxed)) {
+            std::string error;
+            auto section_data = std::make_shared<std::vector<uint8_t>>();
+            if (!decompressMetadataZstd(data_area + section.offset, stored_size, *section_data, error)
+                    || section_data->size() != section.size) {
+                return nullptr;
+            }
+            qore_aot_trace_metadata_decompress(input_data, "section", static_cast<long>(index),
+                section_data->size());
+            decompressed.data = std::move(section_data);
+            decompressed.ready.store(true, std::memory_order_release);
         }
     }
-    return decompressed.data();
+    return decompressed.data->data();
 }
 
 template <typename Size>
@@ -13604,6 +13719,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // QoreStringNode: string literal constant (e.g., "" as constructor arg)
+    // note: safe; the node of the expression, whose inline short string is written above (!expr.hasNode())
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         if (qore_aot_string_needs_value(str->c_str(), str->size(), str->getEncoding())) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));

@@ -40,6 +40,7 @@
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_websocket.h"
+#include "qore/intern/SocketPollEventsOps.h"
 
 /** @cond INTERNAL */
 
@@ -100,12 +101,12 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             PollStateCloseHook::fired(goalReached());
         }
 #endif
-        QoreHashNode* send_info = send_op->continuePoll(xsink);
+        int send_events = qore_socket_poll_events_ops::continuePollEvents(send_op, xsink);
         if (*xsink) {
             setError(xsink);
             return nullptr;
         }
-        if (!send_info) {
+        if (!send_events) {
             // Send complete or failed
             if (send_op->goalReached()) {
                 releaseSendOp(xsink);
@@ -120,15 +121,14 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
                 return nullptr;
             }
         } else {
-            // Send needs more I/O
-            send_info->deref(xsink);
-            poll_events |= SOCK_POLLOUT;
+            // TLS can require the opposite direction to finish this operation.
+            poll_events |= send_events;
         }
     }
 
     // --- Phase 2: Drive active recv operation ---
     if (recv_op) {
-        QoreHashNode* recv_info = recv_op->continuePoll(xsink);
+        int recv_events = qore_socket_poll_events_ops::continuePollEvents(recv_op, xsink);
         if (*xsink) {
             releaseRecvOp(xsink);
             // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
@@ -138,7 +138,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
                 endConnectionLost("Connection lost", xsink);
                 return nullptr;
             }
-        } else if (!recv_info) {
+        } else if (!recv_events) {
             // Recv complete — process the data; update heartbeat activity
             last_recv_activity_ms = monotonicMs();
             bool got_data = false;
@@ -180,9 +180,8 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
                 return nullptr;
             }
         } else {
-            // Recv needs more I/O
-            recv_info->deref(xsink);
-            poll_events |= SOCK_POLLIN;
+            // TLS can require the opposite direction to finish this operation.
+            poll_events |= recv_events;
         }
     }
 
@@ -292,12 +291,8 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Poll for incoming data — skip while echoing a close the server started, to prevent a busy loop from its
-    // FIN; a close the client started waits for the server's close frame
-    if (ws_state != WsState::CLOSING || close_initiated) {
-        poll_events |= SOCK_POLLIN;
-    }
-
+    // An active receive reported its own TLS readiness above. A new receive subscribed
+    // to input when it started. Adding POLLIN here would wake a read that needs POLLOUT.
     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, poll_events);
 
     // Set poll_timeout_ms so the controller wakes us for heartbeat and/or
@@ -1231,7 +1226,7 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass WebSocketClientPollOperationBase [
-    private_members=object sock,string goal,object recv_queue,object send_queue;
+    internal_members=object recv_queue,object send_queue;
     ns=Qore;
     arg=WebSocketClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
@@ -1254,10 +1249,9 @@ WebSocketClientPollOperationBase::constructor(Socket[QoreSocketObject] socket) [
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_WEBSOCKETCLIENTPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_WEBSOCKETCLIENTPOLLOPERATIONBASE,
-        new QoreStringNode("ws-client-io"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("ws-client-io"), xsink);
 
     // Create recv and send queues (unlimited)
     Queue* recv_q = new Queue(-1);
@@ -1301,7 +1295,7 @@ WebSocketClientPollOperationBase::copy() {
 /** @return "ws-client-io"
 */
 string WebSocketClientPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1411,6 +1405,7 @@ nothing WebSocketClientPollOperationBase::sendPing(*data payload) [flags=NAMED_A
                 payload_len = bin->size();
             }
         } else if (t == NT_STRING) {
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(payload);
             if (str->size() > 0) {
                 payload_ptr = str->c_str();
@@ -1446,6 +1441,7 @@ nothing WebSocketClientPollOperationBase::sendPong(*data payload) [flags=NAMED_A
                 payload_len = bin->size();
             }
         } else if (t == NT_STRING) {
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(payload);
             if (str->size() > 0) {
                 payload_ptr = str->c_str();
@@ -1669,7 +1665,7 @@ nothing WebSocketClientPollOperationBase::onPollComplete() {
 /** @return the Socket object
 */
 Socket WebSocketClientPollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Sets the heartbeat ping interval in milliseconds

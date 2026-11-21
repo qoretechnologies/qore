@@ -892,10 +892,12 @@ public:
     //! Evaluates defaults (ARG_DEF) and checks supplied values (ARG_OTHER) using a compile-time pass selection.
     /** The saved list receives original values before conversion, for retrying another overload; it is allocated
         only when a value needs conversion. Separate passes keep default evaluation out of the supplied-value check.
+        A default value is evaluated in the context of the code that declared it, never in the caller's: @p variant
+        gives the class of a method (qore#7066).
     */
     template <int ArgType, typename FilterPolicy>
     DLLLOCAL int prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractFunctionSignature* sig,
-            bool is_copy, QoreObject* self,
+            const AbstractQoreFunctionVariant* variant, bool is_copy, QoreObject* self,
             std::unique_ptr<std::vector<std::pair<unsigned, QoreValue>>>* saved, FilterPolicy policy);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -3525,6 +3527,10 @@ public:
     DLLLOCAL ClassAccess getAccess() const {
         return access;
     }
+
+    //! returns true if the method inherits a public variant of an ancestor through a public path that none of its
+    //! own variants overrides (qore#7074); defined in QoreClass.cpp
+    DLLLOCAL bool hasInheritedPublicVariant() const;
 
     DLLLOCAL virtual const QoreClass* getClass() const {
         return qc;

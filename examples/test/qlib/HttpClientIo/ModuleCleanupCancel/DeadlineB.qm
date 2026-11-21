@@ -1,0 +1,38 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes at the end of the process: its destructor submits an operation that
+# does not end, which the cleanup waits for until its deadline (qore#7027); see deadline-client.qr
+
+%modern
+
+%requires FollowUpOps
+
+module DeadlineB {
+    version = "1.0";
+    desc = "submits an operation that does not end at the end of the process";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DeadlineB {
+#! submits the operation when the cleanup deletes it
+class Submitter {
+    private {
+        EventNotifier notifier();
+    }
+
+    destructor() {
+        submit_operation(notifier, "deadline-b", FollowUpGoal::Never, FollowUpAction::None);
+    }
+}
+
+#! the data of this module
+public class DataB {
+    public {
+        static Submitter submitter();
+    }
+}
+}

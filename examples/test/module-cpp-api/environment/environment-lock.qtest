@@ -128,7 +128,7 @@ class EnvironmentLockTest inherits QUnit::Test {
         assertTrue(h.is_set);
         # after the lock has been released, the environment can be changed
         assertEq(0, h.after_rc);
-        assertEq("changed", getenv(name));
+        assertEq("changed", getenv(name)); # live-provider-optin: a variable of the test itself
     }
 
     testNestedExclusive() {
@@ -137,12 +137,12 @@ class EnvironmentLockTest inherits QUnit::Test {
 
         string v = "nested-" + Pad;
         assertEq(v, cpp_api_env_nested_exclusive(name, v));
-        assertEq(v, getenv(name));
+        assertEq(v, getenv(name)); # live-provider-optin: a variable of the test itself
         # the lock has been released: another thread can change the environment
         Queue q();
         background q.push(setenv(name, "other"));
         assertEq(0, q.get());
-        assertEq("other", getenv(name));
+        assertEq("other", getenv(name)); # live-provider-optin: a variable of the test itself
     }
 
     testForkLockHolders() {
@@ -163,7 +163,7 @@ class EnvironmentLockTest inherits QUnit::Test {
         assertEq(0, cpp_api_env_fork_while_held(name, "exclusive-" + Pad, True));
         assertEq(0, cpp_api_env_fork_while_held(name, "shared-" + Pad, False));
         # the variable was set only in the children
-        assertNothing(getenv(name));
+        assertNothing(getenv(name)); # live-provider-optin: a variable of the test itself
     }
 
     testForkExec() {

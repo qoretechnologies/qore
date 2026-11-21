@@ -208,6 +208,10 @@ cd "${QORE_SRC_DIR}"
 QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" QORE_BINARY="${BUILD_DIR}/qore" \
     QORE_TEST_BUILD_DIR="${BUILD_DIR}" python3 -B -W error -m unittest discover -s examples/test/cmake -v
 
+# The checkers of run_tests.sh, as test-cmake.sh runs them on Linux: some check what only macOS does (the libqore that
+# the dynamic loader finds for the build's programs, #7029)
+QORE_TEST_BUILD_DIR="${BUILD_DIR}" python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py" -v
+
 # Core tests need native modules from the image (for example yaml and xml), but
 # must not see the image's user modules: those were compiled against the Qore
 # that built the image, so a job that changes a qlib API would be tested against

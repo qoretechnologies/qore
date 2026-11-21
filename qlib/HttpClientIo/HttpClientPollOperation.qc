@@ -52,9 +52,6 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
     }
 
     private {
-        #! The client socket
-        Socket sock;
-
         #! Current state
         string state = STATE_CONNECTING;
 
@@ -161,9 +158,9 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
     }
 
     #! Returns the socket
-    Socket getSocket() {
-        return sock;
-    }
+    /** Implemented by the C++ base class of each protocol-specific poll operation, which keeps the socket (qore#6772)
+    */
+    abstract Socket getSocket();
 
     #! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
     /** Implemented by the protocol-specific poll operations

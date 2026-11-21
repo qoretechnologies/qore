@@ -38,7 +38,7 @@ module ModInitThrow {
 public namespace ModInitThrow {
     public string sub f() { return \"module ready\"; }
     public sub init_module() {
-        if (getenv(\"MODINIT_THROW\")) {
+        if (getenv(\"MODINIT_THROW\")) { # live-provider-optin: a variable that the test sets for the module it builds
             throw \"MODULE-INIT-REFUSED\", \"the module's initialization refuses to complete\";
         }
     }
@@ -239,7 +239,7 @@ module %s {
     domains = \"FILESYSTEM,EXTERNAL_INFO\";
     init = sub () {
         File f();
-        f.open2(getenv(\"INIT_LOG\"), O_CREAT | O_WRONLY | O_APPEND);
+        f.open2(getenv(\"INIT_LOG\"), O_CREAT | O_WRONLY | O_APPEND); # live-provider-optin: a variable that the test sets for the module it builds
         f.write(\"%s\\n\");
         %s
     };
@@ -269,7 +269,7 @@ public namespace %s {
         TmpDir src("qore-aot-modinit-order-");
         write(src.path + "/ModOrdA.qm", orderModuleSource("ModOrdA"));
         write(src.path + "/ModOrdB.qm", orderModuleSource("ModOrdB", "",
-            "if (getenv(\"ORDB_THROW\")) { throw \"MODORDB-INIT-ERROR\", \"refused\"; }"));
+            "if (getenv(\"ORDB_THROW\")) { throw \"MODORDB-INIT-ERROR\", \"refused\"; }")); # live-provider-optin: a variable that the test sets for the module it builds
         write(src.path + "/ModOrdC.qm", orderModuleSource("ModOrdC"));
         write(src.path + "/ModOrdU.qm", orderModuleSource("ModOrdU", "%requires ModOrdB\n%requires ModOrdC"));
         # the modules required by their path, required by their names, and through a module that requires them

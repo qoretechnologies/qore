@@ -76,6 +76,9 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         @param offer_http11 if @ref True, ALPN offers \c http/1.1 after \c h2, so that a TLS server without HTTP/2
         selects it (the connection then fails with \c HTTP2-ALPN-ERROR, which an automatic protocol selection falls
         back to HTTP/1.1 on) instead of refusing the handshake
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
@@ -190,6 +193,8 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
             bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
             *string ssl_ca_path, bool offer_http11) {
+        # the caller check of the operation, which this method runs first (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {

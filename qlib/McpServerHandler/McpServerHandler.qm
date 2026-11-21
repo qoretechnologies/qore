@@ -229,6 +229,10 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - fixed matching resource templates: the characters of a template other than its expressions match themselves
       (a template with \c "(" failed every \c resources/read and \c resources/subscribe request, and \c "." matched
       any character), and the pattern is compiled when the template is registered (issue #6603)

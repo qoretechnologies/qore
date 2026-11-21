@@ -34,6 +34,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
@@ -148,7 +149,7 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
         maxidle = minidle;
     // the pool's own thread counts against the sandbox of the creating Program like its workers; it is released when
     // the pool has stopped (see ThreadPool::worker())
-    if (sbx && sbx->acquireThreadSlot(xsink)) {
+    if (sbx && qore_sandbox_manager_ops(sbx).acquireThreadSlot(xsink)) {
         stopped = true;
         return;
     }
@@ -159,7 +160,7 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
         stopped = true;
         // no lock is held here, so the waiting pools are notified at once
         if (sbx) {
-            sbx->releaseThreadSlot();
+            qore_sandbox_manager_ops(sbx).releaseThreadSlot();
         }
     }
 }
@@ -338,7 +339,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     sl.unlock();
 
     if (notify_sbx) {
-        notify_sbx->notifyThreadSlotReleased();
+        qore_sandbox_manager_ops(notify_sbx).notifyThreadSlotReleased();
         notify_sbx->deref(nullptr);
     }
 
