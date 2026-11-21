@@ -13002,6 +13002,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module init error: feature '%s' is already loaded in this Program container", mod_name);
@@ -13850,6 +13852,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module init error: feature '%s' is already loaded in this Program container", mod_name);
@@ -15877,6 +15881,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(

@@ -6831,8 +6831,12 @@ CallerWalkStep qore_caller_walk_step(const QoreProgram* pgm) {
     if (priv->created_in_trusted_build) {
         return CallerWalkStep::Unknown;
     }
-    // the Program of a module, library code or not, serves the code that calls it
-    return priv->module_lifetime.load(std::memory_order_acquire) ? CallerWalkStep::Skip : CallerWalkStep::Found;
+    // the Program of a module, library code or not, serves the code that calls it; also while the module is
+    // initialized, before it is registered and has the lifetime of a module: the module manager marks the Program
+    // that it creates or takes for a module before its code runs; not a Program that module code creates, whose code
+    // is its own (it inherits PO_IN_MODULE, so that option does not tell a module's Program; qore#7077)
+    return (priv->module_lifetime.load(std::memory_order_acquire) || priv->module_program.load(std::memory_order_acquire))
+        ? CallerWalkStep::Skip : CallerWalkStep::Found;
 }
 }
 
@@ -6848,21 +6852,16 @@ int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id) {
         id = p->getProgramId();
         return 0;
     };
-    // the innermost module initialization barrier: the code that loads library code is the caller of its
-    // initialization; the barrier of a trusted build hides the code that the build serves
+    // the innermost module initialization barrier: the walk reaches it through module code only, where the caller is
+    // unknown (see at_barrier below)
     const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
         ? nullptr : &td->module_init_barriers.back();
+    // the walk reaches a barrier through module code only: the initialization of library code (or of a module that
+    // its initialization loads), or the module code of a trusted build; the state that it creates is shared by the
+    // whole process, so the code that loaded or entered it first is not its caller, which would own that state: the
+    // caller is unknown (qore#7077, qore#6852)
     auto at_barrier = [&]() -> int {
-        if (mib->build || mib->loader_pgm_id == QORE_NO_PROGRAM_ID) {
-            return -1;
-        }
-        // the loader's Program is below the barrier on this thread's stack, so it is alive: the Program current when
-        // the barrier was set, if it is the loader's
-        id = mib->loader_pgm_id;
-        if (mib->pgm && mib->pgm->getProgramId() == id) {
-            pgm = const_cast<QoreProgram*>(mib->pgm);
-        }
-        return 0;
+        return -1;
     };
     const QoreCallerProgramScope* scope = td->caller_scope;
     // the end of the walk at a scope: the caller Program of the code that submitted the work

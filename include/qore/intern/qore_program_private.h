@@ -2370,6 +2370,12 @@ public:
     */
     bool exit_hooks_closed = false;
 
+    //! set by the module manager for the Program that it creates or takes for a user module, before the module's code
+    //! is parsed or initialized: the Program is a module's from then on (qore_find_caller_program(), qore#7077);
+    //! PO_IN_MODULE does not tell it, as a Program that module code creates inherits it
+    //! (atomic: the threads that already run a container Program's code read it while the loader sets it)
+    std::atomic<bool> module_program{false};
+
     //! set for the Program of a module that is library code (see QoreModuleManager::isTrustedModulePath())
     /** What such a Program has is library code's own (its parse defines, its module path directives) or was
         filtered when it was created, so the library modules that it loads inherit it whoever loads it first
