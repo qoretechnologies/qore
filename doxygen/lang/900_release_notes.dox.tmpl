@@ -2643,8 +2643,9 @@
       @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
       6791</a>)
     - a @ref number "number" parsed from a decimal string of 22 to 31 digits, including a value read from a
-      \c buffer<decimal128>, has enough precision to print as the value, where it could print with
-      binary conversion noise (see @ref number_string_precision; issue #6824)
+      \c buffer<decimal128>, has enough precision to print as the value, where it could print with binary
+      conversion noise; the precision depends only on the value, so numbers of the same value parsed from different
+      strings compare equal (see @ref number_string_precision; issues #6824, #6976)
     - code that is not trusted (sandboxed or restricted) no longer adds a process-wide encoding for every new name that
       it uses as an encoding name: a name that is not known resolves to a known encoding or a label that data may
       select, registers only a plain name that iconv converts, and otherwise gives the encoding

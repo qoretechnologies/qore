@@ -201,33 +201,93 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     //! returns the precision of a number parsed from a decimal string
-    /** The precision is at least QORE_DEFAULT_PREC and 5 bits per character of the string, and at least the bits of
-        the significant digits of the significand plus QORE_NUM_STRING_GUARD_DIGITS digits.  The guard digits make
-        the binary conversion error of a decimal value show as a run of more than QORE_MPFR_ROUND_THRESHOLD_2 0 or 9
-        digits after the digits of the value in the string form of the number, which the display rounding removes, so
-        that the number prints as the decimal value it was parsed from; at 5 bits per character alone, a value of 22
-        to 31 digits, such as "-567890123456789.0123456789" (a decimal128 value read as a number), could print with
-        the noise digits (issue #6824).
+    /** The precision depends only on the decimal value of the string, never on how it is written, so that numbers of
+        the same value compare equal however they were made: a number literal, number() of a string with a sign,
+        leading or trailing zeros or an exponent, or a value read from a decimal column with the zeros of its scale
+        (issue #6976).  It is the largest of:
+        - QORE_DEFAULT_PREC bits
+        - the bits of the significant digits of the value plus QORE_NUM_STRING_GUARD_DIGITS digits: the significant
+          digits are those of the shortest significand of the value, so leading zeros and the zeros at the end of
+          the significand do not count (123.45678901234567890 and 1.234567890123456789e2 have 19); the guard digits
+          make the binary conversion error of a decimal value show as a run of more than
+          QORE_MPFR_ROUND_THRESHOLD_2 0 or 9 digits after the digits of the value in the string form of the number,
+          which the display rounding removes, so that the number prints as the decimal value it was parsed from
+          (issue #6824)
+        - 5 bits for each power of 10 of the magnitude of the value (the decimal exponent of its first significant
+          digit), which makes an integer value exact and keeps the precision of a value with a large or small
+          exponent
+
+        and at most QORE_MAX_PREC bits.  A string that is not a decimal number (NaN or infinity) has
+        QORE_DEFAULT_PREC bits; the digits are read as mpfr_set_str() reads them, up to the first character that is
+        not part of the number.
     */
     DLLLOCAL static mpfr_prec_t getDecimalStringPrec(const char* str) {
-        size_t len = 0;
-        size_t digits = 0;
-        bool significant = false;
-        bool in_exponent = false;
-        for (const char* p = str; *p; ++p, ++len) {
-            if (in_exponent) {
-                continue;
-            }
-            if (*p == 'e' || *p == 'E') {
-                in_exponent = true;
-            } else if (*p >= '0' && *p <= '9' && (significant || *p != '0')) {
-                significant = true;
-                ++digits;
+        const char* p = str;
+        while (*p == ' ' || (*p >= '\t' && *p <= '\r')) {
+            ++p;
+        }
+        if (*p == '-' || *p == '+') {
+            ++p;
+        }
+        // the index of each digit of the significand, the number of digits before the decimal point, and the indices
+        // of the first and last nonzero digits
+        int64_t index = 0;
+        int64_t int_digits = -1;
+        int64_t first = -1;
+        int64_t last = -1;
+        for (; ; ++p) {
+            if (*p >= '0' && *p <= '9') {
+                if (*p != '0') {
+                    if (first < 0) {
+                        first = index;
+                    }
+                    last = index;
+                }
+                ++index;
+            } else if (*p == '.' && int_digits < 0) {
+                int_digits = index;
+            } else {
+                break;
             }
         }
+        // zero, or not a decimal number
+        if (first < 0) {
+            return QORE_DEFAULT_PREC;
+        }
+        if (int_digits < 0) {
+            int_digits = index;
+        }
+        // the exponent; a larger one than QORE_MAX_PREC gives the maximum precision anyway
+        int64_t exp = 0;
+        if (index && (*p == 'e' || *p == 'E')) {
+            ++p;
+            bool neg = false;
+            if (*p == '-' || *p == '+') {
+                neg = *p == '-';
+                ++p;
+            }
+            for (; *p >= '0' && *p <= '9'; ++p) {
+                if (exp <= QORE_MAX_PREC) {
+                    exp = exp * 10 + (*p - '0');
+                }
+            }
+            if (neg) {
+                exp = -exp;
+            }
+        }
+        // the significant digits
+        int64_t digits = last - first + 1;
+        // the decimal exponent of the first significant digit
+        int64_t magnitude = int_digits - 1 - first + exp;
+        if (magnitude < 0) {
+            magnitude = -magnitude;
+        }
+        if (digits > QORE_MAX_PREC || magnitude > QORE_MAX_PREC / 5) {
+            return QORE_MAX_PREC;
+        }
         // log2(10) < 3.322 bits per decimal digit
-        size_t digit_prec = ((digits + QORE_NUM_STRING_GUARD_DIGITS) * 3322 + 999) / 1000;
-        size_t prec = QORE_MAX(len * 5, digit_prec);
+        int64_t prec = ((digits + QORE_NUM_STRING_GUARD_DIGITS) * 3322 + 999) / 1000;
+        prec = QORE_MAX(prec, magnitude * 5);
         if (prec > QORE_MAX_PREC) {
             prec = QORE_MAX_PREC;
         }
@@ -235,18 +295,6 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     DLLLOCAL qore_number_private(const char* str) : qore_number_private_intern(getDecimalStringPrec(str)) {
-        // see if number has an exponent and increase the number's precision if necessary
-        const char* p = strchrs(str, "eE");
-        if (p) {
-            // the precision is at most QORE_MAX_PREC; the exponent is read without overflowing
-            long long exp = strtoll(p + 1, nullptr, 10);
-            mpfr_prec_t np = (exp > QORE_MAX_PREC / 5 || exp < -QORE_MAX_PREC / 5)
-                ? QORE_MAX_PREC
-                : static_cast<mpfr_prec_t>(QORE_MAX(exp, -exp) * 5);
-            if (np > getPrec()) {
-                setPrec(np);
-            }
-        }
         if (!str[0])
             mpfr_set_sj(num, 0, QORE_MPFR_RND);
         else
