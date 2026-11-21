@@ -587,6 +587,17 @@ bool LexicalSemanticPolicy::getAsBool(const QoreValue& value) const {
 // ============================================================================
 
 qore_type_t QoreValue::getType() const {
+    // the tags of a node and an integer first, the types of most of the values that the runtime checks (#7006): no
+    // other kind of value has either tag (an encoded double, a special value, a short string, an opaque value and an
+    // enum have tags of their own), so the type is the one that the tests below give
+    const uint64_t t = tag();
+    if (t == TAG_POINTER) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getType() : NT_NOTHING;
+    }
+    if (t == TAG_INT48) {
+        return NT_INT;
+    }
     if (isFloat()) {
         return NT_FLOAT;
     }
