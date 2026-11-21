@@ -78,7 +78,13 @@ public class Holder {
         notifier = new EventNotifier();
         canceller = new Canceller(mode);
         if (mode == "chain") {
-            submit_operation(notifier, "first", False, True, -1s);
+            # the first step of the operation runs before the end of the process, which would refuse it to a worker
+            # (it is not work of the module cleanup), so the operation waits for its socket when the cleanup cancels it
+            Counter started(1);
+            submit_operation(notifier, "first", False, True, -1s, started);
+            if (started.waitForZero(20s)) {
+                throw "FOLLOW-UP-ERROR", "the first step of the operation did not run";
+            }
         }
     }
 }

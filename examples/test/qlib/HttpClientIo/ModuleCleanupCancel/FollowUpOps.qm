@@ -26,13 +26,16 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
         bool reached = False;
         #! True: its onComplete() submits the operation again (a reader that re-arms itself)
         bool resubmit;
+        #! decremented by its first step, so that the code that submits it can wait until it waits for its socket
+        *Counter started;
     }
 
-    constructor(EventNotifier notifier, string label, bool done = False, bool resubmit = False) {
+    constructor(EventNotifier notifier, string label, bool done = False, bool resubmit = False, *Counter started) {
         self.notifier = notifier;
         self.label = label;
         self.done = done;
         self.resubmit = resubmit;
+        self.started = started;
     }
 
     string getGoal() {
@@ -48,6 +51,10 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
     }
 
     *hash<SocketPollInfo> continuePoll() {
+        if (started) {
+            started.dec();
+            remove started;
+        }
         if (done) {
             reached = True;
             return NOTHING;
@@ -87,11 +94,12 @@ class Data {
     }
 }
 
-#! submits an operation
-public sub submit_operation(EventNotifier notifier, string label, bool done, bool resubmit, timeout to) {
+#! submits an operation; with \a started, its first step decrements it
+public sub submit_operation(EventNotifier notifier, string label, bool done, bool resubmit, timeout to,
+        *Counter started) {
     AsyncIoController::submit(<SocketPollOperationInfo>{
         "sock": notifier,
-        "spop": new FollowUpOperation(notifier, label, done, resubmit),
+        "spop": new FollowUpOperation(notifier, label, done, resubmit, started),
         "owner": "module-cleanup-follow-up-" + label,
         "to": to,
     });
