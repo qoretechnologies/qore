@@ -1076,6 +1076,12 @@ private:
             hold it (see qore_owned_descriptor_create())
         */
         std::shared_ptr<QoreSharedDescriptor> owned;
+        //! true once the socket has taken the attempt's descriptor over: the socket closes it (qore#6962)
+        /** The attempt keeps the number to check the connection; once the socket has closed its descriptor (a connect
+            timeout, or a close by its owner) the number can belong to another descriptor of the process, so it is
+            never closed nor polled by the attempt, whatever the socket's descriptor is then
+        */
+        bool socket_owned = false;
 
         DLLLOCAL ConnAttempt() = default;
         DLLLOCAL ConnAttempt(ConnAttempt&&) = default;

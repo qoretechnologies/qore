@@ -9281,7 +9281,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             int fd = active_attempts[i].fd;
             active_attempts[i].fd = QORE_INVALID_SOCKET;
             fd_set_changed = true;
-            if (fd == sock->sock) {
+            if (active_attempts[i].socket_owned) {
+                // the socket took the descriptor over (qore#6962): it is given up through the socket, which has
+                // closed it already if it was closed meanwhile
+                active_attempts[i].socket_owned = false;
                 // Assign another active fd as primary so isOpen() remains true; the failed one can be registered in
                 // an async I/O thread's event loop, which holds it open until it has removed it
                 ConnAttempt* next = nullptr;
@@ -9325,9 +9328,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             // the attempt that is the socket's descriptor is released like the others; closeAllFds() leaves it to
             // the socket
             for (auto& a : active_attempts) {
-                if (a.fd != QORE_INVALID_SOCKET && a.fd == sock->sock) {
+                if (a.fd != QORE_INVALID_SOCKET && a.socket_owned) {
                     int fd = a.fd;
                     a.fd = QORE_INVALID_SOCKET;
+                    a.socket_owned = false;
                     releasePrimaryFd(fd, nullptr);
                     break;
                 }
@@ -9371,9 +9375,10 @@ void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<
         return;
     }
 
-    // Return all active fds that are NOT the primary sock->sock fd
+    // Return all active fds that the socket has not taken over: its own descriptor is polled as the socket's, and the
+    // number of one that the socket has closed can belong to another descriptor (qore#6962)
     for (auto& a : active_attempts) {
-        if (a.fd != QORE_INVALID_SOCKET && a.fd != sock->sock) {
+        if (a.fd != QORE_INVALID_SOCKET && !a.socket_owned) {
             fds.push_back({a.fd, SOCK_POLLOUT});
         }
     }
@@ -9579,6 +9584,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // over
         if (sock->sock == QORE_INVALID_SOCKET) {
             sock->setDescriptor(fd, active_attempts.back().owned, true);
+            active_attempts.back().socket_owned = true;
             sock->resetCloseInterrupt();
         }
 
@@ -9618,8 +9624,9 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
             // the previous primary attempt is given up through the socket: an async I/O thread can have it
             // registered, and holds it open until it has removed it
             for (auto& a : active_attempts) {
-                if (a.fd == old_primary) {
+                if (a.socket_owned) {
                     a.fd = QORE_INVALID_SOCKET;
+                    a.socket_owned = false;
                     break;
                 }
             }
@@ -9636,6 +9643,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     }
     winner.fd = QORE_INVALID_SOCKET;
     winner.owned.reset();
+    winner.socket_owned = false;
     sock->resetCloseInterrupt();
     sock->sfamily = wp.family;
     sock->stype = wp.socktype;
@@ -9675,6 +9683,7 @@ void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttem
             qore_socket_private::closeDescriptor(fd);
         }
         if (next) {
+            next->socket_owned = true;
             sock->resetCloseInterrupt();
         }
     }
@@ -9683,11 +9692,10 @@ void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttem
 void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
     for (auto& a : active_attempts) {
         if (a.fd != QORE_INVALID_SOCKET) {
-            // Don't close the fd if it's currently assigned to sock->sock
-            // (that will be handled by sock->close() or by assignWinner); the
-            // others are extra fds of the operation, which an async I/O thread
-            // that has them registered closes when it has removed them
-            if (a.fd != sock->sock) {
+            // Don't close the fd if the socket took it over (the socket closes it, also when it has closed it
+            // already and the number can belong to another descriptor: qore#6962); the others are extra fds of the
+            // operation, which an async I/O thread that has them registered closes when it has removed them
+            if (!a.socket_owned) {
                 if (a.owned) {
                     qore_owned_descriptor_release(a.owned);
                 } else {
@@ -9696,6 +9704,7 @@ void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
             }
             a.fd = QORE_INVALID_SOCKET;
             a.owned.reset();
+            a.socket_owned = false;
         }
     }
 }
