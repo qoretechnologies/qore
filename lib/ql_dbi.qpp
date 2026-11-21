@@ -47,7 +47,7 @@ namespace Qore::SQL;
 
     @return a @ref datasource_hash "datasource hash" of the components of a datasource string
 
-    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is not shown in the exception, as it can contain a password
+    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc), or the string contains a NUL character (since %Qore 3.0); the string is not shown in the exception, as it can contain a user name, a password and a database name; only its driver name is shown (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding"; the string is not shown in the exception (since %Qore 3.0)
 
     @note the string is converted to the @ref default_encoding "default encoding", in which the strings of the hash are returned (since %Qore 3.0)
@@ -163,8 +163,9 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
     @endcode
 
     @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected
-    character, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is not shown in the
-    exception, as it can contain a password
+    character, etc), or the string contains a NUL character (since %Qore 3.0); the string is not shown in the
+    exception, as it can contain a user name, a password and a database name; only its driver name is shown (since
+    %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the string cannot be converted to the @ref default_encoding "default encoding";
     the string is not shown in the exception (since %Qore 3.0)
 

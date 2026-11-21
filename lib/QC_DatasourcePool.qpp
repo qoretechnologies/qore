@@ -51,12 +51,18 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
    ReferenceHolder<Queue> q(queue, xsink);
 
    std::string str;
-   bool has_type = check_hash_key(opts, "type", DSPC_ERR, str, xsink);
+   // the driver name, user name, password and database name are not shown in an exception (qore#6961)
+   bool has_type = check_hash_key(opts, "type", DSPC_ERR, str, xsink, true);
    if (*xsink)
       return;
 
    if (!has_type) {
       xsink->raiseException(DSPC_ERR, "expecting a string value with the 'type' key giving the driver name");
+      return;
+   }
+
+   if (!q_dbi_valid_driver_name(str.c_str())) {
+      q_dbi_raise_invalid_driver_name(xsink, "DATASOURCEPOOL-UNSUPPORTED-DATABASE");
       return;
    }
 
@@ -69,7 +75,7 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
    }
 
    std::string user;
-   bool has_user = check_hash_key(opts, "user", DSPC_ERR, user, xsink);
+   bool has_user = check_hash_key(opts, "user", DSPC_ERR, user, xsink, true);
    if (*xsink) return;
 
    std::string pass;
@@ -77,7 +83,7 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
    if (*xsink) return;
 
    std::string db;
-   bool has_db = check_hash_key(opts, "db", DSPC_ERR, db, xsink);
+   bool has_db = check_hash_key(opts, "db", DSPC_ERR, db, xsink, true);
    if (*xsink) return;
 
    std::string charset;
@@ -270,8 +276,8 @@ qclass DatasourcePool [dom=DATABASE; arg=DatasourcePool* ds; ns=Qore::SQL; vpare
 DatasourcePool db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 3, 10, 5432);
     @endcode
 
-    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be found, or the driver name contains a NUL character (since %Qore 3.0)
-    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a password is not shown in the exception
+    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be found, or the driver name contains a NUL character (since %Qore 3.0), or the driver argument is not a valid driver name (since %Qore 3.0): a driver name has only ASCII letters, digits, \c "_" and \c "-"; such a string is not looked up, not loaded as a module and not shown in the exception, as it can be a datasource string with credentials
+    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a user name, password or database name is not shown in the exception (since %Qore 3.0)
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
     @throw DATASOURCE-PARSE-ERROR the driver argument is a datasource string with a NUL character (since %Qore 3.0); it is not shown in the exception, as it can contain a password
     @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
@@ -299,16 +305,17 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
    const QoreString* host_v = *host_str;
 
    // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
-   // datasource string with a password, so it is not shown, and neither is the password
+   // datasource string with credentials, so it is not shown, and neither are the user name, the password and the
+   // database name (qore#6961)
    bool is_ds_string = !port && min_connections == 3 && max_connections == 10 && driver_v->find(':') != -1;
    if (q_check_secret_no_nul(driver_v->c_str(), driver_v->size(), "driver or datasource string",
          "driver names and datasource strings", is_ds_string ? "DATASOURCE-PARSE-ERROR"
             : "DATASOURCEPOOL-UNSUPPORTED-DATABASE", xsink)
-      || (username_v && q_check_no_nul(username_v->c_str(), username_v->size(), "user name", "datasource values",
-         DSPC_ERR, xsink))
+      || (username_v && q_check_secret_no_nul(username_v->c_str(), username_v->size(), "user name",
+         "datasource values", DSPC_ERR, xsink))
       || (password_v && q_check_secret_no_nul(password_v->c_str(), password_v->size(), "password",
          "datasource values", DSPC_ERR, xsink))
-      || (database_v && q_check_no_nul(database_v->c_str(), database_v->size(), "database name",
+      || (database_v && q_check_secret_no_nul(database_v->c_str(), database_v->size(), "database name",
          "datasource values", DSPC_ERR, xsink))
       || (encoding_v && q_check_no_nul(encoding_v->c_str(), encoding_v->size(), "encoding", "datasource values",
          DSPC_ERR, xsink))
@@ -323,6 +330,13 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
          return;
       }
       dsp_constructor_hash(*h, self, queue.release(), argument, xsink);
+      return;
+   }
+
+   // a string that is not a driver name, such as a datasource string given with other arguments, is not looked up
+   // and not shown (qore#6961)
+   if (!q_dbi_valid_driver_name(driver_v->c_str())) {
+      q_dbi_raise_invalid_driver_name(xsink, "DATASOURCEPOOL-UNSUPPORTED-DATABASE");
       return;
    }
 
@@ -373,7 +387,7 @@ DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
-    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); a datasource string with a NUL character is not shown in the exception, as it can contain a password
+    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); the datasource string is not shown in the exception, as it can contain a user name, a password and a database name; only its driver name is shown (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
     encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
     3.0)
@@ -409,8 +423,8 @@ DatasourcePool::constructor(string description, *Qore::Thread::Queue[Queue] queu
 Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "database", "charset": "utf8", "host": "localhost", "port": 5432, "options": ("min": 3, "max": 10)));
     @endcode
 
-    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
-    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
+    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded, or the \c "type" key is not a valid driver name (since %Qore 3.0): a driver name has only ASCII letters, digits, \c "_" and \c "-"; such a value is not looked up, not loaded as a module and not shown in the exception
+    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys, or a string value contains a NUL character (since %Qore 3.0); the values of the \c "type", \c "user", \c "pass" and \c "db" keys are not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
     @throw ENCODING-CONVERSION-ERROR a string value of the hash cannot be converted to the @ref default_encoding
     "default encoding", in which a datasource keeps its connection values; it is not shown in the exception (since

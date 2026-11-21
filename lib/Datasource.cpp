@@ -1625,10 +1625,12 @@ void qore_dbi_keep_abandoned(void* p) {
 }
 
 void qore_dbi_raise_fork_error(ExceptionSink* xsink, const Datasource& ds, const char* reason) {
-    xsink->raiseException("DATASOURCE-FORK-ERROR", "%s:%s@%s: the connection was opened by the parent of this "
+    // the user name, the password and the database name are masked (qore#6961)
+    QoreString desc;
+    q_ds_append_masked(desc, ds);
+    xsink->raiseException("DATASOURCE-FORK-ERROR", "%s: the connection was opened by the parent of this "
         "process, which was created with fork(), and %s; the connection was given up without changing the parent's "
-        "session, and the next action opens a new connection", ds.getDriverName(), ds.getUsernameStr().c_str(),
-        ds.getDBNameStr().c_str(), reason);
+        "session, and the next action opens a new connection", desc.c_str(), reason);
 }
 
 void qore_ds_private::abandon() {
@@ -2403,8 +2405,11 @@ QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNo
 int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
     //printd(5, "Datasource::beginImplicitTransaction() autocommit=%s\n", autocommit ? "true" : "false");
     if (priv->getAutoCommit()) {
-        xsink->raiseException("AUTOCOMMIT-ERROR", "%s:%s@%s: transaction management is not available because "
-            "autocommit is enabled for this Datasource", getDriverName(), priv->username.c_str(), priv->dbname.c_str());
+        // the user name, the password and the database name are masked (qore#6961)
+        QoreString desc;
+        q_ds_append_masked(desc, *this);
+        xsink->raiseException("AUTOCOMMIT-ERROR", "%s: transaction management is not available because "
+            "autocommit is enabled for this Datasource", desc.c_str());
         return -1;
     }
     return qore_dbi_private::get(*priv->dsl)->beginTransaction(this, xsink);

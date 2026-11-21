@@ -724,6 +724,11 @@ DBIDriver* DBIDriverList::find(const char* name) const {
 }
 
 DBIDriver* DBIDriverList::find(const char* name, ExceptionSink* xsink) const {
+    // a string that cannot be a driver name, such as a datasource string or a path, is not looked up and not loaded as
+    // a module, whose error would show it (qore#6961)
+    if (!q_dbi_valid_driver_name(name)) {
+        return nullptr;
+    }
     DBIDriver* d = priv->find_intern(name);
     if (d) {
         return d;
@@ -812,6 +817,55 @@ static char* check_datasource_chars(char* str, const char* chars) {
     return p;
 }
 
+bool q_dbi_valid_driver_name(const char* name) {
+    if (!name || !*name) {
+        return false;
+    }
+    for (const char* p = name; *p; ++p) {
+        // ASCII letters and digits only, independent of the locale
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err) {
+    assert(xsink);
+    xsink->raiseException(err, "the DBI driver name is not valid: a driver name has only ASCII letters, digits, '_' "
+        "and '-'; it is not shown, as it can be a datasource string with credentials (a datasource string is accepted "
+        "only as the only connection argument)");
+    return -1;
+}
+
+void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port) {
+    str.sprintf("%s:" QORE_DS_MASK "/" QORE_DS_MASK "@" QORE_DS_MASK,
+        q_dbi_valid_driver_name(driver) ? driver : QORE_DS_MASK);
+    if (host && *host) {
+        str.sprintf("%%%s", host);
+        if (port) {
+            str.sprintf(":%d", port);
+        }
+    }
+}
+
+void q_ds_append_masked(QoreString& str, const Datasource& ds) {
+    q_ds_append_masked(str, ds.getDriverName(), ds.getHostNameStr().c_str(), ds.getPort());
+}
+
+void q_ds_append_masked_string(QoreString& str, const char* ds) {
+    const char* colon = ds ? strchr(ds, ':') : nullptr;
+    if (colon && colon != ds) {
+        std::string driver(ds, colon - ds);
+        if (q_dbi_valid_driver_name(driver.c_str())) {
+            str.sprintf("%s:" QORE_DS_MASK, driver.c_str());
+            return;
+        }
+    }
+    str.concat(QORE_DS_MASK);
+}
+
 /*
   parseDatasource()
   parses strings of the form: driver:user/pass@db(encoding)%host:post{option1,option2=value}
@@ -824,6 +878,18 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         xsink->raiseException(DATASOURCE_PARSE_ERROR, "empty text passed to parseDatasource()");
         return nullptr;
     }
+
+    // the string is never shown in an exception, as it can contain a user name, a password and a database name; only
+    // its driver name is shown (qore#6961)
+    auto parse_error = [ds, xsink](const char* fmt, const char* arg = nullptr) -> QoreHashNode* {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+        desc->sprintf(fmt, arg);
+        desc->concat(" in datasource string '");
+        q_ds_append_masked_string(**desc, ds);
+        desc->concat('\'');
+        xsink->raiseException(DATASOURCE_PARSE_ERROR, desc.release());
+        return nullptr;
+    };
 
     QoreStringNode* driver = nullptr;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -867,16 +933,13 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
                         // here we must have an equals sign
                         assert(eq);
                         if (eq == p) {
-                            xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing value after '=' in option "
-                                "specification in '%s'", ds);
-                            return nullptr;
+                            return parse_error("missing value after '=' in option specification");
                         }
                         *eq = '\0';
                         ++eq;
                         len = oend ? oend - eq : strlen(eq);
                         if (opt->existsKey(p)) {
-                            xsink->raiseException(DATASOURCE_PARSE_ERROR, "option '%s' repeated in '%s'", p, ds);
-                            return nullptr;
+                            return parse_error("option '%s' repeated", p);
                         }
 
                         QoreString key(p);
@@ -941,8 +1004,7 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
     // take last '@' sign in string in case there's one in the password
     p = strrchr(str, '@');
     if (!p) {
-        xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing database name delimited by '@' in '%s'", ds);
-        return nullptr;
+        return parse_error("missing database name delimited by '@'");
     }
 
     *p = '\0';
@@ -960,9 +1022,7 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
     if (p) {
         char* end = strchr(p, ')');
         if (!end) {
-            xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing closing parenthesis in charset specification in "
-                "'%s'", ds);
-            return nullptr;
+            return parse_error("missing closing parenthesis in charset specification");
         }
         *p = '\0';  // terminate for db
         *end = '\0';  // terminate charset
@@ -985,9 +1045,7 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         if (tok == '%') {
             p = check_datasource_chars(str, ":");
             if ((p == str) || !*str) {
-                xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing hostname string after '%%' delimeter in '%s'",
-                    ds);
-                return nullptr;
+                return parse_error("missing hostname string after '%%' delimeter");
             }
 
             const char* hstr = str;
@@ -1014,17 +1072,13 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
             }
 
             if (*pstr) {
-                xsink->raiseException(DATASOURCE_PARSE_ERROR, "invalid characters present in port number in '%s'",
-                    ds);
-                return nullptr;
+                return parse_error("invalid characters present in port number");
             }
             str = pstr;
         }
 
         if (*str) {
-            xsink->raiseException(DATASOURCE_PARSE_ERROR, "unrecognized characters at end of datasource definition "
-                "in '%s'", ds);
-            return nullptr;
+            return parse_error("unrecognized characters at end of datasource definition");
         }
     }
 

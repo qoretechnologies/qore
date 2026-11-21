@@ -153,7 +153,8 @@ sub datasource_cases() {
             ok("Datasource database name with NUL", False, "no exception was raised");
         } catch (hash<ExceptionInfo> ex) {
             ok("Datasource database name with NUL", ex.err == "DATASOURCE-ERROR"
-                && u(ex.desc) =~ /^database name .* contains a NUL character at byte offset 2/,
+                && u(ex.desc) == "database name contains a NUL character; datasource values cannot contain NUL "
+                    "characters",
                 sprintf("%s: %s", ex.err, u(ex.desc)));
         }
     }

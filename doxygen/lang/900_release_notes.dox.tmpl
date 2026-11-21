@@ -2604,6 +2604,13 @@
       @ref Qore::SQL::parse_datasource() "parse_datasource()" convert connection values and option names to the
       @ref default_encoding "default encoding", which drivers read them in, where a value in another encoding kept its
       bytes; one that it cannot represent raises \c ENCODING-CONVERSION-ERROR, which does not show it (issue #6960)
+    - exceptions about a datasource string, a @ref datasource_hash "datasource hash" or the connection values of a
+      @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" could show its
+      password and other credentials; they now never show its user name, password or database name: an error about a
+      datasource string shows only its driver name, and the errors of a datasource show its driver, host and port with
+      the other values masked as \c "****"; a driver name that is not a valid driver name (only ASCII letters, digits,
+      \c "_" and \c "-"), such as a datasource string given with other connection arguments, is no longer looked up
+      or loaded as a module, and is rejected without being shown (issue #6961)
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)
