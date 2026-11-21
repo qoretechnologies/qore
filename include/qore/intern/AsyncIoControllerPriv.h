@@ -1254,6 +1254,10 @@ private:
             processed, so the address cannot be reused meanwhile
         */
         const QoreObject* cancel_spop_obj = nullptr;
+        //! For Cancel / CancelOwner: if set, only the operations of this Program are canceled (qore#7010)
+        /** Set when the canceling code is sandboxed (see ownerProgramForCancel()); compared by address only
+        */
+        const QoreProgram* restrict_pgm = nullptr;
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
         //! For SubmitOp: the owner of the poll op whose continuePoll() was
         //! running on this (worker) thread when submit() was called — the
@@ -2132,7 +2136,8 @@ private:
         @return true if the operation was found on the calling thread, or a Cancel was queued for another I/O thread
         (or, during a continuePoll() batch, for the calling thread)
     */
-    DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink);
+    DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink,
+        const QoreProgram* restrict_pgm = nullptr);
 
     //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
     /** @param uh the operation key
@@ -2142,7 +2147,20 @@ private:
         @return true if an operation was found and canceled
     */
     DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
-        const QoreObject* only_spop_obj = nullptr);
+        const QoreObject* only_spop_obj = nullptr, const QoreProgram* restrict_pgm = nullptr);
+
+    //! Returns the Program whose operations the calling code may cancel by key or owner, or nullptr for any
+    /** Code that is sandboxed (see qore_caller_is_sandboxed()) cancels only the operations of its own Program, the
+        Program of the poll operation's (or the I/O object's) Qore object; trusted code cancels any operation
+        (qore#7010).  Keys and owners can be guessed, so without this sandboxed code could cancel the operations of
+        other code in the process.
+
+        @param no_program set to true if the calling code is sandboxed but has no Program: it then cancels nothing
+    */
+    DLLLOCAL static const QoreProgram* ownerProgramForCancel(bool& no_program);
+
+    //! Returns true if the operation may be canceled by code restricted to the given Program (nullptr: any)
+    DLLLOCAL static bool opInProgram(const PollInfo& pinfo, const QoreProgram* restrict_pgm);
 
     //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
     //! the map's ref.  Caller must hold m.

@@ -4916,17 +4916,42 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
     return *xsink ? -1 : 0;
 }
 
+const QoreProgram* AsyncIoControllerPriv::ownerProgramForCancel(bool& no_program) {
+    if (!qore_caller_is_sandboxed()) {
+        return nullptr;
+    }
+    const QoreProgram* pgm = getProgram();
+    // fails closed: sandboxed code without a Program cancels nothing
+    no_program = !pgm;
+    return pgm;
+}
+
+bool AsyncIoControllerPriv::opInProgram(const PollInfo& pinfo, const QoreProgram* restrict_pgm) {
+    if (!restrict_pgm) {
+        return true;
+    }
+    const QoreObject* obj = pinfo.spop_obj ? pinfo.spop_obj : pinfo.sock_obj;
+    return obj && obj->getProgram() == restrict_pgm;
+}
+
 bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink* xsink) {
     if (checkForked("cancelByKey", xsink)) {
         return false;
     }
     std::string uh(key->c_str());
 
+    // sandboxed code cancels only the operations of its own Program (qore#7010)
+    bool no_program = false;
+    const QoreProgram* restrict_pgm = ownerProgramForCancel(no_program);
+    if (no_program) {
+        return false;
+    }
+
     // An operation runs on the I/O thread of its socket, which cannot be derived from its key; with several I/O
     // threads every thread is searched
     int own_idx = ownIoThreadIndex();
     if (own_idx >= 0) {
-        return cancelByKeyOnIoThread(uh, own_idx, xsink);
+        return cancelByKeyOnIoThread(uh, own_idx, xsink, restrict_pgm);
     }
 
     bool multi;
@@ -4935,7 +4960,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         multi = io_threads.size() > 1;
     }
     if (multi) {
-        return cancelByKeyOnAllThreads(uh, xsink);
+        return cancelByKeyOnAllThreads(uh, xsink, nullptr, restrict_pgm);
     }
 
     bool rv = false;
@@ -4974,6 +4999,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
             cmd.cmd = IoCommand::Cancel;
             cmd.key = uh;
             cmd.cancel_count = count_ref;
+            cmd.restrict_pgm = restrict_pgm;
             target->cmdq.push(std::move(cmd));
             // Bump submit_seq so the I/O thread's pre-poll catch-up covers
             // this Cancel; submit() does the same.  Without this, a queued
@@ -5003,7 +5029,8 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     return rv;
 }
 
-bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink) {
+bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink,
+        const QoreProgram* restrict_pgm) {
     // The calling I/O thread's own cache is searched directly unless a continuePoll() batch is running: the batch
     // holds raw spop_base / spop_obj pointers captured from the cache, and erasing + cleaning up an entry now would
     // leave the remaining batch entries with dangling pointers (a UAF on the next iteration's
@@ -5021,7 +5048,7 @@ bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own
     if (!inside_continue_poll_batch) {
         IoThreadContext& t = *io_threads[own_idx];
         auto it = t.cache.find(uh);
-        if (it != t.cache.end()) {
+        if (it != t.cache.end() && opInProgram(it->second, restrict_pgm)) {
             rv = true;
             direct_cancel = true;
             ASYNC_IO_TRACE("cache.erase CANCEL_DIRECT key='%s' owner='%s'\n",
@@ -5046,6 +5073,7 @@ bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own
                 cmd.cmd = IoCommand::Cancel;
                 cmd.key = uh;
                 cmd.cancel_count = nullptr;
+                cmd.restrict_pgm = restrict_pgm;
                 tp.cmdq.push(std::move(cmd));
                 ++submit_seq;
                 ++tp.submit_seq;
@@ -5065,7 +5093,7 @@ bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own
 }
 
 bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
-        const QoreObject* only_spop_obj) {
+        const QoreObject* only_spop_obj, const QoreProgram* restrict_pgm) {
     // Send a Cancel command to every live I/O thread and wait until all have processed it.  A stopped thread's
     // cache is empty: a thread only stops by autostop once every cache is empty, or after its exit cleanup has
     // canceled its operations.
@@ -5086,6 +5114,7 @@ bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, Excep
                     cmd.cmd = IoCommand::Cancel;
                     cmd.key = uh;
                     cmd.cancel_spop_obj = only_spop_obj;
+                    cmd.restrict_pgm = restrict_pgm;
                     completion->ROreference();  // one ref per cmd
                     cmd.completion = completion;
                     tp->cmdq.push(std::move(cmd));
@@ -5120,6 +5149,15 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         return -1;
     }
     std::string owner_str(owner->c_str());
+
+    // sandboxed code cancels only the operations of its own Program (qore#7010); its cancel records the owner as
+    // canceled (which refuses the owner's later submissions) only if it canceled an operation of its own, so that it
+    // cannot refuse the submissions of other code with the same owner
+    bool no_program = false;
+    const QoreProgram* restrict_pgm = ownerProgramForCancel(no_program);
+    if (no_program) {
+        return 0;
+    }
 
     bool do_signal = false;
     int count = 0;
@@ -5169,7 +5207,8 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         // Dead thread — walk its cache directly.
                         std::vector<std::string> keys;
                         for (auto& [key, pinfo] : tp.cache) {
-                            if (pinfo.owner == owner_str || pinfo.inherited_owner == owner_str) {
+                            if ((pinfo.owner == owner_str || pinfo.inherited_owner == owner_str)
+                                    && opInProgram(pinfo, restrict_pgm)) {
                                 keys.push_back(key);
                             }
                         }
@@ -5189,11 +5228,13 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         // SubmitOp already pushed (seq_at_push <= this) is
                         // tombstoned, while subsequent submits (seq_at_push >)
                         // are accepted as fresh.
-                        int dead_seq = tp.submit_seq.load(std::memory_order_relaxed);
-                        auto& ci = tp.cancelled_owners[owner_str];
-                        ci.ttl = 2;
-                        if (dead_seq > ci.seq) {
-                            ci.seq = dead_seq;
+                        if (!restrict_pgm || !keys.empty()) {
+                            int dead_seq = tp.submit_seq.load(std::memory_order_relaxed);
+                            auto& ci = tp.cancelled_owners[owner_str];
+                            ci.ttl = 2;
+                            if (dead_seq > ci.seq) {
+                                ci.seq = dead_seq;
+                            }
                         }
                     }
                 }
@@ -5203,6 +5244,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         Command cmd;
                         cmd.cmd = IoCommand::CancelOwner;
                         cmd.owner = owner_str;
+                        cmd.restrict_pgm = restrict_pgm;
                         completion->ROreference();  // one ref per cmd
                         cmd.completion = completion;
                         ++submit_seq;
@@ -5224,7 +5266,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             IoThreadContext& tp = *io_threads[my_idx];
             std::vector<std::string> keys;
             for (auto& [key, pinfo] : tp.cache) {
-                if (pinfo.owner == owner_str || pinfo.inherited_owner == owner_str) {
+                if ((pinfo.owner == owner_str || pinfo.inherited_owner == owner_str) && opInProgram(pinfo, restrict_pgm)) {
                     keys.push_back(key);
                 }
             }
@@ -5243,11 +5285,13 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             // SubmitOps already pushed have seq_at_push <= this value and
             // are rejected, while later submits have seq_at_push > and
             // are accepted as fresh.
-            int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
-            auto& ci = tp.cancelled_owners[owner_str];
-            ci.ttl = 2;
-            if (own_seq > ci.seq) {
-                ci.seq = own_seq;
+            if (!restrict_pgm || !keys.empty()) {
+                int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
+                auto& ci = tp.cancelled_owners[owner_str];
+                ci.ttl = 2;
+                if (own_seq > ci.seq) {
+                    ci.seq = own_seq;
+                }
             }
         }
 
@@ -5282,7 +5326,8 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         // tid==0 under m (startIntern also takes m).
                         std::vector<std::string> keys;
                         for (auto& [key, pinfo] : tp->cache) {
-                            if (pinfo.owner == owner_str || pinfo.inherited_owner == owner_str) {
+                            if ((pinfo.owner == owner_str || pinfo.inherited_owner == owner_str)
+                                    && opInProgram(pinfo, restrict_pgm)) {
                                 keys.push_back(key);
                             }
                         }
@@ -5300,11 +5345,13 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         }
                         // Tombstone gate uses the current per-thread
                         // submit_seq; see CancelOwner handler.
-                        int dead_seq = tp->submit_seq.load(std::memory_order_relaxed);
-                        auto& ci = tp->cancelled_owners[owner_str];
-                        ci.ttl = 2;
-                        if (dead_seq > ci.seq) {
-                            ci.seq = dead_seq;
+                        if (!restrict_pgm || !keys.empty()) {
+                            int dead_seq = tp->submit_seq.load(std::memory_order_relaxed);
+                            auto& ci = tp->cancelled_owners[owner_str];
+                            ci.ttl = 2;
+                            if (dead_seq > ci.seq) {
+                                ci.seq = dead_seq;
+                            }
                         }
                     }
                 }
@@ -5314,6 +5361,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         Command cmd;
                         cmd.cmd = IoCommand::CancelOwner;
                         cmd.owner = owner_str;
+                        cmd.restrict_pgm = restrict_pgm;
                         completion->ROreference();  // one ref per cmd
                         cmd.completion = completion;
                         // Bump submit_seq so the I/O thread's pre-poll
@@ -8627,7 +8675,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                     // Cache access is I/O-thread-only (no lock)
                     auto it = t.cache.find(cmd.key);
-                    if (it != t.cache.end() && (!cmd.cancel_spop_obj || it->second.spop_obj == cmd.cancel_spop_obj)) {
+                    if (it != t.cache.end() && (!cmd.cancel_spop_obj || it->second.spop_obj == cmd.cancel_spop_obj)
+                            && opInProgram(it->second, cmd.restrict_pgm)) {
                         found = true;
                         ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
                             cmd.key.c_str(), it->second.owner.c_str());
@@ -8838,7 +8887,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         // cancelByOwner() also cancels async work spawned by
                         // this owner's continuePoll() (e.g. a blocked nested
                         // waitForNotifier()) — see PollInfo::inherited_owner
-                        if (pinfo.owner == cmd.owner || pinfo.inherited_owner == cmd.owner) {
+                        if ((pinfo.owner == cmd.owner || pinfo.inherited_owner == cmd.owner)
+                                && opInProgram(pinfo, cmd.restrict_pgm)) {
                             keys.push_back(key);
                         }
                     }
@@ -8856,7 +8906,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         auto it = t.cache.find(key);
                         if (it != t.cache.end()
                                 && (it->second.owner == cmd.owner
-                                    || it->second.inherited_owner == cmd.owner)) {
+                                    || it->second.inherited_owner == cmd.owner)
+                                && opInProgram(it->second, cmd.restrict_pgm)) {
                             found = true;
                             ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL_OWNER key='%s' owner='%s'\n",
                                 key.c_str(), cmd.owner.c_str());
@@ -8908,10 +8959,14 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                        disconnect/reconnect) work without depending on TTL
                        aging.  Use max() so a later cancel cannot retreat the
                        gate. */
-                    auto& ci = t.cancelled_owners[cmd.owner];
-                    ci.ttl = 2;
-                    if (cmd.seq_at_push > ci.seq) {
-                        ci.seq = cmd.seq_at_push;
+                    // a cancel restricted to the operations of a Program (qore#7010) records the owner only if it
+                    // canceled one of them
+                    if (!cmd.restrict_pgm || local_count) {
+                        auto& ci = t.cancelled_owners[cmd.owner];
+                        ci.ttl = 2;
+                        if (cmd.seq_at_push > ci.seq) {
+                            ci.seq = cmd.seq_at_push;
+                        }
                     }
 
                     // Report actual cancel count into the shared completion.

@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - cancellation of async I/O operations by key and owner across Programs and sandboxes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoCancelOwnershipTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! An operation that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+}
+
+#! sandboxed code cancels only the async I/O operations of its own Program (qore#7010)
+/** The keys and owners of operations can be guessed, so sandboxed code that cancels by key or owner cancels only
+    the operations of its own Program; trusted code cancels any.  Before the change, the tenant canceled the host's
+    operations.
+*/
+class AsyncIoCancelOwnershipTest inherits QUnit::Test {
+    public {
+        #! the tenant's code: its own operations, and cancels by key and owner
+        const TenantSource = "%modern
+
+class TenantOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return \"waiting\";
+    }
+
+    string getState() {
+        return \"waiting\";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            \"events\": SOCK_POLLIN,
+            \"socket\": notifier,
+        };
+    }
+}
+
+list<auto> notifiers;
+
+auto sub submit_own(string owner, string key) {
+    EventNotifier n();
+    push notifiers, n;
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": new TenantOperation(n),
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+
+bool sub cancel_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+int sub cancel_owner(string owner) {
+    return AsyncIoController::cancelByOwner(owner);
+}
+";
+    }
+
+    private {
+        int serial;
+    }
+
+    constructor() : QUnit::Test("AsyncIoController cancel ownership", "1.0", \ARGV) {
+        addTestCase("a sandboxed caller cannot cancel another code's operation by its key", \keyTest());
+        addTestCase("a sandboxed caller cannot cancel another code's operations by their owner", \ownerTest());
+        addTestCase("a sandboxed caller cancels its own operations", \ownTest());
+        set_return_value(main());
+    }
+
+    keyTest() {
+        Program tenant = getTenant();
+        string owner = getName("host-key");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertFalse(tenant.callFunction("cancel_key", owner + "-key"), "the tenant's cancel finds no operation");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        # the host cancels its own operation
+        assertTrue(AsyncIoController::cancelByKey(owner + "-key"));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    ownerTest() {
+        Program tenant = getTenant();
+        string owner = getName("host-owner");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertEq(0, tenant.callFunction("cancel_owner", owner), "the tenant's cancel finds no operation");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        assertEq(1, AsyncIoController::cancelByOwner(owner));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    ownTest() {
+        Program tenant = getTenant();
+        string owner = getName("tenant");
+        auto rq1 = tenant.callFunction("submit_own", owner + "-1", owner + "-1-key");
+        auto rq2 = tenant.callFunction("submit_own", owner + "-2", owner + "-2-key");
+        on_exit {
+            AsyncIoController::cancelByOwner(owner + "-1");
+            AsyncIoController::cancelByOwner(owner + "-2");
+        }
+        assertTrue(tenant.callFunction("cancel_key", owner + "-1-key"), "by key");
+        assertTrue(rq1.get(HangGuard).canceled);
+        assertEq(1, tenant.callFunction("cancel_owner", owner + "-2"), "by owner");
+        assertTrue(rq2.get(HangGuard).canceled);
+    }
+
+    #! submits an operation of the host's
+    private auto submitHost(string owner, string key, EventNotifier n) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new WaitingOperation(n),
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        });
+    }
+
+    #! Returns a tenant: a sandboxed Program
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+}
