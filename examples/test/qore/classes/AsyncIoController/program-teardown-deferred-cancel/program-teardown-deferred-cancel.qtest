@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the async I/O controller's I/O thread, its callback workers and the teardown of a Program
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+%requires ../../../../ExecModeHarness.qm
+
+%exec-class ProgramTeardownDeferredCancelTest
+
+#! The cancellation of an async I/O operation whose step is in flight when its Program is deleted (qore#6703)
+/** The teardown of a Program cancels its operations (AsyncIoControllerPriv::cancelByProgram()); an operation whose
+    step runs on a callback worker is canceled when the step's result reaches its I/O thread.  Nothing waited for
+    that: if the I/O thread processed the result after the cancellation had ended, the operation's callbacks were
+    dispatched to a worker when the Program had been torn down, and the worker's failure to enter it was reported as
+    an unhandled exception ("PROGRAM-ERROR: the Program accessed has already been deleted").  The cancellation now
+    waits until the deferred cancellations have run, while the Program is still marked as shutting down, so the
+    callbacks are discarded as those of the Program's other operations are.
+
+    teardown-deferred-cancel.qr makes the worker that takes the operation's step wait before it enters the Program,
+    until the cancellation has deferred the operation's cancellation, and the I/O thread wait before it runs a deferred
+    cancellation that no caller waits for, as a slow I/O thread does, with debug hooks.  In the second variant the
+    operation is canceled by its owner while its step is in flight, before the Program is deleted.
+*/
+class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "step paused: True\ndone\n";
+    }
+
+    constructor() : QUnit::Test("ProgramTeardownDeferredCancelTest", "1.0", \ARGV) {
+        addTestCase("a Program deleted while a step of its operation is in flight", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        # the operation is canceled only by the Program's teardown, or by its owner first
+        foreach string variant in (("", "owner")) {
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                    "--exec-mode=%s %s/teardown-deferred-cancel.qr %s", qore_bin, mode, dir, variant));
+                string label = sprintf("%s%s", mode, variant ? " " + variant : "");
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                # nothing on stderr: no exception of the operation's callbacks is reported, and onComplete() does not
+                # run
+                assertEq(Expected, r.out, label);
+            }
+        }
+    }
+}

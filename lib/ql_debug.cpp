@@ -18669,6 +18669,39 @@ static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, R
     return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: requests a pause at a point of the cancellation of a Program's async I/O operations, or ends it
+/** The points are those of AsyncIoControllerPriv::DbgCancelPausePoint: 0, a callback worker that has taken a step of
+    an operation waits before it enters the operation's Program, until the cancellation of the Program's operations
+    has deferred the operation's cancellation; 1, an I/O thread waits before it runs a cancellation deferred until the
+    result of the operation's step that no caller waits for, until the pause is ended (qore#6703).  With @a pause
+    false, the pause is ended (or cancelled if not taken yet), and the function returns True if a thread took it.
+    A test must end the pauses that it requests (also when it fails), or the thread waits until the process exits.
+*/
+static QoreValue f_dbg_async_io_pause_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 point = get_param_value(params, 0).getAsBigInt();
+    if (point != AsyncIoControllerPriv::DBG_CANCEL_STEP_BEFORE_ENTRY
+            && point != AsyncIoControllerPriv::DBG_CANCEL_DEFERRED_RESULT) {
+        xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
+        return QoreValue();
+    }
+    return AsyncIoControllerPriv::dbgPauseCancelPoint(static_cast<int>(point), get_param_value(params, 1).getAsBool());
+}
+
+//! Debug-only: waits until a thread has taken the pause requested at a point of the cancellation of a Program's async
+//! I/O operations (see dbg_async_io_pause_cancel_point()); returns False if none did when the timeout elapsed
+static QoreValue f_dbg_async_io_wait_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 point = get_param_value(params, 0).getAsBigInt();
+    if (point != AsyncIoControllerPriv::DBG_CANCEL_STEP_BEFORE_ENTRY
+            && point != AsyncIoControllerPriv::DBG_CANCEL_DEFERRED_RESULT) {
+        xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
+        return QoreValue();
+    }
+    return AsyncIoControllerPriv::dbgWaitCancelPointTaken(static_cast<int>(point),
+        static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -28773,6 +28806,12 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_pause_cancel_point", f_dbg_async_io_pause_cancel_point,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "point",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_async_io_wait_cancel_point", f_dbg_async_io_wait_cancel_point,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "point",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
