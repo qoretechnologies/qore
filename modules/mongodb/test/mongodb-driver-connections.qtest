@@ -368,8 +368,9 @@ class MongoDbDriverConnectionsTest inherits QUnit::Test {
         FakeMongoServer server();
         on_exit server.stop();
         Program p = tenant(server.getPort());
-        # azure: the driver fetches tokens from the instance metadata endpoint; refused before any connection
-        *hash<ExceptionInfo> ex = p.callFunction("create", sprintf("mongodb://127.0.0.1:%d/?authMechanism="
+        # azure: the driver fetches tokens from the instance metadata endpoint; refused before any connection (with a
+        # user name, which libmongoc 2 requires in the URI of this mechanism, so that the URI is valid for every version)
+        *hash<ExceptionInfo> ex = p.callFunction("create", sprintf("mongodb://user@127.0.0.1:%d/?authMechanism="
             "MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:x&%s", server.getPort(),
             Timeouts));
         assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));

@@ -23,11 +23,12 @@ string sub ss(string s) {
 %endif
 }
 
-#! a file appender whose file name is assigned by Qore code, as the rotating appenders of the Logger module do
+#! a file appender whose file name is set by Qore code, as the rotating appenders of the Logger module do; the
+#! member is private:internal (qore#6839), so the name is given to setFileName()
 class ShortNameAppender inherits Qore::Logger::LoggerAppenderFile {
     constructor(string path) : Qore::Logger::LoggerAppenderFile("T", new Qore::Logger::LoggerLayoutPattern("%m%n"),
             path) {
-        fileName = ss("a.log");
+        setFileName(ss("a.log"));
     }
 }
 
