@@ -29,7 +29,7 @@ class ChunkAccess inherits ProviderIndexUtil {
 
     #! Restores a serialized action as it is restored from the index
     static hash<auto> restore(hash<auto> action) {
-        return getIndexedAction(action, createMetadataDeserializeContext(), True);
+        return restoreIndexedAction(action);
     }
 }
 

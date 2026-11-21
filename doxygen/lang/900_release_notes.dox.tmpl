@@ -2648,6 +2648,9 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
+    - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
+      "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
+      @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
