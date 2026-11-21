@@ -2742,6 +2742,11 @@
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;
       <a href="https://github.com/qoretechnologies/qore/issues/7104">issue 7104</a>)
+    - substituting type arguments in nullable declarations preserves the \c NOTHING alternative of a
+      @ref generic_class_type "parameterized class" and the signature of a @ref code_complex_type "typed callable"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7135">issue 7135</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7144">issue 7144</a>)
+
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

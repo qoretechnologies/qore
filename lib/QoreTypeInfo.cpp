@@ -2521,6 +2521,12 @@ void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
    extern_type_info_map[t] = typeInfo;
 }
 
+// Given a parameterized class in the first return spec, distinguish *C<T> from a mixed union.
+// A symbolic type parameter can also have NT_NOTHING as its type code.
+static bool is_nullable_parameterized_class(const QoreTypeInfo* ti) {
+    return ti->return_vec.size() == 2 && ti->return_vec[1].spec.isRuntimeBaseType(NT_NOTHING);
+}
+
 static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
     assert(QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
 
@@ -2537,17 +2543,16 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         }
     }
 
-    {
-        const QoreClass* qc = QoreTypeInfo::getReturnClass(typeInfo);
-        if (qc) {
-            return qc->getTypeInfo();
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
+        if (is_nullable_parameterized_class(typeInfo)) {
+            return pti;
         }
     }
 
     {
-        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
-        if (pti) {
-            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), false);
+        const QoreClass* qc = QoreTypeInfo::getReturnClass(typeInfo);
+        if (qc) {
+            return qc->getTypeInfo();
         }
     }
 
@@ -2587,6 +2592,10 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         if (ti) {
             return qore_get_complex_reference_type(ti);
         }
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(typeInfo)) {
+        return qore_get_complex_code_type(cti->getReturnType(), cti->getParamTypes(), cti->hasVarArgs());
     }
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -2646,17 +2655,14 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
             return hd->getTypeInfo(true);
     }
 
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
+        return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
+    }
+
     {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
         if (qc) {
             return qc->getOrNothingTypeInfo();
-        }
-    }
-
-    {
-        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
-        if (pti) {
-            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
         }
     }
 
@@ -2692,6 +2698,10 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexReference(typeInfo);
         if (ti)
             return qore_get_complex_reference_or_nothing_type(ti);
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(typeInfo)) {
+        return qore_get_complex_code_or_nothing_type(cti->getReturnType(), cti->getParamTypes(), cti->hasVarArgs());
     }
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -4758,7 +4768,9 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
                 changed = true;
             }
         }
-        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args, pti->isOrNothing()) : ti;
+        // The class spec is the mandatory value type even for *C<T>. Read nullability from the full declaration.
+        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args,
+            is_nullable_parameterized_class(ti)) : ti;
     }
 
     if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
