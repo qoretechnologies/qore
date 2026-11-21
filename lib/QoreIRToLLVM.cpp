@@ -14442,6 +14442,11 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         error = "'" + name + "' was not emitted";
         return nullptr;
     }
+    // JIT handlers and background helpers are passed by address in this module. A later batch
+    // specializing their parent emits its own copy of each helper.
+    if (!aot_mode) {
+        fn->setLinkage(llvm::GlobalValue::InternalLinkage);
+    }
     return fn;
 }
 

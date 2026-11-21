@@ -2574,13 +2574,22 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     std::vector<llvm::Function*> borrowed_templates;
     if (!already_defined_fast.empty()) {
         std::unordered_map<std::string, const BatchCallee*> earlier;
+        size_t scanned = 0;
         for (const auto& callee : callees) {
+            if (!(++scanned % 100) && qore_check_cancel(nullptr, "JIT owning entry collection")) {
+                error = "cancelled during JIT owning entry collection";
+                return false;
+            }
             const auto& info = batch_callee_map.at(callee.variant);
             if (info.approach_b_eligible && already_defined_fast.count(info.fast_name)) {
                 earlier.emplace(info.fast_name, &callee);
             }
         }
         for (llvm::Function& fn : *module) {
+            if (!(++scanned % 100) && qore_check_cancel(nullptr, "JIT owning entry specialization")) {
+                error = "cancelled during JIT owning entry specialization";
+                return false;
+            }
             auto pos = fn.getName().rfind(QORE_OWNED_FAST_ENTRY_INFIX);
             if (!fn.isDeclaration() || pos == llvm::StringRef::npos) {
                 continue;

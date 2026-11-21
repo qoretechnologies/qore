@@ -7,6 +7,7 @@ class Marker {
 }
 
 int sub consume(list<auto> values, bool fail) {
+    on_exit printf("exit\n");
     int count = values.size();
     if (fail) {
         throw "CONSUME-ERROR";

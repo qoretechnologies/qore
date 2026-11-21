@@ -1312,9 +1312,9 @@ private:
     bool callGivesArgs(const QoreIRInstruction* inst) const;
     //! Returns true if the call \a inst of \a variant, which gives its callee arguments (callGivesArgs()), can call
     //! the fast entry of \a info that takes its arguments over (ownedFastEntry(), issue #6105)
-    /** Only in AOT code, for a callee whose fast entry refuses the arguments that a call gives
-        (qore_ir_fast_entry_refuses_given_args()) and is defined in the module (not of another module or a sibling
-        artifact), and for a call that gives only the cleanup slots of temporaries (no slot of a read through a
+    /** For a local callee whose fast entry refuses the arguments that a call gives
+        (qore_ir_fast_entry_refuses_given_args()). A JIT batch can lower its body again when an earlier batch
+        owns the ordinary entry. The AOT entry must belong to this image. The call must give only the cleanup slots of temporaries (no slot of a read through a
         reference, whose value is known at run time only: givenReferenceReadSlot()), at least one of them to a
         parameter whose fast entry takes a reference of its own (qore_aot_fast_entry_param_takes_ref())
     */
