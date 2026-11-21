@@ -3,6 +3,7 @@
 # Opt-in integration helper. The caller creates and removes the named synthetic S3 fixture.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires AwsTextractDataProvider
 if (!ENV.AWS_TEXTRACT_TEST_BUCKET) {
     throw "LIVE-FIXTURE-ERROR", "AWS_TEXTRACT_TEST_BUCKET must name a task-owned synthetic fixture bucket";

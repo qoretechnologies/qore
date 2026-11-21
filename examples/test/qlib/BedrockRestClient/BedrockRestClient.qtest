@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -178,7 +179,7 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("Bedrock connection metadata and provider", \connectionTest());
         addTestCase("Bedrock connection authenticated ping", \connectionPingTest());
 
-        if (ENV.BEDROCK_LIVE) {
+        if (LiveProvider::get("aws", "BEDROCK_LIVE")) {
             addTestCase("live: valid and invalid connection authentication",
                 \liveConnectionPingTest());
         }

@@ -4,6 +4,7 @@
 %allow-injection
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires GroqDataProvider
 %requires HttpServer
 %requires json
@@ -73,7 +74,7 @@ class GroqActionsTest inherits QUnit::Test {
         addTestCase("scoped resource and voice dropdowns", \referenceTest());
         addTestCase("transport errors are never replayed", \retryTest());
         addTestCase("real HTTP JSON, multipart, native paths and binary", \wireTest());
-        if (ENV.GROQ_LIVE) {
+        if (LiveProvider::get("groq", "GROQ_LIVE")) {
             addTestCase("live connection and inference with optional file and audio checks", \liveTest());
         }
         set_return_value(main());
@@ -432,8 +433,11 @@ class GroqActionsTest inherits QUnit::Test {
     }
 
     private liveTest() {
-        AbstractConnection conn = ENV.GROQ_CONNECTION ? get_connection(ENV.GROQ_CONNECTION)
-            : new GroqRestConnection("groq-test", "live", GroqRestConnection::DefaultUrl, {}, {"apikey": ENV.GROQ_APIKEY});
+        *string conn_name = LiveProvider::get("groq", "GROQ_CONNECTION");
+        # live-provider-optin: the connection name comes from LiveProvider
+        AbstractConnection conn = conn_name ? get_connection(conn_name)
+            : new GroqRestConnection("groq-test", "live", GroqRestConnection::DefaultUrl, {},
+                {"apikey": LiveProvider::get("groq", "GROQ_APIKEY")});
         assertTrue(conn.ping(True).ok);
         # Use local providers with the saved connection's credentials and transport.
         GroqDataProvider root(cast<RestClientIo::RestClientIo>(conn.getAsync()));

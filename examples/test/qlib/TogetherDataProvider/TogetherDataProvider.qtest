@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -130,7 +131,7 @@ public class TogetherDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("TogetherDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.TOGETHER_CONNECTION;
+        conn_name = LiveProvider::get("together", "TOGETHER_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 197 actions registered", \registrationTest());
         addTestCase("root provider lists 197 children",       \rootProviderTest());
@@ -152,7 +153,7 @@ public class TogetherDataProviderTest inherits QUnit::Test {
             hash<auto> fixture = item;
             addTestCase("request: " + fixture.action, sub () { operationTest(fixture); });
         }
-        if (ENV.TOGETHERAI_LIVE) {
+        if (LiveProvider::get("together", "TOGETHERAI_LIVE")) {
             addTestCase("live read-only listings and dropdowns", \liveReadOnlyTest());
         }
         if (ENV.TOGETHERAI_PAID_TESTS) {
@@ -530,9 +531,11 @@ public class TogetherDataProviderTest inherits QUnit::Test {
 
     private TogetherDataProvider::TogetherDataProvider liveRoot() {
         if (conn_name) {
+            # live-provider-optin: the connection name comes from LiveProvider
             return cast<TogetherDataProvider::TogetherDataProvider>(get_connection(conn_name).getDataProvider());
         }
-        return new TogetherDataProvider::TogetherDataProvider({"apikey": ENV.TOGETHERAI_APIKEY});
+        return new TogetherDataProvider::TogetherDataProvider({"apikey":
+            LiveProvider::get("together", "TOGETHERAI_APIKEY")});
     }
 
     private liveReadOnlyTest() {

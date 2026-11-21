@@ -3,6 +3,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires BedrockRestClient
 %requires AwsEventStream
 %requires QoreLlmTypes
@@ -92,7 +93,7 @@ class BedrockStreamingTest inherits QUnit::Test {
         addTestCase("callback failures retain their original exception", \callbackFailureTest());
         addTestCase("service failure after messageStop is not successful completion", \lateFailureTest());
         # Opt-in: these calls use real AWS credentials and may incur inference charges.
-        if (ENV.BEDROCK_STREAM_LIVE) {
+        if (LiveProvider::get("aws", "BEDROCK_STREAM_LIVE")) {
             addTestCase("live ConverseStream", \liveConverseTest());
             addTestCase("live InvokeModelWithResponseStream", \liveInvokeTest());
             addTestCase("live Nova Sonic bidirectional session", \liveBidirectionalTest());

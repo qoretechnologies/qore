@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -56,7 +57,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("ChromaDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.CHROMA_CONNECTION;
+        conn_name = LiveProvider::get("chroma", "CHROMA_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("query hits tenant/database-scoped collection URL",
@@ -144,6 +145,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
                 "Chroma collection UUID");
         }
 
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Chroma connection ping failed: %s",

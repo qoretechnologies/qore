@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires JinaDataProvider
 %requires json
 
@@ -101,7 +102,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("JinaDataProvider Test", "1.1", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.JINA_CONNECTION;
+        conn_name = LiveProvider::get("jina", "JINA_CONNECTION", m_options.conn);
         addTestCase("registration and every action path", \registrationTest());
         addTestCase("vendored schema provenance and drift", \schemaTest());
         addTestCase("constructor alternatives and child registration", \constructorTest());
@@ -114,7 +115,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
         addTestCase("JSONL downloads and malformed responses", \downloadTest());
         addTestCase("invalid inputs never reach transport", \invalidInputTest());
         addTestCase("transport errors are not retried", \errorTest());
-        if (conn_name || ENV.JINAAI_APIKEY) {
+        if (conn_name || LiveProvider::get("jina", "JINAAI_APIKEY")) {
             addTestCase("live catalog, inference, and model dropdowns", \liveInferenceTest());
             addTestCase("live Reader, Search, Segmenter, and vision", \liveContentTest());
             addTestCase("live batch submission and status", \liveBatchTest());
@@ -437,9 +438,10 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private AbstractDataProvider liveProvider() {
         if (conn_name) {
+            # live-provider-optin: the connection name comes from LiveProvider
             return get_connection(conn_name).getDataProvider();
         }
-        return new JinaDataProvider::JinaDataProvider({"apikey": ENV.JINAAI_APIKEY});
+        return new JinaDataProvider::JinaDataProvider({"apikey": LiveProvider::get("jina", "JINAAI_APIKEY")});
     }
 
     private liveInferenceTest() {

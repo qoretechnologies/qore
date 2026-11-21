@@ -3,13 +3,16 @@
 # Private subprocess protocol for live_lifecycle.py. Never run with inherited stdout logging.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires AzureDocumentIntelligenceDataProvider
 %requires json
 
 try {
     hash<auto> command = parse_json(stdin.read(-1));
-    hash<auto> auth = command.bearer ? {"entra_token": ENV.AZURE_DI_TOKEN} : {"apikey": ENV.AZURE_DI_KEY};
-    if (!ENV.AZURE_DI_ENDPOINT || !(command.bearer ? ENV.AZURE_DI_TOKEN : ENV.AZURE_DI_KEY)) {
+    hash<auto> auth = command.bearer ? {"entra_token": LiveProvider::get("azure", "AZURE_DI_TOKEN")} : {"apikey":
+        LiveProvider::get("azure", "AZURE_DI_KEY")};
+    if (!ENV.AZURE_DI_ENDPOINT || !(command.bearer ? LiveProvider::get("azure", "AZURE_DI_TOKEN") :
+        LiveProvider::get("azure", "AZURE_DI_KEY"))) {
         throw "AZURE-LIVE-CONFIG-ERROR", "missing private endpoint/authentication environment";
     }
     AzureDocumentIntelligenceRestConnection connection("azure-live-lifecycle", "Synthetic live verification",

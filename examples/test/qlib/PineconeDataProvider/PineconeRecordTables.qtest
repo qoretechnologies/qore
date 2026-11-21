@@ -22,6 +22,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires RestSchemaActions
 %requires RestClientIo
 %requires json
@@ -66,7 +67,7 @@ class PineconeTablesTest inherits QUnit::Test {
         addTestCase("document projection, full-record fetches and writes", \documentTest());
         addTestCase("scope and identity-specific control-plane writes", \scopeTest());
         addTestCase("dynamic metadata filter language", \filterTest());
-        if (ENV.PINECONE_TABLE_PHASE && ENV.PINECONE_APIKEY) {
+        if (ENV.PINECONE_TABLE_PHASE && LiveProvider::get("pinecone", "PINECONE_APIKEY")) {
             addTestCase("live: indexes, namespaces, vectors and documents", \liveTest());
         }
         set_return_value(main());
@@ -259,7 +260,7 @@ class PineconeTablesTest inherits QUnit::Test {
         string phase = ENV.PINECONE_TABLE_PHASE;
         assertTrue(inlist(phase, ("prepare", "read", "updated", "deleted", "cleaned", "cleanup")));
         assertTrue(ENV.PINECONE_TABLE_STATE.val());
-        PineconeDataProvider p(new PineconeRestClientIo({"apikey": ENV.PINECONE_APIKEY}));
+        PineconeDataProvider p(new PineconeRestClientIo({"apikey": LiveProvider::get("pinecone", "PINECONE_APIKEY")}));
         AbstractDataProvider indexes = p.getChildProviderPath("tables/indexes");
         hash<auto!> state = phase == "prepare" ? {} : parse_json(File::readTextFile(ENV.PINECONE_TABLE_STATE));
         list<string> created = state.created ?? ();
@@ -282,7 +283,7 @@ class PineconeTablesTest inherits QUnit::Test {
         }
         if (phase == "prepare") {
             PineconeRestConnection conn("pinecone-record-test", "live table test",
-                PineconeRestConnection::DefaultUrl, {}, {"apikey": ENV.PINECONE_APIKEY});
+                PineconeRestConnection::DefaultUrl, {}, {"apikey": LiveProvider::get("pinecone", "PINECONE_APIKEY")});
             assertTrue(conn.ping(True).ok);
             PineconeRestConnection bad("pinecone-bad-key", "negative ping",
                 PineconeRestConnection::DefaultUrl, {}, {"apikey": "pcsk_invalid_qore_test"});

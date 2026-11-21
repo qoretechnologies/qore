@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -285,6 +286,7 @@ public class GcpAuthTest inherits QUnit::Test {
         # NOTHING + GOOGLE_APPLICATION_CREDENTIALS env var
         GcpAuth::clearTokenCache();
         token_handler.call_count = 0;
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_env = getenv("GOOGLE_APPLICATION_CREDENTIALS");
         on_exit {
             saved_env.val()

@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires RestClientIo
 %requires QoreRagTypes
 %requires QoreRagUtils
@@ -194,7 +195,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
 
     milvusTest() {
         string name = "conformance_" + get_random_string(8).lwr();
-        string token = ENV.MILVUS_TOKEN ?? "root:Milvus";
+        string token = LiveProvider::get("milvus", "MILVUS_TOKEN") ?? "root:Milvus";
         RestClientIo::RestClientIo rest({"url": ENV.MILVUS_URL, "data": "json",
             "headers": {"Authorization": "Bearer " + token}});
         # Milvus reports errors in the response body with a 200 status

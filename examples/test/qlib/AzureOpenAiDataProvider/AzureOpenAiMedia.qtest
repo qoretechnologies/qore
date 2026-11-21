@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires AzureOpenAiDataProvider
 %requires RestSchemaActions
 %exec-class AzureOpenAiMediaTest
@@ -34,12 +35,15 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
     }
 
     private AbstractDataProvider getProvider(*string deployment) {
-        if (!ENV.AZURE_MEDIA_ENDPOINT.val() || !ENV.AZURE_MEDIA_API_KEY.val() || !deployment.val()) {
-            testSkip("configure AZURE_MEDIA_ENDPOINT, AZURE_MEDIA_API_KEY, and this test's deployment");
+        if (!ENV.AZURE_MEDIA_ENDPOINT.val() || !LiveProvider::get("azure", "AZURE_MEDIA_API_KEY").val()
+            || !deployment.val()) {
+            testSkip(LiveProvider::enabled("azure")
+                ? "configure AZURE_MEDIA_ENDPOINT, AZURE_MEDIA_API_KEY, and this test's deployment"
+                : LiveProvider::skipReason("azure", "AZURE_MEDIA_API_KEY"));
         }
         if (!provider) {
             AzureOpenAiRestConnection conn({"name": "azure-media-test", "url": ENV.AZURE_MEDIA_ENDPOINT,
-                "opts": {"api_key": ENV.AZURE_MEDIA_API_KEY, "timeout": 180000}});
+                "opts": {"api_key": LiveProvider::get("azure", "AZURE_MEDIA_API_KEY"), "timeout": 180000}});
             provider = conn.getDataProvider();
         }
         return provider;

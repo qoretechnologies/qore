@@ -2,6 +2,7 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires QUnit
 %requires BedrockRestClient
 %requires AwsEventStream

@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -74,7 +75,7 @@ public class GroqDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("GroqDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.GROQ_CONNECTION;
+        conn_name = LiveProvider::get("groq", "GROQ_CONNECTION", m_options.conn);
 
         addTestCase("factory registered with DataProvider", \factoryTest());
         addTestCase("app registered with action catalog",   \appCatalogTest());
@@ -327,6 +328,7 @@ public class GroqDataProviderTest inherits QUnit::Test {
         The completion is capped at 128 tokens, including reasoning.
     */
     private liveGroqTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Groq connection ping failed: %s",

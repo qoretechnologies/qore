@@ -3,6 +3,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires AssemblyAiDataProvider
 %requires json
 %exec-class AssemblyAiLiveTest
@@ -19,10 +20,11 @@ class AssemblyAiLiveTest inherits QUnit::Test {
         AssemblyAiDataProvider::AssemblyAiDataProvider root;
     }
     constructor() : Test("AssemblyAI live API", "1.0", \ARGV, MyOpts) {
-        connection_name = m_options.connection ?? ENV.ASSEMBLYAI_CONNECTION;
+        connection_name = LiveProvider::get("assemblyai", "ASSEMBLYAI_CONNECTION", m_options.connection);
         audio_file = m_options.audio ?? ENV.ASSEMBLYAI_TEST_AUDIO;
-        if (ENV.ASSEMBLYAI_APIKEY) {
-            client = new AssemblyAiRestClientIo({"apikey": ENV.ASSEMBLYAI_APIKEY, "timeout": 3m});
+        if (LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY")) {
+            client = new AssemblyAiRestClientIo({"apikey":
+                LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY"), "timeout": 3m});
             root = new AssemblyAiDataProvider::AssemblyAiDataProvider(client);
             addTestCase("environment key: authenticated and invalid-key pings", \authTest());
             addTestCase("environment key: read and token actions", \readTest());
@@ -37,9 +39,11 @@ class AssemblyAiLiveTest inherits QUnit::Test {
         if (connection_name) {
             addTestCase("named connection: authenticated ping and typed listing", \connectionTest());
         }
-        if (!ENV.ASSEMBLYAI_APIKEY && !connection_name) {
+        if (!LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY") && !connection_name) {
             addTestCase("live API credentials", nothing sub () {
-                testSkip("set ASSEMBLYAI_APIKEY or --connection for live API checks");
+                testSkip(LiveProvider::enabled("assemblyai") ?
+                    "set ASSEMBLYAI_APIKEY or --connection for live API checks"
+                        : LiveProvider::skipReason("assemblyai", "ASSEMBLYAI_APIKEY"));
             });
         }
         set_return_value(main());
@@ -54,7 +58,7 @@ class AssemblyAiLiveTest inherits QUnit::Test {
     }
     private authTest() {
         AssemblyAiRestConnection valid("live", "Live fixture", AssemblyAiRestConnection::DefaultUrl,
-            {}, {"apikey": ENV.ASSEMBLYAI_APIKEY});
+            {}, {"apikey": LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY")});
         assertTrue(valid.ping(True).ok);
         AssemblyAiRestConnection invalid("invalid", "Invalid credential fixture",
             AssemblyAiRestConnection::DefaultUrl, {}, {"apikey": "qore-5419-invalid-key"});
@@ -83,6 +87,7 @@ class AssemblyAiLiveTest inherits QUnit::Test {
         }
     }
     private connectionTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection connection = get_connection(connection_name);
         assertEq("assemblyai", connection.getType());
         assertTrue(connection.ping(True).ok);

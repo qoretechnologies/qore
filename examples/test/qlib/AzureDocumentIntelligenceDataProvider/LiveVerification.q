@@ -3,12 +3,13 @@
 # Opt-in: the caller supplies resource credentials privately through the environment.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires AzureDocumentIntelligenceDataProvider
 
-if (!ENV.AZURE_DI_ENDPOINT || !ENV.AZURE_DI_KEY) {
+if (!ENV.AZURE_DI_ENDPOINT || !LiveProvider::get("azure", "AZURE_DI_KEY")) {
     throw "AZURE-LIVE-CONFIG-ERROR", "live verification requires the endpoint and key environment variables";
 }
-hash<auto> opts = {"apikey": ENV.AZURE_DI_KEY};
+hash<auto> opts = {"apikey": LiveProvider::get("azure", "AZURE_DI_KEY")};
 AzureDocumentIntelligenceRestConnection connection("azure-live", "Synthetic fixture verification",
     ENV.AZURE_DI_ENDPOINT, {}, opts);
 if (!connection.ping(True).ok) { throw "AZURE-LIVE-ERROR", "valid-key connection ping failed"; }

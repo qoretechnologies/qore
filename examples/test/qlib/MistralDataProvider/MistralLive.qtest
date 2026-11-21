@@ -3,6 +3,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires MistralDataProvider
 %requires json
 %exec-class MistralLiveTest
@@ -12,10 +13,12 @@ class MistralLiveTest inherits QUnit::Test {
         *MistralDataProvider::MistralDataProvider root;
     }
     constructor() : Test("Mistral live API", "1.0", \ARGV) {
-        if (!ENV.MISTRALAI_APIKEY) {
-            addTestCase("live API credentials", sub () { testSkip("set MISTRALAI_APIKEY for live tests"); });
+        if (!LiveProvider::get("mistral", "MISTRALAI_APIKEY")) {
+            addTestCase("live API credentials", sub () { testSkip(LiveProvider::enabled("mistral") ?
+                "set MISTRALAI_APIKEY for live tests" : LiveProvider::skipReason("mistral", "MISTRALAI_APIKEY")); });
         } else {
-            root = new MistralDataProvider::MistralDataProvider({"apikey": ENV.MISTRALAI_APIKEY});
+            root = new MistralDataProvider::MistralDataProvider({"apikey":
+                LiveProvider::get("mistral", "MISTRALAI_APIKEY")});
             addTestCase("models and chat", \inferenceTest());
             addTestCase("code completion", \codeTest());
             addTestCase("embeddings", \embeddingTest());
