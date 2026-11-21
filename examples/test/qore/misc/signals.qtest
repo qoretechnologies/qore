@@ -273,8 +273,8 @@ class SignalTest inherits QUnit::Test {
         string cmd;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
-            if (ENV{var}) {
-                cmd += sprintf("%s='%s' ", var, ENV{var});
+            if (ENV{var}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                cmd += sprintf("%s='%s' ", var, ENV{var}); # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
             }
         }
         cmd += sprintf("'%s' '%s' 2>&1", TestInterpreter::qore_interpreter(), script.path);
@@ -301,8 +301,8 @@ class SignalTest inherits QUnit::Test {
         string cmd = start;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
-            if (ENV{var}) {
-                cmd += sprintf("%s='%s' ", var, ENV{var});
+            if (ENV{var}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                cmd += sprintf("%s='%s' ", var, ENV{var}); # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
             }
         }
         cmd += sprintf("'%s' '%s' %d %s %s 2>/dev/null; echo rc=$?", TestInterpreter::qore_interpreter(), script.path, sig, mode, expected);
@@ -403,8 +403,8 @@ class SignalTest inherits QUnit::Test {
         {
             string cmd;
             foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
-                if (ENV{var}) {
-                    cmd += sprintf("%s='%s' ", var, ENV{var});
+                if (ENV{var}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                    cmd += sprintf("%s='%s' ", var, ENV{var}); # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
                 }
             }
             string out = backquote(sprintf("%snohup '%s' '%s' %d never survives 2>/dev/null; echo rc=$?", cmd,

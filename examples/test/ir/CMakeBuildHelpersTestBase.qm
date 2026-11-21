@@ -349,7 +349,7 @@ public class CMakeBuildTest inherits QUnit::Test {
     }
 
     private:internal static int determineBuildJobs() {
-        *string jobs = ENV{BuildJobsVar};
+        *string jobs = ENV{BuildJobsVar}; # live-provider-optin: BuildJobsVar, the number of build jobs
         if (exists jobs && jobs != "") {
             if (jobs !~ /^[0-9]+$/ || jobs.toInt() < 1) {
                 throw "BUILD-JOBS-ERROR", sprintf("%s=%y is not a positive integer", BuildJobsVar, jobs);

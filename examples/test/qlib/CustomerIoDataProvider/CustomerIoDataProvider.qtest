@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -166,10 +167,11 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Customer.io client for integration tests
     private setupConnection() {
-        *string app_api_key = m_options.appapikey ?? ENV.CUSTOMERIO_APP_API_KEY;
-        *string site_id = m_options.siteid ?? ENV.CUSTOMERIO_SITE_ID;
-        *string tracking_api_key = m_options.trackingapikey ?? ENV.CUSTOMERIO_TRACKING_API_KEY;
-        *string region = m_options.region ?? ENV.CUSTOMERIO_REGION ?? "us";
+        *string app_api_key = LiveProvider::get("customerio", "CUSTOMERIO_APP_API_KEY", m_options.appapikey);
+        *string site_id = LiveProvider::get("customerio", "CUSTOMERIO_SITE_ID", m_options.siteid);
+        *string tracking_api_key = LiveProvider::get("customerio", "CUSTOMERIO_TRACKING_API_KEY",
+            m_options.trackingapikey);
+        *string region = m_options.region ?? LiveProvider::get("customerio", "CUSTOMERIO_REGION") ?? "us";
         if (!app_api_key || !site_id || !tracking_api_key) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -a/-s/-t options or CUSTOMERIO_APP_API_KEY/"

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires QoreRagTypes
@@ -66,7 +67,7 @@ public class MistralRestClientTest inherits QUnit::Test {
         addTestCase("connection fixes auto URL and publishes app metadata", \connectionConfigTest());
         addTestCase("connection validates required and finite options", \connectionValidationTest());
         addTestCase("sync and async pings authenticate with the versioned models endpoint", \pingTest());
-        if (ENV.MISTRALAI_APIKEY) {
+        if (LiveProvider::get("mistral", "MISTRALAI_APIKEY")) {
             addTestCase("live: valid and invalid API keys", \livePingTest());
         }
         addTestCase("model-specific reasoning capabilities", \reasoningCapabilitiesTest());
@@ -212,7 +213,8 @@ public class MistralRestClientTest inherits QUnit::Test {
 
     private livePingTest() {
         MistralRestClient::MistralRestConnection conn("live-mistral", "test",
-            MistralRestClient::MistralRestConnection::DefaultUrl, {}, {"apikey": ENV.MISTRALAI_APIKEY});
+            MistralRestClient::MistralRestConnection::DefaultUrl, {}, {"apikey":
+                LiveProvider::get("mistral", "MISTRALAI_APIKEY")});
         assertTrue(conn.ping(True).ok);
         hash<auto> response = conn.get().get("models").body;
         assertTrue(response.data.lsize() > 0);

@@ -411,6 +411,7 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
             return rootProvider;
         }
         try {
+            # live-provider-optin: the connection name comes only from the test's own command line (-c)
             AbstractConnection conn = get_connection(connName);
             rootProvider = conn.getDataProvider();
         } catch (hash<ExceptionInfo> ex) {

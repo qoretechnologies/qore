@@ -42,6 +42,7 @@ public class ConnectionProviderModuleTest inherits QUnit::Test {
         {
             Program p();
             p.loadModule("ConnectionProvider");
+            # live-provider-optin: the connections of the test's own TestConnectionProvider.qm, or none
             p.parse("string sub test(string str) { return get_connection_url(str); }", "");
             assertEq("test://user:pass@x", p.callFunction("test", "X"));
             assertThrows("CONNECTION-ERROR", \p.callFunction(), ("test", "Y"));
@@ -50,8 +51,11 @@ public class ConnectionProviderModuleTest inherits QUnit::Test {
         {
             Program p();
             p.loadModule("ConnectionProvider");
+            # live-provider-optin: the connections of the test's own TestConnectionProvider.qm, or none
             p.parsePending("AbstractConnection sub get_obj(string str) { return get_connection(str); }", "");
+            # live-provider-optin: the connections of the test's own TestConnectionProvider.qm, or none
             p.parsePending("hash sub get_conn() { return get_connections(); }", "");
+            # live-provider-optin: the connections of the test's own TestConnectionProvider.qm, or none
             p.parse("hash sub get_hash() { return get_connection_hash(); }", "");
             any obj = p.callFunction("get_obj", "X");
             assertEq(Type::Object, obj.type());
@@ -70,6 +74,7 @@ public class ConnectionProviderModuleTest inherits QUnit::Test {
 
         Program p();
         p.loadModule("ConnectionProvider");
+        # live-provider-optin: the connections of the test's own TestConnectionProvider.qm, or none
         p.parse("string sub test(string str) { return get_connection_url(str); }", "");
         assertThrows("CONNECTION-ERROR", \p.callFunction(), ("test", "X"));
         assertEq("X://x", p.callFunction("test", "X://x"));

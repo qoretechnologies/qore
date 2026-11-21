@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires HuggingFaceDataProvider
@@ -196,14 +197,15 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.HUGGINGFACE_CONNECTION;
+        *string conn_name = LiveProvider::get("huggingface", "HUGGINGFACE_CONNECTION", m_options.conn);
         if (conn_name.val()) {
+            # live-provider-optin: the connection name comes from LiveProvider
             AbstractConnection conn = get_connection(conn_name);
             live_provider = conn.getDataProvider();
             return;
         }
         # fallback to API token env var
-        *string token = ENV.HUGGINGFACE_TOKEN;
+        *string token = LiveProvider::get("huggingface", "HUGGINGFACE_TOKEN");
         if (token.val()) {
             live_provider = new HuggingFaceDataProvider::HuggingFaceDataProvider({"apikey": token});
         }
@@ -564,7 +566,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationListModels() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         AbstractDataProvider list_dp = live_provider.getChildProvider("models").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
@@ -576,7 +580,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationGetModel() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         AbstractDataProvider get_dp = live_provider.getChildProvider("models").getChildProvider("get");
         auto result = get_dp.doRequest({"repo_id": "google-bert/bert-base-uncased"});
@@ -586,7 +592,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationListDatasets() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         AbstractDataProvider list_dp = live_provider.getChildProvider("datasets").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
@@ -597,7 +605,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationListSpaces() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         AbstractDataProvider list_dp = live_provider.getChildProvider("spaces").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "likes", "direction": -1});
@@ -608,7 +618,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationModelCrud() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         # generate unique repo name to avoid conflicts
         string repo_name = sprintf("qore-test-%d", clock_getmicros());
@@ -666,7 +678,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationDatasetCrud() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         string repo_name = sprintf("qore-test-ds-%d", clock_getmicros());
 
@@ -719,7 +733,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationSpaceCrud() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         string repo_name = sprintf("qore-test-sp-%d", clock_getmicros());
 
@@ -773,7 +789,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationChatCompletions() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         # use the inference child provider to get the chat completions provider
         AbstractDataProvider chat_dp = live_provider.getChildProvider("inference")
@@ -794,7 +812,9 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
 
     testIntegrationReferenceData() {
         if (!live_provider) {
-            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+            testSkip(LiveProvider::enabled("huggingface") ?
+                "no connection; use -c <connection> or set HUGGINGFACE_TOKEN"
+                    : LiveProvider::skipReason("huggingface", "HUGGINGFACE_TOKEN"));
         }
         *list<hash<AllowedValueInfo>> models = live_provider.getReferenceData("models");
         assertTrue(models.size() > 0, "models reference data returns results");

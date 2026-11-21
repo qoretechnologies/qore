@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -204,19 +205,19 @@ public class TableauDataProviderTest inherits QUnit::Test {
     #! Sets up the Tableau client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.TABLEAU_CONNECTION;
+        *string conn_name = LiveProvider::get("tableau", "TABLEAU_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = LiveProvider::connection("tableau", "TABLEAU_CONNECTION", m_options.conn).get();
             return;
         }
 
-        *string subdomain = m_options.subdomain ?? ENV.TABLEAU_SUBDOMAIN;
-        *string token_name = m_options.token_name ?? ENV.TABLEAU_TOKEN_NAME;
-        *string token_secret = m_options.token_secret ?? ENV.TABLEAU_TOKEN_SECRET;
-        *string content_url = m_options.content_url ?? ENV.TABLEAU_CONTENT_URL;
+        *string subdomain = m_options.subdomain ?? LiveProvider::get("tableau", "TABLEAU_SUBDOMAIN");
+        *string token_name = LiveProvider::get("tableau", "TABLEAU_TOKEN_NAME", m_options.token_name);
+        *string token_secret = LiveProvider::get("tableau", "TABLEAU_TOKEN_SECRET", m_options.token_secret);
+        *string content_url = m_options.content_url ?? LiveProvider::get("tableau", "TABLEAU_CONTENT_URL");
 
         if (!subdomain || !token_name || !token_secret) {
             if (m_options.verbose) {

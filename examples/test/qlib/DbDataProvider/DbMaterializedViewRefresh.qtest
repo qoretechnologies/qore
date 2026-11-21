@@ -96,11 +96,11 @@ class DbMaterializedViewRefreshTest inherits QUnit::Test {
             connstr = "sqlite3:@:memory:";
         } else {
             string var = label == "pgsql" ? "QORE_DB_CONNSTR_PGSQL" : "QORE_DB_CONNSTR_MYSQL";
-            if (!ENV{var}) {
+            if (!ENV{var}) { # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
                 skip_reasons{label} = var + " is not set";
                 return;
             }
-            connstr = ENV{var};
+            connstr = ENV{var}; # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             if (label == "pgsql") {
                 PgsqlRunSchema::setup(connstr, "DbMaterializedViewRefresh");
                 pgsql_isolated = True;

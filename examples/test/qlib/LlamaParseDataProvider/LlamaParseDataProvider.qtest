@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -53,7 +54,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("LlamaParseDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.LLAMAPARSE_CONNECTION;
+        conn_name = LiveProvider::get("llamaparse", "LLAMAPARSE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("the manifest agrees with the pinned schema", \schemaTest());
@@ -234,6 +235,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
         an API key the server would reject.
     */
     private livePingTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("LlamaParse connection ping failed: %s",
@@ -255,6 +257,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
 
     #! Reads what the account already holds, and fills the dropdowns from it
     private liveReadTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
 
         auto projects = prov.getChildProviderEx("list-projects").doRequest({});
@@ -283,6 +286,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
         tier.
     */
     private liveParseLifecycleTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
         string doc = "# Quarterly Report\n\nRevenue for Q3 was 1,250,000 EUR.\n";
         *string file_id;
@@ -343,6 +347,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
         free tier.
     */
     private liveLlamaParseTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("LlamaParse connection ping failed: %s",

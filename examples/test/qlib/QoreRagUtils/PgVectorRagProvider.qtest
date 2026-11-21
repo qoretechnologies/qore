@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires json
 %requires ConnectionProvider
 %requires QoreRagTypes
@@ -146,7 +147,7 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("PgVectorRagProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.PGVECTOR_CONNECTION;
+        conn_name = LiveProvider::get("pgvector", "PGVECTOR_CONNECTION", m_options.conn);
 
         addTestCase("factory registered + lazy-loadable",   \factoryTest());
         addTestCase("constructor requires collection + datasource",
@@ -524,6 +525,7 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
                 "pgvector-backed table");
         }
 
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("pgvector connection ping failed: %s",
@@ -555,6 +557,7 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
 
     #! Exercises countByFilter(), summarizeBy() and deleteByFilter() against a real database, in a temporary table
     private liveManagementTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         Qore::SQL::AbstractDatasource ds = conn.get();
         string table = "qore_rag_mgmt_" + get_random_string(8).lwr();

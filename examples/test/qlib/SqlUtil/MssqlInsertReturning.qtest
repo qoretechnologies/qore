@@ -226,11 +226,11 @@ class MssqlInsertReturningTest inherits QUnit::Test {
 
     #! returns the datasource of the run's database on SQL Server, or skips the test case if there is none
     private Datasource datasource(string var) {
-        if (!ENV{var}.val()) {
+        if (!ENV{var}.val()) { # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             testSkip(var + " is not set");
         }
         try {
-            Datasource ds(ENV{var});
+            Datasource ds(ENV{var}); # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             ds.open();
             if (MssqlDatabase::isSybase(ds)) {
                 testSkip("the database is Sybase, not SQL Server");
@@ -241,6 +241,7 @@ class MssqlInsertReturningTest inherits QUnit::Test {
             }
             TestRun::failOrSkipConnect("no DB connection", ex);
         }
+        # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
         Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlInsertReturning"));
         ds.open();
         return ds;

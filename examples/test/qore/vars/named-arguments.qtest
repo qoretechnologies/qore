@@ -488,8 +488,10 @@ public class NamedArgumentsTest inherits QUnit::Test {
         string key = "QORE_NAMED_ARGS_TEST_ENV";
         unsetenv(name: key);
         setenv(name: key, value: "named-ok");
+        # live-provider-optin: a variable of the test itself
         assertEq("named-ok", getenv(name: key), "environment helpers expose name and value");
         unsetenv(name: key);
+        # live-provider-optin: a variable of the test itself
         assertNothing(getenv(name: key), "environment helpers clean up with named arguments");
 
         assertEq({

@@ -1,0 +1,302 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LiveProviderTest.qm gives the tests the credentials of external services only when live calls are enabled
+
+/*  LiveProviderTest.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module LiveProviderTest {
+    version = "1.0";
+    desc    = "gives the tests the credentials of external services only when live calls are enabled";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+    init    = sub () {
+        LiveProviderTest::LiveProvider::clearAmbient();
+    };
+}
+
+/** @mainpage LiveProviderTest Module
+
+    A test of a provider module (a data provider or REST client of an external service) calls the service with an
+    account only when live calls are enabled for that service: a credential in the environment is not enough, as a
+    host can have one set for other purposes (qore#6964).  Every test reads the credentials of a service through
+    @ref LiveProviderTest::LiveProvider "LiveProvider", which gives them only when:
+    - \c QORE_TEST_LIVE_PROVIDERS is \c "1" or \c "all" (every service), or a comma-separated list of service ids
+      that has the test's one (ex: <tt>QORE_TEST_LIVE_PROVIDERS=mistral,openai</tt>); it is unset by default, and
+      CI sets it only to \c "mews" (the public demo environment of Mews, whose tests need no key)
+    - and the credential variables are set
+
+    A test that cannot have its credentials skips its live test cases with a reason that names the opt-in
+    (LiveProvider::skipReason()); the reason never has a value.  The guardrail test
+    \c examples/test/qore/misc/live-provider-optin.qtest fails any test that reads a credential variable or opens a
+    non-local connection without this module.
+
+    Some client modules also find credentials that no test reads: the AWS clients take \c AWS_ACCESS_KEY_ID and
+    the other standard variables and the container and instance metadata endpoints, the Azure and Google clients
+    their workload identity variables.  When the module is loaded, it removes those variables from the environment
+    of the process (and so of its children) for each such service that live calls are not enabled for
+    (LiveProvider::AmbientVars), and sets \c AWS_EC2_METADATA_DISABLED for the AWS tools; a test of such a client
+    gives it fake credentials explicitly, as the mock-server tests do.  The guardrail requires this module in every
+    test that loads such a client module.
+
+    @par Example:
+    @code{.py}
+%requires ../../LiveProviderTest.qm
+
+# skips the test case unless live calls to Mistral are enabled and the key is set
+hash<string, string> creds = LiveProvider::require("mistral", "MISTRALAI_APIKEY");
+    @endcode
+*/
+
+#! Contains the definitions of the LiveProviderTest module
+public namespace LiveProviderTest {
+#! The credentials of external services for tests, given only when live calls are enabled
+public class LiveProvider {
+    public {
+        #! the variable that enables live calls
+        const OptInVar = "QORE_TEST_LIVE_PROVIDERS";
+
+        #! the URLs of the hosted services of providers whose tests also run against servers of their own
+        /** by service id; see isLocalService()
+        */
+        const RemoteServicePatterns = {
+            # MongoDB Atlas: an SRV URL or a host in its domain
+            "mongodb": "^mongodb\\+srv:|\\.mongodb\\.net(?:[:,/?]|$)",
+        };
+
+        #! the variables that client modules or their tools read credentials from without a test reading them
+        /** by service id; they are removed from the environment when the module is loaded, for each service that live
+            calls are not enabled for
+        */
+        const AmbientVars = {
+            "aws": (
+                "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN",
+                "AWS_PROFILE", "AWS_DEFAULT_PROFILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE",
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "AWS_CONTAINER_AUTHORIZATION_TOKEN", "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_ROLE_SESSION_NAME",
+            ),
+            "google": (
+                "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_QUOTA_PROJECT", "CLOUDSDK_CONFIG",
+                "CLOUDSDK_AUTH_ACCESS_TOKEN_FILE",
+            ),
+            "azure": (
+                "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "AZURE_CLIENT_CERTIFICATE_PATH",
+                "AZURE_CLIENT_CERTIFICATE_PASSWORD", "AZURE_FEDERATED_TOKEN_FILE", "AZURE_USERNAME",
+                "AZURE_PASSWORD", "IDENTITY_ENDPOINT", "IDENTITY_HEADER", "MSI_ENDPOINT", "MSI_SECRET",
+            ),
+        };
+    }
+
+    #! Removes the ambient credential variables of the services that live calls are not enabled for
+    /** Called when the module is loaded; see AmbientVars
+    */
+    static clearAmbient() {
+        foreach hash<auto> i in (AmbientVars.pairIterator()) {
+            if (LiveProvider::enabled(i.key)) {
+                continue;
+            }
+            map unsetenv($1), i.value;
+            if (i.key == "aws") {
+                # the AWS CLI and SDKs that a test runs do not query the instance metadata endpoint
+                setenv("AWS_EC2_METADATA_DISABLED", "true");
+            }
+        }
+    }
+
+    #! Returns @ref True "True" if live calls to the service are enabled by \c QORE_TEST_LIVE_PROVIDERS
+    /** @param provider the id of the service: its name in lower case (ex: \c "mistral")
+
+        @return @ref True "True" if the variable is \c "1" or \c "all", or a comma-separated list with the id (case
+        and spaces around the ids are ignored); @ref False "False" if it is not set or has any other value
+    */
+    static bool enabled(string provider) {
+        *string opt = LiveProvider::getOptIn();
+        if (!opt) {
+            return False;
+        }
+        opt = trim(opt).lwr();
+        if (opt == "1" || opt == "all") {
+            return True;
+        }
+        foreach string id in (opt.split(",")) {
+            if (trim(id) == provider.lwr()) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the value of a credential variable, only when live calls to the service are enabled
+    /** @param provider the id of the service, as for enabled()
+        @param var the name of the variable
+        @param explicit_value a value that the user gave the test on its OWN command line (ex: an \c --apikey
+        option of the test): it is returned as it is, as giving it is an explicit choice; it must never be a
+        default that reads the environment (such as an option whose default is \c ENV.X), which this method alone
+        reads
+
+        @return the explicit value if any; else the value of the variable if live calls to the service are enabled
+        and the variable is set; else no value
+    */
+    static *string get(string provider, string var, *string explicit_value) {
+        if (explicit_value) {
+            return explicit_value;
+        }
+        if (!LiveProvider::enabled(provider)) {
+            return;
+        }
+        return LiveProvider::getVar(var);
+    }
+
+    #! Returns the values of the credential variables, only when live calls are enabled and all of them are set
+    /** @param provider the id of the service, as for enabled()
+        @param vars the names of the variables
+
+        @return the values by name, or no value if live calls to the service are not enabled or a variable is not
+        set
+    */
+    static *hash<string, string> getAll(string provider, softlist<string> vars) {
+        if (!LiveProvider::enabled(provider)) {
+            return;
+        }
+        hash<string, string> rv = {};
+        foreach string var in (vars) {
+            *string v = LiveProvider::getVar(var);
+            if (!v) {
+                return;
+            }
+            rv{var} = v;
+        }
+        return rv;
+    }
+
+    #! Returns the reason to skip the live test cases of the service; it never has a value
+    /** @param provider the id of the service, as for enabled()
+        @param vars the names of the credential variables
+
+        @return \c "live <provider> tests are disabled: set QORE_TEST_LIVE_PROVIDERS=<provider> (or 1) and <vars>"
+        when live calls are not enabled, or \c "live <provider> tests are enabled, but <vars> not set" when a
+        variable is missing
+    */
+    static string skipReason(string provider, softlist<string> vars) {
+        if (!LiveProvider::enabled(provider)) {
+            # a test that needs no variable (ex: it reaches a service without a credential) names only the opt-in
+            return sprintf("live %s tests are disabled: set %s=%s (or 1)%s", provider, OptInVar, provider,
+                vars ? " and " + join(", ", vars) : "");
+        }
+        list<string> missing = select vars, !LiveProvider::getVar($1);
+        return sprintf("live %s tests are enabled, but %s %s not set", provider, join(", ", missing),
+            missing.size() == 1 ? "is" : "are");
+    }
+
+    #! Returns the values of the credential variables, or skips the current QUnit test case
+    /** @param provider the id of the service, as for enabled()
+        @param vars the names of the variables
+
+        @return the values by name
+
+        @throw TEST-SKIPPED-EXCEPTION live calls to the service are not enabled or a variable is not set: QUnit
+        reports the test case as skipped with skipReason()
+    */
+    static hash<string, string> require(string provider, softlist<string> vars) {
+        *hash<string, string> rv = LiveProvider::getAll(provider, vars);
+        if (!rv) {
+            throw "TEST-SKIPPED-EXCEPTION", LiveProvider::skipReason(provider, vars);
+        }
+        return rv;
+    }
+
+    #! Returns the URL of a service that a test can run against a server of its own (ex: a MongoDB server in a
+    #! container), unless it is a remote, credentialed service that live calls are not enabled for
+    /** A URL that carries credentials (<tt>user:password\@</tt> or any other user information) or that names a
+        hosted service of the provider (RemoteServicePatterns, ex: MongoDB Atlas) is a live call as a credential
+        variable is; any other URL (ex: <tt>mongodb://mongodb:27017</tt> of CI, or \c localhost) is a local service,
+        which a test uses whether live calls are enabled or not; see isLocalService()
+
+        @param provider the id of the service, as for enabled()
+        @param var the variable with the URL (ex: \c "MONGODB_URL")
+
+        @return the URL, or no value if the variable is not set, or the URL is not a local service and live calls to
+        the service are not enabled
+    */
+    static *string getService(string provider, string var) {
+        *string url = LiveProvider::getVar(var);
+        if (!url || (!LiveProvider::isLocalService(provider, url) && !LiveProvider::enabled(provider))) {
+            return;
+        }
+        return url;
+    }
+
+    #! Returns @ref True "True" if a URL of the service needs no credential and does not name its hosted service
+    /** @param provider the id of the service, as for enabled()
+        @param url the URL
+
+        @return @ref False "False" if the URL has user information (<tt>user:password\@</tt>, <tt>user\@</tt>) or
+        matches the provider's RemoteServicePatterns (ex: <tt>mongodb+srv://</tt> or a \c *.mongodb.net host for
+        \c "mongodb"), else @ref True "True"
+    */
+    static bool isLocalService(string provider, string url) {
+        # the authority: after the scheme, up to the path, query or fragment
+        *string authority = (url =~ x/^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^\/?#]*)/)[0] ?? url;
+        if (authority.find("@") >= 0) {
+            return False;
+        }
+        *string remote = RemoteServicePatterns{provider.lwr()};
+        return !remote || !url.regex(remote, RE_Caseless);
+    }
+
+    #! Returns a named connection to the service, only when live calls to it are enabled
+    /** A connection reaches the service with the credentials of its definition (the connection providers, ex:
+        \c QORE_CONNECTION_PROVIDERS, or a connection file), so it is a live call as a credential variable is
+
+        @param provider the id of the service, as for enabled()
+        @param var the variable that names the connection (ex: \c "ANTHROPIC_CONNECTION")
+        @param explicit_name a connection name that the user gave on the test's OWN command line, as for get()
+
+        @return the connection (an \c AbstractConnection of the ConnectionProvider module, which is loaded only
+        then), or no value if no name is given or live calls to the service are not enabled
+    */
+    static auto connection(string provider, string var, *string explicit_name) {
+        *string name = LiveProvider::get(provider, var, explicit_name);
+        if (!name) {
+            return;
+        }
+        load_module("ConnectionProvider");
+        return call_function("get_connection", name);
+    }
+
+    #! Returns the value of the opt-in variable, from the environment of the process
+    /** getenv() reads the current environment, not the \c ENV snapshot taken at startup, so a variable removed or
+        set by a test or by clearAmbient() counts as such
+    */
+    private static *string getOptIn() {
+        return getenv(OptInVar);
+    }
+
+    #! Returns the value of a variable, from the current environment of the process
+    private static *string getVar(string var) {
+        *string v = getenv(var);
+        return v.val() ? v : NOTHING;
+    }
+}
+}

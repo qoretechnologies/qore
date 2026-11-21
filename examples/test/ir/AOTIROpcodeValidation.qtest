@@ -24,7 +24,8 @@ class AOTIROpcodeValidationTest inherits QUnit::Test {
         }
         string prefix;
         foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
-            if (ENV{name}) {
+            if (ENV{name}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
                 prefix += name + "=" + shellQuote(ENV{name}) + " ";
             }
         }

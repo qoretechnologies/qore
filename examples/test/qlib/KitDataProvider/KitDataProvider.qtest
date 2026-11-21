@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -167,20 +168,20 @@ public class KitDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Kit client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.KIT_CONNECTION;
+        *string conn_name = LiveProvider::get("kit", "KIT_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("kit", "KIT_CONNECTION", m_options.conn);
             if (conn instanceof KitRestClient::KitRestConnection) {
                 client = (cast<KitRestClient::KitRestConnection>(conn)).getAsync();
             }
             return;
         }
 
-        *string apikey = m_options.apikey ?? ENV.KIT_API_KEY;
-        *string token = ENV.KIT_TOKEN;
-        *string client_id = ENV.KIT_OAUTH2_CLIENT_ID;
-        *string client_secret = ENV.KIT_OAUTH2_CLIENT_SECRET;
-        *string refresh_token = ENV.KIT_OAUTH2_REFRESH_TOKEN;
+        *string apikey = LiveProvider::get("kit", "KIT_API_KEY", m_options.apikey);
+        *string token = LiveProvider::get("kit", "KIT_TOKEN");
+        *string client_id = LiveProvider::get("kit", "KIT_OAUTH2_CLIENT_ID");
+        *string client_secret = LiveProvider::get("kit", "KIT_OAUTH2_CLIENT_SECRET");
+        *string refresh_token = LiveProvider::get("kit", "KIT_OAUTH2_REFRESH_TOKEN");
 
         if (apikey) {
             client = new KitRestClient::KitRestClientIo({"apikey": apikey});
