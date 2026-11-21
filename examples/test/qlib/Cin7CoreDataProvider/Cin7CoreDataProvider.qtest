@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -136,8 +137,8 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Cin7Core client for integration tests
     private setupConnection() {
-        *string account_id = m_options.account_id ?? ENV.CIN7CORE_ACCOUNT_ID;
-        *string apikey = m_options.apikey ?? ENV.CIN7CORE_API_KEY;
+        *string account_id = LiveProvider::get("cin7core", "CIN7CORE_ACCOUNT_ID", m_options.account_id);
+        *string apikey = LiveProvider::get("cin7core", "CIN7CORE_API_KEY", m_options.apikey);
         if (!account_id || !apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -a and -k options or CIN7CORE_ACCOUNT_ID "

@@ -171,3 +171,53 @@ wrapper while retaining all prior contexts.
 Internal composite managers are enforcement views: filesystem/network checks, interruption and thread-slot
 accounting fan out to the constituent managers. Configure, inspect and revoke the original managers, not these
 temporary views. Cleanup retains provenance, including when releasing a bound closure runs destructors.
+
+## Isolation domains (qore#6536)
+
+A tenant is an isolation domain that trusted host code sets on a sandbox (`QoreSandboxManager::setIsolationDomain()`):
+once, before the manager governs code (`setGoverns()`, under the same lock: a Program uses it, or a composite contains
+it), so the checks read it without a lock. A manager that sandboxed code creates or copies inherits the domain of the
+sandbox that governs the creating code (`inheritIsolationDomain()`). A composite has no domain of its own: its members
+are checked. `qore_caller_isolation_domain()` (`SandboxManager::getCallerIsolationDomain()`) is the domain of the
+calling code's sandbox, or, in a trusted build that a tenant entered (whose barrier hides the tenant), the tenant's.
+
+Invariant: in a trusted build that sandboxed code entered, code of a sandbox of another domain than the caller's never
+runs. The check is at the one point where a sandbox becomes current on a thread in a build, `QoreSandboxBudgetStack::
+enter()`/`enterInBuild()`/`enterBuildOwn()`: the entry of a Program (`ProgramThreadCountContextHelper::
+enterSandboxBudgets()`), the provenance of an object or callback (`QoreSandboxProvenanceHelper`), and continuations
+(`attach()`); it is made also for a call whose limits cannot be enforced (`lost_owner`), whose later entries are not
+recorded. Parsing or committing code in a Program switches into it without entering its sandboxes, so
+`ProgramRuntimeParseContextHelper` and `ProgramRuntimeParseCommitContextHelper` check its sandboxes against the
+isolation (`qore_sandbox_check_program_isolation()`). The state of a Program is used without entering it, so every
+instance method of `Program` and `ProgramControl` (`lib/QC_Program.qpp`, `lib/QC_ProgramControl.qpp`) makes the same
+check first ("accessing a Program"), except `getProgramId()`; a Program whose own and creator sandboxes have no other
+domain (the host's, a trusted module's, one of a sandbox without a domain) passes it. Isolation covers a tenant's
+data as well as its code; the objects that tenants share on purpose are a separate rule (#6843).
+
+Each build floor carries a `QoreSandboxIsolation`: the sandboxes of its caller (none for a build that the outer
+build's own code entered), the sandboxes of the Program that created it, and the isolation of the outer build. An
+entry must pass every level, so a nested build never widens what runs: a level allows a sandbox if it has no domain,
+is one of the level's caller's sandboxes or of its domain, or is a sandbox of the level's creator; a level whose
+caller has no domain allows everything. The build's own code is allowed by the level of its build (its creator's
+sandboxes) and checked against every other level. A continuation captures the isolation of the innermost floor
+(`QoreSandboxContext::isolation`), also when no sandbox governs the capturing code (a thread that a build starts:
+`QoreInheritedSandbox::capture()`; a pool task; an async I/O operation: `capture_async_io_sandbox_context()`); a
+context that only keeps an isolation is applied as a floor, not as the thread's sandbox context. `attach()` combines
+the captured isolation with that of the floor that the thread is in, if any (`QoreSandboxIsolation::join()`): a
+continuation that runs on the thread of a build (a pool's cancel callback, a native callback) keeps the isolation of
+that build as well. The threads that run work for its submitter (pool workers and the pool's own thread, the async I/O
+workers) are started with `QTF_NO_SANDBOX_INHERIT` and have no floor, so their work is governed by the submitter's
+isolation only, and a shared worker that started in one tenant's build runs other work as before. If the floor cannot
+be recorded, the continuation's stack is closed. Builds that trusted code entered have no isolation. A continuation's
+floor can have no frames, so `QoreSandboxBudgetStack::empty()` counts the floors too.
+
+A refused entry fails closed: it records nothing more until it is left (`refused_owner`), closes the stack (the stack
+check at the entry of every function, method and closure, in each execution mode, raises `SANDBOX-ISOLATION-ERROR`),
+sets the sandbox-limit cancellation bit (every cancellation point raises it), and the Program entry and the receiver's
+provenance in `CodeEvaluationHelper` raise it at once. The fast paths that run IR without the stack check (the native
+leaves, the inline IR closure and method calls) decline while the thread has a refused entry
+(`qore_sandbox_isolation_refused()`, which reads a process-wide count first), so the regular call path raises it.
+
+Not covered: builtin (trusted) code that runs on an object with another tenant's provenance, which is data that the
+caller should not hold (see the tenant isolation issues, qore#6751); code that a build registers to run after it
+returns (a signal handler, an at-exit callback), which runs without the build's context.

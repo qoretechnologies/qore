@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+# test-platform: macos - directory enumeration and removal of non-ASCII filesystem names
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
@@ -28,6 +29,7 @@ public class TmpDirTest inherits QUnit::Test {
     constructor() : Test ("TmpDirTest", "1.0") {
         addTestCase("tmp_dir test - standard temp location", \test_tmp_dir_std());
         addTestCase("tmp_dir test - custom temp location", \test_tmp_dir_custom());
+        addTestCase("tmp_dir preserves entry bytes during cleanup", \test_entry_bytes());
         set_return_value(main());
     }
 
@@ -51,6 +53,53 @@ public class TmpDirTest inherits QUnit::Test {
 
             assertNeq("", path);
             assertFalse(path_exists(path));
+        }
+    }
+
+    test_entry_bytes() {
+        # Choose the path's encoding explicitly so this also exercises a process with another default.
+        foreach string encoding in ("UTF-8", "ISO-8859-1") {
+            string parent = binary_to_string(binary(tmp_location()), encoding);
+            string root;
+            string nested;
+            string child;
+            string leaf;
+            on_error {
+                # Clean up by the original names if the destructor failed.
+                if (exists leaf && is_file(leaf)) {
+                    unlink(leaf);
+                }
+                if (exists child && is_dir(child)) {
+                    rmdir(child);
+                }
+                if (exists nested && is_dir(nested)) {
+                    rmdir(nested);
+                }
+                if (exists root && is_dir(root)) {
+                    rmdir(root);
+                }
+            }
+            {
+                TmpDir tmp(NOTHING, NOTHING, parent);
+                root = tmp.path;
+                assertEq(encoding, root.encoding());
+                # These two names contain the UTF-8 and Latin-1 spellings of e-acute, respectively.
+                nested = binary_to_string(binary(root) + <2f636166c3a9>, "UTF-8");
+                child = binary_to_string(binary(nested) + <2f636166e9>, "ISO-8859-1");
+                assertEq(0, mkdir(nested));
+                if (mkdir(child)) {
+                    # Some filesystems require valid UTF-8 filenames.
+                    int code = errno();
+                    assertTrue(code == Err::EILSEQ || code == Err::EINVAL, strerror(code));
+                    child = join_paths(nested, "child");
+                    assertEq(0, mkdir(child));
+                }
+                leaf = join_paths(child, "file.qi");
+                FileOutputStream out(leaf);
+                out.close();
+                assertTrue(is_file(leaf));
+            }
+            assertFalse(is_dir(root));
         }
     }
 

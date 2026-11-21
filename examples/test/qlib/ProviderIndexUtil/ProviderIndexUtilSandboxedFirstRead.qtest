@@ -80,6 +80,7 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
         if (m_options.verbose <= 2) {
             ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
         }
+        # live-provider-optin: saves and restores the provider index directory variable
         saved_dir = ENV{ProviderIndexEnvVar};
         addTestCase("an index read first by a sandboxed reader is the index of the process", \firstReadTest());
         addTestCase("a canonical index read first by a sandboxed reader is the index of the process",
@@ -102,6 +103,7 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
             ProviderIndexUtil::setEnvironmentVariable(saved_dir);
         } else {
             unsetenv(ProviderIndexEnvVar);
+            # live-provider-optin: saves and restores the provider index directory variable
             remove ENV{ProviderIndexEnvVar};
         }
         ProviderIndexUtilSandboxedFirstReadTest::resetIndexState();

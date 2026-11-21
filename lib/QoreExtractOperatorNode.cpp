@@ -61,7 +61,7 @@ QoreString *QoreExtractOperatorNode::getAsString(bool &del, int foff, ExceptionS
 }
 
 int QoreExtractOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&extract_str);
+    qore_string_private::get(str)->concatAsciiName(extract_str);
     return 0;
 }
 
@@ -221,6 +221,7 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
         }
     }
     else if (vt == NT_STRING) {
+        // note: safe; val.ensureUnique() above makes a node of an inline short string
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
         if (!length_exp && !new_exp)
             rv = vs->extract(offset, xsink);

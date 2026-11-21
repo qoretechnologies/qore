@@ -32,7 +32,7 @@ class NoopParseErrorsTest inherits QUnit::Test {
             "chr(%n)",
             "setenv(%n, \"x\")",
             "unsetenv(%n)",
-            "getenv(%n)",
+            "getenv(%n)", # live-provider-optin: a parse check of getenv() with a computed argument
             "reverse(%n)",
             "exists_function(%n)",
             "is_date_absolute(%n)",

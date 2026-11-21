@@ -12,6 +12,7 @@
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
 %requires ../SqlUtil/MssqlTestIsolation.qm
+%requires ../SqlUtil/TestRunIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -101,7 +102,7 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
         ds.close();
     }

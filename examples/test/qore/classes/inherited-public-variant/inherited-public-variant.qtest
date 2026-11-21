@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class InheritedPublicVariantTest
+
+#! a method whose own variants are private has the public variants that it inherits (qore#7074)
+/** A method has the variants of the methods of the same name of its ancestors; a class whose own variants of a
+    method are private, with other signatures than the public variant of a parent class, is called with that public
+    variant from outside the class hierarchy.  The IR execution modes raised METHOD-IS-PRIVATE for such a call in
+    top-level code, and every mode raised it for a call resolved at run time (an object of an unknown class,
+    call_object_method(), a call reference) and hasCallableMethod() returned False.  A private variant of the same
+    signature overrides the inherited one, and the method then cannot be called from outside (qore#6062).
+*/
+class InheritedPublicVariantTest inherits QUnit::Test {
+    public {
+        #! the result of each call
+        const Expected = "top B(): public A\n"
+            "B(): public A\n"
+            "object B(): public A\n"
+            "object B({}): RUNTIME-OVERLOAD-ERROR\n"
+            "call_object_method B(): public A\n"
+            "call reference B(): public A\n"
+            "hasCallableMethod B: yes\n"
+            "object C(): METHOD-IS-PRIVATE\n"
+            "call_object_method C(): METHOD-IS-PRIVATE\n"
+            "hasCallableMethod C: no\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("inherited public variant", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("qcc executable", \aotTest());
+        set_return_value(main());
+    }
+
+    modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("inherited-public-variant-");
+        string exe = dir.path + "/inherited-public-variant";
+        string out = backquote(sprintf("%s %s -O3 -o %s %s 2>&1", env, qcc_bin, exe, scriptPath()));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "qcc");
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/inherited-public-variant.q";
+    }
+}

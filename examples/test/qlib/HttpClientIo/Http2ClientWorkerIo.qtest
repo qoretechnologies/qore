@@ -171,33 +171,38 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
 }
 
 #! Server-streaming handler used to prove that a client RST_STREAM actually arrives
-/** Emits one message, then parks on a Counter until the test has submitted the
-    cancel.  Once released it streams until Http2Session::sendStreamData() reports
-    the peer's reset with \c HTTP2-STREAM-RESET.
+/** Emits one message, then parks on a Counter until the test releases it.  Once
+    released it waits for the server's view of the client's reset: the server
+    session ends the stream's registered body queue with an error hash when it has
+    processed the peer's RST_STREAM.  A write to the stream must then be refused
+    with \c HTTP2-STREAM-RESET.
 
-    Without a working client-side cancel the reset never arrives, that error never
-    fires, and the handler streams until it hits the message cap or the deadline —
-    exactly the unbounded server-side resource leak reported in issue #5369.
+    The handler waits for that event instead of streaming until a write fails: a
+    cancel from a continuePoll worker is queued and flushed on the client
+    controller's next cycle, so the reset can arrive after any number of writes
+    that fit in the flow-control window, and a burst with a message cap could end
+    before the server session had read it (issue #6969).  Without a working
+    client-side cancel the reset never arrives, and the wait ends at the deadline
+    with an error: the unbounded server-side resource leak of issue #5369.
 */
 class BurstStreamHandler inherits AbstractHttpRequestHandler {
     public {
-        #! safety cap on messages emitted when the peer's reset never arrives
-        const MaxMessages = 5000;
-
-        #! safety deadline for the burst loop when the peer's reset never arrives
-        const BurstDeadline = 15s;
+        #! bounds the wait for the peer's reset in the unfixed case, where it never arrives
+        const ResetDeadline = 60s;
     }
 
     private {
         #! released by the test once the cancel has been submitted from a worker
         Counter go_ahead;
-        #! reaches zero when the burst loop has exited
+        #! reaches zero when the handler has finished
         Counter finished;
         #! written only by the handler thread; the test reads these after waitForFinish(),
         #! which establishes the required happens-before edge, so no lock is needed
         int sent = 0;
         bool saw_reset = False;
         *string reset_err;
+        #! the error hash that ended the stream's body queue (the server's view of the reset)
+        *hash<auto> body_end;
         *string handler_error;
         #! guards release() so the test's on_exit safety net cannot double-decrement
         Mutex release_lock();
@@ -233,25 +238,31 @@ class BurstStreamHandler inherits AbstractHttpRequestHandler {
             }
             ++sent;
 
-            # park until the test has submitted the cancel from a continuePoll worker
+            # park until the test releases the handler (before or after the cancel)
             go_ahead.waitForZero(60s);
 
-            # Http2Session::sendStreamData() raises HTTP2-STREAM-RESET once the peer's
-            # RST_STREAM has closed the stream, so the write itself is the server's view
-            # of the client's cancel; the cap and deadline only bound the unfixed case
-            date deadline = now_us() + BurstDeadline;
-            while (sent < MaxMessages && now_us() < deadline) {
-                try {
-                    s.sendHttp2StreamData(stream_id, binary("msg"));
-                } catch (hash<ExceptionInfo> ex) {
-                    reset_err = ex.err;
-                    saw_reset = ex.err == "HTTP2-STREAM-RESET";
+            # the server session ends the registered body queue with an error hash once it has
+            # processed the peer's RST_STREAM, and with NOTHING if the request body ended
+            # normally; a body chunk is skipped.  The deadline only bounds the unfixed case,
+            # where the reset never arrives (Queue::get() raises QUEUE-TIMEOUT then)
+            while (True) {
+                auto ev = body_queue.get(ResetDeadline);
+                if (ev.typeCode() == NT_HASH) {
+                    body_end = ev;
                     break;
                 }
-                if (io_wake) {
-                    io_wake();
+                if (!exists ev) {
+                    throw "BURST-ERROR", "the request body ended without a reset of the stream";
                 }
+            }
+
+            # Http2Session::sendStreamData() refuses a write to the reset stream
+            try {
+                s.sendHttp2StreamData(stream_id, binary("msg"));
                 ++sent;
+            } catch (hash<ExceptionInfo> ex) {
+                reset_err = ex.err;
+                saw_reset = ex.err == "HTTP2-STREAM-RESET";
             }
 
             if (!exists reset_err) {
@@ -269,7 +280,7 @@ class BurstStreamHandler inherits AbstractHttpRequestHandler {
         return <HttpResponseInfo>{"code": 200, "body": ""};
     }
 
-    #! Releases the burst loop; called by the test after the cancel is submitted
+    #! Releases the handler; called by the test before or after the cancel is submitted
     /** Idempotent so the test's on_exit safety net can call it unconditionally
     */
     release() {
@@ -280,7 +291,7 @@ class BurstStreamHandler inherits AbstractHttpRequestHandler {
         }
     }
 
-    #! Waits for the burst loop to exit
+    #! Waits for the handler to finish
     waitForFinish(timeout t) {
         finished.waitForZero(t);
     }
@@ -293,9 +304,14 @@ class BurstStreamHandler inherits AbstractHttpRequestHandler {
         return saw_reset;
     }
 
-    #! Returns the error code that ended the burst loop, or NOTHING if it ran to the cap
+    #! Returns the error code of the write after the reset, or NOTHING if the write was not refused
     *string getResetError() {
         return reset_err;
+    }
+
+    #! Returns the error hash that ended the stream's body queue, or NOTHING if none did
+    *hash<auto> getBodyEnd() {
+        return body_end;
     }
 
     *string getHandlerError() {
@@ -478,7 +494,10 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
         addTestCase("write from a continuePoll worker reaches the server",
             \writeFromContinuePollWorker());
         addTestCase("cancel from a continuePoll worker reaches the server",
-            \cancelFromContinuePollWorker());
+            \cancelFromContinuePollWorker(), False);
+        # the order that load gave (issue #6969): the handler runs on before the reset arrives
+        addTestCase("cancel from a continuePoll worker reaches the server after the handler is released",
+            \cancelFromContinuePollWorker(), True);
         addTestCase("handler-thread writes still flush synchronously",
             \handlerThreadWriteFlushesSynchronously());
         set_return_value(main());
@@ -605,8 +624,11 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
     /** Before the fix the RST_STREAM submission threw and the exception was
         swallowed by a bare catch, so the server kept streaming into a stream
         nobody was reading.
+
+        @param release_first releases the handler before the cancel is submitted, so that it runs before the reset
+        reaches the server, as it could under load (issue #6969); otherwise it is released after the submission
     */
-    cancelFromContinuePollWorker() {
+    cancelFromContinuePollWorker(bool release_first) {
         string url;
         BurstStreamHandler handler();
         HttpServer server = startServer(handler, \url);
@@ -626,6 +648,9 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
         # the handler's first message proves the stream is live before we cancel
         assertEq(binary("msg"), readFirstChunk(sh, 20s), "received the server's first message");
 
+        if (release_first) {
+            handler.release();
+        }
         hash<SocketPollResultInfo> result =
             runOnWorker(new WorkerStreamCancelPollOperation(sh), "h2-worker-cancel");
         assertNothing(result.ex, "cancel from a continuePoll worker must not raise");
@@ -634,17 +659,16 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
         assertEq(0, capture.countMessagesContaining("cancel stream"),
             "no cancel failure was logged");
 
-        # release the burst loop only after the RST_STREAM has been submitted
         handler.release();
-        handler.waitForFinish(60s);
+        handler.waitForFinish(120s);
 
         assertNothing(handler.getHandlerError(), "the handler ran without error");
+        assertEq(NT_HASH, handler.getBodyEnd().typeCode(),
+            "the server session ended the stream's body with the client's reset");
         assertTrue(handler.sawReset(),
-            sprintf("the server observed the client's RST_STREAM (sent %d message(s), loop ended "
-                "with %y)", handler.getSent(), handler.getResetError()));
-        assertLt(BurstStreamHandler::MaxMessages, handler.getSent(),
-            sprintf("the server stopped streaming early (sent %d of %d)", handler.getSent(),
-                BurstStreamHandler::MaxMessages));
+            sprintf("the server refused a write after the client's RST_STREAM (write ended with %y)",
+                handler.getResetError()));
+        assertEq(1, handler.getSent(), "the server sent only its first message");
     }
 
     #! Handler-thread writes must keep taking the facade, which flushes synchronously

@@ -75,6 +75,7 @@ static inline int dataFrameUtf8String(QoreValue v, std::string& out, ExceptionSi
     if (v.isPointer()) {
         const AbstractQoreNode* node = v.getPtr();
         if (node->getType() == NT_STRING) {
+            // note: safe; a value in a node (isPointer()) is never an inline short string, which is handled below
             const QoreStringNode* str = static_cast<const QoreStringNode*>(node);
             if (str->getEncoding() == QCS_UTF8) {
                 out.assign(str->c_str(), str->size());

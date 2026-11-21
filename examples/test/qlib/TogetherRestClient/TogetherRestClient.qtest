@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires QoreRagTypes
@@ -59,7 +60,7 @@ public class TogetherRestClientTest inherits QUnit::Test {
         addTestCase("embedder requires api_key",          \embedderConfigTest());
         addTestCase("automatic URL, app identity, and required credentials", \connectionConfigTest());
         addTestCase("authenticated ping on synchronous and asynchronous transports", \pingTest());
-        if (ENV.TOGETHERAI_LIVE) {
+        if (LiveProvider::get("together", "TOGETHERAI_LIVE")) {
             addTestCase("live authentication accepts the key and rejects an invalid key", \livePingTest());
         }
         set_return_value(main());
@@ -124,7 +125,8 @@ public class TogetherRestClientTest inherits QUnit::Test {
 
     private livePingTest() {
         TogetherRestClient::TogetherRestConnection conn("live", "live authentication",
-            TogetherRestClient::TogetherRestConnection::DefaultUrl, {}, {"apikey": ENV.TOGETHERAI_APIKEY});
+            TogetherRestClient::TogetherRestConnection::DefaultUrl, {}, {"apikey":
+                LiveProvider::get("together", "TOGETHERAI_APIKEY")});
         assertTrue(conn.ping(True).ok);
         TogetherRestClient::TogetherRestConnection invalid("invalid", "negative authentication",
             TogetherRestClient::TogetherRestConnection::DefaultUrl, {}, {"apikey": "invalid-qore-audit-key"});

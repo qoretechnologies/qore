@@ -15,6 +15,7 @@ class HashKeyCancelTest inherits QUnit::Test {
 
     private nativeChecks() {
         string qore = TestInterpreter::qore_interpreter();
+        # live-provider-optin: the path of a native test binary
         string native = ENV.QORE_HASH_KEY_CANCEL_TEST ?? dirname(qore) + "/qore-hash-key-cancel-test";
         if (!is_file(native)) {
             testSkip("the native hash key cancellation test executable is not available");

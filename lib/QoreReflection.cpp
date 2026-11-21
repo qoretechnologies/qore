@@ -143,6 +143,12 @@ bool qore_type_get_code_param_types(const QoreTypeInfo* ti, type_vec_t& params) 
     return true;
 }
 
+const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti) {
+    const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
+    // a copy kept with the type, whose elements are orphaned with the type's own (issue #6936)
+    return code_type ? code_type->getLegacyParamTypes() : nullptr;
+}
+
 bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
     const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
     return code_type && code_type->hasVarArgs();
@@ -169,6 +175,20 @@ bool qore_type_get_type_arguments(const QoreTypeInfo* ti, type_vec_t& args) {
         return true;
     }
     return false;
+}
+
+const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+    const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
+    if (parameterized_type) {
+        // a copy kept with the type, whose elements are orphaned with the type's own (issue #6936)
+        return parameterized_type->getLegacyTypeArgs();
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
+        // the hashdecl's own vector, as before
+        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+    }
+    return nullptr;
 }
 
 bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {
@@ -915,6 +935,37 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
             privpub(access));
     }
     return -1;
+}
+
+bool QoreReflectionCaller::canUseObjectElementClass(const QoreObject& obj, const QoreClass& cls) const {
+    if (!obj.isValid()) {
+        return false;
+    }
+    const qore_class_private* oc = qore_class_private::get(*obj.getClass());
+    const qore_class_private* decl = qore_class_private::get(cls);
+    // a class reached without a private:internal edge below the object's class, by identity for a caller that the
+    // language's rules govern: a class with only the name and signature of a class of the object's hierarchy is
+    // another class (qore#7036)
+    {
+        ClassAccess access = Public;
+        if (oc->getAccessClass(*decl, access)) {
+            return true;
+        }
+    }
+    if (!member_access) {
+        // a caller that may use every element of a class may use every class of the object's hierarchy, by identity
+        ClassAccess access = Public;
+        return oc->inAccessHierarchy(*decl, access);
+    }
+    // the language's rules: the class context is in the object's hierarchy, and is the class or reaches it, also
+    // through a class that it inherits with private:internal itself
+    if (!caller_class) {
+        return false;
+    }
+    // the classes by identity, never by name and signature (qore#7036)
+    ClassAccess access;
+    return oc->getAccessClass(*caller_class, access)
+        && (caller_class == decl || caller_class->getAccessClass(*decl, access));
 }
 
 bool QoreReflectionCaller::appliesModuleExports(const QoreProgram* target) const {

@@ -33,6 +33,7 @@
 %requires FsUtil
 %requires mongodb
 %requires ../../../examples/test/TestCertificates.qm
+%requires ../../../examples/test/LiveProviderTest.qm
 
 %exec-class MongoDbTest
 
@@ -53,7 +54,7 @@ public class MongoDbTest inherits QUnit::Test {
     }
 
     constructor() : Test("MongoDbTest", "1.0") {
-        mongodb_url = ENV.MONGODB_URL ?? "mongodb://localhost:27017";
+        mongodb_url = LiveProvider::getService("mongodb", "MONGODB_URL") ?? "mongodb://localhost:27017";
         addTestCase("ObjectId tests", \objectIdTests());
         addTestCase("ObjectId edge cases", \objectIdEdgeCaseTests());
         addTestCase("Connection tests", \connectionTests());
@@ -1290,7 +1291,7 @@ our *hash<ExceptionInfo> ex_info;
 sub test_pre_interrupt() {
     try {
         # This should fail because interrupt was already requested before we started
-        MongoClient client(ENV.MONGODB_URL ?? "mongodb://localhost:27017");
+        MongoClient client(MongoDbTestUrl);
         # The connection attempt or first operation should detect the interrupt
         client.ping();
     } catch (hash<ExceptionInfo> ex) {
@@ -1300,6 +1301,8 @@ sub test_pre_interrupt() {
 ';
 
             Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            # the code connects to the URL of the test
+            pre_interrupt_code = replace(pre_interrupt_code, "MongoDbTestUrl", sprintf("%y", mongodb_url));
             pgm.parse(pre_interrupt_code, "pre_interrupt_test");
 
             SandboxManager sm();

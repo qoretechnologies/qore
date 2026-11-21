@@ -17,6 +17,7 @@
 %requires FreetdsSqlUtil
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
+%requires ./TestRunIsolation.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -172,7 +173,7 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
     #! checks the view alignment on a database
     private checkDriver(string driver) {
         if (!dsh{driver}) {
-            testSkip(skip{driver});
+            TestRun::skipOrFail(skip{driver});
         }
         Datasource ds = dsh{driver};
         on_exit {

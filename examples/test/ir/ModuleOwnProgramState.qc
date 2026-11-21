@@ -2,9 +2,11 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 
 # The cases of the ModuleOwnProgramState-<n>.qtest tests: each runs one part of them, so that each takes a short time,
-# and together they run every case (see addPartCase()); part 1 runs the case with the source forms of the Mapper and
-# DataProvider modules, whose jit and tiered runs compile them to native code function by function, and part 2 the
-# case with their AOT forms (qore#6358)
+# and together they run every case (see addPartCase()); parts 1, 3 and 4 run the case with the source forms of the
+# Mapper and DataProvider modules in the ast and ir, in the jit and in the tiered execution modes, whose jit and tiered
+# runs compile them to native code function by function, and part 2 the case with their AOT forms in every mode
+# (qore#6358; part 1 ran every mode with the source forms in 78 s of CPU time alone in a debug build and was killed at
+# the runner's 300 s limit under load)
 
 #! Module code running in its own Program uses its thread-local data for a restricted caller in every execution mode
 /** Module code runs with the restrictions of a sandboxed caller as well as its own, so a method of a module class that
@@ -141,11 +143,15 @@ user mark_resources: \"marked\"
         makeQlibSourceDir();
 
         # the source qlib modules are compiled to native code function by function in the jit and tiered runs, which
-        # takes most of the time: each part runs alone (qore#6358)
+        # takes most of the time: each of these modes runs in a part of its own (qore#6358)
         addPartCase(1, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
-            "modules in every mode", \testSourceQlib());
+            "modules in the ast and ir modes", \testSourceQlib(), (("ast", "ir"),));
         addPartCase(2, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with AOT qlib "
             "modules in every mode", \testAotQlib());
+        addPartCase(3, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
+            "modules in the jit mode", \testSourceQlib(), (("jit",),));
+        addPartCase(4, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
+            "modules in the tiered mode", \testSourceQlib(), (("tiered",),));
 
         set_return_value(main());
     }
@@ -432,15 +438,17 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
             module_path, qore_bin, mode, script_path));
     }
 
-    #! runs the script with the source and the AOT test module in every mode against the source module's AST output
+    #! runs the script with the source and the AOT test module in the given modes against the source module's AST output
     /** @param qlib_path the module path that provides the Mapper and DataProvider modules
         @param qlib_form the form of the Mapper and DataProvider modules that the module path provides
+        @param modes the execution modes to run the script in
     */
-    private checkAllModes(string script_path, string qlib_path, string qlib_form) {
+    private checkAllModes(string script_path, string qlib_path, string qlib_form,
+            list<string> modes = ExecModeHarness::ExecModes) {
         string expected = sprintf("qlib: %s %s\n", qlib_form, qlib_form) + ExpectedOutput;
         hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir + ":" + qlib_path, script_path, "ast");
         assertEq(expected, reference.out, sprintf("qlib %s, source module, ast", qlib_form));
-        foreach string mode in (ExecModeHarness::ExecModes) {
+        foreach string mode in (modes) {
             hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir + ":" + qlib_path, script_path, mode);
             assertEq(reference.out, r.out, sprintf("qlib %s, source module, %s", qlib_form, mode));
             r = runScript(qmod_dir + ":" + qlib_path, script_path, mode);
@@ -475,9 +483,9 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
         }
     }
 
-    testSourceQlib() {
+    testSourceQlib(list<string> modes) {
         skipIfBinaryDependencyMissing();
-        checkAllModes(prepare(), qlib_src_dir + ":" + qlib_dir, "source");
+        checkAllModes(prepare(), qlib_src_dir + ":" + qlib_dir, "source", modes);
     }
 
     testAotQlib() {

@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MergeDeletedObjectTest
+
+class MergeTarget {
+    public {
+        int a = 1;
+        *string b;
+    }
+}
+
+#! a class with no members
+class MergeEmpty {
+}
+
+#! a class with a member that can hold the object itself
+class MergeSelf {
+    public {
+        int a = 1;
+        *object o;
+    }
+}
+
+class MergeSource {
+    public {
+        int a = 2;
+        string b = "source";
+    }
+}
+
+#! A merge of an object's members into another object checks that the source object is not deleted (qore#7055)
+/** The merge read the members of the source object after checking the status of the target object, so a merge from
+    a deleted object dereferenced its member hash, which the deletion had released, and crashed the process
+*/
+class MergeDeletedObjectTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MergeDeletedObject", "1.0", \ARGV) {
+        addTestCase("a merge from a deleted object", \deletedSourceTest());
+        addTestCase("a merge from an object", \sourceTest());
+        addTestCase("a merge into a deleted object", \deletedTargetTest());
+        addTestCase("a merge of nothing into a deleted object", \deletedTargetNothingTest());
+        addTestCase("a merge of a hash into a deleted object", \deletedTargetHashTest());
+        addTestCase("a merge of nothing into an object through a member of itself", \selfMemberNothingTest());
+        set_return_value(main());
+    }
+
+    deletedSourceTest() {
+        MergeTarget target();
+        MergeSource source();
+        object s = source;
+        delete source;
+        assertThrows("OBJECT-ALREADY-DELETED", "MergeSource", sub () { target += s; });
+        assertEq(1, target.a, "the target is not changed");
+        assertNothing(target.b, "the target is not changed");
+    }
+
+    sourceTest() {
+        MergeTarget target();
+        MergeSource source();
+        target += source;
+        assertEq(2, target.a);
+        assertEq("source", target.b);
+    }
+
+    deletedTargetTest() {
+        MergeTarget target();
+        MergeSource source();
+        object t = target;
+        delete target;
+        assertThrows("OBJECT-ALREADY-DELETED", "MergeTarget", sub () { t += source; });
+    }
+
+    #! a merge into a deleted object raises also when there is nothing to merge: fail closed (qore#7055)
+    deletedTargetNothingTest() {
+        MergeTarget target();
+        MergeEmpty empty();
+        object t = target;
+        delete target;
+        assertThrows("OBJECT-ALREADY-DELETED", "MergeTarget", sub () { t += empty; });
+    }
+
+    #! the same for a hash: an empty hash and a hash with members
+    deletedTargetHashTest() {
+        MergeTarget target();
+        object t = target;
+        delete target;
+        assertThrows("OBJECT-ALREADY-DELETED", "MergeTarget", sub () { t += {}; });
+        assertThrows("OBJECT-ALREADY-DELETED", "MergeTarget", sub () { t += {"a": 2}; });
+    }
+
+    #! the check of a merge with nothing to merge does not lock the object again when the lvalue is a member of the
+    #! object itself, whose lock the lvalue holds already (qore#7055)
+    selfMemberNothingTest() {
+        MergeSelf t();
+        t.o = t;
+        t.o += {};
+        t.o += new MergeEmpty();
+        assertEq(1, t.a, "nothing is merged");
+        assertTrue(t.o == t, "the member still holds the object");
+        # break the cycle
+        remove t.o;
+    }
+}

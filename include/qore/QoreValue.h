@@ -620,10 +620,10 @@ public:
     }
 
     //! Returns true if the value is NOTHING
-    DLLEXPORT bool isNothing() const;
+    DLLEXPORT_BOUND bool isNothing() const;
 
     //! Returns true if the value is NULL
-    DLLEXPORT bool isNull() const;
+    DLLEXPORT_BOUND bool isNull() const;
 
     //! Returns true if the value is NOTHING or NULL
     DLLEXPORT bool isNullOrNothing() const;
@@ -920,7 +920,7 @@ public:
     // ========================================================================
 
     //! Returns the type code of the value
-    DLLEXPORT qore_type_t getType() const;
+    DLLEXPORT_BOUND qore_type_t getType() const;
 
     //! Returns the type name as a string
     DLLEXPORT const char* getTypeName() const;

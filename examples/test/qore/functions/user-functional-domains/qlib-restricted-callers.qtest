@@ -170,6 +170,8 @@ kept closure called: INVALID-FUNCTION-ACCESS
 init closure qualifies: True
 init closure run: MODULE-INIT-CLOSURE-ERROR
 init closure run by its module: 42
+add listener: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+remove listener: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 ";
 
         #! the output of the case of the rollback of module loads
@@ -215,7 +217,7 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 
         #! the output of the case of the SqlUtil table cache and the datasource of restricted code
         const ExpectedSqlIdentity = "trusted cached: True
-same description: True
+same key: True
 cached table: \"own datasource\"
 resolver table: \"own datasource\"
 resolved table: \"own datasource\"
@@ -383,7 +385,7 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
     }
 
     testListener() {
-        # code that a sandbox governs cannot add a catalog change listener
+        # The host registers the listener. The restricted Program cannot add or remove one.
         foreach string mode in (Modes) {
             checkCase(ExpectedListener, "listener", mode);
         }

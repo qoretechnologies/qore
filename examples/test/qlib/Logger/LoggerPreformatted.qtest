@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerPreformattedTest
+
+#! An appender that keeps the message of each event
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    public {
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            messages += params;
+        }
+    }
+}
+
+#! A logger interface of its own that does not implement logPreformatted(): it gets the default implementation
+class RecordingLogger inherits LoggerInterface {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    log(Qore::Logger::LoggerLevel level, string message, ...) {
+        logArgs(level, message, argv);
+    }
+    log(int level, string message, ...) {
+        logArgs(level, message, argv);
+    }
+    log(string level, string message, ...) {
+        logArgs(level, message, argv);
+    }
+    logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args) {
+        calls += {"level": level.getStr(), "message": message, "args": args};
+    }
+    logArgs(int level, string message, *softlist<auto> args) {
+        calls += {"level": LoggerLevel::getLevel(level).getStr(), "message": message, "args": args};
+    }
+    logArgs(string level, string message, *softlist<auto> args) {
+        calls += {"level": level, "message": message, "args": args};
+    }
+    logEvent(LoggerEvent event) {
+    }
+    trace(string message, ...) {
+    }
+    debug(string message, ...) {
+    }
+    info(string message, ...) {
+    }
+    warn(string message, ...) {
+    }
+    error(string message, ...) {
+    }
+    fatal(string message, ...) {
+    }
+    assertLog(bool assertion, string message, ...) {
+    }
+    traceVar(string var_name, auto value) {
+    }
+    debugVar(string var_name, auto value) {
+    }
+    bool isEnabledFor(Qore::Logger::LoggerLevel level) {
+        return True;
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+    bool isEnabledFor(string level) {
+        return True;
+    }
+    bool isTraceEnabled() {
+        return True;
+    }
+    bool isDebugEnabled() {
+        return True;
+    }
+    bool isInfoEnabled() {
+        return True;
+    }
+    bool isWarnEnabled() {
+        return True;
+    }
+    bool isErrorEnabled() {
+        return True;
+    }
+    bool isFatalEnabled() {
+        return True;
+    }
+    *LoggerLevel decLevel() {
+    }
+    *LoggerLevel incLevel() {
+    }
+    *LoggerLevel getLevel(bool effective = True) {
+    }
+    setLevel(*LoggerLevel level) {
+    }
+    setLevel(int level) {
+    }
+    setLevel(string level) {
+    }
+}
+
+#! A message can be logged as it is, with no formatting (#3420)
+/** log() and its relatives use the message as a format for vsprintf(), so that a literal message with format
+    characters lost them: "%s %y %d" was logged as " null 0".  logPreformatted() logs the message as it is.
+*/
+class LoggerPreformattedTest inherits QUnit::Test {
+    public {
+        #! a message with format characters that must be logged as they are
+        const Message = "%s %y %d 100% done";
+    }
+
+    constructor() : Test("LoggerPreformattedTest", "1.0", \ARGV) {
+        addTestCase("a logger logs a preformatted message as it is", \loggerTest());
+        addTestCase("a disabled level logs nothing", \disabledTest());
+        addTestCase("a logger wrapper passes a preformatted message on", \wrapperTest());
+        addTestCase("a logger interface of its own gets a default implementation", \defaultTest());
+        set_return_value(main());
+    }
+
+    private Logger makeLogger(CapturingAppender appender, LoggerLevel level = LoggerLevel::getLevelAll()) {
+        Logger logger("test", level);
+        logger.addAppender(appender);
+        appender.open();
+        return logger;
+    }
+
+    loggerTest() {
+        CapturingAppender appender();
+        Logger logger = makeLogger(appender);
+        on_exit appender.close();
+        logger.logPreformatted(LoggerLevel::getLevelInfo(), Message);
+        logger.logPreformatted(LoggerLevel::INFO, Message);
+        logger.logPreformatted("INFO", Message);
+        # the formatting methods still format
+        logger.log(LoggerLevel::INFO, "%s-%d", "x", 1);
+        assertEq((Message, Message, Message, "x-1"), appender.messages);
+        # an invalid level is an error, as for logArgs()
+        assertThrows("LOGGER-ERROR", \logger.logPreformatted(), ("NO-SUCH-LEVEL", Message));
+    }
+
+    disabledTest() {
+        CapturingAppender appender();
+        Logger logger = makeLogger(appender, LoggerLevel::getLevelError());
+        on_exit appender.close();
+        logger.logPreformatted(LoggerLevel::INFO, Message);
+        assertEq((), appender.messages);
+        logger.logPreformatted(LoggerLevel::ERROR, Message);
+        assertEq((Message,), appender.messages);
+    }
+
+    wrapperTest() {
+        CapturingAppender appender();
+        Logger logger = makeLogger(appender);
+        on_exit appender.close();
+        LoggerWrapper wrapper(logger);
+        wrapper.logPreformatted(LoggerLevel::getLevelWarn(), Message);
+        wrapper.logPreformatted(LoggerLevel::WARN, Message);
+        wrapper.logPreformatted("WARN", Message);
+        assertEq((Message, Message, Message), appender.messages);
+        # with no logger, nothing happens
+        LoggerWrapper empty();
+        empty.logPreformatted(LoggerLevel::WARN, Message);
+    }
+
+    defaultTest() {
+        RecordingLogger logger();
+        logger.logPreformatted(LoggerLevel::getLevelDebug(), Message);
+        logger.logPreformatted(LoggerLevel::DEBUG, Message);
+        logger.logPreformatted("DEBUG", Message);
+        # the message is the argument of a format that gives it as it is
+        hash<auto> expected = {"level": "DEBUG", "message": "%s", "args": (Message,)};
+        assertEq((expected, expected, expected), logger.calls);
+    }
+}

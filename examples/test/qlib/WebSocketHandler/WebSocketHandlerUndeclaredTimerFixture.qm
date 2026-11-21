@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module that arms its own timers through the AsyncSocketIo controller wrapper, which is not tagged, and declares
+# no functional domain, as WebSocketHandler did before it declared THREAD_CONTROL; see
+# WebSocketHandlerRestrictedTimers.qtest
+
+%modern
+
+%requires AsyncSocketIo
+
+module WebSocketHandlerUndeclaredTimerFixture {
+    version = "1.0";
+    desc = "a module that arms its own timers without declaring THREAD_CONTROL";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace WebSocketHandlerUndeclaredTimerFixture {
+#! arms a timer with the module's own closure and cancels it; returns the result of the cancel
+public bool sub own_timer() {
+    AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+    int id = c.addTimerDelay(1h, sub () {});
+    return c.cancelTimer(id);
+}
+}

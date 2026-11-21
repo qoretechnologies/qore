@@ -1582,15 +1582,17 @@ static char* parse_command_line(unsigned argc, char* argv[]) {
       }
    }
 
-// pvanek - argc check removed, just because the i value is checked
-// directly in qore_setup_argv(). ARGV and mainly QORE_ARGV should
-// be set in any case.
-   qore_setup_argv(i, argc, argv);
-
+   // the process ends for an invalid option before ARGV and QORE_ARGV are made, as exit() does not release them
+   // (qore#7000)
    if (opt_errors) {
       printe(suggest, pn);
       exit(1);
    }
+
+// pvanek - argc check removed, just because the i value is checked
+// directly in qore_setup_argv(). ARGV and mainly QORE_ARGV should
+// be set in any case.
+   qore_setup_argv(i, argc, argv);
    return fn;
 }
 

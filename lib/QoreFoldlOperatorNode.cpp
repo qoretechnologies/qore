@@ -68,6 +68,8 @@ static const QoreStringNode* get_string_join_separator(const QoreValue& fold_exp
         return nullptr;
     }
     const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(inner->getLeft().getInternalNode());
+    // note: safe; a separator that is not a string node, also an inline short string, gives nullptr: the fold is not
+    // made a join, and runs as written
     const auto* separator = dynamic_cast<const QoreStringNode*>(inner->getRight().getInternalNode());
     return arg1 && arg1->getOffset() == 0 ? separator : nullptr;
 }
@@ -79,7 +81,7 @@ QoreString *QoreFoldlOperatorNode::getAsString(bool &del, int foff, ExceptionSin
 }
 
 int QoreFoldlOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&foldl_str);
+    qore_string_private::get(str)->concatAsciiName(foldl_str);
     return 0;
 }
 
@@ -278,7 +280,7 @@ QoreString* QoreFoldrOperatorNode::getAsString(bool& del, int foff, ExceptionSin
 }
 
 int QoreFoldrOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&foldr_str);
+    qore_string_private::get(str)->concatAsciiName(foldr_str);
     return 0;
 }
 

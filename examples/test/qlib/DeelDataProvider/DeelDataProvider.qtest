@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -142,7 +143,7 @@ public class DeelDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Deel client for integration tests
     private setupConnection() {
-        *string token = m_options.token ?? ENV.DEEL_API_TOKEN;
+        *string token = LiveProvider::get("deel", "DEEL_API_TOKEN", m_options.token);
         if (!token) {
             if (m_options.verbose) {
                 printf("No API token provided (use -t option or DEEL_API_TOKEN env var)\n");

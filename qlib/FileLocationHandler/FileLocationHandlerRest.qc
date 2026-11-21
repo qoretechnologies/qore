@@ -44,6 +44,9 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
 
         #! The asynchronous client used for requests by a bound handler, if the bound client is supported
         *object bound_rest;
+
+        #! True if code restricted from the network bound the handler to its client (qore#6959)
+        bool bound_by_restricted;
     }
 
     #! Creates a handler that builds a client for each request from the location URL
@@ -61,6 +64,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         - The operations of a handler bound to another kind of object raise \c UNIMPLEMENTED
     */
     constructor(object client) {
+        # the handler is not a capability of the host if code restricted from the network bound it (qore#6959)
+        bound_by_restricted = SandboxManager::isCallerRestricted(DOM_NETWORK);
         bound_client = client;
         bound_rest = RestIoSupport::getAsyncClient(client);
     }
@@ -181,6 +186,13 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             "headers": RestClientLocationOpts.headers,
             "method": RestClientLocationOpts.method,
         };
+    }
+
+    #! The network for the code that calls it, unless the handler is bound to a client that it was given (qore#6959)
+    private int getCallerDomainsImpl(string scheme, *hash<auto> opts) {
+        # a client that restricted code bound is not a capability of the host (qore#6959); the certificate and key
+        # files that the options name are read with FileLocationHandler, which checks the caller
+        return (isBoundImpl() && !bound_by_restricted) ? 0 : DOM_NETWORK;
     }
 
     #! Retrieves a text file from the given location

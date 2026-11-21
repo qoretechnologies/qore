@@ -16,7 +16,7 @@
 class RestSchemaModuleLazyTypesBase inherits QUnit::Test {
     public {
         #! The number of parts that the modules are compared in
-        const Parts = 8;
+        const Parts = 14;
     }
 
     private {
@@ -38,6 +38,12 @@ class RestSchemaModuleLazyTypesBase inherits QUnit::Test {
         addPartCase(6, "lazy types equal eager ones, part 6", \modulesTest(), 6);
         addPartCase(7, "lazy types equal eager ones, part 7", \modulesTest(), 7);
         addPartCase(8, "lazy types equal eager ones, part 8", \modulesTest(), 8);
+        addPartCase(9, "lazy types equal eager ones, part 9", \modulesTest(), 9);
+        addPartCase(10, "lazy types equal eager ones, part 10", \modulesTest(), 10);
+        addPartCase(11, "lazy types equal eager ones, part 11", \modulesTest(), 11);
+        addPartCase(12, "lazy types equal eager ones, part 12", \modulesTest(), 12);
+        addPartCase(13, "lazy types equal eager ones, part 13", \modulesTest(), 13);
+        addPartCase(14, "lazy types equal eager ones, part 14", \modulesTest(), 14);
         set_return_value(main());
     }
 

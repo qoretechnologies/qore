@@ -60,6 +60,9 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, *int ssl_verify_mode, bool accept_all_certs = False,
@@ -159,6 +162,8 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
             bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
             *string ssl_ca_path) {
+        # the caller check of the operation, which this method runs first (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {

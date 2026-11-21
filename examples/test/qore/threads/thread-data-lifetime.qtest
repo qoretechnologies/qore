@@ -34,6 +34,24 @@ class Tracked {
     }
 }
 
+#! signals that its destructor runs and holds it until a value is pushed on the Queue given (bounded)
+class Holder {
+    private {
+        Counter entered;
+        Queue release;
+    }
+
+    constructor(Counter entered, Queue release) {
+        self.entered = entered;
+        self.release = release;
+    }
+
+    destructor() {
+        entered.dec();
+        release.get(30s);
+    }
+}
+
 #! the parse options of the Programs the tests create
 const ChildOptions = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
 
@@ -98,6 +116,39 @@ code sub pool_task(string key, auto value, Counter cleared) {
     };
 }
 
+#! a global variable of this Program that the destructor of RootValue reads (set by save_root_value_in_thread())
+our *string root_global;
+
+#! a value of a class of this Program; its destructor uses the Program's global variable and counts its run
+class RootValue {
+    private {
+        Counter body_ran;
+    }
+
+    constructor(Counter body_ran) {
+        self.body_ran = body_ran;
+    }
+
+    destructor() {
+        # counted first, so that a run of the body is seen whatever the state of the root's data
+        body_ran.dec();
+        # the root's global variable, which its teardown clears
+        string v = root_global ?? \"\";
+        remove v;
+    }
+}
+
+#! saves the values given and an object of this Program's class between them in the thread-local data of a background
+#! thread started in this Program, which ends when a value is pushed on the Queue given
+sub save_root_value_in_thread(auto first, Counter body_ran, auto last, Queue gate) {
+    root_global = \"root\";
+    background sub () {
+        # the hash frees its values in the order in which they were saved
+        save_thread_data({\"a_first\": first, \"b_root\": new RootValue(body_ran), \"c_last\": last});
+        gate.get();
+    }();
+}
+
 #! returns a child Program of this Program
 Program sub child() {
     Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
@@ -120,6 +171,8 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
         addTestCase("a child Program shares the thread data of its parent", \sharing());
         addTestCase("an independent Program has thread data of its own", \independent());
         addTestCase("a root's teardown frees the thread data of a live thread", \rootTeardownFreesLiveThread());
+        addTestCase("a destructor of a class of a deleted root does not run at the end of a thread",
+            \deletedRootClassDestructor());
         addTestCase("destructors run by the teardown can use thread data and start threads",
             \teardownDestructorUsesThreadData());
         addTestCase("a pool worker's data in a family it entered through a child Program is freed",
@@ -174,6 +227,34 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
         delete_thread_data("independent_key");
     }
 
+    #! the destructor of an object of a class of the root, in the thread data of a thread that frees it after the root
+    #! was deleted, is refused and does not run (qore#7012): the thread has left the root before it frees its data, and
+    #! once the root's deletion has started no thread can enter it (see threads_and_program_deletion)
+    deletedRootClassDestructor() {
+        Counter entered(1);
+        Queue release();
+        Counter body_ran(1);
+        Counter done(1);
+        Queue gate();
+        # a failed assertion does not leave the thread blocked
+        on_error release.push(True);
+        on_error gate.push(True);
+        Program root(ChildOptions, True);
+        root.parse(ProgramCode, "root");
+        root.callFunction("save_root_value_in_thread", new Holder(entered, release), body_ran, new Tracked(done),
+            gate);
+        gate.push(True);
+        # the thread is at its end, in the first destructor: it has left the root and its registry
+        assertEq(0, entered.waitForZero(30s), "the thread's end runs the first destructor");
+        delete root;
+        release.push(True);
+        # the destructor of the last value runs after that of the root's class: the thread has got past it
+        assertEq(0, done.waitForZero(30s), "the thread's end runs the last destructor");
+        # the refused destructor raises PROGRAM-ERROR in the ending thread, which prints it as an unhandled exception
+        # of the thread: that output is expected
+        assertEq(1, body_ran.getCount(), "the destructor of the deleted root's class did not run");
+    }
+
     #! the thread data a live thread has in a family is freed when the family's root is destroyed
     rootTeardownFreesLiveThread() {
         Counter destroyed(1);
@@ -190,8 +271,10 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
             release.push(True);
             ended.waitForZero();
         }
-        # the thread has ended; its data was freed at its end at the latest
-        assertEq(0, destroyed.getCount(), "the thread's data was freed");
+        # the thread's code has ended; its data is freed by the root's teardown, or at the thread's end, which can
+        # still be in progress here (it can have taken its data before the root's teardown, and then runs its
+        # destructors after the teardown has ended): the bound is for a broken test only
+        assertEq(0, destroyed.waitForZero(120000), "the thread's data was freed");
 
         # now a thread that stays alive outside the root's code: it saves in the root, then parks in this Program
         destroyed = new Counter(1);

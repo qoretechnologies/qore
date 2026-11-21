@@ -6,10 +6,12 @@
 # Fails a CI test job that runs on another qore-test-base image than the build job whose build artifact it tests.
 #
 # The build job compiles Qore and the qlib AOT modules against the binary modules of its image (the native modules in
-# the image's module directory).  The test jobs of a pipeline run on the image tag that the build job ran on, but the
-# tag can be published again between the jobs, as in pipeline 61639, and a test job then tests the build with the
-# binary modules of another image.  No test result of such a job is valid, so the job fails before any test runs, and
-# the pipeline has to be run again.
+# the image's module directory).  The test jobs of a pipeline ran on the image tag that the build job ran on, and the
+# tag could be published again between the jobs, as in pipeline 61639 and the batch/8 pipeline, so that a test job
+# tested the build with the binary modules of another image.  The jobs now run on the digests that the
+# resolve-qore-test-base-images job resolves the tags to when the pipeline starts (resolve-image-digests.py), so a
+# publish no longer reaches a running pipeline; this check remains as the backstop: no test result of a job on another
+# image is valid, so the job fails before any test runs, and the pipeline has to be run again.
 #
 # The image of the build job is described by the [qore-test-base-build-info] section of the build artifact info that
 # test/docker_test/build.sh (or build-perf.sh) writes, and the image of this job by /etc/qore-test-base-build-info, or

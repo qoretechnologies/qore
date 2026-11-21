@@ -44,6 +44,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_stdio.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cerrno>
@@ -156,12 +157,16 @@ static std::string qore_canonicalize_path(const char* path) {
     return std::string(path);
 }
 
-static bool qore_check_duplicate_libqore() {
+//! Returns true if more than one libqore is loaded
+/** @param self_path set to the canonical path of this libqore, which the module manager uses (see
+    QoreModuleManager::init()): dladdr() is costly with glibc, which reads every dynamic symbol of the library
+*/
+static bool qore_check_duplicate_libqore(std::string& self_path) {
     std::set<std::string> paths;
 
     Dl_info info;
     if (dladdr((void*)&qore_check_duplicate_libqore, &info) && info.dli_fname) {
-        std::string self_path = qore_canonicalize_path(info.dli_fname);
+        self_path = qore_canonicalize_path(info.dli_fname);
         if (!self_path.empty()) {
             paths.insert(self_path);
         }
@@ -216,11 +221,13 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     qore_license = license;
     qore_library_options = n_qore_library_options;
 
+    // the canonical path of this libqore, for the module manager
+    std::string libqore_path;
 #if defined(DARWIN) || defined(__linux__)
     static bool duplicate_checked = false;
     if (!duplicate_checked) {
         duplicate_checked = true;
-        if (qore_check_duplicate_libqore()) {
+        if (qore_check_duplicate_libqore(libqore_path)) {
             _exit(1);
         }
     }
@@ -324,7 +331,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     }
 
     qore_string_init();
-    QoreHttpClientObject::static_init();
+    qore_http_client_object_ops::static_init();
 
     // initialize random number generator
     if (!(qore_library_options & QLO_DO_NOT_SEED_RNG)) {
@@ -346,7 +353,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     init_qore_threads();
 
     // initialize charset encoding support
-    QEM.init(def_charset);
+    qore_encoding_manager_ops(QEM).init(def_charset);
 
     // init character maps
     init_charmaps();
@@ -357,7 +364,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     init_qore_types();
 
     // init module subsystem
-    QMM.init(show_module_errors);
+    QMM.init(show_module_errors, libqore_path.empty() ? nullptr : libqore_path.c_str());
 
 #ifdef HAVE_SIGNAL_HANDLING
     // init signals

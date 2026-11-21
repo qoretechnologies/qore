@@ -9,6 +9,7 @@
 %requires json
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -101,7 +102,7 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("FireworksDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.FIREWORKS_CONNECTION;
+        conn_name = LiveProvider::get("fireworks", "FIREWORKS_CONNECTION", m_options.conn);
 
         addTestCase("factory and complete action catalog registered", \registrationTest());
         addTestCase("root resolves all action paths",       \rootProviderTest());
@@ -436,14 +437,16 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     private AbstractDataProvider getLiveRoot() {
         if (!live_root) {
             if (conn_name) {
+                # live-provider-optin: the connection name comes from LiveProvider
                 live_connection = get_connection(conn_name);
             } else {
-                if (!ENV.FIREWORKSAI_APIKEY) {
+                if (!LiveProvider::get("fireworks", "FIREWORKSAI_APIKEY")) {
                     throw "LIVE-TEST-CONFIG-ERROR", "--live requires FIREWORKSAI_APIKEY";
                 }
                 live_connection = new FireworksRestClient::FireworksRestConnection("live", "live API test",
                     FireworksRestClient::FireworksRestConnection::DefaultUrl, {},
-                    {"apikey": ENV.FIREWORKSAI_APIKEY, "connect_timeout": 15s, "timeout": 30s});
+                    {"apikey":
+                        LiveProvider::get("fireworks", "FIREWORKSAI_APIKEY"), "connect_timeout": 15s, "timeout": 30s});
             }
             live_root = live_connection.getDataProvider();
         }
@@ -475,7 +478,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
 
     private liveChatTest() {
         AbstractDataProvider root = getLiveRoot();
-        string chat_model = ENV.FIREWORKS_TEST_CHAT_MODEL ?? "accounts/fireworks/models/gpt-oss-120b";
+        string chat_model = LiveProvider::get("fireworks", "FIREWORKS_TEST_CHAT_MODEL") ??
+            "accounts/fireworks/models/gpt-oss-120b";
         auto chat = root.getChildProvider("chat-completion").doRequest({
             "model": chat_model,
             "messages": ({"role": "user", "content": "Say hi."},),
@@ -491,7 +495,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     private liveEmbedTest() {
         AbstractDataProvider root = getLiveRoot();
         auto embedded = root.getChildProvider("create-embeddings").doRequest({
-            "model": ENV.FIREWORKS_TEST_EMBED_MODEL ?? "accounts/fireworks/models/qwen3-embedding-8b",
+            "model": LiveProvider::get("fireworks", "FIREWORKS_TEST_EMBED_MODEL") ??
+                "accounts/fireworks/models/qwen3-embedding-8b",
             "input": "invoice", "dimensions": 32,
         });
         assertEq(32, embedded.data[0].embedding.size());
@@ -502,7 +507,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     private liveRerankTest() {
         AbstractDataProvider root = getLiveRoot();
         auto ranked = root.getChildProvider("rerank").doRequest({
-            "model": ENV.FIREWORKS_TEST_RERANK_MODEL ?? "accounts/fireworks/models/qwen3-reranker-8b",
+            "model": LiveProvider::get("fireworks", "FIREWORKS_TEST_RERANK_MODEL") ??
+                "accounts/fireworks/models/qwen3-reranker-8b",
             "query": "refund", "documents": ("Refunds accepted", "Blue sky"), "top_n": 1,
         });
         assertEq(1, ranked.data.size());

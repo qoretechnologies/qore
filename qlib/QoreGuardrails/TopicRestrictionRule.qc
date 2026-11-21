@@ -101,26 +101,26 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
 
         if (llm) {
-            return classifyTopic(text, start);
+            return classifyTopic(text, start_us);
         }
 
         # Without LLM, cannot classify topics
         if (getFailClosed()) {
             hash<GuardrailResult> result = makeFailResult(
                 "topic classification unavailable without LLM (fail-closed)");
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 
     #! Uses LLM to classify whether the query is within allowed topics
-    private hash<GuardrailResult> classifyTopic(string text, date start) {
+    private hash<GuardrailResult> classifyTopic(string text, int start_us) {
         string topics_str = (map sprintf("\"%s\"", $1), allowed_topics).join(", ");
         string system_prompt = sprintf(
             "You are a topic classifier. Determine if the user's query falls within "
@@ -156,7 +156,7 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
                         "reason": parsed.reason,
                     },
                 );
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -164,14 +164,14 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
                 hash<GuardrailResult> result = makeFailResult(
                     sprintf("topic classification unavailable (fail-closed): %s",
                         ex.desc));
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
             # LLM failure — pass through (fail open)
         }
 
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 }

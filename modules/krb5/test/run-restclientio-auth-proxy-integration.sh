@@ -151,9 +151,9 @@ if [[ "$ready" != True ]]; then
     exit 1
 fi
 
-http_port="$("$engine" port "$container_name" 80/tcp | head -n 1)"
+http_port="$("$engine" port "$container_name" 80/tcp | sed -n 1p)"
 http_port="${http_port##*:}"
-kdc_port="$("$engine" port "$container_name" 88/tcp | head -n 1)"
+kdc_port="$("$engine" port "$container_name" 88/tcp | sed -n 1p)"
 kdc_port="${kdc_port##*:}"
 if [[ -z "$http_port" || -z "$kdc_port" ]]; then
     echo "failed to determine auth-proxy mapped ports" >&2

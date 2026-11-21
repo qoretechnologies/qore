@@ -20,7 +20,7 @@ public class SubstituteEnvVarsTest inherits QUnit::Test {
 
     test_basic() {
         # Set up test environment variables
-        string orig_home = ENV.HOME ?? "";
+        string orig_home = ENV.HOME ?? ""; # live-provider-optin: HOME, for the substitution test
 
         # Test $VAR syntax
         if (orig_home.val()) {
@@ -37,7 +37,7 @@ public class SubstituteEnvVarsTest inherits QUnit::Test {
     }
 
     test_multiple() {
-        string home = ENV.HOME ?? "";
+        string home = ENV.HOME ?? ""; # live-provider-optin: HOME, for the substitution test
         string user = ENV.USER ?? "";
 
         if (home.val() && user.val()) {

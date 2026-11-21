@@ -1,0 +1,383 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# DataSchemaLoader::loadHashChecked() reports every problem of a data schema definition with the dotted path of its
+# node, in document order, as errors and warnings, and returns the normalized definition only without errors;
+# DataSchemaLoader::loadHash() still raises an exception for the first error (qore#6825).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Schema
+
+%exec-class DataSchemaIssuesTest
+
+class DataSchemaIssuesTest inherits QUnit::Test {
+    private {
+        #! A definition without a problem
+        const Valid = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "columns": {"audit_ts": {"type": "timestamp", "notnull": True}},
+            "tables": {
+                "customers": {
+                    "columns": {
+                        "id": {"type": "int"},
+                        "email": {"type": "varchar", "size": 240},
+                        "created": {"$use": "audit_ts"},
+                    },
+                    "primary_key": {"name": "pk_customers", "columns": ("id",)},
+                },
+            },
+            "reference_data": {
+                "strict": {"customers": {"columns": ("id", "email"), "rows": ((1, "a@b.c"),)}},
+            },
+        };
+
+        #! A definition with problems in several places at once
+        const Many = {
+            "schema": {"name": "issues-test"},
+            "columns": {"audit_ts": {"type": "timestamp"}},
+            "tables": {
+                "customers": {
+                    "columns": {
+                        "id": {"type": "int"},
+                        "email": {"type": "varchar", "size": 240, "bogus": 1},
+                        "amount": {"type": "money"},
+                        "created": {"$use": "nope"},
+                    },
+                    "primary_key": {"name": "pk_customers", "columns": ("id", "missing")},
+                    "sequence_columns": ("id",),
+                },
+                "orders": {
+                    "columns": {"id": {"type": "int"}},
+                    "auto_triggers": "created",
+                },
+                "empty": {
+                    "comment": "no columns",
+                },
+            },
+            "reference_data": {
+                "strict": {"customers": {"columns": ("id",), "rows": ((1,),), "extra": True}},
+                "sometimes": {},
+            },
+            "zzz": 1,
+        };
+    }
+
+    constructor() : Test("DataSchemaIssuesTest", "1.0") {
+        addTestCase("a definition without a problem", \testValid());
+        addTestCase("every problem of a definition with its path, in document order", \testMany());
+        addTestCase("loadHash() raises an exception for the first error as before", \testLoadHashUnchanged());
+        addTestCase("warnings are reported, and the definition is still normalized", \testWarnings());
+        addTestCase("a missing schema section", \testMissingSchema());
+        addTestCase("a shared definition that draws from another", \testNestedShared());
+        addTestCase("errors of the meta-schema are given at their node", \testMetaSchema());
+        addTestCase("a key checked by validation and normalization is reported once", \testOnce());
+        addTestCase("values of types that the loader does not read are reported, not raised", \testTypes());
+        addTestCase("a column that is not normalized is not reported again by the primary key", \testNoCascade());
+        addTestCase("column entries that are not hashes", \testColumnTypes());
+        addTestCase("shared sections and definitions that are not hashes", \testSharedTypes());
+        addTestCase("a warning leaves the error of the meta-schema of its node", \testWarningAndMeta());
+        addTestCase("loadHash() without validation keeps entries without a value as before", \testNullEntries());
+        set_return_value(main());
+    }
+
+    #! Returns the issues of \a info as (severity, code, path) lists
+    private static list<list<auto>> summary(hash<DataSchemaCheckInfo> info) {
+        return map ($1.severity, $1.code, $1.path), info.issues;
+    }
+
+    testValid() {
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(Valid);
+        assertEq((), info.issues, "no problem is reported");
+        assertEq(DataSchemaLoader::loadHash(Valid), info.normalized, "the normalized definition is that of loadHash()");
+    }
+
+    testMany() {
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(Many);
+        assertNothing(info.normalized, "a definition with errors is not normalized");
+        assertEq((
+            (DataSchemaIssueError, "MISSING-KEY", "schema.version"),
+            (DataSchemaIssueError, "UNKNOWN-KEY", "tables.customers.columns.email.bogus"),
+            (DataSchemaIssueError, "UNKNOWN-TYPE", "tables.customers.columns.amount.type"),
+            (DataSchemaIssueError, "UNKNOWN-SHARED-DEFINITION", "tables.customers.columns.created.$use"),
+            (DataSchemaIssueError, "UNKNOWN-PRIMARY-KEY-COLUMN", "tables.customers.primary_key.columns.1"),
+            (DataSchemaIssueError, "UNKNOWN-KEY", "tables.customers.sequence_columns"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.orders.auto_triggers"),
+            (DataSchemaIssueError, "MISSING-KEY", "tables.empty.columns"),
+            (DataSchemaIssueError, "UNKNOWN-KEY", "reference_data.strict.customers.extra"),
+            (DataSchemaIssueError, "UNKNOWN-KEY", "reference_data.sometimes"),
+            (DataSchemaIssueError, "UNKNOWN-KEY", "zzz"),
+        ), summary(info), "every problem is reported once, at its node, in document order");
+
+        # the messages are those of the exceptions of loadHash()
+        hash<string, string> messages = map {$1.path: $1.message}, info.issues;
+        assertEq("missing required 'schema.version' key", messages."schema.version");
+        assertRegex("^table \"customers\" column \"email\": unknown key \"bogus\"",
+            messages."tables.customers.columns.email.bogus");
+        assertRegex("^table \"customers\" column \"amount\": unknown type \"money\"",
+            messages."tables.customers.columns.amount.type");
+        assertRegex("draws from unknown shared column \"nope\"; the schema declares \\[\"audit_ts\"\\]",
+            messages."tables.customers.columns.created.$use");
+        assertEq("table \"customers\" primary key references unknown column \"missing\"",
+            messages."tables.customers.primary_key.columns.1");
+        assertRegex("\"sequence_columns\" belongs under \"auto_triggers\"",
+            messages."tables.customers.sequence_columns");
+        assertRegex("\"auto_triggers\" must be a hash", messages."tables.orders.auto_triggers");
+        assertEq("table \"empty\" is missing required 'columns' key", messages."tables.empty.columns");
+        assertRegex("unknown key \"extra\"", messages."reference_data.strict.customers.extra");
+        assertRegex("^data schema: unknown key \"zzz\"", messages.zzz);
+        # the column whose shared definition is missing is not reported for what it lacks
+        assertEq((), (select info.issues, $1.path == "tables.customers.columns.created"),
+            "an unresolved shared definition is not reported again as a column without a type");
+    }
+
+    testLoadHashUnchanged() {
+        # each definition raises the exception of its first error, as before
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "missing required 'schema.version' key",
+            \DataSchemaLoader::loadHash(), (Many,));
+        hash<auto> raw = Many + {"schema": {"name": "issues-test", "version": "1.0"}};
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "unknown key \"zzz\"", \DataSchemaLoader::loadHash(), (raw,));
+        # without validation, normalization raises its first error
+        assertThrows("DATA-SCHEMA-ERROR", "unknown key \"zzz\"", \DataSchemaLoader::loadHash(), (raw, False));
+        raw -= "zzz";
+        # normalization resolves the shared definitions of a table before its columns
+        assertThrows("DATA-SCHEMA-ERROR", "draws from unknown shared column \"nope\"", \DataSchemaLoader::loadHash(),
+            (raw, False));
+        # the error that loadHash() raises is one of those that loadHashChecked() reports
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        string err = getError(raw);
+        assertEq(1, (select info.issues, $1.message == err).size(), "the error of loadHash() is reported");
+    }
+
+    #! Returns the message of the exception that loadHash() raises without validation
+    private static string getError(hash<auto> raw) {
+        try {
+            DataSchemaLoader::loadHash(raw, False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        throw "TEST-ERROR", "no exception";
+    }
+
+    testWarnings() {
+        hash<auto> raw = Valid;
+        raw.tables.customers.columns += {
+            "name": {"type": "varchar"},
+            "count": {"type": "int", "scale": 2},
+            "price": {"type": "number", "size": 10, "scale": 2},
+        };
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((
+            (DataSchemaIssueWarning, "MISSING-SIZE", "tables.customers.columns.name.size"),
+            (DataSchemaIssueWarning, "SCALE-IGNORED", "tables.customers.columns.count.scale"),
+        ), summary(info), "the warnings");
+        assertEq(DataSchemaLoader::loadHash(raw), info.normalized, "a definition with warnings only is normalized");
+    }
+
+    testMissingSchema() {
+        hash<auto> raw = Valid - "schema";
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "MISSING-KEY", "schema"),), summary(info));
+        assertEq("missing required 'schema' key", info.issues[0].message);
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "missing required 'schema' key", \DataSchemaLoader::loadHash(),
+            (raw,));
+    }
+
+    testNestedShared() {
+        hash<auto> raw = Valid + {"columns": {"base": {"type": "int"}, "audit_ts": {"$use": "base"}}};
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "NESTED-SHARED-DEFINITION", "tables.customers.columns.created.$use"),),
+            summary(info));
+        assertRegex("shared definitions are not resolved recursively", info.issues[0].message);
+    }
+
+    testMetaSchema() {
+        # the meta-schema rejects a size that is not a number, which the loader does not check itself
+        hash<auto> raw = Valid + {
+            "schema": {"name": 1, "version": "1.0"},
+            "tables": {"customers": {"columns": {"email": {"type": "varchar", "size": "large"}}}},
+        };
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((
+            (DataSchemaIssueError, "META-SCHEMA", "schema.name"),
+            (DataSchemaIssueError, "META-SCHEMA", "tables.customers"),
+        ), summary(info), "the errors of the meta-schema at their nodes");
+        assertRegex("^schema validation failed: /schema/name: ", info.issues[0].message);
+        assertNothing(info.normalized);
+
+        # an error of the meta-schema at a node where the loader reports an error is left out: the meta-schema
+        # rejects an unknown key of a table as an invalid table
+        raw = Valid + {"tables": {"customers": {"columns": {"id": {"type": "int"}}, "bogus": 1}}} - "reference_data";
+        info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "UNKNOWN-KEY", "tables.customers.bogus"),), summary(info),
+            "only the loader's own error");
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "unknown key \"bogus\"", \DataSchemaLoader::loadHash(), (raw,));
+    }
+
+    testTypes() {
+        hash<auto> raw = {
+            "schema": "issues-test",
+            "columns": {"audit_ts": "timestamp"},
+            "indexes": "none",
+            "tables": {
+                "customers": {
+                    "columns": {
+                        "id": {"type": "int"},
+                        "created": {"$use": 1},
+                        "updated": {"$use": "audit_ts"},
+                    },
+                    "primary_key": {"name": "pk", "columns": ("id", 2)},
+                },
+                "orders": {"columns": ("id",)},
+                "lines": "line",
+            },
+            "reference_data": {"strict": "rows"},
+        };
+        hash<DataSchemaCheckInfo> info;
+        try {
+            info = DataSchemaLoader::loadHashChecked(raw);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("loadHashChecked() raised %s: %s", ex.err, ex.desc));
+        }
+        assertNothing(info.normalized);
+        list<list<auto>> own = select summary(info), $1[1] != "META-SCHEMA";
+        assertEq((
+            (DataSchemaIssueError, "INVALID-VALUE", "schema"),
+            (DataSchemaIssueError, "INVALID-VALUE", "columns.audit_ts"),
+            (DataSchemaIssueError, "INVALID-VALUE", "indexes"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.customers.columns.created.$use"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.customers.primary_key.columns.1"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.orders.columns"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.lines"),
+            (DataSchemaIssueError, "INVALID-VALUE", "reference_data.strict"),
+        ), own, "every value of a type that is not read is reported at its node");
+        assertEq((), (select info.issues, $1.code == "INVALID-DEFINITION"), "no exception escaped a check");
+        # loadHash() still raises the exception it raised before for a schema that is not a hash
+        assertThrows("PSEUDO-METHOD-DOES-NOT-EXIST", \DataSchemaLoader::loadHash(), (raw,));
+    }
+
+    testColumnTypes() {
+        # a column entry that is not a hash, and one without a value
+        hash<auto> raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": {"id": "int", "name": NOTHING, "ok": {"type": "int"}},
+                "primary_key": {"name": "pk", "columns": ("id",)}}},
+        };
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.t.columns.id"),
+            (DataSchemaIssueError, "INVALID-VALUE", "tables.t.columns.name"),
+        ), (select summary(info), $1[1] != "META-SCHEMA"), "each column is reported at its node, and the primary key "
+            "does not report the column again");
+        assertNothing(info.normalized);
+    }
+
+    testSharedTypes() {
+        # a shared section that is not a hash: its references are not reported again
+        hash<auto> raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "columns": ("audit_ts",),
+            "tables": {"t": {"columns": {"id": {"type": "int"}, "created": {"$use": "audit_ts"}}}},
+        };
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "INVALID-VALUE", "columns"),), (select summary(info), $1[1] != "META-SCHEMA"));
+        # a shared definition without a value is reported once
+        raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "columns": {"audit_ts": NOTHING},
+            "tables": {"t": {"columns": {"id": {"type": "int"}, "created": {"$use": "audit_ts"}}}},
+        };
+        info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "INVALID-VALUE", "columns.audit_ts"),),
+            (select summary(info), $1[1] != "META-SCHEMA"));
+        # a table whose columns are an empty list is reported once
+        raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": ()}},
+        };
+        info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "INVALID-VALUE", "tables.t.columns"),),
+            (select summary(info), $1[1] != "META-SCHEMA"));
+        # reference data of a table that is not a hash, which loadHash() accepts without validation, is reported only
+        # by the meta-schema
+        raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": {"id": {"type": "int"}}}},
+            "reference_data": {"strict": {"t": "rows"}},
+        };
+        assertEq({"t": (NOTHING,)}, DataSchemaLoader::loadHash(raw, False).reference_data.strict);
+        info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((), (select summary(info), $1[1] != "META-SCHEMA"), "no error of the loader");
+        # a table with empty columns: its primary key is not checked
+        raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": {}, "primary_key": {"name": "pk", "columns": ("id",)}}},
+        };
+        info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq(((DataSchemaIssueError, "MISSING-KEY", "tables.t.columns"),),
+            (select summary(info), $1[1] != "META-SCHEMA"));
+    }
+
+    testNoCascade() {
+        hash<auto> raw = Valid + {
+            "tables": {
+                "customers": {
+                    "columns": {
+                        "id": {"$use": "nope"},
+                        "email": {"type": "varchar", "size": 240},
+                    },
+                    "primary_key": {"name": "pk", "columns": ("id", "email")},
+                },
+                "orders": {
+                    "primary_key": {"name": "pk_orders", "columns": ("id",)},
+                },
+            },
+        } - "reference_data";
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((
+            (DataSchemaIssueError, "UNKNOWN-SHARED-DEFINITION", "tables.customers.columns.id.$use"),
+            (DataSchemaIssueError, "MISSING-KEY", "tables.orders.columns"),
+        ), summary(info), "the primary keys do not report the columns that are not normalized");
+    }
+
+    testWarningAndMeta() {
+        hash<auto> raw = Valid + {
+            "tables": {"customers": {"columns": {"id": {"type": "int", "scale": "two"}}}},
+        } - "reference_data";
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(raw);
+        assertEq((
+            (DataSchemaIssueError, "META-SCHEMA", "tables.customers"),
+            (DataSchemaIssueWarning, "SCALE-IGNORED", "tables.customers.columns.id.scale"),
+        ), summary(info), "the warning does not hide the error of the meta-schema");
+        assertNothing(info.normalized, "a definition that loadHash() rejects is not normalized");
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", \DataSchemaLoader::loadHash(), (raw,));
+    }
+
+    testNullEntries() {
+        # without validation, an index without a value is passed through and a column without a value is a type
+        # error, as before
+        hash<auto> raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": {"id": {"type": "int"}}, "indexes": {"i": NOTHING}}},
+        };
+        hash<auto> normalized = DataSchemaLoader::loadHash(raw, False);
+        assertTrue(normalized.tables.t.indexes.hasKey("i"), "the index without a value is kept");
+        raw = {
+            "schema": {"name": "issues-test", "version": "1.0"},
+            "tables": {"t": {"columns": {"id": {"type": "int"}, "c": NOTHING}}},
+        };
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "normalizeColumn\\(string, string, nothing\\)", \DataSchemaLoader::loadHash(),
+            (raw, False));
+    }
+
+    testOnce() {
+        hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(Valid + {"constraints": {}});
+        assertEq(((DataSchemaIssueError, "UNKNOWN-KEY", "constraints"),), summary(info));
+        assertRegex("constraints are declared per table", info.issues[0].message);
+    }
+}

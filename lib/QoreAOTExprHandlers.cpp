@@ -3228,6 +3228,7 @@ static bool write_expr_const_string(AOTExprWriteCtx& ctx) {
     }
 
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    // note: safe; the node of ctx.expr, whose inline short string is written above
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
         ctx.writer.writeStringRef(str->c_str(), str->size());

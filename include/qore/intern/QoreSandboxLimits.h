@@ -237,6 +237,78 @@ DLLLOCAL void qore_sandbox_budgets_deref(QoreSandboxBudgetList& budgets);
     helper that failed leaves: \c SANDBOX-ERROR, naming the limits that cannot be enforced, is raised at every
     cancellation point and, if the call has a stack limit, at the next stack check.
 */
+//! The isolation of the code that a trusted build entered by a sandboxed caller runs (qore#6536)
+/** Code of a sandbox whose isolation domain (the tenant: QoreSandboxManager::setIsolationDomain()) differs from the
+    caller's never runs there: the caller's sandboxes (\a callers) and the sandboxes of the Programs that created the
+    builds from the caller's build to the innermost one (\a creators: the build's own code) may run, and sandboxes
+    without a domain; see "Isolation domains" in design/sandbox-provenance.md.  Shared by the floors of nested builds
+    and of continuations of the build's code (a thread, a pool task, async I/O: see QoreSandboxContext::isolation)
+*/
+class QoreSandboxIsolation : public QoreReferenceCounter {
+public:
+    //! Creates the isolation of a build that \a callers (referenced here; nullptr for a build that the outer build's
+    //! own code entered) entered, inside the isolation \a outer (referenced here) of the outer build, or nullptr
+    DLLLOCAL QoreSandboxIsolation(QoreSandboxManager* callers, QoreSandboxIsolation* outer);
+
+    DLLLOCAL QoreSandboxIsolation(const QoreSandboxIsolation&) = delete;
+    DLLLOCAL QoreSandboxIsolation& operator=(const QoreSandboxIsolation&) = delete;
+
+    DLLLOCAL void ref() const {
+        ROreference();
+    }
+
+    DLLLOCAL void deref() {
+        if (ROdereference()) {
+            delete this;
+        }
+    }
+
+    //! Adds the sandbox of a Program that created a build (referenced here); may throw std::bad_alloc
+    DLLLOCAL void addCreator(QoreSandboxManager* sm);
+
+    //! Returns nullptr if the code of \a member (a plain manager) may run, else the domain that it has
+    /** The code must be allowed by this build and by every outer build: a nested build never widens what may run
+    */
+    DLLLOCAL const std::string* refuses(const QoreSandboxManager* member) const;
+
+    //! Returns the isolation domain of the innermost caller that has one, or nullptr
+    DLLLOCAL const std::string* callerDomain() const;
+
+    //! Returns the isolation of the outer build, or nullptr
+    DLLLOCAL const QoreSandboxIsolation* getOuter() const {
+        return outer;
+    }
+
+    //! Returns the isolation of the build that a continuation runs inline in (see join()), or nullptr
+    DLLLOCAL const QoreSandboxIsolation* getJoined() const {
+        return joined;
+    }
+
+    //! Returns the isolation of a continuation (\a captured) that runs inline inside a build (\a current): code must
+    //! pass both; may throw std::bad_alloc
+    DLLLOCAL static QoreSandboxIsolation* join(QoreSandboxIsolation* captured, QoreSandboxIsolation* current);
+
+private:
+    //! the sandboxes that governed the caller (referenced), or nullptr for a build that the outer build's own code
+    //! entered
+    QoreSandboxManager* callers;
+    //! the isolation of the outer build (referenced), or nullptr
+    QoreSandboxIsolation* outer;
+    //! the isolation of the build that a continuation runs inline in (referenced; see join()), or nullptr
+    QoreSandboxIsolation* joined = nullptr;
+
+    //! Returns nullptr if this build allows the code of \a member, else its domain
+    DLLLOCAL const std::string* levelRefuses(const QoreSandboxManager* member) const;
+    //! the sandboxes of the Programs that created the builds (referenced)
+    std::vector<QoreSandboxManager*> creators;
+
+    DLLLOCAL ~QoreSandboxIsolation();
+};
+
+//! The number of threads with a refused entry (see QoreSandboxBudgetStack::isIsolationRefused()), so that the fast
+//! paths that run code inline check the thread only while one exists
+DLLLOCAL extern std::atomic<int> qore_sandbox_refused_threads;
+
 class QoreSandboxBudgetStack {
 public:
     DLLLOCAL QoreSandboxBudgetStack() = default;
@@ -248,7 +320,25 @@ public:
 
     //! Returns true if no frame applies to the thread
     DLLLOCAL bool empty() const {
-        return frames.empty() && !lost_owner;
+        // a continuation's floor in a build can have no frames (no sandbox with limits governs it): it is left too
+        return frames.empty() && !lost_owner && !refused_owner && charge_floors.empty();
+    }
+
+    //! Returns true if the thread entered a sandbox whose code may not run in the trusted build that it runs
+    /** Until the refused entry is left, nothing more is recorded, and the code must not run: every site that runs
+        code after an entry raises \c SANDBOX-ISOLATION-ERROR (see raiseIsolation()), and so does every cancellation
+        point (qore#6536)
+    */
+    DLLLOCAL bool isIsolationRefused() const {
+        return refused_owner;
+    }
+
+    //! Raises \c SANDBOX-ISOLATION-ERROR for the refused entry (see isIsolationRefused())
+    DLLLOCAL void raiseIsolation(ExceptionSink* xsink, const char* operation) const;
+
+    //! Returns the isolation of the innermost trusted build of the thread, or nullptr (not referenced)
+    DLLLOCAL QoreSandboxIsolation* currentIsolation() const {
+        return charge_floors.empty() ? nullptr : charge_floors.back().iso;
     }
 
     //! Starts a new budget for \a sm and for each constituent of a composite manager that has a per-call limit (wall
@@ -263,7 +353,12 @@ public:
     /** @param in_build true if the budgets were captured in a trusted build: the continuation runs in a build with no
         caller (see suspendCharge()), until leave()
     */
-    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false);
+    /** \a iso is the isolation of the build in which the continuation was captured; the isolation of a build that
+        the thread runs holds as well (a continuation that runs on the thread of a build: a pool's cancel callback, a
+        native callback; the workers that run tasks inherit no sandbox, so they have no floor; qore#6536)
+    */
+    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false,
+            QoreSandboxIsolation* iso = nullptr);
 
     //! Returns the number of frames of the thread (for tests)
     DLLLOCAL size_t frameCount() const {
@@ -305,6 +400,11 @@ public:
     */
     DLLLOCAL void suspendCharge(const QoreSandboxManager* callers);
 
+    //! Sets the isolation of the build that suspendCharge() started: its caller's, or that of the outer build for a
+    //! build that the outer build's own code entered; \a own and \a creator are the sandboxes of the Program that
+    //! created the build, or nullptr; may throw std::bad_alloc
+    DLLLOCAL void setIsolation(QoreSandboxManager* callers, QoreSandboxManager* own, QoreSandboxManager* creator);
+
     //! Ends the memory accounting of a trusted build started with suspendCharge()
     DLLLOCAL void resumeCharge();
 
@@ -325,6 +425,12 @@ public:
     */
     DLLLOCAL int64 findStackLimit(size_t limit) const;
 
+    //! Returns true if a call of the thread into a sandbox has a stack size limit, applied or not
+    /** A destructor of an object released at the stack limit does not get the slice of the stack guard in such a
+        call (destructor_stack_floor, qore#6861): the sandbox's limit is never extended
+    */
+    DLLLOCAL bool hasStackBudget() const;
+
     //! Returns the innermost budget with a CPU-time limit, or nullptr if there is none
     DLLLOCAL const QoreSandboxCallBudget* findCPUBudget() const;
 
@@ -336,6 +442,12 @@ public:
     //! Returns true if the current call's stack limit cannot be enforced, so its stack was closed
     DLLLOCAL bool isStackLost() const {
         return lost_stack_closed;
+    }
+
+    //! Returns true if the current call has a stack limit that cannot be enforced, whether its stack could be closed
+    //! or not (a call that starts past the thread's limit cannot close it)
+    DLLLOCAL bool isStackLimitLost() const {
+        return lost_owner && (lost_kinds & QSB_LIMIT_STACK);
     }
 
     //! Raises the exception for a budget returned by findExpired(): \c SANDBOX-TIMEOUT, or \c SANDBOX-ERROR naming
@@ -375,11 +487,34 @@ private:
         const QoreSandboxManager* callers;
         //! the helper of a continuation that attached the floor (see attach()), or nullptr for a build
         const void* owner;
+        //! the isolation of the code of the build (referenced), or nullptr if no sandboxed caller entered it
+        QoreSandboxIsolation* iso = nullptr;
     };
     //! the trusted builds that the thread runs, innermost last
     std::vector<BuildFloor> charge_floors;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
     const void* lost_owner = nullptr;
+    //! the helper whose entry was refused for the isolation of the build, or nullptr; see isIsolationRefused()
+    const void* refused_owner = nullptr;
+    //! the isolation domain of the refused entry and that of the build's caller (for the exception)
+    std::string refused_domain, refused_caller_domain;
+    //! the stack limit before the refusal closed the stack (see refuseIsolation())
+    size_t refused_saved_stack_limit = 0;
+    //! true if the refusal closed the stack, so that the next stack check of any call fails
+    bool refused_stack_closed = false;
+
+    //! Refuses the entry of \a owner (see isIsolationRefused())
+    DLLLOCAL void refuseIsolation(int tid, const void* owner, const std::string& domain,
+            const std::string* caller_domain);
+
+    //! Refuses the entry of \a owner and returns true if the isolation of the innermost build refuses \a sm
+    DLLLOCAL bool checkIsolation(int tid, QoreSandboxManager* sm, const void* owner);
+
+public:
+    //! Returns the isolation domain that the innermost build refuses for \a sm, or nullptr if it may run there
+    DLLLOCAL const std::string* isolationRefuses(const QoreSandboxManager* sm) const;
+
+private:
     //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)
     unsigned lost_kinds = 0;
     //! the wall-time limit of the lost call, or 0 if it is not known (a continuation of a lost call)

@@ -5,7 +5,8 @@
 #
 # a string value was serialized to JSON as a C string, so a string with a NUL character was cut at the NUL character
 # ("a\x00b" was written as "a"); the whole string is now written, with the NUL character escaped as \u0000, and the
-# message of a JSON-RPC 1.1 error is serialized as a JSON string, so that a control character in it is escaped
+# message of a JSON-RPC 1.1 error is serialized as a JSON string, so that a control character in it is escaped;
+# parse_json() reports the text after a NUL byte that follows the JSON value, which it ignored (issue #6718)
 
 %modern
 
@@ -23,6 +24,7 @@ class JsonNulTest inherits QUnit::Test {
         addTestCase("make_json() and parse_json()", \makeParse());
         addTestCase("JSON-RPC messages", \jsonRpc());
         addTestCase("JsonStreamWriter", \streamWriter());
+        addTestCase("a NUL byte after the JSON value", \nulAfterValue());
         set_return_value(main());
     }
 
@@ -50,6 +52,31 @@ class JsonNulTest inherits QUnit::Test {
         assertEq("a\x00b", req.params.text);
         hash<auto> resp = parse_json(make_jsonrpc_response("2.0", 1, "a\x00b"));
         assertEq("a\x00b", resp.result);
+    }
+
+    #! a NUL byte is not JSON whitespace: the text after it is extra text (issue #6718)
+    nulAfterValue() {
+        foreach string json in (("\"a\"\x00garbage", "[1]\x00[2]", "1\x00", "null\x00", "{\"a\": 1}\x00 ",
+                "true \x00x", "\x00garbage", " \x00", "\x00")) {
+            assertThrows("JSON-PARSE-ERROR", "extra text after JSON data", \parse_json(), (json,), sprintf("%y", json));
+        }
+        # whitespace after the value, and an empty text, are accepted
+        assertEq((1,), parse_json("[1] \n"));
+        assertEq(NOTHING, parse_json(" \n "));
+        assertEq(NOTHING, parse_json(""));
+        # text in another encoding, converted to UTF-8 to be parsed
+        assertThrows("JSON-PARSE-ERROR", "extra text after JSON data", \parse_json(),
+            (convert_encoding("[1]\x00[2]", "UTF-16LE"),));
+        assertEq((1,), parse_json(convert_encoding("[1] ", "UTF-16LE")));
+        # the line of the extra text
+        assertThrows("JSON-PARSE-ERROR", "on line 2", \parse_json(), ("[1]\n\x00",));
+        # a NUL byte in a string value is not valid JSON either
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), ("\"a\x00b\"",));
+        # the SAX parser reports it too
+        assertThrows("JSON-SAX-PARSE-ERROR", "extra text after JSON data", sub () {
+            JsonSaxParser p();
+            p.parse("[1]\x00[2]", sub (hash<auto> e) {});
+        });
     }
 
     streamWriter() {

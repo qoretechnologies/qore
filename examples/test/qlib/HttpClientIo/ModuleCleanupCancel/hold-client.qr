@@ -1,0 +1,13 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# makes a request whose connection a module keeps open until the end of the process, and holds the onComplete() work
+# item that the module cleanup hands over when it cancels the connection, so that it runs only when the cleanup
+# releases it: when the cleanup waits for the work that it handed over, or else after the user modules have been
+# deleted (qore#6928; a debug build's test hook)
+# arguments: the URL and the protocol of the connection manager ("h1", "h2" or "h3")
+
+%requires CleanupCancelHolder
+
+printf("status: %d\n", Holder::get(ARGV[0], ARGV[1]));
+# only the work that the module cleanup hands over is held
+call_function("dbg_async_io_hold_module_cleanup_work", True);

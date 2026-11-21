@@ -600,7 +600,7 @@ protected:
     DLLLOCAL static QoreString op_str;\
 public:\
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {del = false;return &op_str;}\
-    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {qore_string_private::get(str)->concat(&op_str);return 0;}\
+    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {qore_string_private::get(str)->concatAsciiName(op_str);return 0;}\
     DLLLOCAL virtual const char* getTypeName() const {return op_str.getBuffer();}
 
 template <unsigned int N, class T = QoreOperatorNode>

@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the async I/O controller's worker threads and the module cleanup at the end of the process
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+%requires ../../../../ExecModeHarness.qm
+
+%exec-class ModuleExitCompletionTest
+
+#! The completion of an asynchronous I/O operation of a module while the modules are deleted (qore#6685)
+/** The module cleanup at the end of the process closes the Programs of the modules to the threads other than the one
+    that runs it before it clears their data.  An operation that a module's own code submitted, whose step completed
+    then, had its onComplete() dispatched to a callback worker, which was refused entry into the module's Program: the
+    refusal was reported as an unhandled exception in onComplete() ("PROGRAM-ERROR: the Program of a module cannot be
+    entered by another thread while the modules are deleted at the end of the process").  The callbacks of such an
+    operation are skipped, as those of a Program that is being deleted are.
+
+    \c ModuleExitCompletion submits the operation in its initialization and holds the result of its step with a debug
+    hook; \c ModuleExitCleaner, whose data are cleared first, releases the result in the destructor of its static
+    object, then waits until the operation's onComplete() is queued and flushes the callbacks.  A timer callback of
+    the module's code, whose dispatch is held in the same way and released then, is skipped too, as is the
+    onComplete() of a second operation that belongs to a Program that is not a module's while its class is the
+    module's (the worker enters the operation's Program, and is refused entry into the module's), and the destructor
+    of a resource of the module's class that the operations hold; the exception of the onComplete() of an operation of
+    the other Program's own class, which runs, is still reported.  The programs are in
+    \c module-exit-completion/.
+*/
+class ModuleExitCompletionTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "held: True\nnested held: True\nfailing held: True\ntimer held: True\n"
+            "completed while the modules were deleted: True\n"
+            "timer callbacks released while the modules were deleted: 1\n";
+    }
+
+    constructor() : QUnit::Test("ModuleExitCompletionTest", "1.0", \ARGV) {
+        addTestCase("an operation of a module that completes while the modules are deleted", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        # the test's modules are found first
+        string module_dir = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("env QORE_MODULE_DIR=%s "
+                "%s --enable-debug --exec-mode=%s %s/client.qr", module_dir, qore_bin, mode, dir));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            # the module's callbacks (the operations' onComplete(), the timer's callback, the destructor of the
+            # resource) do not run, and their refusals are not reported
+            assertEq(Expected, r.stdout, mode);
+            assertEq(False, r.out =~ /PROGRAM-ERROR/, mode + ": no refusal is reported");
+            # the exception of the callback of the other Program, which runs, is reported
+            assertEq(True, r.out =~ /TEST-ERROR/, mode + ": the exception of a callback that ran is reported");
+        }
+    }
+}

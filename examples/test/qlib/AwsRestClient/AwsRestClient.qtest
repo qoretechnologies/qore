@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Logger
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires ../../TestInterpreter.qm
 %requires Mime
 %requires ConnectionProvider
@@ -139,10 +140,12 @@ class AwsTest inherits QUnit::Test {
             testSkip("no client support");
         }
 
-        # https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08
+        # https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08; the clients do not connect: the signatures
+        # are computed offline, and the test makes no call to AWS (qore#6964)
         AwsRestTestClient aws_client;
         try {
-            aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"} + FakeAwsOptions);
+            aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"}
+                + FakeAwsOptions, True);
         } catch (hash<ExceptionInfo> ex) {
             if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
@@ -160,7 +163,7 @@ class AwsTest inherits QUnit::Test {
 
         try {
             aws_client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
-                + (FakeAwsOptions - ("aws_service", "aws_region")));
+                + (FakeAwsOptions - ("aws_service", "aws_region")), True);
         } catch (hash<ExceptionInfo> ex) {
             if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
@@ -200,8 +203,11 @@ class AwsTest inherits QUnit::Test {
     #! Verifies AwsRestClient picks up credentials from AWS_* environment variables
     envVarCredentialTest() {
         # snapshot existing process env so we can restore it
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_keyid  = getenv("AWS_ACCESS_KEY_ID");
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_secret = getenv("AWS_SECRET_ACCESS_KEY");
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_token  = getenv("AWS_SESSION_TOKEN");
         *string saved_region = getenv("AWS_REGION");
         *string saved_default_region = getenv("AWS_DEFAULT_REGION");
@@ -516,8 +522,11 @@ class AwsTest inherits QUnit::Test {
         on_exit delete imds_http;
 
         # snapshot existing AWS env vars so the test sees a clean slate
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_ecs_rel = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_ecs_full = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
         unsetenv("AWS_ACCESS_KEY_ID");
         unsetenv("AWS_SECRET_ACCESS_KEY");
@@ -591,6 +600,7 @@ class AwsTest inherits QUnit::Test {
 
     #! aws_imds_disabled must short-circuit instance-credential pickup
     imdsDisabledTest() {
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_keyid = getenv("AWS_ACCESS_KEY_ID");
         unsetenv("AWS_ACCESS_KEY_ID");
         unsetenv("AWS_SECRET_ACCESS_KEY");
@@ -779,7 +789,7 @@ class FakeStsHandler inherits AbstractHttpRequestHandler {
 }
 
 class AwsRestTestClient inherits AwsRestClient {
-    constructor(hash<auto> opts) : AwsRestClient(opts) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : AwsRestClient(opts, do_not_connect) {
     }
 
     string getSignatureTest(string meth, string path, hash<auto> hdr, *data body, date gmdate, string scope) {

@@ -29,7 +29,9 @@
   symlink to the AOT-compiled `build/qlib-qmod/` output and is preferred over the `.qm`/`.qc`
   sources, so source edits are silently ignored until the qmod is rebuilt — even with `qlib`
   prepended to the module path. Symptom: the edited code simply never runs (no error). The same
-  applies to `build-debug/` when testing the debug build.
+  applies to `build-debug/` when testing the debug build. The links are shared by the builds of the
+  tree and lead to the build built last, but a qore of another build loads its own build's module
+  in their place, or the source if its build has none (`design/aot-linked-module-sources.md`).
 
 ## Coding Style & Naming Conventions
 - C++ code uses 4-space indentation and braces on the same line; follow nearby file style.
@@ -109,6 +111,10 @@
   part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
+- The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the
+  tags to when the pipeline starts (`image: $QORE_TEST_BASE_<flavor>_<arch>_IMAGE`; a new job on a qore-test-base image
+  uses one of these and, with `needs`, names the resolver); a tag published during a pipeline reaches only the next
+  pipeline (design/ci-test-base-image-digests.md, `examples/test/runner/test_resolve_image_digests.py`).
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example

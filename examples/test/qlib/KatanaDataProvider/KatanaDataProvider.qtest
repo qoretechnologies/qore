@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -141,6 +142,7 @@ public class KatanaDataProviderTest inherits QUnit::Test {
     private setupConnection() {
         if (conn_name) {
             try {
+                # live-provider-optin: the connection name comes only from the test's own command line (-c)
                 AbstractConnection conn = get_connection(conn_name);
                 if (conn instanceof KatanaRestClient::KatanaRestConnection) {
                     client = (cast<KatanaRestClient::KatanaRestConnection>(conn))
@@ -154,7 +156,7 @@ public class KatanaDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string apikey = m_options.apikey ?? ENV.KATANA_API_KEY;
+        *string apikey = LiveProvider::get("katana", "KATANA_API_KEY", m_options.apikey);
         if (apikey) {
             client = new KatanaRestClient::KatanaRestClientIo({"apikey": apikey});
         }
@@ -402,6 +404,7 @@ public class KatanaDataProviderTest inherits QUnit::Test {
         if (!conn_name) {
             testSkip("ping requires a named connection (-c)");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping_result = conn.ping(True);
         assertTrue(ping_result.ok, "connection ping succeeded");

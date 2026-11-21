@@ -35,6 +35,8 @@
 %modern
 
 module WebSocketHandler {
+    # the module arms heartbeat and idle timers for its own streams (see design/user-functional-domains.md)
+    domains = "THREAD_CONTROL";
     version = "2.8";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
@@ -138,6 +140,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - a connection whose setup raises an exception after the connection was registered (for example when its
       @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" raises one, or an HTTP/2 stream has no data
       queue) is deregistered, gets
@@ -162,6 +168,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002) on HTTP/1.1, HTTP/2 and HTTP/3
       (<a href="https://github.com/qoretechnologies/qore/issues/6781">issue 6781</a>)
+    - over HTTP/2 and HTTP/3, a data frame, a continuation frame included, with an RSV bit set that no negotiated
+      extension defines (RFC 6455 section 5.2) closes the connection with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002), as on HTTP/1.1
+      (<a href="https://github.com/qoretechnologies/qore/issues/6810">issue 6810</a>)
     - a connection closed because a message was larger than the maximum message size is reported with its close code
       1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
@@ -2161,6 +2171,17 @@ class WebSocketStreamProcessor {
                     # The C++ frame state always pushes `binary` payloads;
                     # decode text frames to string so gotMessage(string)
                     # overloads dispatch correctly (matches ws_parse_frame).
+                    # the RSV bits of all the frames of the message, which the frame state records, must be those
+                    # of the negotiated extensions (RFC 6455 section 5.2, qore#6810); the extensions see those of
+                    # its first frame only
+                    int rsv_bits = frame.rsv_bits ?? 0;
+                    if (!wsc.validateRsvBits((rsv_bits & WS_RSV1) != 0, (rsv_bits & WS_RSV2) != 0,
+                            (rsv_bits & WS_RSV3) != 0)) {
+                        handler.logError("H2/H3 WebSocket message rejected: RSV bits 0x%x set that no negotiated "
+                            "extension defines", rsv_bits);
+                        wsc.startStreamClose(WSCC_ProtocolError, "Invalid RSV bits");
+                        return;
+                    }
                     auto msg = frame.data ?? binary();
                     if (type == "text") {
                         msg = msg.toString("UTF-8");
@@ -3009,11 +3030,11 @@ handler.setCloseTimeout(2s);
                 is_http3 ? "9220" : "8441");
 
             # Negotiate extensions if supported
-            *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+            *hash<auto> ext_result = negotiateExtensions(http_get_field(hdr, "sec-websocket-extensions"));
             # HTTP/2 and HTTP/3 header field names must be lowercase
             hash<auto> rhdr = {};
-            if (hdr."sec-websocket-key") {
-                rhdr."sec-websocket-accept" = ws_get_response_key(hdr."sec-websocket-key");
+            if (http_get_field(hdr, "sec-websocket-key")) {
+                rhdr."sec-websocket-accept" = ws_get_response_key(http_get_field(hdr, "sec-websocket-key"));
             }
             if (ext_result.response_header) {
                 rhdr."sec-websocket-extensions" = ext_result.response_header;
@@ -3049,7 +3070,7 @@ handler.setCloseTimeout(2s);
         }
 
         # HTTP/1.1 WebSocket upgrade requires Sec-WebSocket-Key
-        if (!hdr."sec-websocket-key") {
+        if (!http_get_field(hdr, "sec-websocket-key")) {
             return {
                 "code": 400,
                 "body": "cannot open WebSocket connection; no Sec-WebSocket-Key header found in request",
@@ -3059,11 +3080,11 @@ handler.setCloseTimeout(2s);
         hash<auto> rhdr = {
             "Upgrade": "websocket",
             "Connection": "Upgrade",
-            "Sec-WebSocket-Accept": ws_get_response_key(hdr."sec-websocket-key"),
+            "Sec-WebSocket-Accept": ws_get_response_key(http_get_field(hdr, "sec-websocket-key")),
         };
 
         # Negotiate extensions if supported
-        *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+        *hash<auto> ext_result = negotiateExtensions(http_get_field(hdr, "sec-websocket-extensions"));
         if (ext_result.response_header) {
             rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
         }

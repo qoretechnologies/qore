@@ -17,7 +17,8 @@
 
 %exec-class ModuleOwnProgramStatePart1
 
-#! runs part 1 of 2 of the cases of ModuleOwnProgramStateBase: the source forms of the Mapper and DataProvider modules
+#! runs part 1 of 4 of the cases of ModuleOwnProgramStateBase: the source forms of the Mapper and
+#! DataProvider modules in the ast and ir modes
 class ModuleOwnProgramStatePart1 inherits ModuleOwnProgramStateBase {
     constructor() : ModuleOwnProgramStateBase("ModuleOwnProgramStatePart1", 1) {
     }

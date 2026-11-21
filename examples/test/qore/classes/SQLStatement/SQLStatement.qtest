@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../qlib/SqlUtil/OracleTestIsolation.qm
+%requires ../../../qlib/SqlUtil/TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -36,7 +37,12 @@ class SQLStatementTest inherits QUnit::Test {
         catch (hash ex) {
             if (m_options.verbose)
                 printf("%s: %s\n", ex.err, ex.desc);
-            # skip tests if we can't create the datasource
+            # without a datasource, the tests skip; one whose database cannot be connected to fails a test
+            # case of its own (qore#6934)
+            string reason = TestRun::getConnectFailureReason("no DB connection", ex);
+            if (reason =~ /^precondition failure: /) {
+                addTestCase("the database can be connected to", sub () { fail(reason); });
+            }
         }
 
         if (dsp) {

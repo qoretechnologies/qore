@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - client connections to a port whose connection attempts get no answer
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientConnectWaitErrorTest
+
+#! the error of a request whose connection is not established in its time names the target and the error of the
+#! attempt before it (qore#6849)
+/** A connection to a host that does not answer (a firewall that drops packets, or on macOS a port that is bound but
+    does not listen) ends when the request's time runs out: the error, \c HTTPCLIENT-TIMEOUT, gave only "connection
+    establishment timed out", and the error of an earlier attempt of the request (a connect timeout, which is retried)
+    was dropped.
+
+    The target is a port whose connection attempts get no answer: on Linux a listener whose accept queue is full,
+    which drops the connection requests that it cannot queue, and on macOS a port that is bound and does not listen.
+*/
+class HttpClientConnectWaitErrorTest inherits QUnit::Test {
+    private {
+        #! the socket of the target, kept for the test
+        Socket target();
+        #! the connections that fill the accept queue of the target on Linux
+        list<Socket> fill = ();
+        #! the port of the target
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpClientConnectWaitError", "1.0", \ARGV) {
+        addTestCase("a request timeout names the target", \testTimeout());
+        addTestCase("a request timeout after a retried connect timeout gives its error", \testRetriedTimeout());
+        addTestCase("a streaming request timeout after a retried connect timeout gives its error",
+            \testStreamingRetriedTimeout());
+        addTestCase("an async submission timeout after a retried connect timeout gives its error",
+            \testSubmitAsyncRetriedTimeout());
+        addTestCase("a background request timeout after a retried connect timeout gives its error",
+            \testRequestAsyncRetriedTimeout());
+        addTestCase("a streaming request ends at an earlier deadline of its caller", \testStreamingEarlierDeadline());
+        addTestCase("a streaming request ignores a later deadline of its caller", \testStreamingLaterDeadline());
+        addTestCase("a streaming request ends at once at a deadline that has passed", \testStreamingPassedDeadline());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        target.bind("127.0.0.1:0");
+        port = target.getSocketInfo().port;
+        if (PlatformOS == "Darwin") {
+            # macOS does not answer a connection to a port that is bound and does not listen
+            return;
+        }
+        # Linux refuses a connection to a port that is bound and does not listen, but drops the connection requests
+        # that a listener cannot queue: the queue is filled until a connection is not established
+        target.listen(0);
+        for (int i = 0; i < 16; ++i) {
+            Socket s();
+            try {
+                s.connect(sprintf("127.0.0.1:%d", port), 500ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-TIMEOUT") {
+                    return;
+                }
+                rethrow;
+            }
+            push fill, s;
+        }
+        throw "SETUP-ERROR", sprintf("the accept queue of the listener on port %d did not fill", port);
+    }
+
+    private HttpClientConnectionManager getManager(timeout request_timeout, *timeout connect_timeout) {
+        hash<HttpClientConnectionManagerOptions> opts = <HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "request_timeout": request_timeout,
+        };
+        if (connect_timeout) {
+            opts.connect_timeout = connect_timeout;
+        }
+        return new HttpClientConnectionManager(opts);
+    }
+
+    #! checks the error of an expired connect wait; returns the error
+    private hash<ExceptionInfo> checkTimeout(*hash<ExceptionInfo> err, string label) {
+        if (!err) {
+            fail(label + ": the request did not fail");
+            return <ExceptionInfo>{};
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": " + got);
+        assertRegex(sprintf("^connection establishment timed out: the connection to 127\\.0\\.0\\.1:%d was not "
+            "established before the time of the request ran out \\(after a wait of [0-9]+ ms\\)", port), err.desc,
+            label + ": " + got);
+        assertEq("127.0.0.1", err.arg.host, label + ": the argument's host");
+        assertEq(port, err.arg.port, label + ": the argument's port");
+        # the wait of the attempt, within the request's 1 s
+        assertEq(Type::Int, err.arg.timeout_ms.type(), label + ": the argument's time");
+        assertTrue(err.arg.timeout_ms >= 0 && err.arg.timeout_ms <= 1000, label + ": the time waited: "
+            + err.arg.timeout_ms);
+        return err;
+    }
+
+    testTimeout() {
+        # the transport's connect timeout (30 s by default) is longer than the request's time
+        HttpClientConnectionManager mgr = getManager(1s);
+        on_exit mgr.closeAll();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(sprintf("http://127.0.0.1:%d", port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        err = checkTimeout(err, "request");
+        assertNRegex("attempt before", err.desc, "no earlier attempt");
+        assertFalse(exists err.arg.last_attempt_error, "no earlier attempt in the argument");
+    }
+
+    #! the connect timeout ends two attempts (at 400 and 800 ms), and the request's time the third (at 1000 ms)
+    private checkRetriedTimeout(*hash<ExceptionInfo> err, string label) {
+        err = checkTimeout(err, label);
+        # the transport's error, as the connection reports it
+        assertRegex("; the attempt before failed with HTTPCLIENT-CONNECT-ERROR: connection closed: "
+            "HTTP1-CONNECT-TIMEOUT: connection to 127\\.0\\.0\\.1:" + port + " was not established within the "
+            "connect timeout \\(400 ms\\)$", err.desc, label);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.arg.last_attempt_error.err, label + ": the earlier attempt's error");
+        assertEq("HTTP1-CONNECT-TIMEOUT", err.arg.last_attempt_error.arg.err, label + ": the transport's error");
+    }
+
+    testRetriedTimeout() {
+        HttpClientConnectionManager mgr = getManager(1s, 400ms);
+        on_exit mgr.closeAll();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(sprintf("http://127.0.0.1:%d", port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        checkRetriedTimeout(err, "request");
+    }
+
+    testStreamingRetriedTimeout() {
+        HttpClientConnectionManager mgr = getManager(1s, 400ms);
+        on_exit mgr.closeAll();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.acquireAndStartStreaming(sprintf("http://127.0.0.1:%d", port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        checkRetriedTimeout(err, "streaming request");
+    }
+
+    testSubmitAsyncRetriedTimeout() {
+        HttpClientConnectionManager mgr = getManager(1s, 400ms);
+        on_exit mgr.closeAll();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.submitRequestAsync(sprintf("http://127.0.0.1:%d", port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        checkRetriedTimeout(err, "async submission");
+    }
+
+    #! starts a streaming request to the target with the given request timeout and deadline; returns its error and
+    #! the time that it took
+    private hash<auto> streamUntil(timeout request_timeout, int deadline_us) {
+        HttpClientConnectionManager mgr = getManager(request_timeout);
+        on_exit mgr.closeAll();
+        date start = now_us();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.acquireAndStartStreaming(sprintf("http://127.0.0.1:%d", port), "GET", "/", NOTHING, False, NOTHING,
+                deadline_us);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        return {"err": err, "elapsed": now_us() - start};
+    }
+
+    #! the caller's deadline (1 s) ends the request before its request timeout (30 s) (qore#6850)
+    testStreamingEarlierDeadline() {
+        hash<auto> r = streamUntil(30s, clock_get_monotonic_us() + 1000000);
+        checkTimeout(r.err, "earlier deadline");
+        assertGe(900ms, r.elapsed, "the request waited until the deadline");
+        assertLt(20s, r.elapsed, "the deadline, not the request timeout, ended the request");
+    }
+
+    #! a deadline of the caller after the end of the request timeout (1 s) does not extend it (qore#6850)
+    testStreamingLaterDeadline() {
+        hash<auto> r = streamUntil(1s, clock_get_monotonic_us() + 60000000);
+        checkTimeout(r.err, "later deadline");
+        assertGe(900ms, r.elapsed, "the request waited for its timeout");
+        assertLt(20s, r.elapsed, "the request timeout ended the request");
+    }
+
+    #! a deadline that has passed ends the request at once, without waiting for a connection (qore#6850)
+    testStreamingPassedDeadline() {
+        hash<auto> r = streamUntil(30s, clock_get_monotonic_us() - 1);
+        if (!r.err) {
+            fail("the request did not fail");
+            return;
+        }
+        assertEq("HTTPCLIENT-TIMEOUT", r.err.err, sprintf("%s: %s", r.err.err, r.err.desc));
+        assertLt(20s, r.elapsed, "the request ended without waiting for its timeout");
+    }
+
+    #! a background request (HttpClientRequestPollOperation) retries the connection itself and gives the transport's
+    #! error of the attempt before its timeout
+    testRequestAsyncRetriedTimeout() {
+        HttpClientConnectionManager mgr = getManager(1s, 400ms);
+        on_exit mgr.closeAll();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.requestAsync(sprintf("http://127.0.0.1:%d", port), "GET", "/").get();
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        if (!err) {
+            fail("the background request did not fail");
+            return;
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, got);
+        assertRegex(sprintf("^timed out waiting for the connection from http://127\\.0\\.0\\.1:%d.*; the attempt "
+            "before failed with HTTP1-CONNECT-TIMEOUT: connection to 127\\.0\\.0\\.1:%d was not established within "
+            "the connect timeout \\(400 ms\\)$", port, port), err.desc, got);
+        assertEq("HTTP1-CONNECT-TIMEOUT", err.arg.last_attempt_error.err, "the transport's error");
+        assertRegex(sprintf("^http://127\\.0\\.0\\.1:%d", port), err.arg.url, "the argument's URL");
+    }
+}

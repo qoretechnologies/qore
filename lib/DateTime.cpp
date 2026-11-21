@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_date_private.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -202,12 +203,12 @@ int DateTime::getEpochMicrosecondsUTCCheckedKind(int64& micros) const {
    return priv->getEpochMicrosecondsUTCCheckedKind(micros);
 }
 
-void DateTime::setDateLiteral(int64 date) {
-   priv->setDateLiteral(date);
+void qore_date_time_ops::setDateLiteralImpl(DateTime* b, int64 date) {
+   b->priv->setDateLiteral(date);
 }
 
-void DateTime::setRelativeDateLiteral(int64 date) {
-   priv->setRelativeDateLiteral(date);
+void qore_date_time_ops::setRelativeDateLiteralImpl(DateTime* b, int64 date) {
+   b->priv->setRelativeDateLiteral(date);
 }
 
 // return the ISO-8601 calendar week information - note that the ISO-8601 calendar year may be different than the actual year

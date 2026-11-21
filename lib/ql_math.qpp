@@ -165,8 +165,11 @@ float round(softfloat value, int precision = 0) [flags=PURE,NAMED_ARGS] {
   *
   * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
   * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
-  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
-  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  * rounded from its binary value; the result is correctly rounded: with a positive <b>precision</b> it has the
+  * precision of the number parsed from the decimal string of its value (see @ref number_string_precision), so that
+  * it is the same number as the number literal of its value (ex:
+  * <tt>round(123.45678901234567891n, 4) == 123.4568n</tt>), and otherwise the precision of <b>value</b>; a result
+  * beyond the exponent range of a number is infinity (it was clamped to about 1e308)
   *
   * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
   * above 10^22
@@ -259,8 +262,11 @@ float ceil(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
   * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
-  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
-  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  * rounded from its binary value; the result is correctly rounded: with a positive <b>precision</b> it has the
+  * precision of the number parsed from the decimal string of its value (see @ref number_string_precision), so that
+  * it is the same number as the number literal of its value (ex:
+  * <tt>ceil(123.45678901234567891n, 4) == 123.4568n</tt>), and otherwise the precision of <b>value</b>; a result
+  * beyond the exponent range of a number is infinity (it was clamped to about 1e308)
   *
   * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
   * above 10^22
@@ -353,8 +359,11 @@ float floor(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
   * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
-  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
-  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  * rounded from its binary value; the result is correctly rounded: with a positive <b>precision</b> it has the
+  * precision of the number parsed from the decimal string of its value (see @ref number_string_precision), so that
+  * it is the same number as the number literal of its value (ex:
+  * <tt>floor(123.45678901234567891n, 4) == 123.4567n</tt>), and otherwise the precision of <b>value</b>; a result
+  * beyond the exponent range of a number is infinity (it was clamped to about 1e308)
   *
   * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
   * above 10^22

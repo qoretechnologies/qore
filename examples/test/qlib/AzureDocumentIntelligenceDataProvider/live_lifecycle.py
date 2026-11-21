@@ -98,7 +98,7 @@ class LiveRun:
         self.role_id = None
         self.cleanup = []
         self.pending = {}
-        self.env = dict(os.environ)
+        self.env = dict(os.environ, QORE_TEST_LIVE_PROVIDERS='azure')  # the live scripts' opt-in (qore#6964)
         self.subscription = self.az("account", "show")["id"]
         self.account = self.az("cognitiveservices", "account", "show", "-n", args.account,
                                "-g", args.resource_group)

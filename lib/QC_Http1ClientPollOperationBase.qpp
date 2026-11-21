@@ -35,6 +35,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -176,6 +177,10 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     if (response_headers_raw) {
         response_headers_raw->deref(xsink);
         response_headers_raw = nullptr;
+    }
+    if (response_trailers) {
+        response_trailers->deref(xsink);
+        response_trailers = nullptr;
     }
     if (response_status_message) {
         response_status_message->deref();
@@ -1772,19 +1777,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         }
         response_headers_raw = nullptr;
 
-        ConstHashIterator hi(hdr);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            // Skip status line pseudo-keys
-            if (!strcmp(key, "status_code") || !strcmp(key, "status_message")
-                    || !strcmp(key, "http_version")) {
-                continue;
+        // every field of the header, with a name that a key of the response can have too (qore#6811)
+        QoreValue fields_val = hdr->getKeyValue("headers");
+        if (fields_val.getType() == NT_HASH) {
+            ConstHashIterator hi(fields_val.get<const QoreHashNode>());
+            while (hi.next()) {
+                response_headers->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
             }
-            // Convert key to lowercase
-            QoreStringNode* lc_key = new QoreStringNode(key);
-            lc_key->tolwr();
-            response_headers->setKeyValue(lc_key->c_str(), hi.get().refSelf(), xsink);
-            lc_key->deref();
         }
 
         // Extract original-case headers from the info hash produced by
@@ -1878,8 +1877,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             return 0;
         };
         QoreValue conn_val = response_headers->getKeyValue("connection");
+        // the values can be inline short strings, which have no node (issue #7038)
         if (conn_val.getType() == NT_STRING) {
-            if (inspect_connection(*conn_val.get<const QoreStringNode>())) {
+            if (inspect_connection(**QoreStringNodeValueHelper(conn_val))) {
                 return nullptr;
             }
         } else if (conn_val.getType() == NT_LIST) {
@@ -1889,7 +1889,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     return nullptr;
                 }
                 QoreValue item = li.getValue();
-                if (item.getType() == NT_STRING && inspect_connection(*item.get<const QoreStringNode>())) {
+                if (item.getType() == NT_STRING && inspect_connection(**QoreStringNodeValueHelper(item))) {
                     return nullptr;
                 }
             }
@@ -1915,7 +1915,18 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         {
             ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
             if (sink) {
-                sink->responseHeaders(*hdr);
+                // the fields with the status line, as HTTP/2 and HTTP/3 report them: the header hash of the socket
+                // gives the fields under "headers" (qore#6761)
+                QoreValue fields = hdr->getKeyValue("headers");
+                ReferenceHolder<QoreHashNode> ev(fields.getType() == NT_HASH
+                    ? fields.get<const QoreHashNode>()->copy() : new QoreHashNode(autoTypeInfo), xsink);
+                for (const char* key : {"status_code", "status_message", "http_version"}) {
+                    QoreValue v = hdr->getKeyValue(key);
+                    if (!v.isNothing()) {
+                        ev->setKeyValue(key, v.refSelf(), xsink);
+                    }
+                }
+                sink->responseHeaders(**ev);
             }
         }
 
@@ -2064,7 +2075,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunk size line"));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;
@@ -2311,9 +2323,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
         if (chunk_size == 0) {
             // Last chunk - read trailing CRLF (or trailers followed by CRLF)
             releaseCurrentOp(xsink);
+            trailer_bytes = 0;
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunked body trailer"));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;
@@ -2507,7 +2521,8 @@ QoreHashNode* Http1ClientPollOperationPriv::readNextChunkSize(ExceptionSink* xsi
     releaseCurrentOp(xsink);
     sock_obj->ref();
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-    setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+    setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+        "chunk size line"));
     if (*xsink) {
         releaseCurrentOp(xsink);
         return nullptr;
@@ -2565,15 +2580,38 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
         if (line_val->getType() == NT_STRING) {
             QoreStringValueHelper line(*line_val);
             if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
-                // Empty line - chunked transfer complete
+                // Empty line - chunked transfer complete; the trailer fields are given with the response (qore#6811)
+                if (!response_trailer_text.empty()) {
+                    QoreString text(response_trailer_text.c_str(), response_trailer_text.size(),
+                        sock_obj->getEncoding());
+                    ReferenceHolder<QoreHashNode> trailers(new QoreHashNode(autoTypeInfo), xsink);
+                    if (my_socket_priv::getPriv(*sock_obj)->convertHeaderToHash(**trailers, text, xsink)) {
+                        QoreStringValueHelper err_str(xsink->getExceptionErr());
+                        QoreStringValueHelper desc_str(xsink->getExceptionDesc());
+                        std::string err = err_str->c_str();
+                        std::string desc = desc_str->c_str();
+                        xsink->clear();
+                        setError(err.c_str(), desc.c_str(), xsink);
+                        return nullptr;
+                    }
+                    response_trailer_text.clear();
+                    if (response_trailers) {
+                        response_trailers->deref(xsink);
+                    }
+                    response_trailers = trailers.release();
+                }
                 return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
             }
-            // Trailer line - read next line
+            // Trailer line - kept, then the next line is read; the lines of the section count together against the
+            // maximum header size of the socket (issue #6867)
             printd(5, "Http1ClientPollOperationPriv::handleRecvChunkCrlf() trailer line\n");
+            response_trailer_text.append(line->c_str(), line->size());
+            trailer_bytes += line->size();
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunked body trailer", trailer_bytes));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;
@@ -2766,6 +2804,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     if (response_headers_raw) {
         resp->setKeyValue("headers_raw", response_headers_raw->hashRefSelf(), xsink);
     }
+    if (response_trailers) {
+        resp->setKeyValue("trailers", response_trailers->hashRefSelf(), xsink);
+    }
     if (!body.isNullOrNothing()) {
         resp->setKeyValue("body", body, xsink);
     } else {
@@ -2949,6 +2990,8 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     // the completed request's action that this one replaces is released first, as when it was released under the
     // lock
     old_completed_channel_action = nullptr;
+    // the trailer fields of a chunked response are given with the end of the stream (qore#6811)
+    ReferenceHolder<QoreHashNode> end_trailers(response_trailers ? response_trailers->hashRefSelf() : nullptr, xsink);
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
@@ -2967,6 +3010,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
         end_resp->setKeyValue("end_stream", true, xsink);
         end_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
+        if (end_trailers) {
+            end_resp->setKeyValue("trailers", end_trailers.release(), xsink);
+        }
         action->execute(end_resp.release(), xsink);
         action->complete(xsink);
         action->deref(xsink);
@@ -3000,6 +3046,11 @@ void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
         response_headers_raw->deref(xsink);
         response_headers_raw = nullptr;
     }
+    if (response_trailers) {
+        response_trailers->deref(xsink);
+        response_trailers = nullptr;
+    }
+    response_trailer_text.clear();
     response_status_code = 0;
     if (response_status_message) {
         response_status_message->deref();
@@ -3659,7 +3710,6 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     @since %Qore 3.0
 */
 qclass Http1ClientPollOperationBase [
-    private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http1ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
@@ -3722,11 +3772,9 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP1CLIENTPOLLOPERATIONBASE,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP1CLIENTPOLLOPERATIONBASE,
-        new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http1_client"), xsink);
 
     // Set self on the connect op so it can build SocketPollInfo hashes
     SocketConnectPollOperation* connect_ptr = connect_op.release();
@@ -3770,7 +3818,7 @@ int Http1ClientPollOperationBase::getIdleTime() [flags=CONSTANT] {
 /** @return the goal string
 */
 string Http1ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -3990,6 +4038,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4051,6 +4100,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4139,6 +4189,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4196,6 +4247,7 @@ nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS
         return QoreValue();
     }
     if (data->getType() == NT_STRING) {
+        // note: safe; qpp makes a node of an inline short string for a *data parameter
         priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink);
         return QoreValue();
     }
@@ -4259,6 +4311,7 @@ int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4341,5 +4394,5 @@ nothing Http1ClientPollOperationBase::installSseState(int stream_id, Queue[Queue
 /** @return the socket
 */
 Socket Http1ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

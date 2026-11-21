@@ -39,6 +39,7 @@ typedef std::map<QoreParseOptions, const char*> rev_opt_map_t;
 
 //! provides access to parse option information
 class ParseOptionMap {
+    friend class qore_parse_option_map_ops;
    private:
       DLLLOCAL static opt_map_t map;
       DLLLOCAL static rev_opt_map_t rmap;
@@ -49,7 +50,6 @@ class ParseOptionMap {
 
    public:
       DLLLOCAL ParseOptionMap();
-      DLLLOCAL static void static_init();
 
       //! find a parse option name from its code
       DLLEXPORT static const char* find_name(const QoreParseOptions& code);
@@ -60,8 +60,6 @@ class ParseOptionMap {
       //! print out all parse options to stdout
       DLLEXPORT static void list_options();
 
-      DLLLOCAL static QoreHashNode* getCodeToStringMap();
-      DLLLOCAL static QoreHashNode* getStringToCodeMap();
 };
 
 #endif

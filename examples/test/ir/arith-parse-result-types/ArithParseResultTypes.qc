@@ -13,8 +13,11 @@
     IR tier and as AOT executables (qcc -O0 and -O3) must be that of the AST interpreter, whose results are checked with
     the expected results below.
 
-    - arith-result-cases.q (parts 1-4: IR and JIT, tiered and the IR tier, AOT -O0, AOT -O3): +, -, * and / applied
-      to parameters of plain, or-nothing, union and container types, with the result in a list literal
+    - arith-result-cases.q (parts 1-4, 6 and 7: IR and JIT, tiered and the IR tier, AOT -O0 and -O3 of the cases of +
+      and -, AOT -O3 and -O0 of the cases of * and /): +, -, * and / applied to parameters of plain, or-nothing, union
+      and container types, with the result in a list literal; an AOT compile of all of them took up to 78 s of CPU
+      time alone in a debug build and was killed at the runner's 300 s limit under load, so each AOT part compiles
+      half of them (the parse defines OnlyAddSub and OnlyMulDiv of the script)
     - arith-list-cases.q (part 5): list + list, list + element and element + list for list and element types (plain,
       soft, or-nothing, typed and untyped), with the result in a list literal in a named function
     - arith-container-cases.q (part 5): map expressions over typed lists, whose element type is the parse result type
@@ -161,8 +164,8 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         addPartCase(1, "matrix cases: AST semantics", \astTest(), (MatrixScript, MatrixCount, MatrixExpected));
         addPartCase(1, "matrix cases: IR and JIT", \modesTest(), (MatrixScript, ("ir", "jit"), False));
         addPartCase(2, "matrix cases: tiered and IR tier", \modesTest(), (MatrixScript, ("tiered",), True));
-        addPartCase(3, "matrix cases: AOT -O0", \aotTest(), (MatrixScript, True, ("-O0",)));
-        addPartCase(4, "matrix cases: AOT -O3", \aotTest(), (MatrixScript, True, ("-O3",)));
+        addPartCase(3, "matrix cases of + and -: AOT -O0", \aotTest(), (MatrixScript, True, ("-O0",), "OnlyAddSub"));
+        addPartCase(4, "matrix cases of + and -: AOT -O3", \aotTest(), (MatrixScript, True, ("-O3",), "OnlyAddSub"));
         addPartCase(5, "container cases: AST semantics", \astTest(),
             (ContainerScript, ContainerCount, ContainerExpected));
         addPartCase(5, "container cases: execution modes", \modesTest(), ContainerScript);
@@ -170,6 +173,8 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         addPartCase(5, "list cases: AST semantics", \astTest(), (ListScript, ListCount, ListExpected));
         addPartCase(5, "list cases: execution modes", \modesTest(), ListScript);
         addPartCase(5, "list cases: AOT executables", \aotTest(), (ListScript, False));
+        addPartCase(6, "matrix cases of * and /: AOT -O3", \aotTest(), (MatrixScript, True, ("-O3",), "OnlyMulDiv"));
+        addPartCase(7, "matrix cases of * and /: AOT -O0", \aotTest(), (MatrixScript, True, ("-O0",), "OnlyMulDiv"));
         set_return_value(main());
     }
 
@@ -210,16 +215,19 @@ class ArithParseResultTypesBase inherits QUnit::Test {
     #! executables give the output of the AST interpreter
     /** With \a skip_or_nothing, the cases with an operand of an or-nothing type are left out: AOT code takes NOTHING
         as 0 in arithmetic on such operands of the matrix script (qore#5889)
+
+        With \a define, the script is parsed and compiled with this parse define, which selects the cases it defines
     */
-    private aotTest(string script, bool skip_or_nothing = True, list<string> opts = ("-O0", "-O3")) {
+    private aotTest(string script, bool skip_or_nothing = True, list<string> opts = ("-O0", "-O3"), *string define) {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
-        list<string> exp = select astOutput(script).split("\n"), !skip_or_nothing || $1 !~ /(^|\s)\*[a-z]/;
+        string define_opt = define ? " --define=" + define : "";
+        list<string> exp = select astOutput(script, define).split("\n"), !skip_or_nothing || $1 !~ /(^|\s)\*[a-z]/;
         TmpDir dir(script + "-aot-");
         foreach string opt in (opts) {
             string exe = sprintf("%s/%s%s", dir.path, script, opt);
-            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe,
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s%s -o %s %s", env, qcc_bin, opt, define_opt, exe,
                 scriptPath(script)));
             assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
             list<string> actual = select ExecModeHarness::run_any(sprintf("%s %s", env, exe)).split("\n"),
@@ -232,8 +240,9 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         return get_script_dir() + "/" + script + ".q";
     }
 
-    #! the output of the script with the AST interpreter
-    private string astOutput(string script) {
-        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(script)));
+    #! the output of the script with the AST interpreter, parsed with the given parse define if any
+    private string astOutput(string script, *string define) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast%s %s", env, qore_bin,
+            define ? " --define=" + define : "", scriptPath(script)));
     }
 }

@@ -5914,8 +5914,8 @@ void QoreOnnxSessionPool::clearAsyncLeaderUnlocked() {
 
 //! Returns true if the exception reports an error code
 static bool onnx_async_error_is(ExceptionSink& err, const char* code) {
-    QoreValue errv = err.getExceptionErr();
-    return errv.getType() == NT_STRING && !strcmp(errv.get<const QoreStringNode>()->c_str(), code);
+    // the error code is read in either string representation
+    return QoreStringDataHelper(err.getExceptionErr()) == code;
 }
 
 bool QoreOnnxSessionPool::isThreadCancel(ExceptionSink& err) {

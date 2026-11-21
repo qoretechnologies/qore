@@ -164,6 +164,10 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+
+//! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
+//! stream for this read of the count (0 when no progress is simulated for the stream)
+DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
 //! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
 //! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
@@ -191,6 +195,8 @@ DLLLOCAL extern std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2];
 //! true to keep the RFC 9113 default connection window (65535) in new HTTP/2 sessions, for tests that detect lost
 //! connection credit by watching the window shrink; see dbg_http2_default_connection_window()
 DLLLOCAL extern std::atomic<bool> qore_dbg_h2_default_connection_window;
+//! Use equally small connection and request-stream windows for new QUIC clients in receive-credit tests.
+DLLLOCAL extern std::atomic<bool> qore_dbg_quic_small_client_stream_window;
 
 //! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
 DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);

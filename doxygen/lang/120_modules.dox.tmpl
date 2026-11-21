@@ -1478,6 +1478,13 @@ qcc of this Qore installation
       reported;
     - if the source module loads, a \c BINARY-MODULE-SOURCE-FALLBACK warning gives the reason; with a warning mask
       of 0, no warning is issued, except for a compiled module that is out of date with its sources
+    - the compiled modules that cannot be loaded because a module that they were compiled against is missing (one
+      that their source loads with \c %%try-module, for example) are reported in one
+      \c BINARY-MODULE-SOURCE-FALLBACK warning for the module load, when it ends, instead of one warning each: it names
+      the missing modules and, for each one, the modules loaded from their source, in the order of their names, ex:
+      <tt>3 AOT modules were loaded from their source because modules that they were compiled against are missing:
+      'msgpack' (ProviderIndexUtil), 'xml' (DataProvider, RestClient); ...</tt>; loading a module from its source is
+      slower than loading its compiled module, so installing the missing modules makes the load faster
 
     The warnings of the module loader (\c BINARY-MODULE-SOURCE-FALLBACK, \c BINARY-MODULE-STALE, and
     \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED for @ref user_module_children "child modules") are reported

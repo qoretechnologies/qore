@@ -23,6 +23,7 @@ module SqlUtilTestBase {
 %requires(reexport) Schema
 %requires(reexport) DbDataProvider
 %requires(reexport) Mapper
+%requires ./TestRunIsolation.qm
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     private {
@@ -89,6 +90,27 @@ public class SqlTestBase inherits QUnit::Test {
         list upsert_data;
 
         Logger logger;
+    }
+
+
+    #! Adds a failing test case when the datasource could not be made because its database cannot be connected to
+    /** A database outage is not a reason to skip (qore#6934): the reason is the precondition failure that an
+        isolation module raised, or that of the datasource string of an environment variable; any other error (a
+        datasource string that is not set, a driver module that cannot be loaded) leaves the tests to skip
+
+        @param ex the exception raised while the datasource was made
+    */
+    private checkConnectFailure(hash<auto> ex) {
+        *string reason;
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            reason = ex.desc;
+        } else if (m_options.connstr && ex.err != "LOAD-MODULE-ERROR" && ex.err !~ /^TEST-/
+            && TestRun::getVariable(m_options.connstr) != "the datasource string") {
+            reason = TestRun::getPreconditionFailure(TestRun::getVariable(m_options.connstr), m_options.connstr, ex);
+        }
+        if (reason) {
+            addTestCase("the database can be connected to", sub () { fail(reason); });
+        }
     }
 
     constructor(string testName, string testVer, any args, *hash mopts) : Test(testName, testVer, \args, mopts) {
