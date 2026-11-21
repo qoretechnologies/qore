@@ -136,6 +136,15 @@ public class HttpAsyncSocketIoController {
         const SyncPollTimeout = 30s;
     }
 
+    private:internal {
+        #! the test hook that the completion of a lingering close calls (see dbgSetLingeringCloseHook()): not readable
+        #! by subclasses
+        static *code<nothing(HttpAsyncSocketIoController, string)> dbg_lingering_close_hook;
+
+        #! the test hook that the destructor calls first (see dbgSetDestructorHook()): not readable by subclasses
+        static *code<nothing(HttpAsyncSocketIoController)> dbg_destructor_hook;
+    }
+
     private {
         #! Lock for atomic operations — RWLock allows concurrent read-only access
         RWLock m();
@@ -288,8 +297,59 @@ public class HttpAsyncSocketIoController {
         logger = new_logger;
     }
 
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that the completion of a lingering close calls (debug builds of the library only)
+    /** For tests: the hook is process-wide (it is called for the connections of every server in the process), so
+        only trusted code with process control can set it, and the method exists only in a debug build of the library
+
+        @param hook the hook, called with the controller and the unique hash of the connection in the thread of the
+        completion, when the connection has been removed, or @ref nothing to remove it; an exception that it raises
+        is ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetLingeringCloseHook(*code<nothing(HttpAsyncSocketIoController, string)> hook)
+            [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the lingering close hook of HTTP connections");
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the lingering close hook of HTTP connections from a context with "
+                "restricted process control";
+        }
+        dbg_lingering_close_hook = hook;
+    }
+
+    #! Sets the test hook that the destructor of a controller calls first (debug builds of the library only)
+    /** For tests: the hook is process-wide (it is called by the destructor of every controller in the process), so
+        only trusted code with process control can set it, and the method exists only in a debug build of the library
+
+        @param hook the hook, called with the controller in the thread of the destructor, or @ref nothing to remove
+        it; an exception that it raises is ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetDestructorHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the destructor hook of HTTP I/O controllers");
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the destructor hook of HTTP I/O controllers from a context with "
+                "restricted process control";
+        }
+        dbg_destructor_hook = hook;
+    }
+    #! @endcond
+%endif
+
     #! Destructor stops the controller
     destructor() {
+        # test hook (a debug build of the library only, qore#6967)
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_destructor_hook) {
+            try {
+                dbg_destructor_hook(self);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
         stop();
     }
 
@@ -2849,9 +2909,12 @@ public class HttpAsyncSocketIoController {
         }
         string owner = linfo.listener.uniqueHash();
         try {
+            # the operation holds this controller until its completion has run (see submitConnectionOpIntern(),
+            # qore#6967)
+            HttpAsyncSocketIoController ctrl @= self;
             auto wrapped_op = new DelegatingPollOperation(ssl_op,
                 sub (hash<SocketPollResultInfo> result) {
-                    handleSslResult(result, uh, linfo, http_version);
+                    ctrl.handleSslResult(result, uh, linfo, http_version);
                 });
             controller.submit(<SocketPollOperationInfo>{
                 "sock": sock,
@@ -3133,14 +3196,18 @@ public class HttpAsyncSocketIoController {
                 "timer_id": 0,
             };
             on_error remove delayed_responses{delay_key};
+            # the timer holds this controller until it has run, as the operations do (see submitConnectionOpIntern(),
+            # qore#6967): its closure's self does not hold the controller, and a cancellation cannot stop a timer whose
+            # callback runs already, so that a destruction elsewhere could delete the controller under the callback
+            HttpAsyncSocketIoController ctrl @= self;
             int timer_id = controller.addTimerDelay(delay, sub () {
                 bool dispatch;
                 {
-                    AutoWriteLock wl(m);
+                    AutoWriteLock wl(ctrl.m);
                     *hash<HttpDelayedResponseInfo> delayed =
-                        remove delayed_responses{delay_key};
-                    dispatch = exists delayed && !stopping
-                        && connections.hasKey(owner);
+                        remove ctrl.delayed_responses{delay_key};
+                    dispatch = exists delayed && !ctrl.stopping
+                        && ctrl.connections.hasKey(owner);
                 }
                 if (dispatch) {
                     callback();
@@ -3421,9 +3488,17 @@ public class HttpAsyncSocketIoController {
                 # held by the I/O controller for as long as it runs, and the entry would keep a stale copy of the
                 # connection's listener, target and operations reachable from it
                 string state = cinfo.state;
+                # the operation holds this controller until its completion has run, as the operations whose
+                # completion context is set do (HttpConnectionPollOperationBase::setCompletionContext()): the
+                # closure's self does not hold it, and the controller was destroyed when the other operations that
+                # held it ended, while this one was pending, so that its completion ran on the deleted controller, or
+                # held the controller's lock while the controller and its lock were deleted (qore#6967); the
+                # reference is opaque, like that one: nothing that the controller holds references this wrapper or
+                # its closure (the global I/O controller does, until the completion has run), so it is in no cycle
+                HttpAsyncSocketIoController ctrl @= self;
                 submit_op = new DelegatingPollOperation(op,
                     sub (hash<SocketPollResultInfo> result) {
-                        handleConnectionResult(result, uh, state);
+                        ctrl.handleConnectionResult(result, uh, state);
                     });
             }
             hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
@@ -3820,6 +3895,13 @@ public class HttpAsyncSocketIoController {
                 {
                     AutoWriteLock al(m);
                     remove connections{uh};
+                }
+                # test hook (a debug build of the library only, qore#6967)
+                if (Option::HAVE_LIBRARY_DEBUGGING && dbg_lingering_close_hook) {
+                    try {
+                        dbg_lingering_close_hook(self, uh);
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
                 }
                 break;
             }
