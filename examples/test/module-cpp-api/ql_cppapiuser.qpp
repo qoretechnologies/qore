@@ -2440,6 +2440,15 @@ hash<auto> sb_reset_restricts() {
     return rv.release();
 }
 
+//! Returns the restrictions of a callable value or object as a scheduler sees them (qore_callable_origin_restrictions())
+/** @param v the value
+
+    @return the restricting functional domains of \a v, as a bitmask (qore#7056)
+*/
+int cpp_api_callable_origin_restrictions(auto v) {
+    return qore_callable_origin_restrictions(v);
+}
+
 //! Captures the sandbox that governs the current thread with QoreSandboxCapture; returns a handle for it
 /** @return the handle of the capture, for the other sb_capture functions; release it with sb_capture_free()
 */

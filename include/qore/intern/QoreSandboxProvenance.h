@@ -50,6 +50,9 @@ DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, 
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
 DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure);
+//! Returns the restrictions of a callable value or object as a mask of parse options (see the public
+//! qore_callable_origin_restrictions()), for code of the library that gates the callables it accepts (qore#7056)
+DLLLOCAL QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v);
 //! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.

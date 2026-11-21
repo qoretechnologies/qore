@@ -1146,6 +1146,27 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
 */
 DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
 
+//! Returns the functional-domain restrictions that a callable value or an object runs with when other code calls it
+/** A scheduler that runs a callback or task later, on another thread or for other code, can refuse a callable that
+    restricted code created by these restrictions, independently of the code that hands it over: they are those
+    recorded with the call reference, closure or object when it was created (the restrictions of the creating code,
+    for code that is not the creating %Program's own: the code of a module or builtin code), combined with the parse
+    options of the %Program whose code it runs, if that is not a module's %Program (a closure, function or method of
+    a restricted %Program is restricted by that %Program, which records nothing), and with those of the %Program that
+    created it, if that is not a module's %Program (an object of a builtin class, or of a class of the host that it
+    imported, which records nothing).  For a method reference, the code is that of the method's class; for an object,
+    that of its class.  An object of a builtin class that module code created for restricted code has no restrictions
+    yet (issue #7039).
+
+    @param v a call reference, a closure or an object; any other value has no restrictions
+
+    @return the restricting functional domains (\c QDOM_*, as a bitmask; the domains of the options that allow
+    something, such as \c QDOM_INJECTION, never count), or 0 if there are none
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int64 qore_callable_origin_restrictions(const QoreValue v);
+
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
 
