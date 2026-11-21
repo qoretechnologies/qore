@@ -3039,6 +3039,31 @@ size_t linux_get_stack_start_pos() {
 }
 #endif
 
+//! Raises the exception of a call whose stack is beyond the thread's limit
+/** A sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack because its
+    limits cannot be enforced, or because the code of another tenant was entered in a trusted build (qore#6536).  Out
+    of line and cold, so that the stack check of every call stays small
+
+    @return -1
+*/
+static __attribute__((noinline, cold)) int raise_stack_limit(ExceptionSink* xsink, ThreadData* td) {
+    if (td->sandbox_budgets.isIsolationRefused()) {
+        td->sandbox_budgets.raiseIsolation(xsink, "call");
+        return -1;
+    }
+    if (td->sandbox_budgets.isStackLost()) {
+        td->sandbox_budgets.raiseLost(xsink, "call");
+        return -1;
+    }
+    if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
+        QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
+        return -1;
+    }
+    xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
+        "(%lu bytes)", td->getUsableStackSize());
+    return -1;
+}
+
 static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
@@ -3063,24 +3088,7 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
-        // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack
-        // because its limits cannot be enforced, or because the code of another tenant was entered in a trusted
-        // build (qore#6536)
-        if (td->sandbox_budgets.isIsolationRefused()) {
-            td->sandbox_budgets.raiseIsolation(xsink, "call");
-            return -1;
-        }
-        if (td->sandbox_budgets.isStackLost()) {
-            td->sandbox_budgets.raiseLost(xsink, "call");
-            return -1;
-        }
-        if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
-            QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
-            return -1;
-        }
-        xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-            "(%lu bytes)", td->getUsableStackSize());
-        return -1;
+        return raise_stack_limit(xsink, td);
     }
 
     return 0;
@@ -3108,21 +3116,7 @@ int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
         return 0;
     }
     // the frame does not fit: raised as check_stack_intern() raises it for the limit
-    if (td->sandbox_budgets.isIsolationRefused()) {
-        td->sandbox_budgets.raiseIsolation(xsink, "call");
-        return -1;
-    }
-    if (td->sandbox_budgets.isStackLost()) {
-        td->sandbox_budgets.raiseLost(xsink, "call");
-        return -1;
-    }
-    if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
-        QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
-        return -1;
-    }
-    xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-        "(%lu bytes)", td->getUsableStackSize());
-    return -1;
+    return raise_stack_limit(xsink, td);
 }
 #endif
 
@@ -5881,6 +5875,19 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     }
 }
 
+bool ProgramThreadCountContextHelper::enterSandboxedProgram(ThreadData* td, ExceptionSink* xsink,
+        qore_program_private* pp) {
+    enterSandboxBudgets(td, pp);
+    // the code of another tenant does not run in a trusted build that a tenant called (qore#6536)
+    if (td->sandbox_budgets.isIsolationRefused()) {
+        td->sandbox_budgets.raiseIsolation(xsink, "entering a Program");
+        restoreContext();
+        restore = false;
+        return true;
+    }
+    return false;
+}
+
 void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,
         qore_program_private* pp, bool runtime) {
 #ifdef DEBUG
@@ -5891,15 +5898,8 @@ void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSin
     // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
     // is not already running a call of it (see design/sandbox-resource-limits.md)
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
-    if (pp->hasSandboxManager()) {
-        enterSandboxBudgets(td, pp);
-        // the code of another tenant does not run in a trusted build that a tenant called (qore#6536)
-        if (td->sandbox_budgets.isIsolationRefused()) {
-            td->sandbox_budgets.raiseIsolation(xsink, "entering a Program");
-            restoreContext();
-            restore = false;
-            return;
-        }
+    if (pp->hasSandboxManager() && enterSandboxedProgram(td, xsink, pp)) {
+        return;
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
@@ -7207,6 +7207,10 @@ const std::string* qore_sandbox_build_caller_domain() {
     ThreadData* td = thread_data.get();
     const QoreSandboxIsolation* iso = td ? td->sandbox_budgets.currentIsolation() : nullptr;
     return iso ? iso->callerDomain() : nullptr;
+}
+
+bool qore_sandbox_isolation_refused_slow() {
+    return qore_sandbox_check_isolation(nullptr, "") != 0;
 }
 
 int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
