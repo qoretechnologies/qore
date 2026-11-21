@@ -177,6 +177,11 @@ class TrustedBase {
         self.ev = ev;
     }
 
+    #! the events, for the sandboxed subclass, which cannot use the private members of this class (qore#6843)
+    Queue getEvents() {
+        return ev;
+    }
+
     hook() {
     }
 
@@ -368,14 +373,14 @@ class SbSub inherits TrustedBase {
             Mutex m();
             m.lock();
             m.unlock();
-            ev.push(\"hook-locked\");
+            getEvents().push(\"hook-locked\");
         } catch (hash<ExceptionInfo> ex) {
-            ev.push(\"hook:\" + ex.err);
+            getEvents().push(\"hook:\" + ex.err);
         }
     }
 
     destructor() {
-        ev.push(\"sub-dtor\");
+        getEvents().push(\"sub-dtor\");
     }
 }
 
@@ -1194,6 +1199,9 @@ class TrustedBase {
     constructor(Queue ev) {
         self.ev = ev;
     }
+    Queue getEvents() {
+        return ev;
+    }
     hook() {
     }
     destructor() {
@@ -1247,13 +1255,13 @@ class SbSub inherits TrustedBase {
             Mutex m();
             m.lock();
             m.unlock();
-            ev.push('hook-locked');
+            getEvents().push('hook-locked');
         } catch (hash<ExceptionInfo> ex) {
-            ev.push('hook:' + ex.err);
+            getEvents().push('hook:' + ex.err);
         }
     }
     destructor() {
-        ev.push('sub-dtor');
+        getEvents().push('sub-dtor');
     }
 }
 sub hold(Queue ev, Counter ready, Counter block) {
