@@ -30,8 +30,9 @@
     (lookalike.q; its private:internal declarations: lookalike-internal.q, which depends on qore#7036).  The uses of
     the private hooks of library classes that stay allowed (overrides, private and public, a recursive call of the own
     override, the implementation of private abstract hooks, the call of the library class's version of an overridden
-    method) and the call of another private method of a library class, which is refused, are in library-hooks.q.  The
-    output of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
+    method) and the call of another private method of a library class, which is refused, are in library-hooks.q; the
+    public methods that library classes offer their sandboxed subclasses in place of their private members are in
+    public-hooks.q.  The output of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
 
     The programs are in \c sandbox-trusted-private-access/.
 */
@@ -41,7 +42,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         string dir = get_script_dir() + "/sandbox-trusted-private-access";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe", "lookalike", "library-hooks");
+        const Programs = ("probe", "lookalike", "library-hooks", "public-hooks");
 
         #! the private:internal declarations of a look-alike class (lookalike-internal.q) are refused once qore#7036
         #! is fixed: until then the program is not run

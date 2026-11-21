@@ -1,0 +1,2 @@
+ftppoller-fatal-member: parse: PARSE-EXCEPTION: illegal access to private member 'fatal' of class 'FtpPoller' in class 'MyPoller': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+ftppoller fatal flag: OK [False, True, False]

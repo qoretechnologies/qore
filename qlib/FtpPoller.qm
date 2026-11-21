@@ -184,6 +184,10 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - added @ref FtpPoller::FtpPoller::setFatal() "FtpPoller::setFatal()" and
+      @ref FtpPoller::FtpPoller::isFatal() "isFatal()" for subclasses, which cannot use the private members of the
+      class when sandboxed code declares them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - a started poller whose last reference is dropped is destroyed, which stops its polling thread: the thread holds
       the poller only for each poll; before, the thread kept the poller, and itself, alive
     - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
@@ -735,6 +739,26 @@ public class FtpPoller {
     #! returns the current poll count
     int getPollCount() {
         return pollcnt;
+    }
+
+    #! Sets the fatal error flag of the poller
+    /** The poller sets the flag when an error is raised after a file event has been handled; a subclass can set it
+        for its own errors and read it with isFatal().  Public, so that a subclass declared by sandboxed code, which
+        cannot use the private members of this class, can use it
+
+        @param fatal the new value of the flag
+
+        @since FtpPoller 2.2
+    */
+    setFatal(bool fatal = True) {
+        self.fatal = fatal;
+    }
+
+    #! Returns the fatal error flag of the poller; see setFatal()
+    /** @since FtpPoller 2.2
+    */
+    bool isFatal() {
+        return fatal;
     }
 
     #! returns the absolute directory of a path to poll
