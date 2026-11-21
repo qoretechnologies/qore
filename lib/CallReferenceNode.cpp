@@ -79,11 +79,9 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
 }
 
 void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm) {
-    // only a reference to library module code records anything, and then only for restricted creating code
-    if (!code_pgm || !qore_program_is_library_module(code_pgm)) {
-        return;
-    }
-    QoreParseOptions origin = qore_creation_origin_restrictions();
+    // only a reference whose code runs where the creating code is not on the stack records anything, and then only
+    // for restricted creating code
+    QoreParseOptions origin = qore_creation_origin_for(code_pgm);
     if (!origin) {
         return;
     }

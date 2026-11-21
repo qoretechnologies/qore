@@ -5,10 +5,11 @@
 #! information, in its initialization, for a plain call, under a host grant, and for code that a grant calls back
 
 %modern
+%requires GrantOther
 
 module GrantProbe {
     # the module's own code uses the domain that its declared function declares
-    domains = "EXTERNAL_INFO";
+    domains = "EXTERNAL_INFO,THREAD_CONTROL,MODULES,EMBEDDED_LOGIC";
     version = "1.0";
     desc = "test module reporting the restrictions of its calling code";
     author = "Qore Technologies, s.r.o.";
@@ -22,6 +23,16 @@ module GrantProbe {
         GrantProbe::Capability = call_static_method("SandboxManager", "createSystemPolicyCall", \GrantProbe::probe());
         GrantProbe::Probe = \GrantProbe::probe();
         GrantProbe::Declared = \GrantProbe::declared();
+        GrantProbe::ProbeProcess = \GrantProbe::probe_process();
+        GrantProbe::ProbeThing = \GrantProbe::probe_thing();
+        GrantProbe::MakeThing = \GrantProbe::make_thing();
+        GrantProbe::LoadNative = \GrantProbe::load_native_intern();
+        GrantProbe::LoadNativeInProgram = \GrantProbe::load_native_in_program_intern();
+        GrantProbe::StartThread = \GrantProbe::start_thread_intern();
+        GrantProbe::Throw = \GrantProbe::throw_intern();
+        GrantProbe::Cross = \GrantProbe::cross_intern();
+        GrantProbe::CrossCapability = call_static_method("SandboxManager", "createSystemPolicyCall",
+            \GrantProbe::cross_intern());
     };
 }
 
@@ -30,6 +41,27 @@ public namespace GrantProbe {
     our code Capability;
     our code Probe;
     our code Declared;
+    our code ProbeProcess;
+    our code ProbeThing;
+    our code MakeThing;
+    our code LoadNative;
+    our code LoadNativeInProgram;
+    our code StartThread;
+    our code Throw;
+    our code Cross;
+    our code CrossCapability;
+    #! the callbacks that the initialization of GrantFire calls
+    our list<code> Listeners;
+    #! the path of the native module that the initialization of GrantNativeInit loads, and the result
+    our string NativePath;
+    our auto NativeInitResult;
+
+    #! an object of library code, created by the code of the module
+    public class Thing {
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+        }
+    }
 
     #! a function that declares the domain: the calling code is checked when it is entered
     bool sub declared() [dom=EXTERNAL_INFO] {
@@ -79,7 +111,169 @@ public namespace GrantProbe {
     }
 
     #! calls back the caller's code under a policy barrier
-    public auto sub call_barrier(code c) {
-        return call_static_method("SandboxManager", "callWithSystemPolicy", c);
+    public auto sub call_barrier(code c, *softlist<auto> args) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", c, args);
+    }
+
+    #! calls back the caller's code under a policy barrier, or returns the error
+    public auto sub try_barrier(code c) {
+        try {
+            return call_static_method("SandboxManager", "callWithSystemPolicy", c);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! calls a method of the caller's object under a policy barrier that the module code sets up
+    public auto sub with_grant(object o) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", auto sub () { return o.probe(); });
+    }
+
+    bool sub probe_process() {
+        return SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+    }
+
+    #! returns whether the calling code is restricted from process control under a policy barrier: not lent
+    public bool sub barrier_process() {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", ProbeProcess);
+    }
+
+    Thing sub make_thing() {
+        return new Thing();
+    }
+
+    #! returns an object of the module created under a policy barrier
+    public Thing sub make_thing_in_grant() {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", MakeThing);
+    }
+
+    #! returns an object of the module created for the caller
+    public Thing sub make_thing_plain() {
+        return new Thing();
+    }
+
+    bool sub probe_thing(Thing t) {
+        return t.probe();
+    }
+
+    #! returns whether the object's code is restricted under a policy barrier
+    public bool sub thing_in_grant(Thing t) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", ProbeThing, t);
+    }
+
+    list<bool> sub start_thread_intern() {
+        Queue q();
+        background q.push((SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO),
+            SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)));
+        return q.get();
+    }
+
+    #! returns the restrictions (external information, process control) of a thread started under a policy barrier
+    public list<bool> sub thread_in_grant() {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", StartThread);
+    }
+
+    nothing sub throw_intern() {
+        throw "GRANT-TEST-ERROR";
+    }
+
+    #! returns whether the calling code is restricted after an exception left a policy barrier
+    public bool sub after_exception() {
+        try {
+            call_static_method("SandboxManager", "callWithSystemPolicy", Throw);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return probe();
+    }
+
+    list<auto> sub cross_intern() {
+        GrantOther::Obj o();
+        string declared;
+        try {
+            declared = GrantOther::declared();
+        } catch (hash<ExceptionInfo> ex) {
+            declared = ex.err;
+        }
+        return (GrantOther::probe(), o.probe(), declared);
+    }
+
+    #! calls another library module under a policy barrier: it is lent too
+    public list<auto> sub cross_in_grant() {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", Cross);
+    }
+
+    #! calls another library module in a capability: it is lent too
+    public list<auto> sub cross_in_capability() {
+        return CrossCapability();
+    }
+
+    #! calls another library module for the caller
+    public list<auto> sub cross_plain() {
+        return cross_intern();
+    }
+
+    #! sets the path of the native module that the initialization of GrantNativeInit loads
+    public nothing sub set_native_path(string path) {
+        NativePath = path;
+    }
+
+    #! returns the path of the native module that the initialization of GrantNativeInit loads
+    public string sub get_native_path() {
+        return NativePath;
+    }
+
+    #! sets the result of the native module load of the initialization of GrantNativeInit
+    public nothing sub set_native_init_result(auto v) {
+        NativeInitResult = v;
+    }
+
+    #! returns the result of the native module load of the initialization of GrantNativeInit
+    public auto sub get_native_init_result() {
+        return NativeInitResult;
+    }
+
+    #! registers a callback for the initialization of GrantFire
+    public nothing sub register(code c) {
+        Listeners += c;
+    }
+
+    #! calls the registered callbacks
+    public list<auto> sub fire() {
+        return map $1(), Listeners;
+    }
+
+    auto sub load_native_intern(string path) {
+        try {
+            load_module(path);
+            return "LOADED";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc =~ /native code only from the module path/ ? "NATIVE-REFUSED" : ex.err;
+        }
+    }
+
+    auto sub load_native_in_program_intern(string path) {
+        Program target(PO_NEW_STYLE);
+        try {
+            target.loadModule(path);
+            return "LOADED";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc =~ /native code only from the module path/ ? "NATIVE-REFUSED" : ex.err;
+        }
+    }
+
+    #! loads a native module by its path into another Program under a policy barrier: the host grant and the Program
+    #! switch together (issues #6844, #7020)
+    public auto sub load_native_in_program_barrier(string path) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", LoadNativeInProgram, path);
+    }
+
+    #! loads a native module by its path under a policy barrier
+    public auto sub load_native_barrier(string path) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", LoadNative, path);
+    }
+
+    #! loads a native module by its path
+    public auto sub load_native(string path) {
+        return load_native_intern(path);
     }
 }

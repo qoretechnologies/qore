@@ -1275,6 +1275,7 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
     QoreParseOptions old_caller_restrictions;
+    uint64_t old_caller_restrictions_gen;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
     bool old_sandboxed;
@@ -1426,6 +1427,9 @@ struct QoreRuntimePoState {
     /** see runtime_get_own_program_state_parse_options()
     */
     QoreParseOptions caller_restrictions;
+    //! the generation of caller_restrictions: changed each time they are set, restored with them (qore#6844, see
+    //! ThreadData::GrantSnapshot)
+    uint64_t caller_restrictions_gen;
     //! the Program of the module whose code runs with caller_restrictions, or nullptr
     const QoreProgram* module_pgm;
     //! the ID of the application Program that the code of module_pgm runs for
@@ -1594,6 +1598,8 @@ private:
     std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
     //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
     QoreParseOptions old_caller_restrictions;
+    //! their generation (ThreadData::thread_caller_restrictions_gen)
+    uint64_t old_caller_restrictions_gen = 0;
 
     //! restores old_caller_restrictions
     DLLLOCAL void restoreCallerRestrictions();
@@ -1845,6 +1851,11 @@ DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
     example) has the restrictions of the Program that loaded it and is calling code (qore#6337)
 */
 DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
+//! returns true if the calling code may not use uncontrolled APIs, for the loading of native code (qore#6844)
+/** As qore_caller_restricts_domain(QDOM_UNCONTROLLED_API), but neither a host grant nor a module initialization
+    barrier hides the code that established it or loaded the module: neither lends the loading of native code
+*/
+DLLLOCAL bool qore_caller_restricts_native_code();
 
 //! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
 /** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their

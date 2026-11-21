@@ -7,6 +7,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
+%requires Util
 %requires ../../TestInterpreter.qm
 
 %exec-class CallerRestrictionGrantsTest
@@ -16,6 +18,7 @@
 class CallerRestrictionGrantsTest inherits QUnit::Test {
     constructor() : Test("CallerRestrictionGrants", "1.0", \ARGV) {
         addTestCase("module initialization and host grants", \grantsTest());
+        addTestCase("objects and call references of restricted code, lent domains and native code", \referencesTest());
         set_return_value(main());
     }
 
@@ -30,5 +33,90 @@ class CallerRestrictionGrantsTest inherits QUnit::Test {
         # still restricted; a function that declares the domain is refused for the restricted caller and lent under a
         # policy barrier
         assertEq("[False, True, False, False, True, \"INVALID-FUNCTION-ACCESS\", True]\n", out);
+    }
+
+    #! the code of an object or call reference that restricted code created is restricted under a host grant and in the
+    #! initialization of library code when the creating code is not on the stack; a grant lends only the file system,
+    #! the network and external information; native code is never loaded for a restricted caller through a grant or
+    #! by the initialization of library code (issue #6844)
+    referencesTest() {
+        # absolute paths: the child resolves a relative path of a module from its own directory
+        string base = normalize_dir(get_script_dir()) + DirSep;
+        string dir = base + "caller-restriction" + DirSep;
+        TmpDir tmp("caller-restriction-grants-");
+        # a native module outside the module path: refused before it is opened, or it fails to load
+        string native = tmp.path + DirSep + "GrantNative.qmod";
+        {
+            File f();
+            f.open2(native, O_CREAT | O_WRONLY | O_TRUNC);
+        }
+        string cmd = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' '%s' '%s' %%s 2>&1",
+            (dir, ENV.QORE_MODULE_DIR).join(PathSep), TestInterpreter::qore_interpreter(),
+            dir + "GrantReferenceChild.q", base + "grant-path" + DirSep + "GrantPath.qm", native);
+        hash<string, string> r = parse(backquote(sprintf(cmd, "restricted")));
+        hash<string, string> u = parse(backquote(sprintf(cmd, "unrestricted")));
+        hash<string, string> sb = parse(backquote(sprintf(cmd, "sandboxed")));
+        # trusted code under a grant is lent access also in the other library modules that it calls, also for a
+        # caller with a sandbox; the code of the host that it imported runs with the host's Program on the stack
+        foreach hash<auto> i in ({"restricted": r, "sandboxed": sb, "unrestricted": u}.pairIterator()) {
+            hash<string, string> h = i.value;
+            assertEq("[False, False, \"OK\"]", h.cross_in_grant, i.key + ": another library module under a grant");
+            assertEq("[False, False, \"OK\"]", h.cross_in_capability, i.key
+                + ": another library module in a capability");
+            assertEq(i.key == "unrestricted" ? "[False, False, \"OK\"]" : "[True, True, \"INVALID-FUNCTION-ACCESS\"]",
+                h.cross_plain, i.key + ": another library module for the caller");
+            assertEq("False", h.imported_obj, i.key + ": an object of an imported class");
+            assertEq("False", h.imported_obj_ref, i.key + ": a call reference to a method of an imported class");
+            assertEq("\"OK\"", h.imported_obj_declared, i.key + ": a declared domain called by imported code");
+            assertEq("False", h.imported_func_ref, i.key + ": a call reference to an imported function");
+        }
+        assertEq(7, sb.size(), "sandboxed: every result");
+        # every way that restricted code's code runs is restricted, also under a grant and in a module's initialization
+        foreach string k in (("path_direct", "closure_barrier", "path_ref_barrier", "path_obj_ref_barrier",
+                "subclass_ref_barrier", "made_obj_ref_barrier", "builtin_ref_barrier", "obj_with_grant",
+                "thing_made_plain", "after_exception")) {
+            assertEq("True", r{k}, "restricted: " + k);
+            assertEq("False", u{k}, "unrestricted: " + k);
+        }
+        assertEq("[True, True]", r.init_fired, "restricted: callbacks fired by a module's initialization");
+        assertEq("[False, False]", u.init_fired, "unrestricted: callbacks fired by a module's initialization");
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.declared_ref_barrier, "restricted: a declared domain under a grant");
+        assertEq("\"HOST\"", u.declared_ref_barrier, "unrestricted: a declared domain under a grant");
+        # a grant lends external information, not process control
+        assertEq("True", r.process_barrier, "restricted: process control is not lent");
+        assertEq("False", u.process_barrier, "unrestricted: process control");
+        # an object that library code creates under a grant does not record the lent restrictions
+        assertEq("False", r.thing_made_in_grant, "restricted: an object created under a grant");
+        assertEq("False", u.thing_made_in_grant, "unrestricted: an object created under a grant");
+        assertEq("[False, True]", r.thread_in_grant, "restricted: a thread started under a grant");
+        assertEq("[False, False]", u.thread_in_grant, "unrestricted: a thread started under a grant");
+        # the loading of native code from outside the module path is not lent
+        assertEq("\"NATIVE-REFUSED\"", r.native_barrier, "restricted: native code under a grant");
+        assertEq("\"NATIVE-REFUSED\"", r.native_init, "restricted: native code in a module's initialization");
+        assertEq("\"NATIVE-REFUSED\"", r.native_program_barrier,
+            "restricted: native code into another Program under a grant");
+        assertNeq("\"NATIVE-REFUSED\"", u.native_program_barrier,
+            "unrestricted: native code into another Program under a grant");
+        assertNeq("\"NATIVE-REFUSED\"", u.native_barrier, "unrestricted: native code under a grant");
+        assertNeq("\"NATIVE-REFUSED\"", u.native_init, "unrestricted: native code in a module's initialization");
+        assertEq(25, r.size(), "restricted: every result");
+        assertEq(25, u.size(), "unrestricted: every result");
+    }
+
+    #! parses the output of a child process: one line per result, with the key, \c "=" and the value written with
+    #! \c %y
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> kv = (line =~ x/^([a-z_]+)=(.*)$/);
+            if (!kv) {
+                throw "CHILD-OUTPUT-ERROR", sprintf("unexpected output: %s", out);
+            }
+            rv{kv[0]} = kv[1];
+        }
+        return rv;
     }
 }
