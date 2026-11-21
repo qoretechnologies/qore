@@ -20951,6 +20951,31 @@ static QoreValue f_dbg_dsp_wait_for_waiters(const QoreListNode* params, RuntimeC
 }
 #endif
 
+#ifdef DEBUG
+//! adds time to the measured time of the next wait for a free connection of a DatasourcePool
+/** So that a test can make a waiting thread's wait exceed the threshold of the warning callback without sleeping
+    (qore#6961); the time is added once, by the next thread that ends a wait, and then reset
+
+    @param pool the DatasourcePool
+    @param us the microseconds to add; 0 resets it
+ */
+static QoreValue f_dbg_dsp_add_next_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* o = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    int64 us = get_param_value(params, 1).getAsBigInt();
+    if (us < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_dsp_add_next_wait() requires a time that is not negative; "
+            "got " QLLD, us);
+        return QoreValue();
+    }
+    ReferenceHolder<DatasourcePool> dsp(o->getReferencedPrivateData<DatasourcePool>(CID_DATASOURCEPOOL, xsink),
+        xsink);
+    if (dsp) {
+        dsp->dbgAddNextWait(us);
+    }
+    return QoreValue();
+}
+#endif
+
 // --- code flag oracle (debug builds only) ---
 
 /* The functions below exist so that the parser's code-flag diagnostics can be tested against every
@@ -28751,6 +28776,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
         stringTypeInfo, QORE_PARAM_NO_ARG, "op_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "when");
+    qns.addBuiltinVariant("dbg_dsp_add_next_wait", f_dbg_dsp_add_next_wait,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        QC_DATASOURCEPOOL->getTypeInfo(), QORE_PARAM_NO_ARG, "pool",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
     qns.addBuiltinVariant("dbg_dsp_wait_for_waiters", f_dbg_dsp_wait_for_waiters,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
         QC_DATASOURCEPOOL->getTypeInfo(), QORE_PARAM_NO_ARG, "pool",

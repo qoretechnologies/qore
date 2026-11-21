@@ -631,6 +631,13 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
 
         // add waiting time to total time
         wait_total += (q_get_monotonic_us() - warn_start);
+#ifdef DEBUG
+        // a time injected by a test for this wait, read and reset with the pool lock held
+        if (dbg_next_wait_us) {
+            wait_total += dbg_next_wait_us;
+            dbg_next_wait_us = 0;
+        }
+#endif
 
         if (!valid) {
             xsink->raiseException("DATASOURCEPOOL-ERROR", "%s: DatasourcePool deleted while TID %d waiting " \
@@ -1042,6 +1049,11 @@ bool DatasourcePool::dbgWaitForWaiters(unsigned count, int timeout_ms) {
         }
     }
     return true;
+}
+
+void DatasourcePool::dbgAddNextWait(int64 us) {
+    AutoLocker al((QoreThreadLock*)this);
+    dbg_next_wait_us = us;
 }
 #endif
 
