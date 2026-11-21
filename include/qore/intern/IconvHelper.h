@@ -197,8 +197,13 @@ public:
        whose input is left to iconv (see qore_encoding_private::defined_multibyte) (qore#6796)
    */
    DLLLOCAL static bool isStructuredMultiByte(const QoreEncoding* enc) {
-      return enc != QCS_UTF8 && enc->isMultiByte() && !isUnicodeForm(enc)
-         && !qore_encoding_private::isStateful(enc) && qore_encoding_private::get(*enc)->defined_multibyte;
+      // the flag is read first, inline: it is set only for the encodings of the defined multi-byte families, so a
+      // conversion from any other encoding (a single-byte one, for example) pays no more than this check
+      if (!qore_encoding_private::get(*enc)->defined_multibyte) {
+         return false;
+      }
+      assert(enc != QCS_UTF8 && enc->isMultiByte() && !isUnicodeForm(enc) && !qore_encoding_private::isStateful(enc));
+      return true;
    }
 
    //! Returns true if the platform's iconv rejects values above U+10FFFF and unpaired surrogates in Unicode forms
