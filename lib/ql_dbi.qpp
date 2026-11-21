@@ -149,6 +149,37 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
         @ref Qore::SQL::DatasourcePool::constructor(hash<auto>, __7_ Qore::Thread::Queue, auto) "DatasourcePool::constructor(hash<auto>, *Queue, auto)" \
         variant for setting the minimum and maximum connections in the pool, respectively; other options are passed \
         to the DBI driver
+
+    @section datasource_secrets Credentials in Datasource Messages
+    The exceptions of %Qore about a datasource string, a @ref datasource_hash "datasource hash" or the connection values
+    of a @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool", and the
+    descriptions of datasources in its messages and logs, never show the user name, the password or the database name
+    of a datasource (since %Qore 3.0):
+    - an error about a datasource string that cannot be parsed shows only its driver name (as
+      <tt><em>driver</em>:****</tt>), or \c "****" if it has no valid driver name
+    - the errors of a datasource show its masked description: its driver, host and port, with the user name, the
+      password and the database name masked as \c "****"
+      (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>);
+      @ref Qore::SQL::mask_datasource(string) "mask_datasource()" and
+      @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" give this
+      description to Qore code
+    - a driver name is shown only if it is a valid driver name (only ASCII letters, digits, \c "_" and \c "-"); a
+      driver name that is not valid, such as a datasource string given as the driver name, is not looked up or loaded
+      as a module, and is rejected without being shown
+    - a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":", \c "[" and
+      \c "]" (the characters of a host name or an IP address); a host with any other character, such as a control
+      character, a space or a \c "/" (a socket path), is shown as \c "****"
+    - the option block of a datasource string is found from its last \c "{", so a \c "{" in a password can make a
+      part of the password and the database name the option block, and a part of the password the host: a string
+      with an option name with \c "@" is refused with \c DATASOURCE-PARSE-ERROR, which shows no option name, and
+      @ref Qore::SQL::mask_datasource(string) "mask_datasource()" describes a string with an option value with
+      \c "@" by its driver name only; a password with \c "{" can still make a datasource string ambiguous, so give
+      such a password in a @ref datasource_hash "datasource hash" or with the connection arguments of
+      @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    - the debug output of URL parsing shows no URL or password
+
+    A datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the text
+    before the first \c ":" is taken as the driver name; always give the driver prefix.
 */
 ///@{
 namespace Qore::SQL;
@@ -357,10 +388,12 @@ string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARG
 
     @param datasource a datasource string as accepted by @ref Qore::SQL::parse_datasource() "parse_datasource()"
 
-    @return the masked description of the datasource; a string that cannot be parsed is described as
+    @return the masked description of the datasource; a string that cannot be parsed, or whose option block has an
+    option with \c "@" (which makes the split of the string ambiguous), is described as
     <tt><em>driver</em>:****</tt> if it starts with a valid driver name followed by \c ":", or as \c "****" otherwise;
     the driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with
-    \c "****" otherwise
+    \c "****" otherwise; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":",
+    \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
 
     @par Example:
     @code{.py}
@@ -397,7 +430,8 @@ string mask_datasource(string datasource) [flags=CONSTANT,NAMED_ARGS] {
     @param config a @ref datasource_hash "datasource hash"; a \c "type" (driver name) or \c "host" value that is not a
     string is ignored, as is a \c "port" value that is not an integer or a string with an integer from 1 to 65535;
     the driver name is shown only if it has only ASCII letters, digits, \c "_" and \c "-", and is replaced with
-    \c "****" otherwise
+    \c "****" otherwise; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":",
+    \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
 
     @return the masked description of the datasource
 

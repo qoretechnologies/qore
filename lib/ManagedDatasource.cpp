@@ -694,6 +694,11 @@ int ManagedDatasource::getPendingPort() const {
    return Datasource::getPendingPort();
 }
 
+void ManagedDatasource::appendMaskedPendingDesc(QoreString& str) const {
+    DsLocker al(*this);
+    q_ds_append_masked_pending(str, *this);
+}
+
 int ManagedDatasource::getPort() const {
     // the port in use is changed with ds_lock held by the thread that holds the connection (qore#6142)
     DsLocker al(*this);

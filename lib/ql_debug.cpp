@@ -11651,6 +11651,15 @@ static void ut_datasource_pending_params_locked(UnitTestCounters& c) {
         UT_ASSERT(c, ut_ds_str(ds.getPendingDBName()) == "x3-db2", "X3: the new database name is pending");
         UT_ASSERT_EQ(c, 4321, ds.getPendingPort(), "X3: the new port is pending");
 
+        // the masked description reads the pending host and port in one section, so that it never pairs the host
+        // with a port set for another (qore#6988)
+        QoreString desc;
+        ut_ds_pending_sections(c, 1, "X3: q_ds_append_masked_pending()", [&]() {
+            q_ds_append_masked_pending(desc, ds);
+        });
+        UT_ASSERT(c, !strcmp(desc.c_str(), "qore-ut-dsopt:****/****@****%x3-host:4321"),
+            "X3: the masked description has the pending host and port");
+
         // the source and the target are each read or written in a section of their own, never together: the source,
         // the creators of the target (which are merged with those of the source outside the lock), and the target
         Datasource target(drv);
@@ -11662,6 +11671,12 @@ static void ut_datasource_pending_params_locked(UnitTestCounters& c) {
         // the managed datasource: its configuration methods take the transaction lock, not the lock of the values
         UtManagedDsHolder md(new ManagedDatasource(drv));
         ut_ds_configure(*md.ds, "x3m");
+        QoreString mdesc;
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::appendMaskedPendingDesc()", [&]() {
+            md.ds->appendMaskedPendingDesc(mdesc);
+        });
+        UT_ASSERT(c, !strcmp(mdesc.c_str(), "qore-ut-dsopt:****/****@****%x3m-host:1234"),
+            "X3: the managed masked description has the pending host and port");
         ReferenceHolder<QoreHashNode> mh(nullptr);
         ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::getConfigHash() of a closed datasource", [&]() {
             mh = md.ds->getConfigHash(&xsink);

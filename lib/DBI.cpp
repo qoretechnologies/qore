@@ -835,15 +835,37 @@ int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err) {
     assert(xsink);
     xsink->raiseException(err, "the DBI driver name is not valid: a driver name has only ASCII letters, digits, '_' "
         "and '-'; it is not shown, as it can be a datasource string with credentials (a datasource string is accepted "
-        "only as the only connection argument)");
+        "only where a datasource string is expected, never as a driver name)");
     return -1;
 }
 
+// returns true if the host name has only characters that a host name or an IP address can have (qore#6988)
+/** ASCII letters, digits, '.', '-', '_', and ':', '[' and ']' for an IPv6 address; a host with any other character
+    (such as a control character, which could forge a line of a log, or the text of a datasource string that is not a
+    host name) is not shown
+*/
+static bool q_ds_valid_host_name(const char* host, size_t len) {
+    // a NUL character, which would end the host as a C string, is not valid either
+    for (const char* p = host, *e = host + len; p < e; ++p) {
+        // independent of the locale
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-'
+            || c == '_' || c == ':' || c == '[' || c == ']')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port) {
+    q_ds_append_masked(str, driver, host, host ? strlen(host) : 0, port);
+}
+
+void q_ds_append_masked(QoreString& str, const char* driver, const char* host, size_t host_len, int port) {
     str.sprintf("%s:" QORE_DS_MASK "/" QORE_DS_MASK "@" QORE_DS_MASK,
         q_dbi_valid_driver_name(driver) ? driver : QORE_DS_MASK);
-    if (host && *host) {
-        str.sprintf("%%%s", host);
+    if (host && host_len) {
+        str.sprintf("%%%s", q_ds_valid_host_name(host, host_len) ? host : QORE_DS_MASK);
         if (port) {
             str.sprintf(":%d", port);
         }
@@ -905,7 +927,7 @@ void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
     // value that is not a string gives nullptr
     QoreStringDataHelper type(h->getKeyValue("type"));
     QoreStringDataHelper host(h->getKeyValue("host"));
-    q_ds_append_masked(str, type.c_str(), host.c_str(), q_ds_hash_port(h));
+    q_ds_append_masked(str, type.c_str(), host.c_str(), host.size(), q_ds_hash_port(h));
 }
 
 void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
@@ -923,6 +945,26 @@ void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
         }
         q_ds_append_masked_string(str, tmp->c_str());
         return;
+    }
+    // the option block is found from the last '{' of the string, so a '{' in the password can make the text after it,
+    // with the real database name and host, the option block, and a part of the password the host; an option with
+    // '@', which separates the credentials from the database name, makes the split ambiguous, so only the driver is
+    // shown then (qore#6988)
+    QoreValue opts = h->getKeyValue("options");
+    if (opts.getType() == NT_HASH) {
+        ConstHashIterator i(opts.get<const QoreHashNode>());
+        while (i.next()) {
+            QoreStringDataHelper val(i.get());
+            if (strchr(i.getKey(), '@') || (val && memchr(val.c_str(), '@', val.size()))) {
+                QoreStringDataHelper driver(h->getKeyValue("type"));
+                if (driver && q_dbi_valid_driver_name(driver.c_str())) {
+                    str.sprintf("%s:" QORE_DS_MASK, driver.c_str());
+                } else {
+                    str.concat(QORE_DS_MASK);
+                }
+                return;
+            }
+        }
     }
     q_ds_append_masked_hash(str, *h);
 }
@@ -1017,6 +1059,18 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
                 }
                 if (oend) {
                     ++p;
+                }
+            }
+
+            // the option block is found from the last '{', so a '{' in a password can make a part of the password
+            // and the database name an option; an option name never has '@', which separates the credentials from
+            // the database name, so such a string is refused, and its option names are not shown, as they can be a
+            // part of a password (qore#6988)
+            ConstHashIterator oi(*opt);
+            while (oi.next()) {
+                if (strchr(oi.getKey(), '@')) {
+                    return parse_error("an option name in the option specification has '@'; a password with '{' can "
+                        "be given in a datasource hash");
                 }
             }
 

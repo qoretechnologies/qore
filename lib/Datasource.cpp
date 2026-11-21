@@ -2686,6 +2686,13 @@ int Datasource::getPendingPort() const {
     return priv->getPendingPort();
 }
 
+void q_ds_append_masked_pending(QoreString& str, const Datasource& ds) {
+    std::string host;
+    int port;
+    qore_ds_private::get(const_cast<Datasource&>(ds))->getPendingHostPort(host, port);
+    q_ds_append_masked(str, ds.getDriverName(), host.c_str(), port);
+}
+
 const char* Datasource::getDriverName() const {
     return priv->dsl->getName();
 }

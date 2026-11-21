@@ -171,7 +171,9 @@ string desc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
     /** @param ds the datasource
 
         @return a key made from the driver name, the user name, the database name, the host and the port of the
-        datasource: <tt><em>driver</em>:<em>user</em>\@<em>db</em>[%<em>host</em>[:<em>port</em>]]</tt>
+        datasource: <tt><em>driver</em>:<em>user</em>\@<em>db</em>[%<em>host</em>][:<em>port</em>]</tt>, where each
+        \c "\\", \c ":", \c "@" and \c "%" in the driver name, the user name, the database name and the host is
+        escaped with a \c "\\", so that two connections that differ in any of them never get the same key
 
         @note the key contains the user name and the database name, so it must not be shown in exception messages or
         logs; use makeDatasourceDesc() for messages
@@ -181,14 +183,21 @@ string desc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
         @since %SqlUtil 3.11.0
     */
     static string makeDatasourceKey(AbstractDatasource ds) {
-        string key = sprintf("%s:%s@%s", ds.getDriverName(), ds.getUserName(), ds.getDBName());
+        # each separator in a part is escaped, so that the key is never the same for two connections (issue #6988)
+        string key = sprintf("%s:%s@%s", AbstractSqlUtilBase::escapeKeyPart(ds.getDriverName()),
+            AbstractSqlUtilBase::escapeKeyPart(ds.getUserName()), AbstractSqlUtilBase::escapeKeyPart(ds.getDBName()));
         if (*string host = ds.getHostName()) {
-            key += "%" + host;
+            key += "%" + AbstractSqlUtilBase::escapeKeyPart(host);
         }
         if (*int port = ds.getPort()) {
             key += sprintf(":%d", port);
         }
         return key;
+    }
+
+    #! returns a part of a key of makeDatasourceKey() with each separator and escape character escaped
+    private:internal static string escapeKeyPart(*string str) {
+        return str ? regex_subst(str, "([\\\\:@%])", "\\\\$1", RE_Global) : "";
     }
 
     #! returns a name as an SQL identifier for the database

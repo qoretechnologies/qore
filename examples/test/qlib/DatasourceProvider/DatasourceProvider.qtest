@@ -6,6 +6,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+# the interpreter that the test runner runs (examples/test/runner/test_interpreter_lookup)
+%requires ../../TestInterpreter.qm
 
 %exec-class DatasourceProviderTest
 
@@ -14,6 +16,7 @@ public class DatasourceProviderTest inherits QUnit::Test {
         addTestCase("dsp test", \datasourceProviderTest());
         addTestCase("dsp neg test", \datasourceProviderNegativeTest());
         addTestCase("dsp masked strings", \datasourceProviderMaskedTest());
+        addTestCase("dsp masked verbose output", \datasourceProviderVerboseTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -40,6 +43,33 @@ public class DatasourceProviderTest inherits QUnit::Test {
         p.parse("string sub test(string str) { return get_ds_string(str); }", "");
         assertThrows("DATASOURCE-ERROR", \p.callFunction(), ("test", "X"));
         assertEq("X:", p.callFunction("test", "X:"));
+    }
+
+    # the verbose output of get_ds_string() shows the text of a provider module's exception with the datasource string
+    # masked; an identifier is shown (qore#6988)
+    datasourceProviderVerboseTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+        string module_dir = dir + "/../../../../qlib" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string env = sprintf("QORE_MODULE_DIR='%s' QORE_DATASOURCE_PROVIDERS='%s/EchoDatasourceProvider.qm'",
+            module_dir, dir);
+
+        # a datasource string, which the provider module does not match, is returned as given, as it has a driver
+        string out = backquote(sprintf("%s %s -b '%s/dsp-verbose-child.q' "
+            "'pgsql:u_SECRET1/p_SECRET2@d_SECRET3%%h:5432' 2>&1", env, qore_bin, dir));
+        foreach string secret in (("u_SECRET1", "p_SECRET2", "d_SECRET3")) {
+            assertEq(-1, out.find(secret), sprintf("the verbose output shows %y: %s", secret, out));
+        }
+        # the text of the error is not shown, as a provider module can show the string in any form
+        assertRegex("ECHO-ERROR: \\(the text of the error is not shown, as it can show the datasource string "
+            "pgsql:\\*\\*\\*\\*/\\*\\*\\*\\*@\\*\\*\\*\\*%h:5432\\)", out);
+        assertEq(-1, out.find("cannot resolve"), "the text of the error is not shown: " + out);
+        assertRegex("result: the string given", out);
+
+        # an identifier is shown; it is not matched, so get_ds_string() raises DATASOURCE-ERROR after the output
+        out = backquote(sprintf("%s %s -b '%s/dsp-verbose-child.q' 'my_ident' 2>&1", env, qore_bin, dir));
+        assertRegex("ECHO-ERROR: cannot resolve my_ident \\(\"my_ident\"\\)", out);
+        assertRegex("DATASOURCE-ERROR", out);
     }
 
     # a datasource string that is not matched is not shown in an exception; an identifier is (qore#6988)

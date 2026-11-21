@@ -376,6 +376,8 @@ public:
     DLLLOCAL QoreStringNode* getPendingDBEncoding() const;
     DLLLOCAL QoreStringNode* getPendingHostName() const;
     DLLLOCAL int getPendingPort() const;
+    //! appends the masked description of the pool with its pending host and port, read together (qore#6988)
+    DLLLOCAL void appendMaskedPendingDesc(QoreString& str) const;
     DLLLOCAL const QoreEncoding* getQoreEncoding() const;
     DLLLOCAL const DBIDriver* getDriver() const {
         return pool[0]->getDriver();

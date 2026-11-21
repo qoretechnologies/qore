@@ -892,6 +892,11 @@ int DatasourcePool::getPendingPort() const {
     return pool[0]->getPendingPort();
 }
 
+void DatasourcePool::appendMaskedPendingDesc(QoreString& str) const {
+    // depends on static configuration, can be called disconnected
+    q_ds_append_masked_pending(str, *pool[0]);
+}
+
 const QoreEncoding* DatasourcePool::getQoreEncoding() const {
     // depends on static configuration, can be called disconnected
     return pool[0]->getQoreEncoding();

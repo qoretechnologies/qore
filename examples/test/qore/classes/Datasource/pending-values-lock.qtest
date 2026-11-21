@@ -52,6 +52,6 @@ class DatasourcePendingValuesLockTest inherits QUnit::Test {
 
     private {
         #! the number of assertions of dbg_run_datasource_pending_tests()
-        const TestCount = 145;
+        const TestCount = 153;
     }
 }
