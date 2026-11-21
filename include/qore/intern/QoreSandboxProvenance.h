@@ -97,6 +97,17 @@ DLLLOCAL QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v
 */
 DLLLOCAL QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, QoreProgram* governed,
     const QoreListNode* args, ExceptionSink* xsink);
+
+//! Returns the restrictions of the code that authored a callable value or object as parse options (qore#7056)
+/** As qore_callable_origin_restrictions_po(), without the restrictions that module or builtin code recorded when it
+    created the value for the code that called it: the restrictions of a closure, function or method of a Program that
+    is not a module's, of a call reference or object that the code of such a Program created (also of a builtin class
+    or of a class that the host imported), and of the code of a child Program that it created; a closure, call
+    reference or object that module code creates for a restricted caller is the module's capability, which the sandbox
+    of the caller governs (its thread limit and policy), and gives 0.  The schedulers that refuse code that may not
+    control threads use this (qore_check_thread_callable()).
+*/
+DLLLOCAL QoreParseOptions qore_callable_authored_restrictions_po(const QoreValue v);
 //! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.

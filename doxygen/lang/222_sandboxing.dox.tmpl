@@ -160,13 +160,14 @@ Program p(opts);
     the %Program as capabilities, and from library modules that declare the domain.
 
     What the %Program's restrictions do guarantee when module code is involved:
+    - code that the %Program authors is never run in another thread by the builtins that run code in other threads,
+      whichever code passes it on (see @ref sandbox_thread_callables)
     - the restrictions of a sandboxed %Program apply to the builtins that module code calls for it, as described in
       @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
       @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
       @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a sandboxed
-      caller that may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
-      checked against the module's own parse options only, and module code can always run its own closures, which can
-      call the caller's code
+      caller that may not control threads (see @ref MODULE_OWNED); module code can always run its own closures, which
+      can call the caller's code
     - the caller's code that module code runs, on the caller's thread or on a thread of the module, keeps the
       restrictions of its own %Program: they are checked when it is parsed and, for a dynamic call such as
       @ref Qore::call_function() "call_function()", when the call is made; only the thread it runs on is one that the
@@ -185,16 +186,49 @@ Program p(opts);
     What they do not guarantee:
     - the restrictions of a %Program without a @ref Qore::SandboxManager "SandboxManager" (parse options only) are not
       passed on to module code at run time: module code runs with its own parse options, and the
-      @ref MODULE_OWNED checks do not apply, so module code can run the %Program's closures and call references on
-      its own threads and timers; parse options restrict the code of the %Program itself
+      @ref MODULE_OWNED checks do not apply; module code that runs a closure of its own on its own threads and timers
+      can call the %Program's code from there
     - a module that module code loads at run time (with @ref Qore::load_module() "load_module()", or a data provider
       factory or type that is loaded on demand) is loaded with the restrictions of the %Program of the module that
       loads it, which a module's \c domains declaration relaxes, not with those of the caller
 
     To contain restricted code that uses modules, and to bound its threads, give its %Program a
-    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.  A run-time refusal of the @ref background "background" operator in module code for restricted
-    callers would break the modules that run their callers' code on their own threads, while the sandbox already
-    governs those threads.
+    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.
+
+    @subsection sandbox_thread_callables Code of Restricted Programs Is Not Run in Other Threads
+    A @ref closure "closure", @ref call_reference "call reference" or object that the code of a %Program that may not
+    control threads (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") authored is refused with
+    \c PERMISSION-DENIED by the APIs that run code in another thread, whichever code passes it on, with or without a
+    @ref Qore::SandboxManager "SandboxManager" (since %Qore 3.0):
+    - a call of a closure or call reference with the @ref background "background" operator (ex: \c "background c()"
+      in module code that was given \c c)
+    - @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", its timers and
+      @ref Qore::AsyncIoController::setTimerCallback() "setTimerCallback()", and
+      @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" of a poll operation of a class of such a
+      %Program
+    - the completion code of a @ref Qore::DelegatingPollOperation "DelegatingPollOperation", and the frame callback
+      of a WebSocket poll operation that was created for such a %Program
+    - @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" and
+      @ref Qore::parallel_foreach() "parallel_foreach()"
+
+    The thread classes are a domain of their own: code that may not control threads but may use the thread classes
+    can create a @ref Qore::Thread::ThreadPool "ThreadPool" of its own, so its code is run by a pool, also one that its
+    host lends it; @ref Qore::Thread::ThreadPool::submit() "ThreadPool::submit()" and the functions above refuse the
+    code of a %Program that may not use the thread classes (@ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES").
+    @ref Qore::defer_thread_cancel() "defer_thread_cancel()" runs its code in the calling thread and is not affected.
+
+    The code that authored a value decides, not the code that passes it on:
+    - code that the host creates passes, also when the host gives it to the restricted %Program or creates it for an
+      object that it lends: the host decides to run it
+    - a closure, call reference or object that module code creates for a restricted caller is the module's
+      capability, which the caller's sandbox governs (its thread limit and policy): module code that runs a closure
+      of its own in another thread, which then calls the code of its caller, is how a module calls back its callers
+      (a server handler, an event callback, a timer of the module) and is not refused
+
+    Module code that runs code that it is given in another thread through a queue of its own checks it with
+    @ref Qore::check_thread_callable() "check_thread_callable()", as the handler pool of
+    @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" and the done callbacks of the
+    WebSocket modules do.
 
     @section sandbox_manager SandboxManager Class
 

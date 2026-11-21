@@ -303,6 +303,10 @@ qclass DelegatingPollOperation [
 */
 DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter)
         [flags=NAMED_ARGS] {
+    // the completion code runs on a worker of the controller; checked before any reference is taken (qore#7056)
+    if (qore_check_thread_callable(on_complete, QDOM_THREAD_CONTROL, "DelegatingPollOperation::constructor()", xsink)) {
+        return;
+    }
     QoreObject* inner_obj = const_cast<QoreObject*>(operation);
 
     // Get the inner operation's C++ private data if available

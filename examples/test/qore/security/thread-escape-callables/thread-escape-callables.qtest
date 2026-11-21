@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the probe script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - threads started by the asynchronous I/O controller and thread pools for restricted callables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ThreadEscapeCallablesTest
+
+#! a callable created by code restricted from thread control is not scheduled onto another thread (qore#7056)
+/** Code of a Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" had callables that it created run on
+    other threads through user-module APIs, which pass them on to the builtin scheduling functions or run them from a
+    queue of their own; the builtins checked who called them, which there is trusted module code.  The builtins now
+    refuse a callable whose origin is restricted from thread control, whoever passes it, and the module APIs that run
+    callables from a queue check them the same way; a callable that the host creates is scheduled, also for an object
+    that the host lends to the restricted code, and so is a closure that module code creates for the restricted code
+    (the capability of a module that calls back its caller from a thread of its own).  A pool is a thread class: code
+    that may not control threads but may use the thread classes can use a pool, code that may not use them cannot.
+
+    thread-escape-callables.q probes each path in a restricted Program; its output must be the expected one in every
+    execution mode, on the IR tier and as a qcc executable.
+*/
+class ThreadEscapeCallablesTest inherits QUnit::Test {
+    public {
+        #! the result of each probe
+        const Expected = "wrapper submitTask: PERMISSION-DENIED\n"
+            "wrapper addTimerDelay: PERMISSION-DENIED\n"
+            "lent controller, restricted task: PERMISSION-DENIED\n"
+            "lent controller, host task: ran\n"
+            "lent ThreadPool, restricted task: ran\n"
+            "module background: PERMISSION-DENIED\n"
+            "subclass runOnThreadOfItsOwn: PARSE-EXCEPTION\n"
+            "subclass peer lookup: PARSE-EXCEPTION\n"
+            "submitToHandlerPool: PERMISSION-DENIED\n"
+            "lent WebSocket op, setDoneCallback: PERMISSION-DENIED\n"
+            "lent WebSocket op, setFrameCallback: set\n"
+            "own WebSocket op, setFrameCallback: PERMISSION-DENIED\n"
+            "DelegatingPollOperation on_complete: PERMISSION-DENIED\n"
+            "lent ThreadPool, restricted cancel callback: submitted\n"
+            "module call_async: PERMISSION-DENIED\n"
+            "module parallel_map: PERMISSION-DENIED\n"
+            "own poll operation submitted: PERMISSION-DENIED\n"
+            "check_thread_callable, restricted code: PERMISSION-DENIED\n"
+            "check_thread_callable, host code: passed\n"
+            "module pool, no thread classes: PERMISSION-DENIED\n"
+            "module closure calling restricted code: ran\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("thread escape of restricted callables", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the children load this repository's modules, which the restricted Programs require
+        string qlib = realpath(get_script_dir() + "/../../../../../qlib");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, qlib + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : ""));
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("qcc executable", \aotTest());
+        set_return_value(main());
+    }
+
+    modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("thread-escape-callables-");
+        string exe = dir.path + "/thread-escape-callables";
+        string out = backquote(sprintf("%s %s -O3 -o %s %s 2>&1", env, qcc_bin, exe, scriptPath()));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        # the restricted Programs parse their code at run time: the executable runs from the script's directory, where
+        # the helper module is
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("cd %s && %s %s", get_script_dir(), env, exe)), "qcc");
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/thread-escape-callables.q";
+    }
+}

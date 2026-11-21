@@ -397,6 +397,13 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     // AsyncIoControllerPriv::submit that plugs the per-call leak); our
     // QPP-generated caller still owns its own ref on the method arg, so
     // hand submit() an explicit self-ref via hashRefSelf().
+    // a poll operation of a class with Qore code runs that code on the controller's workers: an operation that code
+    // that may not control threads authored is not run there (qore#7056)
+    QoreValue spop = operation_info->getKeyValue("spop");
+    if (spop.getType() == NT_OBJECT && !spop.get<const QoreObject>()->getClass()->isSystem()
+            && qore_check_thread_callable(spop, QDOM_THREAD_CONTROL, "AsyncIoController::submit()", xsink)) {
+        return QoreValue();
+    }
     return ctrl->submit(obj, operation_info->hashRefSelf(), replace_existing, xsink);
 }
 
@@ -838,7 +845,8 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
         return 0;
     }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
-            "schedule", xsink)) {
+            "schedule", xsink)
+            || qore_check_thread_callable(user_data, QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()", xsink)) {
         return 0;
     }
     QoreObject* obj;
@@ -903,8 +911,12 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner,
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
             "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimer()", "schedule", xsink))) {
+            || qore_check_thread_callable(udata, QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimer()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimer()", xsink)))) {
         return 0;
     }
     QoreObject* obj;
@@ -960,7 +972,9 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto user_data)
         return 0;
     }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
+            "AsyncIoController::addTimerDelay()", "schedule", xsink)
+            || qore_check_thread_callable(user_data, QDOM_THREAD_CONTROL, "AsyncIoController::addTimerDelay()",
+                xsink)) {
         return 0;
     }
     QoreObject* obj;
@@ -1019,8 +1033,12 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL,
             "AsyncIoController::addTimerDelay()", "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimerDelay()", "schedule", xsink))) {
+            || qore_check_thread_callable(udata, QDOM_THREAD_CONTROL, "AsyncIoController::addTimerDelay()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimerDelay()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimerDelay()", xsink)))) {
         return 0;
     }
     QoreObject* obj;
@@ -1099,6 +1117,10 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    // the callback runs on the controller's workers (qore#7056)
+    if (qore_check_thread_callable(callback, QDOM_THREAD_CONTROL, "AsyncIoController::setTimerCallback()", xsink)) {
+        return QoreValue();
+    }
     ctrl->setTimerCallback(callback ? callback->refRefSelf() : nullptr, xsink);
 }
 
@@ -1133,8 +1155,12 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
     if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
             "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::submitTask()", "schedule", xsink))) {
+        || qore_check_thread_callable(task, QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::submitTask()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
+                    xsink)))) {
         return QoreValue();
     }
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submitTask", false, xsink)) {

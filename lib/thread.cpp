@@ -61,6 +61,7 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/QoreSandboxLimits.h"
 
 // to register object types
@@ -9305,6 +9306,29 @@ int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 do
     return check_module_owned_code(code, domain, name, action, xsink);
 }
 
+int qore_check_thread_callable(const QoreValue v, int64 domain, const char* name, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreParseOptions denied = qore_callable_authored_restrictions_po(v) & QoreParseOptions(domain);
+    if (!denied) {
+        return 0;
+    }
+    if (denied & QoreParseOptions(QDOM_THREAD_CONTROL)) {
+        xsink->raiseException("PERMISSION-DENIED", "%s: the code was created by code that may not control threads "
+            "(PO_NO_THREAD_CONTROL), so it cannot be run in another thread", name);
+    } else {
+        xsink->raiseException("PERMISSION-DENIED", "%s: the code was created by code that may not use the thread "
+            "classes (PO_NO_THREAD_CLASSES), so it cannot be run in another thread", name);
+    }
+    return -1;
+}
+
+int qore_check_thread_callable(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
+        ExceptionSink* xsink) {
+    return code
+        ? qore_check_thread_callable(QoreValue(const_cast<ResolvedCallReferenceNode*>(code)), domain, name, xsink)
+        : 0;
+}
+
 // rcr is the code, or nullptr if the value is not code
 static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink) {
@@ -11011,6 +11035,13 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
     BackgroundClosureCaptureHelper closure_capture(xsink);
     ValueHolder nl(copy_value_and_resolve_lvar_refs(rc, left, xsink), xsink);
     if (*xsink || !nl) {
+        return QoreValue();
+    }
+    // a call of a closure or call reference that code restricted from thread control created is not started in
+    // another thread, whichever code starts it (qore#7056); the copy holds the value of the callee
+    if (nl->getType() == NT_FUNCREFCALL
+            && qore_check_thread_callable(nl->get<const CallReferenceCallNode>()->getExp(), QDOM_THREAD_CONTROL,
+                "background operator", xsink)) {
         return QoreValue();
     }
 

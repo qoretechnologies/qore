@@ -132,7 +132,10 @@ static QoreParseOptions qore_non_module_program_restrictions(const QoreProgram* 
 
 static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr);
 
-QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
+// returns the restrictions of a callable or object: with \a recorded_origin, also those that module or builtin code
+// recorded when it created the value for the code that called it (qore_callable_origin_restrictions_po()), otherwise
+// only those of the code that authored it (qore_callable_authored_restrictions_po(), qore#7056)
+static QoreParseOptions qore_callable_restrictions_po(const QoreValue v, bool recorded_origin) {
     // only the restricting options are domains: not the positive options (PO_ALLOW_*) or PO_IN_MODULE
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
         & ~QoreParseOptions(PO_IN_MODULE);
@@ -143,10 +146,12 @@ QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
             const ResolvedCallReferenceNode* rcr = v.get<const ResolvedCallReferenceNode>();
             // the restrictions recorded when it was created, for module or builtin code
             // (qore_capture_call_reference_origin())
-            QoreSandboxContext* context = qore_get_call_reference_provenance(rcr);
-            if (context) {
-                rv = context->origin_restrictions;
-                context->deref();
+            if (recorded_origin) {
+                QoreSandboxContext* context = qore_get_call_reference_provenance(rcr);
+                if (context) {
+                    rv = context->origin_restrictions;
+                    context->deref();
+                }
             }
             // the Program whose code it runs, and the Program that created it, which the reference keeps alive: the
             // code of a restricted Program, or a reference that it created to the code of another Program (a method of
@@ -166,7 +171,13 @@ QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
             } else {
                 rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
             }
-            rv |= qore_non_module_program_restrictions(rcr->getProgram());
+            // the code of a closure is that of the Program that defines it: the Program that was current when it was
+            // created is not its author (a closure of module code created in a method that runs for an object of a
+            // restricted subclass, for example); the creator below gives a closure that restricted code created
+            // (qore#7056)
+            if (recorded_origin || v.getType() != NT_RUNTIME_CLOSURE) {
+                rv |= qore_non_module_program_restrictions(rcr->getProgram());
+            }
             // the code that created a run-time reference, if it is the code of a Program that is not a module's: a
             // reference that restricted code created to a method of an object of another Program (one lent to it)
             const ResolvedCallReferenceNodeIntern* intern = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(rcr);
@@ -180,7 +191,7 @@ QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
             const QoreObject* obj = v.get<const QoreObject>();
             const qore_object_private* priv = qore_object_private::get(*obj);
             // set when the object is constructed and not changed after
-            if (priv->sandbox_provenance) {
+            if (recorded_origin && priv->sandbox_provenance) {
                 rv = priv->sandbox_provenance->origin_restrictions;
             }
             // the Program that created it, which the object keeps alive: also for an object of a builtin class or of
@@ -199,6 +210,14 @@ QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
             return QoreParseOptions();
     }
     return rv & restricting;
+}
+
+QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
+    return qore_callable_restrictions_po(v, true);
+}
+
+QoreParseOptions qore_callable_authored_restrictions_po(const QoreValue v) {
+    return qore_callable_restrictions_po(v, false);
 }
 
 int64 qore_callable_origin_restrictions(const QoreValue v) {

@@ -745,6 +745,30 @@ DLLLOCAL int qore_check_module_owned_code(const QoreValue code, int64 domain, co
 DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink);
 
+//! refuses a callable or object that code restricted from a thread domain authored, to be run in another thread
+/** A closure, call reference or object of code that may not control threads (\c PO_NO_THREAD_CONTROL), or that may
+    not use the thread classes (\c PO_NO_THREAD_CLASSES) for an API of that domain, is not run in another thread,
+    whichever code passes it on: module code that is given such code cannot start a thread for code that cannot
+    start one itself (qore#7056).  The code that authored the value decides (qore_callable_authored_restrictions_po()):
+    a closure, call reference or object that module code creates for a restricted caller is the module's capability,
+    which the caller's sandbox governs.  Values of unrestricted code and values that are not callable pass.
+
+    This is the only place that implements the rule: the builtins that run code in another thread (the background
+    operator, ThreadPool, AsyncIoController, ...) and Qore::check_thread_callable() call it.
+
+    @param v the callable or object to check
+    @param domain the thread domains of the API: \c QDOM_THREAD_CONTROL and/or \c QDOM_THREAD_CLASS
+    @param name the name of the API, for the exception
+    @param xsink raises \c PERMISSION-DENIED if the value may not run in another thread
+
+    @return 0 if the value may be run in another thread, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_thread_callable(const QoreValue v, int64 domain, const char* name, ExceptionSink* xsink);
+
+//! refuses code that code restricted from a thread domain authored, to be run in another thread; see above
+DLLLOCAL int qore_check_thread_callable(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
+        ExceptionSink* xsink);
+
 //! Returns true if the code running on the current thread is not trusted to choose library code
 /** Code that a sandbox governs, and code whose runtime parse options restrict a functional domain (other than the
     in-module domain of module Programs).  Such code cannot change the process-wide module path, nor replace or

@@ -1,0 +1,42 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+# a module that runs a callable that it is given on a thread of its own (see thread-escape-callables.q, qore#7056)
+module ThreadEscapeHelper {
+    version = "1.0";
+    desc = "runs a callable that it is given in another thread";
+    author = "Qore"; license = "MIT";
+}
+public namespace ThreadEscapeHelper {
+    #! runs a callable on a new thread
+    public sub runInBackground(code<nothing()> c) {
+        background c();
+    }
+
+    #! runs a callable on a thread pool of the module and waits for it
+    public sub runOnPool(code<nothing()> c) {
+        ThreadPool tp(1);
+        on_exit tp.stopWait();
+        tp.submit(c);
+    }
+
+    #! runs a closure of the module on a new thread, which calls the callable that it is given there: the capability
+    #! pattern of a module that calls back its caller from a thread of its own
+    public sub runWrapped(code<nothing()> c) {
+        background sub () { c(); }();
+    }
+
+    #! runs a callable with call_async() and waits for it
+    public auto sub runAsync(code c) {
+        return call_async(c).get();
+    }
+
+    #! submits a poll operation that it is given to the async I/O controller
+    public sub submitOperation(Socket sock, AbstractPollOperation op) {
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": sock, "spop": op, "owner": "probe"});
+    }
+
+    #! runs a callable with parallel_map()
+    public list<auto> sub runParallelMap(code c) {
+        return parallel_map(c, (1, 2));
+    }
+}
