@@ -224,19 +224,37 @@ QoreHashNode* EnumList::getInfo() {
 }
 
 bool EnumListIterator::isPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isPublic();
 }
 
 bool EnumListIterator::isUserPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isUserPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isUserPublic();
 }
 
 bool ConstEnumListIterator::isPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isPublic();
 }
 
 bool ConstEnumListIterator::isUserPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isUserPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isUserPublic();
+}
+
+std::vector<std::pair<const char*, QoreEnumDecl*>> EnumList::getInDeclarationOrder() const {
+    std::vector<std::pair<const char*, QoreEnumDecl*>> v;
+    v.reserve(hm.size());
+    for (auto& i : hm) {
+        v.emplace_back(i.first, i.second);
+    }
+    std::stable_sort(v.begin(), v.end(), [](const std::pair<const char*, QoreEnumDecl*>& a,
+            const std::pair<const char*, QoreEnumDecl*>& b) {
+        return qore_enum_decl_private::get(*a.second)->getDeclSeq()
+            < qore_enum_decl_private::get(*b.second)->getDeclSeq();
+    });
+    return v;
 }
 
 void EnumList::parseRemove(const char* name) {
