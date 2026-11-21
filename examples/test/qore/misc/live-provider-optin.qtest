@@ -1,0 +1,326 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class LiveProviderOptInTest
+
+#! A line of a test that reaches a credential of an external service without LiveProviderTest.qm
+hashdecl LiveProviderReadInfo {
+    #! the file, relative to the repository root
+    string file;
+    #! the line number
+    int line;
+    #! what the line does
+    string what;
+    #! the line
+    string text;
+}
+
+#! Rejects tests that reach the credentials of external services without LiveProviderTest.qm (qore#6964)
+/** A test calls an external service with an account only when \c QORE_TEST_LIVE_PROVIDERS enables it, which
+    @ref LiveProviderTest::LiveProvider "LiveProvider" checks; so a test reads a credential, or opens a connection
+    whose definition has one, only through it.  This test fails on a line of a test outside LiveProviderTest.qm
+    that:
+    - reads a variable with a credential-like name: <tt>ENV.NAME</tt>, <tt>ENV{"NAME"}</tt> or
+      <tt>getenv("NAME")</tt>, where the name has a part such as \c KEY, \c TOKEN, \c SECRET, \c PASSWORD, \c USER,
+      \c CONNECTION, \c ACCOUNT or \c LIVE (\c QORE_DB_CONNSTR and the other \c QORE_DB_ variables of the local
+      database servers are not, see TestRunIsolation.qm)
+    - reads a variable whose name is computed (<tt>ENV{expr}</tt>, <tt>getenv(expr)</tt>), or iterates over the
+      names of the environment (<tt>keys ENV</tt>, <tt>ENV.keys()</tt>, <tt>ENV.pairIterator()</tt>, ...), as the
+      name of a credential can be computed
+    - opens a named connection (\c get_connection(), \c get_datasource_connection(), ...), which has the
+      credentials of its definition (the connection providers, ex: \c QORE_CONNECTION_PROVIDERS)
+    - reads a file of the home directory (\c HOME, <tt>~/</tt>) or a credential file of a service's tools (ex:
+      <tt>.aws/</tt>, <tt>.config/gcloud</tt>, <tt>.netrc</tt>)
+
+    It also fails a test that loads a client module that finds credentials by itself (the AWS, Azure and Google
+    Cloud clients: \c AwsRestClient, \c BedrockRestClient, \c AzureAuth, \c GcpAuth, \c VertexAiRestClient, ...)
+    without loading LiveProviderTest.qm, which removes those credentials from the environment unless live calls
+    to the service are enabled.
+
+    A line that does not reach a credential (ex: a test that saves and restores a variable around a case that sets
+    a fake value, or opens a connection that it defined itself to a local server) is allowed when it, or the line
+    before it, has a comment starting with <tt>live-provider-optin:</tt> that says why.
+*/
+class LiveProviderOptInTest inherits QUnit::Test {
+    public {
+        #! the directories scanned, relative to the repository root; "modules/*/test" is added
+        const ScanDirs = ("examples/test",);
+
+        #! the files that are not scanned, relative to the repository root
+        const Exempt = {
+            # the helper reads the credentials
+            "examples/test/LiveProviderTest.qm": True,
+            # this test has the forms that it finds in its own test case
+            "examples/test/qore/misc/live-provider-optin.qtest": True,
+        };
+
+        #! the extensions of the files scanned
+        const Extensions = {
+            "qtest": True,
+            "q": True,
+            "qc": True,
+            "qm": True,
+            "ql": True,
+        };
+
+        #! the credential-like parts of a variable name
+        const CredentialName = "(?:^|_)(?:API_?KEYS?|APIKEY|ACCESS_?KEY|KEY_?ID|KEYS?|TOKENS?|SECRETS?|PASS|PASSWD|"
+            "PASSWORD|PASSPHRASE|PWD|CLIENT_?ID|API_?ID|APP_?ID|CREDENTIALS?|CREDS|SA_JSON|SERVICE_?ACCOUNT|ACCOUNT|"
+            "ACCOUNT_?ID|AUTH|BEARER|SESSION|USER|USERNAME|LOGIN|CONNECTION|CONNECTIONS|CONN|SITE|TENANT|SID|DSN|"
+            "PROVIDERS|LIVE)(?:_|$)";
+
+        #! the client modules that find credentials by themselves (LiveProvider::AmbientVars)
+        const AmbientClientModule = "^(?:Aws|Bedrock|Gcp|GoogleCloud|GoogleDocumentAi|VertexAi|Azure)";
+
+        #! the URLs of services that can be hosted services with credentials, read with LiveProvider::getService()
+        const ServiceUrl = {
+            "MONGODB_URL": True,
+        };
+
+        #! the names with a credential-like part that are not credentials
+        const NotCredential = {
+            # the user running the process
+            "USER": True,
+            "LOGNAME": True,
+            "USERNAME": True,
+        };
+    }
+
+    constructor() : Test("live provider credentials are read through LiveProviderTest.qm", "1.0") {
+        addTestCase("the scanner finds the reads of credentials", \scannerTest());
+        addTestCase("no test reads a credential without LiveProviderTest.qm", \repositoryTest());
+        set_return_value(main());
+    }
+
+    scannerTest() {
+        list<string> lines = (
+            "*string k = ENV.MISTRALAI_APIKEY;",                            # 1
+            "*string k = ENV{\"OPENAI_TOKEN\"};",                           # 2
+            "*string k = getenv(\"SALESFORCE_PASS\");",                     # 3
+            "*string k = getenv( 'ZOHO_CLIENT_ID' );",                      # 4
+            "if (ENV.BEDROCK_LIVE || ENV.UNLEASHED_API_ID) {",              # 5
+            "*string c = m_options.conn ?? ENV.ANTHROPIC_CONNECTION;",      # 6
+            "*string v = ENV{name};",                                       # 7
+            "*string v = getenv(var);",                                     # 8
+            "foreach string k in (keys ENV) {",                             # 9
+            "map $1, ENV.pairIterator();",                                  # 10
+            "foreach string k in (ENV.keys()) {",                           # 11
+            "AbstractConnection c = get_connection(name);",                 # 12
+            "Datasource ds = get_datasource_connection(\"omq\");",          # 13
+            "string f = ENV.HOME + \"/.qorus/conn.yaml\";",                 # 14
+            "string f = \"~/.aws/credentials\";",                           # 15
+            "string f = getenv(\"HOME\");",                                 # 16
+            "string f = dir + \"/.config/gcloud/adc.json\";",               # 17
+            # not credentials
+            "*string c = ENV.QORE_DB_CONNSTR_PGSQL;",
+            "*string u = ENV.USER;",
+            "*string p = ENV.PATH;",
+            "*string s = ENV.QORE_TEST_OPTS;",
+            "*string m = ENV.MISTRAL_TEST_CHAT_MODEL;",
+            "# *string k = ENV.MISTRALAI_APIKEY;",
+            "string s = \"ENVIRONMENT\";",
+            "string s = sprintf(\"%s\", MY_ENV.X_TOKEN);",
+            "setenv(\"AWS_ACCESS_KEY_ID\", \"fake\");",
+            # allowed with a reason
+            "*string saved = getenv(\"AWS_ACCESS_KEY_ID\"); # live-provider-optin: saved and restored",
+            "# live-provider-optin: a connection to the test's own local server",
+            "AbstractConnection c = get_connection(\"local-6964\");",
+            # a marker without a reason allows nothing
+            "*string k = ENV.CHARGEBEE_API_KEY; # live-provider-optin:",
+        );
+        list<hash<LiveProviderReadInfo>> found = scanLines("examples/test/x.qtest", lines);
+        assertEq((1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, lines.size()), map $1.line, found);
+        assertEq("reads ENV.MISTRALAI_APIKEY", found[0].what);
+        map assertTrue(LiveProviderOptInTest::isCredentialName($1), $1), ("UNLEASHED_API_ID", "VERTEX_SA_JSON",
+            "GOOGLE_SERVICE_ACCOUNT", "AWS_TEXTRACT_LIVE", "QORE_CONNECTION_PROVIDERS", "MONGODB_URL");
+        map assertFalse(LiveProviderOptInTest::isCredentialName($1), $1), ("USER", "QORE_DB_CONNSTR_PGSQL",
+            "QORE_TEST_OPTS", "MISTRAL_TEST_CHAT_MODEL");
+        assertEq("reads a variable whose name is computed", found[6].what);
+        assertEq("iterates over the environment", found[8].what);
+        assertEq("opens a named connection", found[11].what);
+        assertEq("reads a file of the home directory or a credential file", found[13].what);
+
+        # a client module that finds credentials by itself needs the helper
+        assertEq(("loads AwsRestClient without LiveProviderTest.qm", "loads GcpAuth without LiveProviderTest.qm"),
+            map $1.what, scanAmbientClients("examples/test/x.qtest", ("%requires QUnit", "%requires AwsRestClient",
+            "%requires(reexport) ../../../../qlib/GcpAuth.qm", "%requires RestClient")));
+        assertEq((), scanAmbientClients("examples/test/x.qtest", ("%requires AwsRestClient",
+            "%requires ../../LiveProviderTest.qm")));
+
+        # a doc comment block is not code
+        assertEq((), scanLines("examples/test/x.qm", ("/** example:", "    ENV.MISTRALAI_APIKEY", "*/")));
+        assertEq((3,), map $1.line, scanLines("examples/test/x.qm", ("/* x */", "int i;",
+            "*string k = ENV.MISTRALAI_APIKEY;")));
+    }
+
+    repositoryTest() {
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+        list<hash<LiveProviderReadInfo>> found = ();
+        foreach string dir in (ScanDirs) {
+            found += scanDir(root, dir);
+        }
+        Dir d();
+        d.chdir(root + "/modules");
+        foreach string name in (sort(d.listDirs() ?? ())) {
+            if (is_dir(root + "/modules/" + name + "/test")) {
+                found += scanDir(root, "modules/" + name + "/test");
+            }
+        }
+        assertEq((), map sprintf("%s:%d: %s: %s", $1.file, $1.line, $1.what, $1.text), found);
+    }
+
+    #! Scans the files below a directory relative to the repository root
+    private list<hash<LiveProviderReadInfo>> scanDir(string root, string rel) {
+        list<hash<LiveProviderReadInfo>> rv = ();
+        string path = root + "/" + rel;
+        Dir d();
+        d.chdir(path);
+        foreach string name in (sort(d.listDirs() ?? ())) {
+            # build trees, dependencies and VCS data hold no tests of the repository
+            if (name =~ /^build/ || name == "node_modules" || name =~ /^\./) {
+                continue;
+            }
+            rv += scanDir(root, rel + "/" + name);
+        }
+        foreach string name in (sort(d.listFiles() ?? ())) {
+            *string ext = (name =~ x/\.([^.]+)$/)[0];
+            if (!exists ext || !Extensions{ext} || Exempt{rel + "/" + name}) {
+                continue;
+            }
+            ReadOnlyFile f(path + "/" + name, NOTHING, ENCODING_ERRORS_KEEP);
+            string text = f.read(-1) ?? "";
+            if (!text.isEncodingValid()) {
+                continue;
+            }
+            list<string> lines = text.split("\n");
+            rv += scanLines(rel + "/" + name, lines);
+            rv += scanAmbientClients(rel + "/" + name, lines);
+        }
+        return rv;
+    }
+
+    #! Returns the directives that load a client module that finds credentials by itself, if the file does not load
+    #! LiveProviderTest.qm
+    private list<hash<LiveProviderReadInfo>> scanAmbientClients(string file, list<string> lines) {
+        if (select lines, $1 =~ /^\s*%requires(?:\s*\([^)]*\))?\s+\S*LiveProviderTest\.qm\b/) {
+            return ();
+        }
+        list<hash<LiveProviderReadInfo>> rv = ();
+        foreach string line in (lines) {
+            *string mod = (line =~ x/^\s*%(?:requires|try-module)(?:\s*\([^)]*\))?\s+(?:\S*\/)?([A-Za-z0-9_]+)/)[0];
+            if (mod && mod.regex(AmbientClientModule)) {
+                rv += <LiveProviderReadInfo>{
+                    "file": file,
+                    "line": $# + 1,
+                    "what": "loads " + mod + " without LiveProviderTest.qm",
+                    "text": trim(line),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the lines that reach a credential without LiveProviderTest.qm
+    private list<hash<LiveProviderReadInfo>> scanLines(string file, list<string> lines) {
+        list<hash<LiveProviderReadInfo>> rv = ();
+        bool in_comment = False;
+        foreach string line in (lines) {
+            string code = line;
+            # the parts of the line in a /* */ comment are not code
+            if (in_comment) {
+                int end = code.find("*/");
+                if (end < 0) {
+                    continue;
+                }
+                code = code.substr(end + 2);
+                in_comment = False;
+            }
+            while (True) {
+                int start = code.find("/*");
+                if (start < 0) {
+                    break;
+                }
+                int end = code.find("*/", start + 2);
+                if (end < 0) {
+                    code = code.substr(0, start);
+                    in_comment = True;
+                    break;
+                }
+                code = code.substr(0, start) + code.substr(end + 2);
+            }
+            # a line comment is not code
+            if (code =~ /^\s*#/) {
+                continue;
+            }
+            *string what = LiveProviderOptInTest::getRead(code);
+            if (!what) {
+                continue;
+            }
+            # the line, or the line before it, says why it does not reach a credential
+            if (line =~ /#\s*live-provider-optin:\s*\S/ || ($# && lines[$# - 1] =~ /^\s*#\s*live-provider-optin:\s*\S/)) {
+                continue;
+            }
+            rv += <LiveProviderReadInfo>{
+                "file": file,
+                "line": $# + 1,
+                "what": what,
+                "text": trim(line),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns what a line of code does to reach a credential, or @ref NOTHING if it does not
+    static *string getRead(string code) {
+        # the names read with a literal name
+        list<*string> names = ();
+        names += (code =~ x/\bENV\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)/g) ?? ();
+        names += (code =~ x/\bENV\s*\{\s*["']([^"']+)["']\s*\}/g) ?? ();
+        names += (code =~ x/\bgetenv\s*\(\s*["']([^"']+)["']\s*\)/g) ?? ();
+        foreach *string name in (names) {
+            if (!name) {
+                continue;
+            }
+            if (name == "HOME") {
+                return "reads a file of the home directory or a credential file";
+            }
+            # the methods of the hash, see below
+            if (code.regex("\\bENV\\s*\\.\\s*" + name + "\\s*\\(")) {
+                continue;
+            }
+            if (LiveProviderOptInTest::isCredentialName(name)) {
+                return "reads ENV." + name;
+            }
+        }
+        if (code =~ /\bENV\s*\{\s*[^"'\s}]/ || code =~ /\bgetenv\s*\(\s*[^"'\s)]/) {
+            return "reads a variable whose name is computed";
+        }
+        if (code =~ /\bkeys\s+ENV\b/ || code =~ /\bin\s*\(\s*ENV\s*\)/
+            || code =~ /\bENV\s*\.\s*(?:keys|values|pairIterator|keyIterator|iterator|contextIterator|firstKey|lastKey|size|sort|select|map)\s*\(/) {
+            return "iterates over the environment";
+        }
+        if (code =~ /\bget_(?:datasource_)?connections?(?:_hash|_url)?\s*\(/) {
+            return "opens a named connection";
+        }
+        if (code =~ /["']~\// || code =~ /\.aws\/|\.config\/gcloud|\.netrc\b|\.qorus\/|\.pgpass\b|\.my\.cnf\b/) {
+            return "reads a file of the home directory or a credential file";
+        }
+    }
+
+    #! Returns @ref True if a variable name is credential-like
+    static bool isCredentialName(string name) {
+        string uname = name.upr();
+        if (NotCredential{uname} || uname =~ /^QORE_DB_/) {
+            return False;
+        }
+        return ServiceUrl{uname} || uname.regex(CredentialName);
+    }
+}

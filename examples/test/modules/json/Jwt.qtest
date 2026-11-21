@@ -5,6 +5,7 @@
 
 %requires qore >= 2.0
 %requires json
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
 %exec-class JwtTest
@@ -66,6 +67,8 @@ class JwtTest inherits QUnit::Test {
         addTestCase("Non-object payload", \testNonObjectPayload());
         addTestCase("Invalid base64", \testInvalidBase64());
         addTestCase("Missing key", \testMissingKey());
+        addTestCase("Text after a NUL byte in a token", \testNulInToken());
+        addTestCase("NUL bytes in keys, signing inputs and algorithm names", \testNulInKeysAndInputs());
         addTestCase("Unsupported algorithm", \testUnsupportedAlg());
         addTestCase("JWS raw sign and verify", \testJwsRawSignVerify());
         addTestCase("JWS raw negative", \testJwsRawNegative());
@@ -95,6 +98,40 @@ class JwtTest inherits QUnit::Test {
         list<string> parts = token.split(".");
         @assert(parts.size() == 3);
         return parts;
+    }
+
+    #! the whole token is decoded: text after a NUL byte is part of it, so the token is refused (issue #6841)
+    testNulInToken() {
+        string token = jwt_encode(buildClaims(), "secret", "HS256", buildHeader());
+        assertTrue(cast<hash<JwtDecodeResult>>(jwt_decode(token, "secret")).signature_valid);
+        assertThrows("JWT-ERROR", "NUL byte", \jwt_decode(), (token + "\x00junk", "secret"));
+        assertThrows("JWT-ERROR", "NUL byte", \jwt_decode(), ("\x00" + token, "secret"));
+    }
+
+    #! a key and a signing input are used whole, and an algorithm name with a NUL byte names no algorithm (issue #6841)
+    testNulInKeysAndInputs() {
+        # an HMAC key is not cut at a NUL byte
+        string token = jwt_encode(buildClaims(), "ab\x00cd", "HS256", buildHeader());
+        assertTrue(cast<hash<JwtDecodeResult>>(jwt_decode(token, "ab\x00cd")).signature_valid);
+        assertFalse(cast<hash<JwtDecodeResult>>(jwt_decode(token, "ab")).signature_valid, "the prefix of the key");
+        assertFalse(cast<hash<JwtDecodeResult>>(jwt_decode(jwt_encode(buildClaims(), "\x00secret", "HS256",
+            buildHeader()), "\x00secretX")).signature_valid);
+        assertNeq(jws_sign("hdr.payload", "k", "HS256"), jws_sign("hdr.payload", "k\x00x", "HS256"));
+        assertTrue(jws_verify("hdr.payload", jws_sign("hdr.payload", "k\x00x", "HS256"), "k\x00x", "HS256"));
+        assertFalse(jws_verify("hdr.payload", jws_sign("hdr.payload", "k\x00x", "HS256"), "k", "HS256"));
+        # a signing input is not cut at a NUL byte: text after it is not taken as signed
+        binary sig = jws_sign("hdr.payload", "k", "HS256");
+        assertTrue(jws_verify("hdr.payload", sig, "k", "HS256"));
+        assertFalse(jws_verify("hdr.payload\x00evil", sig, "k", "HS256"));
+        assertTrue(jws_verify("a\x00b", jws_sign("a\x00b", "k", "HS256"), "k", "HS256"));
+        # an algorithm name with a NUL byte
+        assertThrows("JWT-ERROR", "NUL byte", \jws_sign(), ("x", "k", "HS256\x00junk"));
+        assertThrows("JWT-ERROR", "NUL byte", \jws_verify(), ("x", sig, "k", "HS256\x00junk"));
+        assertThrows("JWT-ERROR", "NUL byte", \jwt_encode(), (buildClaims(), "k", "HS256\x00junk"));
+        string input = make_base64_url_string(make_json({"alg": "HS256\x00x", "typ": "JWT"})) + "."
+            + make_base64_url_string(make_json({"sub": "x"}));
+        string forged = input + "." + make_base64_url_string(jws_sign(input, "k", "HS256"));
+        assertThrows("JWT-ERROR", "NUL byte", \jwt_decode(), (forged, "k"));
     }
 
     testHs256RoundTrip() {

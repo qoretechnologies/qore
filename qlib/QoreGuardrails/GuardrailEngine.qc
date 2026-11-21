@@ -297,7 +297,7 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
     #! Evaluates rules matching the given phase direction
     private hash<GuardrailResult> evaluateRules(string text, *hash<auto> ctx,
             string phase) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
         list<hash<GuardrailViolation>> all_violations = ();
         *string current_text = NOTHING;
         int evaluated = 0;
@@ -330,7 +330,7 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
             }
         }
 
-        int elapsed_ms = (now_us() - start).durationMicroseconds() / 1000;
+        int elapsed_ms = (clock_get_monotonic_us() - start_us) / 1000;
 
         return <GuardrailResult>{
             "passed": passed,

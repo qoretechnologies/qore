@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -408,12 +409,12 @@ public class GoogleDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.GOOGLE_CONNECTION;
+        *string conn_name = LiveProvider::get("google", "GOOGLE_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             error("missing -c,--connection option or GOOGLE_CONNECTION environment variable");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("google", "GOOGLE_CONNECTION", m_options.conn);
         if (!(conn instanceof GoogleRestConnection)) {
             error("connection %y is type %y; expecting \"GoogleRestConnection\"", conn_name, conn.className());
         }

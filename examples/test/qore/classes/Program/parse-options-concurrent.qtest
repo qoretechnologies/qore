@@ -32,13 +32,15 @@ class ParseOptionsConcurrentTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("ParseOptionsConcurrentTest", "1.0") {
         addTestCase("a read while the options change sees the old or the new value", \readDuringChange());
+        addTestCase("a shared ParseOptions value yields a consistent snapshot", sub() { readDuringChange(True); });
         addTestCase("concurrent changes of different options are all kept", \concurrentChanges());
         addTestCase("a child process can change the options after fork() while another thread changed them",
             \forkWhileLocked());
         set_return_value(main());
     }
 
-    readDuringChange() {
+    readDuringChange(bool boxed = False) {
+        ParseOptions shared();
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         ParseOptions both(("no-gui", "no-class-defs"));
         ParseOptions lo("no-gui");
@@ -58,7 +60,7 @@ class ParseOptionsConcurrentTest inherits QUnit::Test {
                 # even rounds set the options, odd rounds disable them
                 bool want = !(r % 2);
                 while (!stop) {
-                    ParseOptions po = p.getFullParseOptions();
+                    ParseOptions po = boxed ? shared.copy() : p.getFullParseOptions();
                     bool l = po.hasAny(lo);
                     bool h = po.hasAny(hi);
                     if (l != h) {
@@ -74,7 +76,13 @@ class ParseOptionsConcurrentTest inherits QUnit::Test {
         {
             on_exit stop = True;
             for (int r = 0; r < Rounds; ++r) {
-                if (r % 2) {
+                if (boxed) {
+                    if (r % 2) {
+                        shared.clear(both);
+                    } else {
+                        shared.set(both);
+                    }
+                } else if (r % 2) {
                     p.disableParseOptions(both);
                 } else {
                     p.setParseOptions(both);
@@ -84,7 +92,7 @@ class ParseOptionsConcurrentTest inherits QUnit::Test {
         }
         c.waitForZero();
         assertEq(0, torn);
-        assertFalse(p.getFullParseOptions().hasAny(both));
+        assertFalse((boxed ? shared : p.getFullParseOptions()).hasAny(both));
     }
 
     concurrentChanges() {

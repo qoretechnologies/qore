@@ -189,7 +189,9 @@ class DataProviderProcessingBillingTest inherits QUnit::Test {
         testSkip("no msgpack module");
 %endif
         TmpDir tmp("dp-proc-bill-index-");
+        # live-provider-optin: saves and restores the provider index directory variable
         bool had_env = exists ENV{ProviderIndexEnvVar};
+        # live-provider-optin: saves and restores the provider index directory variable
         string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
         ProviderIndexUtil::setEnvironmentVariable(tmp.path);
         on_exit {
@@ -197,6 +199,7 @@ class DataProviderProcessingBillingTest inherits QUnit::Test {
                 ProviderIndexUtil::setEnvironmentVariable(old_env);
             } else {
                 unsetenv(ProviderIndexEnvVar);
+                # live-provider-optin: saves and restores the provider index directory variable
                 remove ENV{ProviderIndexEnvVar};
             }
             ProviderIndexUtil::setBuildMode(True);

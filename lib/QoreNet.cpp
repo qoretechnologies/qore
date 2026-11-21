@@ -32,6 +32,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreNetInternal.h"
 
 #include <cstdlib>
 #include <cstring>

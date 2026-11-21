@@ -1,0 +1,15 @@
+%modern
+module InternalBarewordBase {
+    version = "1.0";
+    desc = "Imported parent for the bare member lookup test";
+    author = "Qore";
+    license = "MIT";
+}
+
+public class InternalBarewordBase {
+    private:internal {
+        int internal_value = 41;
+    }
+
+    int baseValue() { return internal_value; }
+}

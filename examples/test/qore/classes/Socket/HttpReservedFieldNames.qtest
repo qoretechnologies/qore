@@ -1,0 +1,642 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 header and chunked trailer parsing over sockets
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The fields of an HTTP message are given under "headers" (a header) and "trailers" (the trailer fields of a chunked
+# body), and at the top level of the hash of the message too unless that deprecated placement is turned off; a field
+# whose name is a key that the readers set themselves (body, headers, trailers, status_code, status_message,
+# http_version, method, path) is never given at the top level, so that it cannot replace that key: a message that
+# sends such a field is read as it is (qore#6761, qore#6811).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires Swagger
+%requires OpenApi3
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpReservedFieldNamesTest
+
+#! a handler that gives the request it got back in its response
+class EchoRequestHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.push({"hdr": hdr, "trailers": cx.trailers, "body": body});
+        return <HttpResponseInfo>{"code": 200, "body": "ok", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
+public class HttpReservedFieldNamesTest inherits QUnit::Test {
+    private {
+        Socket server();
+        hash<auto> server_info;
+    }
+
+    constructor() : Test("HttpReservedFieldNames", "1.0", \ARGV) {
+        server.bind("localhost:0");
+        server.listen();
+        server_info = server.getSocketInfo(False);
+
+        addTestCase("a chunked trailer named Body", \chunkedBodyTrailer());
+        addTestCase("response header fields with reserved names", \responseHeader());
+        addTestCase("request header fields with reserved names", \requestHeader());
+        addTestCase("the fields only under headers and trailers", \fieldsNotAtTopLevel());
+        addTestCase("a chunk with trailer fields", \chunkTrailer());
+        addTestCase("HTTPClient response fields with reserved names", \httpClientResponse());
+        addTestCase("HTTPClient with the fields not at the top level", \httpClientFieldsNotAtTopLevel());
+        addTestCase("HTTPClient streamed body trailer fields", \httpClientStreamedTrailers());
+        addTestCase("HTTPClient fields with the names of its own keys", \httpClientInternalKeys());
+        addTestCase("HTTPClient trailer section size", \httpClientTrailerSize());
+        addTestCase("HTTPClient response header events", \httpClientEvents());
+        addTestCase("RestClient with the fields not at the top level", \restClientFieldsNotAtTopLevel());
+        addTestCase("RestClient schema and error responses with nested fields", \restClientNestedSchema());
+        addTestCase("PollPipeline with the fields not at the top level", \pollPipelineFieldsNotAtTopLevel());
+        addTestCase("HttpServer request fields with reserved names", \httpServerRequest());
+        addTestCase("HttpServer HTTP/2 request fields", \httpServerHttp2Request());
+        addTestCase("HttpServer HTTP/3 request fields", \httpServerHttp3Request());
+        set_return_value(main());
+    }
+
+    #! returns a connected client socket and the server end of the connection
+    list<Socket> connect() {
+        Socket client();
+        client.connectINET(server_info.address, server_info.port, 30s, server_info.family);
+        Socket conn = server.accept(30s);
+        return (client, conn);
+    }
+
+    chunkedBodyTrailer() {
+        foreach bool binary_body in ((False, True)) {
+            string label = binary_body ? "binary" : "string";
+            (Socket client, Socket conn) = connect();
+            conn.send("5\r\nhello\r\n0\r\nBody: from-trailer\r\nX-T: 1\r\n\r\n");
+            hash<auto> rv = binary_body ? client.readHTTPChunkedBodyBinary(30s) : client.readHTTPChunkedBody(30s);
+            assertEq(binary_body ? binary("hello") : "hello", rv.body, label + ": the body is the body");
+            assertEq({"body": "from-trailer", "x-t": "1"}, rv.trailers, label + ": the trailer fields");
+            assertEq("1", rv."x-t", label + ": a trailer field is at the top level too (deprecated)");
+        }
+        # a body without trailer fields has no trailers key
+        (Socket client, Socket conn) = connect();
+        conn.send("2\r\nok\r\n0\r\n\r\n");
+        assertEq({"body": "ok"}, client.readHTTPChunkedBody(30s), "no trailer fields");
+    }
+
+    chunkTrailer() {
+        foreach bool top_level in ((True, False)) {
+            string tl = top_level ? "top level" : "not at the top level";
+            (Socket client, Socket conn) = connect();
+            client.setHttpFieldsAtTopLevel(top_level);
+            conn.send("5\r\nhello\r\n0\r\nBody: from-trailer\r\nX-T: 1\r\n\r\n");
+            hash<auto> rv = client.readHTTPChunk(30s);
+            assertEq(binary("hello"), rv.body, tl + ": the first chunk");
+            assertFalse(rv.hasKey("trailers"), tl + ": a chunk before the last has no trailers");
+            rv = client.readHTTPChunk(30s);
+            assertEq({"body": "from-trailer", "x-t": "1"}, rv.trailers, tl + ": the trailer fields of the last chunk");
+            assertEq(top_level ? "1" : NOTHING, rv."x-t", tl + ": a trailer field at the top level");
+            assertFalse(rv.body == "from-trailer", tl + ": a trailer field named Body is not the body");
+        }
+    }
+
+    responseHeader() {
+        (Socket client, Socket conn) = connect();
+        conn.send("HTTP/1.1 200 OK\r\nStatus_Code: 999\r\nStatus_Message: Bogus\r\nHttp_Version: 9.9\r\n"
+            "Headers: h\r\nContent-Length: 0\r\n\r\n");
+        hash<auto> hdr = client.readHTTPHeader(30s);
+        assertEq(200, hdr.status_code, "the status code is that of the status line");
+        assertEq("OK", hdr.status_message, "the status message is that of the status line");
+        assertEq("1.1", hdr.http_version, "the version is that of the status line");
+        assertEq({"status_code": "999", "status_message": "Bogus", "http_version": "9.9", "headers": "h",
+            "content-length": "0"}, hdr.headers, "every field is under headers");
+        assertEq("0", hdr."content-length", "a field is at the top level too (deprecated)");
+    }
+
+    requestHeader() {
+        (Socket client, Socket conn) = connect();
+        client.send("GET /real HTTP/1.1\r\nHost: x\r\nPath: /evil\r\nMethod: DELETE\r\nHttp_Version: 9.9\r\n"
+            "Trailers: t\r\nBody: b\r\n\r\n");
+        hash<auto> hdr = conn.readHTTPHeader(30s);
+        assertEq("GET", hdr.method, "the method is that of the request line");
+        assertEq("/real", hdr.path, "the path is that of the request line");
+        assertEq("1.1", hdr.http_version, "the version is that of the request line");
+        assertEq({"host": "x", "path": "/evil", "method": "DELETE", "http_version": "9.9", "trailers": "t",
+            "body": "b"}, hdr.headers, "every field is under headers");
+        assertEq("x", hdr.host, "a field is at the top level too (deprecated)");
+        assertFalse(hdr.hasKey("body"), "a field named Body is not at the top level");
+        assertFalse(hdr.hasKey("trailers"), "a field named Trailers is not at the top level");
+    }
+
+    fieldsNotAtTopLevel() {
+        (Socket client, Socket conn) = connect();
+        assertTrue(client.getHttpFieldsAtTopLevel(), "the deprecated placement is on by default");
+        client.setHttpFieldsAtTopLevel(False);
+        assertFalse(client.getHttpFieldsAtTopLevel());
+        conn.send("HTTP/1.1 200 OK\r\nX-H: 1\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\nX-T: 2\r\n\r\n");
+        hash<auto> hdr = client.readHTTPHeader(30s);
+        assertEq(("headers", "http_version", "status_code", "status_message"), sort(keys hdr),
+            "no field at the top level of the header");
+        assertEq("1", hdr.headers."x-h");
+        hash<auto> rv = client.readHTTPChunkedBody(30s);
+        assertEq({"body": "ok", "trailers": {"x-t": "2"}}, rv, "no field at the top level of the body");
+
+        # an accepted socket takes the setting of its listening socket
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        listener.setHttpFieldsAtTopLevel(False);
+        hash<auto> li = listener.getSocketInfo(False);
+        Socket c();
+        c.connectINET(li.address, li.port, 30s, li.family);
+        Socket accepted = listener.accept(30s);
+        assertFalse(accepted.getHttpFieldsAtTopLevel(), "the accepted socket takes the listener's setting");
+    }
+
+    #! serves one HTTP/1.1 response to the next connection of the server socket
+    private Counter serveOnce(string response) {
+        return serve((response,));
+    }
+
+    #! serves each response to the next connection of the server socket, and puts the headers of the requests in reqs
+    private Counter serve(list<data> responses, *Queue reqs) {
+        Counter served(1);
+        background sub () {
+            on_exit served.dec();
+            foreach data response in (responses) {
+                Socket s = server.accept(30s);
+                hash<auto> hdr = s.readHTTPHeader(30s);
+                if (reqs) {
+                    reqs.push(hdr);
+                }
+                s.send(response);
+                # waits for the client to close the connection
+                try {
+                    s.recv(1, 30s);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                }
+            }
+        }();
+        return served;
+    }
+
+    httpClientResponse() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        foreach bool top_level in ((True, False)) {
+            string tl = top_level ? "top level" : "not at the top level";
+            # a response with a Content-Length
+            HTTPClient hc({"url": url, "timeout": 30s, "http_fields_at_top_level": top_level});
+            Counter served = serveOnce("HTTP/1.1 200 OK\r\nStatus_Code: 999\r\nBody: from-header\r\n"
+                "Content-Length: 5\r\n\r\nhello");
+            hash<auto> info;
+            hash<auto> rv = hc.send(NOTHING, "GET", "/", NOTHING, False, \info);
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq(200, rv.status_code, tl + ": the status code is that of the status line");
+            assertEq("hello", rv.body, tl + ": the body is the body");
+            assertEq("999", rv.headers.status_code, tl + ": the field named Status_Code is under headers");
+            assertEq("from-header", rv.headers.body, tl + ": the field named Body is under headers");
+            assertEq(top_level ? "5" : NOTHING, rv."content-length", tl + ": a field at the top level");
+            assertEq(top_level, hc.getHttpConfig().http_fields_at_top_level ?? True, tl + ": the option");
+
+            # a chunked response with trailer fields, which are given under trailers
+            hc = new HTTPClient({"url": url, "timeout": 30s, "http_fields_at_top_level": top_level});
+            served = serveOnce("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nBody: from-header\r\n\r\n"
+                "5\r\nhello\r\n0\r\nBody: from-trailer\r\nX-T: 1\r\n\r\n");
+            rv = hc.send(NOTHING, "GET", "/");
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq(200, rv.status_code, tl + ": chunked: the status code");
+            assertEq("hello", rv.body, tl + ": chunked: the body is the body");
+            assertEq("from-header", rv.headers.body, tl + ": chunked: the header field named Body");
+            assertEq({"body": "from-trailer", "x-t": "1"}, rv.trailers, tl + ": chunked: the trailer fields");
+            assertFalse(rv.hasKey("x-t"), tl + ": chunked: HTTPClient gives a trailer field only under trailers");
+
+            # a streamed chunked response: the trailer fields are given in the last call of the callback
+            hc = new HTTPClient({"url": url, "timeout": 30s, "http_fields_at_top_level": top_level});
+            served = serveOnce("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n"
+                "5\r\nhello\r\n0\r\nBody: from-trailer\r\nX-T: 1\r\n\r\n");
+            string data;
+            *hash<auto> trailers;
+            *hash<auto> header;
+            *hash<auto> cb_info;
+            info = {};
+            hc.sendWithRecvCallback(sub (hash<auto> h) {
+                if (h.hasKey("data")) {
+                    data += h.data;
+                } else if (h.hasKey("info")) {
+                    # the first call gives the header of the response
+                    header = h.hdr;
+                    cb_info = h.info;
+                } else if (h.hasKey("hdr")) {
+                    trailers = h.hdr;
+                }
+            }, NOTHING, "GET", "/", NOTHING, 30s, False, \info);
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq("hello", data, tl + ": streamed: the body");
+            assertEq({"body": "from-trailer", "x-t": "1"}, trailers, tl + ": streamed: the trailer fields");
+            assertEq("text/plain", header.headers."content-type", tl + ": streamed: the header fields");
+            assertEq(top_level ? "text/plain" : NOTHING, header."content-type",
+                tl + ": streamed: a header field at the top level");
+            assertEq("text/plain", cb_info."response-headers"."content-type",
+                tl + ": streamed: response-headers of the callback has the fields at its top level");
+            assertFalse(cb_info."response-headers".hasKey("headers"),
+                tl + ": streamed: response-headers of the callback has no headers key");
+            assertEq("text/plain", info."response-headers"."content-type", tl + ": streamed: response-headers");
+            assertFalse(info."response-headers".hasKey("headers"), tl + ": streamed: response-headers has no headers key");
+        }
+    }
+
+    #! the client's own reading of a response does not depend on the placement of the fields it gives
+    httpClientFieldsNotAtTopLevel() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        foreach bool by_method in ((False, True)) {
+            string how = by_method ? "setHttpFieldsAtTopLevel()" : "option";
+            code new_client = HTTPClient sub (*hash<auto> opts) {
+                HTTPClient hc({"url": url, "timeout": 30s} + opts + (by_method ? NOTHING
+                    : {"http_fields_at_top_level": False}));
+                if (by_method) {
+                    hc.setHttpFieldsAtTopLevel(False);
+                }
+                assertFalse(hc.getHttpFieldsAtTopLevel(), how + ": the setting");
+                return hc;
+            };
+
+            # a compressed body is decoded
+            HTTPClient hc = new_client();
+            Counter served = serve((binary("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n"
+                "Content-Length: " + gzip("compressed").size() + "\r\n\r\n") + gzip("compressed"),));
+            hash<auto> info;
+            hash<auto> rv = hc.send(NOTHING, "GET", "/", NOTHING, False, \info);
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq("compressed", rv.body, how + ": a compressed body is decoded");
+            assertEq("gzip", rv.headers."content-encoding", how + ": the field is under headers");
+            assertFalse(rv.hasKey("content-encoding"), how + ": the field is not at the top level");
+            assertEq(("body", "headers", "http_version", "status_code", "status_message"),
+                sort(keys (rv - "_qore_orig_content_type")), how + ": no field at the top level");
+            # info."response-headers" has the fields at its top level, as in earlier versions
+            assertEq("gzip", info."response-headers"."content-encoding", how + ": response-headers is flat");
+            assertFalse(info."response-headers".hasKey("headers"), how + ": response-headers has no headers key");
+
+            # the charset of a body is used to decode it
+            hc = new_client();
+            served = serve((binary("HTTP/1.1 200 OK\r\nContent-Type: text/plain;charset=ISO-8859-1\r\n"
+                "Content-Length: 1\r\n\r\n") + <e9>,));
+            rv = hc.send(NOTHING, "GET", "/");
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq("ISO-8859-1", rv.body.encoding(), how + ": the charset of the body is used");
+            assertEq("\u00e9", convert_encoding(rv.body, "UTF-8"), how + ": the body is decoded");
+
+            # an error response is given in the exception as the response would be
+            hc = new_client();
+            served = serveOnce("HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\nnone");
+            try {
+                hc.send(NOTHING, "GET", "/missing");
+                assertTrue(False, how + ": the error response raises an exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, how + ": the error");
+                assertEq(404, ex.arg.status_code, how + ": the status code of the error response");
+                assertEq("text/plain", ex.arg.headers."content-type", how + ": the fields of the error response");
+                assertFalse(ex.arg.hasKey("content-type"), how + ": no field at the top level of the error response");
+            }
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+
+            # a redirect is followed
+            hc = new_client();
+            Queue reqs();
+            served = serve(("HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\ndone"), reqs);
+            rv = hc.send(NOTHING, "GET", "/first");
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            assertEq("/first", reqs.get(30s).path, how + ": the first request");
+            assertEq("/next", reqs.get(30s).path, how + ": the redirect is followed");
+            assertEq("done", rv.body, how + ": the response of the redirect");
+
+            # an authentication challenge is answered with the credentials of the URL (a Digest challenge, as Basic
+            # credentials are sent with the first request)
+            hc = new_client({"url": sprintf("http://user:pass@localhost:%d", server_info.port)});
+            served = serve(("HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Digest realm=\"test\", nonce=\"n1\"\r\n"
+                "Content-Length: 0\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"), reqs);
+            rv = hc.send(NOTHING, "GET", "/auth");
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            reqs.get(30s);
+            hash<auto> second = reqs.get(30s);
+            assertEq("ok", rv.body, how + ": the challenge is answered");
+            assertRegex("^Digest username=\"user\", realm=\"test\", nonce=\"n1\"", second.headers.authorization,
+                how + ": the challenge is read from the response");
+        }
+    }
+
+    #! the trailer fields of a streamed response are given with the end of its body
+    httpClientStreamedTrailers() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        string response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n"
+            "5\r\nhello\r\n0\r\nBody: from-trailer\r\nX-T: 1\r\n\r\n";
+        hash<auto> trailers = {"body": "from-trailer", "x-t": "1"};
+
+        HTTPClient hc({"url": url, "timeout": 30s});
+        Counter served = serveOnce(response);
+        hash<auto> hdr = hc.sendAndStream("GET", "/");
+        assertEq(200, hdr.status_code);
+        hash<auto> rv = hc.readHTTPChunkedBody(30s);
+        hc.disconnect();
+        assertEq(0, served.waitForZero(30s), "the server thread is done");
+        assertEq({"body": "hello", "trailers": trailers}, rv, "readHTTPChunkedBody()");
+
+        hc = new HTTPClient({"url": url, "timeout": 30s});
+        served = serveOnce(response);
+        hc.sendAndStream("GET", "/");
+        rv = hc.readHTTPChunkedBodyBinary(30s);
+        hc.disconnect();
+        assertEq(0, served.waitForZero(30s), "the server thread is done");
+        assertEq({"body": binary("hello"), "trailers": trailers}, rv, "readHTTPChunkedBodyBinary()");
+
+        hc = new HTTPClient({"url": url, "timeout": 30s});
+        served = serveOnce(response);
+        hc.sendAndStream("GET", "/");
+        binary body;
+        while (True) {
+            rv = hc.readHTTPChunk(30s);
+            if (!rv.hasKey("body")) {
+                break;
+            }
+            body += rv.body;
+        }
+        hc.disconnect();
+        assertEq(0, served.waitForZero(30s), "the server thread is done");
+        assertEq(binary("hello"), body, "readHTTPChunk(): the body");
+        assertEq({"trailers": trailers}, rv, "readHTTPChunk(): the end of the body gives the trailer fields");
+    }
+
+    #! a field named like a key that the client uses itself does not change what the client does
+    httpClientInternalKeys() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        HTTPClient hc({"url": url, "timeout": 30s});
+        Counter served = serve(("HTTP/1.1 200 OK\r\nProtocol: h2\r\n_qore_orig_content_type: application/json\r\n"
+            "Content-Type: text/plain\r\nContent-Length: 2\r\n\r\nok",
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nok2"));
+        hash<auto> rv = hc.send(NOTHING, "GET", "/");
+        assertEq("h2", rv.headers.protocol, "the field named Protocol is under headers");
+        assertFalse(rv.hasKey("protocol"), "the field named Protocol is not at the top level");
+        assertEq("ok", rv.body, "the body is decoded with its own Content-Type");
+        # the field named Protocol did not make the client use HTTP/2 for the next request
+        hc.disconnect();
+        rv = hc.send(NOTHING, "GET", "/");
+        hc.disconnect();
+        assertEq(0, served.waitForZero(30s), "the server thread is done");
+        assertEq("ok2", rv.body, "the next request is made with HTTP/1.1");
+        assertEq("HTTP/1.1", hc.getHttpVersion(), "the client still uses HTTP/1.1");
+    }
+
+    #! the trailer section of a response is limited in size
+    httpClientTrailerSize() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        string trailer;
+        # more than the default maximum size of a trailer section (65536 bytes; issue #6867)
+        for (int i = 0; i < 70; ++i) {
+            trailer += sprintf("X-T%d: %s\r\n", i, strmul("x", 1000));
+        }
+        HTTPClient hc({"url": url, "timeout": 30s});
+        Counter served = serveOnce("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n"
+            "5\r\nhello\r\n0\r\n" + trailer + "\r\n");
+        assertThrows("HTTP-HEADER-TOO-LARGE", "chunked body trailer.*exceeds the maximum size of 65536 bytes", \hc.send(),
+            (NOTHING, "GET", "/"));
+        hc.disconnect();
+        assertEq(0, served.waitForZero(30s), "the server thread is done");
+    }
+
+    #! the response header event gives the fields with the status line
+    httpClientEvents() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        foreach bool top_level in ((True, False)) {
+            string tl = top_level ? "top level" : "not at the top level";
+            HTTPClient hc({"url": url, "timeout": 30s, "http_fields_at_top_level": top_level});
+            Queue events();
+            hc.setEventQueue(events);
+            Counter served = serveOnce("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok");
+            hc.send(NOTHING, "GET", "/");
+            hc.disconnect();
+            assertEq(0, served.waitForZero(30s), "the server thread is done");
+            *hash<auto> ev;
+            while (events.size()) {
+                hash<auto> e = events.get();
+                if (e.event == EVENT_HTTP_MESSAGE_RECEIVED) {
+                    ev = e;
+                    break;
+                }
+            }
+            assertEq("text/plain", ev.headers."content-type", tl + ": the event has the fields");
+            assertEq(200, ev.headers.status_code, tl + ": the event has the status code");
+            assertFalse(ev.headers.hasKey("headers"), tl + ": the event has no headers key");
+        }
+    }
+
+    #! RestClient reads response fields from the nested hash with either way of setting the option (issue #6869)
+    restClientFieldsNotAtTopLevel() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        string response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nBody: header-body\r\n"
+            "Status_Code: 999\r\nContent-Length: 7\r\n\r\n{\"n\":1}";
+        foreach bool constructor_option in ((True, False)) {
+            RestClient rc({"url": url, "http_fields_at_top_level": constructor_option ? False : NOTHING}, True);
+            if (!constructor_option) {
+                assertTrue(rc.getHttpFieldsAtTopLevel(), "default field placement");
+                rc.setHttpFieldsAtTopLevel(False);
+            }
+            assertFalse(rc.getHttpFieldsAtTopLevel(), "only nested fields requested");
+            Counter served = serveOnce(response);
+            hash<auto> raw = rc.get("/");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "server finished");
+            assertEq({"n": 1}, raw.body, "body decoded by Content-Type");
+            assertEq(200, raw.status_code, "HTTP status");
+            assertFalse(raw.hasKey("content-type"), "no duplicate header");
+            assertEq("header-body", raw.headers.body, "field named Body");
+            served = serveOnce(response);
+            hash<RestResponseInfo> rest = rc.restDoRawRequest("GET", "/");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "raw request finished");
+            assertEq({"n": 1}, rest.body, "raw request decodes the response body");
+            assertEq("application/json", rest.content_type, "raw request content type");
+            assertEq("999", rest.headers.status_code, "field named Status_Code");
+            served = serveOnce(response);
+            raw = rc.doRequestWithResponseLimit("GET", "/", NOTHING, 16);
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "bounded request finished");
+            assertEq({"n": 1}, raw.body, "bounded response decoded");
+            assertEq("header-body", raw.headers.body, "bounded response headers");
+            assertFalse(raw.hasKey("content-type"), "bounded response has no duplicate header");
+
+            served = serveOnce(response);
+            RestRequestPollOperation poller = rc.startPollGet("/");
+            while (*hash<SocketPollInfo> poll_info = poller.continuePoll()) {
+                Socket::poll((poll_info,), 30s);
+            }
+            raw = poller.getOutput();
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "poll request finished");
+            assertEq({"n": 1}, raw.body, "poll response body");
+            assertEq("999", raw.headers.status_code, "poll response wire header");
+            assertEq(200, raw.status_code, "poll response status");
+            assertFalse(raw.hasKey("content-type"), "poll response has no duplicate header");
+            rc.setHttpFieldsAtTopLevel(True);
+            assertTrue(rc.getHttpFieldsAtTopLevel(), "legacy placement can be restored");
+        }
+    }
+
+    restClientNestedSchema() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        hash<auto> schema = {"type": "object", "properties": {"n": {"type": "integer"}}};
+        hash<auto> info = {"title": "Nested fields", "version": "1"};
+        Swagger::SwaggerSchema swagger("", {"swagger": "2.0", "info": info, "produces": ("application/json",),
+            "paths": {"/test": {"get": {"responses": {"200": {"description": "OK", "schema": schema}}}}}});
+        OpenApi3::OpenApi3Schema openapi("", {"openapi": "3.0.3", "info": info,
+            "paths": {"/test": {"get": {"responses": {"200": {"description": "OK",
+                "content": {"application/json": {"schema": schema}}}}}}}});
+        foreach AbstractRestSchemaValidator validator in ((swagger, openapi)) {
+            RestClient rc({"url": url, "validator": validator, "http_fields_at_top_level": False}, True);
+            Counter served = serveOnce("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n"
+                "Content-Length: 7\r\n\r\n{\"n\":1}");
+            hash<RestResponseInfo> response = rc.restGet("/test");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "schema request finished");
+            assertEq({"n": 1}, response.body, validator.className());
+        }
+        string body = "{\"err\":\"NESTED-TEST-ERROR\",\"desc\":\"structured error\"}";
+        RestClient rc({"url": url, "http_fields_at_top_level": False}, True);
+        Counter served = serveOnce(sprintf("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json; charset=UTF-8\r\n"
+            "Content-Length: %d\r\n\r\n%s", body.size(), body));
+        assertThrows("NESTED-TEST-ERROR", "structured error", \rc.get(), "/");
+        rc.disconnect();
+        assertEq(0, served.waitForZero(30s), "error response finished");
+    }
+
+    #! a PollPipeline reads the fields of a header from its headers key
+    pollPipelineFieldsNotAtTopLevel() {
+        (Socket client, Socket conn) = connect();
+        client.setHttpFieldsAtTopLevel(False);
+        conn.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello");
+        PollPipeline p(client);
+        p.addReadHttpHeader();
+        p.addValidateHeaderPrefix("content-type", "text/", "PIPELINE-TEST-ERROR");
+        p.addReadHttpBody("GET");
+        int start = clock_getmicros_monotonic();
+        while (!p.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > 30000000) {
+                throw "POLL-TIMEOUT", sprintf("the pipeline timed out in state %y", p.getState());
+            }
+            *hash<SocketPollInfo> pi = p.continuePoll();
+            if (pi) {
+                Socket::poll((pi,), 5s);
+            }
+        }
+        hash<auto> result = p.getResult();
+        assertEq(200, result.status_code, "the status code");
+        assertEq("text/plain", result.hdr.headers."content-type", "the fields of the header");
+        assertEq(binary("hello"), result.body, "the body is read with its Content-Length");
+    }
+
+    httpServerRequest() {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit delete hs;
+        EchoRequestHandler handler();
+        hs.setHandler("echo", "", NOTHING, handler);
+        hs.setDefaultHandler("echo", handler);
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        hs.waitForAsyncIo();
+
+        Socket s();
+        s.connect("localhost:" + port, 30s);
+        on_exit s.close();
+        s.send("POST /real HTTP/1.1\r\nHost: localhost\r\nPath: /evil\r\nMethod: DELETE\r\nBody: b\r\n"
+            "Content-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "5\r\nhello\r\n0\r\nBody: from-trailer\r\nContent-Encoding: gzip\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(30s);
+        assertEq(200, resp.status_code, "the request is answered");
+        hash<auto> req = handler.requests.get(30s);
+        assertEq("POST", req.hdr.method, "the method is that of the request line");
+        # HttpServer gives the path without its leading slash
+        assertEq("real", req.hdr.path, "the path is that of the request line");
+        assertEq("/evil", req.hdr.headers.path, "the field named Path is under headers");
+        assertEq("b", req.hdr.headers.body, "the field named Body is under headers");
+        assertEq("hello", req.body, "the body is the body; a trailer does not change its decoding");
+        assertEq({"body": "from-trailer", "content-encoding": "gzip"}, req.trailers, "the trailers");
+        assertEq("localhost", req.hdr.host, "the fields are at the top level too (the server keeps them for now)");
+    }
+
+    httpServerHttp2Request() {
+        EchoRequestHandler handler();
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit delete hs;
+        hs.setDefaultHandler("echo", handler);
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "enable_h3": False,
+        }).port;
+        hs.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False, "http_version": "2.0",
+            "timeout": 30s});
+        hc.connect();
+        assertEq("HTTP/2", hc.getHttpVersion(), "HTTP/2 is negotiated");
+        checkServerRequest(hc, handler, "HTTP/2");
+    }
+
+    httpServerHttp3Request() {
+        EchoRequestHandler handler();
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit delete hs;
+        hs.setDefaultHandler("echo", handler);
+        int port;
+        try {
+            port = hs.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        hs.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False, "http_version": "3",
+            "timeout": 30s});
+        hc.connect();
+        if (hc.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", hc.getHttpVersion()));
+        }
+        checkServerRequest(hc, handler, "HTTP/3");
+    }
+
+    #! sends a request with fields that have the names of keys of the request header hash
+    private checkServerRequest(HTTPClient hc, EchoRequestHandler handler, string proto) {
+        hash<auto> rv = hc.send("data", "POST", "/real", {"Content-Type": MimeTypeText, "Path": "/evil",
+            "Method": "DELETE", "Body": "b", "X-Test": "1"});
+        assertEq(200, rv.status_code, proto + ": the request is answered");
+        hash<auto> req = handler.requests.get(30s);
+        assertEq("POST", req.hdr.method, proto + ": the method is that of the request");
+        assertEq("real", req.hdr.path, proto + ": the path is that of the request");
+        assertEq("/evil", req.hdr.headers.path, proto + ": the field named Path is under headers");
+        assertEq("DELETE", req.hdr.headers.method, proto + ": the field named Method is under headers");
+        assertEq("b", req.hdr.headers.body, proto + ": the field named Body is under headers");
+        assertEq("1", req.hdr.headers."x-test", proto + ": a field is under headers");
+        assertEq("1", req.hdr."x-test", proto + ": a field is at the top level too (the server keeps them for now)");
+        assertEq("data", req.body, proto + ": the body is the body");
+    }
+}

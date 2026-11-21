@@ -21,7 +21,7 @@ sub main() {
         run("chr", auto sub () { return chr(i()); });
         run("setenv", auto sub () { return setenv(s(), "x"); });
         run("unsetenv", auto sub () { return unsetenv(s()); });
-        run("getenv", auto sub () { return getenv(s()); });
+        run("getenv", auto sub () { return getenv(s()); }); # live-provider-optin: a parse check of getenv() with a computed argument
         run("reverse", auto sub () { return reverse(l()); });
         run("exists_function", auto sub () { return exists_function(s()); });
         run("is_date_absolute", auto sub () { return is_date_absolute(d()); });

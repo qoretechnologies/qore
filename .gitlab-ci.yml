@@ -44,6 +44,9 @@ variables:
   MEMCACHED_URL: 'memcached://memcached:11211'
   REDIS_URL: 'redis://redis:6379'
   MONGODB_URL: 'mongodb://mongodb:27017'
+  # live calls of the provider tests (examples/test/LiveProviderTest.qm, qore#6964): only the public demo environment
+  # of Mews, whose tests use its published demo tokens; no other service is called, and no job has a provider key
+  QORE_TEST_LIVE_PROVIDERS: mews
   QORE_TEST_OPTS: '-penable-debug'
   QORE_EXCLUDE_PERF_TESTS: "1"
   # A test job fails when a native module of its image has no build for the module API of the qore under test, as its
@@ -56,6 +59,49 @@ variables:
   # the build downloads the third-party source archives of cmake/third-party-sources.cmake from this mirror (the
   # generic package registry of mirror/qore, read with the job token) before their upstream URLs
   QORE_THIRD_PARTY_MIRROR: "${CI_API_V4_URL}/projects/mirror%2Fqore/packages/generic"
+
+  # The qore-test-base images of the build and test jobs (design/ci-test-base-image-digests.md): the job
+  # resolve-qore-test-base-images resolves their tags to digests when the pipeline starts and writes these variables
+  # to its dotenv report, which takes precedence over the values here, so that every job of the pipeline runs on the
+  # same image even when a tag is published again while it runs.  The values here are in no registry: a job that does
+  # not get the report fails to pull its image instead of running on a tag or on the runner's default image.
+  QORE_TEST_BASE_REPOSITORY: "$CI_REGISTRY/infrastructure/qore-test-base/qore-test-base"
+  QORE_TEST_BASE_UBUNTU_AMD64_IMAGE: "invalid.invalid/unresolved/qore-test-base-ubuntu-amd64"
+  QORE_TEST_BASE_UBUNTU_ARM64_IMAGE: "invalid.invalid/unresolved/qore-test-base-ubuntu-arm64"
+  QORE_TEST_BASE_ALPINE_AMD64_IMAGE: "invalid.invalid/unresolved/qore-test-base-alpine-amd64"
+  QORE_TEST_BASE_ALPINE_ARM64_IMAGE: "invalid.invalid/unresolved/qore-test-base-alpine-arm64"
+
+# The qore-test-base images of the pipeline: each tag is resolved to the digest that it names now, and the build and
+# test jobs run on the digests (image: $QORE_TEST_BASE_<flavor>_<arch>_IMAGE; design/ci-test-base-image-digests.md).
+# A build job compiles the AOT modules against the binary modules of its image, so a test job on another image tests
+# them with other modules (the batch/8 pipeline, where the tags were published between the build and the test jobs).
+# The job fails, and with it the pipeline, when any tag cannot be resolved: no job falls back to a tag.  It runs on the
+# tag itself, as tree-already-tested does: neither uses the image's Qore modules.  ci-build-image-check.sh still fails
+# a test job whose image is not its build job's.
+resolve-qore-test-base-images:
+  stage: .pre
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  # one more run when the registry was briefly unavailable (the script exits 1 on any error); this replaces the
+  # default retry, so a runner system failure is retried as well
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - script_failure
+  script:
+    - python3 -I test/docker_test/resolve-image-digests.py qore-test-base-images.env
+      "QORE_TEST_BASE_UBUNTU_AMD64_IMAGE=${QORE_TEST_BASE_REPOSITORY}:develop"
+      "QORE_TEST_BASE_UBUNTU_ARM64_IMAGE=${QORE_TEST_BASE_REPOSITORY}:develop-arm64"
+      "QORE_TEST_BASE_ALPINE_AMD64_IMAGE=${QORE_TEST_BASE_REPOSITORY}:develop-alpine"
+      "QORE_TEST_BASE_ALPINE_ARM64_IMAGE=${QORE_TEST_BASE_REPOSITORY}:develop-alpine-arm64"
+  artifacts:
+    reports:
+      dotenv: qore-test-base-images.env
 
 # Every download of the build takes its source from cmake/third-party-sources.cmake, and the mirror has every archive
 # listed there with its pinned SHA-256
@@ -83,7 +129,7 @@ tree-already-tested:
 
 check-third-party-sources:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -98,7 +144,7 @@ check-third-party-sources:
 # standard sizes; the checkers' own tests run first
 check-module-release-notes:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -117,11 +163,15 @@ check-module-release-notes:
 # AddressSanitizer + UndefinedBehaviorSanitizer and under ThreadSanitizer (it needs no Qore build)
 check-fast-routes-core-sanitizers:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -134,7 +184,7 @@ check-fast-routes-core-sanitizers:
 # it runs in the build stage, on one platform, and stops at the first error
 check-build-separate-units:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -197,7 +247,7 @@ check-build-separate-units:
 build-ubuntu-amd64:
   extends: .qmod-cache
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
@@ -214,7 +264,7 @@ build-ubuntu-amd64:
 build-ubuntu-arm64:
   extends: .qmod-cache
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
+  image: $QORE_TEST_BASE_UBUNTU_ARM64_IMAGE
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
@@ -231,7 +281,7 @@ build-ubuntu-arm64:
 build-alpine-amd64:
   extends: .qmod-cache
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  image: $QORE_TEST_BASE_ALPINE_AMD64_IMAGE
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
@@ -248,7 +298,7 @@ build-alpine-amd64:
 build-alpine-arm64:
   extends: .qmod-cache
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
+  image: $QORE_TEST_BASE_ALPINE_ARM64_IMAGE
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - arm64
@@ -265,7 +315,7 @@ build-alpine-arm64:
 build-perf:
   extends: .qmod-cache
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - $QORE_QMOD_CACHE_RUNNER_TAG
     - amd64
@@ -289,8 +339,8 @@ test-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -319,8 +369,8 @@ test-ubuntu-arm64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-arm64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
+  needs: [resolve-qore-test-base-images, build-ubuntu-arm64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_ARM64_IMAGE
   tags:
     - k8s
     - arm64
@@ -351,8 +401,8 @@ test-alpine-amd64:
   stage: test
   parallel: 3
   timeout: 105 minutes
-  needs: [build-alpine-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  needs: [resolve-qore-test-base-images, build-alpine-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_ALPINE_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -381,8 +431,8 @@ test-alpine-arm64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-alpine-arm64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
+  needs: [resolve-qore-test-base-images, build-alpine-arm64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_ALPINE_ARM64_IMAGE
   tags:
     - k8s
     - arm64
@@ -411,8 +461,8 @@ test-alpine-arm64:
 test-ast-ubuntu-amd64:
   stage: test
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -456,8 +506,8 @@ test-ir-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -497,8 +547,8 @@ test-jit-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -538,8 +588,8 @@ test-tiered-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
@@ -588,6 +638,9 @@ test-macos:
     - $QORE_QMOD_CACHE_MACOS_RUNNER_TAG
   services: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     QORE_TEST_OPTS: '-penable-debug'
     QORE_EXCLUDE_PERF_TESTS: "1"
   before_script:
@@ -618,13 +671,16 @@ test-macos:
 test-perf:
   stage: test
   timeout: 105 minutes
-  needs: [build-perf, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-perf, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
   services: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     QORE_PERF_TESTS_ONLY: "1"
     QORE_EXCLUDE_PERF_TESTS: ""
   before_script:
@@ -659,12 +715,16 @@ test-perf:
 test-cmake-ubuntu-amd64:
   stage: test
   timeout: 30 minutes
-  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -673,12 +733,16 @@ test-cmake-ubuntu-amd64:
 test-cmake-alpine-amd64:
   stage: test
   timeout: 30 minutes
-  needs: [build-alpine-amd64, {job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  needs: [resolve-qore-test-base-images, build-alpine-amd64, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_ALPINE_AMD64_IMAGE
   tags:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -693,14 +757,17 @@ test-cmake-alpine-amd64:
 test-tsan-ubuntu-amd64:
   stage: test
   timeout: 60 minutes
-  needs: [{job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
   services: []
   before_script: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     TEST_TIMEOUT: "600"
   script:
     - . test/docker_test/tree-tested-skip.sh

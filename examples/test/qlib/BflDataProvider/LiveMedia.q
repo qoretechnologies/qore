@@ -2,15 +2,18 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 # Compiled-artifact helper: invoke only through the explicitly enabled ledger runner.
 %modern
+%requires ../../LiveProviderTest.qm
 %requires BflDataProvider
 %requires QoreMediaUtils
 %requires json
 
-if (ENV.QORE_BFL_LIVE_MEDIA != "1" || !ENV.BFL_APIKEY.val()) {
-    throw "LIVE-TEST-DISABLED", "use the opt-in ledger runner with a privately loaded credential";
+*string apikey = LiveProvider::get("bfl", "BFL_APIKEY");
+if (LiveProvider::get("bfl", "QORE_BFL_LIVE_MEDIA") != "1" || !apikey.val()) {
+    throw "LIVE-TEST-DISABLED", "use the opt-in ledger runner with a privately loaded credential and "
+        + LiveProvider::skipReason("bfl", ("QORE_BFL_LIVE_MEDIA", "BFL_APIKEY"));
 }
-BflRestConnection connection({"name": "blackforestlabs", "url": ENV.QORE_BFL_LIVE_URL,
-    "opts": {"apikey": ENV.BFL_APIKEY, "timeout": 120s, "connect_timeout": 10s}});
+BflRestConnection connection({"name": "blackforestlabs", "url": LiveProvider::get("bfl", "QORE_BFL_LIVE_URL"),
+    "opts": {"apikey": apikey, "timeout": 120s, "connect_timeout": 10s}});
 BflRestClientIo client = connection.getAsync(False);
 BflDataProvider::BflDataProvider root(client);
 string action = ARGV[0];
@@ -36,7 +39,7 @@ try {
             "width": 512, "height": 512, "seed": 0, "output_format": "png", "job_timeout": 10m});
     } else if (action == "image-facade") {
         auto result = QoreMediaUtils::MediaProviderRegistry::createImageGenerator(<QoreMediaUtils::ImageGeneratorConfig>{
-            "backend": "bfl", "api_key": ENV.BFL_APIKEY, "url": client.getUrl(), "model": "flux-2-klein-4b",
+            "backend": "bfl", "api_key": apikey, "url": client.getUrl(), "model": "flux-2-klein-4b",
             "provider_options": {"width": 512, "height": 512, "job_timeout": 10m}, "output_format": "png"})
             .generateImage(prompt, {"seed": 0});
         done = result.metadata + {"media": result.metadata{"width", "height"}
@@ -55,7 +58,7 @@ try {
         done.media = root.getChildProvider("download-result").doRequest(done{"id", "polling_url"});
     } else if (action == "video-facade") {
         auto result = QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(<QoreMediaUtils::VideoGeneratorConfig>{
-            "backend": "bfl", "api_key": ENV.BFL_APIKEY, "url": client.getUrl(), "model": "flux-3-video",
+            "backend": "bfl", "api_key": apikey, "url": client.getUrl(), "model": "flux-3-video",
             "duration_seconds": 5, "aspect_ratio": "16:9",
             "provider_options": {"mode": "t2v", "resolution": "hd", "draft": True,
                 "generate_audio": False, "job_timeout": 15m}}).generateVideo(

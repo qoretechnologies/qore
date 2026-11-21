@@ -32,6 +32,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_Program.h"
@@ -1867,6 +1868,7 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
     }
     SimpleRefHolder<SimpleValueQoreNode> rv(qore_decode_http_body(ct, body, assumed));
     if (rv->getType() == NT_STRING) {
+        // note: safe; rv is the node made by qore_decode_http_body()
         const QoreStringNode* str = static_cast<const QoreStringNode*>(*rv);
         // the check of <string>::isEncodingValid() and of the "latin1" mode: also a byte that is not a character of
         // a single-byte encoding (ex: 0x81 in windows-1252) is not valid
@@ -3788,16 +3790,24 @@ load_user_module_with_program("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
+    @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
     @since %Qore 0.8.12
  */
-nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
-    if (QoreModuleManager::checkModuleName(*name, xsink)) {
-        // the Program container has been taken from its object and is owned by this call
-        ReferenceHolder<QoreProgram> holder(program, xsink);
+nothing load_user_module_with_program(string name, Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
+    // the container is taken from its object, which is deleted, only if it is not another tenant's Program
+    // (qore#6536)
+    QoreProgram* container = qore_take_module_container(obj_program, *program, xsink);
+    if (!container) {
         return QoreValue();
     }
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), program);
+    // the Program container is owned by this call
+    ReferenceHolder<QoreProgram> holder(container, xsink);
+    if (*xsink || QoreModuleManager::checkModuleName(*name, xsink)) {
+        return QoreValue();
+    }
+    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), holder.release());
 }
 
 //! Reloads an already-loaded %Qore module subject to code injection at run-time into %Qore; the module's code is not imported into the current Program object
@@ -4649,7 +4659,7 @@ static QoreValue q_call_function_lexical(const QoreListNode* args, RuntimeConfig
     if constexpr (ByReference) {
         const ResolvedCallReferenceNode* callable = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
         ProgramCallContextHelper pch(callable->getProgram());
-        return callable->invokeLexical(forwarded_args, xsink, policy);
+        return qore_resolved_call_reference_node_ops(callable).invokeLexical(forwarded_args, xsink, policy);
     } else {
         QoreStringNodeValueHelper name_holder(get_param_value(args, 0));
         const QoreStringNode* name = *name_holder;

@@ -1,0 +1,23 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+module SystemOptionsFixture {
+    version = "1.0";
+    desc = "Program option inheritance fixture";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \SystemOptionsFixture::prepare();
+}
+
+public namespace SystemOptionsFixture {
+    our Program Child;
+
+    sub prepare() {
+        Child = new Program();
+    }
+
+    public Program sub child() {
+        return Child;
+    }
+}

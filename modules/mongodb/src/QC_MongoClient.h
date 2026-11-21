@@ -59,6 +59,25 @@ public:
             uri = nullptr;
             return;
         }
+        // the authentication mechanisms that make the driver connect by itself are refused to sandboxed code when
+        // the client is created, before any connection (qoretechnologies/qore#6911)
+        if (creation.isSandboxed()) {
+            const char* reason = qore_mongo_driver_connection_reason(uri);
+            if (!reason) {
+                // GSSAPI is allowed only with an unrestricted network policy (qoretechnologies/qore#6912)
+                QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+                ExceptionSink gss_xsink;
+                reason = qore_mongo_gssapi_reason(uri, smh.get(), &gss_xsink);
+                gss_xsink.clear();
+            }
+            if (reason) {
+                xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox of the calling program does not allow "
+                    "%s: its connections cannot be checked against the sandbox's network policy", reason);
+                mongoc_uri_destroy(uri);
+                uri = nullptr;
+                return;
+            }
+        }
         client = mongoc_client_new_from_uri(uri);
         if (!client) {
             mongoc_uri_destroy(uri);
@@ -67,7 +86,7 @@ public:
             return;
         }
         // Set up interruptible streams for sandbox support
-        qore_mongo_setup_interruptible_streams(client);
+        qore_mongo_setup_interruptible_streams(client, &creation);
         // Set the application name, but only when the URI does not already carry one: libmongoc
         // refuses to set it twice and logs an ERROR for the attempt, and the name in the URI is the
         // user's own - Atlas reports it in the cluster's monitoring, so it must not be overwritten
@@ -149,6 +168,9 @@ public:
     }
 
 private:
+    //! the sandbox of the code that created the client, which governs each of its connections as well as the
+    //! sandbox of the code that uses it (qoretechnologies/qore#6911)
+    QoreSandboxCapture creation;
     mongoc_client_t* client = nullptr;
     mongoc_uri_t* uri = nullptr;
 };

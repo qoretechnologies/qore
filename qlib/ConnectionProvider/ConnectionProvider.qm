@@ -184,6 +184,15 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - a connection is a capability of the code that creates it: code restricted from the functional domain of a
+      connection's clients (\c NETWORK, \c FILESYSTEM or \c DATABASE) cannot create the connection, by a constructor
+      or by deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
+      gives it its clients, except a client that is or creates an \c HttpClientIo connection manager (the async
+      clients of HTTP and REST connections, for example), which code restricted from \c NETWORK cannot create; a
+      connection class that does not declare its domains (getConnectionDomainsImpl()) is treated as using all of
+      them; see @ref ConnectionProvider::AbstractConnection "AbstractConnection"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7052">issue 7052</a>)
     - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "validateConnectionOptions()"
       accepts values assignable to the declared Qore option type, including closures and call references for
       \c code options and lists with the declared element type (issue #6712)

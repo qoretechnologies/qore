@@ -155,7 +155,8 @@ private:
         }
         bool keep_brackets = options & QURL_KEEP_BRACKETS;
 
-        printd(5, "QoreURL::parse_intern(%s)\n", buf);
+        // the URL is not printed, as it can contain a password (qore#6961)
+        printd(5, "QoreURL::parse_intern() options: %d\n", options);
 
         // buf is continuously shrinked depending on the part of the string
         // that remains to be processed
@@ -256,7 +257,7 @@ private:
                 //printd(5, "QoreURL::parse_intern path: '%s'\n", path->c_str());
                 // get copy of hostname string for localized searching and invasive parsing
                 sbuf = sbuf.substr(0, path_start);
-                //printd(5, "QoreURL::sbuf: '%s' size: %d\n", sbuf.c_str(), sbuf.size());
+                //printd(5, "QoreURL::sbuf size: %d\n", sbuf.size());
             }
         }
 
@@ -267,7 +268,6 @@ private:
             // see if there's a password
             size_t pw_start = sbuf.find(':');
             if (pw_start < username_end && pw_start != std::string::npos) {
-                printd(5, "QoreURL::parse_intern password: '%s'\n", sbuf.c_str() + pw_start + 1);
                 password = new QoreStringNode(sbuf.c_str() + pw_start + 1, username_end - (pw_start + 1));
                 // set username
                 username = new QoreStringNode(sbuf.c_str(), pw_start);

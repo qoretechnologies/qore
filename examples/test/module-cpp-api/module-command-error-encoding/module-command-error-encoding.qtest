@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes with a default encoding of their own, each in the execution mode it sets
+# test-platform: macos - iconv conversions of exception descriptions between ISO-8859-1 and UTF-8, binary module command handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ModuleCommandErrorEncodingTest
+
+#! Tests the description of an exception raised by a module command (issue #6741)
+/** The command is appended to the description (": module command error from command '...'"); it was appended as its
+    bytes, whatever the encoding of the description and of the command, and cut after 200 bytes, which could be inside
+    a character.  It is appended as text in the encoding of the description, up to its first end of line and at most
+    200 characters.  The helper issues commands that fail to the cppapiuser test module, with each default encoding, in
+    the default execution mode and in each execution mode; Program::issueModuleCmd() gives the module the command in
+    the default encoding, so a command that it cannot represent raises ENCODING-CONVERSION-ERROR instead.
+*/
+class ModuleCommandErrorEncodingTest inherits QUnit::Test {
+    private {
+        #! the start of the description of a failed command
+        const Prefix = "the command \"fail\" was issued: module command error from command '";
+
+        #! the description of each case, in UTF-8
+        const Expected = {
+            "ascii": Prefix + "fail'",
+            "utf8-command": Prefix + "fail ü'",
+            "iso-command": Prefix + "fail ü'",
+            "euro-command": Prefix + "fail €'",
+            "utf8-description": "the command \"fail-utf8\" was issued (é): module command error from command "
+                "'fail-utf8 ü'",
+            "long-command": Prefix + "fail " + strmul("é", 195) + "...'",
+            "multi-line-command": Prefix + "fail ü...'",
+        };
+
+        #! the cases whose description is UTF-8 in a process whose default encoding is ISO-8859-1
+        const Utf8InIso = ("utf8-description",);
+
+        #! the cases whose command a process whose default encoding is ISO-8859-1 cannot represent
+        const NotInIso = ("euro-command",);
+
+        #! the default encodings of the child processes
+        const Encodings = ("ISO-8859-1", "UTF-8");
+    }
+
+    constructor() : QUnit::Test("ModuleCommandErrorEncodingTest", "1.0", \ARGV) {
+        addTestCase("module command errors in each default encoding", \errorTest());
+        set_return_value(main());
+    }
+
+    errorTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string helper = get_script_dir() + DirSep + "cmd-error-encoding.q";
+        foreach string encoding in (Encodings) {
+            foreach *string mode in ((NOTHING,) + ExecModeHarness::ExecModes) {
+                string opts = "--charset=" + encoding + (mode ? " --exec-mode=" + mode : "");
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", qore_bin,
+                    opts, helper));
+                if (m_options.verbose > 1) {
+                    printf("%s: rc %d\n%s", opts, r.rc, r.out);
+                }
+                assertEq(0, r.rc, opts + ": " + r.out);
+                hash<string, list<string>> results;
+                foreach string line in (select r.stdout.split("\n"), $1.val()) {
+                    list<string> f = line.split(" ");
+                    results{f[0]} = f[1..];
+                }
+                assertEq(keys Expected, keys results, opts + ": " + r.out);
+                foreach hash<auto> i in (Expected.pairIterator()) {
+                    string label = sprintf("%s (%s)", i.key, opts);
+                    *list<string> res = results{i.key};
+                    if (encoding == "ISO-8859-1" && inlist(i.key, NotInIso)) {
+                        assertEq("ENCODING-CONVERSION-ERROR", res[0], label);
+                        continue;
+                    }
+                    assertEq("CPPAPIUSER-COMMAND-ERROR", res[0], label);
+                    assertEq(binary(i.value), res[1] == "invalid" ? binary("invalid") : parse_base64_string(res[1]),
+                        label);
+                    string expected_encoding = (encoding == "UTF-8" || inlist(i.key, Utf8InIso))
+                        ? "UTF-8" : encoding;
+                    assertEq(expected_encoding, res[2], label + ": encoding");
+                    assertEq("True", res[3], label + ": valid");
+                }
+            }
+        }
+    }
+}

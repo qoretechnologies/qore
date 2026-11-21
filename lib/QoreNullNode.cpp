@@ -48,7 +48,7 @@ QoreValue QoreNullNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const 
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
 // returns -1 for exception raised, 0 = OK
 int QoreNullNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&NullTypeString);
+    qore_string_private::get(str)->concatAsciiName(NullTypeString);
     return 0;
 }
 

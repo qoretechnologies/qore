@@ -33,6 +33,7 @@
 #define QTP_DEFAULT_RELEASE_MS 5000
 
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <deque>
 #include <optional>
@@ -98,6 +99,8 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
+        // the task's code has the caller of the code that submitted it as its caller (qore#6852)
+        QoreCallerProgramScope caller_scope(&caller);
         return code->invoke(0, xsink);
     }
 
@@ -111,6 +114,7 @@ public:
             QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
             QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
             SandboxScope sandbox_scope(sandbox_context);
+            QoreCallerProgramScope caller_scope(&caller);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
     }
@@ -122,6 +126,8 @@ protected:
     const QoreSandboxContext sandbox_context;
     //! The run-time parse options of the submitting code (qore#6208)
     const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
+    //! the caller Program of the code that submitted the task (qore#6852)
+    const QoreCallerProgramCapture caller;
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
@@ -130,7 +136,9 @@ protected:
     class SandboxScope {
     public:
         DLLLOCAL SandboxScope(const QoreSandboxContext& ctx) {
-            if (ctx.manager || ctx.policy_manager) {
+            // the task is work for its submitter: governed by the submitter's sandbox and the isolation of the
+            // trusted build that submitted it, if any (qore#6536)
+            if (ctx.manager || ctx.policy_manager || ctx.isolation) {
                 helper.emplace(ctx);
             }
         }
@@ -370,7 +378,7 @@ protected:
             notify_pending = false;
             sl.unlock();
             // this pool released the slot itself: it does not need to be woken for it
-            sbx->notifyThreadSlotReleased(this);
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased(this);
             sl.lock();
         }
     }
@@ -390,7 +398,7 @@ protected:
         // the limit is a capacity of the pool here, like max: a failure is not an error of any caller
         ExceptionSink slot_xsink;
         bool released = false;
-        int rc = sbx->acquireThreadSlotQuiet(&slot_xsink, released);
+        int rc = qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(&slot_xsink, released);
         if (released) {
             notify_pending = true;
         }
@@ -407,7 +415,7 @@ protected:
     */
     DLLLOCAL void releaseWorkerSlotUnlocked() {
         if (sbx) {
-            sbx->releaseThreadSlotQuiet();
+            qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             notify_pending = true;
         }
     }
@@ -644,7 +652,7 @@ public:
         bool released = false;
         int rc = submitUnlocked(task, released, xsink);
         if (released) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return rc;
     }
@@ -660,7 +668,7 @@ public:
         // sandbox thread limit raises THREAD-CREATION-FAILURE in the submitting code instead of leaving the task in a
         // pool that cannot start a worker
         if (sbx && !reserved && fh.empty() && ah.empty()) {
-            if (sbx->acquireThreadSlotQuiet(xsink, released)) {
+            if (qore_sandbox_manager_ops(sbx).acquireThreadSlotQuiet(xsink, released)) {
                 return -1;
             }
             ++reserved;
@@ -712,12 +720,12 @@ public:
             // the thread leaves the pool and ends; its slot is released quietly, and the waiting pools are notified
             // below, without the lock
             if (sbx) {
-                sbx->releaseThreadSlotQuiet();
+                qore_sandbox_manager_ops(sbx).releaseThreadSlotQuiet();
             }
         }
 
         if (sbx) {
-            sbx->notifyThreadSlotReleased();
+            qore_sandbox_manager_ops(sbx).notifyThreadSlotReleased();
         }
         return -1;
     }

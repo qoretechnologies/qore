@@ -17,10 +17,12 @@
     stored the address of each slot in arrays, thousands of stores without a call between them that made LLVM's code
     generation superlinear; the test checks that the entry block stores no address.
 
-    The cases are in three parts (see addPartCase()), JITReloadChainFlush-<n>.qtest, so that each runs for a short
+    The cases are in five parts (see addPartCase()), JITReloadChainFlush-<n>.qtest, so that each runs for a short
     time (the whole test took 112 s alone in a debug build and was killed at the runner's 300 s limit under load,
-    qore#6409): part 1 checks the growth of the code, part 2 the results in every mode, with the inline flush and in
-    executables made by qcc, and part 3 a function under the threshold and the entry block.
+    qore#6409; part 2 with the inline flush and the qcc executables took 70 s of CPU time alone in a debug build, 27 s of
+    them for the inline flush, and was killed at the limit under load): part 1 checks the growth of the code, part 2
+    the results in every mode, part 3 a function under the threshold and the entry block, part 4 the results with the
+    inline flush, and part 5 the results in executables made by qcc at -O0 and -O3.
 */
 class JITReloadChainFlushBase inherits QUnit::Test {
     public {
@@ -53,6 +55,10 @@ class JITReloadChainFlushBase inherits QUnit::Test {
         addPartCase(2, "the flushes keep the results and the order of the destructors of the AST", \testResults());
         addPartCase(3, "a function under the threshold keeps the inline flush", \testInline());
         addPartCase(3, "the entry block of a large function stores no slot address", \testEntryBlock());
+        addPartCase(4, "the inline flush keeps the results and the order of the destructors of the AST",
+            \testResultsInline());
+        addPartCase(5, "the flushes of a qcc -O0 executable keep the results of the AST", \testResultsQcc(), "-O0");
+        addPartCase(5, "the flushes of a qcc -O3 executable keep the results of the AST", \testResultsQcc(), "-O3");
         set_return_value(main());
     }
 
@@ -77,8 +83,14 @@ class D {
 
 int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
 
+# a reference created in the function keeps its untyped locals on the runtime stack, where the handlers' native
+# code tracks them (#5951: a typed local that only a handler references is IR-only)
+sub touch(reference<int> z) {}
+
 string sub big(int n) {
-    int r = 0;
+    auto r = 0;
+    int z = 0;
+    touch(\\z);
     *D keep;
 ";
         for (int i = 0; i < n; ++i) {
@@ -86,7 +98,7 @@ string sub big(int n) {
         r += may_throw(n - %d);
         keep = new D(\"t%d\");
     } catch (hash<ExceptionInfo> ex) {
-        int l%d = r + %d;
+        auto l%d = r + %d;
         D d%d = new D(\"c%d\");
         on_exit { r += l%d; log += \"x%d\"; }
         r += d%d.get().size();
@@ -233,34 +245,47 @@ for (int c = 0; c < 3; ++c) {
 
     testResults() {
         string code = getCode(Large);
-        string expected = getResults(runScript(code, "ast", ""));
-        assertRegex("^rv0:", expected);
-        assertEq(3, expected.split("\n").size(), "three result lines");
+        string expected = getExpectedResults(code);
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, getResults(runScript(code, mode, "")), mode);
         }
-        # the inline form for every function gives the same
+    }
+
+    #! the inline form for every function gives the same results
+    testResultsInline() {
+        string code = getCode(Large);
+        string expected = getExpectedResults(code);
         assertEq(expected, getResults(runScript(code, "jit", "QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD=0")),
             "jit with the inline flush");
+    }
 
-        # executables made by qcc
+    #! checks an executable made by qcc with the given optimization level
+    testResultsQcc(string opt) {
+        string code = getCode(Large);
+        string expected = getExpectedResults(code);
         TmpDir dir();
         string src = join_paths(dir.path, "flush.qr");
         File f();
         f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(code);
         f.close();
-        foreach string opt in (("-O0", "-O3")) {
-            string exe = join_paths(dir.path, "flush" + opt);
-            string out = backquote(sprintf("%s QORE_DUMP_LLVM_IR=1 %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt,
-                exe, src));
-            assertTrue(is_executable(exe), sprintf("qcc %s made an executable: %s", opt, out.substr(-2000)));
-            # the AOT code takes the table path too
-            hash<string, int> calls = getCalls(out, "qcc " + opt);
-            assertGt(0, calls.qore_rt_reload_chain_flush ?? 0, "qcc " + opt + ": the flushes are table calls");
-            assertEq(0, calls.qore_rt_reload_chain_rotate ?? 0, "qcc " + opt + ": no rotation of a single local");
-            assertEq(expected, getResults(backquote(sprintf("%s %s 2>&1", lib_env, exe))), "qcc " + opt);
-        }
+        string exe = join_paths(dir.path, "flush" + opt);
+        string out = backquote(sprintf("%s QORE_DUMP_LLVM_IR=1 %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt,
+            exe, src));
+        assertTrue(is_executable(exe), sprintf("qcc %s made an executable: %s", opt, out.substr(-2000)));
+        # the AOT code takes the table path too
+        hash<string, int> calls = getCalls(out, "qcc " + opt);
+        assertGt(0, calls.qore_rt_reload_chain_flush ?? 0, "qcc " + opt + ": the flushes are table calls");
+        assertEq(0, calls.qore_rt_reload_chain_rotate ?? 0, "qcc " + opt + ": no rotation of a single local");
+        assertEq(expected, getResults(backquote(sprintf("%s %s 2>&1", lib_env, exe))), "qcc " + opt);
+    }
+
+    #! Returns the results of the code with the AST interpreter, which the other modes must give
+    private string getExpectedResults(string code) {
+        string expected = getResults(runScript(code, "ast", ""));
+        assertRegex("^rv0:", expected);
+        assertEq(3, expected.split("\n").size(), "three result lines");
+        return expected;
     }
 
     testInline() {

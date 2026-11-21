@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP socket teardown, close notifications and peer EOF on loopback
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketReleaseEventsTest
+
+class SocketReleaseEventsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SocketReleaseEventsTest", "1.0", \ARGV) {
+        addTestCase("an unopened socket reports deletion once", \neverOpened());
+        addTestCase("release closes a connected socket before deletion", \connected());
+        addTestCase("a closed socket can reopen and close again", \reopened());
+        set_return_value(main());
+    }
+
+    neverOpened() {
+        Queue q();
+        Socket s();
+        s.setEventQueue(q, "unopened");
+        assertFalse(s.isOpen());
+        delete s;
+        assertEq((EVENT_DELETED,), events(q));
+    }
+
+    connected() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        Queue q();
+        Socket s();
+        s.connectINET("127.0.0.1", listener.getSocketInfo().port, 10s);
+        Socket peer = listener.accept(10s);
+        s.setEventQueue(q, "connected");
+        s.send("payload");
+        delete s;
+        assertEq((EVENT_CHANNEL_CLOSED, EVENT_DELETED), events(q));
+        assertEq("payload", peer.recv(-1, 10s));
+    }
+
+    reopened() {
+        Queue q();
+        Socket s();
+        s.bindINET("127.0.0.1", "0", True);
+        s.setEventQueue(q, "reopened");
+        assertEq(0, s.close());
+        assertFalse(s.isOpen());
+        assertEq(0, s.close());
+        s.bindINET("127.0.0.1", "0", True);
+        assertTrue(s.isOpen());
+        delete s;
+        assertEq((EVENT_CHANNEL_CLOSED, EVENT_CHANNEL_CLOSED, EVENT_DELETED), events(q));
+    }
+
+    private list<int> events(Queue q) {
+        list<int> rv();
+        while (q.size()) {
+            int event = q.get().event;
+            if (event == EVENT_CHANNEL_CLOSED || event == EVENT_DELETED) {
+                rv += event;
+            }
+        }
+        return rv;
+    }
+}

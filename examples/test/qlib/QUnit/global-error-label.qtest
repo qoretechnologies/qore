@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the reported test runs in child processes of its own binary in the default mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%try-module xml
+%define NO_XML
+%endtry
+
+%exec-class GlobalErrorLabelTest
+
+#! An error in Test::globalSetUp() or Test::globalTearDown() is reported with the name of its phase (issue #6925), and
+#! the assertions of a thread that one of them starts are counted for it (issue #6937)
+/** The child test has one test case; its global setup makes 1 assertion and its global teardown 2, and each raises an
+    exception when the \c ERROR_MODE environment variable names it.  The report of each error, the list of failed test
+    cases after the run and the junit report name the phase that raised the exception, with its own assertions.  With
+    the \c THREADS environment variable set, the global setup also starts a thread that makes 2 assertions and the
+    global teardown one that makes 3, and each waits for its thread and raises the exception that its thread got.
+*/
+class GlobalErrorLabelTest inherits QUnit::Test {
+    private {
+        const Script = "%modern
+%requires QUNIT_PATH
+%exec-class ReportedTest
+class ReportedTest inherits QUnit::Test {
+    constructor() : Test(\"ReportedTest\", \"1.0\", \\ARGV) {
+        addTestCase(\"case\", \\testCase());
+        set_return_value(main());
+    }
+    globalSetUp() {
+        assertTrue(True, \"setup\");
+        runThread(2);
+        if (ENV.ERROR_MODE == \"setup\" || ENV.ERROR_MODE == \"both\") {
+            throw \"SETUP-ERROR\", \"the setup failed\";
+        }
+    }
+    globalTearDown() {
+        assertTrue(True, \"teardown 1\");
+        assertTrue(True, \"teardown 2\");
+        runThread(3);
+        if (ENV.ERROR_MODE == \"teardown\" || ENV.ERROR_MODE == \"both\") {
+            throw \"TEARDOWN-ERROR\", \"the teardown failed\";
+        }
+    }
+    testCase() {
+        assertTrue(True, \"case\");
+    }
+    # with THREADS set, starts a thread that makes the assertions and waits for it; raises the exception it got
+    runThread(int n) {
+        if (!ENV.THREADS) {
+            return;
+        }
+        Counter done(1);
+        *hash<ExceptionInfo> thread_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < n; ++i) {
+                    assertTrue(True, \"thread \" + i);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                thread_ex = ex;
+            }
+        }();
+        done.waitForZero();
+        if (thread_ex) {
+            throw thread_ex.err, thread_ex.desc;
+        }
+    }
+}
+";
+        const Ts = "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+";
+        const At = " at .*reported\\.qtest:[0-9]+";
+        const SetupListed = "^  ERROR: globalSetUp: " + Ts + ": Unexpected exception: SETUP-ERROR" + At;
+        const TeardownListed = "^  ERROR: globalTearDown: " + Ts + ": Unexpected exception: TEARDOWN-ERROR" + At;
+
+        FsUtil::TmpDir tmp_dir("qunit-global-error-label-");
+        string path;
+    }
+
+    constructor() : Test("global error label", "1.0", \ARGV) {
+        path = tmp_dir.path + "/reported.qtest";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(replace(Script, "QUNIT_PATH", get_module_hash().QUnit.filename));
+        f.close();
+        addTestCase("a setup error", \setupError());
+        addTestCase("a teardown error", \teardownError());
+        addTestCase("a setup and a teardown error", \bothErrors());
+        addTestCase("no error", \noError());
+        addTestCase("junit report", \junitReport());
+        addTestCase("thread assertions in a setup and a teardown error", \threadBothErrors());
+        addTestCase("thread assertions in a teardown error", \threadTeardownError());
+        addTestCase("thread assertions without an error", \threadNoError());
+        set_return_value(main());
+    }
+
+    setupError() {
+        hash<auto> res = runTest("setup", "-v");
+        # the exit status is the number of errors
+        assertEq(1, res.rc, res.out);
+        assertEq(1, countMatches("^ERROR: globalSetUp: 1 assertion$", res.out), res.out);
+        assertEq(1, countMatches("^Skipped: case: 0 assertions \\(not run: globalSetUp raised SETUP-ERROR: the setup "
+            "failed\\)$", res.out), res.out);
+        assertEq(0, countMatches("globalTearDown", res.out), res.out);
+        assertEq((SetupListed,), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 2 test cases, 1 error, 1 skipped \\(3 assertions\\)$", res.out), res.out);
+    }
+
+    teardownError() {
+        hash<auto> res = runTest("teardown", "-v");
+        assertEq(1, res.rc, res.out);
+        assertEq(1, countMatches("^Success: case: 1 assertion$", res.out), res.out);
+        # the global teardown's own assertions
+        assertEq(1, countMatches("^ERROR: globalTearDown: 2 assertions$", res.out), res.out);
+        assertEq(0, countMatches("globalSetUp", res.out), res.out);
+        assertEq((TeardownListed,), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 2 test cases, 1 succeeded, 1 error \\(4 assertions\\)$", res.out), res.out);
+    }
+
+    bothErrors() {
+        hash<auto> res = runTest("both", "-v");
+        assertEq(2, res.rc, res.out);
+        assertEq(1, countMatches("^ERROR: globalSetUp: 1 assertion$", res.out), res.out);
+        assertEq(1, countMatches("^ERROR: globalTearDown: 2 assertions$", res.out), res.out);
+        assertEq((SetupListed, TeardownListed), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 3 test cases, 2 errors, 1 skipped \\(3 assertions\\)$", res.out), res.out);
+    }
+
+    noError() {
+        # the global setup and teardown give no result when they complete
+        hash<auto> res = runTest("none", "-v");
+        assertEq(0, res.rc, res.out);
+        assertEq(0, countMatches("global(SetUp|TearDown)", res.out), res.out);
+        assertEq(0, countMatches("^Failed test cases:$", res.out), res.out);
+        assertEq(1, countMatches("^Ran 1 test case, 1 succeeded \\(4 assertions\\)$", res.out), res.out);
+    }
+
+    junitReport() {
+%ifdef NO_XML
+        testSkip("the xml module is not available");
+%else
+        hash<auto> res = runTest("both", "--format=junit");
+        assertEq(2, res.rc, res.out);
+        hash<auto> xml = parse_xml(res.out);
+        list<auto> cases = xml.testsuites.testsuite.testcase;
+        assertEq(("globalSetUp", "case", "globalTearDown"), (map $1."^attributes^".name, cases), res.out);
+        assertEq("SETUP-ERROR", cases[0].error."^attributes^".type, res.out);
+        assertEq(NOTHING, cases[1].error, res.out);
+        assertEq("TEARDOWN-ERROR", cases[2].error."^attributes^".type, res.out);
+%endif
+    }
+
+    threadBothErrors() {
+        # the assertions of the threads are counted for the phase that started them; before, the global setup fails
+        # and no test case runs, so neither thread could make an assertion (TEST-ERROR) (issue #6937)
+        hash<auto> res = runTest("both", "-v", True);
+        assertEq(2, res.rc, res.out);
+        assertEq(1, countMatches("^ERROR: globalSetUp: 3 assertions$", res.out), res.out);
+        assertEq(1, countMatches("^ERROR: globalTearDown: 5 assertions$", res.out), res.out);
+        assertEq(0, countMatches("TEST-ERROR", res.out), res.out);
+        assertEq((SetupListed, TeardownListed), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 3 test cases, 2 errors, 1 skipped \\(8 assertions\\)$", res.out), res.out);
+    }
+
+    threadTeardownError() {
+        # before, the thread started by the global teardown made its assertions for the test case that ran last
+        # (issue #6937)
+        hash<auto> res = runTest("teardown", "-v", True);
+        assertEq(1, res.rc, res.out);
+        assertEq(1, countMatches("^Success: case: 1 assertion$", res.out), res.out);
+        assertEq(1, countMatches("^ERROR: globalTearDown: 5 assertions$", res.out), res.out);
+        assertEq((TeardownListed,), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 2 test cases, 1 succeeded, 1 error \\(9 assertions\\)$", res.out),
+            res.out);
+    }
+
+    threadNoError() {
+        hash<auto> res = runTest("none", "-v", True);
+        assertEq(0, res.rc, res.out);
+        assertEq(0, countMatches("global(SetUp|TearDown)|TEST-ERROR", res.out), res.out);
+        assertEq(1, countMatches("^Ran 1 test case, 1 succeeded \\(9 assertions\\)$", res.out), res.out);
+    }
+
+    #! returns the lines of the list of failed test cases that the summary gives after the reports of the test cases
+    private list<string> getFailedList(string out) {
+        list<string> lines = out.split("\n");
+        int start = -1;
+        for (int i = 0; i < lines.size(); ++i) {
+            if (lines[i] == "Failed test cases:") {
+                start = i;
+                break;
+            }
+        }
+        if (start < 0) {
+            return ();
+        }
+        list<string> listed = ();
+        foreach string line in (lines[start + 1..]) {
+            if (line !~ /^  /) {
+                break;
+            }
+            # each line is checked against its pattern; the patterns are returned for the lines that match one
+            if (line.regex(SetupListed)) {
+                listed += SetupListed;
+            } else if (line.regex(TeardownListed)) {
+                listed += TeardownListed;
+            } else {
+                listed += line;
+            }
+        }
+        return listed;
+    }
+
+    #! returns the number of lines of the output that match the pattern
+    private static int countMatches(string pattern, string out) {
+        return (select out.split("\n"), $1.regex(pattern)).size();
+    }
+
+    #! runs the child test with the error mode and the arguments, with threads in its global setup and teardown if
+    #! requested; returns its exit status and its output
+    private hash<auto> runTest(string mode, string args, bool threads = False) {
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            # live-provider-optin: the library path variables (LD_LIBRARY_PATH, DYLD_LIBRARY_PATH), no credential
+            if (ENV{var}) {
+                # live-provider-optin: the library path variables, passed to the child shell
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        # with --format=junit only the standard output is read, as it is the report; otherwise the standard error,
+        # where the test cases are announced with -v, is read with it
+        if (threads) {
+            cmd += "THREADS=1 ";
+        }
+        cmd += sprintf("ERROR_MODE=%s '%s' '%s' %s%s", mode, TestInterpreter::qore_interpreter(), path, args,
+            args == "--format=junit" ? "" : " 2>&1");
+        int rc;
+        string out = backquote(cmd, \rc);
+        return {"rc": rc, "out": out};
+    }
+}

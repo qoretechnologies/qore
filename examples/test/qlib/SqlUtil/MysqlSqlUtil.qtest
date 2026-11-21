@@ -192,7 +192,9 @@ class MysqlTest inherits SqlTestBase {
         } catch (hash ex) {
             if (m_options.verbose)
                 printf("%s: %s\n", ex.err, ex.desc);
-            # skip tests if we can't create the datasource
+            # without a datasource, the tests skip; a datasource string whose database cannot be connected to fails
+            # a test case of its own (qore#6934)
+            checkConnectFailure(ex);
         }
 
         if (ds) {
@@ -653,6 +655,15 @@ class MysqlTest inherits SqlTestBase {
     #! An emulated sequence gives its start value first, as a database sequence does
     private sequenceStartTest() {
         AbstractDatasource ds = table.getDatasource();
+        # the function that emulates sequences modifies data: a server with binary logging enabled (the default of
+        # MySQL 8.0 and later) creates it only when log_bin_trust_function_creators is 1, which is a precondition of
+        # the case, not a failure of the code (qore#6944)
+        hash<auto> binlog = ds.selectRow("select @@log_bin as log_bin, @@log_bin_trust_function_creators as trust");
+        if (binlog.log_bin.toInt() && !binlog.trust.toInt()) {
+            fail("precondition failure: the server has binary logging enabled and log_bin_trust_function_creators "
+                "off, so it cannot create the function that emulates sequences; start the server with "
+                "--log-bin-trust-function-creators=1, or disable binary logging");
+        }
         MysqlDatabase db(ds);
         on_exit {
             try {

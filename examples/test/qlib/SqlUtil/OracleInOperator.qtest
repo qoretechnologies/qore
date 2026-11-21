@@ -58,11 +58,15 @@ class OracleInOperatorTest inherits QUnit::Test {
             dropTables();
             OracleRunSchema::teardown();
         }
+        # a database that cannot be connected to fails a test case of its own, and the cases of its driver skip
+        # (qore#6934)
+        *string precondition = TestRun::guardSetup(sub () {
         foreach hash<auto> i in ({"oracle": "QORE_DB_CONNSTR_ORACLE", "jdbc": "QORE_DB_CONNSTR_JDBC_ORACLE"}
                 .pairIterator()) {
-            if (!ENV{i.value}.val()) {
+            if (!ENV{i.value}.val()) { # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
                 continue;
             }
+            # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             *string connstr = OracleRunSchema::getConnectionString(ENV{i.value}, "OracleInOperator", i.key);
             if (!connstr) {
                 continue;
@@ -82,6 +86,10 @@ class OracleInOperatorTest inherits QUnit::Test {
             ds.open();
             names{i.key} = TestRun::makeName("in_" + i.key);
             tables{i.key} = setupTable(ds, names{i.key});
+        }
+        });
+        if (precondition) {
+            addTestCase("the database can be connected to", sub () { fail(precondition); });
         }
 
         addTestCase("numbers", \numbers());

@@ -72,7 +72,13 @@ class ConnectHeaderValuesTest inherits QUnit::Test {
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
             qcc_bin, exe, getWorker()));
         assertTrue(is_file(exe), "compiled program: " + compile_out);
-        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        # the program loads the modules of the tree under test first, as the interpreted runs do with their
+        # %prepend-module-path: the AOT modules of qlib are those of the build, so the run tests them, and no module
+        # of another build (an installed one) is loaded from its source with a warning in the output (qore#6935)
+        string qlib = get_script_dir() + "/../../../../../../qlib";
+        string module_dir = ENV.QORE_MODULE_DIR ? qlib + ":" + ENV.QORE_MODULE_DIR : qlib;
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s 2>&1", libqore_dir,
+            module_dir, exe)));
     }
 
     private string getWorker() {

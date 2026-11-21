@@ -581,6 +581,11 @@ public class HttpRequestPollOperation inherits HttpClientIoPollOperation {
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
 public class HttpBasedConnection inherits AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     #! Creates the connection object
     /** @param name the name of the connection
         @param desc connection description

@@ -334,6 +334,156 @@ string sub read_member(object o) {
 }
 ";
 
+        #! a tenant's look-alike of the listener object's class, with its name and signature, whose methods read and
+        #! write the member of the object that the tenant was given; in the tenant's root namespace and in a namespace
+        #! of the same name as the real class's (qore#7036)
+        const TenantLookAlikeSource = "%modern
+%requires HttpServer
+
+our *object target;
+our *string result;
+
+class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
+    private:internal {
+        *HttpListener listener;
+    }
+
+    constructor(HttpListener listener) {
+        self.listener = listener;
+    }
+
+    log(string fmt, ...) {
+    }
+
+    logError(string fmt, ...) {
+    }
+
+    logResponse(hash<auto> cx, hash<auto> rv) {
+    }
+
+    removeExternalDedicatedSocket(softstring id) {
+        # the attack on the object that the tenant was given: a write of its member
+        try {
+            ::target.listener = NOTHING;
+            ::result = \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            ::result = ex.err;
+        }
+    }
+
+    removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+    }
+
+    int getMaxDecodedBodySize() {
+        return 0;
+    }
+
+    string getDefaultTextEncoding() {
+        # the attack on the object that the tenant was given: a read of its member
+        try {
+            auto v = ::target.listener;
+            return v ? v.className() : \"empty\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    *hash<auto> getDefaultResponseHeaders() {
+    }
+
+    addUserThreadContext(hash<auto> uctx) {
+    }
+
+    auto removeUserThreadContext(*string k) {
+    }
+
+    signalPersistentSessionClose(softstring uh) {
+    }
+
+    signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+    }
+}
+
+namespace HttpServer {
+    class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
+        private:internal {
+            *HttpListener listener;
+        }
+
+        constructor(HttpListener listener) {
+            self.listener = listener;
+        }
+
+        log(string fmt, ...) {
+        }
+
+        logError(string fmt, ...) {
+        }
+
+        logResponse(hash<auto> cx, hash<auto> rv) {
+        }
+
+        removeExternalDedicatedSocket(softstring id) {
+            # the attack on the object that the tenant was given: a write of its member
+            try {
+                ::target.listener = NOTHING;
+                ::result = \"ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                ::result = ex.err;
+            }
+        }
+
+        removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+        }
+
+        int getMaxDecodedBodySize() {
+            return 0;
+        }
+
+        string getDefaultTextEncoding() {
+            # the attack on the object that the tenant was given: a read of its member
+            try {
+                auto v = ::target.listener;
+                return v ? v.className() : \"empty\";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+
+        *hash<auto> getDefaultResponseHeaders() {
+        }
+
+        addUserThreadContext(hash<auto> uctx) {
+        }
+
+        auto removeUserThreadContext(*string k) {
+        }
+
+        signalPersistentSessionClose(softstring uh) {
+        }
+
+        signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+        }
+    }
+}
+
+hash<string, string> sub probe(object o) {
+    target = o;
+    HttpListener l(new HttpServer(<HttpServerOptionInfo>{}), sub () {}, 0, new Sequence(),
+        <HttpListenerOptionInfo>{\"name\": \"look-alike\", \"no_bind\": True});
+    hash<string, string> r;
+    ::HttpListenerHandlerView root(l);
+    r.root_read = root.getDefaultTextEncoding();
+    root.removeExternalDedicatedSocket(\"x\");
+    r.root_write = result;
+    HttpServer::HttpListenerHandlerView ns(l);
+    r.ns_read = ns.getDefaultTextEncoding();
+    ns.removeExternalDedicatedSocket(\"x\");
+    r.ns_write = result;
+    return r;
+}
+";
+
         #! a tenant's socket handler: tries to remove its connection with another handler, then ends it as its own
         const TenantSocketSource = "%modern
 %requires HttpServer
@@ -395,6 +545,8 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         addTestCase("HTTP/3: a handler cannot take over the requests of its own connection", \ownKeyTest(), "3.0");
         addTestCase("the wait for the cleanup of a closed persistent session is bounded", \closeBoundTest());
         addTestCase("sandboxed code cannot read the listener of the object through reflection", \reflectionTest());
+        addTestCase("a sandboxed look-alike of the object's class cannot read or write its listener",
+            \lookAlikeTest());
         set_return_value(main());
     }
 
@@ -674,6 +826,30 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         hc.get("/");
         Program tenant = getTenantProgram(TenantReflectionSource);
         assertNeq("ok", tenant.callFunction("read_member", handler.kept));
+    }
+
+    #! A class of a tenant with the name and members of the listener object's class has no access to its members
+    /** This needs the core to give private access only to the class itself, not to a class with the same name and
+        signature (qore#7036)
+    */
+    lookAlikeTest() {
+        KeepingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("keep", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        hc.get("/");
+        Program tenant = getTenantProgram(TenantLookAlikeSource);
+        hash<string, string> r = tenant.callFunction("probe", handler.kept);
+        # every attempt is refused: none reads the listener, and the write does not succeed
+        foreach hash<auto> i in (r.pairIterator()) {
+            string what = sprintf("%s (all: %y)", i.key, r);
+            assertNeq("HttpListener", i.value, what + ": the listener is not read");
+            assertNeq("ok", i.value, what + ": the member is not written");
+            assertNeq("empty", i.value, what + ": the member is not reached");
+        }
     }
 
     #! Returns a sandboxed Program with the given source

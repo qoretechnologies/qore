@@ -1292,11 +1292,12 @@ protected:
     LexicalSemanticPolicy initializer_policy;
     bool instance_initializer = false;
 
-    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old) : typeInfo(old.typeInfo),
+    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old, bool copy_initializer = true) : typeInfo(old.typeInfo),
             initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
             initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
-            exp(old.exp.refSelf()),
-            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+            exp(copy_initializer ? old.exp.refSelf() : QoreValue()),
+            loc(old.loc), parseTypeInfo(copy_initializer && old.parseTypeInfo
+                ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
             decl_pwo(old.decl_pwo), has_decl_po(old.has_decl_po) {
     }
 
@@ -1418,8 +1419,10 @@ public:
     }
 
 protected:
-    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
-            : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {
+    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access,
+            bool copy_initializer = true)
+            : QoreMemberInfoBase(old, copy_initializer), access(old.access >= n_access ? old.access : n_access),
+            init(old.init) {
     }
 
     bool init = false;
@@ -1502,10 +1505,10 @@ public:
     // copy to a new class - same member, new class
     DLLLOCAL QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls);
 
-    DLLLOCAL ~QoreMemberInfo() {
-        delete cls_context_map;
-        delete member_info_list;
-    }
+    QoreMemberInfo(const QoreMemberInfo&) = delete;
+    QoreMemberInfo& operator=(const QoreMemberInfo&) = delete;
+
+    DLLLOCAL ~QoreMemberInfo();
 
     DLLLOCAL void setDeclaringClass(const qore_class_private* qc) {
         assert(!decl_cls);
@@ -1668,6 +1671,12 @@ private:
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
     member_info_list_t* member_info_list = nullptr;
+
+    // During parseInit(), the declaration and copies waiting for its initializer form a circular list.
+    // A member removed during inheritance resolution can unlink itself without extending its lifetime.
+    mutable QoreMemberInfo* pending_init_next = nullptr;
+    DLLLOCAL void deferInitializerCopy(const QoreMemberInfo& old);
+    DLLLOCAL void finishInitializer(bool resolved);
 
     // local flag
     bool is_local,
@@ -2670,8 +2679,14 @@ public:
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
+    //! as getClass(const qore_class_private&, ...), with the identity of the classes for private access
+    //! (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    //! as inHierarchy(), with the identity of the classes (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // inaccessible methods are ignored
@@ -2812,8 +2827,14 @@ public:
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
 
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
+    //! as getClass(const qore_class_private&, ...), with the identity of the classes for private access
+    //! (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    //! as inHierarchy(), with the identity of the classes (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
 
     DLLLOCAL void addNewAncestors(QoreMethod* m);
     DLLLOCAL void addAncestors(QoreMethod* m);
@@ -3237,6 +3258,12 @@ public:
 
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;
+
+    //! 1 if the class is SocketPollOperation or a subclass of it, 0 if not, -1 if not determined yet (qore#6839)
+    /** the objects of these classes keep the socket and goal of their operation with the operation; set when first
+        needed, by any thread, with the same value
+    */
+    mutable std::atomic<signed char> socket_poll_op_class{-1};
 
     qore_classid_t classID,          // class ID
         methodID;                    // for subclasses of builtin classes that will not have their own private data,
@@ -4243,6 +4270,23 @@ public:
         return info ? info->getClassContext(class_ctx) : nullptr;
     }
 
+#ifdef DEBUG
+    //! returns true if an access to the member in the class context would miss a system class's internal member
+    /** this = the object's class; true if every declaration of the member is private:internal, the member is
+        declared by a system class, and the class context cannot reach it: such an access goes to the object's main
+        data, so C++ code that accesses a private:internal member of a system class by name must give the declaring
+        class (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
+        QoreObject::setInternalMemberValue()); used by the debug assertions of the accesses without a class, which
+        also check that the main data does not hold the name, as a member written from outside the class can
+        (qore#6839)
+    */
+    DLLLOCAL bool runtimeMissesInternalOnlyMember(const char* mem, const qore_class_private* class_ctx) const {
+        const QoreMemberInfo* info = members.find(mem);
+        return info && (info->access == Internal || info->access == Inaccessible) && info->getClass()
+            && info->getClass()->sys && !info->getClassContext(class_ctx);
+    }
+#endif
+
     DLLLOCAL bool runtimeIsMemberInternal(const char* mem) const {
         QoreMemberInfo* info = members.find(mem);
         return info && info->isLocalInternal() ? true : false;
@@ -4421,7 +4465,11 @@ public:
         return scl ? scl->parseFindVar(vname, qc, access, toplevel) : nullptr;
     }
 
-    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& l_mi, const QoreMemberInfo& b_mi) const;
+    //! Checks that the declarations \a b_mi and \a l_mi of a member of the hierarchy of the class \a cname can be
+    //! combined; raises a parse exception if not, as for every two declarations but those of two system classes
+    //! (qore#6772)
+    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
+            const QoreMemberInfo& l_mi, const char* cname) const;
 
     DLLLOCAL int checkExistingVarMember(const char* dname, const QoreMemberInfoBaseAccess* mi, const QoreMemberInfoBaseAccess* omi, const qore_class_private* qc, ClassAccess oaccess, bool var = false) const;
 
@@ -5349,7 +5397,8 @@ public:
     DLLLOCAL const QoreMethod* doRuntimeMethodAccess(const QoreMethod* m, ClassAccess& access, ClassAccess ma, const qore_class_private* class_ctx) const {
         assert(m);
 
-        if (ma >= Internal && (!class_ctx || !equal(*class_ctx)))
+        // a private:internal method only for its own class, by identity (qore#7036)
+        if (ma >= Internal && (!class_ctx || !sameClass(*class_ctx)))
             m = nullptr;
         else if (access < ma)
             access = ma;
@@ -5651,7 +5700,10 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
     //! finds the given class anywhere in the hierarchy regardless of access permissions or location
-    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()).  For the parse-time checks of a hierarchy
+        (a class that inherits itself, a duplicate base class), which compare the classes with equal(): they only raise
+        parse errors, never give access
+    */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
         if (equal(qc)) {
             return cls;
@@ -5670,6 +5722,11 @@ public:
         return getClassIntern(qc, n_access, true);
     }
 
+    //! returns this class or the class of its hierarchy that is \a qc as a type (equal()), if any
+    /** For the type compatibility of an object with a class (casts, the class of the object of a call of a base
+        class's method, the receiver of a call reference): classes of different Programs with the same name and
+        signature are the same type.  The checks that give private access use getAccessClassIntern() (qore#7036)
+    */
     DLLLOCAL const QoreClass* getClassIntern(const qore_class_private& qc, ClassAccess& n_access,
             bool toplevel) const {
         if (equal(qc)) {
@@ -5687,6 +5744,25 @@ public:
 #endif
 
         return scl ? scl->getClass(qc, n_access, toplevel) : nullptr;
+    }
+
+    //! returns this class or the class of its hierarchy that is \a qc for private access, if any (qore#7036)
+    /** As getClassIntern(const qore_class_private&, ...), but the classes are compared with sameClass(), never by
+        their name and signature: used by the checks that give private access (runtimeCheckPrivateClassAccess(),
+        parseCheckPrivateClassAccess() and the checks of the class context of a member)
+    */
+    DLLLOCAL const QoreClass* getAccessClassIntern(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const {
+        if (sameClass(qc)) {
+            return cls;
+        }
+        return scl ? scl->getAccessClass(qc, n_access, toplevel) : nullptr;
+    }
+
+    //! as getClass(const qore_class_private&, ClassAccess&), for private access (getAccessClassIntern())
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access) const {
+        n_access = Public;
+        return getAccessClassIntern(qc, n_access, true);
     }
 
     DLLLOCAL const QoreClass* parseGetClassIntern(const qore_class_private& qc, ClassAccess& n_access,
@@ -5708,6 +5784,7 @@ public:
         return scl ? scl->parseGetClass(qc, n_access, toplevel) : nullptr;
     }
 
+    //! returns true if \a qc is a type of this class's hierarchy, through any edge (equal(); see getClassIntern())
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
         if (equal(qc)) {
             return cls;
@@ -5722,6 +5799,34 @@ public:
         }
 
         return scl ? scl->inHierarchyStrict(qc, n_access) : false;
+    }
+
+    //! returns true if \a qc is this class or a class of its hierarchy, through any edge, by identity (sameClass();
+    //! qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+        if (sameClass(qc)) {
+            return true;
+        }
+
+        return scl ? scl->inAccessHierarchy(qc, n_access) : false;
+    }
+
+    //! returns the class of a method in the hierarchy of the class of an object that the method is bound to, or
+    //! nullptr if the object's class is not or does not inherit the method's class (qore#7036)
+    /** A method of a class runs on an object only if the object's class is the method's class or inherits it, by
+        identity (getAccessClassIntern()): the method's code has the private access of its class to the object, which
+        another class with the same name and signature must not get.  For the calls of a method named with its class
+        (a call reference of a method of the object, a qualified call of a method of a base class, a background call)
+
+        @param obj_cls the class of the object
+        @param mcls the class of the method
+        @param priv set to true if the method's class is inherited privately
+    */
+    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv) {
+        ClassAccess access = Public;
+        const QoreClass* rv = obj_cls.priv->getAccessClassIntern(*mcls.priv, access, true);
+        priv = access > Public;
+        return rv;
     }
 
 #ifdef DEBUG_SKIP
@@ -5765,6 +5870,13 @@ public:
         return a == b || (a && b && a->priv->classID == b->priv->classID);
     }
 
+    //! Returns true if \a qc is this class, a copy of its declaration or a class with the same name and signature
+    /** The type compatibility of classes (the class of a value for a declared type, casts and the calls of a base
+        class's methods on an object): the same declaration loaded in two Programs (an included source parsed by each
+        of them, for example) is the same type.  Never used to give private access, which a class with the name and
+        the signature of another class (a look-alike, which any code that sees the declaration of the class can
+        declare) must not get: see sameClass() (qore#7036)
+    */
     DLLLOCAL bool equal(const qore_class_private& qc) const {
         if (&qc == this) {
             return true;
@@ -5785,6 +5897,32 @@ public:
         return false;
     }
 
+    //! Returns true if \a qc is this class for private access: this class, a copy of its declaration or a class
+    //! related to it by injection (qore#7036)
+    /** A copy of the declaration (a class imported into another Program with Program::importClass(), also for
+        injection) has the class ID of its source; an injected class and the class that it replaces (injectedClass)
+        are related by Program::importClass() with injection, which needs PO_ALLOW_INJECTION in the target Program.
+        Unlike equal(), two classes with the same name and signature are not the same class here, so that a class
+        cannot get the private access of another class by declaring its name and its declarations
+    */
+    DLLLOCAL bool sameClass(const qore_class_private& qc) const {
+        if (&qc == this || qc.classID == classID) {
+            return true;
+        }
+
+        // a class is never injected in place of itself (also not by a damaged AOT image)
+        if (injectedClass && injectedClass != this && injectedClass->sameClass(qc)) {
+            return true;
+        }
+
+        if (qc.injectedClass && qc.injectedClass != &qc && sameClass(*qc.injectedClass)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    //! as equal(), at parse time: the type compatibility of classes, never private access (see sameClass())
     DLLLOCAL bool parseEqual(const qore_class_private& qc) const {
         if (&qc == this)
             return true;
@@ -5829,6 +5967,7 @@ public:
         return parseCheckHierarchyIntern(n_cls, access, true);
     }
 
+    // the class as a type (parseEqual()): the receiver of the static call of a generic class; not private access
     DLLLOCAL bool parseCheckHierarchyIntern(const QoreClass* n_cls, ClassAccess& access, bool toplevel) const {
         if (parseEqual(*n_cls->priv))
             return true;

@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class NumberRoundDecimalPrecisionTest
+
+#! round(), ceil() and floor() with digits after the decimal point give the number of the decimal value (qore#7014)
+/** The result of rounding a number to a positive number of digits after the decimal point is a decimal value; it has
+    the precision of the number parsed from the decimal string of the value, so that it is the same number as the
+    number literal of the value and compares equal to it, whatever the precision of the number rounded.
+*/
+class NumberRoundDecimalPrecisionTest inherits QUnit::Test {
+    public {
+        #! decimal strings of at least 30 digits after the decimal point, whose digits after any of the first 30 are
+        #! neither all zeros nor 5 and zeros, so that the decimal value and the binary value of the number round alike
+        const Values = (
+            "123.456789012345678912345678901234567",
+            "-123.456789012345678912345678901234567",
+            "1.200000000000000000010000000000001",
+            "-1.200000000000000000010000000000001",
+            "9.999999999999999999999999999999999",
+            "-9.999999999999999999999999999999999",
+            "0.000000000123456789012345678901234567",
+            "-0.000000000123456789012345678901234567",
+            "98765432109876543210.1234567890123456789012345678913",
+            "-567890123456789.0123456789012345678901234567891",
+            "0.999999999999999999999999999999999999",
+        );
+    }
+
+    constructor() : QUnit::Test("NumberRoundDecimalPrecision", "1.0", \ARGV) {
+        addTestCase("the cases of the issue", \issueCases());
+        addTestCase("digits 1 to 30 after the decimal point", \digits());
+        addTestCase("large magnitudes", \largeMagnitudes());
+        addTestCase("small magnitudes", \smallMagnitudes());
+        addTestCase("no digits after the decimal point", \noDigits());
+        set_return_value(main());
+    }
+
+    issueCases() {
+        assertTrue(round(123.45678901234567891n, 4) == 123.4568n);
+        assertEq(123.4568n.prec(), round(123.45678901234567891n, 4).prec());
+        assertTrue(ceil(123.45678901234567891n, 4) == 123.4568n);
+        assertEq(123.4568n.prec(), ceil(123.45678901234567891n, 4).prec());
+        assertTrue(floor(123.45678901234567891n, 4) == 123.4567n);
+        assertEq(123.4567n.prec(), floor(123.45678901234567891n, 4).prec());
+        assertTrue(round(-123.45678901234567891n, 4) == -123.4568n);
+        assertEq((-123.4568n).prec(), round(-123.45678901234567891n, 4).prec());
+        assertTrue(ceil(-123.45678901234567891n, 4) == -123.4567n);
+        assertTrue(floor(-123.45678901234567891n, 4) == -123.4568n);
+        # a result with zeros at the end of its digits is the number of its shortest form
+        assertTrue(round(1.20000000000000000001n, 2) == 1.2n);
+        assertEq(1.2n.prec(), round(1.20000000000000000001n, 2).prec());
+        assertTrue(floor(1.20000000000000000001n, 5) == 1.2n);
+        assertEq(1.2n.prec(), floor(1.20000000000000000001n, 5).prec());
+        assertTrue(ceil(1.20000000000000000001n, 2) == 1.21n);
+        assertEq(1.21n.prec(), ceil(1.20000000000000000001n, 2).prec());
+        # rounded up to a power of 10
+        assertTrue(round(9.9999999999999999999999n, 3) == 10n);
+        assertEq(10n.prec(), round(9.9999999999999999999999n, 3).prec());
+        # a number of the same value at another precision
+        number n = number("123.45678901234567891" + strmul("0", 30));
+        assertTrue(round(n, 4) == 123.4568n);
+        assertEq(123.4568n.prec(), round(n, 4).prec());
+        # the results print as the value
+        assertEq("123.4568", string(round(123.45678901234567891n, 4)));
+        assertEq("1.2", string(round(1.20000000000000000001n, 2)));
+        assertEq("1.20000000000000000001", round(1.200000000000000000010000000001n, 20).toStringRoundTrip());
+    }
+
+    #! every value rounded to 1 to 30 digits after the decimal point by round(), ceil() and floor()
+    digits() {
+        foreach string v in (Values) {
+            number x = number(v);
+            for (int k = 1; k <= 30; ++k) {
+                check(v, x, k, "round", round(x, k));
+                check(v, x, k, "ceil", ceil(x, k));
+                check(v, x, k, "floor", floor(x, k));
+            }
+        }
+    }
+
+    #! values whose magnitude is a large power of 10 have the precision of their magnitude (5 bits each)
+    largeMagnitudes() {
+        # 400 digits before the decimal point
+        string int_part = strmul("1234567890", 40);
+        string v = int_part + ".12345678901234567890123456789012";
+        number x = number(v);
+        for (int k = 1; k <= 30; ++k) {
+            check(v, x, k, "round", round(x, k));
+            check(v, x, k, "ceil", ceil(x, k));
+            check(v, x, k, "floor", floor(x, k));
+        }
+        assertEq(1995, round(x, 4).prec());
+        # an integer value is its own result
+        number big = 1.234567890123456789012345678901234567891e299n;
+        foreach int k in (1, 5, 30, 1000) {
+            assertTrue(big == round(big, k), sprintf("round(big, %d)", k));
+            assertEq(big.prec(), round(big, k).prec(), sprintf("round(big, %d) prec", k));
+            assertTrue(big == ceil(big, k));
+            assertEq(big.prec(), floor(big, k).prec());
+        }
+        # beyond the magnitude of the maximum precision
+        number huge = number("1.5e2000");
+        assertEq(8192, huge.prec());
+        assertTrue(huge == round(huge, 3));
+        assertEq(8192, round(huge, 3).prec());
+    }
+
+    #! values smaller than the digits rounded to are zero or a power of 10
+    smallMagnitudes() {
+        number tiny = number("0." + strmul("0", 1700) + "123456789");
+        for (int k = 1; k <= 30; ++k) {
+            number r = round(tiny, k);
+            assertTrue(r == 0n, sprintf("round(tiny, %d)", k));
+            assertEq(0n.prec(), r.prec(), sprintf("round(tiny, %d) prec", k));
+            r = ceil(tiny, k);
+            number e = number("1e-" + k);
+            assertTrue(r == e, sprintf("ceil(tiny, %d)", k));
+            assertEq(e.prec(), r.prec(), sprintf("ceil(tiny, %d) prec", k));
+            r = floor(-tiny, k);
+            assertTrue(r == -e, sprintf("floor(-tiny, %d)", k));
+            assertEq(e.prec(), r.prec(), sprintf("floor(-tiny, %d) prec", k));
+            assertEq(0n.prec(), floor(tiny, k).prec());
+        }
+        # rounded at the magnitude of the value: zero, or a power of 10 at the maximum precision
+        assertTrue(round(tiny, 1700) == 0n);
+        assertEq(128, round(tiny, 1700).prec());
+        assertTrue(ceil(tiny, 1700) == number("1e-1700"));
+        assertEq(number("1e-1700").prec(), ceil(tiny, 1700).prec());
+        assertTrue(round(tiny, 1701) == number("1e-1701"));
+        assertEq(number("1e-1701").prec(), round(tiny, 1701).prec());
+        assertTrue(round(tiny, 1705) == number("1.2346e-1701"));
+        assertEq(number("1.2346e-1701").prec(), round(tiny, 1705).prec());
+    }
+
+    #! rounding to no digits or to a power of 10 keeps the precision of the number
+    noDigits() {
+        number x = 123.45678901234567891n;
+        assertEq(x.prec(), round(x).prec());
+        assertEq(x.prec(), round(x, 0).prec());
+        assertEq(x.prec(), ceil(x, -1).prec());
+        assertEq(x.prec(), floor(x, -2).prec());
+        assertTrue(round(x, -1) == 120n);
+    }
+
+    #! checks that @a r is the number of the decimal string of @a v rounded to @a k digits as given by @a func
+    private check(string v, number x, int k, string func, number r) {
+        string label = sprintf("%s(%s, %d)", func, v, k);
+        number e = number(roundString(v, k, func));
+        assertTrue(e == r, label + sprintf(": %s == %s", e.toStringRoundTrip(), r.toStringRoundTrip()));
+        assertEq(e.prec(), r.prec(), label + " prec");
+        # the result printed and parsed again is the same number
+        number p = number(r.toStringRoundTrip());
+        assertTrue(p == r, label + " parsed again");
+        assertEq(p.prec(), r.prec(), label + " parsed again prec");
+    }
+
+    #! rounds the plain decimal string @a v to @a k digits after the decimal point as given by @a func
+    private static string roundString(string v, int k, string func) {
+        bool neg = v.substr(0, 1) == "-";
+        if (neg) {
+            v = v.substr(1);
+        }
+        (*string ip, *string fp) = (v =~ x/^([0-9]+)\.?([0-9]*)$/);
+        fp = fp ?? "";
+        while (fp.size() < k) {
+            fp += "0";
+        }
+        string kept = ip + fp.substr(0, k);
+        string tail = fp.substr(k);
+        bool nonzero = tail =~ /[1-9]/;
+        bool up;
+        switch (func) {
+            case "round": up = tail.size() && int(tail.substr(0, 1)) >= 5; break;
+            case "ceil": up = nonzero && !neg; break;
+            case "floor": up = nonzero && neg; break;
+        }
+        if (up) {
+            kept = increment(kept);
+        }
+        string rv = kept.substr(0, kept.size() - k) + "." + kept.substr(kept.size() - k);
+        return (neg ? "-" : "") + rv;
+    }
+
+    #! adds 1 to the decimal digits @a d
+    private static string increment(string d) {
+        int i = d.size() - 1;
+        while (i >= 0 && d.substr(i, 1) == "9") {
+            --i;
+        }
+        string nines = strmul("0", d.size() - 1 - i);
+        if (i < 0) {
+            return "1" + nines;
+        }
+        return d.substr(0, i) + string(int(d.substr(i, 1)) + 1) + nines;
+    }
+}

@@ -1,0 +1,68 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ModuleExitCleaner.qm keeps an operation that another thread submitted until the modules are deleted, and
+#! completes it then (qore#6685)
+
+/*  ModuleExitCleaner.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module ModuleExitCleaner {
+    version = "1.0";
+    desc = "completes an operation of the ModuleExitCompletion module while the modules are deleted";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ModuleExitCleaner::Completer::completer = new ModuleExitCleaner::Completer();
+    };
+}
+
+/*  The data of the modules are cleared at the end of the process in the order of their names, after the Programs of
+    the modules have been closed (see QoreModuleManager::delUser()): this module's data are cleared before those of
+    ModuleExitCompletion, whose Program is then closed to the threads other than the cleanup, but has not been cleared,
+    so its operation is not canceled yet.
+*/
+public namespace ModuleExitCleaner {
+public class Completer {
+    public {
+        static *Completer completer;
+    }
+
+    destructor() {
+        # the operations' step results are released: the operations complete, and their onComplete() calls are
+        # dispatched to callback workers with the context of the thread that submitted them, not of the cleanup
+        call_function("dbg_async_io_release_held_step_results");
+        # the I/O thread processes the result and queues the operation's onComplete(), which a worker then processes:
+        # it must skip it, as the Program of the operation's module is closed to the worker
+        bool queued = call_function("dbg_async_io_wait_on_complete_queued", 3, 20s);
+        AsyncIoController::flushCallbacks();
+        printf("completed while the modules were deleted: %y\n", queued);
+        # the timer's callback is dispatched to a callback worker, which must skip it; the release returns once it has
+        # been processed
+        int timers = call_function("dbg_async_io_release_held_timer_callbacks");
+        printf("timer callbacks released while the modules were deleted: %d\n", timers);
+        flush();
+    }
+}
+
+#! keeps the operation's objects until the modules are deleted
+}

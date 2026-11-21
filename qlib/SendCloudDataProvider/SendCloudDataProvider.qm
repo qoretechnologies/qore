@@ -28,13 +28,13 @@
 %modern
 
 %requires(reexport) DataProvider
-%requires(reexport) SendCloudRestClient
+%requires(reexport) SendCloudRestClient >= 1.1
 %requires json
 
 module SendCloudDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     domains = "PROCESS_CONTROL";
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing a data provider API for SendCloud shipping automation";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -648,9 +648,11 @@ module SendCloudDataProvider {
       shipping methods, service points, and more
 
     @par Authentication:
-    SendCloud uses HTTP Basic Authentication. You need an integration's public_key (username)
-    and secret_key (password) which can be obtained from the SendCloud Settings > Integrations
-    page after creating an API integration.
+    SendCloud uses OAuth2 (client credentials) or HTTP Basic Authentication with an integration's public_key
+    (username) and secret_key (password), which can be obtained from the SendCloud Settings > Integrations
+    page after creating an API integration; for OAuth2, the keys are the OAuth2 client ID and secret (see
+    @ref sendcloudrestclient_auth).  The clients that the data provider creates for the service points host and
+    for the v3 API authenticate the same way as its connection.
 
     @par Example:
     @code{.py}
@@ -685,6 +687,10 @@ printf("Created parcel: %d\n", result.id);
     @endcode
 
     @section sendclouddataproviderrelnotes Release Notes
+
+    @subsection sendclouddataproviderv1_1 SendCloudDataProvider v1.1
+    - the clients created for the service points host and the v3 API authenticate with OAuth2 when the connection
+      does (<a href="https://github.com/qoretechnologies/qore/issues/6896">issue 6896</a>)
 
     @subsection sendclouddataproviderv1_0 SendCloudDataProvider v1.0
     - initial release

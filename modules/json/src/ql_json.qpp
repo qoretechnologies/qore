@@ -47,9 +47,15 @@ const TypedHashDecl* hashdeclJwtHeader = nullptr;
 const TypedHashDecl* hashdeclJwtClaims = nullptr;
 const TypedHashDecl* hashdeclJwtDecodeResult = nullptr;
 
-static const EVP_MD* jwt_get_md(const char* alg, bool& is_hmac, bool& is_rsa, ExceptionSink* xsink) {
+static const EVP_MD* jwt_get_md(const QoreString& alg_name, bool& is_hmac, bool& is_rsa, ExceptionSink* xsink) {
     is_hmac = false;
     is_rsa = false;
+    // the whole name: one with a NUL byte names no algorithm, also when the text before it does (issue #6841)
+    if (memchr(alg_name.c_str(), '\0', alg_name.size())) {
+        xsink->raiseException("JWT-ERROR", "unsupported JWT algorithm: the name contains a NUL byte");
+        return nullptr;
+    }
+    const char* alg = alg_name.c_str();
     if (!strcmp(alg, "HS256")) {
         is_hmac = true;
         return EVP_sha256();
@@ -1343,8 +1349,10 @@ bool json_pointer_exists(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_
 */
 string json_pointer_escape(string token) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* str = new QoreStringNode;
+    // the whole token, with any NUL characters (issue #6841)
     const char* p = token->c_str();
-    while (*p) {
+    const char* end = p + token->size();
+    while (p < end) {
         if (*p == '~') {
             str->concat("~0");
         } else if (*p == '/') {
@@ -1390,7 +1398,7 @@ namespace Qore::Json;
     string token = jwt_encode(claims, "secret", "HS256", header);
     @endcode
 
-    @throw JWT-ERROR if encoding fails or the algorithm is unsupported
+    @throw JWT-ERROR if encoding fails or the algorithm is unsupported (also one whose name contains a NUL byte)
 
     @since json 1.11
 */
@@ -1412,7 +1420,7 @@ string jwt_encode(hash<auto> claims, string key, *string algorithm, *hash<auto> 
 
     QoreString alg_str(QCS_UTF8);
     if (algorithm) {
-        alg_str.concat(algorithm->c_str());
+        alg_str.concat(algorithm, xsink);
     } else {
         alg_str.concat("HS256");
     }
@@ -1446,12 +1454,12 @@ string jwt_encode(hash<auto> claims, string key, *string algorithm, *hash<auto> 
 
     bool is_hmac = false;
     bool is_rsa = false;
-    const EVP_MD* md = jwt_get_md(alg_str.c_str(), is_hmac, is_rsa, xsink);
+    const EVP_MD* md = jwt_get_md(alg_str, is_hmac, is_rsa, xsink);
     if (*xsink) {
         return 0;
     }
 
-    QoreString key_str(key->c_str(), QCS_UTF8);
+    QoreString key_str(key->c_str(), key->size(), QCS_UTF8);
     ReferenceHolder<BinaryNode> signature(xsink);
     if (is_hmac) {
         signature = jwt_sign_hmac(md, key_str, signing_input, xsink);
@@ -1489,7 +1497,8 @@ string jwt_encode(hash<auto> claims, string key, *string algorithm, *hash<auto> 
     printf("alg=%s sub=%s\n", result.alg, result.claims.sub);
     @endcode
 
-    @throw JWT-ERROR if decoding fails or verification fails due to missing key/unsupported algorithm
+    @throw JWT-ERROR if decoding fails, the token contains a NUL byte, or verification fails due to missing
+    key/unsupported algorithm (also one whose name contains a NUL byte)
     @throw BASE64-PARSE-ERROR if any token segment is not valid base64url
     @throw JSON-ERROR if decoded header or payload is not valid JSON
     @throw INVALID-ENCODING if the decoded header or payload is not valid UTF-8 (since json 3.0)
@@ -1501,7 +1510,13 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
     assert(hashdeclJwtHeader);
     assert(hashdeclJwtClaims);
 
-    std::string t(token->c_str());
+    // a token is made of base64url characters and dots: one with a NUL byte, which would end it as a C string, so
+    // that the text after it were ignored, is refused (issue #6841)
+    if (memchr(token->c_str(), '\0', token->size())) {
+        xsink->raiseException("JWT-ERROR", "invalid JWT format: the token contains a NUL byte");
+        return QoreValue();
+    }
+    std::string t(token->c_str(), token->size());
     size_t dot1 = t.find('.');
     size_t dot2 = t.rfind('.');
     if (dot1 == std::string::npos || dot2 == std::string::npos || dot1 == dot2) {
@@ -1509,9 +1524,9 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
         return QoreValue();
     }
 
-    QoreString header_b64(t.substr(0, dot1).c_str(), QCS_UTF8);
-    QoreString payload_b64(t.substr(dot1 + 1, dot2 - dot1 - 1).c_str(), QCS_UTF8);
-    QoreString sig_b64(t.substr(dot2 + 1).c_str(), QCS_UTF8);
+    QoreString header_b64(t.data(), dot1, QCS_UTF8);
+    QoreString payload_b64(t.data() + dot1 + 1, dot2 - dot1 - 1, QCS_UTF8);
+    QoreString sig_b64(t.data() + dot2 + 1, t.size() - dot2 - 1, QCS_UTF8);
 
     ReferenceHolder<QoreStringNode> header_json(jwt_b64url_decode_string(header_b64, xsink), xsink);
     if (*xsink || !header_json) {
@@ -1553,7 +1568,7 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
         xsink->raiseException("JWT-ERROR", "JWT header missing 'alg'");
         return QoreValue();
     }
-    QoreString alg_str(alg_value->c_str(), QCS_UTF8);
+    QoreString alg_str(alg_value->c_str(), alg_value->size(), QCS_UTF8);
 
     ReferenceHolder<QoreHashNode> claims(jwt_extract_claims(payload_hash, xsink), xsink);
     if (*xsink) {
@@ -1578,11 +1593,11 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
         }
         bool is_hmac = false;
         bool is_rsa = false;
-        const EVP_MD* md = jwt_get_md(alg_str.c_str(), is_hmac, is_rsa, xsink);
+        const EVP_MD* md = jwt_get_md(alg_str, is_hmac, is_rsa, xsink);
         if (*xsink) {
             return QoreValue();
         }
-        QoreString key_str(key->c_str(), QCS_UTF8);
+        QoreString key_str(key->c_str(), key->size(), QCS_UTF8);
         if (is_hmac) {
             signature_valid = jwt_verify_hmac(md, key_str, signing_input, *signature, xsink);
         } else if (is_rsa) {
@@ -1630,7 +1645,8 @@ binary sig = jws_sign(protected_b64 + "." + payload_b64, private_key_pem, "RS256
 string signature = make_base64_url_string(sig);
     @endcode
 
-    @throw JWT-ERROR if the algorithm is unsupported, the key cannot be read, or signing fails
+    @throw JWT-ERROR if the algorithm is unsupported (also one whose name contains a NUL byte), the key cannot be
+    read, or signing fails
 
     @note \c ES* (ECDSA) algorithms are not supported; JWS requires the raw <tt>R||S</tt> signature encoding for
     those, which differs from the DER encoding OpenSSL produces
@@ -1644,13 +1660,13 @@ string signature = make_base64_url_string(sig);
 binary jws_sign(string signing_input, string key, string algorithm) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bool is_hmac = false;
     bool is_rsa = false;
-    const EVP_MD* md = jwt_get_md(algorithm->c_str(), is_hmac, is_rsa, xsink);
+    const EVP_MD* md = jwt_get_md(*algorithm, is_hmac, is_rsa, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    QoreString key_str(key->c_str(), QCS_UTF8);
-    QoreString input_str(signing_input->c_str(), QCS_UTF8);
+    QoreString key_str(key->c_str(), key->size(), QCS_UTF8);
+    QoreString input_str(signing_input->c_str(), signing_input->size(), QCS_UTF8);
     ReferenceHolder<BinaryNode> signature(xsink);
     if (is_hmac) {
         signature = jwt_sign_hmac(md, key_str, input_str, xsink);
@@ -1683,7 +1699,8 @@ bool ok = jws_verify(protected_b64 + "." + payload_b64, parse_base64_url_string(
     "RS256");
     @endcode
 
-    @throw JWT-ERROR if the algorithm is unsupported or the key cannot be read
+    @throw JWT-ERROR if the algorithm is unsupported (also one whose name contains a NUL byte) or the key cannot be
+    read
 
     @note An invalid signature returns @ref False rather than raising an exception; an exception means the
     verification could not be attempted at all
@@ -1697,13 +1714,13 @@ bool ok = jws_verify(protected_b64 + "." + payload_b64, parse_base64_url_string(
 bool jws_verify(string signing_input, binary signature, string key, string algorithm) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bool is_hmac = false;
     bool is_rsa = false;
-    const EVP_MD* md = jwt_get_md(algorithm->c_str(), is_hmac, is_rsa, xsink);
+    const EVP_MD* md = jwt_get_md(*algorithm, is_hmac, is_rsa, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    QoreString key_str(key->c_str(), QCS_UTF8);
-    QoreString input_str(signing_input->c_str(), QCS_UTF8);
+    QoreString key_str(key->c_str(), key->size(), QCS_UTF8);
+    QoreString input_str(signing_input->c_str(), signing_input->size(), QCS_UTF8);
     bool rv = false;
     if (is_hmac) {
         rv = jwt_verify_hmac(md, key_str, input_str, signature, xsink);

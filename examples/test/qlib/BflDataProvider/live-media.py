@@ -45,7 +45,7 @@ def main():
             config.get('opts', {}).get('apikey') != os.environ['BFL_APIKEY']:
         raise RuntimeError('named connection does not match the privately selected credential')
     build = repo/'build'
-    env = dict(os.environ, QORE_BFL_LIVE_MEDIA='1', QORE_BFL_LIVE_URL=config['url'],
+    env = dict(os.environ, QORE_BFL_LIVE_MEDIA='1', QORE_TEST_LIVE_PROVIDERS='bfl', QORE_BFL_LIVE_URL=config['url'],
                QORE_MODULE_DIR_ONLY='1', LD_LIBRARY_PATH=str(build),
                QORE_MODULE_DIR=':'.join([str(build/'qlib-qmod'),
                    *sorted({str(p.parent) for p in (build/'modules').rglob('*.qmod')}),

@@ -35,6 +35,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/ql_websocket.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 WebSocketStreamFrameState::WebSocketStreamFrameState(Queue* msg_queue_, SendCallback send_cb_,
         bool is_server_)
@@ -59,7 +60,7 @@ bool WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> 
     // the queue's hook serves every stream whose messages it receives; without a queue, no message is kept, and the
     // data is credited as it is fed (creditUnusedData())
     if (msg_queue) {
-        item_hook = msg_queue->getItemConsumeHook();
+        item_hook = qore_queue_ops(msg_queue).getItemConsumeHook();
     }
     stream_hook = std::move(hook);
     return true;
@@ -255,6 +256,11 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
         return;
     }
 
+    // the RSV bits of every frame of the message, which the connection's code checks against the negotiated
+    // extensions (qore#6810): a continuation frame belongs to the message being received, and a frame that starts a
+    // message starts the record
+    message_rsv = (frame.opcode == WSOP_CONTINUATION ? message_rsv : 0) | frame.rsv;
+
     // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
     if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
         size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
@@ -317,11 +323,13 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
     }
 
     MessageKind kind = (msg_opcode == WSOP_TEXT) ? MessageKind::Text : MessageKind::Binary;
-    pushMessage(kind, payload.release(), msg_rsv);
+    uint8_t all_rsv = message_rsv;
+    message_rsv = 0;
+    pushMessage(kind, payload.release(), msg_rsv, 0, nullptr, all_rsv);
 }
 
 void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payload,
-        uint8_t rsv, uint16_t code, const char* reason) {
+        uint8_t rsv, uint16_t code, const char* reason, uint8_t all_rsv) {
     ExceptionSink xs;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xs);
     const char* type_str = nullptr;
@@ -342,6 +350,8 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
         h->setKeyValue("rsv1", (rsv & 0x04) != 0, &xs);
         h->setKeyValue("rsv2", (rsv & 0x02) != 0, &xs);
         h->setKeyValue("rsv3", (rsv & 0x01) != 0, &xs);
+        // the RSV bits of all the frames of the message, in the positions of the first byte of a frame (qore#6810)
+        h->setKeyValue("rsv_bits", static_cast<int64_t>(all_rsv) << 4, &xs);
     }
     if (kind == MessageKind::Close || kind == MessageKind::Error) {
         h->setKeyValue("code", static_cast<int64_t>(code), &xs);

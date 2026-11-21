@@ -24,8 +24,8 @@
           "message": "Súbor je nahraný na FTP server"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "Reagovať na súbory nahrané na FTP server; konfigurácia akcie určuje, či udalosť obsahuje samotné údaje súboru alebo odkaz na umiestnenie súboru v lokálnom súborovom systéme. V každom prípade udalosť označuje, že údaje súboru už boli stiahnuté a sú lokálne dostupné"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Reagovať na súbory nahrané na FTP server; konfigurácia akcie určuje, či udalosť obsahuje samotné údaje súboru alebo odkaz na umiestnenie súboru v lokálnom súborovom systéme. V každom prípade udalosť označuje, že údaje súboru už boli stiahnuté a sú lokálne dostupné. Nastavením remote_file_disposition na DELETE alebo MOVE po spracovaní odstránite vzdialený súbor z adresára. Pri nastavení NONE platí nasledujúce pravidlo. Obsluha udalosti musí súbor presunúť, premenovať alebo odstrániť, inak sa pri ďalšej kontrole doručí znova."
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

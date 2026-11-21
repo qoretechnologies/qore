@@ -9,6 +9,7 @@
 %requires json
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -94,7 +95,7 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("AzureOpenAiDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.AZURE_OPENAI_CONNECTION;
+        conn_name = LiveProvider::get("azure", "AZURE_OPENAI_CONNECTION", m_options.conn);
 
         addTestCase("factory + provider info",            \factoryTest());
         addTestCase("app registered with logo + group",   \appTest());
@@ -135,17 +136,20 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
     /** Uses bounded inference requests and removes temporary uploads even if an assertion fails.
     */
     private liveAzureOpenAiTest() {
-        *string deployment = ENV.AZURE_OPENAI_DEPLOYMENT;
+        *string deployment = LiveProvider::get("azure", "AZURE_OPENAI_DEPLOYMENT");
         if (!deployment.val()) {
             testSkip("AZURE_OPENAI_DEPLOYMENT env var is required to name a "
                 "deployment in the account");
         }
 
-        if (!ENV.AZURE_OPENAI_API_KEY.val() || !ENV.AZURE_OPENAI_ENDPOINT.val()) {
-            testSkip("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are required for standalone live tests");
+        if (!LiveProvider::get("azure", "AZURE_OPENAI_API_KEY").val() || !
+            LiveProvider::get("azure", "AZURE_OPENAI_ENDPOINT").val()) {
+            testSkip(LiveProvider::enabled("azure") ?
+                "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are required for standalone live tests"
+                    : LiveProvider::skipReason("azure", "AZURE_OPENAI_API_KEY"));
         }
-        AzureOpenAiRestConnection conn({"name": conn_name, "url": ENV.AZURE_OPENAI_ENDPOINT,
-            "opts": {"api_key": ENV.AZURE_OPENAI_API_KEY}});
+        AzureOpenAiRestConnection conn({"name": conn_name, "url": LiveProvider::get("azure", "AZURE_OPENAI_ENDPOINT"),
+            "opts": {"api_key": LiveProvider::get("azure", "AZURE_OPENAI_API_KEY")}});
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Azure OpenAI connection ping failed: %s",
             ping.info ?? "no info"));
@@ -167,9 +171,10 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
             "text": {"format": {"type": "json_schema", "name": "result", "schema": {}, "strict": False}}});
         assertTrue(response.output.size() > 0);
         assertTrue(response.usage.total_tokens > 0);
-        if (ENV.AZURE_OPENAI_EMBEDDING_DEPLOYMENT.val()) {
+        if (LiveProvider::get("azure", "AZURE_OPENAI_EMBEDDING_DEPLOYMENT").val()) {
             auto embedding = prov.getChildProvider("embedding").doRequest({
-                "deployment": ENV.AZURE_OPENAI_EMBEDDING_DEPLOYMENT, "input": "Qore test", "dimensions": 8});
+                "deployment": LiveProvider::get("azure", "AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
+                "input": "Qore test", "dimensions": 8});
             assertEq(8, embedding.data[0].embedding.size());
         }
         foreach bool expiration in (False, True) {
@@ -194,7 +199,8 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
             auto content = prov.getChildProvider("download-file").doRequest({"file_id": id});
             assertEq(bytes.toString(), content.toString());
         }
-        AzureOpenAiRestConnection invalid({"name": "invalid", "url": ENV.AZURE_OPENAI_ENDPOINT,
+        AzureOpenAiRestConnection invalid({"name": "invalid", "url":
+            LiveProvider::get("azure", "AZURE_OPENAI_ENDPOINT"),
             "opts": {"api_key": "qore-invalid-key"}});
         *hash<ExceptionInfo> error;
         try {

@@ -359,12 +359,24 @@ bool same = c'a' == "a";        # True
 
     @par Precision of a Number from a Decimal String:
     @anchor number_string_precision A number parsed from a decimal string (an immediate value, a string converted to
-    a number, or a value read from a \c buffer<decimal128>, as from a decimal column of a
-    @ref Qore::SQL::ColumnarResult "ColumnarResult") has at least 128 bits of precision, 5 bits for each character
-    of the string, and the bits of its significant digits plus 20 guard digits, so that it prints as the decimal
-    value it was parsed from (ex: \c -567890123456789.0123456789n).  The display rounding of number strings removes a run of more than 16 \c 0 or
-    \c 9 digits in the fraction, so a value with such a run prints rounded (ex: \c 1.00000000000000000001n prints as
-    \c 1); @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" returns the exact value.
+    a number, a value deserialized from a string, or a value read from a \c buffer<decimal128>, as from a decimal
+    column of a @ref Qore::SQL::ColumnarResult "ColumnarResult") has a precision that depends only on its decimal
+    value, not on how the string is written, so numbers of the same value parsed from different strings are the same
+    number and compare equal (ex: \c 123.4567890123456789n, <tt>number("123.45678901234567890")</tt>,
+    <tt>number("+1.234567890123456789e2")</tt> and a \c decimal(38,20) element of the value).  The precision is the
+    largest of 128 bits, the bits of the significant digits of the value plus 20 guard digits, and 5 bits for each
+    power of 10 of the magnitude of the value (the decimal exponent of its first significant digit), at most 8192
+    bits; the significant digits are those of the shortest significand of the value, so a sign, leading zeros and
+    the zeros at the end of the significand do not count.  The guard digits make the number print as the decimal
+    value it was parsed from (ex: \c -567890123456789.0123456789n).  The display rounding of number strings removes a
+    run of more than 16 \c 0 or \c 9 digits in the fraction, so a value with such a run prints rounded (ex:
+    \c 1.00000000000000000001n prints as \c 1); @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()"
+    returns the exact value.  The result of @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" or
+    @ref Qore::floor() "floor()" with digits after the decimal point is a decimal value, and has the precision
+    of the number parsed from its decimal string, so that it is the same number (ex:
+    <tt>round(123.45678901234567891n, 4) == 123.4568n</tt>).  Numbers are compared by their binary values: a number
+    computed in binary (ex: by arithmetic) is equal to a number parsed from a decimal string only when their binary
+    values are the same.
 
     @par Exact Decimal Value of a Number:
     @anchor number_exact_decimal A number written to a fixed-scale decimal value (an element of a

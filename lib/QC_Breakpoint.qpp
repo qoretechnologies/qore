@@ -37,6 +37,17 @@
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
+// Raises SANDBOX-ISOLATION-ERROR and returns -1 if the Program that the breakpoint is assigned to is refused by
+// the isolation of the thread's trusted build (qore#6958)
+static int check_breakpoint_isolation(QoreBreakpoint* bkpt, ExceptionSink* xsink) {
+    // nothing to check outside a trusted build that a tenant entered
+    if (!qore_sandbox_isolation_active()) {
+        return 0;
+    }
+    ReferenceHolder<QoreProgram> pgm(qore_breakpoint_ops(bkpt).getReferencedProgram(), xsink);
+    return *pgm ? qore_sandbox_check_program_isolation(*pgm, xsink, "accessing a Program") : 0;
+}
+
 /** @defgroup breakpoint_policy_options Breakpoint Policy Constants
 
     These are the possible values that can be passed back to breakpoint as policy related to thread list
@@ -107,6 +118,11 @@ Breakpoint::destructor() {
  * @param enabled the enabled state to set
  */
 nothing Breakpoint::setEnabled(bool enabled) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    bkpt->enabled = enabled;
 }
 
@@ -115,6 +131,11 @@ nothing Breakpoint::setEnabled(bool enabled) [flags=NAMED_ARGS] {
  *
  */
 bool Breakpoint::getEnabled() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    return bkpt->enabled;
 }
 
@@ -125,6 +146,11 @@ bool Breakpoint::getEnabled() {
    @throw BREAKPOINT-ERROR if policy is wrong value
  */
 nothing Breakpoint::setPolicy(softint policy) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    switch (policy) {
    case BKP_PO_NONE:
    case BKP_PO_ACCEPT:
@@ -140,6 +166,11 @@ nothing Breakpoint::setPolicy(softint policy) [flags=NAMED_ARGS] {
 /**
  */
 int Breakpoint::getPolicy() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    return (int)bkpt->policy;
 }
 
@@ -149,6 +180,15 @@ int Breakpoint::getPolicy() {
  *  @param program the program to assign to the breakpoint
  */
 nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    bkpt->assignProgram(*program, xsink);
 }
 
@@ -157,6 +197,11 @@ nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] program) [flags=NA
  *
  */
 nothing Breakpoint::unassignProgram() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    bkpt->assignProgram(nullptr, xsink);
 }
 
@@ -167,11 +212,16 @@ nothing Breakpoint::unassignProgram() {
  */
 ProgramControl Breakpoint::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
    // the Program is returned with a reference, which the new object takes over
-   QoreProgram* pgm = qore_breakpoint_ops(bkpt).getReferencedProgram();
+   ReferenceHolder<QoreProgram> pgm(qore_breakpoint_ops(bkpt).getReferencedProgram(), xsink);
    if (!pgm) {
       return xsink->raiseException("BREAKPOINT-ERROR", "Program is not assigned");
    }
-   return new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
+   // the Program that is returned is checked, not the one assigned before: a Program of another tenant is not used
+   // in a trusted build that a tenant called (qore#6958)
+   if (qore_sandbox_check_program_isolation(*pgm, xsink, "accessing a Program")) {
+      return QoreValue();
+   }
+   return new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm.release());
 }
 
 //! Assign breakpoint to a statement.
@@ -179,6 +229,11 @@ ProgramControl Breakpoint::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
  * @param statement_id the statement ID to assign to the breakpoint
  */
 nothing Breakpoint::assignStatement(int statement_id) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    AbstractStatement *s = bkpt->resolveStatementId(statement_id, xsink);
    if (!xsink->isEvent()) {
       bkpt->assignStatement(s, xsink);
@@ -190,6 +245,11 @@ nothing Breakpoint::assignStatement(int statement_id) [flags=NAMED_ARGS] {
  * @param statement_id the statement ID to unassign from the breakpoint
  */
 nothing Breakpoint::unassignStatement(int statement_id) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    AbstractStatement *s = bkpt->resolveStatementId(statement_id, xsink);
    if (!xsink->isEvent()) {
       bkpt->unassignStatement(s, xsink);
@@ -201,6 +261,11 @@ nothing Breakpoint::unassignStatement(int statement_id) [flags=NAMED_ARGS] {
  *  @see @ref Qore::Program::resolveStatementId() "Program::resolveStatementId()"
  */
 list<int> Breakpoint::getStatementIds() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    return bkpt->getStatementIds(xsink);
 }
 
@@ -209,6 +274,11 @@ list<int> Breakpoint::getStatementIds() {
  *
  */
 list<int> Breakpoint::getThreadIds() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
     TidList_t tl;
     bkpt->getThreadIds(tl, xsink);
     ReferenceHolder<QoreListNode> l(new QoreListNode(bigIntTypeInfo), xsink);
@@ -223,6 +293,11 @@ list<int> Breakpoint::getThreadIds() {
  * @param thread_ids the thread IDs to set
  */
 nothing Breakpoint::setThreadIds(softlist<softint> thread_ids) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
     TidList_t tl;
     for (size_t i = 0, e = thread_ids->size(); i < e; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "setting breakpoint thread IDs")) {
@@ -241,6 +316,11 @@ nothing Breakpoint::setThreadIds(softlist<softint> thread_ids) [flags=NAMED_ARGS
  * @param thread_id the thread ID to add
  */
 nothing Breakpoint::addThreadId(int thread_id) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    bkpt->addThreadId(thread_id, xsink);
 }
 
@@ -249,6 +329,11 @@ nothing Breakpoint::addThreadId(int thread_id) [flags=NAMED_ARGS] {
  * @param thread_id the thread ID to remove
  */
 nothing Breakpoint::removeThreadId(int thread_id) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    bkpt->removeThreadId(thread_id, xsink);
 }
 
@@ -257,6 +342,11 @@ nothing Breakpoint::removeThreadId(int thread_id) [flags=NAMED_ARGS] {
  * @param thread_id the thread ID to check
  */
 bool Breakpoint::isThreadId(softint thread_id) [flags=NAMED_ARGS] {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    return bkpt->isThreadId(thread_id, xsink);
 }
 
@@ -265,6 +355,11 @@ bool Breakpoint::isThreadId(softint thread_id) [flags=NAMED_ARGS] {
  *
  */
 nothing Breakpoint::clearThreadIds() {
+    // the Program of another tenant that the breakpoint is assigned to is not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (check_breakpoint_isolation(bkpt, xsink)) {
+        return QoreValue();
+    }
    bkpt->clearThreadIds(xsink);
 }
 

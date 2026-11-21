@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../qlib/SqlUtil/TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -21,7 +22,9 @@
 /** a driver with the exec-describe method describes a statement without executing it, and the statement is closed
     after it: the next fetch prepared it again with the arguments of prepare() only, so that the values given to bind()
     were lost; runs with the drivers that have the method (Oracle, MySQL) when \c QORE_DB_CONNSTR_ORACLE and
-    \c QORE_DB_CONNSTR_MYSQL are set
+    \c QORE_DB_CONNSTR_MYSQL are set; a case whose variable is set and whose database cannot be connected to fails
+    with the variable, the driver, host and port of the datasource (its user, password and database always masked)
+    and the connection error (the socket or host), as a database outage is not a reason to skip
 */
 class DescribeKeepsBoundValuesTest inherits QUnit::Test {
     constructor() : Test("DescribeKeepsBoundValues", "1.0", \ARGV) {
@@ -37,7 +40,7 @@ class DescribeKeepsBoundValuesTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_ORACLE) {
             testSkip("QORE_DB_CONNSTR_ORACLE is not set");
         }
-        check(new Datasource(ENV.QORE_DB_CONNSTR_ORACLE), " from dual", "oracle");
+        check(connect("QORE_DB_CONNSTR_ORACLE"), " from dual", "oracle");
     }
 
     mysqlTest() {
@@ -47,7 +50,38 @@ class DescribeKeepsBoundValuesTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_MYSQL) {
             testSkip("QORE_DB_CONNSTR_MYSQL is not set");
         }
-        check(new Datasource(ENV.QORE_DB_CONNSTR_MYSQL), "", "mysql");
+        check(connect("QORE_DB_CONNSTR_MYSQL"), "", "mysql");
+    }
+
+    #! Returns the open datasource of the environment variable, or fails the test case with the reason
+    /** The reason names the variable, the driver, the host and the port, and the connection error; the user, the
+        password and the database are always masked, in the datasource and in the error
+    */
+    private Datasource connect(string var) {
+        # live-provider-optin: a QORE_DB_CONNSTR_* connection string of a local test database, not a live provider
+        string connstr = ENV{var};
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            hash<auto> config = parse_datasource(connstr);
+            string shown = sprintf("%s:****/****@****", config.type);
+            if (config.host) {
+                shown += "%" + config.host;
+                if (config.port) {
+                    shown += ":" + config.port;
+                }
+            }
+            string desc = ex.desc ?? "";
+            foreach *string secret in ((config.user, config.pass, config.db)) {
+                if (secret) {
+                    desc = replace(desc, secret, "****");
+                }
+            }
+            fail(TestRun::maskSecrets(sprintf("precondition failure: %s is set to %y, but no connection to its "
+                "database can be opened: %s: %s", var, shown, ex.err, desc), connstr));
+        }
+        return ds;
     }
 
     private check(Datasource ds, string from, string db) {

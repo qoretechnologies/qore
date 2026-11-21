@@ -2095,6 +2095,7 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                     ? static_cast<arrow::StringBuilder*>(builder)->Append(data, len)
                     : static_cast<arrow::LargeStringBuilder*>(builder)->Append(data, len);
             };
+            // note: safe; a value in a node (isPointer()) is never an inline short string, which is handled below
             const QoreStringNode* node = val.isPointer() && val.getPtr()->getType() == NT_STRING
                 ? static_cast<const QoreStringNode*>(val.getPtr()) : nullptr;
             if (node && node->getEncoding() == QCS_UTF8) {

@@ -133,26 +133,27 @@ string sub run_backquote(string cmd) {
         # a name cut at the NUL character would set another variable
         assertEq(-1, setenv(name + "\x00_SUFFIX", "x"));
         assertEq(Err::EINVAL, errno());
-        assertNothing(getenv(name));
+        assertNothing(getenv(name)); # live-provider-optin: a variable of the test itself
 
         # a value cut at the NUL character would be set to a different value
         assertEq(-1, setenv(name, "value\x00more"));
         assertEq(Err::EINVAL, errno());
-        assertNothing(getenv(name));
+        assertNothing(getenv(name)); # live-provider-optin: a variable of the test itself
 
         assertEq(0, setenv(name, "value"));
-        assertEq("value", getenv(name));
+        assertEq("value", getenv(name)); # live-provider-optin: a variable of the test itself
 
         # the name cut at the NUL character is the name of the variable that was just set
-        assertNothing(getenv(name + "\x00_SUFFIX"));
+        assertNothing(getenv(name + "\x00_SUFFIX")); # live-provider-optin: a variable of the test itself
         assertEq(Err::EINVAL, errno());
 
         assertEq(-1, unsetenv(name + "\x00_SUFFIX"));
         assertEq(Err::EINVAL, errno());
+        # live-provider-optin: a variable of the test itself
         assertEq("value", getenv(name), "the variable was not unset");
 
         assertEq(0, unsetenv(name));
-        assertNothing(getenv(name));
+        assertNothing(getenv(name)); # live-provider-optin: a variable of the test itself
     }
 
     usersAndGroups() {

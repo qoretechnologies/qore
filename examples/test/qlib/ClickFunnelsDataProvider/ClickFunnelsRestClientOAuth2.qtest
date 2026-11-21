@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ClickFunnelsRestClientOAuth2.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires ConnectionProvider
+%requires RestClient
+%requires HttpServerUtil
+%requires HttpServer
+%requires ClickFunnelsRestClient
+
+%exec-class ClickFunnelsRestClientOAuth2Test
+
+#! A local stand-in for the ClickFunnels API that records the requests it gets
+class ClickFunnelsStandInHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(()),
+        };
+    }
+}
+
+#! OAuth2 and API token authentication of the ClickFunnels REST client and connection (qore#6896)
+/** No credentials and no network: options and URLs are inspected, and requests go to a local stand-in.
+*/
+public class ClickFunnelsRestClientOAuth2Test inherits QUnit::Test {
+    constructor() : Test("ClickFunnelsRestClientOAuth2", "1.0", \ARGV, Opts) {
+        addTestCase("scheme", \schemeTest());
+        addTestCase("OAuth2 connection", \oauth2ConnectionTest());
+        addTestCase("workspace from the token response", \workspaceTest());
+        addTestCase("API token fallback", \apiTokenFallbackTest());
+        addTestCase("requests to a stand-in", \standInRequestTest());
+        set_return_value(main());
+    }
+
+    #! The connection scheme names OAuth2 first and defaults its options to the ClickFunnels endpoints
+    schemeTest() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("clickfunnelsrest");
+        assertEq("oauth2_client_id,oauth2_client_secret|team,apikey", scheme.required_options);
+        list<string> alternatives = scheme.required_options.split("|");
+        assertEq("oauth2_client_id,oauth2_client_secret", alternatives[0]);
+        assertEq("team,apikey", alternatives[1]);
+        assertEq("https://accounts.myclickfunnels.com/oauth/authorize", scheme.options.oauth2_auth_url.default_value);
+        assertEq("https://accounts.myclickfunnels.com/oauth/token", scheme.options.oauth2_token_url.default_value);
+        assertEq("authorization_code", scheme.options.oauth2_grant_type.default_value);
+        assertEq({"grant_type": "authorization_code", "new_installation": "true"},
+            scheme.options.oauth2_auth_args.default_value);
+        assertTrue(scheme.options.apikey.sensitive);
+        assertTrue(scheme.options.oauth2_client_secret.sensitive);
+    }
+
+    #! A connection with the OAuth2 client credentials needs no team and asks for a new installation
+    oauth2ConnectionTest() {
+        ClickFunnelsRestConnection conn({
+            "name": "clickfunnels-oauth2",
+            "opts": {
+                "oauth2_client_id": "client-1",
+                "oauth2_client_secret": "secret-1",
+                "oauth2_redirect_url": "https://example.com/callback",
+            },
+        });
+        hash<auto> opts = conn.getConnectionOptions();
+        assertEq("https://accounts.myclickfunnels.com/oauth/authorize", opts.oauth2_auth_url);
+        assertEq("https://accounts.myclickfunnels.com/oauth/token", opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+
+        *hash<auto> features = conn.getFeatures();
+        assertTrue(features{RestConnection::RCF_OAUTH2});
+        assertTrue(features{RestConnection::RCF_OAUTH2_AUTH_CODE});
+
+        string auth_req = conn.getAuthorizationCodeRequest(<AuthCodeInfo>{"state": "st"});
+        assertRegex("^https://accounts\\.myclickfunnels\\.com/oauth/authorize\\?", auth_req);
+        assertRegex("client_id=client-1", auth_req);
+        assertRegex("response_type=code", auth_req);
+        assertRegex("&new_installation=true", auth_req);
+        assertRegex("&grant_type=authorization_code", auth_req);
+
+        # an authorized client sends the token as a Bearer token
+        ClickFunnelsRestClient client(opts + {"team": "acme", "token": "access-1"}, True);
+        assertEq("Bearer access-1", client.getDefaultHeaders().Authorization);
+        assertEq("https://acme.myclickfunnels.com/api/v2", client.getURL());
+    }
+
+    #! The API URL and the team are taken from the workspace that the token response names
+    workspaceTest() {
+        ClickFunnelsRestConnection conn({
+            "name": "clickfunnels-workspace",
+            "opts": {
+                "oauth2_client_id": "client-1",
+                "oauth2_client_secret": "secret-1",
+                "oauth2_redirect_url": "https://example.com/callback",
+            },
+        });
+        hash<auto> updated;
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updated += new_opts; });
+        updated = {};
+        # the response of the ClickFunnels documentation
+        hash<auto> resp = conn.processOAuth2TokenResponse({
+            "access_token": "access-1",
+            "token_type": "Bearer",
+            "expires_in": 7200,
+            "scope": "admin read",
+            "created_at": 1707498467,
+            "team_id": 1234,
+            "team_name": "John Doe's Team",
+            "workspace_id": 4567,
+            "workspace_name": "Clickfunneller",
+            "workspace_url": "https://clickfunneller.myclickfunnels.com",
+        });
+        assertEq("access-1", resp.token);
+        assertEq("clickfunneller", resp.team);
+        assertEq("clickfunnelsrest://clickfunneller.myclickfunnels.com/api/v2", resp.url);
+        # tokens do not expire, so expires_in is ignored
+        assertNothing(resp.oauth2_token_expiry);
+        assertEq("clickfunneller", updated.team);
+        assertEq("clickfunnelsrest://clickfunneller.myclickfunnels.com/api/v2", updated.url);
+        assertFalse(updated.hasKey("oauth2_token_expiry"));
+
+        assertEq("clickfunneller",
+            ClickFunnelsRestClientBase::getWorkspaceSubdomain("https://clickfunneller.myclickfunnels.com"));
+        assertEq("ws1", ClickFunnelsRestClientBase::getWorkspaceSubdomain("https://ws1.myclickfunnels.com/"));
+        # a URL that is not a workspace host gives no team
+        assertNothing(ClickFunnelsRestClientBase::getWorkspaceSubdomain("https://example.com"));
+        assertNothing(ClickFunnelsRestClientBase::getWorkspaceSubdomain("https://a.b.myclickfunnels.com"));
+        resp = conn.processOAuth2TokenResponse({
+            "access_token": "access-2",
+            "token_type": "Bearer",
+            "workspace_url": "https://example.com",
+        });
+        assertEq("access-2", resp.token);
+        assertNothing(resp.team);
+    }
+
+    #! An API token wins over OAuth2: the OAuth2 options are removed
+    apiTokenFallbackTest() {
+        ClickFunnelsRestConnection conn({
+            "name": "clickfunnels-apikey",
+            "opts": {
+                "team": "acme",
+                "apikey": "api-token-1",
+            },
+        });
+        hash<auto> info = conn.getInfo();
+        assertTrue(info.up);
+        assertFalse(conn.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+        # nor does it need authorization (qore#6901)
+        assertFalse(conn.needsAuth());
+        assertEq("none", conn.getExtendedInfo().oauth2_grant_type);
+        hash<auto> client_opts = ClickFunnelsRestClientBase::getOptions(conn.getConnectionOptions());
+        assertEq("Bearer api-token-1", client_opts.headers.Authorization);
+        assertEq("https://acme.myclickfunnels.com/api/v2", client_opts.url);
+        assertNothing(client_opts.apikey);
+        foreach string opt in (ClickFunnelsRestClientBase::OAuth2OptionNames) {
+            assertFalse(client_opts.hasKey(opt), opt);
+        }
+
+        client_opts = ClickFunnelsRestClientBase::getOptions({
+            "team": "acme",
+            "apikey": "api-token-1",
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+        });
+        assertEq("Bearer api-token-1", client_opts.headers.Authorization);
+        assertFalse(client_opts.hasKey("oauth2_client_id"));
+        assertFalse(client_opts.hasKey("oauth2_auth_args"));
+    }
+
+    #! The OAuth2 token and the API token are each sent as a Bearer token
+    standInRequestTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        ClickFunnelsStandInHandler handler();
+        server.setDefaultHandler("clickfunnels", handler);
+        string base = "http://localhost:" + port + "/api/v2";
+
+        ClickFunnelsRestClient client({
+            "url": base,
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+            "token": "access-1",
+        }, True);
+        client.get("teams");
+        ClickFunnelsRestClientIo client_io({
+            "url": base,
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+            "token": "access-io",
+        });
+        client_io.restGet("teams");
+        ClickFunnelsRestClient key_client({"url": base, "apikey": "api-token-1"}, True);
+        key_client.get("teams");
+
+        assertEq(3, handler.requests.size());
+        assertEq(("api/v2/teams", "api/v2/teams", "api/v2/teams"), map $1.path, handler.requests);
+        assertEq(("Bearer access-1", "Bearer access-io", "Bearer api-token-1"),
+            map $1.authorization, handler.requests);
+    }
+}

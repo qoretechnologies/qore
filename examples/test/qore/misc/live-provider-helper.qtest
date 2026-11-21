@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../LiveProviderTest.qm
+
+%exec-class LiveProviderHelperTest
+
+#! LiveProviderTest::LiveProvider gives credentials only with QORE_TEST_LIVE_PROVIDERS (qore#6964)
+/** The values are fake ones set by the test; the test never prints a value: it compares them
+*/
+class LiveProviderHelperTest inherits QUnit::Test {
+    public {
+        const Var = "QORE_TEST_LIVE_HELPER_FAKE_KEY";
+        const Other = "QORE_TEST_LIVE_HELPER_FAKE_OTHER";
+        const Value = "fake-credential-6964";
+    }
+
+    private {
+        *string saved_optin;
+    }
+
+    constructor() : QUnit::Test("LiveProviderHelper", "1.0", \ARGV) {
+        # live-provider-optin: saves the opt-in, which the test sets, to restore it
+        saved_optin = getenv(LiveProvider::OptInVar);
+        addTestCase("the opt-in is parsed", \optIn());
+        addTestCase("get() and getAll() give no value without the opt-in", \getValues());
+        addTestCase("an explicit value of the test's command line is given as it is", \explicitValue());
+        addTestCase("require() skips the test case with the reason, which has no value", \requireSkips());
+        addTestCase("connection() opens nothing without the opt-in", \connection());
+        addTestCase("the ambient credentials of a disabled service are removed", \ambient());
+        addTestCase("a local service URL is given, a remote or credentialed one only when enabled", \service());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (saved_optin) {
+            setenv(LiveProvider::OptInVar, saved_optin);
+        } else {
+            unsetenv(LiveProvider::OptInVar);
+        }
+        unsetenv(Var);
+        unsetenv(Other);
+    }
+
+    optIn() {
+        unsetenv(LiveProvider::OptInVar);
+        assertFalse(LiveProvider::enabled("mistral"), "unset");
+        map checkOptIn($1.key, $1.value), {
+            "1": ("mistral", "openai"),
+            "all": ("mistral", "openai"),
+            "ALL": ("mistral",),
+            " 1 ": ("mistral",),
+            "mistral": ("mistral",),
+            "Mistral, openai": ("mistral", "openai"),
+            "openai,mistral,anthropic": ("mistral", "openai", "anthropic"),
+        }.pairIterator();
+        foreach string garbage in (("", "0", "no", "yes", "true", "mistral-x", "*", "mistralopenai")) {
+            setenv(LiveProvider::OptInVar, garbage);
+            assertFalse(LiveProvider::enabled("mistral"), sprintf("%y does not enable mistral", garbage));
+        }
+        setenv(LiveProvider::OptInVar, "openai");
+        assertFalse(LiveProvider::enabled("mistral"), "another provider's id");
+        assertTrue(LiveProvider::enabled("OpenAI"), "the id is compared in lower case");
+    }
+
+    getValues() {
+        setenv(Var, Value);
+        setenv(Other, Value);
+        foreach *string optin in ((NOTHING, "", "0", "openai")) {
+            if (exists optin) {
+                setenv(LiveProvider::OptInVar, optin);
+            } else {
+                unsetenv(LiveProvider::OptInVar);
+            }
+            assertEq(NOTHING, LiveProvider::get("mistral", Var), sprintf("get() with %y", optin));
+            assertEq(NOTHING, LiveProvider::getAll("mistral", (Var, Other)), sprintf("getAll() with %y", optin));
+        }
+        setenv(LiveProvider::OptInVar, "mistral");
+        assertTrue(LiveProvider::get("mistral", Var) == Value, "get() with the opt-in");
+        assertTrue(LiveProvider::getAll("mistral", (Var, Other)) == {Var: Value, Other: Value},
+            "getAll() with the opt-in");
+        unsetenv(Other);
+        assertEq(NOTHING, LiveProvider::getAll("mistral", (Var, Other)), "getAll() with a variable missing");
+        setenv(Other, "");
+        assertEq(NOTHING, LiveProvider::getAll("mistral", (Var, Other)), "getAll() with an empty variable");
+    }
+
+    explicitValue() {
+        unsetenv(LiveProvider::OptInVar);
+        setenv(Var, Value);
+        assertEq("from-the-command-line", LiveProvider::get("mistral", Var, "from-the-command-line"));
+    }
+
+    requireSkips() {
+        setenv(Var, Value);
+        unsetenv(LiveProvider::OptInVar);
+        checkSkip("live mistral tests are disabled: set QORE_TEST_LIVE_PROVIDERS=mistral (or 1) and " + Var + ", "
+            + Other);
+        assertEq("live sftp-local tests are disabled: set QORE_TEST_LIVE_PROVIDERS=sftp-local (or 1)",
+            LiveProvider::skipReason("sftp-local", ()));
+        setenv(LiveProvider::OptInVar, "mistral");
+        unsetenv(Other);
+        checkSkip("live mistral tests are enabled, but " + Other + " is not set");
+        setenv(Other, Value);
+        assertTrue(LiveProvider::require("mistral", (Var, Other)) == {Var: Value, Other: Value}, "all set");
+    }
+
+    connection() {
+        unsetenv(LiveProvider::OptInVar);
+        setenv(Var, "no-such-connection-6964");
+        # get_connection() is not called: it would raise for this name
+        assertEq(NOTHING, LiveProvider::connection("mistral", Var));
+    }
+
+    ambient() {
+        # live-provider-optin: saves the variables, which the test sets to fake values, to restore them
+        *hash<string, *string> saved = map {$1: getenv($1)}, ("AWS_ACCESS_KEY_ID", "AZURE_CLIENT_SECRET",
+            "AWS_EC2_METADATA_DISABLED", "QORE_GCP_ADC_DISABLED");
+        on_exit {
+            map exists $1.value ? setenv($1.key, $1.value) : unsetenv($1.key), saved.pairIterator();
+        }
+        setenv("AWS_ACCESS_KEY_ID", Value);
+        setenv("AZURE_CLIENT_SECRET", Value);
+        unsetenv("AWS_EC2_METADATA_DISABLED");
+        unsetenv("QORE_GCP_ADC_DISABLED");
+        setenv(LiveProvider::OptInVar, "azure");
+        LiveProvider::clearAmbient();
+        assertEq("1", getenv("QORE_GCP_ADC_DISABLED"), "the implicit Google credentials are turned off");
+        # live-provider-optin: checks that the fake value set above was removed
+        assertEq(NOTHING, getenv("AWS_ACCESS_KEY_ID"), "removed: aws is not enabled");
+        assertEq("true", getenv("AWS_EC2_METADATA_DISABLED"));
+        # live-provider-optin: checks that the fake value set above was kept
+        assertTrue(getenv("AZURE_CLIENT_SECRET") == Value, "kept: azure is enabled");
+        unsetenv(LiveProvider::OptInVar);
+        LiveProvider::clearAmbient();
+        # live-provider-optin: checks that the fake value set above was removed
+        assertEq(NOTHING, getenv("AZURE_CLIENT_SECRET"), "removed: nothing is enabled");
+    }
+
+    service() {
+        map assertTrue(LiveProvider::isLocalService("mongodb", $1), $1), ("mongodb://mongodb:27017",
+            "mongodb://localhost:27017/db?replicaSet=rs0", "mongodb://127.0.0.1", "mongodb://a:1,b:2/x");
+        map assertFalse(LiveProvider::isLocalService("mongodb", $1), $1), ("mongodb+srv://cluster0.example.net/x",
+            "mongodb://u:p@localhost:27017", "mongodb://u@localhost", "mongodb://shard-00.abc.mongodb.net:27017",
+            "MONGODB+SRV://host/x", "mongodb://a:1,shard-01.abc.mongodb.net:27017/x");
+        # a provider without hosted-service patterns: only the credentials count
+        assertTrue(LiveProvider::isLocalService("other", "https://x.mongodb.net"));
+        assertFalse(LiveProvider::isLocalService("other", "https://u:p@x"));
+
+        unsetenv(LiveProvider::OptInVar);
+        setenv(Var, "mongodb://mongodb:27017");
+        on_exit unsetenv(Var);
+        assertEq("mongodb://mongodb:27017", LiveProvider::getService("mongodb", Var), "local: given when disabled");
+        setenv(Var, "mongodb://fakeuser:" + Value + "@localhost:27017");
+        assertEq(NOTHING, LiveProvider::getService("mongodb", Var), "credentialed: not given when disabled");
+        setenv(LiveProvider::OptInVar, "mongodb");
+        # live-provider-optin: compares with the fake value that the test set
+        assertTrue(LiveProvider::getService("mongodb", Var) == getenv(Var), "credentialed: given when enabled");
+        unsetenv(LiveProvider::OptInVar);
+        unsetenv(Var);
+        assertEq(NOTHING, LiveProvider::getService("mongodb", Var), "unset");
+    }
+
+    private checkOptIn(string optin, list<string> providers) {
+        setenv(LiveProvider::OptInVar, optin);
+        foreach string provider in (providers) {
+            assertTrue(LiveProvider::enabled(provider), sprintf("%y enables %y", optin, provider));
+        }
+    }
+
+    #! require() skips with the reason, which does not have the value
+    private checkSkip(string reason) {
+        try {
+            LiveProvider::require("mistral", (Var, Other));
+            assertTrue(False, "require() skips");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST-SKIPPED-EXCEPTION", ex.err);
+            assertEq(reason, ex.desc);
+            assertEq(-1, ex.desc.find(Value), "the reason has no value");
+        }
+    }
+}

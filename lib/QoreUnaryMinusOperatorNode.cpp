@@ -43,7 +43,7 @@ QoreString *QoreUnaryMinusOperatorNode::getAsString(bool& del, int foff, Excepti
 }
 
 int QoreUnaryMinusOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&unaryminus_str);
+    qore_string_private::get(str)->concatAsciiName(unaryminus_str);
     return 0;
 }
 

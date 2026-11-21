@@ -147,9 +147,10 @@ ParseOptions merged = opts.merge(other_opts);
     @endcode
 */
 ParseOptions ParseOptions::merge(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT,NAMED_ARGS] {
-QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    auto [left, right] = pod->snapshotWith(**other);
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
     obj->setPrivate(CID_PARSEOPTIONS,
-        new QoreParseOptionsData(pod->get() | other->get()));
+        new QoreParseOptionsData(left | right));
     return obj;
 }
 
@@ -204,9 +205,10 @@ ParseOptions masked = opts.mask(other_opts);
     @endcode
 */
 ParseOptions ParseOptions::mask(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT,NAMED_ARGS] {
-QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    auto [left, right] = pod->snapshotWith(**other);
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
     obj->setPrivate(CID_PARSEOPTIONS,
-        new QoreParseOptionsData(pod->get() & other->get()));
+        new QoreParseOptionsData(left & right));
     return obj;
 }
 
@@ -251,7 +253,7 @@ opts.set(other_opts);
     @endcode
 */
 nothing ParseOptions::set(ParseOptions[QoreParseOptionsData] other) [flags=NAMED_ARGS] {
-pod->getRef() |= other->get();
+    pod->set(**other);
 }
 
 //! Sets options in place from an integer constant (bitwise OR)
@@ -263,7 +265,7 @@ opts.set(PO_NO_NETWORK);
     @endcode
 */
 nothing ParseOptions::set(softint parse_options) [flags=NAMED_ARGS] {
-    pod->getRef() |= QoreParseOptions(parse_options);
+    pod->set(QoreParseOptions(parse_options));
 }
 
 //! Sets an option in place by name
@@ -279,7 +281,7 @@ opts.set("no-class-defs");
 nothing ParseOptions::set(string name) [flags=NAMED_ARGS] {
     QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
     if (!*xsink) {
-        pod->getRef() |= po;
+        pod->set(po);
     }
 }
 
@@ -292,7 +294,7 @@ opts.clear(other_opts);
     @endcode
 */
 nothing ParseOptions::clear(ParseOptions[QoreParseOptionsData] other) [flags=NAMED_ARGS] {
-pod->getRef() &= ~other->get();
+    pod->clear(**other);
 }
 
 //! Clears options in place from an integer constant (bitwise AND NOT)
@@ -304,7 +306,7 @@ opts.clear(PO_NO_NETWORK);
     @endcode
 */
 nothing ParseOptions::clear(softint parse_options) [flags=NAMED_ARGS] {
-    pod->getRef() &= ~QoreParseOptions(parse_options);
+    pod->clear(QoreParseOptions(parse_options));
 }
 
 //! Clears an option in place by name
@@ -320,7 +322,7 @@ opts.clear("no-class-defs");
 nothing ParseOptions::clear(string name) [flags=NAMED_ARGS] {
     QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
     if (!*xsink) {
-        pod->getRef() &= ~po;
+        pod->clear(po);
     }
 }
 
@@ -337,7 +339,8 @@ if (opts.hasAll(other_opts)) {
     @endcode
 */
 bool ParseOptions::hasAll(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT,NAMED_ARGS] {
-return pod->get().hasAll(other->get());
+    auto [left, right] = pod->snapshotWith(**other);
+    return left.hasAll(right);
 }
 
 //! Returns @ref True if all the specified options are set (integer constant version)
@@ -391,7 +394,8 @@ if (opts.hasAny(other_opts)) {
     @endcode
 */
 bool ParseOptions::hasAny(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT,NAMED_ARGS] {
-return pod->get().hasAny(other->get());
+    auto [left, right] = pod->snapshotWith(**other);
+    return left.hasAny(right);
 }
 
 //! Returns @ref True if any of the specified options are set (integer constant version)
@@ -512,5 +516,6 @@ if (opts.equals(other_opts)) {
     @endcode
 */
 bool ParseOptions::equals(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT,NAMED_ARGS] {
-return pod->get() == other->get();
+    auto [left, right] = pod->snapshotWith(**other);
+    return left == right;
 }

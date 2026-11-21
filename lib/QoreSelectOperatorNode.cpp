@@ -80,7 +80,7 @@ QoreString* QoreSelectOperatorNode::getAsString(bool& del, int foff, ExceptionSi
 }
 
 int QoreSelectOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&select_str);
+    qore_string_private::get(str)->concatAsciiName(select_str);
     return 0;
 }
 

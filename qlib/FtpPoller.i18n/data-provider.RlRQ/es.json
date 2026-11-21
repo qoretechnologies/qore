@@ -24,8 +24,8 @@
           "message": "Se sube un archivo a un servidor FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "Reaccionar a los archivos subidos a un servidor FTP; la configuración de la acción determina si el evento contiene los datos del archivo en sí o un enlace a la ubicación del archivo en el sistema de archivos local. En cualquier caso, el evento indica que los datos del archivo ya se han descargado y están disponibles localmente"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Reaccionar a los archivos subidos a un servidor FTP; la configuración de la acción determina si el evento contiene los datos del archivo en sí o un enlace a la ubicación del archivo en el sistema de archivos local. En cualquier caso, el evento indica que los datos del archivo ya se han descargado y están disponibles localmente. Configure remote_file_disposition como DELETE o MOVE para retirar el archivo remoto después de procesarlo. Con NONE se aplica la siguiente regla. El controlador del evento debe mover, renombrar o eliminar el archivo. De lo contrario, se volverá a entregar en el siguiente sondeo."
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -98,7 +99,7 @@ public class BedrockDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("BedrockDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.BEDROCK_CONNECTION;
+        conn_name = LiveProvider::get("aws", "BEDROCK_CONNECTION", m_options.conn);
 
         addTestCase("factory registered + provider info", \factoryTest());
         addTestCase("app registered with logo + group",   \appTest());
@@ -141,6 +142,7 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         (~$0.001 per run).
     */
     private liveBedrockTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Bedrock connection ping failed: %s",

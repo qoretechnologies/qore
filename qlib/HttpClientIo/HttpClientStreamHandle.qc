@@ -306,16 +306,19 @@ public class HttpClientStreamHandle {
         \c HTTPCLIENT-TIMEOUT for every protocol (#6427), and @ref requestDeadlineExpired() returns @ref True if the
         wait was bounded by the request's deadline.
 
+        @param waited_ms how long the readiness wait lasted, in milliseconds, for the error
+
         @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
         error
         @throw SOCKET-SSL-ERROR the server certificate was refused; raised as it is (see
         @ref HttpClientConnection::waitForReady())
         @throw NETWORK-ACCESS-DENIED the @ref sandboxing "sandbox" denies the connection; raised as it is
         @throw FILESYSTEM-ACCESS-DENIED the @ref sandboxing "sandbox" denies the file of a UNIX domain socket
-        @throw HTTPCLIENT-TIMEOUT no transport error was recorded; the readiness wait
-        genuinely timed out
+
+        @throw HTTPCLIENT-TIMEOUT no transport error was recorded; the readiness wait genuinely timed out; the
+        description names the target and the time waited, and the argument has \c host, \c port and \c timeout_ms
     */
-    private throwConnectWaitExpired() {
+    private throwConnectWaitExpired(int waited_ms) {
         *hash<auto> err = conn.getPollOperation().getError();
         bool reserved = reservation_held;
         reservation_held = False;
@@ -330,7 +333,15 @@ public class HttpClientStreamHandle {
         if (ready_wait_deadline_bound) {
             request_deadline_expired = True;
         }
-        throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+        hash<HttpClientConnectionInfo> info = conn.getConnectionInfo();
+        # a UNIX domain socket has no port
+        string target = info.port ? sprintf("%s:%d", info.host, info.port) : info.host;
+        throw "HTTPCLIENT-TIMEOUT", sprintf("connection establishment timed out: the connection to %s was not "
+            "established before the time of the request ran out (after a wait of %d ms)", target, waited_ms), {
+            "host": info.host,
+            "port": info.port,
+            "timeout_ms": waited_ms,
+        };
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
@@ -744,10 +755,10 @@ public class HttpClientStreamHandle {
                 : connect_timeout * 2;
             ready_wait_deadline_bound = deadline_bound;
             if (remaining_ms <= 0) {
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(0);
             }
             if (!conn.waitForReady(timeout_ms: remaining_ms)) {
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(remaining_ms);
             }
         }
 
@@ -842,14 +853,15 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
+            timeout ready_wait = getReadyWait();
+            if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
                         state = HttpClientStreamState::Pending;
                     }
                 }
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(ready_wait);
             }
         }
 
@@ -1054,14 +1066,15 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
+            timeout ready_wait = getReadyWait();
+            if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
                         state = HttpClientStreamState::Pending;
                     }
                 }
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(ready_wait);
             }
         }
 

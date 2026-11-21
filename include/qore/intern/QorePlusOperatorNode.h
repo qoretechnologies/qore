@@ -46,7 +46,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        qore_string_private::get(str)->concat(&plus_str);
+        qore_string_private::get(str)->concatAsciiName(plus_str);
         return 0;
     }
 

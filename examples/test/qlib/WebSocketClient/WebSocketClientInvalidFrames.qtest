@@ -28,6 +28,8 @@
       whose reason is not valid UTF-8 (qore#6604)
     - a close frame with a one-byte payload or a close code that a close frame may not have (RFC 6455 section 7.4)
       closes it with 1002 (qore#6755); a valid close code is answered with the same code
+    - a data frame, a continuation frame included, with an RSV bit that no negotiated extension defines closes it with
+      1002 (RFC 6455 section 5.2, qore#6810)
 
     The server sends the frames with WebSocketConnection::send() with an opcode, which sends what it is given.
 */
@@ -101,6 +103,23 @@ class BadFrameConnection inherits WebSocketConnection {
                 sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True, WS_RSV1));
                 break;
             }
+            # RSV bits on a data frame that no negotiated extension defines (RFC 6455 section 5.2; issue #6810):
+            # "rsv-data:<bits>"
+            case =~ /^rsv-data:/:
+                sendEncoded(ws_encode_message("rsv", WSOP_Text, NOTHING, True, msg.substr(9).toInt()));
+                break;
+            # RSV2 on a continuation frame of a message, which the extensions do not see (issue #6810)
+            case "rsv2-continuation":
+                sendEncoded(ws_encode_message("frag", WSOP_Text, NOTHING, False));
+                sendEncoded(ws_encode_message("mented", WSOP_Continuation, NOTHING, True, WS_RSV2));
+                break;
+            # RSV2 on a continuation frame of a compressed message (issue #6810)
+            case "rsv2-continuation-deflate": {
+                binary payload = deflate_raw("fragmented café");
+                sendEncoded(ws_encode_message(payload.substr(0, 4), WSOP_Text, NOTHING, False, WS_RSV1));
+                sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True, WS_RSV2));
+                break;
+            }
             # a fragmented compressed message, RSV1 on its first frame only
             case "fragmented": {
                 binary payload = deflate_raw("fragmented café");
@@ -157,6 +176,9 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
             addTestCase(sprintf("HTTP/%s: close frame with a one-byte payload", ver), \testCloseOneByte(), ver);
             addTestCase(sprintf("HTTP/%s: RSV bits on a control frame", ver), \testRsvControl(), ver);
             addTestCase(sprintf("HTTP/%s: RSV1 on a continuation frame", ver), \testRsvContinuation(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV bits on a data frame that no extension defines", ver),
+                \testRsvData(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV2 on a continuation frame", ver), \testRsv2Continuation(), ver);
             addTestCase(sprintf("HTTP/%s: invalid close codes", ver), \testInvalidCloseCodes(), ver);
             addTestCase(sprintf("HTTP/%s: valid close codes", ver), \testValidCloseCodes(), ver);
         }
@@ -324,6 +346,42 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
         on_exit wsc.disconnect();
         wsc.send("rsv-continuation");
         assertClosed(events, deflate, WSCC_ProtocolError, "RSV1 on a continuation frame");
+    }
+
+    #! qore#6810: the RSV bits of a data frame are checked against the negotiated extensions
+    testRsvData(string ver) {
+        # without an extension, no RSV bit may be set
+        foreach int rsv in ((WS_RSV1, WS_RSV2, WS_RSV3)) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/plain", events);
+            on_exit wsc.disconnect();
+            wsc.send("rsv-data:" + rsv);
+            assertClosed(events, plain, WSCC_ProtocolError, sprintf("RSV bits 0x%x without an extension", rsv));
+        }
+        # permessage-deflate defines RSV1 only
+        foreach int rsv in ((WS_RSV2, WS_RSV3)) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+            on_exit wsc.disconnect();
+            wsc.send("rsv-data:" + rsv);
+            assertClosed(events, deflate, WSCC_ProtocolError, sprintf("RSV bits 0x%x with permessage-deflate", rsv));
+        }
+    }
+
+    #! qore#6810: the RSV bits of a continuation frame, which the extensions do not see, are checked too
+    testRsv2Continuation(string ver) {
+        {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/plain", events);
+            on_exit wsc.disconnect();
+            wsc.send("rsv2-continuation");
+            assertClosed(events, plain, WSCC_ProtocolError, "RSV2 on a continuation frame without an extension");
+        }
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        wsc.send("rsv2-continuation-deflate");
+        assertClosed(events, deflate, WSCC_ProtocolError, "RSV2 on a continuation frame with permessage-deflate");
     }
 
     testInvalidCloseCodes(string ver) {
