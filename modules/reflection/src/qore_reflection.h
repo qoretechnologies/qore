@@ -34,6 +34,7 @@
 #define _QORE_MODULE_REFLECTION_QORE_REFLECTION_H
 
 #include "qore/Qore.h"
+#include "qore/QoreSandboxManager.h"
 
 //! ClassAccessInfo hashdecl
 DLLLOCAL extern const TypedHashDecl* hashdeclClassAccessInfo;

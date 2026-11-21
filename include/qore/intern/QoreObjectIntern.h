@@ -697,6 +697,32 @@ public:
     DLLLOCAL int checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
             const qore_class_private& reader_ctx, ExceptionSink* xsink) const;
 
+    //! Checks a call of a method with the given access on the object by the code of the current class context
+    //! (qore#7102)
+    /** The code of a class that sandboxed code declared cannot call a non-public method of an object that its sandbox
+        did not create, with the exemptions of the sandboxed write and read rules (sandboxedWriterDenied()): calling a
+        method of an object is a read or a change of its state that the method's class does not offer to every caller.
+        A call of a public method, and one while no code in the process is sandboxed, costs a compare and a load and
+        a branch; must be called before the call switches to the method's class context
+
+        @param obj the object of the call
+        @param access the access of the method variant called
+        @param mname the name of the method, for the exception
+
+        @return 0 if the call is allowed, -1 if \c SANDBOX-OBJECT-ACCESS-ERROR was raised
+    */
+    DLLLOCAL static int checkSandboxedMethodCall(const QoreObject* obj, ClassAccess access, const char* mname,
+            ExceptionSink* xsink) {
+        if (!qore_sandboxed_code_present.load(std::memory_order_relaxed) || access <= Public || !obj) {
+            return 0;
+        }
+        return checkSandboxedMethodCallIntern(*obj, mname, xsink);
+    }
+
+    //! see checkSandboxedMethodCall()
+    DLLLOCAL static int checkSandboxedMethodCallIntern(const QoreObject& obj, const char* mname,
+            ExceptionSink* xsink);
+
     //! Returns the class context with which code of class \a class_ctx reads the members of the object as a whole
     /** \a class_ctx, or nullptr (the public members only) if the sandboxed read rule refuses the code the
         non-public members of the object (qore#7033); must be called without the object's lock

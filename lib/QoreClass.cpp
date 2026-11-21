@@ -10731,6 +10731,10 @@ MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVari
 
 QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
     //QORE_TRACE("UserMethodVariant::evalMethod()");
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
+    if (qore_object_private::checkSandboxedMethodCall(self, getAccess(), qmethod->getName(), xsink)) {
+        return QoreValue();
+    }
     if (synchronized) {
         return evalSynchronizedMethod(self, ceh, xsink);
     }

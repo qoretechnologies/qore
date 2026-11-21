@@ -1308,6 +1308,48 @@ DLLEXPORT bool qore_caller_tenant_isolated();
 #define QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL 1
 // ---- end of sandbox enforcement level: caller query ----
 
+// ---- sandbox object owner check (QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK) ----
+class QoreObject;
+
+//! Returns true if the calling code may change or read the state of an object as its owner
+/** Trusted code may change any object.  Code that is sandboxed or acts for sandboxed code (as decided for
+    qore_check_process_wide_registration()), at the enforcement level @ref QSEL_TENANT_ISOLATION, may change an object
+    only if its sandbox created it: if every sandbox manager at that level that governs the code also governed the
+    creation of the object; code that only sandboxes at the level @ref QSEL_CODE_SAFETY govern owns every object.
+    It fails closed: sandboxed code that no sandbox manager governs, and code whose sandbox cannot be resolved, owns
+    no object.  The C++ counterpart of \c SandboxManager::isObjectOwnedByCaller().
+
+    A binary module's setter of state that other code relies on (such as a logger of an object that can be shared)
+    uses qore_check_caller_owns_object(); code that passes such state on to another object as a side effect of an
+    operation for its caller uses this function to leave the change out.
+
+    @param obj the object to check
+
+    @return true if the calling code is trusted or its sandbox created \a obj, false if not
+
+    @since Qore 3.0
+*/
+DLLEXPORT bool qore_caller_owns_object(const QoreObject& obj);
+
+//! Refuses a change to an object by sandboxed code whose sandbox did not create it
+/** Decides as qore_caller_owns_object() does.  The C++ counterpart of \c SandboxManager::checkObjectOwnedByCaller().
+
+    @param obj the object to check
+    @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
+    @param xsink raises \c SANDBOX-OBJECT-ACCESS-ERROR if the calling code does not own \a obj
+
+    @return 0 if the calling code owns \a obj, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_check_caller_owns_object(const QoreObject& obj, const char* what, ExceptionSink* xsink);
+
+//! defined if qore_caller_owns_object() and qore_check_caller_owns_object() are available
+/** @since %Qore 3.0
+*/
+#define QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK 1
+// ---- end of sandbox object owner check ----
+
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language

@@ -1,0 +1,373 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - method calls of JIT-compiled and qcc-compiled native code (an executable)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The code of a class that sandboxed code declared cannot call a non-public method of an object that its sandbox did
+# not create (issue #7102): a subclass reaches the private methods of its base classes on every object of the
+# hierarchy, so without the rule a tenant's subclass could read or change the state of an object that the host or
+# another tenant created through a method that the class does not offer to every caller, such as the private accessor
+# of the logger of a LoggerWrapper.  Every route (a call from an instance method, from a static method, through a
+# call reference, a closure and the reflection API) is refused with SANDBOX-OBJECT-ACCESS-ERROR in every execution
+# mode of the tenant's code and in a qcc-compiled host; calls of self, of the tenant's own objects, of public methods,
+# code-safety sandboxes and trusted code are not affected.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires ../../TestInterpreter.qm
+
+%exec-class SandboxPrivateMethodCallTest
+
+#! the class whose private method the tenants' subclass calls; declared by trusted code, the Programs that it creates
+#! inherit it
+public class Target {
+    private {
+        string s = "secret";
+    }
+
+    string pub() {
+        return "public";
+    }
+
+    private string priv() {
+        return s;
+    }
+}
+
+#! the code of the tenants (and of a trusted Program, where it is not restricted)
+const TenantSource = "%modern
+%requires Logger
+%requires reflection
+
+#! the call forms
+const Forms = (
+    \"instance\", \"static\", \"call-ref\", \"closure\", \"call-object-method\", \"public\",
+);
+
+class TSub inherits Target {
+    #! calls the private method of the object from an instance method
+    string viaInstance(Target w) {
+        return w.priv();
+    }
+
+    #! calls the private method of the object with the given form; returns the result or the exception code
+    static string run(string form, Target w) {
+        try {
+            switch (form) {
+                case \"instance\": return (new TSub()).viaInstance(w);
+                case \"static\": return w.priv();
+                case \"call-ref\": { code c = \\w.priv(); return c(); }
+                case \"closure\": { code c = string sub () { return w.priv(); }; return c(); }
+                case \"call-object-method\": return call_object_method(w, \"priv\");
+                case \"public\": return w.pub();
+                default: throw \"UNKNOWN-FORM\", form;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! calls the private method of self
+    string callSelf() {
+        try {
+            code c = \\priv();
+            return sprintf(\"%s %s %s\", priv(), self.priv(), c());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! the subclass of LoggerWrapper that gets the logger of an object with the class's private accessor
+class LSub inherits Logger::LoggerWrapper {
+    #! gets the logger of the object with the given route
+    static string getLoggerOf(Logger::LoggerWrapper w, string route = \"direct\") {
+        try {
+            *Logger::LoggerInterface l;
+            switch (route) {
+                case \"direct\": l = w.getLogger(); break;
+                case \"call-ref\": { code c = \\w.getLogger(); l = c(); break; }
+                case \"reflection-method\":
+                    l = Reflection::Class::forName(\"Logger::LoggerWrapper\").getNormalMethod(\"getLogger\")
+                        .call(w);
+                    break;
+                case \"reflection-variant\":
+                    l = Reflection::Class::forName(\"Logger::LoggerWrapper\").getNormalMethod(\"getLogger\")
+                        .getVariants()[0].call(w);
+                    break;
+                default: throw \"UNKNOWN-ROUTE\", route;
+            }
+            return l ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! calls the private method of the object with every form and returns the results
+hash<string, string> sub run_all(Target w, int count = 2) {
+    hash<string, string> rv;
+    foreach string form in (Forms) {
+        hash<string, bool> r;
+        for (int i = 0; i < count; ++i) {
+            r{TSub::run(form, w)} = True;
+        }
+        rv{form} = (keys r).join(\"|\");
+    }
+    return rv;
+}
+
+Target sub make_target() {
+    return new Target();
+}
+
+TSub sub make_sub() {
+    return new TSub();
+}
+
+string sub call_self(TSub t) {
+    return t.callSelf();
+}
+
+#! gets the logger of the object with every route
+hash<string, string> sub get_logger_of(Logger::LoggerWrapper w) {
+    return map {$1: LSub::getLoggerOf(w, $1)},
+        (\"direct\", \"call-ref\", \"reflection-method\", \"reflection-variant\");
+}
+
+Logger::LoggerWrapper sub make_wrapper() {
+    return new Logger::LoggerWrapper(new Logger::Logger(\"own\"));
+}
+
+hash<string, string> sub run_all_background(Target w) {
+    Queue q();
+    background q.push(run_all(w));
+    return q.get();
+}
+";
+
+#! the host compiled with qcc: it runs a tenant, whose code it reads from the file given as its argument
+const AotHostSource = "%modern
+%requires Logger
+public class Target {
+    private {
+        string s = \"secret\";
+    }
+
+    string pub() {
+        return \"public\";
+    }
+
+    private string priv() {
+        return s;
+    }
+}
+
+class HostSub inherits Target {
+    static string call(Target w) {
+        try {
+            return w.priv();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.setSandboxManager(new SandboxManager());
+p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"tenant\");
+Target host_obj();
+hash<string, string> r = p.callFunction(\"run_all\", host_obj);
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-host.%s=%s\\n\", i.key, i.value);
+}
+r = p.callFunction(\"run_all\", p.callFunction(\"make_target\"));
+foreach hash<auto> i in (r.pairIterator()) {
+    printf(\"tenant-on-own.%s=%s\\n\", i.key, i.value);
+}
+printf(\"host-on-host=%s\\n\", HostSub::call(host_obj));
+printf(\"host-on-tenant=%s\\n\", HostSub::call(p.callFunction(\"make_target\")));
+";
+
+class SandboxPrivateMethodCallTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the exception of a refused call
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the routes to the logger of a LoggerWrapper
+        const LoggerRoutes = ("direct", "call-ref", "reflection-method", "reflection-variant");
+
+        #! the results of every form on an object that the caller owns
+        const Owned = {
+            "instance": "secret",
+            "static": "secret",
+            "call-ref": "secret",
+            "closure": "secret",
+            # a builtin function has no class context: a private method cannot be called with it from anywhere
+            "call-object-method": "METHOD-IS-PRIVATE",
+            "public": "public",
+        };
+
+        #! the results of every form on an object that the caller's sandbox did not create
+        const Refused = {
+            "instance": Err,
+            "static": Err,
+            "call-ref": Err,
+            "closure": Err,
+            "call-object-method": "METHOD-IS-PRIVATE",
+            "public": "public",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed private method call", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        foreach string mode in (keys ExecModes) {
+            addTestCase("tenant calls in " + mode, getTenantTest(mode));
+        }
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
+        addTestCase("qcc-compiled host -O3", sub () { aotHostTest(3); });
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code getTenantTest(string mode) {
+        return sub () { tenantTest(mode); };
+    }
+
+    #! creates a Program with the tenants' code
+    private static Program tenant(string mode, bool sandboxed = True, int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a Program created at runtime does not take the execution mode of the command line
+        p.setExecMode(ExecModes{mode});
+        if (sandboxed) {
+            SandboxManager sm();
+            if (level != QSEL_TENANT_ISOLATION) {
+                sm.setEnforcementLevel(level);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    tenantTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+
+        Target host_obj();
+        assertEq(Refused, a.callFunction("run_all", host_obj, count), mode + ": A on the host's object");
+        assertEq(Refused, a.callFunction("run_all", b.callFunction("make_target"), count), mode + ": A on B's object");
+        assertEq(Refused, a.callFunction("run_all_background", host_obj), mode + ": A's thread");
+
+        # the private accessor of the logger of a LoggerWrapper
+        LoggerWrapper host_wrapper(new Logger("host"));
+        assertEq((map {$1: Err}, LoggerRoutes), a.callFunction("get_logger_of", host_wrapper),
+            mode + ": A gets the host's logger");
+        assertEq((map {$1: "logger"}, LoggerRoutes),
+            a.callFunction("get_logger_of", a.callFunction("make_wrapper")), mode + ": A gets its own logger");
+
+        # the tenant's own objects and self
+        assertEq(Owned, a.callFunction("run_all", a.callFunction("make_target"), count),
+            mode + ": A on its own object");
+        assertEq(Owned, a.callFunction("run_all", a.callFunction("make_sub"), count),
+            mode + ": A on its own subclass object");
+        assertEq("secret secret secret", a.callFunction("call_self", a.callFunction("make_sub")), mode + ": A on self");
+
+        # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
+        Program safe = tenant(mode, True, QSEL_CODE_SAFETY);
+        assertEq(Owned, safe.callFunction("run_all", host_obj, count), mode + ": code safety on the host's object");
+        assertEq((map {$1: "logger"}, LoggerRoutes), safe.callFunction("get_logger_of", host_wrapper),
+            mode + ": code safety gets the logger");
+    }
+
+    trustedTest() {
+        Program t = tenant("ast", False);
+        Program a = tenant("ast");
+        assertEq(Owned, t.callFunction("run_all", new Target()), "trusted code on the host's object");
+        assertEq(Owned, t.callFunction("run_all", a.callFunction("make_target")), "trusted code on a tenant's object");
+        assertEq((map {$1: "logger"}, LoggerRoutes),
+            t.callFunction("get_logger_of", new LoggerWrapper(new Logger("host"))), "trusted code gets the logger");
+    }
+
+    aotHostTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-private-method-call-aot-host-");
+        string src = tmp.path + DirSep + "host.q";
+        write(src, AotHostSource);
+        string exe = tmp.path + DirSep + "host";
+        string tenant_src = tmp.path + DirSep + "tenant.q";
+        write(tenant_src, TenantSource);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "-O%d -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, exe,
+            src));
+        if (!is_file(exe)) {
+            throw "COMPILE-ERROR", out;
+        }
+        int status;
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>&1", libqore_dir,
+            libqore_dir, ENV.QORE_MODULE_DIR ?? "", exe, tenant_src), \status);
+        hash<string, string> results;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z.-]+)=(.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        hash<string, string> expected;
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            expected{"tenant-on-host." + i.key} = i.value;
+        }
+        foreach hash<auto> i in (Owned.pairIterator()) {
+            expected{"tenant-on-own." + i.key} = i.value;
+        }
+        expected."host-on-host" = "secret";
+        expected."host-on-tenant" = "secret";
+        assertEq(expected, results, "compiled host output:\n" + out);
+        assertEq(0, status);
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

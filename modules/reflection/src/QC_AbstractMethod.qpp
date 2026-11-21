@@ -41,6 +41,10 @@ int check_call(QoreObject* obj, const QoreMethod& m, ExceptionSink* xsink) {
         xsink->raiseException("METHOD-ERROR", "object is of class '%s' which is not compatible with method '%s()' of class '%s'", obj->getClassName(), m.getName(), m.getClassName());
         return -1;
     }
+    // a non-public method of an object only for the code that owns the object (qore#7102)
+    if (m.isPrivate() && qore_check_caller_owns_object(*obj, "call a non-public method of", xsink)) {
+        return -1;
+    }
     return 0;
 }
 

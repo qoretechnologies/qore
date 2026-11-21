@@ -1719,15 +1719,14 @@ setLogger(*LoggerInterface logger) {
     @since %Qore 3.0
 */
 static nothing SandboxManager::checkObjectOwnedByCaller(object obj, string what) {
-    if (qore_caller_created_object(*obj)) {
+    if (qore_caller_owns_object(*obj)) {
         return QoreValue();
     }
     TempEncodingHelper str(what, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
-        "%s an object of class '%s' that its sandbox did not create", str->c_str(), obj->getClassName());
+    qore_check_caller_owns_object(*obj, str->c_str(), xsink);
 }
 
 //! Returns the ID of the caller %Program: the %Program whose code called the running code

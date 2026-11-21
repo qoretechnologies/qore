@@ -586,6 +586,12 @@ authenticate();
     creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
     an object of its own with the state of an object that its sandbox did not create.
 
+    Nor can the code of such a class call a non-public method of such an object, with the same exemptions, as calling
+    it reads or changes state of the object that its class does not offer to every caller: the call is refused with
+    \c SANDBOX-OBJECT-ACCESS-ERROR from a method of the class, a static method, a closure, a call reference and the
+    reflection API, in every execution mode.  A binary module applies the same owner check to its own state with
+    \c qore_caller_owns_object() and \c qore_check_caller_owns_object() (\c QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK).
+
     Trusted code that changes state of an object that other code relies on for its caller can decide in the same way
     for the code that calls it: @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()" refuses a sandboxed
     caller whose sandbox did not create the object, with

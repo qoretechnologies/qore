@@ -6750,6 +6750,16 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     QoreSandboxProvenanceHelper provenance(self);
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
+    if (qore_sandboxed_code_present.load(std::memory_order_relaxed) && method && !method->isStatic()) {
+        const AbstractQoreFunctionVariant* access_variant = inst->variant
+            ? inst->variant : getSingleInterpreterMethodVariant(method);
+        if (access_variant && qore_object_private::checkSandboxedMethodCall(self,
+                METHV_const(access_variant)->getAccess(), method->getName(), xsink)) {
+            result = QoreValue();
+            return true;
+        }
+    }
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);

@@ -21720,6 +21720,13 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     if (!variant) {
         return false;
     }
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
+    if (qore_sandboxed_code_present.load(std::memory_order_relaxed) && !method->isStatic()
+            && qore_object_private::checkSandboxedMethodCall(o, METHV_const(variant)->getAccess(), method->getName(),
+                xsink)) {
+        result = toBits(QoreValue());
+        return true;
+    }
     // copy() must go through dispatch_method_on_object → execCopy to create a new object; the length and the bytes
     // of the name are compared inline (a std::string == const char* that the compiler leaves out of line calls
     // strlen() at every call)

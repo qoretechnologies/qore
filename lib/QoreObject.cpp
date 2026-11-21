@@ -1618,6 +1618,23 @@ void qore_object_private::setCopyProvenance(const qore_object_private& source) {
     sandbox_provenance = src;
 }
 
+int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, const char* mname,
+        ExceptionSink* xsink) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    // no class context (no access to non-public methods besides a call of self), or a call of self
+    if (!class_ctx || &obj == runtime_get_stack_object()) {
+        return 0;
+    }
+    const qore_object_private* priv = obj.priv;
+    if (!priv->sandboxedWriterDeniedIntern(*class_ctx)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
+        "cannot call non-public method '%s()' of an object of class '%s' that its sandbox did not create",
+        class_ctx->name.c_str(), mname, priv->theclass->getName());
+    return -1;
+}
+
 bool qore_object_private::callerReadsNonPublicMembersIntern() const {
     // the code of a class that trusted code declared reads as it did before the rule, also for a sandboxed caller; a
     // builtin class (such as Serializable) reads for its caller, which decides

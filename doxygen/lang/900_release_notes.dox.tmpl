@@ -1596,6 +1596,11 @@
     ownership; see @ref sandbox_object_ownership
     (<a href="https://github.com/qoretechnologies/qore/issues/7033">issue 7033</a>).
 
+    @par Sandboxed Code Calls Only the Public Methods of the Objects That Other Code Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot call a non-public method of an object
+    that its sandbox did not create, and binary modules check owners with the new \c qore_check_caller_owns_object();
+    see @ref sandbox_object_ownership (<a href="https://github.com/qoretechnologies/qore/issues/7102">issue 7102</a>).
+
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
     pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and

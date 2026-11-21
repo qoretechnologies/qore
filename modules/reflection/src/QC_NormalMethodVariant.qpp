@@ -39,6 +39,10 @@ int check_variant_call(const QoreExternalVariant* v, QoreObject* obj, const Qore
     }
 
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v);
+    // a non-public variant of an object only for the code that owns the object (qore#7102)
+    if (mv->getAccess() > Public && qore_check_caller_owns_object(*obj, "call a non-public method of", xsink)) {
+        return -1;
+    }
     // we have to explicitly check for abstract methods here and throw an exception
     if (mv->isAbstract()) {
         xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",

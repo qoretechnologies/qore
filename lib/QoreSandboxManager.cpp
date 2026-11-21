@@ -2228,6 +2228,21 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
     return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
+bool qore_caller_owns_object(const QoreObject& obj) {
+    return qore_caller_created_object(obj);
+}
+
+int qore_check_caller_owns_object(const QoreObject& obj, const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    if (qore_caller_created_object(obj)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "%s an object of class '%s' that its sandbox did not create", what, obj.getClassName());
+    return -1;
+}
+
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
     assert(what);
     assert(xsink);
