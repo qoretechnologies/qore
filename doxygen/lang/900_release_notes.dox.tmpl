@@ -2540,7 +2540,8 @@
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
     - fixed a crash when the members of a deleted object are merged into another object with the
-      @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception
+      @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
+      merge into a deleted object also when there is nothing to merge
       (<a href="https://github.com/qoretechnologies/qore/issues/7055">issue 7055</a>)
     - a method whose own variants are @ref private_methods "private" can be called from outside the class hierarchy
       with a public variant that it inherits (see @ref inheritance), also by a call resolved at run time and in the IR
