@@ -157,7 +157,8 @@ public class DeferredOutputTypesTest inherits QUnit::Test {
         p.loadModule("DataProvider");
         p.parse("int sub recover() { return DataProviderActionCatalog::cacheAllRegisteredApps(); }", "recovery");
         assertTrue(p.callFunction("recover") > 0);
-        string expected = sprintf("[caller Program %d] Data provider app %y:", p.getProgramId(), app);
+        string expected = sprintf("[caller Program %d] [app %y] Cannot resolve action output types: "
+            "ACTION-OUTPUT-TYPE-ERROR:", p.getProgramId(), app);
         assertTrue((select logger.messages, $1.startsWith(expected)).size() > 0, "the diagnostic identifies the caller");
     }
 

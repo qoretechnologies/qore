@@ -753,8 +753,9 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     names += sprintf("%s%s (%s)", failure.app, exists failure.action ? "/" + failure.action : "",
                         failure.error);
                 }
-                ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
-                    failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
+                ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug,
+                    "[app %y] unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
+                    failure.app, failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
                     failure.error, failure.description);
             }
         }
@@ -850,7 +851,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             }
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, dependencies;
-                map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), dependencies;
+                map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug,
+                    "[app %y] Registered dependency %y", app.name, $1), dependencies;
             }
             if (app.scheme) {
                 *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(app.scheme);
@@ -864,7 +866,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                 }
                 foreach string dependency in (dependencies) {
                     map index.schememap{$1}{dependency} = True, keys info.schemes;
-                    map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered scheme %y -> %y", $1, dependency), keys info.schemes;
+                    map ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug,
+                        "[app %y] Registered scheme %y from %y", app.name, $1, dependency), keys info.schemes;
                 }
             }
         }
@@ -2397,7 +2400,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }
 
             index.factorymap{factory_name} = mod;
-            ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory_name, mod);
+            ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug, "[module %y] Registered factory %y",
+                mod, factory_name);
         }
     }
 }
