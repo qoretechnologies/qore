@@ -1,0 +1,722 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RestConnectionKeyFallback.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires HttpServerUtil
+%requires HttpServer
+%requires ShippoRestClient
+%requires KlaviyoRestClient
+%requires ConfluenceRestClient
+%requires KitRestClient
+%requires ApolloRestClient
+
+%exec-class RestConnectionKeyFallbackTest
+
+#! The URL of a local port that nothing listens on; no request in this test leaves the host
+const NoServer = "http://127.0.0.1:9";
+
+#! OAuth2 options of the test schemes: the authorization code grant by default, at local URLs
+const OAuth2Defaults = RestConnection::ConnectionScheme.options + {
+    "oauth2_grant_type": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+        "default_value": "authorization_code",
+    }),
+    "oauth2_auth_url": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+        "default_value": NoServer + "/oauth2/authorize",
+    }),
+    "oauth2_token_url": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_token_url, {
+        "default_value": NoServer + "/oauth2/token",
+    }),
+    "oauth2_redirect_url": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_redirect_url,
+        {
+        "default_value": "http://127.0.0.1:9/callback",
+    }),
+};
+
+#! A sensitive API key option
+const ApiKeyOption = <ConnectionOptionInfo>{
+    "display_name": "API Key",
+    "short_desc": "An API key",
+    "type": "string",
+    "desc": "An API key",
+    "sensitive": True,
+};
+
+#! A connection whose scheme is given by its subclass
+class TestKeyConnection inherits RestConnection {
+    constructor(string name, hash<auto> opts, string url) : RestConnection(name, "test", url, {}, opts) {
+    }
+
+    #! Does not check the required options, so that a connection can lack the OAuth2 client ID and secret
+    /** The platform supplies them from its API servers, so a connection's own options can lack them
+    */
+    private hash<auto> validateOptions(hash<auto> options, bool check_required = True) {
+        return RestConnection::validateOptions(options, False);
+    }
+
+    #! Returns the OAuth2 grant type the connection publishes
+    *string grantType() {
+        return getOAuth2GrantType();
+    }
+
+    #! Returns the result of the hook under test
+    bool nonOAuth2() {
+        return usesNonOAuth2Credential();
+    }
+}
+
+#! OAuth2 first, an API key as the fallback (Deel, Shippo)
+class ApiKeyConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "API Key Fallback",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("ApiKeyConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults + {"apikey": ApiKeyOption},
+            "required_options": "oauth2_client_id,oauth2_client_secret|apikey",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("apikey", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! OAuth2 first, a token as the fallback (Klaviyo, GitHub, GitLab, Intercom)
+class TokenConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Token Fallback",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("TokenConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults,
+            "required_options": "oauth2_client_id,oauth2_client_secret|token",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("token", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! The token first, as older modules name it (Google, Wave, Linear)
+class TokenFirstConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Token First",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("TokenFirstConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults,
+            "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,oauth2_client_id,"
+                "oauth2_client_secret",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("token-first", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! An identifier shared by both alternatives (Freshsales)
+class SharedDomainConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Shared Domain",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("SharedDomainConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults + {
+                "apikey": ApiKeyOption,
+                "domain": <ConnectionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "the domain",
+                    "type": "string",
+                    "desc": "the domain",
+                },
+            },
+            "required_options": "domain,oauth2_client_id,oauth2_client_secret|domain,apikey",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("domain", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! An alternative of an identifier only, which is no credential (Confluence)
+class SiteConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Site",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("SiteConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults + {
+                "site": <ConnectionOptionInfo>{
+                    "display_name": "Site",
+                    "short_desc": "the site",
+                    "type": "string",
+                    "desc": "the site",
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret|site",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("site", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! HTTP basic authentication as the fallback of the password grant
+class PasswordConnection inherits TestKeyConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Password",
+            "short_desc": "test",
+            "desc": "test",
+            "cls": Class::forName("PasswordConnection"),
+            "schemes": {"rest": True},
+            "base_scheme_map": {"http": "rest"},
+            "options": OAuth2Defaults + {
+                "oauth2_grant_type": connection_option_override(OAuth2Defaults.oauth2_grant_type, {
+                    "default_value": "password",
+                }),
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret|username,password",
+        };
+    }
+
+    constructor(hash<auto> opts, string url = NoServer) : TestKeyConnection("password", opts, url) {
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! A local stand-in for a token endpoint and an API that records the requests it gets
+class StandInHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? body.toString() : NOTHING,
+        };
+        if (hdr.path == "oauth2/token") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "access_token": "new-access-token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "refresh_token": "new-refresh-token",
+                }),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"ok": True}),
+        };
+    }
+}
+
+#! A connection that offers OAuth2 with a key as the fallback does not use its defaulted grant with the key (qore#6901)
+/** No credentials and no network: connections are inspected, and the only requests go to a local stand-in.
+*/
+public class RestConnectionKeyFallbackTest inherits QUnit::Test {
+    constructor() : Test("RestConnectionKeyFallback", "1.0", \ARGV, Opts) {
+        addTestCase("key-only connection", \keyOnlyTest());
+        addTestCase("OAuth2 without a key", \oauth2WithoutKeyTest());
+        addTestCase("authorized OAuth2 connection", \authorizedOAuth2Test());
+        addTestCase("token fallback", \tokenFallbackTest());
+        addTestCase("identifiers and shared options", \identifierTest());
+        addTestCase("password grant", \passwordGrantTest());
+        addTestCase("no fallback", \noFallbackTest());
+        addTestCase("refresh against a stand-in", \refreshStandInTest());
+        addTestCase("Shippo, Klaviyo and Confluence key-only connections", \shippoKlaviyoTest());
+        addTestCase("Kit and Apollo key-only connections", \kitApolloTest());
+        set_return_value(main());
+    }
+
+    #! A key-only connection is up, needs no authorization, claims no OAuth2 and creates clients without OAuth2
+    keyOnlyTest() {
+        ApiKeyConnection conn({"apikey": "key-1"});
+        assertKeyOnly(conn);
+        # the defaulted grant type is among the connection's own options, which are not changed
+        assertEq("authorization_code", conn.opts.oauth2_grant_type);
+
+        # an authorization failure does not make it need authorization
+        conn.authFailure();
+        assertFalse(conn.needsAuth());
+
+        # both clients are created without the OAuth2 options; with the defaulted grant and no client ID, both
+        # would raise OAUTH2-ERROR
+        RestClient client = conn.get(False);
+        assertFalse(client.usingOAuth2());
+        RestClientIo client_io = conn.getAsync(False);
+        on_exit client_io.close();
+        assertNothing(client_io.getOAuth2Options().oauth2_grant_type);
+        assertNothing(client_io.getOAuth2Options().oauth2_auth_url);
+
+        # a key given with OAuth2 credentials wins, as the clients that use it do
+        conn = new ApiKeyConnection({"apikey": "key-1", "oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertKeyOnly(conn);
+
+        # an empty key is no key
+        conn = new ApiKeyConnection({"apikey": "", "oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertFalse(conn.nonOAuth2());
+        assertEq("authorization_code", conn.grantType());
+    }
+
+    #! A connection without a key uses OAuth2, also when its client ID and secret are not among its options
+    oauth2WithoutKeyTest() {
+        # the client ID and secret are supplied by the platform; the connection still uses OAuth2
+        ApiKeyConnection conn({});
+        assertFalse(conn.nonOAuth2());
+        assertEq("authorization_code", conn.grantType());
+        assertTrue(conn.getExtendedInfo().oauth2);
+        assertEq("authorization_code", conn.getExtendedInfo().oauth2_grant_type);
+        assertTrue(conn.needsAuth());
+        # it cannot connect until it has them and is authorized
+        assertFalse(conn.getInfo().up);
+        assertEq("authorization_code", conn.getConnectionOptions().oauth2_grant_type);
+
+        conn = new ApiKeyConnection({"oauth2_client_id": "id", "oauth2_client_secret": "secret"});
+        assertFalse(conn.nonOAuth2());
+        assertTrue(conn.getFeatures(){RestConnection::RCF_OAUTH2});
+        assertTrue(conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH_CODE});
+        assertTrue(conn.getFeatures(){RestConnection::RCF_OAUTH2_AUTH});
+        assertTrue(conn.needsAuth());
+        # not yet authorized
+        assertFalse(conn.getInfo().up);
+        assertRegex("not yet authorized", conn.getInfo().status);
+        hash<auto> opts = conn.getConnectionOptions();
+        assertEq("id", opts.oauth2_client_id);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertRegex("^" + NoServer + "/oauth2/authorize\\?", conn.getAuthorizationCodeRequest(<AuthCodeInfo>{
+            "state": "st",
+        }));
+    }
+
+    #! An authorized OAuth2 connection keeps its OAuth2 options, and its clients can refresh the token
+    authorizedOAuth2Test() {
+        hash<auto> authorized = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+            "oauth2_token_expiry": now_us() + 1h,
+        };
+        foreach TestKeyConnection conn in (new ApiKeyConnection(authorized), new TokenConnection(authorized),
+                new TokenFirstConnection(authorized)) {
+            string cls = conn.className();
+            assertFalse(conn.nonOAuth2(), cls);
+            assertTrue(conn.getInfo().up, cls);
+            assertFalse(conn.needsAuth(), cls);
+            assertEq("authorization_code", conn.grantType(), cls);
+            assertTrue(conn.getExtendedInfo().oauth2, cls);
+            hash<auto> opts = conn.getConnectionOptions();
+            assertEq("refresh-1", opts.oauth2_refresh_token, cls);
+            assertEq("authorization_code", opts.oauth2_grant_type, cls);
+            assertEq(NoServer + "/oauth2/token", opts.oauth2_token_url, cls);
+
+            # both clients keep the grant and the refresh token
+            RestClient client = conn.get(False);
+            assertTrue(client.usingOAuth2(), cls);
+            assertEq("refresh-1", client.getOAuth2Options().oauth2_refresh_token, cls);
+            RestClientIo client_io = conn.getAsync(False);
+            assertEq("authorization_code", client_io.getOAuth2Options().oauth2_grant_type, cls);
+            assertEq("refresh-1", client_io.getOAuth2Options().oauth2_refresh_token, cls);
+            client_io.close();
+        }
+
+        # an authorized connection whose client ID and secret come from the platform is still OAuth2
+        hash<auto> platform = authorized - ("oauth2_client_id", "oauth2_client_secret");
+        foreach TestKeyConnection conn in (new TokenConnection(platform), new TokenFirstConnection(platform),
+                new ApiKeyConnection(platform)) {
+            string cls = conn.className();
+            assertFalse(conn.nonOAuth2(), cls);
+            assertEq("authorization_code", conn.grantType(), cls);
+            assertTrue(conn.getExtendedInfo().oauth2, cls);
+            assertEq("refresh-1", conn.getConnectionOptions().oauth2_refresh_token, cls);
+            assertEq("authorization_code", conn.getConnectionOptions().oauth2_grant_type, cls);
+        }
+
+        # an expired token with no refresh token needs authorization again
+        TokenConnection conn(authorized - "oauth2_refresh_token" + {"oauth2_token_expiry": now_us() - 1h});
+        assertFalse(conn.nonOAuth2());
+        assertTrue(conn.needsAuth());
+    }
+
+    #! A token is the key only when nothing says it was acquired with OAuth2
+    tokenFallbackTest() {
+        foreach string cls in ("TokenConnection", "TokenFirstConnection") {
+            # a token alone is the fallback credential
+            TestKeyConnection conn = create_object(cls, {"token": "private-key-1"});
+            assertKeyOnly(conn, cls);
+            hash<auto> opts = conn.getConnectionOptions();
+            assertEq("private-key-1", opts.token, cls);
+            # both clients send the token as given
+            RestClient client = conn.get(False);
+            assertEq("Bearer private-key-1", client.getDefaultHeaders().Authorization, cls);
+            RestClientIo client_io = conn.getAsync(False);
+            assertEq("private-key-1", client_io.getOAuth2Options().token, cls);
+            client_io.close();
+
+            # a token with a refresh token was acquired with OAuth2
+            conn = create_object(cls, {"token": "access-1", "oauth2_refresh_token": "refresh-1"});
+            assertFalse(conn.nonOAuth2(), cls);
+            assertEq("authorization_code", conn.grantType(), cls);
+            assertEq("refresh-1", conn.getConnectionOptions().oauth2_refresh_token, cls);
+
+            # a token with an expiry was acquired with OAuth2 too, even without a refresh token
+            conn = create_object(cls, {"token": "access-1", "oauth2_token_expiry": now_us() + 1h});
+            assertFalse(conn.nonOAuth2(), cls);
+            assertEq("authorization_code", conn.grantType(), cls);
+
+            # a token with the client ID and secret belongs to the OAuth2 alternative
+            conn = create_object(cls, {"token": "access-1", "oauth2_client_id": "id", "oauth2_client_secret": "s"});
+            assertFalse(conn.nonOAuth2(), cls);
+            assertEq("authorization_code", conn.grantType(), cls);
+            assertTrue(conn.getInfo().up, cls);
+            assertEq("id", conn.getConnectionOptions().oauth2_client_id, cls);
+        }
+    }
+
+    #! An identifier is no credential, and an option shared with the OAuth2 alternative is not the key
+    identifierTest() {
+        # a site alone does not authenticate the connection
+        SiteConnection site({"site": "example"});
+        assertFalse(site.nonOAuth2());
+        assertEq("authorization_code", site.grantType());
+        assertFalse(site.getInfo().up);
+
+        # a site with HTTP basic authentication does: the alternative names no credential, so the generic ones count
+        site = new SiteConnection({"site": "example", "username": "user@example.com", "password": "api-token"});
+        assertKeyOnly(site);
+        RestClient client = site.get(False);
+        assertFalse(client.usingOAuth2());
+        RestClientIo client_io = site.getAsync(False);
+        on_exit client_io.close();
+        assertNothing(client_io.getOAuth2Options().oauth2_grant_type);
+
+        # as does a site with a token alone, while a token acquired with OAuth2 keeps OAuth2
+        site = new SiteConnection({"site": "example", "token": "token-1"});
+        assertKeyOnly(site);
+        site = new SiteConnection({"site": "example", "token": "access-1", "oauth2_refresh_token": "refresh-1"});
+        assertFalse(site.nonOAuth2());
+        assertEq("refresh-1", site.getConnectionOptions().oauth2_refresh_token);
+
+        # the domain of both alternatives with the key
+        SharedDomainConnection conn({"domain": "example", "apikey": "key-1"});
+        assertKeyOnly(conn);
+        assertEq("example", conn.getConnectionOptions().domain);
+
+        # the domain alone is the OAuth2 alternative waiting for its client ID and secret
+        conn = new SharedDomainConnection({"domain": "example"});
+        assertFalse(conn.nonOAuth2());
+        assertEq("authorization_code", conn.grantType());
+    }
+
+    #! The username and password are HTTP basic authentication unless the password grant has its client
+    passwordGrantTest() {
+        PasswordConnection conn({"username": "user", "password": "pass"});
+        assertKeyOnly(conn);
+        RestClient client = conn.get(False);
+        assertFalse(client.usingOAuth2());
+
+        conn = new PasswordConnection({"username": "user", "password": "pass", "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret"});
+        assertFalse(conn.nonOAuth2());
+        assertEq("password", conn.grantType());
+        assertTrue(conn.getFeatures(){RestConnection::RCF_OAUTH2_PASSWORD});
+        assertTrue(conn.getInfo().up);
+    }
+
+    #! A connection whose scheme offers no fallback is unchanged
+    noFallbackTest() {
+        RestConnection conn("plain", "test", NoServer, {}, {
+            "oauth2_grant_type": "authorization_code",
+            "token": "access-1",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_auth_url": NoServer + "/oauth2/authorize",
+            "oauth2_token_url": NoServer + "/oauth2/token",
+            "oauth2_redirect_url": NoServer + "/callback",
+        });
+        assertTrue(conn.getExtendedInfo().oauth2);
+        assertEq("authorization_code", conn.getConnectionOptions().oauth2_grant_type);
+
+        # a missing client ID still takes it down
+        conn = new RestConnection("plain", "test", NoServer, {}, {
+            "oauth2_grant_type": "client_credentials",
+        });
+        assertFalse(conn.getInfo().up);
+        assertRegex("oauth2_client_id", conn.getInfo().status);
+    }
+
+    #! An authorized connection's clients refresh an expired token at the token URL; a key-only one never asks for one
+    refreshStandInTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        StandInHandler handler();
+        server.setDefaultHandler("stand-in", handler);
+        string base = "http://127.0.0.1:" + port;
+
+        hash<auto> authorized = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_token_url": base + "/oauth2/token",
+            "token": "old-access-token",
+            "oauth2_refresh_token": "old-refresh-token",
+            "oauth2_token_expiry": now_us() - 1h,
+        };
+
+        # the synchronous client
+        TokenConnection conn(authorized, base + "/api");
+        RestClient client = conn.get(False);
+        client.get("ping");
+        assertEq(("oauth2/token", "api/ping"), (map $1.path, handler.requests));
+        hash<auto> form = mime_parse_form_urlencoded_string(handler.requests[0].body);
+        assertEq("refresh_token", form.grant_type);
+        assertEq("old-refresh-token", form.refresh_token);
+        assertEq("Bearer new-access-token", handler.requests[1].authorization);
+
+        # the asynchronous client
+        handler.requests = ();
+        conn = new TokenConnection(authorized, base + "/api");
+        RestClientIo client_io = conn.getAsync(False);
+        on_exit client_io.close();
+        client_io.restGet("ping");
+        assertEq(("oauth2/token", "api/ping"), (map $1.path, handler.requests));
+        assertEq("refresh_token", mime_parse_form_urlencoded_string(handler.requests[0].body).grant_type);
+        assertEq("Bearer new-access-token", handler.requests[1].authorization);
+
+        # a key-only connection's clients send the key and never go to the token URL, though it is defaulted
+        handler.requests = ();
+        TokenConnection key_conn({"token": "private-key-1", "oauth2_token_url": base + "/oauth2/token"},
+            base + "/api");
+        key_conn.get(False).get("ping");
+        RestClientIo key_io = key_conn.getAsync(False);
+        on_exit key_io.close();
+        key_io.restGet("ping");
+        assertEq(("api/ping", "api/ping"), (map $1.path, handler.requests));
+        assertEq(("Bearer private-key-1", "Bearer private-key-1"), (map $1.authorization, handler.requests));
+    }
+
+    #! The key-only connections that the issue was found with
+    shippoKlaviyoTest() {
+        ShippoRestConnection shippo("shippo", "test", "shippo://127.0.0.1:9", {}, {"apikey": "shippo_test_key"});
+        assertKeyOnly(shippo);
+        assertNothing(shippo.getConnectionOptions().oauth2_auth_url);
+        ShippoRestClient shippo_client = shippo.get(False);
+        assertEq("ShippoToken shippo_test_key", shippo_client.getDefaultHeaders().Authorization);
+        assertFalse(shippo_client.usingOAuth2());
+        ShippoRestClientIo shippo_io = shippo.getAsync(False);
+        on_exit shippo_io.close();
+        assertNothing(shippo_io.getOAuth2Options().oauth2_grant_type);
+
+        # a Shippo connection without the key still uses OAuth2
+        shippo = new ShippoRestConnection("shippo", "test", "shippo://127.0.0.1:9", {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+        });
+        assertTrue(shippo.getExtendedInfo().oauth2);
+        assertTrue(shippo.needsAuth());
+
+        # Klaviyo's private API key is the token
+        KlaviyoRestConnection klaviyo("klaviyo", "test", "klaviyo://127.0.0.1:9", {}, {
+            "token": "pk_test",
+            "token_type": "Klaviyo-API-Key",
+        });
+        assertKeyOnly(klaviyo);
+        KlaviyoRestClient klaviyo_client = klaviyo.get(False);
+        assertEq("Klaviyo-API-Key pk_test", klaviyo_client.getDefaultHeaders().Authorization);
+        assertFalse(klaviyo_client.usingOAuth2());
+        KlaviyoRestClientIo klaviyo_io = klaviyo.getAsync(False);
+        on_exit klaviyo_io.close();
+        assertNothing(klaviyo_io.getOAuth2Options().oauth2_grant_type);
+
+        # Confluence's site alternative with an API token sent by HTTP basic authentication
+        ConfluenceRestConnection confluence("confluence", "test", "confluence://127.0.0.1:9", {}, {
+            "site": "example",
+            "username": "user@example.com",
+            "password": "api-token",
+        });
+        assertKeyOnly(confluence);
+        assertFalse(confluence.get(False).usingOAuth2());
+
+        # an authorized Klaviyo connection keeps OAuth2
+        klaviyo = new KlaviyoRestConnection("klaviyo", "test", "klaviyo://127.0.0.1:9", {}, {
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+            "oauth2_token_expiry": now_us() + 1h,
+        });
+        assertTrue(klaviyo.getExtendedInfo().oauth2);
+        assertEq("refresh-1", klaviyo.getConnectionOptions().oauth2_refresh_token);
+        assertEq("authorization_code", klaviyo.getConnectionOptions().oauth2_grant_type);
+    }
+
+    #! Kit (an API key or a token) and Apollo (a token): their getConnectionOptions() adds no OAuth2 options to a key
+    kitApolloTest() {
+        # Kit's API key is sent in its own header
+        KitRestConnection kit("kit", "test", "kitrest://127.0.0.1:9", {}, {"apikey": "kit-key"});
+        assertKeyOnly(kit);
+        KitRestClient kit_client = kit.get(False);
+        assertEq("kit-key", kit_client.getDefaultHeaders()."X-Kit-Api-Key");
+        assertFalse(kit_client.usingOAuth2());
+        KitRestClientIo kit_io = kit.getAsync(False);
+        on_exit kit_io.close();
+        assertNothing(kit_io.getOAuth2Options().oauth2_grant_type);
+
+        # a Kit token alone is sent as a Bearer token
+        kit = new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {"token": "kit-token"});
+        assertKeyOnly(kit);
+        assertEq("Bearer kit-token", kit.get(False).getDefaultHeaders().Authorization);
+        KitRestClientIo kit_token_io = kit.getAsync(False);
+        on_exit kit_token_io.close();
+        assertNothing(kit_token_io.getOAuth2Options().oauth2_grant_type);
+
+        # an authorized Kit connection keeps OAuth2 and gets Kit's OAuth2 URLs
+        kit = new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+            "oauth2_token_expiry": now_us() + 1h,
+        });
+        assertTrue(kit.getInfo().up);
+        assertTrue(kit.getExtendedInfo().oauth2);
+        hash<auto> opts = kit.getConnectionOptions();
+        assertEq(KitRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertEq("refresh-1", opts.oauth2_refresh_token);
+        assertTrue(kit.get(False).usingOAuth2());
+
+        # Apollo's API token
+        ApolloRestConnection apollo("apollo", "test", "apollorest://127.0.0.1:9", {}, {"token": "apollo-token"});
+        assertKeyOnly(apollo);
+        ApolloRestClient apollo_client = apollo.get(False);
+        assertEq("Bearer apollo-token", apollo_client.getDefaultHeaders().Authorization);
+        assertFalse(apollo_client.usingOAuth2());
+        ApolloRestClientIo apollo_io = apollo.getAsync(False);
+        on_exit apollo_io.close();
+        assertNothing(apollo_io.getOAuth2Options().oauth2_grant_type);
+
+        # an authorized Apollo connection keeps OAuth2 and gets Apollo's OAuth2 URLs
+        apollo = new ApolloRestConnection("apollo", "test", "apollorest://127.0.0.1:9", {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+        });
+        assertTrue(apollo.getInfo().up);
+        assertTrue(apollo.getExtendedInfo().oauth2);
+        opts = apollo.getConnectionOptions();
+        assertEq(ApolloRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertTrue(apollo.get(False).usingOAuth2());
+
+        # neither can be created with no credential
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {});
+        });
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new ApolloRestConnection("apollo", "test", "apollorest://127.0.0.1:9", {}, {});
+        });
+    }
+
+    #! Asserts that a connection authenticated by a key does not use OAuth2
+    private assertKeyOnly(AbstractRestConnection conn, *string label) {
+        string cls = label ?? conn.className();
+        hash<auto> info = conn.getInfo();
+        assertTrue(info.up, cls + ": " + (info.status ?? ""));
+        assertFalse(conn.needsAuth(), cls);
+        *hash<string, bool> features = conn.getFeatures();
+        foreach string feature in (RestConnection::RCF_OAUTH2, RestConnection::RCF_OAUTH2_AUTH,
+                RestConnection::RCF_OAUTH2_AUTH_CODE, RestConnection::RCF_OAUTH2_IMPLICIT,
+                RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS, RestConnection::RCF_OAUTH2_PASSWORD) {
+            assertFalse(features{feature} ?? False, cls + ": " + feature);
+        }
+        hash<auto> ext = conn.getExtendedInfo();
+        assertFalse(ext.oauth2, cls);
+        assertEq("none", ext.oauth2_grant_type, cls);
+        assertFalse(ext.oauth2_auth, cls);
+        assertEq((), (select keys conn.getConnectionOptions(), $1 =~ /^oauth2_/) ?? (), cls);
+    }
+}

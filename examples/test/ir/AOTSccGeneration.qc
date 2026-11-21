@@ -1,70 +1,68 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
-#
-# Verifies the strongly-connected-component decomposition and the generation
-# identity that qore-qo-source-order publishes for incremental AOT builds.
 
-%modern
-%no-child-restrictions
+# the cases of the AOTSccGeneration-<n>.qtest tests: each runs one part of them, so that each takes a short time, and
+# together they run every case (see addPartCase()); the whole test took 42 s of CPU time alone in a debug build
+# and was killed at the runner's 300 s limit under load
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires ../TestInterpreter.qm
-%requires FsUtil
-%requires Util
-%requires json
-
-%exec-class AOTSccGenerationTest
-
-class AOTSccGenerationTest inherits QUnit::Test {
+class AOTSccGenerationBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string source_order_tool;
     }
 
-    constructor() : QUnit::Test("AOTSccGenerationTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         source_order_tool = normalize_dir(get_script_dir() + "/../../../tools")
             + DirSep + "qore-qo-source-order";
 
-        addTestCase("required cycles condense into one component",
+        addPartCase(1, "required cycles condense into one component",
             \testMutualDependencyComponent());
-        addTestCase("acyclic graphs decompose into singleton components",
+        addPartCase(1, "acyclic graphs decompose into singleton components",
             \testAcyclicGraphSingletons());
-        addTestCase("generation tokens combine member sources with predecessor contracts",
+        addPartCase(1, "generation tokens combine member sources with predecessor contracts",
             \testGenerationIdentity());
-        addTestCase("source-only stale planning delegates external dependencies to CMake",
+        addPartCase(1, "source-only stale planning delegates external dependencies to CMake",
             \testSourceStalePlanning());
-        addTestCase("a stale plan reports how much of the group a rebuild reaches",
+        addPartCase(1, "a stale plan reports how much of the group a rebuild reaches",
             \testRebuildClosurePlanning());
-        addTestCase("a component larger than the old retry limit stays one unit",
+        addPartCase(1, "a component larger than the old retry limit stays one unit",
             \testLargeComponent());
-        addTestCase("component selectors reject unknown arguments",
+        addPartCase(2, "component selectors reject unknown arguments",
             \testSelectorErrors());
-        addTestCase("degenerate object groups decompose without error",
+        addPartCase(2, "degenerate object groups decompose without error",
             \testDegenerateGroups());
-        addTestCase("CMake dependency plan is atomic and content-stable",
+        addPartCase(2, "CMake dependency plan is atomic and content-stable",
             \testCMakePlan());
-        addTestCase("generation tokens follow the declaration contract",
+        addPartCase(2, "generation tokens follow the declaration contract",
             \testGenerationFollowsDeclarationContract());
-        addTestCase("a baked body contract is watched by the consumer that baked it",
+        addPartCase(2, "a baked body contract is watched by the consumer that baked it",
             \testBakedBodyContractIsWatched());
-        addTestCase("a consumer watches only the body-contract rows it baked",
+        addPartCase(2, "a consumer watches only the body-contract rows it baked",
             \testBakedBodyContractRowsAreWatched());
-        addTestCase("a partial parse compiles only what no preloaded object stands between",
+        addPartCase(2, "a partial parse compiles only what no preloaded object stands between",
             \testConvexSubset());
-        addTestCase("a declaration of another kind does not hide a class from its subclass",
+        addPartCase(2, "a declaration of another kind does not hide a class from its subclass",
             \testKindSpecificProviders());
-        addTestCase("an execution directive does not hide the actual class provider",
+        addPartCase(2, "an execution directive does not hide the actual class provider",
             \testExecClassIsNotAProvider());
-        addTestCase("typedef mentions preload their providers without an existing depfile",
+        addPartCase(2, "typedef mentions preload their providers without an existing depfile",
             \testTypedefProviders());
-        addTestCase("a regex literal does not hide the namespace of what follows it",
+        addPartCase(2, "a regex literal does not hide the namespace of what follows it",
             \testRegexLiteralNamespaceTracking());
 
         set_return_value(main());
+    }
+
+    #! adds the test case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! Runs the helper and asserts that it succeeded.

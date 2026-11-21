@@ -305,8 +305,8 @@ public class FreshsalesDataProviderTest inherits QUnit::Test {
         assertEq("Freshsales REST Connection", scheme.display_name);
         assertEq(True, scheme.auto_url);
 
-        # Verify required options
-        assertEq("domain,apikey", scheme.required_options);
+        # Verify required options: OAuth2 first, the API key as the fallback, both on the organization's domain
+        assertEq("domain,oauth2_client_id,oauth2_client_secret|domain,apikey", scheme.required_options);
 
         # Verify options exist
         assertEq(True, scheme.options.hasKey("apikey"), "apikey option exists");

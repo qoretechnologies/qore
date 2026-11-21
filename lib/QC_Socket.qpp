@@ -5790,8 +5790,14 @@ hash<auto> ans = sock.readHTTPHeader(10s);
       above 0x7f, so that it is not a token (RFC 9110 section 5.1); \c HttpServer answers such a request with
       \c 400
 
-    @return a hash of headers (where each header key is converted to lower-case; a header value, as the
-    \c status_message, that is not valid UTF-8 is given in ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text) also including the following keys giving additional information about the HTTP header received:
+    @return a hash of the header; a header value, as the \c status_message, that is not valid UTF-8 is given in
+    ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text; the hash has the following keys:
+    - \c headers: a hash of every header field, with lower-case names; a field given more than once is a list of its
+      values
+    - the header fields with their lower-case names at the top level as well (deprecated; see
+      @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
+      \c status_message, \c http_version, \c method or \c path, which is given only under \c headers (so that a field
+      cannot replace one of the keys of this hash; qore#6761)
     - \c http_version: a string giving the HTTP version set in the header
     - \c status_code: (HTTP responses only) an integer giving the status code
     - \c status_message: (HTTP responses only) if present in an HTTP response, this key will be set to the message after the status code
@@ -5868,7 +5874,11 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
 
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
-    @return a hash of any HTTP footers received (with footer keys converted to lower case), with the body returned in the \c "body" key as a string in the Socket's encoding
+    @return a hash with the body in the \c "body" key as a string in the Socket's encoding; if the body has a
+    trailer section, the trailer fields (with lower-case names) are given under the \c "trailers" key, and at the top
+    level as well (deprecated; see @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers,
+    \c trailers, \c status_code, \c status_message, \c http_version, \c method or \c path, which is given only
+    under \c "trailers" (qore#6761)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
@@ -5897,7 +5907,10 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
 
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
-    @return a hash of any HTTP footers received (with footer keys converted to lower case), with the body returned in the \c "body" key as a binary object
+    @return a hash with the body in the \c "body" key as a binary object; if the body has a trailer section, the trailer
+    fields (with lower-case names) are given under the \c "trailers" key, and at the top level as well (deprecated;
+    see @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
+    \c status_message, \c http_version, \c method or \c path, which is given only under \c "trailers" (qore#6761)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
@@ -5930,8 +5943,11 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
 
-    @return a hash of any HTTP footers received (with footer keys converted to lower case), with the body returned in
-    the \c "body" key as a binary value
+    @return a hash with the data read in the \c "body" key as a binary value; with the last chunk of a body that has
+    a trailer section, the trailer fields (with lower-case names) are given under the \c "trailers" key, and at the
+    top level as well (deprecated; see @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers,
+    \c trailers, \c status_code, \c status_message, \c http_version, \c method or \c path, which is given only
+    under \c "trailers" (qore#6761)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
@@ -6405,6 +6421,49 @@ bool b = sock.isOpen();
 */
 bool Socket::isOpen() [flags=CONSTANT] {
     return s->isOpen();
+}
+
+//! Sets whether the fields of the HTTP messages read with this socket are also given at the top level of their hashes
+/** The fields of a message read with this socket are always given under the \c "headers" key of the hash of a
+    header (@ref readHTTPHeader()) and under the \c "trailers" key of the hash of a chunked body
+    (@ref readHTTPChunkedBody(), @ref readHTTPChunkedBodyBinary(), @ref readHTTPChunk()).  By default they are also
+    given at the top level of these hashes, under their lower-case names, as in earlier versions of %Qore; this
+    placement is deprecated, and this method turns it off.
+
+    A field whose name is a key that the readers set themselves (\c body, \c headers, \c trailers,
+    \c status_code, \c status_message, \c http_version, \c method and \c path) is never given at the top level,
+    so that it cannot replace that key.
+
+    @par Example:
+    @code{.py}
+sock.setHttpFieldsAtTopLevel(False);
+hash<auto> hdr = sock.readHTTPHeader();
+*string ct = hdr.headers."content-type";
+    @endcode
+
+    @param top_level @ref True (the default, deprecated) to give the fields at the top level as well, @ref False to
+    give them only under \c "headers" and \c "trailers"
+
+    @note the setting is copied to the sockets that @ref accept() returns
+
+    @see @ref getHttpFieldsAtTopLevel()
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttpFieldsAtTopLevel(bool top_level) {
+    my_socket_priv::getPriv(*s)->setHttpFieldsAtTopLevel(top_level);
+}
+
+//! Returns @ref True if the fields of the HTTP messages read with this socket are also at the top level of their hashes
+/** @return @ref True if the fields are also given at the top level (the default, deprecated), @ref False if they are
+    only given under \c "headers" and \c "trailers"
+
+    @see @ref setHttpFieldsAtTopLevel()
+
+    @since %Qore 3.0
+*/
+bool Socket::getHttpFieldsAtTopLevel() [flags=CONSTANT] {
+    return my_socket_priv::getPriv(*s)->getHttpFieldsAtTopLevel();
 }
 
 //! Returns the name of the cipher for an encrypted connection or @ref nothing if a secure connection has not been established
@@ -7893,6 +7952,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
 
     Blocks the calling thread until the stream's internal buffer drops below the
     backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+    For a stream with its own send limit (see
+    @ref Qore::Socket::setHttp2StreamSendLimit() "setHttp2StreamSendLimit()"), the buffer has drained when it is empty or
+    when the data that the limit refused last fits within the limit, so that sending that data again succeeds.
 
     Unlike polling with usleep(), this method uses a condition variable signaled by
     the I/O thread when buffer space is freed, providing deterministic wakeup with
@@ -9482,6 +9544,9 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 
     Blocks the calling thread until the stream's internal buffer drops below the
     backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+    For a stream with its own send limit (see
+    @ref Qore::Socket::setQuicStreamSendLimit() "setQuicStreamSendLimit()"), the buffer has drained when it is empty or
+    when the data that the limit refused last fits within the limit, so that sending that data again succeeds.
 
     Unlike polling with usleep(), this method uses a condition variable signaled by
     the I/O thread when buffer space is freed, providing deterministic wakeup with

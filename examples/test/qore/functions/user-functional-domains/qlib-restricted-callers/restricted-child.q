@@ -280,11 +280,12 @@ class RcListener inherits DataProviderCatalogChangeListener {
     }
 }
 
-list<string> sub run(*string arg) {
+RcListener sub make_listener() {
+    return new RcListener();
+}
+
+list<string> sub run(RcListener listener) {
     list<string> l = ();
-    RcListener listener();
-    int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
-    on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
     l += \"lazy actions: \" + attempt_desc(auto sub () {
         return action_names(DataProviderActionCatalog::getActionHash(LazyApp)); });
     l += \"lazy runs: \" + getCalls(\"lazy\");
@@ -301,6 +302,12 @@ list<string> sub run(*string arg) {
     l += \"init closure run by its module: \" + attempt(auto sub () { return runInitClosure(); });
     return l;
 }",
+        "restricted_parse": {
+            "add listener": "%requires DataProvider
+sub t(DataProviderCatalogChangeListener obj) { DataProviderActionCatalog::addCatalogChangeListener(obj); }",
+            "remove listener": "%requires DataProvider
+sub t(int id) { DataProviderActionCatalog::removeCatalogChangeListener(id); }",
+        },
     },
 
     # the rollback of module loads: restricted code cannot run the rollback closures of other loads on its thread;
@@ -552,7 +559,14 @@ if (c.trusted_pre) {
     print_lines(tpre.callFunction("run", arg));
 }
 
-if (rp) {
+if (case_name == "listener") {
+    # The host owns the subscription. The listener and the catalog lookup both run in the restricted Program.
+    load_module("DataProvider");
+    object listener = rp.callFunction("make_listener");
+    int id = call_static_method("DataProvider::DataProviderActionCatalog", "addCatalogChangeListener", listener);
+    on_exit call_static_method("DataProvider::DataProviderActionCatalog", "removeCatalogChangeListener", id);
+    print_lines(rp.callFunction("run", listener));
+} else if (rp) {
     print_lines(rp.callFunction("run", arg));
 }
 

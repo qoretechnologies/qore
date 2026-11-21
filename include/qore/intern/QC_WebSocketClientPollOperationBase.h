@@ -50,7 +50,8 @@
     Key differences from the server-side HttpWebSocketPollOperationBase:
     - ALL outgoing frames use client masking (RFC 6455 Section 5.3)
     - RSV bits are included in recv_queue frame hashes for extension processing
-    - When has_extensions is true, RSV bit validation is skipped (Qore wrapper handles it)
+    - The RSV bits of every data frame are checked against those of the negotiated extensions
+      (setExtensionRsvMask()); the extensions see the RSV bits of the first frame of a message only (qore#6810)
 
     The C++ base handles the HTTP/1.1 hot path:
     - Read from socket -> decode frames via WebSocketFrameDecoder/Reassembler
@@ -171,12 +172,22 @@ public:
     DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     //! Sets whether extensions are active
-    /** When extensions are active, RSV bit validation is skipped in C++
-        (the Qore wrapper handles extension-specific RSV validation).
+    /** With extensions active and no mask set with setExtensionRsvMask(), every RSV bit of a data frame is accepted
+        in C++ (the Qore wrapper handles extension-specific RSV validation).
         RSV bits are always included in recv_queue frame hashes.
     */
     DLLLOCAL void setHasExtensions(bool val) {
-        has_extensions = val;
+        extension_rsv_mask = val ? 0x07 : 0;
+    }
+
+    //! Sets the RSV bits that the negotiated extensions define (qore#6810)
+    /** A data frame with another RSV bit set, a continuation frame included, fails the connection with 1002 (RFC 6455
+        section 5.2)
+
+        @param mask the RSV bits as in WsFrame::rsv (bit 2 = RSV1, bit 1 = RSV2, bit 0 = RSV3)
+    */
+    DLLLOCAL void setExtensionRsvMask(uint8_t mask) {
+        extension_rsv_mask = mask & 0x07;
     }
 
     //! Queues a text frame for sending with client masking (thread-safe)
@@ -438,7 +449,9 @@ private:
         millisecond before the close timeout
     */
     int64 close_deadline_us = 0;
-    bool has_extensions = false;            //!< true if extensions are active (skip RSV validation)
+    //! the RSV bits that the negotiated extensions define, as in WsFrame::rsv; another RSV bit on a data frame fails
+    //! the connection
+    uint8_t extension_rsv_mask = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
     //! Number of frames pushed to recv_queue during the current continuePoll cycle

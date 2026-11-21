@@ -263,8 +263,11 @@ declaration digests.  `MODULE_DOMAINS` section (33).  AOT identity changes (gene
 WebhookSupport declare `[dom=PROCESS_CONTROL]` (those with `isSandboxed()`/`checkNotSandboxed()`/`checkRegistration()`
 refusals, `registerFactory()`, and the builder/scheme setters guarded in module init); the `isSandboxed()` refusals
 stay (a sandbox does not imply `PO_NO_PROCESS_CONTROL`).  The 150 modules that call them declare
-`domains = "PROCESS_CONTROL"`.  Not tagged (no refusal today, decision pending):
-`AbstractDataProvider::registerChild()`, `DataProviderActionCatalog::registerLazyValue()`, `addCatalogChangeListener()`.
+`domains = "PROCESS_CONTROL"`.
+The base and concrete static `registerChild()` methods and both catalog change listener mutations declare
+`PROCESS_CONTROL` (#5844). Static methods do not inherit the base declaration. `registerLazyValue()` remains a
+module-initialization API: governed initializers build the value eagerly. Read-only catalog lookups keep their
+existing domains.
 
 ### qlib module audit (PO_NO_PROCESS_CONTROL, PO_NO_THREAD_CONTROL)
 

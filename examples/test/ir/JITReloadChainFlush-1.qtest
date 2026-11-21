@@ -17,7 +17,7 @@
 
 %exec-class JITReloadChainFlushPart1
 
-#! runs part 1 of 3 of the cases of JITReloadChainFlushBase: the growth of the code
+#! runs part 1 of 5 of the cases of JITReloadChainFlushBase: the growth of the code
 class JITReloadChainFlushPart1 inherits JITReloadChainFlushBase {
     constructor() : JITReloadChainFlushBase("JITReloadChainFlushPart1", 1) {
     }

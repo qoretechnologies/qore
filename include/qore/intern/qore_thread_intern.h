@@ -1043,6 +1043,86 @@ private:
     DLLLOCAL QoreInheritedSandbox() = default;
 };
 
+//! Finds the Program whose code called the running code: the caller Program (qore#6852)
+/** The caller Program is the first Program, from the running code outward, that is not a module's Program: library
+    code that serves a call does not hide the code it serves.  The walk follows the Program switches of the thread,
+    which every execution mode records at each call into another Program's code, and the switches of
+    QoreProgramContextHelper; it adds no work to calls.
+
+    @param pgm set to the caller Program, or nullptr if it is unknown; not referenced, valid during the call
+    @param id set to its ID, or QORE_NO_PROGRAM_ID if it is unknown
+
+    @return 0 if the caller Program was found, -1 if it is unknown: the walk reached a Program that a trusted build
+    created, a trusted build's barrier, or the start of the thread without finding one
+*/
+DLLLOCAL int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id);
+
+//! Returns true if the current thread runs a trusted build (SandboxManager::createTrustedBuildCall())
+DLLLOCAL bool qore_thread_in_trusted_build();
+
+//! The caller Program of the code that submits work that runs later on another thread (qore#6852)
+/** Captured where a thread is started (the \c background operator, q_start_thread()) or a task is submitted (a
+    ThreadPool task), and applied where the work starts with QoreCallerProgramScope, so that the caller Program of the
+    work is that of the code that submitted it
+*/
+class QoreCallerProgramCapture {
+public:
+    //! Captures the caller Program of the current thread
+    DLLLOCAL QoreCallerProgramCapture();
+    DLLLOCAL ~QoreCallerProgramCapture();
+
+    //! Returns the caller Program, or nullptr if it was unknown
+    DLLLOCAL QoreProgram* getProgram() const {
+        return pgm;
+    }
+
+    //! Returns the ID of the caller Program, or QORE_NO_PROGRAM_ID if it was unknown
+    DLLLOCAL qore_program_id_t getProgramId() const {
+        return pgm_id;
+    }
+
+    DLLLOCAL QoreCallerProgramCapture(const QoreCallerProgramCapture&) = delete;
+    DLLLOCAL QoreCallerProgramCapture& operator=(const QoreCallerProgramCapture&) = delete;
+
+private:
+    //! the caller Program, with a dependency reference, or nullptr
+    QoreProgram* pgm = nullptr;
+    qore_program_id_t pgm_id;
+};
+
+//! Applies a captured caller Program to the work that starts on the current thread while the object exists
+/** The walk of qore_find_caller_program() ends at the program context helper current when the scope was set, with
+    the captured caller Program
+*/
+class QoreCallerProgramScope {
+public:
+    //! Applies the capture, if any; the capture must remain valid while the scope is active
+    DLLLOCAL QoreCallerProgramScope(const QoreCallerProgramCapture* capture);
+    DLLLOCAL ~QoreCallerProgramScope();
+
+    //! Restores the previous scope; must be called before the thread's data is destroyed
+    DLLLOCAL void reset();
+
+    //! Returns the capture
+    DLLLOCAL const QoreCallerProgramCapture* getCapture() const {
+        return capture;
+    }
+
+    //! Returns the program context helper current when the scope was set
+    DLLLOCAL const ProgramThreadCountContextHelper* getContext() const {
+        return ctx;
+    }
+
+    DLLLOCAL QoreCallerProgramScope(const QoreCallerProgramScope&) = delete;
+    DLLLOCAL QoreCallerProgramScope& operator=(const QoreCallerProgramScope&) = delete;
+
+private:
+    const QoreCallerProgramCapture* capture = nullptr;
+    const ProgramThreadCountContextHelper* ctx = nullptr;
+    const QoreCallerProgramScope* old_scope = nullptr;
+    bool active = false;
+};
+
 //! Governs the current thread by an inherited or captured sandbox as its outermost caller while the object exists
 class QoreInheritedSandboxHelper {
 public:
@@ -3954,6 +4034,15 @@ public:
          i = i ? i - 1 : ModuleProgramDataCacheSize - 1;
       }
       return nullptr;
+   }
+
+   //! forgets the cached local data of the thread in the given Program, which is deleted; called in the thread itself
+   DLLLOCAL void forgetModuleProgramData(const QoreProgram* pgm) {
+      for (ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+         if (e.pgm == pgm) {
+            e = ModuleProgramDataCacheEntry();
+         }
+      }
    }
 
    //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()

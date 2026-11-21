@@ -986,6 +986,16 @@ public:
     DLLEXPORT QoreHashNode* getUsageInfo() const;
     DLLEXPORT void clearStats();
 
+    //! sets the http_fields_at_top_level option: the fields of a response are also given at the top level of its hash
+    /** @since %Qore 3.0
+     */
+    DLLEXPORT void setHttpFieldsAtTopLevel(bool set);
+
+    //! returns the value of the http_fields_at_top_level option
+    /** @since %Qore 3.0
+     */
+    DLLEXPORT bool getHttpFieldsAtTopLevel() const;
+
     //! sets the new and returns the old error_passthru status
     /** @since %Qore 0.9.3
      */

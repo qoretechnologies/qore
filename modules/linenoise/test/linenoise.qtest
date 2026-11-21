@@ -40,7 +40,7 @@ class LinenoiseTest inherits Test {
         addTestCase("history_save() error handling", \testHistorySaveError());
         addTestCase("history_load() error handling", \testHistoryLoadError());
         addTestCase("history_load() non-existent file", \testHistoryLoadNonExistent());
-        addTestCase("history_save() and history_load() respect the sandbox", \testHistorySandbox());
+        addTestCase("history_save() and history_load() refuse sandboxed code", \testHistorySandbox());
         addTestCase("history_save() and history_load() refuse a path with a NUL character", \testHistoryNulPath());
 
         # UTF-8 tests
@@ -382,26 +382,24 @@ sub load_history(string path) {
 
         Linenoise::history_add("inside-line");
 
-        # a file inside the sandbox root can be written and read back
+        # the history is process-wide: it holds the lines of all the code of the process, so sandboxed code can
+        # neither save it, also inside its sandbox root, nor load lines into it (qore#6846)
         string allowed_file = allowed_dir + "/history.txt";
-        p.callFunction("save_history", allowed_file);
-        assertTrue(is_file(allowed_file), "history_save() writes a file inside the sandbox root");
+        assertThrows("SANDBOX-REGISTRATION-ERROR", sub () {
+            p.callFunction("save_history", allowed_file);
+        }, NOTHING, "history_save() refuses sandboxed code");
+        assertFalse(is_file(allowed_file), "a refused history_save() creates no file");
+
+        # a history file inside the sandbox root, written by trusted code
+        Linenoise::history_save(allowed_file);
         Linenoise::history_free();
-        p.callFunction("load_history", allowed_file);
-        assertEq(("inside-line",), Linenoise::history(), "history_load() reads a file inside the sandbox root");
-
-        # writing outside the sandbox root is denied, and no file is created
-        string denied_file = outside_dir + "/written.txt";
-        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
-            p.callFunction("save_history", denied_file);
-        }, NOTHING, "history_save() cannot write outside the sandbox root");
-        assertFalse(is_file(denied_file), "a denied history_save() creates no file");
-
-        # reading outside the sandbox root is denied, and the history is unchanged
-        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
-            p.callFunction("load_history", outside_file);
-        }, NOTHING, "history_load() cannot read outside the sandbox root");
-        assertEq(("inside-line",), Linenoise::history(), "a denied history_load() loads no lines");
+        Linenoise::history_add("trusted-line");
+        foreach string file in ((allowed_file, outside_file)) {
+            assertThrows("SANDBOX-REGISTRATION-ERROR", sub () {
+                p.callFunction("load_history", file);
+            }, NOTHING, "history_load() refuses sandboxed code");
+        }
+        assertEq(("trusted-line",), Linenoise::history(), "a refused history_load() loads no lines");
     }
 
     testHistoryNulPath() {

@@ -7567,15 +7567,23 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
 
-                // Generic notification for any C++ op that pushed items to queues
-                // (WebSocket frame I/O, PollPipeline PUSH_QUEUE, etc.)
+                // Generic notification for any C++ op that pushed items to queues (WebSocket frame I/O, PollPipeline
+                // PUSH_QUEUE, etc.), if its class has an onPollComplete() method (qore#6804)
                 {
                     int pushed = op.spop_base->getAndClearItemsPushed();
                     if (pushed > 0) {
-                        ensureCallDispatcher();
-                        op.spop_obj->ref();
-                        call_dispatcher.load(std::memory_order_acquire)->dispatchPollCompleteAsync(
-                            op.spop_obj, op_owner, op_sandbox_ctx, op_app_id);
+                        // an operation is told only if it has the method: a PollPipeline, whose steps push items to
+                        // its queues, has none (qore#6804); looked up once, the first time it pushed items
+                        int8_t& poll_complete = node->second.poll_complete;
+                        if (poll_complete < 0) {
+                            poll_complete = op.spop_obj->getClass()->findMethod("onPollComplete") ? 1 : 0;
+                        }
+                        if (poll_complete) {
+                            ensureCallDispatcher();
+                            op.spop_obj->ref();
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchPollCompleteAsync(
+                                op.spop_obj, op_owner, op_sandbox_ctx, op_app_id);
+                        }
                     }
                 }
             } else {

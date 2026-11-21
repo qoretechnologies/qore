@@ -234,6 +234,30 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     requests and between clients; each event is raised on the queue of the client that made the request
     it belongs to, and reports that client in its \c "id" key.
 
+    @section httpclient_response_fields Response Fields
+
+    The hash that the send methods return has the header fields of the response under \c "headers" and, for a
+    response with trailer fields (a chunked HTTP/1.1 body, or the trailers of an HTTP/2 or HTTP/3 response), the
+    trailer fields under \c "trailers"; the names are lower-case, and a field given more than once is a list of its
+    values.  The header fields are also given at the top level of the hash, as in earlier versions; this placement is
+    deprecated, and the \c http_fields_at_top_level option (see @ref HTTPClient::constructor()) turns it off.  A
+    field whose name is a key that the hash has itself (\c body, \c headers, \c trailers, \c status_code,
+    \c status_message, \c http_version, \c method or \c path) is never given at the top level, so that a server
+    cannot replace one of these keys with a field (qore#6811); nor is a field named \c protocol or one whose name
+    starts with \c _qore_, keys that the client uses itself.  The option (also set with setHttpFieldsAtTopLevel())
+    changes only the hashes given to the caller: the response, the \c "hdr" of a receive callback and the \c arg of
+    an \c HTTP-CLIENT-RECEIVE-ERROR exception.  \c "response-headers" in the \c info output hash always has the
+    header fields at its top level, without the \c "headers" and \c "trailers" keys, as in earlier versions.  After
+    sendAndStream(), the chunks read with readHTTPChunk() and the bodies read with readHTTPChunkedBody() and
+    readHTTPChunkedBodyBinary() give the trailer fields under \c "trailers" only.
+
+    @code{.py}
+HTTPClient hc({"url": "https://example.com", "http_fields_at_top_level": False});
+hash<auto> resp = hc.send(NOTHING, "GET", "/data");
+*string ct = resp.headers."content-type";
+*hash<auto> trailers = resp.trailers;
+    @endcode
+
     @section httpclient_response_body Response Message Bodies
 
     The media type of a response decides how its message body is delivered: a media type that carries text is
@@ -547,6 +571,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       giving the default port number or a hash with \c "port" and \c "ssl" keys giving the default port number and a
       boolean value to indicate that an SSL connection should be established
     - \c proxy: The proxy URL for connecting through a proxy
+    - \c http_fields_at_top_level: if @ref False "False", the fields of a response are given only under the
+      \c "headers" and \c "trailers" keys of the hash that the send methods return, and not at its top level too
+      (the default, deprecated); see @ref httpclient_response_fields
     - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
       processed
     - \c ssl_cert_data: a binary (DER) or string (PEM) value representing the certificate; if this option is used,
@@ -621,6 +648,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       - \c username
       - \c password
     - %Qore 3.0 added the following options:
+      - \c http_fields_at_top_level
       - \c http3_mode
       - \c max_response_body_size
       - \c ssl_ca_file
@@ -1631,7 +1659,8 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The message body (if
     any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
@@ -1720,7 +1749,10 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The message body (if any) will be assigned to the value of the \c "body" key
+    and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the
+    type of the body is decided.
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -1799,7 +1831,8 @@ printf("sent to %s\n", info."effective-url");
     \c effective-url gives the absolute URL of the last request sent, which is the target resolved from \a url
     after any redirects
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The message body
     (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
@@ -1871,7 +1904,8 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
     headers and other information about the HTTP request; the keys are the same as for @ref send()
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The message body
     (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
@@ -1939,7 +1973,8 @@ if (resp.status_code == 200) {
     @param headers An optional hash of headers to include in the message
     @param info An optional reference to receive request/response information
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The \c "body"
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The \c "body"
     key will NOT be present as the body is left on the socket for streaming. The HTTP status will be assigned
     to the \c "status_code" key.
 
@@ -2017,7 +2052,9 @@ bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @param timeout_ms timeout for the read operation
 
-    @return a hash with the "body" key containing the chunk data, or an empty hash for EOF
+    @return a hash with the "body" key containing the chunk data; at the end of the body (EOF), an empty hash, or a
+    hash with only the trailer fields of the response (with lower-case names) under the \c "trailers" key when it has
+    any (see @ref httpclient_response_fields)
 
     @since %Qore 3.0
 */
@@ -2102,7 +2139,8 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 
 //! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
 /** @param timeout_ms timeout for the read operation
-    @return hash with "body" key containing the accumulated body
+    @return hash with "body" key containing the accumulated body, and the trailer fields of the response (with
+    lower-case names) under the \c "trailers" key when it has any (see @ref httpclient_response_fields)
 
     @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
     setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
@@ -2122,7 +2160,8 @@ hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED
 
 //! Reads a full HTTP chunked body as binary; overrides Socket::readHTTPChunkedBodyBinary
 /** @param timeout_ms timeout for the read operation
-    @return hash with "body" key containing the accumulated binary body
+    @return hash with "body" key containing the accumulated binary body, and the trailer fields of the response
+    (with lower-case names) under the \c "trailers" key when it has any (see @ref httpclient_response_fields)
 
     @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
     setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
@@ -2213,7 +2252,10 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
+    @return The headers received from the HTTP server with all key names converted to lower-case (see
+    @ref httpclient_response_fields). The message body (if any) will be assigned to the value of the \c "body" key
+    and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the
+    type of the body is decided.
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -3918,6 +3960,35 @@ bool HTTPClient::isPersistent() [flags=CONSTANT] {
 */
 int HTTPClient::getPersistentCount() [flags=CONSTANT] {
     return client->getPersistentCount();
+}
+
+//! Sets the \c http_fields_at_top_level option of the client; overrides Socket::setHttpFieldsAtTopLevel()
+/** @par Example:
+    @code{.py}
+httpclient.setHttpFieldsAtTopLevel(False);
+    @endcode
+
+    @param top_level @ref True to give the header fields of a response at the top level of its hash as well (the
+    default, deprecated), @ref False to give them only under \c "headers" (and the trailer fields under
+    \c "trailers"); see @ref httpclient_response_fields
+
+    The setting changes the hashes that the client gives for its responses, as the \c http_fields_at_top_level option
+    does; the client's own reading of the responses is not changed.
+
+    @since %Qore 3.0
+*/
+nothing HTTPClient::setHttpFieldsAtTopLevel(bool top_level) {
+    client->setHttpFieldsAtTopLevel(top_level);
+}
+
+//! Returns the value of the \c http_fields_at_top_level option; overrides Socket::getHttpFieldsAtTopLevel()
+/** @return @ref True if the header fields of a response are also given at the top level of its hash (the default,
+    deprecated), @ref False if they are only given under \c "headers"; see @ref httpclient_response_fields
+
+    @since %Qore 3.0
+*/
+bool HTTPClient::getHttpFieldsAtTopLevel() [flags=CONSTANT] {
+    return client->getHttpFieldsAtTopLevel();
 }
 
 //! set the error passthru status

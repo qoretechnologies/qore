@@ -408,10 +408,11 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
         if (stop_listener_first) {
             # the stop of the listener in another thread waits for the request; it is reported once it has marked the
             # listener as stopping, so that the stop of the server's destructor finds it in progress
-            HttpListener::dbgSetStoppingHook(sub (HttpListener l) {
+            # called by name: the method exists only in a debug build of the library
+            call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
                 listener_stopping.push(gettid());
             });
-            on_exit HttpListener::dbgSetStoppingHook();
+            on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
             server.stopListenerIDNoWait(linfo.id);
             listener_stopping_tid = listener_stopping.get(HangTimeout);
             assertNeq(request_tid, listener_stopping_tid, "the listener's stop starts in another thread");

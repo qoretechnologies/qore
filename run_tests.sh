@@ -47,6 +47,10 @@ print_usage () {
   echo "  QORE_TEST_DURATION_PROFILE"
   echo "                           The column of test-durations.tsv used (default: CI_JOB_NAME without its shard)."
   echo "  QORE_TEST_DURATIONS_FILE The durations file (default: examples/test/docker_test/test-durations.tsv)."
+  echo "  QORE_TEST_TIME_BINS      The time programs that -t tries, in order (default: time, /usr/bin/time,"
+  echo "                           /bin/time and the one in PATH); set it empty to use none, so that the shell's time"
+  echo "                           keyword is used if the shell has one (tests of the runner use it to be independent of"
+  echo "                           the host)."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P), and the tests that"
   echo "                           declare '# test-release-build: <why>', which check a release build (the CI"
@@ -682,7 +686,7 @@ if [ $MEASURE_TIME -eq 1 ]; then
         TIME_OK=$?
     }
 
-    TIME_BINS="time /usr/bin/time /bin/time `which time`"
+    TIME_BINS=${QORE_TEST_TIME_BINS-"time /usr/bin/time /bin/time `which time 2>/dev/null`"}
     for tm in $TIME_BINS; do
         TIME_BIN=$tm
         test_time
@@ -692,8 +696,13 @@ if [ $MEASURE_TIME -eq 1 ]; then
         TIME_CMD=""
     done
 
-    if [ "$TIME_CMD" = "" ]; then
+    # without a time program, the shell's time keyword, if the shell has one (dash, the /bin/sh of Debian and Ubuntu,
+    # has none: no time is reported then); a keyword is not a program, so it must come before the timeout command,
+    # which can only run programs (TIME_KEYWORD)
+    TIME_KEYWORD=0
+    if [ "$TIME_CMD" = "" ] && (eval "time -p true") >/dev/null 2>&1; then
         TIME_CMD="time -p"
+        TIME_KEYWORD=1
     fi
 fi
 
@@ -1522,6 +1531,7 @@ run_with_watchdog() {
         watchdog_message "*** WATCHDOG ERROR: the watchdog's event FIFO $TEST_EVENT_FIFO $watchdog_fifo_error:" \
             "the test is run with a plain time limit ***"
         WATCHDOG_ERROR=1
+        PLAIN_TIMEOUT=1
         if [ -n "$TEST_LOG" ]; then
             $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $limit "$@" >> "$TEST_LOG" 2>&1
         else
@@ -1799,6 +1809,7 @@ run_test() {
     WATCHDOG_TIMED_OUT=0
     WATCHDOG_ERROR=0
     TEST_PID=""
+    PLAIN_TIMEOUT=0
     # a parallel run writes the output of the test to its log (TEST_LOG), which is printed when the test has ended;
     # it is opened for appending, as the watchdog appends its messages to it too
     TEST_LOG_REDIRECT=""
@@ -1808,7 +1819,12 @@ run_test() {
     fi
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            PLAIN_TIMEOUT=1
+            if [ $TIME_KEYWORD -eq 1 ]; then
+                eval $TIME_CMD $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            else
+                eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
+            fi
         else
             eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
         fi
@@ -1867,31 +1883,43 @@ EOF
             "is its own, but the run fails ***"
     fi
 
-    # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
-    if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
-        if [ $WATCHDOG_TIMED_OUT -eq 1 ] && [ "$WATCHDOG_TEST_EXIT" -gt 128 ]; then
+    # Only the watchdog knows whether its deadline expired. The plain timeout command used by -t and
+    # the FIFO fallback can return its child's status, including the same 124 or 143 it uses for a timeout.
+    inspect_timeout_core=0
+    if [ $WATCHDOG_TIMED_OUT -eq 1 ]; then
+        if [ "$WATCHDOG_TEST_EXIT" -gt 128 ]; then
             echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit (it was ended by signal" \
                 "`expr $WATCHDOG_TEST_EXIT - 128`)"
         else
             echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
         fi
-        # the stacks of the threads of a test aborted by the watchdog or the timeout show where it hangs
-        if { [ $WATCHDOG_TIMED_OUT -eq 1 ] || [ -n "$TIMEOUT_SIGNAL_OPTS" ]; } && command -v gdb > /dev/null 2>&1; then
-            find_test_core
-            TIMEOUT_CORE=$CORE_FILE
-            if [ -n "$TIMEOUT_CORE" ]; then
-                echo "*** Core dump of the hung test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
-                BT_FILE="$CORE_DIR/backtrace-`test_artifact_name "$test"`-timeout.txt"
-                gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
-                head -500 "$BT_FILE"
+        inspect_timeout_core=1
+    elif [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
+        if [ $PLAIN_TIMEOUT -eq 1 ]; then
+            echo "The timeout command returned status $test_exit (limit ${THIS_TEST_TIMEOUT}s; expiry unconfirmed)"
+            if [ -n "$TIMEOUT_SIGNAL_OPTS" ]; then
+                inspect_timeout_core=1
             fi
+        elif [ $test_exit -eq 143 ]; then
+            echo "TEST EXIT: status 143 (128 + SIGTERM); no watchdog deadline expired"
+        else
+            echo "TEST EXIT: status 124; no watchdog deadline expired"
+        fi
+    fi
+
+    if [ $inspect_timeout_core -eq 1 ] && command -v gdb > /dev/null 2>&1; then
+        find_test_core
+        TIMEOUT_CORE=$CORE_FILE
+        if [ -n "$TIMEOUT_CORE" ]; then
+            echo "*** Core dump of the test: $TIMEOUT_CORE - extracting the stacks of its threads ***"
+            BT_FILE="$CORE_DIR/backtrace-`test_artifact_name "$test"`-timeout.txt"
+            gdb -batch -ex "thread apply all bt" -ex "quit" "$QORE" "$TIMEOUT_CORE" > "$BT_FILE" 2>&1
+            head -500 "$BT_FILE"
         fi
     fi
 
     if [ $test_exit -ne 0 ]; then
-        # BusyBox reports its deliberate timeout termination as SIGTERM (143). It is already
-        # recorded above; rerunning that hung test under gdb would lose the timeout entirely.
-        # Capture crash diagnostics only for unexpected signals.
+        # SIGTERM is a termination request. Rerunning the test under a debugger would discard the original event.
         if [ $test_exit -gt 128 ] && [ $test_exit -ne 143 ]; then
             SIG_NUM=`expr $test_exit - 128`
             echo "*** CRASH: test killed by signal $SIG_NUM (exit code $test_exit) ***"
