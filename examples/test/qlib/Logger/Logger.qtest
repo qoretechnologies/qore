@@ -712,6 +712,9 @@ class Test inherits QUnit::Test {
             la.getQueue().process(100ms);
         }
         m_counter.waitForZero();
+        # the loop ends when the last thread is done, but a thread can post its event after the last call above and
+        # end before the loop checks the counter: every event is queued now, so the rest is processed here
+        la.getQueue().process();
         list l2 = ();
         string ls = sos.getData();
 
