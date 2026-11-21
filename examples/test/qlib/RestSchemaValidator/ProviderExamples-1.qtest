@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires AssemblyAiDataProvider
+%requires AwsTextractDataProvider
+%requires AzureDocumentIntelligenceDataProvider
+%requires AzureOpenAiDataProvider
+%requires BedrockDataProvider
+%requires BflDataProvider
+%requires BitbucketDataProvider
+%requires CohereDataProvider
+%requires ConfluenceDataProvider
+%requires ExaDataProvider
+%requires FireworksDataProvider
+%requires GitHubDataProvider
+%requires GitLabDataProvider
+%requires GoogleDocumentAiDataProvider
+%requires IntercomDataProvider
+%requires JinaDataProvider
+%requires KlaviyoDataProvider
+%requires LlamaParseDataProvider
+%requires MewsRestDataProvider
+%requires MistralDataProvider
+%requires PaddleDataProvider
+%requires PineconeDataProvider
+%requires StabilityAiDataProvider
+%requires StripeDataProvider
+%requires TogetherDataProvider
+%requires UnstructuredDataProvider
+%requires XeroDataProvider
+
+%include ProviderExamples.qc
+
+%exec-class ProviderExamplesPart1
+
+#! runs part 1 of 2 of the cases of ProviderExamplesBase
+class ProviderExamplesPart1 inherits ProviderExamplesBase {
+    constructor() : ProviderExamplesBase("ProviderExamplesPart1", 1) {
+    }
+}
