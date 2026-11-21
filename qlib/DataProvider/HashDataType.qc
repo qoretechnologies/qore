@@ -397,12 +397,15 @@ auto v = t.getDefaultValue();
                 throw "ADD-QORE-FIELDS-ERROR", sprintf("field %y to be added has a value of type %y; expecting "
                     "\"hash\"", i.key, i.value.fullType());
             }
-            if (!exists i.value.name) {
-                i.value.name = i.key;
+            # the description can be a typed hash, such as a hash of types only, which cannot take the name
+            hash<auto> field_desc = {};
+            field_desc += i.value;
+            if (!exists field_desc.name) {
+                field_desc.name = i.key;
             }
             on_error rethrow $1.err, sprintf("%s (while adding field %y to type %y from hash: %y)", $1.desc, i.key,
-                name, i.value);
-            QoreDataField field(i.value);
+                name, field_desc);
+            QoreDataField field(field_desc);
             addFieldIntern(field);
 
             if (exists (auto fv = field.getDefaultValue())) {
