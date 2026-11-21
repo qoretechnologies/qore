@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerStartTimeSandboxTest
+
+#! The process-wide start time of relative logger time refuses changes by sandboxed code (issue #6746)
+/** The start time applies to the log output of every logger in the process: code that is sandboxed or acts for
+    sandboxed code cannot change it, also under a policy barrier, from a background thread and from a Program that it
+    created; it can read it, and the start time that the host set stays in effect for every tenant
+*/
+class LoggerStartTimeSandboxTest inherits QUnit::Test {
+    public {
+        #! the code that tries to change the start time
+        const SetSource = "try {
+        LoggerEvent::setStartTime(2001-01-01T00:00:00);
+        return \"no exception\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }";
+    }
+
+    constructor() : Test("logger start time refuses sandboxed code", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot change the start time", \sandboxedTest());
+        addTestCase("trusted code is not refused", \trustedTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        date start = LoggerEvent::getStartTime();
+        on_exit LoggerEvent::setStartTime(start);
+        date host_start = 2000-01-01T00:00:00;
+        LoggerEvent::setStartTime(host_start);
+
+        hash<auto> results = {};
+        # two tenants with sandboxes of their own
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = LoggerStartTimeSandboxTest::tenant(name, "set", SetSource);
+            results{name} = tenant.callFunction("t_set");
+        }
+        # a background thread of a tenant
+        Program tenant_bg = LoggerStartTimeSandboxTest::tenant("tenant-bg", "bg", "code set = string sub () { "
+            + SetSource + " }; Queue q(); background q.push(set()); return q.get();");
+        results."background" = tenant_bg.callFunction("t_bg");
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(string sub () {
+            try {
+                LoggerEvent::setStartTime(2001-01-01T00:00:00);
+                return "no exception";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        });
+        Program tenant_c = LoggerStartTimeSandboxTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = tenant_c.callFunction("t_run", cap);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = LoggerStartTimeSandboxTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"%requires Logger\nstring sub set() { \" + s + \" }\", \"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", SetSource);
+        results.child = child.callFunction("set");
+
+        hash<auto> expected = {};
+        map expected{$1} = "SANDBOX-REGISTRATION-ERROR", ("tenant-a", "tenant-b", "background", "barrier", "child");
+        assertEq(expected, results);
+
+        # the host's start time stays, for the host and for a tenant, which can read it
+        assertEq(host_start, LoggerEvent::getStartTime());
+        Program reader = LoggerStartTimeSandboxTest::tenant("tenant-r", "read", "return LoggerEvent::getStartTime();");
+        assertEq(host_start, reader.callFunction("t_read"));
+    }
+
+    trustedTest() {
+        date start = LoggerEvent::getStartTime();
+        on_exit LoggerEvent::setStartTime(start);
+        Program trusted(PO_NEW_STYLE);
+        trusted.parse("%requires Logger\ndate sub set(date d) { LoggerEvent::setStartTime(d); "
+            "return LoggerEvent::getStartTime(); }", "trusted");
+        assertEq(2002-01-01T00:00:00, trusted.callFunction("set", 2002-01-01T00:00:00));
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("%%requires Logger\nauto sub t_%s(%s) { %s }\n", func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

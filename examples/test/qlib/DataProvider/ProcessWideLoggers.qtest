@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%exec-class ProcessWideLoggersTest
+
+#! The process-wide loggers of DataProvider and ProviderIndexUtil are not handed to sandboxed code (issue #6746)
+/** The global loggers are set by trusted code and receive the messages of every caller: code that is sandboxed or
+    acts for sandboxed code gets no logger from the getters, as if none were set, and cannot set one, also under a
+    policy barrier, from a background thread and from a Program that it created; the host keeps its loggers, trusted
+    code gets them, and the messages that the module produces for a sandboxed caller still go to the host's logger
+*/
+class ProcessWideLoggersTest inherits QUnit::Test {
+    public {
+        #! the code that reads the loggers, as readLoggers() does
+        const ReadSource = "return {
+        \"DataProvider\": exists DataProvider::getGlobalLogger(),
+        \"ProviderIndexUtil\": exists ProviderIndexUtil::getGlobalLogger(),
+    };";
+
+        #! the code that sets the loggers; each call must be refused
+        const SetSource = "hash<auto> rv = {};
+    foreach string c in (\"DataProvider\", \"ProviderIndexUtil\") {
+        try {
+            if (c == \"DataProvider\") {
+                DataProvider::setGlobalLogger();
+            } else {
+                ProviderIndexUtil::setGlobalLogger();
+            }
+            rv{c} = \"no exception\";
+        } catch (hash<ExceptionInfo> ex) {
+            rv{c} = ex.err;
+        }
+    }
+    return rv;";
+    }
+
+    constructor() : Test("process-wide loggers of the data provider modules", "1.0", \ARGV) {
+        addTestCase("tenants do not get the host's loggers", \readTest());
+        addTestCase("tenants cannot replace the host's loggers", \replaceTest());
+        addTestCase("the messages produced for a tenant go to the host's logger", \routingTest());
+        set_return_value(main());
+    }
+
+    readTest() {
+        *LoggerInterface dp_logger = DataProvider::getGlobalLogger();
+        on_exit DataProvider::setGlobalLogger(dp_logger);
+        *LoggerInterface piu_logger = ProviderIndexUtil::getGlobalLogger();
+        on_exit ProviderIndexUtil::setGlobalLogger(piu_logger);
+        TestLogger host_dp_logger();
+        TestLogger host_piu_logger();
+        DataProvider::setGlobalLogger(host_dp_logger);
+        ProviderIndexUtil::setGlobalLogger(host_piu_logger);
+
+        hash<auto> results = {};
+        # two tenants with sandboxes of their own
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = ProcessWideLoggersTest::tenant(name, "read", ReadSource);
+            results{name} = tenant.callFunction("t_read");
+        }
+        # a background thread of a tenant
+        Program tenant_bg = ProcessWideLoggersTest::tenant("tenant-bg", "bg", "code read = hash<auto> sub () { "
+            + ReadSource + " }; Queue q(); background q.push(read()); return q.get();");
+        results."background" = tenant_bg.callFunction("t_bg");
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            return ProcessWideLoggersTest::readLoggers();
+        });
+        Program tenant_c = ProcessWideLoggersTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = tenant_c.callFunction("t_run", cap);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = ProcessWideLoggersTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"%requires DataProvider\n%requires ProviderIndexUtil\nhash<auto> sub read() { \" + s + \" }\", "
+            "\"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", ReadSource);
+        results.child = child.callFunction("read");
+        # trusted code and a trusted Program
+        results.host = ProcessWideLoggersTest::readLoggers();
+        Program trusted_pgm(PO_NEW_STYLE);
+        trusted_pgm.parse("%requires DataProvider\n%requires ProviderIndexUtil\nhash<auto> sub read() { " + ReadSource
+            + " }", "trusted");
+        results."trusted Program" = trusted_pgm.callFunction("read");
+
+        hash<auto> sandboxed = {"DataProvider": False, "ProviderIndexUtil": False};
+        hash<auto> trusted = {"DataProvider": True, "ProviderIndexUtil": True};
+        hash<auto> expected = {};
+        map expected{$1} = sandboxed, ("tenant-a", "tenant-b", "background", "barrier", "child");
+        map expected{$1} = trusted, ("host", "trusted Program");
+        assertEq(expected, results);
+        # the host still has its loggers
+        assertEq(host_dp_logger, DataProvider::getGlobalLogger());
+        assertEq(host_piu_logger, ProviderIndexUtil::getGlobalLogger());
+    }
+
+    replaceTest() {
+        *LoggerInterface dp_logger = DataProvider::getGlobalLogger();
+        on_exit DataProvider::setGlobalLogger(dp_logger);
+        *LoggerInterface piu_logger = ProviderIndexUtil::getGlobalLogger();
+        on_exit ProviderIndexUtil::setGlobalLogger(piu_logger);
+        TestLogger host_dp_logger();
+        TestLogger host_piu_logger();
+        DataProvider::setGlobalLogger(host_dp_logger);
+        ProviderIndexUtil::setGlobalLogger(host_piu_logger);
+
+        hash<auto> refused = {
+            "DataProvider": "DATA-PROVIDER-CALLBACK-ERROR",
+            "ProviderIndexUtil": "PROVIDER-INDEX-REGISTRATION-DENIED",
+        };
+        hash<auto> results = {};
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = ProcessWideLoggersTest::tenant(name, "set", SetSource);
+            results{name} = tenant.callFunction("t_set");
+        }
+        Program tenant_d = ProcessWideLoggersTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"%requires DataProvider\n%requires ProviderIndexUtil\nhash<auto> sub set() { \" + s + \" }\", "
+            "\"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", SetSource);
+        results.child = child.callFunction("set");
+
+        hash<auto> expected = {};
+        map expected{$1} = refused, ("tenant-a", "tenant-b", "child");
+        assertEq(expected, results);
+        assertEq(host_dp_logger, DataProvider::getGlobalLogger());
+        assertEq(host_piu_logger, ProviderIndexUtil::getGlobalLogger());
+    }
+
+    routingTest() {
+        *LoggerInterface dp_logger = DataProvider::getGlobalLogger();
+        on_exit DataProvider::setGlobalLogger(dp_logger);
+        TestLogger host_logger();
+        DataProvider::setGlobalLogger(host_logger);
+        # a tenant uses a data provider without a logger of its own whose request API fails: the module logs the
+        # error that it catches with the global logger, which is the host's
+        Program tenant = ProcessWideLoggersTest::tenant("tenant", "use", "QoreProcessorsDataProvider p(); "
+            "return p.tryGetActionOptionsFromRequestTypeWithData(1);");
+        assertNothing(tenant.callFunction("t_use"));
+        assertEq(1, host_logger.messages.size());
+        assertRegex("failed to get the request type", host_logger.messages[0]);
+    }
+
+    #! Reads the loggers as \c ReadSource does
+    static hash<auto> readLoggers() {
+        return {
+            "DataProvider": exists DataProvider::getGlobalLogger(),
+            "ProviderIndexUtil": exists ProviderIndexUtil::getGlobalLogger(),
+        };
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("%%requires DataProvider\n%%requires ProviderIndexUtil\nauto sub t_%s(%s) { %s }\n", func,
+            args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}
+
+#! a logger of the host, which records its messages
+class TestLogger inherits LoggerWrapper {
+    public {
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerWrapper(new Logger("host")) {
+    }
+
+    logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args) {
+        messages += vsprintf(message, args);
+    }
+}

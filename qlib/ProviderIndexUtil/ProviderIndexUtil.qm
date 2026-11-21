@@ -284,6 +284,10 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       index creation leaves the previous index in place
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled
       modules with API-version suffixes; legacy explicit-path indexes remain readable
+    - @ref ProviderIndexUtil::ProviderIndexUtil::getGlobalLogger() "ProviderIndexUtil::getGlobalLogger()" returns
+      @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the
+      process-wide logger that the host set
+      (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
 
     @section providerindexutil_v1_0 ProviderIndexUtil v1.0
     - initial release
