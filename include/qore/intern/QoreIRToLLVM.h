@@ -616,6 +616,10 @@ private:
     // runtime-stack ownership. Proven-assigned native int/float locals can stay
     // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
+    //! the reload-exempt locals without the handlers' locals that the native code keeps on the runtime stack (#5951)
+    std::unordered_set<const void*> aot_reload_exempt;
+    //! the IR-only locals without the handlers' locals, for a function whose handlers use the table protocol (#5951)
+    std::unordered_set<const void*> handler_demoted_ir_only;
     //! The locals with IR storage (QoreIRFunction::hasIRStorage()) when the function has reference slot locals: the
     //! set that ir_only_locals_set points to, which then includes them
     std::unordered_set<const void*> ir_storage_locals;
@@ -2220,6 +2224,16 @@ private:
     //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
     void publishLocalsForHandlers(llvm::Module& module);
 
+    //! Puts the IR-only locals that the handlers reference on the runtime local stack before they run out of line
+    /** The runtime stack takes the reference of the native storage, so that a handler that assigns or removes the
+        local releases the value right away; retireHandlerIRLocals() takes them back after the handlers (#5951)
+    */
+    void materializeHandlerIRLocals(llvm::Module& module);
+
+    //! Moves the values of the locals that materializeHandlerIRLocals() published back to their native storage, and
+    //! removes them from the runtime local stack, last published first (#5951)
+    void retireHandlerIRLocals(llvm::Module& module);
+
     //! Records the call that runs handlers out of line, around which finalizeHandlerSites() releases and reloads the
     //! reload storage of the locals that the handlers can assign
     /** @param reload true if the locals whose storage is released are reloaded right after the call; false if the
@@ -2263,6 +2277,8 @@ private:
         llvm::Instruction* reload_after;
     };
     std::vector<HandlerSite> handler_sites;
+    //! the locals that materializeHandlerIRLocals() published for the handler run being emitted, in declaration order
+    std::vector<const void*> materialized_handler_locals;
 
     //! true if the reload storage of the local is released for handlers run out of line (see handler_locals)
     bool releasesReloadStorageForHandlers(const void* key) const;

@@ -1386,7 +1386,34 @@ public:
 
     //! Returns true if the slot is that of an object local, whose object has a real reference from the slot
     DLLLOCAL bool isRealSlot(size_t i) const {
-        return i < real_slots.size() && real_slots[i];
+        return i < real_slots.size() && (real_slots[i] & RealSlot);
+    }
+
+    //! Takes over the value of the slot of an IR-only local of the function that a handler runs for, with its reference
+    /** The value that the slot holds, a copy of \a parent_value with a reference of its own, is released (the
+        function's reference keeps it), and the slot takes \a parent_value, which is left NOTHING; the slot is that of
+        an object local if the function's slot is (\a real); giveBack() returns the value (#5951)
+    */
+    DLLLOCAL void takeOver(size_t i, QoreValue& parent_value, bool real, ExceptionSink* xsink) {
+        slots[i].discard(xsink);
+        slots[i] = parent_value;
+        parent_value = QoreValue();
+        if (real_slots.size() <= i) {
+            real_slots.resize(slots.size(), 0);
+        }
+        real_slots[i] |= TakenSlot | (real ? RealSlot : 0);
+    }
+
+    //! Returns true if the slot took over its value from the function that the handler runs for (see takeOver())
+    DLLLOCAL bool isTakenSlot(size_t i) const {
+        return i < real_slots.size() && (real_slots[i] & TakenSlot);
+    }
+
+    //! Returns the value of a slot that took over its value, with its reference, and leaves the slot NOTHING
+    DLLLOCAL QoreValue giveBack(size_t i) {
+        QoreValue v = slots[i];
+        slots[i] = QoreValue();
+        return v;
     }
 
     //! Sets the slots of the object locals of the function the frame runs (see interpreter_real_slots)
@@ -1501,7 +1528,11 @@ public:
 
 private:
     std::vector<QoreValue> slots;
-    //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
+    //! the slot of an object local (see QoreIRFunction::real_reference_locals)
+    static constexpr uint8_t RealSlot = 1;
+    //! a slot that took over its value from the function that the handler runs for (see takeOver())
+    static constexpr uint8_t TakenSlot = 2;
+    //! RealSlot and TakenSlot for each slot; empty if none
     std::vector<uint8_t> real_slots;
     //! the values of a return that an exception interrupted, released after the locals of the frame (#5920), and the
     //! handed-over return after its marker (see findHandedOverReturn())
@@ -5054,6 +5085,9 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
             || !callee_ir->ast_visible_body_locals.empty()
+            // a function whose handlers take over the slots of its IR-only locals runs in a frame of its own (see
+            // qore_ir_take_parent_ir_only_slots(), #5951)
+            || !callee_ir->handler_ir_locals.empty()
             || callee_ir->hasTypeSpecialization()
             // a call that can give a temporary to a parameter that takes its argument over is made by the call path,
             // which releases the reference that the caller gave once the parameter holds one of its own; whether a
@@ -5279,6 +5313,9 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
             || !callee_ir->ast_visible_body_locals.empty()
+            // a function whose handlers take over the slots of its IR-only locals runs in a frame of its own (see
+            // qore_ir_take_parent_ir_only_slots(), #5951)
+            || !callee_ir->handler_ir_locals.empty()
             // an inlined call has no frame of its own on the thread-local variable stack
             || callee_ir->needs_call_frame
             || callee_ir->hasTypeSpecialization()
@@ -7428,6 +7465,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         if (!callee_ir || !sig
                 || sig->needsTypeParameterSubstitution()
                 || !callee_ir->ast_visible_body_locals.empty()
+                // a function whose handlers take over the slots of its IR-only locals runs in a frame of its own (see
+                // qore_ir_take_parent_ir_only_slots(), #5951)
+                || !callee_ir->handler_ir_locals.empty()
                 // an inlined call has no frame of its own on the thread-local variable stack
                 || callee_ir->needs_call_frame
                 || callee_ir->hasTypeSpecialization()
@@ -10776,6 +10816,48 @@ static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFun
     interpreter loop, so that its variadic call does not enlarge the frame of QoreIRInterpreter::execute(), which
     every level of a recursion of interpreted code puts on the stack (qore#6540)
 */
+//! Makes the slots that a handler's frame inherits for the IR-only locals of its function IR-only in the handler
+/** A local of a function that only the IR of its on_block_exit handlers references can be IR-only
+    (QoreIRFunction::handler_ir_locals): it has no variable on the runtime stack, and the handler, which reads and
+    assigns the locals of its function in the slots that it inherits, reads and assigns it in its slot.  The handler
+    takes the function's reference to its value, so that it holds the only one while it runs, as for the locals on the
+    runtime stack (see releaseHandlerParentCache()), and an assignment of the handler releases the value at once; the
+    slot takes the value back when the handler ends (see IRLocalSlotCache::takeOver(), #5951).
+
+    The function's frame is found by its slot cache: the handler runs for the innermost frame that has it (see
+    executeHandlerBody() and qore_rt_exec_on_block_exit_impl()).  A function compiled to native code gives its handler
+    no slot cache: it puts such locals on the runtime stack while its handlers run (see
+    QoreIRToLLVM::materializeHandlerIRLocals()).
+*/
+static QORE_IR_COLD_NOINLINE void qore_ir_take_parent_ir_only_slots(std::vector<QoreValue>& parent_cache,
+        uint32_t parent_slot_count, const std::vector<bool>& handler_own_slot, IRLocalSlotCache& slots,
+        std::vector<uint8_t>& locals_ir_only, std::vector<bool>& parent_slot_dirty, ExceptionSink* xsink) {
+    IRCallFramePool& pool = TlFramePool::get();
+    IRCallFrame* parent = nullptr;
+    for (size_t i = pool.top; i; --i) {
+        IRCallFrame* frame = pool.frames[i - 1].get();
+        if (&frame->locals_slot_cache.vector() == &parent_cache) {
+            parent = frame;
+            break;
+        }
+    }
+    if (!parent) {
+        return;
+    }
+    const std::vector<uint8_t>& parent_ir_only = parent->locals_ir_only;
+    size_t count = std::min({static_cast<size_t>(parent_slot_count), parent_ir_only.size(), parent_cache.size(),
+        locals_ir_only.size(), slots.size()});
+    for (size_t i = 0; i < count; ++i) {
+        if (!parent_ir_only[i] || (i < handler_own_slot.size() && handler_own_slot[i])) {
+            continue;
+        }
+        locals_ir_only[i] = 1;
+        slots.takeOver(i, parent_cache[i], parent->locals_slot_cache.isRealSlot(i), xsink);
+        // written back whether or not the handler assigns it
+        parent_slot_dirty[i] = true;
+    }
+}
+
 static QORE_IR_COLD_NOINLINE void qore_ir_raise_parent_slot_count_error(const QoreIRFunction& func,
         size_t frame_slots, const std::vector<QoreValue>* parent_slot_cache, ExceptionSink* xsink) {
     xsink->raiseException("IR-ERROR", "IR function '%s' has %u parent slots, more than its frame (%zu) or that of its "
@@ -11049,7 +11131,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (!parent_slot_dirty[i]) {
                         continue;
                     }
-                    QoreValue value = getWritebackValue(i);
+                    // a slot that took over its value gives it back, with its reference, to the slot that it took it
+                    // from, which is NOTHING (#5951)
+                    QoreValue value = locals_slot_cache.isTakenSlot(i) ? locals_slot_cache.giveBack(i)
+                        : getWritebackValue(i);
                     (*parent_slot_cache)[i].discard(xsink);
                     (*parent_slot_cache)[i] = value;
                     if (parent_slot_cache_dirty) {
@@ -11620,6 +11705,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // this frame releases its cached local references.
     ParentSlotWriteback parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
         parent_slot_to_lvar, parent_slot_dirty, parent_slot_cache_dirty, xsink);
+    // a handler takes over the slots of its function's IR-only locals, which the write-back gives back (#5951)
+    if (func.parent_slot_count && parent_slot_cache) {
+        qore_ir_take_parent_ir_only_slots(*parent_slot_cache, func.parent_slot_count, handler_own_slot,
+            locals_slot_cache, locals_ir_only, parent_slot_dirty, xsink);
+    }
 
     // Locals owned by this function.  Used by ensureLocalInstantiated() to
     // distinguish body locals from outer-scope variables (e.g. enclosing
