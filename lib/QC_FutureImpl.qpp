@@ -76,7 +76,8 @@ void q_future_rename_timeout(ExceptionSink* xsink, const char* err, const char* 
         return;
     }
     const QoreValue e = xsink->getExceptionErr();
-    if (e.getType() != NT_STRING || strcmp(e.get<const QoreStringNode>()->c_str(), "FUTURE-TIMEOUT")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(e) != "FUTURE-TIMEOUT") {
         return;
     }
     xsink->renamePrependLastException(err, "%s: ", desc_prefix ? desc_prefix : "");

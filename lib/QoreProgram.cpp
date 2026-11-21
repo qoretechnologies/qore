@@ -4601,8 +4601,8 @@ void ThreadLocalProgramData::dbgClearTermination(ExceptionSink& xsink) {
     if (!pgm || !pgm->priv->debugger_terminating) {
         return;
     }
-    QoreValue err = xsink.getExceptionErr();
-    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(xsink.getExceptionErr()) == "THREAD-CANCELLED") {
         printd(5, "ThreadLocalProgramData::dbgClearTermination() this: %p, tid: %d\n", this, q_gettid());
         xsink.clear();
     }
