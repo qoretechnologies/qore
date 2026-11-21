@@ -2226,9 +2226,10 @@ public:
 */
 class QoreProgramStackLocationHelper {
 public:
+    //! \a frame_pgm, if not nullptr, is the Program recorded for the frame, otherwise the current Program
     DLLLOCAL QoreProgramStackLocationHelper(QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt,
-            QoreProgram*& current_pgm) :
-        stack_loc(update_get_runtime_stack_location(stack_loc, current_stmt, current_pgm)) {
+            QoreProgram*& current_pgm, QoreProgram* frame_pgm = nullptr) :
+        stack_loc(update_get_runtime_stack_location(stack_loc, current_stmt, current_pgm, frame_pgm)) {
     }
 
     DLLLOCAL ~QoreProgramStackLocationHelper() {
@@ -2613,6 +2614,40 @@ public:
 private:
     DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
             QoreClassSourceProgramInfo* spgm_info);
+};
+
+//! Sets the call Program context of the frame of a method or a closure that runs without CodeContextHelperBase
+/** The paths that run the body of a method or a closure without UserVariantBase::eval() (the runtime fast-call
+    helpers, the IR interpreter's inline calls) set its object and class context with ObjectSubstitutionHelper or
+    CalleeContextHelper; this helper sets its call Program context (call_program_context) as CodeContextHelperBase
+    does: the source Program of the class, or else the Program of the object.  The calls made in the body take it as
+    the Program of their caller (qore_get_call_program_context()): their frames record it, which the code that reads
+    the Programs of the frames (Program::getCallerCapabilityMask(), for example) sees, and a call into a module's
+    Program takes it as its caller (CodeEvaluationHelper) (qore#7079).
+
+    It is created once the thread has entered the Program the code runs in (ProgramThreadCountContextHelper), so that
+    in the usual case, a class whose source Program is that Program, it takes no reference to it, and it changes
+    nothing when the thread has that context already.
+*/
+class MethodCallProgramContextHelper {
+public:
+    //! sets the call Program context for code of the class \a c (if any) run with the object \a obj (if any)
+    DLLLOCAL MethodCallProgramContextHelper(const qore_class_private* c, QoreObject* obj, ExceptionSink* xsink);
+
+    //! restores the caller's call Program context
+    DLLLOCAL ~MethodCallProgramContextHelper();
+
+    MethodCallProgramContextHelper(const MethodCallProgramContextHelper&) = delete;
+    MethodCallProgramContextHelper& operator=(const MethodCallProgramContextHelper&) = delete;
+
+private:
+    //! the current thread if the context was changed, otherwise nullptr
+    ThreadData* td = nullptr;
+    //! the caller's call Program context, restored by the destructor if \a td is set
+    QoreProgram* old_call_program_context = nullptr;
+    //! the source Program of the class if a reference to it was taken (see CodeContextHelperBase); released last
+    QoreProgram* referenced_class_pgm = nullptr;
+    ExceptionSink* xsink;
 };
 
 //! Runs the body of a plain function or a static method in its own object and class context

@@ -5112,6 +5112,47 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     }
 }
 
+MethodCallProgramContextHelper::MethodCallProgramContextHelper(const qore_class_private* c, QoreObject* obj,
+        ExceptionSink* xsink) : xsink(xsink) {
+    // as CodeContextHelperBase::init(): the class's source Program, which is kept for the frame unless the thread runs
+    // in it already, or else the Program of the object
+    bool referenced = false;
+    QoreProgram* pgm = c ? c->getSourceProgramForCall(referenced) : nullptr;
+    if (referenced) {
+        referenced_class_pgm = pgm;
+    }
+    if (!pgm && obj) {
+        pgm = obj->getProgram();
+    }
+    if (!pgm) {
+        return;
+    }
+    ThreadData* t = thread_data.get();
+    // the frame has the call Program context of its caller already, as for a call within a class's Program
+    if (t->call_program_context == pgm) {
+        return;
+    }
+    td = t;
+    old_call_program_context = t->call_program_context;
+    t->call_program_context = pgm;
+}
+
+MethodCallProgramContextHelper::~MethodCallProgramContextHelper() {
+    if (td) {
+        td->call_program_context = old_call_program_context;
+    }
+    // released once the frame no longer refers to it
+    if (referenced_class_pgm) {
+        if (xsink) {
+            referenced_class_pgm->deref(xsink);
+        } else {
+            // a path without an exception sink: an exception of the release is reported by the local sink
+            ExceptionSink xs;
+            referenced_class_pgm->deref(&xs);
+        }
+    }
+}
+
 CodeContextHelperBase::~CodeContextHelperBase() {
     ThreadData* td = thread_data.get();
     if (do_program_context) {
