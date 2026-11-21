@@ -24488,8 +24488,14 @@ private:
     LValueHelper& lvalue;
 };
 
+//! Merges into the object \a o after the lvalue that holds it has released its lock
+/** For an object with members held in external storage, whose setters run without any lock, and for a merge whose
+    target or source object is the object whose member is the lvalue (`t.o = t; t.o += h`, `t.o += t`): the lvalue
+    holds that object's lock for writing, which the merge takes itself, and the merge can replace the lvalue's own
+    member (qore#7107).  The merge is then that of the object held by the lvalue, as with a local variable.
+*/
 template <bool Lexical>
-static __attribute__((noinline)) QoreValue mergeExternalObjectMembers(LValueHelper& v, QoreObject* o,
+static __attribute__((noinline)) QoreValue mergeObjectMembersUnlocked(LValueHelper& v, QoreObject* o,
         const QoreValue& right, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     // Preserve an opaque target tag as well as its ownership when returning the compound result.
     ValueHolder target(v.getReferencedValue(), xsink);
@@ -24679,21 +24685,49 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 hp->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink);
             }
         } else if (right.getType() == NT_OBJECT) {
-            v.ensureUnique();
             auto* op = qore_object_private::get(*right.get<QoreObject>());
-            if constexpr (Lexical) {
-                op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink, policy);
+            if (v.getAutoVLock().getRWL() == &op->rml) {
+                // the object is the one whose member is the lvalue, whose lock this thread holds for writing: its
+                // members are copied without locking it again, before the lvalue's hash is made unique, as the hash
+                // can be one of them (qore#7107)
+                ReferenceHolder<QoreHashNode> members(new QoreHashNode(autoTypeInfo), xsink);
+                if constexpr (Lexical) {
+                    op->mergeDataToHash(*members, sdh, xsink, policy, false);
+                } else {
+                    op->mergeDataToHash(*members, sdh, xsink, false);
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+                v.ensureUnique();
+                auto* hp = qore_hash_private::get(*v.getValue().get<QoreHashNode>());
+                if constexpr (Lexical) {
+                    hp->merge(*qore_hash_private::get(**members), sdh, xsink, policy);
+                } else {
+                    hp->merge(*qore_hash_private::get(**members), sdh, xsink);
+                }
             } else {
-                op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink);
+                v.ensureUnique();
+                if constexpr (Lexical) {
+                    op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink, policy);
+                } else {
+                    op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink);
+                }
             }
         }
     } else if (vtype == NT_OBJECT) {
         // a char is added as its one-character string is
         const QoreValue operand = right.isChar() ? qore_plus_equals_replace_char(right_holder) : right;
         QoreObject* o = v.getValue().get<QoreObject>();
-        if (qore_class_private::get(*o->getClass())->has_member_accessors
-                && (right.getType() == NT_HASH || right.getType() == NT_OBJECT)) {
-            return mergeExternalObjectMembers<Lexical>(v, o, right, xsink, policy);
+        if (right.getType() == NT_HASH || right.getType() == NT_OBJECT) {
+            // the lock that the lvalue holds: that of the object whose member is the lvalue
+            const QoreVarRWLock* vl_lock = v.getAutoVLock().getRWL();
+            if (qore_class_private::get(*o->getClass())->has_member_accessors
+                    || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
+                        || (right.getType() == NT_OBJECT
+                            && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml)))) {
+                return mergeObjectMembersUnlocked<Lexical>(v, o, right, xsink, policy);
+            }
         }
         LValueMergeDerefHelper sdh(v, xsink);
         if constexpr (Lexical) {
@@ -24967,7 +25001,10 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             QoreObject* o = v.getValue().get<QoreObject>();
 
             const qore_class_private* cls = qore_class_private::get(*o->getClass());
-            if (cls->has_member_accessors || cls->member_write_gate) {
+            // the lvalue holds the object's lock when it is a member of the object itself (`t.o = t; t.o -= "a"`):
+            // the members are then removed after the lvalue has released it (qore#7107)
+            if (cls->has_member_accessors || cls->member_write_gate
+                    || v.getAutoVLock().getRWL() == &qore_object_private::get(*o)->rml) {
                 return removeExternalObjectMembers(v, o, right, xsink);
             }
             removeObjectMembers(v, o, right, xsink);

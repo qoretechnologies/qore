@@ -1218,6 +1218,17 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bool for_delete, bool* exists) {
     lvh.disableMemberWriteBack();
+    // the lvalue holds this object's lock for writing when it is a member of the object itself (`t.o = t;
+    // remove t.o.a`): the member is taken after the lvalue has released it, as from an object in a local variable,
+    // with the object's own lock and scan (qore#7107)
+    if (lvh.vl.getRWL() == &rml) {
+        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
+        return takeMember(lvh.vl.xsink, key, true, for_delete, exists);
+    }
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
@@ -1331,8 +1342,10 @@ void qore_object_private::takeExternalMembers(QoreLValueGeneric& rv, LValueHelpe
 void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
         bool for_delete) {
     lvh.disableMemberWriteBack();
-    // members held in external storage are taken one at a time, as their accessors and gates run without locks
-    if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors) {
+    // members held in external storage are taken one at a time, as their accessors and gates run without locks; so
+    // are the members of an object whose lock the lvalue holds, as it is a member of the object itself (qore#7107)
+    if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors
+            || lvh.vl.getRWL() == &rml) {
         takeExternalMembers(rv, lvh, l, for_delete);
         return;
     }
@@ -1412,14 +1425,14 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, bool lock) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         class_ctx = nullptr;
     }
 
-    QoreSafeVarRWReadLocker sl(rml);
+    QoreSafeVarRWReadLocker sl(rml, lock);
 
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
@@ -1481,13 +1494,14 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
     }
 }
 
-void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
-    return mergeDataToHashImpl<false>(hash, sdh, xsink, {});
+void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        bool lock) const {
+    return mergeDataToHashImpl<false>(hash, sdh, xsink, {}, lock);
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-        LexicalSemanticPolicy policy) const {
-    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy);
+        LexicalSemanticPolicy policy, bool lock) const {
+    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy, lock);
 }
 
 QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* member, const qore_class_private* class_ctx) {

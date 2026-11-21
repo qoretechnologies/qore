@@ -2493,6 +2493,10 @@
       @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
       merge into a deleted object also when there is nothing to merge
       (<a href="https://github.com/qoretechnologies/qore/issues/7055">issue 7055</a>)
+    - fixed a deadlock of the @ref plus_equals_operator "+=" and @ref minus_equals_operator "-=" operators and of the
+      @ref remove "remove" and @ref delete "delete" operators on a member of an object reached through a member of the
+      object itself, as in <tt>t.o = t; t.o += {"a": 2};</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/7107">issue 7107</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
