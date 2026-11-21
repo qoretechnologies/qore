@@ -360,6 +360,11 @@ public:
         //! For DT_ABORT: the task in native_task delivers the result after abort() (see
         //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
         bool after_abort_on_complete = false;
+#ifdef DEBUG
+        //! Debug-only: the item was held by the dbg_async_io_hold_module_cleanup_work() test hook; the worker writes on
+        //! stderr when it has ended (qore#6928)
+        bool dbg_held_module_cleanup_work = false;
+#endif
     };
 
     //! Creates the dispatcher

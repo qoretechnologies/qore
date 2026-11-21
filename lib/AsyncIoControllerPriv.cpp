@@ -303,7 +303,8 @@ private:
 }
 
 bool AsyncIoControllerPriv::commandModuleCleanupDelegation() {
-    return qore_module_cleanup_delegation();
+    // also a command that an I/O thread creates while it processes a command of the cleanup (qore#6928)
+    return io_command_module_cleanup_delegate || qore_module_cleanup_delegation();
 }
 
 //! Thread-local pointer to the controller that owns the current I/O thread; nullptr when not on an I/O thread.
@@ -1323,13 +1324,19 @@ bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
 void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+    bool hold_ended = false;
     {
         AutoLocker al(state.lock);
-        if (end_hold) {
+        if (end_hold && state.hold.load(std::memory_order_relaxed)) {
             // the work that the cleanup hands over from now on is queued
             state.hold.store(false, std::memory_order_release);
+            hold_ended = true;
         }
         held.swap(state.held);
+    }
+    if (hold_ended) {
+        fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
+        fflush(stderr);
     }
     if (held.empty()) {
         return;
@@ -1346,6 +1353,7 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
         }
     } requeue_helper;
     for (auto& i : held) {
+        i.second.dbg_held_module_cleanup_work = true;
         i.first->enqueue(std::move(i.second));
     }
 }
@@ -2291,11 +2299,26 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
                 }
             }
 
-            // Enqueue even if no workers exist — stop() will drain and clean up.
-            // Cannot execute synchronously here: caller may be the I/O thread,
-            // and Qore code could call submit() causing deadlock.
-            async_queue.push_back(std::move(item));
-            work_avail.signal();
+            if (!active_workers && ((item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work)
+                    || (item.release && item.release->module_cleanup_delegate))) {
+                // work that the module cleanup handed over and waits for (qore#6928): if no worker runs and none can
+                // be started, it would wait for stop(), which comes after the cleanup; its references are released
+                // now, as stop() releases them
+                if (!item.owner.empty()) {
+                    auto oit = active_per_owner.find(item.owner);
+                    if (oit != active_per_owner.end() && --oit->second <= 0) {
+                        active_per_owner.erase(oit);
+                        owner_idle_cond.broadcast();
+                    }
+                }
+                discard = true;
+            } else {
+                // Enqueue even if no workers exist — stop() will drain and clean up.
+                // Cannot execute synchronously here: caller may be the I/O thread,
+                // and Qore code could call submit() causing deadlock.
+                async_queue.push_back(std::move(item));
+                work_avail.signal();
+            }
         }
     }
 
@@ -3323,6 +3346,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.pgm) {
             async_item.pgm->depDeref();
         }
+#ifdef DEBUG
+        if (async_item.dbg_held_module_cleanup_work) {
+            // the item's callbacks and the release of its references have ended
+            fprintf(stderr, "held module cleanup work: an item %s and ended\n",
+                (pgm_shutting_down || owner_shutting_down) ? "was discarded" : "ran");
+            fflush(stderr);
+        }
+#endif
 
         // The worker's ExceptionSink is long-lived (one per worker thread, cleared only when the worker
         // exits), while the derefs above can run arbitrary Qore destructors that raise into it.  An
@@ -6506,7 +6537,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
 
-        target.cmdq.push(cmd);
+        target.cmdq.push(std::move(cmd));
         ++submit_seq;
         ++target.submit_seq;
         // notify() does not block; notifying under m keeps the context alive until it returns
@@ -6553,7 +6584,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             cmd.timer_id = id;
             // (completion is nullptr by default — AddTimer/CancelTimer have no waiter)
             cmd.timer_deadline_us = 0;
-            target.cmdq.push(cmd);
+            target.cmdq.push(std::move(cmd));
             ++submit_seq;
             ++target.submit_seq;
             // notify() does not block; notifying under m keeps the context alive until it returns
@@ -9695,8 +9726,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 }
 
 void AsyncIoControllerPriv::applyModuleCleanupCancel(PollInfo& pinfo) {
-    if (async_io_module_cleanup_delegate(pinfo.sandbox_ctx)
-            || !(io_command_module_cleanup_delegate || qore_module_cleanup_delegation())) {
+    // a context that is already counted for the cleanup is kept; one that is delegated but not counted (an operation
+    // that work of the cleanup submitted, whose context it captured: QoreSandboxContext(bool)) gets a counted copy,
+    // as the cleanup waits for the work of the operation (qore#6928)
+    if ((pinfo.sandbox_ctx && pinfo.sandbox_ctx->module_cleanup_work)
+            || !(async_io_module_cleanup_delegate(pinfo.sandbox_ctx) || io_command_module_cleanup_delegate
+                || qore_module_cleanup_delegation())) {
         return;
     }
     // the operation keeps its own context if the copy cannot be allocated

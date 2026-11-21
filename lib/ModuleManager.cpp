@@ -6689,8 +6689,6 @@ void QoreModuleManager::delUser() {
         // run here too, while all module data exists (qore#6015)
         qore_aot_run_all_module_del_closures();
     }
-    // the work that the del callbacks handed over ends before any module Program is torn down (qore#6928)
-    qore_module_cleanup_drain_work();
 
     // calls into module code take the thread count of the module's Program again from now on, and the threads in
     // module code entered without it leave it first, so that the teardown below waits for every thread in it (see

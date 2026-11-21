@@ -175,9 +175,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             + "hold-client.qr"), shellQuote(url), protocol), \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)status: 200\n", out, "the request succeeds: " + out);
-        # the work is held, and the cleanup releases it when it waits for it, before any module is deleted
-        assertRegex("(^|\n)held module cleanup work: [1-9][0-9]* released \\(the module cleanup waits for its work\\)\n",
-            out, "the cleanup waits for the work held: " + out);
+        # the work is held, the cleanup releases it when it waits for it, and it runs and ends before the user
+        # modules have been deleted
+        assertRegex("(?s)(^|\n)held module cleanup work: [1-9][0-9]* released \\(the module cleanup waits for its "
+            "work\\)\n.*held module cleanup work: an item ran and ended\n.*held module cleanup work: the hold ends "
+            "\\(the user modules have been deleted\\)\n", out, "the cleanup waits for the work held: " + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }

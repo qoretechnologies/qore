@@ -5439,7 +5439,30 @@ void qore_close_module_programs() {
 
 namespace {
 //! the work that the module cleanup has handed over and that has not ended (qore#6928)
-struct QoreModuleCleanupWork {
+/** Its lock is a leaf lock (QFLR_LEAF): its holders only count and signal.  None of the work counted exists in a
+    child process created with fork(), so the child handler resets the count.
+*/
+struct QoreModuleCleanupWork : public QoreForkHandler {
+    DLLLOCAL QoreModuleCleanupWork() : QoreForkHandler(QFLR_LEAF, "module_cleanup_work") {
+    }
+
+    void prepare() noexcept override {
+        lock.lock();
+    }
+
+    void parent() noexcept override {
+        lock.unlock();
+    }
+
+    void child() noexcept override {
+        // only the forking thread is left, which holds the lock since prepare()
+        count = 0;
+#ifdef DEBUG
+        dbg_held = false;
+#endif
+        lock.unlock();
+    }
+
     QoreThreadLock lock;
     QoreCondition cond;
     //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
