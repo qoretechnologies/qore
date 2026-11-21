@@ -1120,14 +1120,16 @@ public class HttpAsyncSocketIoController {
 
         @param target the async target whose dispatch hooks should wrap the call
         @param body the user-code closure to run on a handler-pool thread
-        @throw PERMISSION-DENIED \a body was created by code restricted from the \c THREAD_CONTROL domain
-        (see @ref Qore::check_thread_callable() "check_thread_callable()")
+        @throw PERMISSION-DENIED \a body, or the class of \a target, whose dispatch hooks run around it, was authored
+        by code restricted from the \c THREAD_CONTROL domain (see
+        @ref Qore::check_thread_callable() "check_thread_callable()")
         @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
     */
     submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
         # the body runs on a thread of the handler pool: code that cannot start threads cannot have its code run there
         # (qore#7056)
         check_thread_callable(body, "HttpAsyncSocketIoController::submitToHandlerPool()");
+        check_thread_callable(target, "HttpAsyncSocketIoController::submitToHandlerPool()");
         Priv::HttpHandlerPool pool = handler_pool;
         pool.submit(handlerTaskRunner(pool));
         pool.tasks.push({"target": target, "body": body});

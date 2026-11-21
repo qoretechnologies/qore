@@ -11113,6 +11113,15 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         ExceptionSink* xsink;
     } value_releaser(helper, xsink);
     for (size_t i = 0; i < num; ++i) {
+        // the callee of the expression is one of the values, but which one is not known here: every closure and call
+        // reference that the thread takes is checked, which refuses more than the AST interpreter, which checks only
+        // the callee of a call of a closure or call reference (ex: "background f(c, x + 1)" with a closure c of code
+        // that may not control threads, which f runs in the new thread) (qore#7056)
+        qore_type_t t = values[i].getType();
+        if ((t == NT_RUNTIME_CLOSURE || t == NT_FUNCREF)
+                && qore_check_thread_callable(values[i], QDOM_THREAD_CONTROL, "background operator", xsink)) {
+            return QoreValue();
+        }
         helper->values.push_back(background_check_value_capture(values[i].refSelf(), xsink));
         if (*xsink) {
             return QoreValue();

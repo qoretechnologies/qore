@@ -41,7 +41,6 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_websocket.h"
 #include "qore/intern/SocketPollEventsOps.h"
-#include "qore/intern/QoreSandboxProvenance.h"
 
 /** @cond INTERNAL */
 
@@ -1482,13 +1481,11 @@ nothing HttpWebSocketPollOperationBase::sendRawFrame(binary frame_data) [flags=N
     @param callback the callback, or @ref nothing to clear
 */
 nothing HttpWebSocketPollOperationBase::setFrameCallback(*code callback) [flags=NAMED_ARGS] {
-    // the callback runs on the controller's workers: code that may not control threads cannot give its own code to
-    // an operation created for it (by its own code or by module code that it calls); an operation that its host
-    // creates and lends it takes its code, as the host decided to run it, and module code gives its own callbacks to
-    // the operations that it creates (qore#7056)
-    if (callback && qore_callable_origin_restrictions_po(QoreValue(self)).hasAny(QoreParseOptions(QDOM_THREAD_CONTROL))
-            && qore_check_thread_callable(callback, QDOM_THREAD_CONTROL,
-                "HttpWebSocketPollOperationBase::setFrameCallback()", xsink)) {
+    // the callback runs on the controller's workers, outside the sandbox of the code that sets it: code that may
+    // not control threads cannot give its own code to any operation, also one that its host lends it; module code
+    // gives its own callbacks to the operations that it creates (qore#7056)
+    if (callback && qore_check_thread_callable(callback, QDOM_THREAD_CONTROL,
+            "HttpWebSocketPollOperationBase::setFrameCallback()", xsink)) {
         return QoreValue();
     }
     ResolvedCallReferenceNode* callback_ptr = nullptr;

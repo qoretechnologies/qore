@@ -195,8 +195,13 @@ static QoreParseOptions qore_callable_restrictions_po(const QoreValue v, bool re
                 rv = priv->sandbox_provenance->origin_restrictions;
             }
             // the Program that created it, which the object keeps alive: also for an object of a builtin class or of
-            // a class that the host imported into it, which records nothing
-            rv |= qore_non_module_program_restrictions(obj->getProgram());
+            // a class that the host imported into it, which records nothing; an object is authored by the code of its
+            // class, whichever code creates it: the Program that is current when it is created can be that of a
+            // restricted caller for which module code creates it (in a method of an object of a restricted subclass,
+            // for example), and an object of a module or builtin class runs only that code (qore#7056)
+            if (recorded_origin) {
+                rv |= qore_non_module_program_restrictions(obj->getProgram());
+            }
             // the source Program of its class, referenced, as it can be deleted while the object exists
             const qore_class_private* qc = qore_class_private::get(*obj->getClass());
             QoreProgram* code_pgm = qc->getReferencedSourceProgram();

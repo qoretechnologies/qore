@@ -6054,13 +6054,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 try {
                     ctrl.submitToHandlerPool(target, c);
                     return;
-                } catch () {
+                } catch (hash<ExceptionInfo> ex) {
+                    # code that may not be run in another thread is refused, never run elsewhere (qore#7056)
+                    if (ex.err == "PERMISSION-DENIED") {
+                        rethrow;
+                    }
                     # the pool is stopping or refuses the task: run it on a thread of its own
                 }
             }
             try {
                 background c();
-            } catch () {
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "PERMISSION-DENIED") {
+                    rethrow;
+                }
                 # no thread can be started (a thread limit): the end must still run, so it runs here
                 c();
             }

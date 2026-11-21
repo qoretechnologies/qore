@@ -36,11 +36,12 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
             "lent controller, host task: ran\n"
             "lent ThreadPool, restricted task: ran\n"
             "module background: PERMISSION-DENIED\n"
+            "module background, computed argument: PERMISSION-DENIED\n"
             "subclass runOnThreadOfItsOwn: PARSE-EXCEPTION\n"
             "subclass peer lookup: PARSE-EXCEPTION\n"
             "submitToHandlerPool: PERMISSION-DENIED\n"
             "lent WebSocket op, setDoneCallback: PERMISSION-DENIED\n"
-            "lent WebSocket op, setFrameCallback: set\n"
+            "lent WebSocket op, setFrameCallback: PERMISSION-DENIED\n"
             "own WebSocket op, setFrameCallback: PERMISSION-DENIED\n"
             "DelegatingPollOperation on_complete: PERMISSION-DENIED\n"
             "lent ThreadPool, restricted cancel callback: submitted\n"
@@ -50,7 +51,12 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
             "check_thread_callable, restricted code: PERMISSION-DENIED\n"
             "check_thread_callable, host code: passed\n"
             "module pool, no thread classes: PERMISSION-DENIED\n"
-            "module closure calling restricted code: ran\n";
+            "module closure calling restricted code: ran\n"
+            "DelegatingPollOperation over an own operation: PERMISSION-DENIED\n"
+            "DelegatingPollOperation with an own counter: PERMISSION-DENIED\n"
+            "own poll operation executed: PERMISSION-DENIED\n"
+            "submitToHandlerPool, own target: PERMISSION-DENIED\n"
+            "restricted subclass, module operation: submitted\n";
     }
 
     private {

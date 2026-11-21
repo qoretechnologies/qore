@@ -71,6 +71,12 @@ probe("module background", RunOrRefuse + 'string sub t() {
     return run(sub (Counter done) { ThreadEscapeHelper::runInBackground(sub () { done.dec(); }); });
 }');
 
+# the same with an argument that the new thread computes (a background expression that the compiled execution modes
+# run with a helper)
+probe("module background, computed argument", RunOrRefuse + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runInBackgroundWithArg(sub (int x) { done.dec(); }, 1); });
+}');
+
 # the private helpers of the HTTP controller are internal: a subclass cannot call them
 probe("subclass runOnThreadOfItsOwn", 'class X inherits HttpServerAsyncIo::HttpAsyncSocketIoController {
     constructor(AsyncSocketIoController c) : HttpAsyncSocketIoController(c) {}
@@ -102,8 +108,9 @@ string sub t() {
     return run(sub (Counter done) { hc.submitToHandlerPool(new T(), sub () { done.dec(); }); });
 }');
 
-# a WebSocket operation that the host creates and lends: its done callback runs on the handler pool, so a restricted
-# callable is refused; a frame callback is the capability of a lent operation
+# a WebSocket operation that the host creates and lends: its done callback runs on the handler pool and its frame
+# callback on the controller's workers, outside the sandbox of the restricted code, so a restricted callable is
+# refused for both
 HttpServerAsyncIo::HttpWebSocketPollOperation lent_ws_op(new Socket());
 probe("lent WebSocket op, setDoneCallback", 'string sub t(HttpServerAsyncIo::HttpWebSocketPollOperation op) {
     try {
@@ -221,5 +228,76 @@ probe("module pool, no thread classes", 'string sub t() {
 probe("module closure calling restricted code", RunOrRefuse + 'string sub t() {
     return run(sub (Counter done) { ThreadEscapeHelper::runWrapped(sub () { done.dec(); }); });
 }');
+
+# a delegating operation over an operation of restricted code, or with a counter of a class of restricted code: their
+# methods run on the controller's workers
+const OpClass = 'class Op inherits AbstractPollOperation {
+    string getGoal() { return "done"; }
+    string getState() { return "done"; }
+    bool goalReached() { return True; }
+    *hash<SocketPollInfo> continuePoll() {}
+}
+';
+probe("DelegatingPollOperation over an own operation", OpClass + 'string sub t() {
+    try {
+        DelegatingPollOperation d(new Op());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return "created";
+}');
+probe("DelegatingPollOperation with an own counter", 'class C inherits Counter {
+    constructor() : Counter(1) {}
+    int dec() { return Counter::dec(); }
+}
+string sub t(HttpServerAsyncIo::HttpWebSocketPollOperation op) {
+    try {
+        DelegatingPollOperation d(op, NOTHING, new C());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return "created";
+}', lent_ws_op);
+
+# AsyncIoController::exec() runs the operation too
+probe("own poll operation executed", OpClass + 'string sub t(Socket sock) {
+    try {
+        ThreadEscapeHelper::execOperation(sock, new Op());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return "executed";
+}', new Socket());
+
+# the dispatch hooks of a target of restricted code run on the handler pool around any body
+probe("submitToHandlerPool, own target", 'class T inherits HttpServerAsyncIo::HttpAsyncTarget {
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+    }
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {}
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {}
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {}
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx) {}
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {}
+}
+string sub t(code make_host_task) {
+    AsyncSocketIoController c();
+    HttpAsyncSocketIoController hc(c);
+    try {
+        hc.submitToHandlerPool(new T(), make_host_task(new Counter(1)));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return "submitted";
+}', make_host_task);
+
+# a restricted subclass of a module class runs the module's code: the operations that the module creates are the
+# module's, also when it creates them in a method of an object of the subclass
+probe("restricted subclass, module operation", 'class S inherits ThreadEscapeHelper::OpSubmitter {}
+string sub t(Socket sock) {
+    return (new S()).submitOwn(sock);
+}', new Socket());
 
 lent_pool.stopWait();

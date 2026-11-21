@@ -187,6 +187,16 @@ hashdecl Qore::SocketPollResultInfo {
     *hash<auto> other;
 }
 
+// a poll operation of a class with Qore code runs that code on the controller's thread and workers: an operation
+// whose class code that may not control threads authored is not run there (qore#7056)
+static int check_submitted_operation(const QoreHashNode* operation_info, const char* name, ExceptionSink* xsink) {
+    QoreValue spop = operation_info->getKeyValue("spop");
+    if (spop.getType() != NT_OBJECT || spop.get<const QoreObject>()->getClass()->isSystem()) {
+        return 0;
+    }
+    return qore_check_thread_callable(spop, QDOM_THREAD_CONTROL, name, xsink);
+}
+
 //! Async I/O controller for managing multiple concurrent socket poll operations
 /** The AsyncIoController provides a high-performance event loop for managing multiple concurrent
     socket operations. It uses the most efficient I/O mechanism available on each platform
@@ -397,11 +407,7 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     // AsyncIoControllerPriv::submit that plugs the per-call leak); our
     // QPP-generated caller still owns its own ref on the method arg, so
     // hand submit() an explicit self-ref via hashRefSelf().
-    // a poll operation of a class with Qore code runs that code on the controller's workers: an operation that code
-    // that may not control threads authored is not run there (qore#7056)
-    QoreValue spop = operation_info->getKeyValue("spop");
-    if (spop.getType() == NT_OBJECT && !spop.get<const QoreObject>()->getClass()->isSystem()
-            && qore_check_thread_callable(spop, QDOM_THREAD_CONTROL, "AsyncIoController::submit()", xsink)) {
+    if (check_submitted_operation(operation_info, "AsyncIoController::submit()", xsink)) {
         return QoreValue();
     }
     return ctrl->submit(obj, operation_info->hashRefSelf(), replace_existing, xsink);
@@ -431,6 +437,9 @@ static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperati
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    if (check_submitted_operation(operation_info, "AsyncIoController::exec()", xsink)) {
+        return QoreValue();
+    }
     return ctrl->exec(obj, operation_info->hashRefSelf(), replace_existing, xsink);
 }
 

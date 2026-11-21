@@ -1580,6 +1580,31 @@ nothing check_thread_callable(code c, string api) {
     qore_check_thread_callable(c, QDOM_THREAD_CONTROL, api->c_str(), xsink);
 }
 
+//! Raises \c PERMISSION-DENIED if the class of the given object was authored by code that may not control threads
+/** For module code that runs methods of an object that it is given in another thread: the object of a class of such
+    a %Program runs its code; an object of a class of a module, of a builtin class or of a class of the host passes,
+    whichever code creates it (see @ref sandbox_thread_callables)
+
+    @par Example:
+    @code{.py}
+submitToWorker(Target target, code<nothing()> body) {
+    check_thread_callable(target, "MyScheduler::submitToWorker()");
+    check_thread_callable(body, "MyScheduler::submitToWorker()");
+    queue.push({"target": target, "body": body});
+}
+    @endcode
+
+    @param o the object to check
+    @param api the name of the API that runs the methods of the object, for the exception
+
+    @throw PERMISSION-DENIED the class of \a o was authored by code that may not control threads
+
+    @since %Qore 3.0
+*/
+nothing check_thread_callable(object o, string api) {
+    qore_check_thread_callable(QoreValue(const_cast<QoreObject*>(o)), QDOM_THREAD_CONTROL, api->c_str(), xsink);
+}
+
 //! Calls the given code in a background thread and returns a Future for the result
 /** This function creates a Promise, spawns a background thread that calls the given function
     with the given arguments, and returns the associated Future. If the function throws an exception,

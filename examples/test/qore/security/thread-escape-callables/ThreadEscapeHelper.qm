@@ -12,6 +12,11 @@ public namespace ThreadEscapeHelper {
         background c();
     }
 
+    #! runs a callable on a new thread with an argument that the new thread computes
+    public sub runInBackgroundWithArg(code<nothing(int)> c, int x) {
+        background c(x + 1);
+    }
+
     #! runs a callable on a thread pool of the module and waits for it
     public sub runOnPool(code<nothing()> c) {
         ThreadPool tp(1);
@@ -33,6 +38,32 @@ public namespace ThreadEscapeHelper {
     #! submits a poll operation that it is given to the async I/O controller
     public sub submitOperation(Socket sock, AbstractPollOperation op) {
         AsyncIoController::submit(<SocketPollOperationInfo>{"sock": sock, "spop": op, "owner": "probe"});
+    }
+
+    #! runs an operation that it is given with AsyncIoController::exec()
+    public sub execOperation(Socket sock, AbstractPollOperation op) {
+        AsyncIoController::exec(<SocketPollOperationInfo>{"sock": sock, "spop": op, "owner": "probe"});
+    }
+
+    #! a poll operation of the module, which is done at once
+    public class ModuleOp inherits AbstractPollOperation {
+        string getGoal() { return "done"; }
+        string getState() { return "done"; }
+        bool goalReached() { return True; }
+        *hash<SocketPollInfo> continuePoll() {}
+    }
+
+    #! submits poll operations of the module that it creates; a restricted subclass runs the module's code
+    public class OpSubmitter {
+        string submitOwn(Socket sock) {
+            try {
+                AsyncIoController::submit(<SocketPollOperationInfo>{"sock": sock, "spop": new ModuleOp(),
+                    "owner": "probe"});
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+            return "submitted";
+        }
     }
 
     #! runs a callable with parallel_map()
