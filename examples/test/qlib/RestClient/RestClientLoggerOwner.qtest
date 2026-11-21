@@ -81,8 +81,14 @@ hash<string, string> sub get_internal(RestClient::RestClient rc) {
 }
 
 #! logs a message through the client's own logging
-sub log_through(RestClient::RestClient rc, string msg) {
+sub log_through(Logger::LoggerWrapper rc, string msg) {
     rc.info(msg);
+}
+
+RestClient::RestConnection sub make_connection() {
+    RestClient::RestConnection c(\"own\", \"own\", \"http://localhost:1\");
+    c.setLogger(own_logger());
+    return c;
 }
 
 Logger::Logger sub own_logger() {
@@ -140,6 +146,13 @@ class RestClientLoggerOwnerTest inherits QUnit::Test {
         assertEq("logger", a.callFunction("get_logger", a.callFunction("make_client")), "A on its own RestClient");
         assertEq("logger", a.callFunction("get_logger", a.callFunction("make_client_io")),
             "A on its own RestClientIo");
+        # the connection
+        RestConnection host_conn("host", "host", "http://localhost:1");
+        host_conn.setLogger(host_logger);
+        assertEq("nothing", a.callFunction("get_logger", host_conn), "A on the host's RestConnection");
+        assertEq("logger", a.callFunction("get_logger", a.callFunction("make_connection")),
+            "A on its own RestConnection");
+        a.callFunction("log_through", host_conn, "connection through A");
 
         # the internal accessor
         hash<string, string> refused = {"direct": Err, "call-ref": Err, "reflection": Err};
@@ -151,7 +164,7 @@ class RestClientLoggerOwnerTest inherits QUnit::Test {
 
         # the client's own logging is unchanged, also when a tenant makes an operation through it
         a.callFunction("log_through", host_rc, "through A");
-        assertEq(("through A",), rec.msgs, "the host's client logs for A");
+        assertEq(("connection through A", "through A"), rec.msgs, "the host's connection and client log for A");
     }
 
     trustedTest() {
@@ -161,6 +174,9 @@ class RestClientLoggerOwnerTest inherits QUnit::Test {
         # trusted code
         assertTrue(host_rc.getLogger() == host_logger, "the host's RestClient");
         assertTrue(host_io.getLogger() == host_logger, "the host's RestClientIo");
+        RestConnection host_conn("host", "host", "http://localhost:1");
+        host_conn.setLogger(host_logger);
+        assertTrue(host_conn.getLogger() == host_logger, "the host's RestConnection");
         Program a = tenant();
         assertTrue(exists cast<RestClient>(a.callFunction("make_client")).getLogger(), "a tenant's client");
 

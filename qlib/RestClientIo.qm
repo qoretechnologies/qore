@@ -1731,6 +1731,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @ref nothing "NOTHING" (see @ref Qore::SandboxManager::isObjectOwnedByCaller()
             "SandboxManager::isObjectOwnedByCaller()"), so that it cannot log into the logger of another owner or read
             its configuration.  The logging of the client itself is not affected.
+
+            @note other code that the owner lends the client to can still make the client log through its operations:
+            a message logged that way reveals nothing of the logger to that code
         */
         *LoggerInterface getLogger() {
             # the logger only to the owner of the client (issue 7034)

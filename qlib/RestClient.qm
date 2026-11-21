@@ -3416,6 +3416,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         @ref nothing "NOTHING" (see @ref Qore::SandboxManager::isObjectOwnedByCaller()
         "SandboxManager::isObjectOwnedByCaller()"), so that it cannot log into the logger of another owner or read
         its configuration.  The logging of the object itself is not affected.
+
+        @note the public logging methods of the client (inherited from @ref Logger::LoggerWrapper "LoggerWrapper") log
+        into its logger for any caller: the owner that lends the client to other code offers that API with it, and a
+        message that the other code logs reveals nothing of the logger to it
     */
     *LoggerInterface getLogger() {
         # the logger only to the owner of the object (issue 7034)
@@ -5342,8 +5346,24 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         }
     }
 
-    #! Returns the logger interface for logging
+    #! Returns the logger of the connection, or @ref nothing "NOTHING" to code that does not own the connection
+    /** The logger is returned to trusted code and to sandboxed code whose sandbox created the connection; code that
+        is sandboxed or acts for sandboxed code, under tenant isolation, whose sandbox did not create the connection
+        gets @ref nothing "NOTHING" (see @ref Qore::SandboxManager::isObjectOwnedByCaller()
+        "SandboxManager::isObjectOwnedByCaller()"), so that it cannot log into the logger of another owner or read
+        its configuration.  The logging of the connection itself is not affected.
+
+        @note the public logging methods of the connection (inherited from @ref Logger::LoggerWrapper "LoggerWrapper")
+        log into its logger for any caller: the owner that lends the connection to other code offers that API with
+        it, and a message that the other code logs reveals nothing of the logger to it
+    */
     *LoggerInterface getLogger() {
+        # the logger only to the owner of the object (issue 7034)
+        return SandboxManager::isObjectOwnedByCaller(self) ? logger : NOTHING;
+    }
+
+    #! Returns the logger for the logging of the connection itself, unchecked (see LoggerWrapper::getInternalLogger())
+    private *LoggerInterface getInternalLogger() {
         return logger;
     }
 
