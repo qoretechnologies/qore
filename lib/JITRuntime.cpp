@@ -12599,6 +12599,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
+            // note: safe; the node of the value, read under arg.hasNode() above
             const auto* str = static_cast<const QoreStringNode*>(node);
             return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }

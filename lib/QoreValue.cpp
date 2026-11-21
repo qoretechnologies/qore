@@ -989,6 +989,7 @@ void QoreValue::sanitize() {
         }
         case NT_STRING: {
             // Try to convert short strings to inline
+            // note: safe; n is the node that this value holds
             QoreStringNode* str = reinterpret_cast<QoreStringNode*>(n);
             size_t len = str->size();
             if (len <= SHORTSTR_MAX_BYTES && str->getEncoding() == QCS_UTF8) {

@@ -3991,6 +3991,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4052,6 +4053,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4140,6 +4142,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -4197,6 +4200,7 @@ nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS
         return QoreValue();
     }
     if (data->getType() == NT_STRING) {
+        // note: safe; qpp makes a node of an inline short string for a *data parameter
         priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink);
         return QoreValue();
     }
@@ -4260,6 +4264,7 @@ int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();

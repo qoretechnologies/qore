@@ -2656,6 +2656,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
                 body_->append(b->getPtr(), b->size());
             }
         } else if (body_type == NT_STRING) {
+            // note: safe; body is a node: qpp or materializeDataBodyNode() makes a node of an inline short string
             const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
             if (str->size()) {
                 body_ = new BinaryNode;

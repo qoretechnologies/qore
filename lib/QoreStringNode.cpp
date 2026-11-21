@@ -396,6 +396,7 @@ void QoreStringNode::getDateTimeRepresentation(DateTime& dt) const {
 bool QoreStringNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     assert(xsink);
     if (get_node_type(v) == NT_STRING) {
+        // note: safe; v is a node pointer, not a value: an inline short string has no node
         return equalSoft(*reinterpret_cast<const QoreStringNode*>(v), xsink);
     }
     QoreStringValueHelper str(v, getEncoding(), xsink);
@@ -408,6 +409,7 @@ bool QoreStringNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsi
 bool QoreStringNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     // note that "hard" equality checks now do encoding conversions if necessary
     if (get_node_type(v) == NT_STRING) {
+        // note: safe; v is a node pointer, not a value: an inline short string has no node
         return equalSoft(*reinterpret_cast<const QoreStringNode*>(v), xsink);
     }
     return false;
