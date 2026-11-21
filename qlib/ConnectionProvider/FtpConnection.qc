@@ -30,6 +30,11 @@ public namespace ConnectionProvider {
     - \c "path_add": appends the given string to the path component of the URL at runtime
 */
 public class FtpConnection inherits AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectionProvider",

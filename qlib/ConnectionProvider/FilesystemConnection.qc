@@ -34,6 +34,11 @@ public namespace ConnectionProvider {
     @note the path will be subject to environment variable substitutions
 */
 public class FilesystemConnection inherits AbstractConnectionWithInfo {
+    #! The connection's clients use the file system (qore#6981)
+    private int getConnectionDomainsImpl() {
+        return DOM_FILESYSTEM;
+    }
+
     public {
         #! Connection entry info
         const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectionProvider",

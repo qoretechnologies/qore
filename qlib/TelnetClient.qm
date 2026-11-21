@@ -1135,6 +1135,11 @@ telnet.setEventQueue();
     @since %TelnetClient 1.3
 */
 public class TelnetConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("TelnetClient",

@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ConnectionProvider
+%requires RestClient
+%requires SmtpClient
+%requires Pop3Client
+%requires ImapClient
+%requires TelnetClient
+%requires RedisDataProvider
+%requires MemcachedDataProvider
+%requires ServerSentEventClient
+%requires MllpUtil
+
+%exec-class ConnectionCreatorDomainsTest
+
+#! Tests that a connection gives its clients according to the restrictions of the code that created it (qore#6981)
+/** A connection builds its client in its module's code, when get() or getAsync() is called, so a connection that code
+    restricted from the network created handed that code a live client.  A connection records the domains that its
+    creator is restricted from: one that restricted code created gives no client, whoever asks for it, and one that
+    the host created and lends to restricted code gives its clients, which the connection creates when they are asked
+    for, as a capability of the host.
+*/
+class ConnectionCreatorDomainsTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the class, the URL scheme and the method that gives a client of each connection
+        const Connections = {
+            "RestConnection get": ("RestClient::RestConnection", "http", "get"),
+            "RestConnection getAsync": ("RestClient::RestConnection", "http", "getAsync"),
+            "HttpConnection get": ("ConnectionProvider::HttpConnection", "http", "get"),
+            "HttpConnection getAsync": ("ConnectionProvider::HttpConnection", "http", "getAsync"),
+            "SmtpConnection get": ("SmtpClient::SmtpConnection", "smtp", "get"),
+            "Pop3Connection get": ("Pop3Client::Pop3Connection", "pop3", "get"),
+            "ImapConnection get": ("ImapClient::ImapConnection", "imap", "get"),
+            "TelnetConnection get": ("TelnetClient::TelnetConnection", "telnet", "get"),
+            "RedisConnection get": ("RedisDataProvider::RedisConnection", "redis", "get"),
+            "MemcachedConnection get": ("MemcachedDataProvider::MemcachedConnection", "memcached", "get"),
+            "ServerSentEventConnection get": ("ServerSentEventClient::ServerSentEventConnection", "sse", "get"),
+            "MllpConnection get": ("MllpUtil::MllpConnection", "mllp", "get"),
+            "FtpConnection getAsync": ("ConnectionProvider::FtpConnection", "ftp", "getAsync"),
+        };
+
+        #! the connections whose creator is checked: those that restricted code creates give no client
+        const Checked = ("RestConnection get", "RestConnection getAsync", "HttpConnection get",
+            "HttpConnection getAsync", "SmtpConnection get", "ImapConnection get", "TelnetConnection get",
+            "RedisConnection get", "MemcachedConnection get", "ServerSentEventConnection get",
+            "FtpConnection getAsync");
+    }
+
+    constructor() : QUnit::Test("ConnectionCreatorDomains", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("connections that the host lends, " + m, sub () { testLent(m); });
+            addTestCase("connections that restricted code creates, " + m, sub () { testRestrictedCreator(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! a connection that the host created gives its clients to restricted code
+    private testLent(string mode) {
+        int port = get_free_port();
+        Program p = getProgram(mode);
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            object c = create_object(i.value[0], "c", "d", getUrl(i.value[1], port),
+                {"monitor": False});
+            # the client is given, or it is created and fails to connect to the port where nothing listens (a client
+            # that connects when it is created): either way it is not refused for its domain
+            string rv = p.callFunction("client", c, i.value[2]);
+            assertRegex("^(client|[A-Z0-9-]+: .*(refused|connect))", rv, sprintf("%s, %s", i.key, mode));
+            assertFalse(rv =~ /^(PERMISSION-DENIED|INVALID-FUNCTION-ACCESS)/,
+                sprintf("%s not refused, %s", i.key, mode));
+        }
+    }
+
+    #! a connection that restricted code created gives no client, also to trusted code
+    private testRestrictedCreator(string mode) {
+        int port = get_free_port();
+        Program p = getProgram(mode);
+        foreach string key in (Checked) {
+            list<string> i = Connections{key};
+            object c = p.callFunction("make", i[0], getUrl(i[1], port));
+            assertRegex("^PERMISSION-DENIED: connection \"c\" was created by code restricted from the NETWORK",
+                p.callFunction("client", c, i[2]), sprintf("%s by the restricted code, %s", key, mode));
+            assertThrows("PERMISSION-DENIED", sub () { call_object_method(c, i[2], False); }, NOTHING,
+                sprintf("%s by trusted code, %s", key, mode));
+        }
+    }
+
+    #! returns the URL of a connection; POP3 and IMAP connections need credentials
+    private static string getUrl(string scheme, int port) {
+        return sprintf("%s://%s127.0.0.1:%d", scheme, (scheme == "pop3" || scheme == "imap") ? "u:p@" : "", port);
+    }
+
+    private Program getProgram(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n%requires SmtpClient\n"
+            "%requires Pop3Client\n%requires ImapClient\n%requires TelnetClient\n%requires RedisDataProvider\n"
+            "%requires MemcachedDataProvider\n%requires ServerSentEventClient\n%requires MllpUtil\n"
+            "object sub make(string cls, string url) { return create_object(cls, \"c\", \"d\", url, "
+            "{\"monitor\": False}); }\n"
+            "string sub client(object c, string method) { try { call_object_method(c, method, False); "
+            "return \"client\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "conn");
+        return p;
+    }
+}

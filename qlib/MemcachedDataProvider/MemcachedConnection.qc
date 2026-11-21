@@ -27,6 +27,11 @@ public namespace MemcachedDataProvider {
 /** Provides connection support for memcached servers using the memcached:// and memcacheds:// URL schemes.
 */
 public class MemcachedConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection scheme information
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MemcachedDataProvider",

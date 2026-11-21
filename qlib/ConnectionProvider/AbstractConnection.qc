@@ -306,6 +306,14 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             caller
         */
         transient DataProvider::DataProviderSandboxCheck sandbox_check();
+
+        #! The functional domains that the code that created the connection is restricted from (qore#6981)
+        /** Set when the connection is created, also when it is deserialized: a connection that code restricted from
+            the domain that the connection uses created is not a capability of the host, and its clients are refused
+            to whoever asks for them (see getConnectionDomainsImpl()); a connection that the host created and lends
+            to restricted code is not refused
+        */
+        transient int creator_restrictions = AbstractConnection::getCreatorRestrictions();
     }
 
     constructor(hash<auto> config, *hash<auto> attr) {
@@ -806,6 +814,7 @@ conn.checkSandboxAccess(True);
     /** calls @ref getImpl() to actually acquire the connection object
     */
     object get(bool connect = True, *hash<auto> rtopts) {
+        checkCreator();
         # the common path is one call: only a sandboxed caller is checked
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
@@ -853,6 +862,7 @@ conn.checkSandboxAccess(True);
         @see getAsyncImpl()
     */
     object getAsync(bool connect = True, *hash<auto> rtopts) {
+        checkCreator();
         # the common path is one call: only a sandboxed caller is checked
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
@@ -1404,6 +1414,37 @@ scheme://user:pass@hostname:port/path
         @return the connection object
     */
     private abstract object getImpl(bool connect = True, *hash<auto> rtopts);
+
+    #! Returns the functional domains that the connection's clients use (qore#6981)
+    /** A connection that code restricted from any of them created gives no client (get(), getAsync()); 0 by default;
+        the connections to a network host return @ref Qore::DOM_NETWORK "DOM_NETWORK", those of the file system
+        @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM"
+
+        @since %ConnectionProvider 2.6
+    */
+    private int getConnectionDomainsImpl() {
+        return 0;
+    }
+
+    #! Refuses the client of a connection that code restricted from the connection's domains created (qore#6981)
+    private:internal checkCreator() {
+        int dom = creator_restrictions & getConnectionDomainsImpl();
+        if (dom) {
+            throw "PERMISSION-DENIED", sprintf("connection %y was created by code restricted from the %s functional "
+                "domain, so it gives no client", name, dom & DOM_FILESYSTEM ? "FILESYSTEM" : "NETWORK");
+        }
+    }
+
+    #! Returns the functional domains of a connection that the calling code is restricted from (qore#6981)
+    private static int getCreatorRestrictions() {
+        int rv = 0;
+        foreach int dom in ((DOM_NETWORK, DOM_FILESYSTEM)) {
+            if (SandboxManager::isCallerRestricted(dom)) {
+                rv |= dom;
+            }
+        }
+        return rv;
+    }
 
     #! returns an async-I/O-capable connection object
     /** The default implementation throws \c CONNECTION-ASYNC-UNSUPPORTED.
