@@ -37,6 +37,7 @@
 #include "qore/intern/QoreUtf16.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -543,6 +544,7 @@ QoreEncodingManager::QoreEncodingManager() {
             mb_getLength<DBCS_get_char_len<&gbk_bytes>>, mb_getByteLen<DBCS_get_char_len<&gbk_bytes>>,
             mb_getCharPos<DBCS_get_char_len<&gbk_bytes>>, DBCS_get_char_len<&gbk_bytes>);
         qore_encoding_private::get(*qcs)->needs_boundary_check = true;
+        qore_encoding_private::get(*qcs)->defined_multibyte = true;
         emap[qcs->getCode()] = qcs;
         QCS_WINDOWS_936 = qcs;
     }
@@ -1670,13 +1672,51 @@ const struct {
     {"UHC", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
     {"JOHAB", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
     {"CP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
+    // other names of these encodings that iconv implementations know (glibc's eucJP-ms is EUC-JP with the user-defined
+    // area, which has the same byte structure) (qore#6796)
+    {"eucJP-ms", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"eucJP-open", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"csEUCPkdFmtJapanese", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"csEUCKR", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"MS936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"Windows-936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"csBig5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    {"BIG-FIVE", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    // glibc: eucJP-win (eucJP-ms), UJIS and OSF00030010 (EUC-JP), OSF0004000A (EUC-KR), MSCP1361 (JOHAB)
+    {"eucJP-win", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"UJIS", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"OSF00030010", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"OSF0004000A", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"MSCP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
+    // EUC-CN (GB2312): code set 1 only, no C1 character (see EUC_get_char_len())
+    {"GB2312", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"EUC-CN", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"CN-GB", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"csGB2312", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"GB18030", QORE_MULTIBYTE_FAMILY("GB18030", GB18030_get_char_len, 4, false)},
+    // glibc: GB13000 (GBK), CN-BIG5 (Big5), MSCP949 and OSF100203B5 (UHC)
+    {"GB13000", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"CN-BIG5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    {"MSCP949", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
+    {"OSF100203B5", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
 
-// returns the family of the encoding of the given name, if Qore knows its definition
+// returns the letters and digits of the name in upper case (qore_encoding_name_key()), without any conversion flags
+// after "//": iconv implementations ignore punctuation in names (ex: "EUCJP" is "EUC-JP" for glibc; musl ignores all
+// of it, so "Shift.JIS" is Shift_JIS there), and every spelling that iconv accepts must find the definition of its
+// family (qore#6796)
+static std::string normalize_multibyte_family_name(const std::string& name) {
+    return qore_encoding_name_key(name.substr(0, name.find("//")).c_str());
+}
+
+// returns the family of the encoding of the given name, if Qore knows its definition; any spelling of the name that
+// iconv accepts is matched (qore#6796: "EUCJP" and "EUCKR" got the generic EUC family, which refuses the C1 bytes
+// of EUC-JP and EUC-KR that iconv decodes)
 const multibyte_family* get_named_multibyte_family(const std::string& code) {
+    std::string name = normalize_multibyte_family_name(code);
     for (const auto& i : named_multibyte_families) {
-        if (!strcasecmp(code.c_str(), i.name)) {
+        if (name == normalize_multibyte_family_name(i.name)) {
             return &i.family;
         }
     }
@@ -1845,8 +1885,9 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       and one of the families in multibyte_families gives the length of every sample character (EUC, double-byte
       encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
       searches only match at character boundaries, as the second byte of a character can be an ASCII character; an
-      encoding whose definition Qore knows (EUC-JP, EUC-KR, GBK, Big5 and its forms, UHC, Johab) then gets the bytes
-      of its definition (see named_multibyte_families).
+      encoding whose definition Qore knows (EUC-JP, EUC-KR, EUC-CN, GBK, GB18030, Big5 and its forms, UHC, Johab, by
+      the names of named_multibyte_families in any spelling) then gets the bytes of its definition, and the input of
+      its conversions is checked with them (see defined_multibyte).
       Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
       are decoded with iconv (QoreEncoding::getUnicode()).
     - Character width of encodings that are not ASCII-compatible: each character of a sample is converted alone and
@@ -1880,13 +1921,18 @@ void qore_encoding_private::probe() {
         return to.valid() && from.valid();
     });
     // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
-    // pairs or identify the extended Windows repertoire as Shift_JIS.
-    const bool windows_sjis = code == "CP932" || code == "Windows-31J";
-    if (windows_sjis || code == "Shift_JIS" || code == "SHIFT-JIS" || code == "SHIFTJIS" || code == "SJIS"
-            || code == "MS_KANJI" || code == "CSSHIFTJIS") {
+    // pairs or identify the extended Windows repertoire as Shift_JIS.  The name is matched as iconv implementations
+    // match it, also with conversion flags (ex: "SJIS//IGNORE") (qore#6796); a spelling that the platform's iconv
+    // does not know (ex: "S-JIS" on glibc) gets these character functions too, as they are those of the definition,
+    // but its text cannot be converted
+    const std::string name = normalize_multibyte_family_name(code);
+    const bool windows_sjis = name == "CP932" || name == "WINDOWS31J" || name == "MS932" || name == "SJISWIN"
+        || name == "SJISOPEN" || name == "CSWINDOWS31J";
+    if (windows_sjis || name == "SHIFTJIS" || name == "SJIS" || name == "MSKANJI" || name == "CSSHIFTJIS") {
         setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
             : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
         needs_boundary_check = true;
+        defined_multibyte = true;
         ascii_compat = false;
         return;
     }
@@ -2008,6 +2054,7 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         // an encoding whose definition Qore knows gets the characters of its definition
         if (const multibyte_family* named = get_named_multibyte_family(code)) {
             f = named;
+            defined_multibyte = true;
         }
         fcharlen = f->charlen;
         flength = f->length;

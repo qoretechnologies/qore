@@ -3007,6 +3007,11 @@ target_include_directories(qore-utf16-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the test calls the validation of IconvHelper, which is inline
 target_link_libraries(qore-utf16-validation-test PRIVATE libqore ${ICONV_LIBRARY})
+# the character functions of the multi-byte encodings against the platform's iconv (qore#6796)
+add_executable(qore-multibyte-iconv-parity-test examples/test/qore/strings/multibyte_iconv_parity.cpp)
+target_include_directories(qore-multibyte-iconv-parity-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${ICONV_INCLUDE_DIR})
+target_link_libraries(qore-multibyte-iconv-parity-test PRIVATE libqore ${ICONV_LIBRARY})
 # the keep-alive interval policy of QUIC connections is header-only, so the test needs no library
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
