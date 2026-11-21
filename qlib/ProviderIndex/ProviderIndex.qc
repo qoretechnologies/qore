@@ -754,8 +754,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                         failure.error);
                 }
                 ProviderIndex::reportModuleDiagnostic(LoggerLevel::LevelDebug,
-                    "[app %y] unavailable in the data provider index: %s%s: %s phase %s: %s: %s",
-                    failure.app, failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
+                    "unavailable in the data provider index: [app %y]%s: %s phase %s: %s: %s",
+                    failure.app, exists failure.action ? "/" + failure.action : "", failure.kind, failure.phase,
                     failure.error, failure.description);
             }
         }
