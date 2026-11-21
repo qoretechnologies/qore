@@ -2360,13 +2360,27 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         if (!owner || ref.module_storage != owner) {
             // A transitive dependency need not re-export the class. The consumer
             // can even declare a different class with the same namespace path.
+            // A class that several modules contribute (one that a binary module
+            // creates on demand for each Program that imports it, such as a Java
+            // class of the jni module) has the owner tag of the first one, which
+            // depends on the order in which the modules were loaded: the class
+            // that the module's Program has is the module's class whatever its
+            // tag (issue #6971)
             if (QoreAbstractModule* module = QMM.findModule(ref.module)) {
-                qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path, pseudo);
-                if (qc && (!qc->getModuleName() || ref.module_storage != qc->getModuleName())) {
+                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path,
+                    pseudo);
+                if (module_qc && module_qc != qc
+                        && (!module_qc->getModuleName() || ref.module_storage != module_qc->getModuleName())) {
+                    module_qc = nullptr;
+                }
+                qc = module_qc;
+            } else if (owner) {
+                // the module is not loaded yet: the class is the module's own if the module is the one being loaded
+                // into the Program (a compiled module referring to its own class, #6971)
+                const char* loading = get_module_context_name();
+                if (!loading || ref.module_storage != loading) {
                     qc = nullptr;
                 }
-            } else if (owner) {
-                qc = nullptr;
             }
             // An embedded source module has no separately loaded module or owner tag.
             // Its class was deserialized directly into the executable's Program.
