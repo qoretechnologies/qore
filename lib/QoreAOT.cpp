@@ -36170,6 +36170,7 @@ class ExprTreeSerializer {
         }
 
         // String constant
+        // note: safe; a node of a value: serializeValue() writes an inline short string before it gives a node here
         if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STRING));
             writeStr(str->c_str(), str->size());
@@ -37632,6 +37633,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
+    // note: safe; the node of the value, whose inline short string is classified above (!v.hasNode())
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
         // a CONST_STRING is rebuilt in UTF-8 from its bytes up to a null byte
         if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {

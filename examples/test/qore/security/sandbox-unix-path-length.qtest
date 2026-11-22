@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the size of the UNIX socket address, which differs between platforms, and its checks
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxUnixPathLengthTest
+
+#! A UNIX socket path that doesn't fit the socket address is refused before it is checked or used (issue #6910)
+/** The path was shortened to fit the socket address after the sandbox had judged it whole, so that a path that the
+    sandbox allowed reached another socket file
+*/
+class SandboxUnixPathLengthTest inherits QUnit::Test {
+    private {
+        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
+        TmpDir tmp("sandbox-unix-path-length-", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
+        Socket listener();
+        #! the socket file that the sandbox does not allow
+        string socket_path;
+        #! a path that names an allowed file, whose first bytes name the socket file
+        string long_path;
+        SandboxManager sm();
+        Program sandboxed;
+    }
+
+    #! the size of the path of a UNIX socket address, with its terminator, on the supported platforms
+    const MaxPath = Qore::PlatformOS == "Darwin" ? 104 : 108;
+
+    const Source = "%modern
+auto sub connect(string path) {
+    try {
+        Socket s();
+        s.connectUNIX(path);
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub bind(string path) {
+    try {
+        Socket s();
+        s.bindUNIX(path);
+        return \"BOUND\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    constructor() : Test("SandboxUnixPathLength", "1.0", \ARGV) {
+        addTestCase("a path that doesn't fit is refused for sandboxed code", \sandboxedTest());
+        addTestCase("a path that doesn't fit is refused for trusted code", \trustedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mkdir(tmp.path + "/sub");
+        socket_path = tmp.path + "/sub/real.sock";
+        listener.bindUNIX(socket_path);
+        listener.listen();
+        string prefix = tmp.path + "/sub/";
+        string truncated = prefix + strmul("/", MaxPath - 1 - prefix.size() - "real.sock".size()) + "real.sock";
+        assertEq(MaxPath - 1, truncated.size());
+        long_path = truncated + "EXTRA/../../allowed/s";
+
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(tmp.path + "/allowed", QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+        sandboxed = new Program(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse(Source, "sandboxed");
+    }
+
+    globalTearDown() {
+        listener.close();
+    }
+
+    sandboxedTest() {
+        # the socket file itself is not allowed
+        assertEq("FILESYSTEM-ACCESS-DENIED", sandboxed.callFunction("connect", socket_path));
+        # nor through a path whose first bytes name it
+        assertEq("SOCKET-CONNECT-ERROR", sandboxed.callFunction("connect", long_path));
+        assertEq("SOCKET-BIND-ERROR", sandboxed.callFunction("bind", long_path));
+    }
+
+    trustedTest() {
+        # the longest path that fits is used; one byte more is refused
+        string longest = tmp.path + "/sub/" + strmul("/", MaxPath - 1 - (tmp.path + "/sub/b.sock").size()) + "b.sock";
+        assertEq(MaxPath - 1, longest.size());
+        Socket b();
+        b.bindUNIX(longest);
+        b.listen();
+        on_exit b.close();
+        Socket c();
+        c.connectUNIX(longest);
+        c.close();
+        assertThrows("SOCKET-CONNECT-ERROR", "is \\d+ bytes long", \c.connectUNIX(), "/" + longest);
+        Socket s();
+        # the low-level bind reports the error number of a name that is too long
+        assertEq(-1, s.bind(long_path));
+        assertEq(ENAMETOOLONG, errno());
+        assertThrows("SOCKET-CONNECT-ERROR", "is \\d+ bytes long", \s.connectUNIX(), long_path);
+        assertThrows("SOCKET-BIND-ERROR", "is \\d+ bytes long", \s.bindUNIX(), long_path);
+        # a path that fits is used as before
+        s.connectUNIX(socket_path);
+        s.close();
+    }
+}

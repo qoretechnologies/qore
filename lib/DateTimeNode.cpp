@@ -419,6 +419,7 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const AbstractQoreNode* n, Exce
     // special logic for strings to verify that the input data represents a valid date
     if (t == NT_STRING) {
         del = true;
+        // note: safe; n is a node pointer, not a value: an inline short string has no node
         QoreAsciiCompatStringHelper str(*reinterpret_cast<const QoreStringNode*>(n));
         dt = new DateTimeNode(str.c_str(), xsink);
         return;

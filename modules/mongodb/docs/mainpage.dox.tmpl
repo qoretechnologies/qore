@@ -101,4 +101,22 @@ list<hash<auto>> docs = users.aggregate((
     MongoClient client("mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=myReplicaSet");
     @endcode
 
+    @section mongodbsandbox Sandboxed Code
+
+    Each connection that the module makes for code that a sandbox governs is checked against the sandbox's network
+    policy, for every address that it connects to; the sandbox of the program that created the client applies as
+    well as the sandbox of the program that uses it.  The driver also connects to other hosts by itself for some
+    options, through no connection that the module makes, so sandboxed code is refused them:
+    - the authentication mechanisms for which the driver fetches credentials or tokens from the environment's
+      endpoints itself (\c MONGODB-AWS without credentials in the connection string, and \c MONGODB-OIDC with an
+      \c ENVIRONMENT) are refused with \c NETWORK-ACCESS-DENIED when sandboxed code creates the client, and when
+      sandboxed code connects with such a client
+    - the TLS connections of sandboxed code never contact an OCSP responder: a stapled OCSP response is still
+      checked (as with the \c tlsDisableOCSPEndpointCheck option); this needs a libmongoc version whose TLS options
+      the module can set (1.17.0 to 2.5.9, which the build reports): with another version, the TLS connections of
+      sandboxed code are refused
+    - \c GSSAPI authentication, for which Kerberos contacts the KDCs itself, is allowed to sandboxed code only when its
+      network policy is unrestricted (as for the krb5 module): it is refused with \c NETWORK-ACCESS-DENIED otherwise,
+      when the client is created and when it connects
+
 */

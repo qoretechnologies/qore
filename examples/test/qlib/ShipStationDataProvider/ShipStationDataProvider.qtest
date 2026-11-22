@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -160,8 +161,8 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
     #! Sets up the ShipStation client for integration tests
     private setupConnection() {
-        *string apikey = m_options.apikey ?? ENV.SHIPSTATION_API_KEY;
-        *string apisecret = m_options.apisecret ?? ENV.SHIPSTATION_API_SECRET;
+        *string apikey = LiveProvider::get("shipstation", "SHIPSTATION_API_KEY", m_options.apikey);
+        *string apisecret = LiveProvider::get("shipstation", "SHIPSTATION_API_SECRET", m_options.apisecret);
         if (!apikey || !apisecret) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -k/-s options or SHIPSTATION_API_KEY/SHIPSTATION_API_SECRET env vars)\n");

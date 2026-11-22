@@ -286,6 +286,47 @@ private:
     //! the target's value: the check after the arguments, where the test dominates it, then tests only the deleted
     //! status of an object that passed it (issue #6646)
     std::unordered_map<llvm::Value*, llvm::Value*> valid_object_tests;
+    //! the number of checks of call targets before the arguments of their calls lowered in the function
+    uint64_t call_target_check_count = 0;
+    //! a call target stored at its check before the call's arguments, to be read again for the call (issue #6872)
+    struct CallTargetSpill {
+        //! call_target_check_count after the check
+        uint64_t check_count;
+        //! the slot, in the entry block
+        llvm::AllocaInst* slot;
+        //! the store of the target in the slot, at the check
+        llvm::StoreInst* store;
+    };
+    //! the call targets stored at their checks before the arguments, by the IR value of the target, until their call
+    //! or another use of the value
+    std::unordered_map<uint32_t, CallTargetSpill> call_target_spills;
+    //! the IR value of the call target read again from its slot for its call (call_target_reload_call)
+    uint32_t call_target_reload_id = 0;
+    //! the value of the call target that the value read from the slot replaces until the call is lowered
+    llvm::Value* call_target_reload_orig = nullptr;
+    //! the call that uses the call target read again from its slot; null if there is none
+    const QoreIRInstruction* call_target_reload_call = nullptr;
+
+    //! A call whose arguments check the targets of this many calls or more reads its own target again from memory
+    //! for the check after the arguments and for the call (issue #6872)
+    /** The target of a call is evaluated and checked before the call's arguments (issue #5784) and used again by the
+        check after them and by the call: held in a register over the code of the arguments, the targets of nested
+        calls are all live together, so that register allocation and the other passes of code generation take time in
+        the square of the nesting.  Such a target is stored in a slot of its own when it is checked and read from it
+        again for the call; the store is removed when the call's arguments check fewer targets, where the target stays
+        in a register.
+    */
+    static constexpr uint64_t CallTargetReloadNesting = 4;
+
+    //! Stores the target of a call checked before its arguments in a slot of its own (issue #6872)
+    void spillCallTarget(const QoreIRInstruction* check, llvm::Function* llvm_func);
+    //! At the first use of a call target stored by spillCallTarget() after its check: reads it again for its call, or
+    //! removes its store (issue #6872)
+    void reloadCallTarget(const QoreIRInstruction* inst, const QoreIRInstruction* next);
+    //! Restores the value of a call target read again for its call once the call \a inst is lowered (issue #6872)
+    void endCallTargetReload(const QoreIRInstruction* inst);
+    //! Removes the stores of the call targets that were not read again (issue #6872)
+    void dropCallTargetSpills();
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -575,6 +616,10 @@ private:
     // runtime-stack ownership. Proven-assigned native int/float locals can stay
     // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
+    //! the reload-exempt locals without the handlers' locals that the native code keeps on the runtime stack (#5951)
+    std::unordered_set<const void*> aot_reload_exempt;
+    //! the IR-only locals without the handlers' locals, for a function whose handlers use the table protocol (#5951)
+    std::unordered_set<const void*> handler_demoted_ir_only;
     //! The locals with IR storage (QoreIRFunction::hasIRStorage()) when the function has reference slot locals: the
     //! set that ir_only_locals_set points to, which then includes them
     std::unordered_set<const void*> ir_storage_locals;
@@ -1798,6 +1843,11 @@ private:
     llvm::Value* body_entry_stmt = nullptr;
     void captureBodyEntryLocation();
     void emitBodyCleanupLocation();
+    //! Before a run of handlers through the runtime: stores the location of the caller's statement of the function if
+    //! the function releases a local there (QoreIRFunction::local_unwind_locations), so that the frame of a handler
+    //! that runs as a function of its own takes it as its body's entry location, as the IR interpreter hands it to the
+    //! handler's frame (qore#6831)
+    void emitHandlerRunLocation();
     llvm::FunctionType* aotBodyFunctionType(bool takes_body_entry_location) const;
 
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
@@ -2174,6 +2224,16 @@ private:
     //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
     void publishLocalsForHandlers(llvm::Module& module);
 
+    //! Puts the IR-only locals that the handlers reference on the runtime local stack before they run out of line
+    /** The runtime stack takes the reference of the native storage, so that a handler that assigns or removes the
+        local releases the value right away; retireHandlerIRLocals() takes them back after the handlers (#5951)
+    */
+    void materializeHandlerIRLocals(llvm::Module& module);
+
+    //! Moves the values of the locals that materializeHandlerIRLocals() published back to their native storage, and
+    //! removes them from the runtime local stack, last published first (#5951)
+    void retireHandlerIRLocals(llvm::Module& module);
+
     //! Records the call that runs handlers out of line, around which finalizeHandlerSites() releases and reloads the
     //! reload storage of the locals that the handlers can assign
     /** @param reload true if the locals whose storage is released are reloaded right after the call; false if the
@@ -2217,6 +2277,8 @@ private:
         llvm::Instruction* reload_after;
     };
     std::vector<HandlerSite> handler_sites;
+    //! the locals that materializeHandlerIRLocals() published for the handler run being emitted, in declaration order
+    std::vector<const void*> materialized_handler_locals;
 
     //! true if the reload storage of the local is released for handlers run out of line (see handler_locals)
     bool releasesReloadStorageForHandlers(const void* key) const;

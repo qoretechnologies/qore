@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 UnicodeCharacterIterator::UnicodeCharacterIterator(const QoreString& str) : str(str) {
 }
@@ -43,7 +44,7 @@ bool UnicodeCharacterIterator::next(ExceptionSink* xsink) {
         return false;
     }
     if (qore_string_private::get(str)->isStateful()) {
-        return nextStateful(xsink);
+        return qore_unicode_character_iterator_ops(this).nextStateful(xsink);
     }
     // if at the end of the string, reset to the beginning and return false
     if (byte_pos == str.size()) {
@@ -67,26 +68,26 @@ bool UnicodeCharacterIterator::next(ExceptionSink* xsink) {
 // next character in the text of the string in UTF-8, which is converted for each character, as the layout of this
 // public class cannot hold the converted text; functions in the library that walk the characters of a string in a
 // stateful encoding walk its text in UTF-8 instead of using this class
-bool UnicodeCharacterIterator::nextStateful(ExceptionSink* xsink) {
+bool qore_unicode_character_iterator_ops::nextStatefulImpl(UnicodeCharacterIterator* b, ExceptionSink* xsink) {
     QoreString utf8(QCS_UTF8);
-    if (qore_string_private::get(str)->statefulToUtf8(utf8, xsink)) {
-        byte_pos = 0;
-        current_code = -1;
+    if (qore_string_private::get(b->str)->statefulToUtf8(utf8, xsink)) {
+        b->byte_pos = 0;
+        b->current_code = -1;
         return false;
     }
-    if (byte_pos >= utf8.size()) {
-        byte_pos = 0;
-        current_code = -1;
+    if (b->byte_pos >= utf8.size()) {
+        b->byte_pos = 0;
+        b->current_code = -1;
         return false;
     }
     unsigned len;
-    current_code = utf8.getUnicodePointFromBytePos(byte_pos, len, xsink);
+    b->current_code = utf8.getUnicodePointFromBytePos(b->byte_pos, len, xsink);
     if (*xsink) {
-        byte_pos = 0;
-        current_code = -1;
+        b->byte_pos = 0;
+        b->current_code = -1;
         return false;
     }
-    byte_pos += len;
+    b->byte_pos += len;
     return true;
 }
 

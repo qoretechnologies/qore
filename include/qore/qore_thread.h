@@ -174,13 +174,13 @@ DLLEXPORT q_trid_t qore_get_trid();
     @note this is a global object and not an attribute of a thread
  */
 class ThreadCleanupList {
+    friend class qore_thread_cleanup_list_ops;
 private:
    static ThreadCleanupNode *head;
 
 public:
    DLLLOCAL ThreadCleanupList();
    DLLLOCAL ~ThreadCleanupList();
-   DLLLOCAL void exec();
 
    //! must only be called in the module initialization function
    /** @param func the cleanup function to be run whenever a thread ends

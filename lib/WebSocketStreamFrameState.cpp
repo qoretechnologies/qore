@@ -35,6 +35,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/ql_websocket.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 WebSocketStreamFrameState::WebSocketStreamFrameState(Queue* msg_queue_, SendCallback send_cb_,
         bool is_server_)
@@ -59,7 +60,7 @@ bool WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> 
     // the queue's hook serves every stream whose messages it receives; without a queue, no message is kept, and the
     // data is credited as it is fed (creditUnusedData())
     if (msg_queue) {
-        item_hook = msg_queue->getItemConsumeHook();
+        item_hook = qore_queue_ops(msg_queue).getItemConsumeHook();
     }
     stream_hook = std::move(hook);
     return true;

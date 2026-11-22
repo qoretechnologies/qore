@@ -1,21 +1,15 @@
-#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
-#
-# A generic function shared by several Programs is specialized for each Program's type arguments: classes and
-# hashdecls of the same name in two live Programs, or in a later Program after an earlier one was destroyed, are
-# different types, so a call never uses the specialization made for another Program's type
-# (GenericSpecializationPrograms.qr, whose Programs run in every execution mode, in a qore process in every execution
-# mode and in AOT executables)
-%modern
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires ../TestInterpreter.qm
-%requires FsUtil
-%exec-class GenericSpecializationProgramsTest
 
-class GenericSpecializationProgramsTest inherits QUnit::Test {
+# The cases of the GenericSpecializationPrograms-<n>.qtest tests: each runs one part of them, so that each takes a
+# short time, and together they run every case (see addPartCase())
+
+
+class GenericSpecializationProgramsBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
         string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
         string qcc = ENV.QCC ?? libdir + "/qcc";
@@ -23,10 +17,17 @@ class GenericSpecializationProgramsTest inherits QUnit::Test {
         const Expected = "ast: ok\nir: ok\njit: ok\ntiered: ok\n";
     }
 
-    constructor() : Test("generic specializations of several Programs", "1.0", \ARGV) {
-        addTestCase("execution modes", \executionModes());
-        addTestCase("AOT", \aot());
+    constructor(string name, int part) : Test(name, "1.0", \ARGV) {
+        self.part = part;
+        addPartCase(1, "execution modes", \executionModes());
+        addPartCase(2, "AOT", \aot());
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     private static string quote(string value) {

@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -139,9 +140,9 @@ public class ApolloDataProviderTest inherits QUnit::Test {
     #! Sets up the Apollo client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.APOLLO_CONNECTION;
+        *string conn_name = LiveProvider::get("apollo", "APOLLO_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("apollo", "APOLLO_CONNECTION", m_options.conn);
             if (conn instanceof ApolloRestClient::ApolloRestConnection) {
                 client = (cast<ApolloRestClient::ApolloRestConnection>(conn)).getAsync();
             }
@@ -149,7 +150,7 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         }
 
         # Try environment variables
-        *string token = m_options.token ?? ENV.APOLLO_TOKEN;
+        *string token = LiveProvider::get("apollo", "APOLLO_TOKEN", m_options.token);
 
         if (token) {
             client = new ApolloRestClient::ApolloRestClientIo({"token": token});

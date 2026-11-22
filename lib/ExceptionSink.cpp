@@ -252,11 +252,48 @@ const QoreValue ExceptionSink::getExceptionArg() {
     return priv->head ? priv->head->arg : QoreValue();
 }
 
+// appends text to the description of an exception in the encoding of the description (qore#6741): text that the
+// description's encoding cannot represent makes the description UTF-8, which represents both
+static void qore_append_exception_description(QoreException& ex, const QoreString& text) {
+    QoreStringNodeValueHelper old_desc(ex.desc);
+    QoreStringNodeHolder desc(old_desc->copy());
+    if (text.getEncoding() == desc->getEncoding()) {
+        desc->concat(text.c_str(), text.size());
+    } else {
+        ExceptionSink xsink;
+        desc->concat(&text, &xsink);
+        if (xsink) {
+            xsink.clear();
+            desc = old_desc->convertEncoding(QCS_UTF8, &xsink);
+            if (*desc) {
+                desc->concat(&text, &xsink);
+            }
+            if (!*desc || xsink) {
+                // text that is not valid in its encoding is left out
+                xsink.clear();
+                return;
+            }
+        }
+    }
+    ex.desc.discard(nullptr);
+    ex.desc = desc.release();
+}
+
+int qore_exception_sink_ops::appendLastDescription(const QoreString& text) {
+    QoreException* ex = getException();
+    if (!ex || ex->desc.getType() != NT_STRING) {
+        return -1;
+    }
+    qore_append_exception_description(*ex, text);
+    return 0;
+}
+
 int ExceptionSink::appendLastDescription(const char* fmt, ...) {
     if (!priv->head || priv->head->desc.getType() != NT_STRING) {
         return -1;
     }
 
+    // the text is formatted in the default encoding
     SimpleRefHolder<QoreStringNode> new_desc(new QoreStringNode);
 
     va_list args;
@@ -270,11 +307,7 @@ int ExceptionSink::appendLastDescription(const char* fmt, ...) {
         }
     }
 
-    QoreStringNodeValueHelper old_desc(priv->head->desc);
-    QoreStringNodeHolder desc(old_desc->copy());
-    desc->concat(new_desc->c_str(), new_desc->size());
-    priv->head->desc.discard(nullptr);
-    priv->head->desc = desc.release();
+    qore_append_exception_description(*priv->head, *new_desc);
     return 0;
 }
 

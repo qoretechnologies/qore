@@ -40,7 +40,7 @@ QoreString* QoreDeleteOperatorNode::getAsString(bool &del, int foff, ExceptionSi
 }
 
 int QoreDeleteOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&delete_str);
+    qore_string_private::get(str)->concatAsciiName(delete_str);
     return 0;
 }
 

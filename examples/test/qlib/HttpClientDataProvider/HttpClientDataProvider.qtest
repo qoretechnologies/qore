@@ -349,9 +349,13 @@ public class HttpClientDataProviderTest inherits QUnit::Test {
                 handler.block.dec();
             }
         }
-        # the documented error of the synchronous client is raised
+        # the documented error of the synchronous client is raised, also when the time runs out before the connection
+        # is established (HTTPCLIENT-TIMEOUT of the connection manager in both cases)
         assertThrows("SOCKET-TIMEOUT", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/block"});
-        assertEq("/block", handler.blocked.get());
+        # whether the server gets the request before the client's deadline is not checked: on a loaded machine the
+        # connection can be established, or the request written, after the deadline, and the wait for the request
+        # would then never end (qore#6956; see WebSocketPingPollOperation.qtest's timeoutTest()); either way, the
+        # request ends at its deadline
         handler.block.dec();
     }
 

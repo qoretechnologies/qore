@@ -201,7 +201,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
     }
 
     private string requireEnv(string name) {
-        *string value = getenv(name);
+        *string value = getenv(name); # live-provider-optin: the local KDC that run-gss-kdc-integration.sh starts
         if (!value || value == "") {
             testSkip(sprintf("environment variable %s is not set", name));
         }

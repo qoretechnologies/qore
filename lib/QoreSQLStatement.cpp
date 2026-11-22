@@ -659,7 +659,7 @@ int QoreSQLStatement::execIntern(DBActionHelper& dba, ExceptionSink* xsink) {
     if (!rc)
         status = STMT_EXECED;
 
-    //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s@%s: %s\n", this, priv->ds, priv->ds->getUsername(), priv->ds->getDBName(), str.getBuffer());
+    //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s\n", this, priv->ds, str.getBuffer());
 
     stmt_mutation_post(dsp, SQL_STMT_CLASS_STMT_EXEC, rc, xsink);
 
@@ -678,7 +678,7 @@ int QoreSQLStatement::execDescribeIntern(DBActionHelper& dba, ExceptionSink* xsi
     if (!rc)
         status = STMT_EXECED;
 
-    //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s@%s: %s\n", this, priv->ds, priv->ds->getUsername(), priv->ds->getDBName(), str.getBuffer());
+    //printd(5, "QoreSQLStatement::execIntern() this: %p ds: %p: %s\n", this, priv->ds, str.getBuffer());
 
     stmt_mutation_post(dsp, SQL_STMT_CLASS_READ, rc, xsink);
 

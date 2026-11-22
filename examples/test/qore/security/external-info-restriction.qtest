@@ -72,7 +72,7 @@ int sub getEnvCount() {
 }
 
 *string sub getHome() {
-    return ENV.HOME;
+    return ENV.HOME; # live-provider-optin: HOME in a restricted Program, which must not see it
 }
 ", "env-test");
 
@@ -83,6 +83,7 @@ int sub getEnvCount() {
         assertEq(NOTHING, path, "ENV.PATH should be NOTHING with PO_NO_EXTERNAL_INFO");
 
         auto home = p.callFunction("getHome");
+        # live-provider-optin: HOME in a restricted Program, which must not see it
         assertEq(NOTHING, home, "ENV.HOME should be NOTHING with PO_NO_EXTERNAL_INFO");
     }
 

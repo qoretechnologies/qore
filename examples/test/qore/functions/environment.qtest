@@ -56,12 +56,13 @@ class EnvironmentTest inherits QUnit::Test {
     }
 
     testEnvHash() {
-        assertTrue(ENV.size() > 0, "ENV is not empty");
+        assertTrue(ENV.size() > 0, "ENV is not empty"); # live-provider-optin: the environment test of the core
         # the variables of this test are the only ones that the process changes
-        foreach string key in (keys ENV) {
+        foreach string key in (keys ENV) { # live-provider-optin: the environment test of the core
             if (key.equalPartial(prefix)) {
                 continue;
             }
+            # live-provider-optin: the environment test of the core
             assertEq(ENV{key}, getenv(key), sprintf("ENV{%y}", key));
         }
     }
@@ -83,15 +84,15 @@ class EnvironmentTest inherits QUnit::Test {
         for (int t = 0; t < Threads; ++t) {
             for (int i = 0; i < OwnVars; ++i) {
                 string own = sprintf("%sT%d_%d", prefix, t, i);
-                assertNothing(getenv(own), own);
+                assertNothing(getenv(own), own); # live-provider-optin: the environment test of the core
             }
         }
         # the environment can still be changed after the threads have finished
         string v = sprintf("final-%s", Pad);
         assertEq(0, setenv(shared, v));
-        assertEq(v, getenv(shared));
+        assertEq(v, getenv(shared)); # live-provider-optin: the environment test of the core
         assertEq(0, unsetenv(shared));
-        assertNothing(getenv(shared));
+        assertNothing(getenv(shared)); # live-provider-optin: the environment test of the core
     }
 
     testChildCopy() {
@@ -132,9 +133,9 @@ class EnvironmentTest inherits QUnit::Test {
         assertNothing(getenv("A=B"));
 
         assertEq(0, setenv(name, "value"));
-        assertEq("value", getenv(name));
+        assertEq("value", getenv(name)); # live-provider-optin: the environment test of the core
         assertEq(0, unsetenv(name));
-        assertNothing(getenv(name));
+        assertNothing(getenv(name)); # live-provider-optin: the environment test of the core
     }
 
     testExecFailure() {
@@ -152,7 +153,7 @@ class EnvironmentTest inherits QUnit::Test {
         string name = prefix + "EXEC";
         on_exit unsetenv(name);
         assertEq(0, setenv(name, "value"));
-        assertEq("value", getenv(name));
+        assertEq("value", getenv(name)); # live-provider-optin: the environment test of the core
     }
 
     testExecSearchError() {
@@ -213,7 +214,7 @@ class EnvironmentTest inherits QUnit::Test {
                     errors += sprintf("thread %d: setenv(%y) failed: %s", t, shared, strerror());
                 }
                 # every value of the shared variable is one that a thread wrote
-                *string sv = getenv(shared);
+                *string sv = getenv(shared); # live-provider-optin: the environment test of the core
                 if (!exists sv || !regex(sv, ValueRegex)) {
                     errors += sprintf("thread %d: %y has an unexpected value: %y", t, shared, sv);
                 }
@@ -222,14 +223,14 @@ class EnvironmentTest inherits QUnit::Test {
                 if (setenv(own, v)) {
                     errors += sprintf("thread %d: setenv(%y) failed: %s", t, own, strerror());
                 }
-                *string ov = getenv(own);
+                *string ov = getenv(own); # live-provider-optin: the environment test of the core
                 if (ov !== v) {
                     errors += sprintf("thread %d: %y is %y, expected %y", t, own, ov, v);
                 }
                 if (unsetenv(own)) {
                     errors += sprintf("thread %d: unsetenv(%y) failed: %s", t, own, strerror());
                 }
-                ov = getenv(own);
+                ov = getenv(own); # live-provider-optin: the environment test of the core
                 if (exists ov) {
                     errors += sprintf("thread %d: %y is still set to %y after unsetenv()", t, own, ov);
                 }

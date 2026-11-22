@@ -230,6 +230,7 @@ enum method_type_e {
     @see QoreClass
  */
 class QoreMethod {
+    friend class qore_method_ops;
     friend class StaticMethodCallNode;
     friend class QoreObject;
     friend class qore_class_private;
@@ -317,9 +318,6 @@ public:
 
     DLLLOCAL QoreMethod(const QoreClass* p_class, MethodFunctionBase* n_func, bool n_static = false);
 
-    DLLLOCAL bool inMethod(const QoreObject* self) const;
-    DLLLOCAL QoreMethod* copy(const QoreClass* p_class) const;
-    DLLLOCAL void assign_class(const QoreClass* p_class);
     // non-exported destructor
     DLLLOCAL ~QoreMethod();
 };

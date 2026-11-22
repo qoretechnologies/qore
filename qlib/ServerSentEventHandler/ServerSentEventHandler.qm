@@ -89,6 +89,10 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_2_0 Version 1.2.0
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - fixed sending events validated against an AsyncAPI schema: an event with none of the \c event, \c id,
       \c retry and \c comment fields raised \c RUNTIME-TYPE-ERROR in
       @ref ServerSentEventHandler::ServerSentEventConnection "ServerSentEventConnection" and

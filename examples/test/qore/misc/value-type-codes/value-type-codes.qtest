@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ValueTypeCodesTest
+
+#! the type code of every kind of value (QoreValue::getType(), #7006)
+/** QoreValue::getType() tests the tags of a node and an integer first; the type of every other kind of value is the one
+    that the rest of its tests give.  The type codes of values of every kind are checked, the boundaries of the
+    integers that a value holds inline and of the strings that it holds inline included.
+*/
+class ValueTypeCodesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("value type codes", "1.0", \ARGV) {
+        addTestCase("type codes", \typeCodes());
+        set_return_value(main());
+    }
+
+    typeCodes() {
+        list<hash<auto>> values = (
+            {"label": "int", "value": 1, "code": NT_INT},
+            {"label": "negative int", "value": -1, "code": NT_INT},
+            {"label": "48-bit int", "value": 140737488355327, "code": NT_INT},
+            {"label": "large int", "value": 9223372036854775807, "code": NT_INT},
+            {"label": "float", "value": 1.5, "code": NT_FLOAT},
+            {"label": "zero float", "value": 0.0, "code": NT_FLOAT},
+            {"label": "negative zero float", "value": -0.0, "code": NT_FLOAT},
+            {"label": "infinite float", "value": @inf@, "code": NT_FLOAT},
+            {"label": "NaN float", "value": @nan@, "code": NT_FLOAT},
+            {"label": "True", "value": True, "code": NT_BOOLEAN},
+            {"label": "False", "value": False, "code": NT_BOOLEAN},
+            {"label": "NULL", "value": NULL, "code": NT_NULL},
+            {"label": "NOTHING", "value": NOTHING, "code": NT_NOTHING},
+            {"label": "short string", "value": "ab", "code": NT_STRING},
+            {"label": "empty string", "value": "", "code": NT_STRING},
+            {"label": "long string", "value": strmul("x", 100), "code": NT_STRING},
+            {"label": "number", "value": 1.5n, "code": NT_NUMBER},
+            {"label": "date", "value": 2026-11-21, "code": NT_DATE},
+            {"label": "binary", "value": <0102>, "code": NT_BINARY},
+            {"label": "hash", "value": {"a": 1}, "code": NT_HASH},
+            {"label": "list", "value": (1, 2), "code": NT_LIST},
+            {"label": "object", "value": new Mutex(), "code": NT_OBJECT},
+            {"label": "closure", "value": sub () {}, "code": NT_CLOSURE},
+            {"label": "call reference", "value": \printf(), "code": NT_CALLREF},
+        );
+        foreach hash<auto> v in (values) {
+            auto value = v.value;
+            assertEq(v.code, value.typeCode(), v.label);
+        }
+        # a value in a list and in a hash
+        foreach hash<auto> v in (values) {
+            list<auto> l = (v.value,);
+            assertEq(v.code, l[0].typeCode(), v.label + " in a list");
+            hash<auto> h = {"k": v.value};
+            assertEq(v.code, h.k.typeCode(), v.label + " in a hash");
+        }
+    }
+}

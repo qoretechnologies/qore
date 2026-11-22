@@ -10,6 +10,7 @@
 %requires MysqlSqlUtil
 %requires DbDataProvider
 %requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -161,7 +162,7 @@ class MysqlListTablesTest inherits QUnit::Test {
 
     private checkConnection() {
         if (!ds) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 

@@ -34,6 +34,7 @@
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_qf_private.h"
+#include "qore/intern/QoreIoClassesOps.h"
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
@@ -265,7 +266,7 @@ ReadOnlyFile::constructor(string path, *string encoding, *string encoding_errors
         return;
     }
 
-    if (f->openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe)) {
+    if (qore_file_ops(f).openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe)) {
         if (!*xsink) {
             xsink->raiseErrnoException("READONLYFILE-OPEN-ERROR", errno, "cannot open '%s'", path->c_str());
         }
@@ -340,7 +341,7 @@ nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
     }
 
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : f->getEncoding();
-    if (f->openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe) && !*xsink) {
+    if (qore_file_ops(f).openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe) && !*xsink) {
         xsink->raiseErrnoException("READONLYFILE-OPEN-ERROR", errno, "cannot open '%s'", path->c_str());
     }
 }
@@ -873,7 +874,7 @@ while (exists (*string line = f.readLine(False))) {
         eol = 0;
 
     // the marker is converted to the file's encoding
-    return eol ? f->readUntilText(*eol, include_eol, xsink) : f->readLine(include_eol, xsink);
+    return eol ? qore_file_ops(f).readUntilText(*eol, include_eol, xsink) : f->readLine(include_eol, xsink);
 }
 
 //! Sets the @ref character_encoding "character encoding" for the %ReadOnlyFile; if called with no argument, the @ref default_encoding "default encoding" is set
@@ -1085,7 +1086,7 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto argument, *bool wit
             "size for I/O monitoring", (int64)queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
+    qore_file_ops(f).setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the %ReadOnlyFile object so that @ref file_events "file events" are no longer added to the @ref Qore::Thread::Queue "Queue"
@@ -1102,7 +1103,7 @@ nothing ReadOnlyFile::setEventQueue() {
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
-    f->setEventQueue(xsink, nullptr, QoreValue(), false);
+    qore_file_ops(f).setEventQueue(xsink, nullptr, QoreValue(), false);
 }
 
 //! Returns a @ref stat_list about the file's status or throws an exception if any errors occur

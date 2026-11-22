@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -82,7 +83,7 @@ public class VoyageDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("VoyageDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.VOYAGE_CONNECTION;
+        conn_name = LiveProvider::get("voyage", "VOYAGE_CONNECTION", m_options.conn);
 
         addTestCase("sanity test", \sanityTest());
         addTestCase("action catalog", \actionCatalogTest());
@@ -115,6 +116,7 @@ public class VoyageDataProviderTest inherits QUnit::Test {
     private AbstractDataProvider getLiveProvider() {
         if (conn_name) {
             if (!live_conn) {
+                # live-provider-optin: the connection name comes from LiveProvider
                 live_conn = get_connection(conn_name);
             }
             hash<PingInfo> ping = live_conn.ping(True);
@@ -122,7 +124,7 @@ public class VoyageDataProviderTest inherits QUnit::Test {
                 ping.info ?? "no info"));
             return live_conn.getDataProvider();
         }
-        *string api_key = ENV.VOYAGE_API_KEY;
+        *string api_key = LiveProvider::get("voyage", "VOYAGE_API_KEY");
         if (!api_key) {
             testSkip("no Voyage connection given; use -c/--connection, or set "
                 "VOYAGE_CONNECTION or VOYAGE_API_KEY");

@@ -227,6 +227,7 @@ DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
     }
 
     environmentTest() {
+        # live-provider-optin: saves and restores the proxy variables
         hash<string, *string> saved = map {$1: getenv($1)}, ("http_proxy", "https_proxy", "HTTPS_PROXY", "all_proxy",
             "ALL_PROXY", "no_proxy", "NO_PROXY", "HTTP_PROXY");
         on_exit {

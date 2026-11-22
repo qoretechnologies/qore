@@ -1,0 +1,911 @@
+  destroyed deleted
+round 0
+method depth 1, valid:
+  arg inner
+  1
+method depth 1, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+closure depth 1, valid:
+  arg inner
+  1
+closure depth 1, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+method depth 4, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 4, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 3:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 4, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 4, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 4, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 3:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 5, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 5, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 5, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 5, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 5, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 8, valid:
+  arg inner
+  1
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 8, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 7:
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 8, inner argument raises:
+  raise inner
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 8, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  arg inner
+  1
+closure depth 8, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 7:
+  code c1
+  code c3
+  code c5
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  raise inner
+  INNER: inner
+method depth 40, valid:
+  arg inner
+  1
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 40, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 20:
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 39:
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 40, inner argument raises:
+  raise inner
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 40, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  arg inner
+  1
+closure depth 40, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 20:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 39:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  raise inner
+  INNER: inner
+round 1
+method depth 1, valid:
+  arg inner
+  1
+method depth 1, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+closure depth 1, valid:
+  arg inner
+  1
+closure depth 1, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+method depth 4, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 4, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 3:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 4, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 4, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 4, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 3:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 5, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 5, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 5, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 5, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 5, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 8, valid:
+  arg inner
+  1
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 8, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 7:
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 8, inner argument raises:
+  raise inner
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 8, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  arg inner
+  1
+closure depth 8, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 7:
+  code c1
+  code c3
+  code c5
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  raise inner
+  INNER: inner
+method depth 40, valid:
+  arg inner
+  1
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 40, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 20:
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 39:
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 40, inner argument raises:
+  raise inner
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 40, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  arg inner
+  1
+closure depth 40, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 20:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 39:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  raise inner
+  INNER: inner
+round 2
+method depth 1, valid:
+  arg inner
+  1
+method depth 1, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+closure depth 1, valid:
+  arg inner
+  1
+closure depth 1, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 1, inner argument raises:
+  raise inner
+  INNER: inner
+method depth 4, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 4, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 4, invalid target at level 3:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 4, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 4, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 4, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, invalid target at level 3:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 4, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 5, valid:
+  arg inner
+  1
+  destroyed r3
+  destroyed r1
+method depth 5, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 2:
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 5, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 5, inner argument raises:
+  raise inner
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 5, valid:
+  code c1
+  code c3
+  arg inner
+  1
+closure depth 5, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 2:
+  code c1
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 5, inner argument raises:
+  code c1
+  code c3
+  raise inner
+  INNER: inner
+method depth 8, valid:
+  arg inner
+  1
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 8, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 4:
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 8, invalid target at level 7:
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 8, inner argument raises:
+  raise inner
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 8, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  arg inner
+  1
+closure depth 8, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 4:
+  code c1
+  code c3
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, invalid target at level 7:
+  code c1
+  code c3
+  code c5
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 8, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  raise inner
+  INNER: inner
+method depth 40, valid:
+  arg inner
+  1
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+method depth 40, invalid target at level 0:
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 20:
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id() on an object that has already been deleted
+method depth 40, invalid target at level 39:
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  OBJECT-ALREADY-DELETED: cannot call T::id(auto x) on an object that has already been deleted
+method depth 40, inner argument raises:
+  raise inner
+  destroyed r39
+  destroyed r37
+  destroyed r35
+  destroyed r33
+  destroyed r31
+  destroyed r29
+  destroyed r27
+  destroyed r25
+  destroyed r23
+  destroyed r21
+  destroyed r19
+  destroyed r17
+  destroyed r15
+  destroyed r13
+  destroyed r11
+  destroyed r9
+  destroyed r7
+  destroyed r5
+  destroyed r3
+  destroyed r1
+  INNER: inner
+closure depth 40, valid:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  arg inner
+  1
+closure depth 40, invalid target at level 0:
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 20:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, invalid target at level 39:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+closure depth 40, inner argument raises:
+  code c1
+  code c3
+  code c5
+  code c7
+  code c9
+  code c11
+  code c13
+  code c15
+  code c17
+  code c19
+  code c21
+  code c23
+  code c25
+  code c27
+  code c29
+  code c31
+  code c33
+  code c35
+  code c37
+  code c39
+  raise inner
+  INNER: inner
+  destroyed o

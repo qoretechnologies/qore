@@ -39,10 +39,14 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
             helpers.mkdir()
             (helpers / "ci-job-processes.sh").symlink_to(ROOT / "examples/test/docker_test/ci-job-processes.sh")
             (binaries / "libqore.so").touch()
-            # touch -t reads its time in UTC (TZ=UTC0): a local time can name two instants or none
+            # the test's core holds the test's mark, as a real core holds the environment of its process: a core that
+            # does not is not the test's (qore#6893); touch -t reads its time in UTC (TZ=UTC0): a local time can name
+            # two instants or none
             scripts = {
                 "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) '
-                        'if [ "$FRESH_CORE" = 1 ]; then TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
+                        'if [ "$FRESH_CORE" = 1 ]; then '
+                        'printf "QORE_TEST_PROCESS_MARK=%s\\0" "$QORE_TEST_PROCESS_MARK" > "$TEST_CORE_TARGET"; '
+                        'TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
                         'if [ "$TEST_EXIT" = TERM ]; then trap "exit 143" TERM; '
                         'printf "%s\\n" "$$" | (read -r pid && kill -TERM "$pid"); fi; '
                         'exit "$TEST_EXIT";; esac\nexit 0\n',

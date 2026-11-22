@@ -50,23 +50,23 @@
 class QoreNullNode : public UniqueValueQoreNode {
 private:
     //! returns the value as a boolean
-    DLLLOCAL virtual bool getAsBoolImpl() const;
+    DLLLOCAL virtual bool getAsBoolImpl() const override;
 
     //! returns the value as an integer
-    DLLLOCAL virtual int getAsIntImpl() const;
+    DLLLOCAL virtual int getAsIntImpl() const override;
 
     //! returns the value as a 64-bit integer
-    DLLLOCAL virtual int64 getAsBigIntImpl() const;
+    DLLLOCAL virtual int64 getAsBigIntImpl() const override;
 
     //! returns the value as a float
-    DLLLOCAL virtual double getAsFloatImpl() const;
+    DLLLOCAL virtual double getAsFloatImpl() const override;
 
 protected:
     //! this function is never called for this type
     /** @see AbstractQoreNode::evalImpl()
     */
     using SimpleValueQoreNode::evalImpl;
-    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override;
 
 public:
     DLLEXPORT QoreNullNode();
@@ -80,7 +80,7 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return -1 for exception raised, 0 = OK
     */
-    DLLEXPORT virtual int getAsString(QoreString &str, int foff, class ExceptionSink *xsink) const;
+    DLLEXPORT virtual int getAsString(QoreString &str, int foff, class ExceptionSink *xsink) const override;
 
     //! returns a QoreString with the text: "<NULL>"
     /** used for %n and %N printf formatting
@@ -90,27 +90,27 @@ public:
         NOTE: Use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using this function directly
         @see QoreNodeAsStringHelper
     */
-    DLLEXPORT virtual QoreString *getAsString(bool &del, int foff, class ExceptionSink *xsink) const;
+    DLLEXPORT virtual QoreString *getAsString(bool &del, int foff, class ExceptionSink *xsink) const override;
 
     //! tests for equality with possible type conversion (soft compare)
     /** since no type can be implicitly converted to a NULL, this comparison is the same as is_equal_hard() for QoreNullNode
         @param v the value to compare
         @param xsink ignored for this version of the function
     */
-    DLLEXPORT virtual bool is_equal_soft(const AbstractQoreNode *v, ExceptionSink *xsink) const;
+    DLLEXPORT virtual bool is_equal_soft(const AbstractQoreNode *v, ExceptionSink *xsink) const override;
 
     //! tests for equality without type conversions (hard compare)
     /**
         @param v the value to compare
         @param xsink ignored for this version of the function
     */
-    DLLEXPORT virtual bool is_equal_hard(const AbstractQoreNode *v, ExceptionSink *xsink) const;
+    DLLEXPORT virtual bool is_equal_hard(const AbstractQoreNode *v, ExceptionSink *xsink) const override;
 
     //! returns the type name as a c string
-    DLLEXPORT virtual const char *getTypeName() const;
+    DLLEXPORT virtual const char *getTypeName() const override;
 
     //! returns the type information
-    DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);
+    DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) override;
 
     //! returns the type name (useful in templates)
     DLLLOCAL static const char *getStaticTypeName() {

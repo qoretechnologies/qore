@@ -9,6 +9,7 @@
 %requires FsUtil
 %requires Mime
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -111,7 +112,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("UnstructuredDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.UNSTRUCTURED_CONNECTION;
+        conn_name = LiveProvider::get("unstructured", "UNSTRUCTURED_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("provider hierarchy", \providerHierarchyTest());
@@ -660,6 +661,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
     }
 
     private liveConnectionTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         assertEq("unstructured", conn.getType());
         assertTrue(conn.hasDataProvider());
@@ -677,6 +679,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         snippet.  Unstructured Serverless free tier: 1000 pages/month.
     */
     private livePartitionTextTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         AbstractDataProvider prov = conn.getDataProvider();
         AbstractDataProvider pt = prov.getChildProviderEx("partition-text");
@@ -715,6 +718,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         failure part-way through does not leave objects behind in the account.
     */
     private livePlatformLifecycleTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         AbstractDataProvider plat = conn.getDataProvider().getChildProviderEx("platform");
 
@@ -827,6 +831,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
 
     #! Reads every record table against the live account
     private livePlatformTableTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         AbstractDataProvider tables =
             conn.getDataProvider().getChildProviderEx("platform").getChildProviderEx("tables");
@@ -847,6 +852,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
 
     #! Exercises the action that matters most: a real binary document
     private livePartitionFileTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         AbstractDataProvider pf = conn.getDataProvider().getChildProviderEx("partition-file");
 

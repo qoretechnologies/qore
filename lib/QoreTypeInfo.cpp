@@ -308,6 +308,35 @@ static QoreThreadLock ctl; // complex type lock
 // the type caches can be used in a child process created with fork() (see QoreForkHandlers.h)
 static QoreForkThreadLock ctl_fork_handler(ctl, QFLR_LEAF, "complex_types");
 
+const type_vec_t* QoreLegacyTypeVec::make(const orphanable_type_vec_t& src) const {
+    // under the lock that refresh() takes: a copy made while the types are orphaned reads their tombstones
+    AutoLocker al(ctl);
+    type_vec_t* rv = vec.load(std::memory_order_relaxed);
+    if (!rv) {
+        std::unique_ptr<type_vec_t> copy(new type_vec_t(orphanable_type_vec_view_t(src).toVector()));
+        rv = copy.release();
+        vec.store(rv, std::memory_order_release);
+    }
+    return rv;
+}
+
+void QoreLegacyTypeVec::refresh(const orphanable_type_vec_t& src) const {
+    AutoLocker al(ctl);
+    type_vec_t* v = vec.load(std::memory_order_relaxed);
+    if (!v) {
+        return;
+    }
+    assert(v->size() == src.size());
+    for (size_t i = 0, e = src.size(); i < e; ++i) {
+        const QoreTypeInfo* ti = src[i].get();
+        // the element is read without the lock by the callers of the deprecated reflection functions
+        std::atomic_ref<const QoreTypeInfo*> elem((*v)[i]);
+        if (elem.load(std::memory_order_relaxed) != ti) {
+            elem.store(ti, std::memory_order_release);
+        }
+    }
+}
+
 namespace {
 class QoreAOTDeferredTypeInfo : public QoreTypeInfo {
 public:
@@ -1494,6 +1523,8 @@ public:
             for (const QoreOrphanablePtr<const QoreTypeInfo>& arg : pti->getTypeArgs().getOrphanable()) {
                 orphanType(arg);
             }
+            // the copy that the deprecated reflection function returns (issue #6936)
+            pti->refreshLegacyTypeArgs();
         } else if (const QoreUnionTypeInfo* uti = dynamic_cast<const QoreUnionTypeInfo*>(ti)) {
             for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableMemberTypes()) {
                 orphanType(m);
@@ -1506,6 +1537,8 @@ public:
             for (const QoreOrphanablePtr<const QoreTypeInfo>& p : cti->getParamTypes().getOrphanable()) {
                 orphanType(p);
             }
+            // the copy that the deprecated reflection function returns (issue #6936)
+            cti->refreshLegacyParamTypes();
         } else if (const QoreWildcardTypeInfo* wti = dynamic_cast<const QoreWildcardTypeInfo*>(ti)) {
             orphanType(wti->getOrphanableBound());
         } else if (const QoreComplexSoftListTypeInfo* sti = dynamic_cast<const QoreComplexSoftListTypeInfo*>(ti)) {

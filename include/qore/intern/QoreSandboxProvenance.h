@@ -19,6 +19,41 @@ public:
     DLLLOCAL static QoreSandboxManager* combine(const std::vector<QoreSandboxManager*>& managers);
     DLLLOCAL static bool same(const QoreSandboxManager* a, const QoreSandboxManager* b);
     DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager* manager);
+
+    //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
+    //! (qore#6536)
+    /** @return 0 for OK, -1 if the creating code's sandbox combines the sandboxes of different isolation domains
+        (or one with a domain and one without), which cannot create a sandbox (\c SANDBOX-ISOLATION-ERROR is raised)
+    */
+    DLLLOCAL static int inheritIsolationDomain(QoreSandboxManager* sm, ExceptionSink* xsink);
+
+    //! Gives the isolation domain of a manager, folding a composite (qore#6536, qore#7009)
+    /** A composite has the domain that its members with a domain have (a member without one adds nothing); if they
+        have different domains, or one of them is mixed (a copy of such a composite), it is mixed.
+
+        @param sm the manager
+        @param domain the domain; empty if none, MixedIsolationDomain if mixed
+
+        @return 1 if the manager has a domain, 0 if it has none, -1 if it is mixed
+    */
+    DLLLOCAL static int foldIsolationDomain(const QoreSandboxManager* sm, std::string& domain);
+
+    //! Returns true if the calling code's governing sandbox is mixed (see foldIsolationDomain()) (qore#7009)
+    /** Fails closed: true if the sandbox cannot be resolved for lack of memory while isolation domains are in use
+    */
+    DLLLOCAL static bool callerIsMixed();
+
+    //! The mixed isolation domain value: never a domain that can be set (see qore_isolation_domain_is_mixed())
+    DLLLOCAL static const std::string MixedIsolationDomain;
+
+    //! Returns the isolation domain of a manager that governs code, or nullptr if it has none (qore#6536)
+    /** The domain of a manager cannot change once it governs code, so it is read without a lock; a composite has no
+        domain of its own (see its members)
+    */
+    DLLLOCAL static const std::string* governingIsolationDomain(const QoreSandboxManager* sm);
+
+    //! Marks the manager as governing code: its isolation domain is fixed from then on (qore#6536)
+    DLLLOCAL static void setGoverns(QoreSandboxManager* sm);
 };
 
 class QoreProgram;

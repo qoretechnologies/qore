@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc executables and in children that run the AST
+# test-platform: macos - the AOT code generation and linking of qcc executables with outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%include AOTOutlineExceptionScopes.qc
+
+%exec-class AOTOutlineExceptionScopesPart1
+
+#! runs part 1 of 3 of the cases of AOTOutlineExceptionScopesBase
+class AOTOutlineExceptionScopesPart1 inherits AOTOutlineExceptionScopesBase {
+    constructor() : AOTOutlineExceptionScopesBase("AOTOutlineExceptionScopesPart1", 1) {
+    }
+}

@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -155,8 +156,8 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Chargebee client for integration tests
     private setupConnection() {
-        *string apikey = m_options.apikey ?? ENV.CHARGEBEE_API_KEY;
-        *string site = m_options.site ?? ENV.CHARGEBEE_SITE;
+        *string apikey = LiveProvider::get("chargebee", "CHARGEBEE_API_KEY", m_options.apikey);
+        *string site = LiveProvider::get("chargebee", "CHARGEBEE_SITE", m_options.site);
         if (!apikey || !site) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -k/-s options or CHARGEBEE_API_KEY/CHARGEBEE_SITE env vars)\n");

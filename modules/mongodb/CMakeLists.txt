@@ -38,6 +38,14 @@ if (PkgConfig_FOUND)
 endif()
 
 if (MONGOC_FOUND AND BSON_FOUND)
+    # the TLS connections of sandboxed code need libmongoc's private TLS options, whose layout the module uses only
+    # with the versions checked (src/QoreMongoStream.cpp, qoretechnologies/qore#6911)
+    if (MONGOC_VERSION VERSION_GREATER_EQUAL "1.17.0" AND MONGOC_VERSION VERSION_LESS_EQUAL "2.5.9")
+        message(STATUS "mongodb: libmongoc ${MONGOC_VERSION}: OCSP endpoint checks can be turned off for sandboxed code")
+    else()
+        message(WARNING "mongodb: libmongoc ${MONGOC_VERSION} is not a version whose private TLS options were "
+            "checked (1.17.0 to 2.5.9): the TLS connections of sandboxed code are refused")
+    endif()
     set(MONGODB_INCLUDE_DIRS ${MONGOC_INCLUDE_DIRS} ${BSON_INCLUDE_DIRS})
     set(MONGODB_LIBRARY_DIRS ${MONGOC_LIBRARY_DIRS} ${BSON_LIBRARY_DIRS})
     set(MONGODB_LIBRARIES ${MONGOC_LIBRARIES} ${BSON_LIBRARIES})

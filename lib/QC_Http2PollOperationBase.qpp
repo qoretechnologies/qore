@@ -43,6 +43,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 // Forward declarations for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -508,7 +509,7 @@ void Http2PollOperationPriv::pushStreamEnd(int32_t stream_id, const StreamQueueI
     // the queue takes the reference; the end is pushed even if the queue is full, after the stream's data, and a
     // queue that refuses it (one whose reader cancelled the body read, or a deleted queue) discards it (issue #5859)
     ExceptionSink push_xsink;
-    info.queue->tryPush(&push_xsink, info.request_body && !complete
+    qore_queue_ops(info.queue).tryPush(&push_xsink, info.request_body && !complete
         ? QoreValue(makeBodyIncompleteError(stream_id, reason, xsink))
         : QoreValue(), true);
     push_xsink.clear();
@@ -783,7 +784,7 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
         // state) has its error for the consumer already (issue #5840)
         ExceptionSink push_xsink;
         // pushed without waiting, even if the queue is bounded and full (issue #5859)
-        q->tryPush(&push_xsink, close_entry.release(), true);
+        qore_queue_ops(q).tryPush(&push_xsink, close_entry.release(), true);
         push_xsink.clear();
     }
     q->deref(xsink);
@@ -796,7 +797,7 @@ int Http2PollOperationPriv::pushStreamQueueData(StreamQueueInfo& info, BinaryNod
     assert(!info.pending);
     // the queue's exceptions are not raised: a queue that refuses data discards it (see drainStreamQueues())
     ExceptionSink push_xsink;
-    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    QoreQueue::TryPushResult rc = qore_queue_ops(info.queue).tryPush(&push_xsink, data);
     push_xsink.clear();
     if (rc != QoreQueue::QTP_FULL) {
         return 0;
@@ -805,11 +806,11 @@ int Http2PollOperationPriv::pushStreamQueueData(StreamQueueInfo& info, BinaryNod
     info.pending = data;
     if (!info.room) {
         info.room = std::make_shared<HttpStreamQueueRoomListener>(sock->getIoIdentityHash());
-        info.queue->addRoomListener(info.room);
+        qore_queue_ops(info.queue).addRoomListener(info.room);
         // room may have appeared before the listener was added
         info.pending = nullptr;
         ExceptionSink retry_xsink;
-        rc = info.queue->tryPush(&retry_xsink, data);
+        rc = qore_queue_ops(info.queue).tryPush(&retry_xsink, data);
         retry_xsink.clear();
         if (rc != QoreQueue::QTP_FULL) {
             return 0;
@@ -835,7 +836,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 // the old registration's room listener is removed from its queue; the data that it had no room for was
                 // taken from the stream, so it goes to the new registration's queue first (issue #5859)
                 if (it->second.room) {
-                    it->second.queue->removeRoomListener(it->second.room.get());
+                    qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
                 }
                 // a frame state gets the stream's data itself, so raw data for its queue is released
                 if (info.frame_state) {
@@ -953,7 +954,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 "maximum request body size", stream_id), xsink);
             // pushed even if the queue is full, after the stream's data (issue #5859)
             ExceptionSink push_xsink;
-            info.queue->tryPush(&push_xsink, err.release(), true);
+            qore_queue_ops(info.queue).tryPush(&push_xsink, err.release(), true);
             push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -1000,7 +1001,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 it->second.pending->deref(xsink);
             }
             if (it->second.room) {
-                it->second.queue->removeRoomListener(it->second.room.get());
+                qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
             }
             // In frame-state mode the Queue ref is owned by the frame state
             // (its destructor derefs it when the shared_ptr drops).  Skip the
@@ -1041,7 +1042,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
                 // released, and the old one's pending data and room listener with them
                 StreamQueueInfo& old = it->second;
                 if (old.room) {
-                    old.queue->removeRoomListener(old.room.get());
+                    qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                 }
                 if (old.pending) {
                     old.pending->deref(xsink);
@@ -1074,7 +1075,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
             info.pending = nullptr;
         }
         if (info.room) {
-            info.queue->removeRoomListener(info.room.get());
+            qore_queue_ops(info.queue).removeRoomListener(info.room.get());
         }
         pushStreamEnd(stream_id, info, false, "the connection was closed or the server stopped reading it", xsink);
         if (info.notifier) {
@@ -1123,7 +1124,6 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass Http2PollOperationBase [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=Http2PollOperationPriv* priv;
     vparent=SocketPollOperationBase<*hash<auto>>
@@ -1162,10 +1162,9 @@ Http2PollOperationBase::constructor(Socket[QoreSocketObject] socket, object init
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTP2POLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP2POLLOPERATIONBASE,
-        new QoreStringNode("http2_connection"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http2_connection"), xsink);
 
     // Ref the socket for the C++ priv
     QoreSocketObject* sock_ptr = *socket;
@@ -1201,7 +1200,7 @@ Http2PollOperationBase::copy() {
 /** @return "http2_connection"
 */
 string Http2PollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1372,7 +1371,7 @@ string Http2PollOperationBase::getH2State() [flags=RET_VALUE_ONLY] {
 /** @return the Socket object
 */
 Socket Http2PollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Returns True if headers-only mode is enabled

@@ -196,8 +196,9 @@ public class OracleRunSchema {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
-            return connstr;
+            # a database outage is not a reason to skip: the variable is set, so the test case fails with the
+            # variable, the masked datasource and the error (qore#6934)
+            TestRun::failUnreachable(admin_connstr, ex);
         }
         OracleRunSchema::dropLeftoversIntern(ds);
 

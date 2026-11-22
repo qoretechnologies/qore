@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc AOT code generation and JIT native code of inline string values
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class ShortStringNativeAccessTest
+
+#! Native code reads the strings of exceptions and hashes in both of their representations (qore#7038)
+/** A value holds a string of up to 6 bytes inline, with no QoreStringNode behind it; native code that read a string
+    value as a QoreStringNode after checking only its type dereferenced a null pointer for such a value (and a debug
+    build aborted on an assertion).  The probes (short-string-native-access/probes.q) pass inline strings to that code:
+    the error code of an exception that ends a background thread, header values and option values in hashes, and the
+    debug hooks that take a string.  They
+    run in each execution mode in a child process and as qcc-compiled executables (-O0, -O3), which hold the strings
+    of a constant hash inline; in a debug build, dbg_make_short_string() makes the strings inline in every mode.
+
+    @note dbg_make_short_string() exists only in debug builds: in a release build, only the qcc runs pass inline
+    strings to the native code; the other runs check the results with heap strings.
+*/
+class ShortStringNativeAccessTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "background: EXCEPTION E2/d2\n"
+            "FastResponseSlot::setDefaults: ok\n"
+            "Socket::setHttpFastExtraHeaders: ok\n"
+            "HTTPClient ssl_ca_file: ok\n"
+            "HTTPClient ssl_ca_path: ok\n"
+            "caught: E1/d1\n"
+%ifdef QoreDebug
+            "dbg_string_is_view: False\n"
+            "dbg_string_capacity: 0\n"
+%endif
+            ;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("ShortStringNativeAccess", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("native code reads inline strings in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-short-string-native-access-");
+        string file = get_script_dir() + DirSep + "short-string-native-access" + DirSep + "probes.q";
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            check(mode, sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, file), tmp);
+        }
+        check("tiered, IR tier", sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1000000 "
+            "%s", env, qore_bin, file), tmp);
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "probes" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            if (!is_file(exe)) {
+                continue;
+            }
+            check("qcc " + opt, sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe),
+                tmp);
+        }
+    }
+
+    #! runs the command and checks its standard output; its standard error is shown if it fails
+    private check(string label, string cmd, TmpDir tmp) {
+        string err_file = tmp.path + DirSep + "stderr";
+        int rc;
+        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
+        string err = ReadOnlyFile::readTextFile(err_file) ?? "";
+        assertEq(Expected, out, sprintf("%s (exit code %d; stderr: %s)", label, rc, err));
+        assertEq(0, rc, sprintf("%s exit code (stderr: %s)", label, err));
+    }
+}

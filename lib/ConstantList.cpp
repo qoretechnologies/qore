@@ -601,7 +601,9 @@ int ConstantEntry::parseInit(ClassNs ptr) {
             }
             for (; e; e = e->next) {
                 if (e->desc.getType() == NT_STRING) {
-                    QoreStringNodeHolder desc(e->desc.get<const QoreStringNode>()->copy());
+                    // the description can be an inline short string, which has no node (issue #7038)
+                    QoreStringNodeValueHelper desc_str(e->desc);
+                    QoreStringNodeHolder desc(desc_str->copy());
                     desc->sprintf(" (while initializing constant '%s')", name.c_str());
                     e->desc.discard(nullptr);
                     e->desc = desc.release();
