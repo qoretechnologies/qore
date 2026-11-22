@@ -302,6 +302,26 @@ class BU2 inherits PU2 {
 }
 class XU2 inherits AU, DU2, BU2 {}
 
+# the skipped private method of an unrelated earlier branch hides a public method of its parent class; P's public
+# method is reached through the public parent class DR, without private inheritance: it is called, as from outside
+class RR { string m() { return "RR::m"; } static string sm() { return "RR::sm"; } }
+class CR inherits RR { private string m() { return "CR::m"; } private static string sm() { return "CR::sm"; } }
+class AR inherits CR {}
+class PR { string m() { return "PR::m"; } static string sm() { return "PR::sm"; } }
+class DR inherits PR {}
+class BR inherits PR {
+    string m() { return "BR::m"; }
+    static string sm() { return "BR::sm"; }
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+    string bTyped(XR o) { return o.m(); }
+    string bRef() { code c = self.getCallReference("m"); return c(); }
+    string bObjRef(auto o) { code c = \o.m(); return c(); }
+    string bStatic() { return XR::sm(); }
+    string bStaticRef() { code c = \XR::sm(); return c(); }
+}
+class XR inherits AR, DR, BR {}
+
 # classes inherited by the classes of a child Program
 public class PC { private string m() { return "PC::m"; } }
 public class AC inherits PC {}
@@ -348,7 +368,7 @@ check("X2 B22 \\o.m() untyped", any sub () { return x.objRef(x); });
 check("X2 B22 \\o.m() typed", any sub () { return x.typedRef(x); });
 check("X2 B22 getCallReference()", \x.getCallRef());
 check("X2 B22 hasCallableMethod()", \x.hasCallable());
-check("X2 B22 call_object_method()", \x.com());
+check("X2 B22 call_object_method() (public methods only)", \x.com());
 check("X2 B22 call_object_method_args()", \x.comArgs());
 check("X2 B22 closure self.m()", \x.closureDot());
 check("X2 B22 closure m()", \x.closureCall());
@@ -362,13 +382,13 @@ check("X2 P2 self.m()", \x.pSelf());
 check("X2 A2 self.m()", \x.aSelf());
 check("X2 X2 self.m()", \x.xSelf());
 check("X2 outside m()", any sub () { return x.m(); });
-check("X2 outside call_object_method()", any sub () { return call_object_method(x, "m"); });
+check("X2 outside call_object_method() (public methods only)", any sub () { return call_object_method(x, "m"); });
 
 Y2 y();
 check("Y2 B22 self.m()", \y.selfDot());
 check("Y2 B22 untyped", any sub () { return y.untyped(y); });
 check("Y2 B22 typed X2", any sub () { return y.typedX2(y); });
-check("Y2 B22 call_object_method()", \y.com());
+check("Y2 B22 call_object_method() (public methods only)", \y.com());
 
 Z2 z();
 B22 b();
@@ -377,7 +397,7 @@ check("B22 B22 self.m()", \b.selfDot());
 
 X7 x7();
 check("X7 B22 self.m()", \x7.selfDot());
-check("X7 B22 call_object_method()", \x7.com());
+check("X7 B22 call_object_method() (public methods only)", \x7.com());
 check("X7 outside m()", any sub () { return x7.m(); });
 
 X9 x9();
@@ -391,7 +411,7 @@ check("C11 C11 self.m()", \c11.cSelf());
 
 X3 x3();
 check("X3 B33 self.m()", \x3.bSelf());
-check("X3 B33 call_object_method()", \x3.bCom());
+check("X3 B33 call_object_method() (public methods only)", \x3.bCom());
 
 X4 x4();
 check("X4 B44 self.m()", \x4.bSelf());
@@ -458,7 +478,7 @@ check("XU1 BU1 untyped", any sub () { return xu1.bUntyped(xu1); });
 check("XU1 BU1 typed XU1", any sub () { return xu1.bTyped(xu1); });
 check("XU1 BU1 XU1::sm()", \xu1.bStatic());
 check("XU1 BU1 call_static_method()", \xu1.bCsm());
-check("XU1 BU1 call_object_method()", \xu1.bCom());
+check("XU1 BU1 call_object_method() (public methods only)", \xu1.bCom());
 check("XU1 BU1 getCallReference()", \xu1.bRef());
 check("XU1 outside m()", any sub () { return xu1.m(); });
 XU1b xu1b();
@@ -472,6 +492,17 @@ check("XU2 (CU::m first) BU2 self.m()", \xu2.bSelf());
 check("XU2 BU2 untyped", any sub () { return xu2.bUntyped(xu2); });
 check("XU2 BU2 typed XU2", any sub () { return xu2.bTyped(xu2); });
 check("XU2 outside m()", any sub () { return xu2.m(); });
+
+XR xr();
+check("XR (CR::m hides RR::m) BR self.m()", \xr.bSelf());
+check("XR BR untyped", any sub () { return xr.bUntyped(xr); });
+check("XR BR typed XR", any sub () { return xr.bTyped(xr); });
+check("XR BR getCallReference()", \xr.bRef());
+check("XR BR \\o.m()", any sub () { return xr.bObjRef(xr); });
+check("XR BR XR::sm()", \xr.bStatic());
+check("XR BR \\XR::sm()", \xr.bStaticRef());
+# untyped: a typed call from outside resolves to RR::m() at parse time (qore#7211)
+check("XR outside m() untyped", any sub () { auto o = xr; return o.m(); });
 
 check("doc A doIt()", any sub () { return (new DocA()).doIt(); });
 check("doc B doIt()", any sub () { return (new DocB()).doIt(); });

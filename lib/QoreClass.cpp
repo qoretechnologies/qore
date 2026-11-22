@@ -4430,6 +4430,50 @@ struct RuntimeFindPublicCommittedMethodLookup {
     }
 };
 
+//! the search of a class at parse time for the method of a name that a caller outside the class hierarchy can call: as
+//! runtime_public_method_visit() with the parse-time access of the method, so that the parse-time check of a public
+//! method found through private inheritance makes the decision of the run-time check (qore#6798)
+static LookupVisit parse_public_method_visit(const QoreMethod* m) {
+    if (!m) {
+        return LookupVisit::Descend;
+    }
+    ClassAccess ma = qore_method_private::getAccess(*m);
+    if (ma == Public) {
+        return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
+    }
+    if (ma == Private) {
+        return qore_method_private::get(*m)->getFunction()->hasInheritedPublicVariant() ? LookupVisit::Found
+            : LookupVisit::Skip;
+    }
+    return LookupVisit::Descend;
+}
+
+//! parse_find_public_method(): as RuntimeFindPublicCommittedMethodLookup at parse time (qore#6798)
+template <bool Static>
+struct ParseFindPublicMethodLookup {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    ParseFindPublicMethodLookup(const char* name) : name(name) {
+    }
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access > Public;
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        priv.initialize();
+        const QoreMethod* m = Static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
+        LookupVisit r = parse_public_method_visit(m);
+        if (r == LookupVisit::Found) {
+            rv = m;
+        }
+        return r;
+    }
+};
+
 //! returns true if the private method \a m of the class \a priv is overridden in the hierarchy of the class context
 //! (qore#6798)
 /** \a ctx_own is the method of the name that code of the class context calls on an object of its own class (its own
@@ -6758,6 +6802,22 @@ static const QoreMethod* parse_find_context_override_method(qore_class_private& 
             skip_public);
 }
 
+//! returns the method of the name that a caller outside the class hierarchy calls on an object of the class \a cls,
+//! found at parse time as qore_class_private::runtimeFindPublicCommittedMethod() finds it at run time (qore#6798)
+static const QoreMethod* parse_find_public_method(qore_class_private& cls, const char* nme, bool is_static) {
+    const QoreMethod* m = is_static ? cls.parseFindLocalStaticMethod(nme) : cls.parseFindLocalMethod(nme);
+    LookupVisit r = parse_public_method_visit(m);
+    if (r == LookupVisit::Found) {
+        return m;
+    }
+    if (r == LookupVisit::Skip || !cls.scl || !cls.scl->valid) {
+        return nullptr;
+    }
+    return is_static
+        ? lookup_walk<ParseFindPublicMethodLookup<true>>(*cls.scl, nme)
+        : lookup_walk<ParseFindPublicMethodLookup<false>>(*cls.scl, nme);
+}
+
 const QoreMethod* qore_class_private::parseFindContextPublicOverride(const char* nme, const QoreMethod* m,
         const qore_class_private* class_ctx, bool is_static) {
     assert(m && class_ctx);
@@ -6766,8 +6826,7 @@ const QoreMethod* qore_class_private::parseFindContextPublicOverride(const char*
     // finds it
     if (qore_method_private::getAccess(*m) != Public || !strcmp(nme, "constructor") || !strcmp(nme, "destructor")
             || !strcmp(nme, "copy") || !context_may_override(*this, m, class_ctx)
-            || (is_static ? parseFindStaticMethodIntern(nme, nullptr) : parseFindNormalMethodIntern(nme, nullptr))
-                == m) {
+            || parse_find_public_method(*this, nme, is_static) == m) {
         return m;
     }
     // the lookup from the class context itself does not call this function again: the class is the class context
