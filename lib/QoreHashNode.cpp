@@ -94,6 +94,47 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
     return nullptr;
 }
 
+HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
+    return addMemberKnownAbsent(new HashMember(qore_hash_lookup_key(key)));
+}
+
+HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
+    return addMemberKnownAbsent(new HashMember(key));
+}
+
+HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
+    return addMemberKnownAbsent(new HashMember(old.key, old.hash));
+}
+
+HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
+    assert(m->val.isNothing());
+    assert(findIter(qore_hash_lookup_key(m->key.c_str(), m->key.size(), m->hash)) == hm.end());
+    // if the list or the map cannot take the member, it is removed from the list again and deleted
+    struct AddMemberHelper {
+        qhlist_t& l;
+        HashMember* m;
+        bool listed = false;
+        bool added = false;
+
+        ~AddMemberHelper() {
+            if (!added) {
+                if (listed) {
+                    l.pop_back();
+                }
+                delete m;
+            }
+        }
+    } amh{member_list, m};
+    member_list.push_back(m);
+    amh.listed = true;
+    qhlist_t::iterator i = member_list.end();
+    --i;
+    hm.emplace(m, i);
+    amh.added = true;
+    sbAdd(m);
+    return m;
+}
+
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
@@ -276,7 +317,7 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
             lvh.trackVivifiedKey(this, key);
         }
     } else {
-        m = (*(i->second));
+        m = i->first;
     }
 
     //printd(5, "qore_hash_private::getLValue() this: %p hd: %p ct: %p key: '%s' type: '%s'\n", this, hashdecl,
@@ -598,7 +639,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 
     if (i != hm.end()) {
         exists = true;
-        return (*i->second)->val;
+        return i->first->val;
     }
 
     exists = false;
@@ -607,7 +648,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 
 QoreValue qore_hash_private::getKeyValueIntern(const char* key) const {
     hm_hm_t::const_iterator i = findIter(key);
-    return i != hm.end() ? (*i->second)->val : QoreValue();
+    return i != hm.end() ? i->first->val : QoreValue();
 }
 
 QoreValue qore_hash_private::getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const {
@@ -629,7 +670,7 @@ QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key
     hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
     if (i != hm.end()) {
         exists = true;
-        return (*i->second)->val;
+        return i->first->val;
     }
     exists = false;
     return QoreValue();
@@ -1368,7 +1409,7 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
+    hm_hm_t::iterator i = h->priv->hm.find(*ni);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);
@@ -1402,7 +1443,7 @@ QoreValue HashIterator::removeKeyValue() {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
+    hm_hm_t::iterator i = h->priv->hm.find(*ni);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);
