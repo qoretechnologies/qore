@@ -3535,7 +3535,12 @@ public:
     // runtime version - assumes signatures are already resolved
     DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
 
-    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant);
+    //! replaces the abstract variant that \a variant of a parent class implements
+    /** @param variant the concrete variant of a parent class
+        @param min_access the more restrictive of the access of the abstract variant and of the access of \a variant
+        in the method of its class: the variant has at least this access in this method (qore#7277)
+    */
+    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant, ClassAccess min_access);
 
     DLLLOCAL void parseRollbackMethod();
 

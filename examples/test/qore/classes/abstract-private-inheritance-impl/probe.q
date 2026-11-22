@@ -231,6 +231,55 @@ class SE7 inherits E7 {
     static string u(auto o, auto a) { return o.m(a); }
 }
 
+# 8: a subclass that declares the abstract variant again does not make public the private variant that the parent
+# class's method has (F8, G8: overloaded, H8: one variant, I8: private:internal, J8: a grandchild); an abstract variant
+# of another parent class keeps its access when a privately inherited class implements it (K8, L8); M8 to O8 are the
+# controls with methods of their own
+class F8 inherits private P7 {
+    private abstract string m(int i);
+    abstract string m(string s);
+}
+class G8 inherits F8 {
+    abstract string m(int i);
+}
+class H8p inherits private P7 {
+    private abstract string m(int i);
+}
+class H8 inherits H8p {
+    abstract string m(int i);
+}
+class I8p inherits private P7 {
+    private:internal abstract string m(int i);
+    abstract string m(string s);
+}
+class I8 inherits I8p {
+    abstract string m(int i);
+}
+class J8 inherits G8 {}
+class AK8 {
+    private abstract string m(int i);
+}
+class K8 inherits AK8, private P7 {}
+class AL8 {
+    private abstract string m(int i);
+    abstract string m(string s);
+}
+class L8 inherits AL8, private P7 {}
+class M8p {
+    private string m(int i) { return "M8p::m(int)"; }
+    string m(string s) { return "M8p::m(string)"; }
+}
+class M8 inherits M8p {
+    abstract string m(int i);
+}
+class N8p {
+    private string m(int i) { return "N8p::m(int)"; }
+}
+class N8 inherits N8p {
+    abstract string m(int i);
+}
+class O8 inherits N8p {}
+
 A1 a1();
 S1 s1();
 check("1 A1 outside", auto sub () { return a1.m(); });
@@ -356,5 +405,15 @@ foreach list<auto> l in ((new A7(), new SA7(), \A7::u(), \A7::r(), \SA7::u()),
         check(sprintf("7 %s %s outside com", cs, t), auto sub () { return Calls7::c(s, a); });
         check(sprintf("7 %s %s parent code", cs, t), auto sub () { return own(s, a); });
         check(sprintf("7 %s %s subclass code", cs, t), auto sub () { return sub_code(s, a); });
+    }
+}
+
+foreach object x in ((new G8(), new H8(), new I8(), new J8(), new K8(), new L8(), new M8(), new N8(), new O8())) {
+    string cx = x.className();
+    foreach auto a in ((1, "a")) {
+        string t = a.typeCode() == NT_INT ? "int" : "string";
+        check(sprintf("8 %s %s outside", cx, t), auto sub () { return x.m(a); });
+        check(sprintf("8 %s %s outside ref", cx, t), auto sub () { return Calls7::r(x, a); });
+        check(sprintf("8 %s %s outside com", cx, t), auto sub () { return Calls7::c(x, a); });
     }
 }

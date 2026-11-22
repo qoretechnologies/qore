@@ -227,3 +227,57 @@
 7 SE7 string outside com: "PV7::m(string)"
 7 SE7 string parent code: "PV7::m(string)"
 7 SE7 string subclass code: "PV7::m(string)"
+8 G8 int outside: RUNTIME-OVERLOAD-ERROR
+8 G8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 G8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 G8 string outside: "P7::m(string)"
+8 G8 string outside ref: "P7::m(string)"
+8 G8 string outside com: "P7::m(string)"
+8 H8 int outside: METHOD-IS-PRIVATE
+8 H8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 H8 int outside com: METHOD-IS-PRIVATE
+8 H8 string outside: METHOD-IS-PRIVATE
+8 H8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 H8 string outside com: METHOD-IS-PRIVATE
+8 I8 int outside: RUNTIME-OVERLOAD-ERROR
+8 I8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 I8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 I8 string outside: "P7::m(string)"
+8 I8 string outside ref: "P7::m(string)"
+8 I8 string outside com: "P7::m(string)"
+8 J8 int outside: RUNTIME-OVERLOAD-ERROR
+8 J8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 J8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 J8 string outside: "P7::m(string)"
+8 J8 string outside ref: "P7::m(string)"
+8 J8 string outside com: "P7::m(string)"
+8 K8 int outside: METHOD-IS-PRIVATE
+8 K8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 K8 int outside com: METHOD-IS-PRIVATE
+8 K8 string outside: METHOD-IS-PRIVATE
+8 K8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 K8 string outside com: METHOD-IS-PRIVATE
+8 L8 int outside: RUNTIME-OVERLOAD-ERROR
+8 L8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 L8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 L8 string outside: "P7::m(string)"
+8 L8 string outside ref: "P7::m(string)"
+8 L8 string outside com: "P7::m(string)"
+8 M8 int outside: RUNTIME-OVERLOAD-ERROR
+8 M8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 M8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 M8 string outside: "M8p::m(string)"
+8 M8 string outside ref: "M8p::m(string)"
+8 M8 string outside com: "M8p::m(string)"
+8 N8 int outside: METHOD-IS-PRIVATE
+8 N8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 N8 int outside com: METHOD-IS-PRIVATE
+8 N8 string outside: METHOD-IS-PRIVATE
+8 N8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 N8 string outside com: METHOD-IS-PRIVATE
+8 O8 int outside: METHOD-IS-PRIVATE
+8 O8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 O8 int outside com: METHOD-IS-PRIVATE
+8 O8 string outside: METHOD-IS-PRIVATE
+8 O8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 O8 string outside com: METHOD-IS-PRIVATE
