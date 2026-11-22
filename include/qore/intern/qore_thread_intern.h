@@ -2862,7 +2862,7 @@ public:
 
     //! Restores the context that the constructor replaced, if any, and the implicit arguments, if it set them
     DLLLOCAL ~CalleeContextHelper() {
-        if (argv_xsink) {
+        if (argv_set) {
             restoreArgv();
         }
         if (switched) {
@@ -2880,18 +2880,24 @@ public:
 protected:
     //! the current thread
     ThreadData* td;
+    //! the sink for the dereference of the call's implicit arguments, if it set them (\a argv_set), and for
+    //! CalleeProgramContextHelper's release of the class's source Program; one member for both, which are the same
+    //! sink, so that the helpers, locals of the frames of calls, are no larger than they must be
+    ExceptionSink* xsink = nullptr;
 
 private:
-    //! true if the constructor switched the context
-    bool switched = false;
     QoreObject* old_obj;
     const qore_class_private* old_class;
     QoreObject* old_rc_obj;
     const qore_class_private* old_rc_class;
     //! the implicit arguments that the call's replaced, if it set them
     QoreListNode* old_argv = nullptr;
-    //! the sink for the dereference of the call's implicit arguments, if it set them
-    ExceptionSink* argv_xsink = nullptr;
+    // the flags last: CalleeProgramContextHelper's own flags are placed in the padding after them (the helpers are
+    // locals of the frames of calls, and of each level of a recursion, see CalleeProgramContextHelper)
+    //! true if the constructor switched the context
+    bool switched = false;
+    //! true if the constructor set the call's implicit arguments
+    bool argv_set = false;
 
     DLLLOCAL void switchContext(const qore_class_private* cls);
     DLLLOCAL void restoreContext();
@@ -2924,16 +2930,19 @@ public:
     }
 
 private:
-    //! the caller's call Program context, restored if \a call_pgm_switched
-    QoreProgram* old_call_pgm = nullptr;
-    //! the source Program of the class if a reference to it was taken; released after the context is restored
-    QoreProgram* referenced_class_pgm = nullptr;
-    //! the sink for the release of \a referenced_class_pgm
-    ExceptionSink* call_pgm_xsink;
+    // the flags first: they take the padding at the end of CalleeContextHelper (whose last members are flags), and
+    // the sink is CalleeContextHelper's, so that the helper, a local of the frame of each inline call of a static
+    // method or closure in the IR interpreter and so of each level of a recursion, adds only the two Programs to it
+    // (examples/test/qore/stack/recursion-frame-budget.qtest)
     //! true if the constructor changed the call Program context
     bool call_pgm_switched = false;
     //! true if the destructor has to restore the call Program context or release \a referenced_class_pgm
     bool call_pgm_restore = false;
+    //! the caller's call Program context, restored if \a call_pgm_switched
+    QoreProgram* old_call_pgm = nullptr;
+    //! the source Program of the class if a reference to it was taken; released after the context is restored (with
+    //! CalleeContextHelper::xsink)
+    QoreProgram* referenced_class_pgm = nullptr;
 
     //! restores the call Program context and releases the reference to the class's source Program, if any
     DLLLOCAL void restoreCallProgramContext();

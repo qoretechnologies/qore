@@ -5224,7 +5224,7 @@ public:
     */
     DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, const std::string& call_name,
             qore_call_t call_type, QoreProgram* caller_pgm = nullptr)
-            : loc(loc), call_name(&call_name), call_type(call_type), caller_pgm(caller_pgm) {
+            : loc(loc), call_name(&call_name), call_type(call_type), stack_helper(this, stmt, pgm, caller_pgm) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -5255,10 +5255,11 @@ private:
     // written by stack_helper through its constructor's output references, so they take no initializers
     const AbstractStatement* stmt;
     QoreProgram* pgm;
-    //! the Program of the caller, recorded for the frame, or nullptr for the current Program
-    QoreProgram* caller_pgm;
-    // last: pushes this location once it is fully constructed and pops it before any member is destroyed
-    QoreProgramStackLocationHelper stack_helper{this, stmt, pgm, caller_pgm};
+    // last: pushes this location once it is fully constructed and pops it before any member is destroyed; the
+    // caller's Program is given to it by the constructor rather than kept in a member, as the frame records it as the
+    // location is pushed and the location never reads it again: a member would add 8 bytes to the frame of every
+    // inline IR call, which is a level of a recursion (examples/test/qore/stack/recursion-frame-budget.qtest)
+    QoreProgramStackLocationHelper stack_helper;
 };
 
 //! Returns the location of the call stack frame of an inline call: the call site, as for an AST call

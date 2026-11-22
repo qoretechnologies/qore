@@ -5039,20 +5039,20 @@ static QORE_INTERN_ALWAYS_INLINE void qore_restore_method_call_program_context(T
 }
 
 CalleeProgramContextHelper::CalleeProgramContextHelper(void* thread_data_ptr, const qore_class_private* cls,
-        ExceptionSink* xsink) : CalleeContextHelper(thread_data_ptr, cls), call_pgm_xsink(xsink) {
+        ExceptionSink* xsink) : CalleeContextHelper(thread_data_ptr, cls) {
+    this->xsink = xsink;
     call_pgm_switched = qore_set_method_call_program_context(td, cls, nullptr, old_call_pgm, referenced_class_pgm);
     call_pgm_restore = call_pgm_switched || referenced_class_pgm;
 }
 
 CalleeProgramContextHelper::CalleeProgramContextHelper(QoreListNode* argv, ExceptionSink* xsink,
-        const qore_class_private* cls) : CalleeContextHelper(argv, xsink, cls), call_pgm_xsink(xsink) {
+        const qore_class_private* cls) : CalleeContextHelper(argv, xsink, cls) {
     call_pgm_switched = qore_set_method_call_program_context(td, cls, nullptr, old_call_pgm, referenced_class_pgm);
     call_pgm_restore = call_pgm_switched || referenced_class_pgm;
 }
 
 void CalleeProgramContextHelper::restoreCallProgramContext() {
-    qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm,
-        call_pgm_xsink);
+    qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm, xsink);
 }
 
 CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
@@ -5062,7 +5062,7 @@ CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class
 }
 
 CalleeContextHelper::CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls)
-        : td(thread_data.get()), old_argv(td->current_implicit_arg), argv_xsink(xsink) {
+        : td(thread_data.get()), xsink(xsink), old_argv(td->current_implicit_arg), argv_set(true) {
     assert(xsink);
     td->current_implicit_arg = argv;
     switchContext(cls);
@@ -5099,8 +5099,8 @@ void CalleeContextHelper::restoreContext() {
 }
 
 void CalleeContextHelper::releaseArgv() {
-    if (argv_xsink && td->current_implicit_arg) {
-        td->current_implicit_arg->deref(argv_xsink);
+    if (argv_set && td->current_implicit_arg) {
+        td->current_implicit_arg->deref(xsink);
         td->current_implicit_arg = nullptr;
     }
 }
@@ -5108,7 +5108,7 @@ void CalleeContextHelper::releaseArgv() {
 void CalleeContextHelper::restoreArgv() {
     // as ~ArgvContextHelper()
     if (td->current_implicit_arg) {
-        td->current_implicit_arg->deref(argv_xsink);
+        td->current_implicit_arg->deref(xsink);
     }
     td->current_implicit_arg = old_argv;
 }
