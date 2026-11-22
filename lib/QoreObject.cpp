@@ -1180,21 +1180,11 @@ int64 qore_object_private::getRuntimeMemberCountSlow() const {
     return rc;
 }
 
-// the first or last name of getRuntimeMemberList(), in its order: the visible members, then the names of the class
-// context's internal data that are not visible members
-const char* qore_object_private::getRuntimeEdgeMemberKeyIntern(const qore_class_private* class_ctx, bool last) const {
+// the first name of getRuntimeMemberList(), in its order: the visible members, then the class context's internal data
+const char* qore_object_private::getFirstRuntimeMemberKeyIntern(const qore_class_private* class_ctx) const {
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    ConstHashIterator hi(data);
     if (!class_ctx) {
-        if (last) {
-            ReverseConstHashIterator hi(data);
-            while (hi.next()) {
-                if (!theclass->isPrivateMember(hi.getKey())) {
-                    return hi.getKey();
-                }
-            }
-            return nullptr;
-        }
-        ConstHashIterator hi(data);
         while (hi.next()) {
             if (!theclass->isPrivateMember(hi.getKey())) {
                 return hi.getKey();
@@ -1202,46 +1192,14 @@ const char* qore_object_private::getRuntimeEdgeMemberKeyIntern(const qore_class_
         }
         return nullptr;
     }
-
-    const QoreHashNode* odata = getInternalData(class_ctx);
-    if (last) {
-        if (odata) {
-            ReverseConstHashIterator ohi(odata);
-            while (ohi.next()) {
-                const char* key = ohi.getKey();
-                if (!data->existsKey(key) || !qore_object_runtime_member_visible(theclass_priv, class_ctx, key)) {
-                    return key;
-                }
-            }
-        }
-        ReverseConstHashIterator hi(data);
-        while (hi.next()) {
-            if (qore_object_runtime_member_visible(theclass_priv, class_ctx, hi.getKey())) {
-                return hi.getKey();
-            }
-        }
-        return nullptr;
-    }
-
-    ConstHashIterator hi(data);
     while (hi.next()) {
         if (qore_object_runtime_member_visible(theclass_priv, class_ctx, hi.getKey())) {
             return hi.getKey();
         }
     }
     // no visible member: every name of the internal data is listed
+    const QoreHashNode* odata = getInternalData(class_ctx);
     return odata ? odata->getFirstKey() : nullptr;
-}
-
-QoreStringNode* qore_object_private::getRuntimeEdgeMemberKey(bool last, ExceptionSink* xsink) const {
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
-    QoreSafeVarRWReadLocker sl(rml);
-    if (status == OS_DELETED) {
-        makeAccessDeletedObjectException(xsink, theclass->getName());
-        return nullptr;
-    }
-    const char* key = getRuntimeEdgeMemberKeyIntern(class_ctx, last);
-    return key ? new QoreStringNode(key) : nullptr;
 }
 
 bool qore_object_private::hasRuntimeMembers() const {
@@ -1258,7 +1216,7 @@ bool qore_object_private::hasRuntimeMembers() const {
     }
     const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
     QoreSafeVarRWReadLocker sl(rml);
-    return status != OS_DELETED && getRuntimeEdgeMemberKeyIntern(class_ctx, false);
+    return status != OS_DELETED && getFirstRuntimeMemberKeyIntern(class_ctx);
 }
 
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {

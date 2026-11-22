@@ -16,7 +16,7 @@
 %exec-class ObjectMemberEnumerationTest
 
 #! The member enumerations of an object report the members that the calling code can access (issue #7048)
-/** <object>::keys(), size(), empty() and val() and the elements operator reported and counted the private members of
+/** <object>::keys(), size() and empty() and the elements operator reported and counted the private members of
     an object to any caller, while the keys operator, hash() and the object iterators report only the members that the
     calling code can access; code outside the class's hierarchy could list the names of the private members of an
     object that other code shares.  They now give the results of the keys operator in the same context.
