@@ -4418,6 +4418,44 @@ size_t QoreIRToLLVM::getReloadChainCallThreshold() {
 }
 
 // documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::isLoweringBlockInCycle() {
+    if (!current_lowering_block_ || !current_ir_func) {
+        return true;
+    }
+    auto it = block_in_cycle.find(current_lowering_block_);
+    if (it != block_in_cycle.end()) {
+        return it->second;
+    }
+    if (!block_reachability) {
+        block_reachability = std::make_shared<QoreIRBlockReachability>(*current_ir_func);
+    }
+    bool in_cycle = block_reachability->reachesAnyAvoiding(current_lowering_block_, nullptr,
+        {current_lowering_block_});
+    block_in_cycle.emplace(current_lowering_block_, in_cycle);
+    return in_cycle;
+}
+
+size_t QoreIRToLLVM::getReloadChainCostBudget() {
+    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
+        constexpr size_t default_budget = 40000;
+        QoreEnvironmentValue env_holder("QORE_JIT_RELOAD_CHAIN_COST_BUDGET");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            return default_budget;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(env, &end, 10);
+        if (!end || end == env || *end || *env == '-'
+                || value > static_cast<unsigned long long>(std::numeric_limits<size_t>::max())) {
+            return default_budget;
+        }
+        // 0 disables the cost rule
+        return static_cast<size_t>(value);
+    });
+    return budget_setting.get();
+}
+
+// documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::isRealReferenceAlloca(const llvm::AllocaInst* alloca) const {
     if (!current_ir_func || (current_ir_func->real_reference_locals.empty()
             && current_ir_func->real_reference_ir_only_locals.empty())) {
@@ -7215,8 +7253,19 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     // calls of its 43499, and 21313 of its 41605 stores): the flush of a function over the threshold is one call
     // with a constant table of the slots that it rotates, clears and marks stale, in the order of the inline form
     // below (qore#6299)
-    bool use_flush_helpers = (local_reload_trackers.size()
-        + local_reload_deferred.size()) >= getReloadChainCallThreshold();
+    // The inline form's code is also in the product of the tracked locals and the boundaries in a function with fewer
+    // tracked locals than the threshold but hundreds of boundaries (a long function of untyped locals: its rotations
+    // were 16% of its code), so a function whose tracked locals times its IR instructions (for its boundaries) reach
+    // the cost budget uses the helpers too, at the boundaries outside its loops: one in a loop, whose code runs often,
+    // keeps the inline form, which runs faster (qore#7187); a function whose inline form is asked for keeps it
+    const size_t tracked = local_reload_trackers.size() + local_reload_deferred.size();
+    const size_t threshold = getReloadChainCallThreshold();
+    bool use_flush_helpers = tracked >= threshold;
+    if (!use_flush_helpers && tracked && current_ir_func && threshold != std::numeric_limits<size_t>::max()) {
+        const size_t budget = getReloadChainCostBudget();
+        use_flush_helpers = budget && tracked * current_ir_func->getInstructionCount() >= budget
+            && !isLoweringBlockInCycle();
+    }
     if (use_flush_helpers) {
         // the table gives the slots in the cleanup frame
         auto candidate = [this](const auto& map) -> bool {
@@ -16601,6 +16650,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     local_reload_trackers.clear();
     local_reload_deferred.clear();
+    block_in_cycle.clear();
+    block_reachability.reset();
     local_reload_epoch = nullptr;
     local_valid_epochs.clear();
     local_reload_boundary_cleanup_pending = false;
