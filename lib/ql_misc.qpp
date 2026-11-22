@@ -50,6 +50,7 @@
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
