@@ -59,6 +59,10 @@ module QUnit {
     It contains base classes for creating test cases and test suites. It also provides a
     dependency injection helper for mocking pre-existing classes without modifying their code.
 
+    Tests write their output to the terminal, so code that is restricted from terminal I/O
+    (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") cannot run them: their output is refused also when the module's
+    code writes it (see @ref sandbox_terminal_io).
+
     It also provides a number of pre-defined testing functions for use in assertions.
 
     <b>Examples:</b>

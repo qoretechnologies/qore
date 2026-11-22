@@ -1,0 +1,45 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of terminal-io-caller.qtest: returns whether its code may write to the terminal for its caller (qore#7140)
+
+%modern
+
+module TermCheck {
+    version = "1.0";
+    desc = "returns whether the module's code may write to the terminal for its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace TermCheck {
+#! returns SandboxManager::isTerminalIoAllowed() as the module's code sees it
+public bool sub allowed() {
+    return SandboxManager::isTerminalIoAllowed();
+}
+
+#! uses a builtin that uses the terminal for the caller, with no check of its own; returns "used" or the error
+public string sub use(string how) {
+    try {
+        switch (how) {
+            case "printf": printf("printf from library code\n"); break;
+            case "print": print("print from library code\n"); break;
+            case "stdout": stdout.print("stdout from library code\n"); break;
+            case "stderr": stderr.print("stderr from library code\n"); break;
+            case "stream": (new StdoutOutputStream()).write(binary("stream from library code\n")); break;
+            case "streamwriter": (new StreamWriter(new StderrOutputStream())).print("streamwriter from library code\n");
+                break;
+            case "window": return TermIOS::getWindowSize().typeCode() == NT_HASH ? "used" : "?";
+            case "getopt": {
+                list<string> args = ("--qore-7140-no-such-option",);
+                return GetOpt::parseExit({"help": "h,help"}, \args).typeCode() == NT_HASH ? "used" : "?";
+            }
+            default: throw "TERMCHECK-ERROR", how;
+        }
+        return "used";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}
