@@ -5196,8 +5196,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     }
                 }
 
-                # the handler's changes, except for the server's own keys
-                cx = handler_cx + cx{ServerContextKeys};
+                # the handler's changes, except for the server's own keys, also those that the server's context
+                # does not have
+                cx = (handler_cx - ServerContextKeys) + cx{ServerContextKeys};
 
                 # return an error if authentication failed
                 if (ah) {
