@@ -93,6 +93,9 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         assertRegex("received event event", r.out, label + ": the event is printed");
         assertRegex(EventValue, r.out, label + ": the event's data is printed");
         assertRegex(TimeoutRegex, r.out, label + ": listening stops on its timeout");
+        # the reason that qdp gives is the timeout, not the user (qore#7130)
+        assertRegex("listening stopped on its timeout", r.out, label + ": the timeout is named as the reason");
+        assertFalse(regex(r.out, "on user request"), label + ": the user is not named as the reason");
         assertRegex("send .*SIGINT.* or .*SIGTERM.* to stop listening", r.out,
             label + ": the prompt names the signals that stop listening");
         assertFalse(regex(r.out, "press any key"), label + ": no keystroke is invited");
@@ -154,6 +157,7 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         assertRegex(EventValue, out, "the event is printed");
         assertRegex("listening stopped due to signal", out, "listening stops on the signal");
         assertFalse(regex(out, "TIMEOUT:"), "no timeout");
+        assertFalse(regex(out, "on its timeout|on user request"), "the signal is the only reason given");
     }
 
     #! the interactive mode reads lines from a terminal: a usage error without one
