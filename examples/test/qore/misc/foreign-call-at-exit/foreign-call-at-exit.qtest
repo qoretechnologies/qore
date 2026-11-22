@@ -103,12 +103,20 @@ class ForeignCallAtExitTest inherits QUnit::Test {
     }
 
     blockedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the bound of the wait is made short with dbg_set_process_end_foreign_wait(), which only a library "
+                "debug build has");
+        }
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             checkRun(runScript(mode, "foreign-call-blocked.q", "100"), 0, BlockedOutput, mode);
         }
     }
 
     blockedExitTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the bound of the wait is made short with dbg_set_process_end_foreign_wait(), which only a library "
+                "debug build has");
+        }
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             checkRun(runScript(mode, "foreign-call-blocked.q", "100 exit"), 5, BlockedExitOutput, mode);
         }
@@ -141,6 +149,10 @@ class ForeignCallAtExitTest inherits QUnit::Test {
                 continue;
             }
             if (script == "foreign-call-blocked") {
+                if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                    # the short bound needs dbg_set_process_end_foreign_wait() (a library debug build)
+                    continue;
+                }
                 checkRun(run(exe + " 100"), 0, BlockedOutput, script + ": AOT");
                 checkRun(run(exe + " 100 exit"), 5, BlockedExitOutput, script + ": AOT exit()");
             } else {
