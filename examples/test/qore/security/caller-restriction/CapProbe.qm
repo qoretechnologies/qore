@@ -5,6 +5,7 @@
 #! the network domain lazily, in its methods, as the connections of the library do
 
 %modern
+%requires CapGadget
 
 module CapProbe {
     domains = "NETWORK,THREAD_CONTROL,THREAD_CLASS,MODULES,PROCESS";
@@ -93,6 +94,21 @@ public namespace CapProbe {
         #! only the domains that a host grant lends are lent: not the process domain
         public bool processProbe() {
             return SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+        }
+
+        #! creates an object of the class that its caller names (a factory by name)
+        public object make(string cls) {
+            return create_object(cls);
+        }
+
+        #! creates an object with a method that a subclass can override (a template method)
+        public object makeHooked() {
+            return makeHook();
+        }
+
+        #! creates an object of this module's class; see makeHooked()
+        public object makeHook() {
+            return new Conn();
         }
 
         #! loads a library module for the first time

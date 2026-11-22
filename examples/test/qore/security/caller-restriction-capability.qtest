@@ -70,6 +70,23 @@ class CallerRestrictionCapabilityTest inherits QUnit::Test {
             assertEq("\"INVALID-FUNCTION-ACCESS\"", r{"top_" + m + "_own_get"},
                 "restricted: top-level: its own connection: " + m);
             assertEq("\"client\"", u{"top_" + m + "_own_get"}, "unrestricted: top-level: own connection: " + m);
+            # factories and inherited methods of lent objects in every execution mode
+            assertEq("True", r{"top_" + m + "_factory_other_probe"},
+                "restricted: top-level: a factory: another module's class: " + m);
+            assertEq("\"client\"", r{"top_" + m + "_factory_own_get"},
+                "restricted: top-level: a factory: the lent module's own class: " + m);
+            assertEq("\"client\"", r{"top_" + m + "_inherited_base_get"},
+                "restricted: top-level: an inherited method: its module's class: " + m);
+            assertEq("False", r{"top_" + m + "_inherited_own_probe"},
+                "restricted: top-level: the subclass's method: its module's class: " + m);
+            assertEq("True", r{"top_" + m + "_inherited_override_probe"},
+                "restricted: top-level: an override called by an inherited method: " + m);
+            foreach string k in (("factory_other_probe", "inherited_own_probe", "inherited_override_probe")) {
+                assertEq("False", u{"top_" + m + "_" + k}, "unrestricted: top-level: " + k + ": " + m);
+            }
+            foreach string k in (("factory_own_get", "inherited_base_get")) {
+                assertEq("\"client\"", u{"top_" + m + "_" + k}, "unrestricted: top-level: " + k + ": " + m);
+            }
         }
         # only the domains that a host grant lends are lent
         assertEq("True", r.lent_process, "restricted: the process domain is not lent");
@@ -91,7 +108,12 @@ class CallerRestrictionCapabilityTest inherits QUnit::Test {
         # the destructor of a lent object that the restricted code deletes is checked against it
         assertEq("True", r.lent_destructor, "restricted: the destructor of a lent object");
         assertEq("False", u.lent_destructor, "unrestricted: the destructor of a lent object");
-        assertEq(48, r.size(), "restricted: every result");
+        # a factory of a lent object lends only objects of the lent module's own classes
+        assertEq("True", r.factory_other_probe, "restricted: a factory: another module's class");
+        assertEq("\"client\"", r.factory_own_get, "restricted: a factory: the lent module's own class");
+        assertEq("False", u.factory_other_probe, "unrestricted: a factory: another module's class");
+        assertEq("\"client\"", u.factory_own_get, "unrestricted: a factory: the lent module's own class");
+        assertEq(90, r.size(), "restricted: every result");
         checked = (r, u);
         # nothing is restricted for an unrestricted Program
         foreach string k in (("lent_get", "lent_nested_get", "own_get", "own_subclass_get", "library_shared_get")) {

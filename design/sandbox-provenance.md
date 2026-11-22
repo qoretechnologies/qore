@@ -201,9 +201,14 @@ is a call reference that restricted code created (`QoreSandboxContext::reference
 its restrictions through a lent object; `std::bad_alloc` leaves the frame out (fail closed). No frame is pushed for a
 call made while the object's destructor runs (the object's status is no longer `OS_OK` once its deletion or the release
 of its last reference started): the code that deletes the object or releases its last reference does not call it as a
-capability. In a lent method, only an object whose own class is a module's is lent, not one of a class that the caller
-supplies (its subclass of a module's class), so a factory that the lent method calls cannot mint a capability of the
-caller's class.
+capability. The frame records the Program of the lent method's code (`CapabilityFrame::code_pgm`, the Program of the
+class that declares the method, so for an inherited method the base class's module): in a lent method, only an object
+of a class of that module Program is lent, not one of another module's class or of a class that the caller supplies,
+so a factory that creates an object of a class that its caller names cannot mint a capability of another module's
+class; every class of its own module stays reachable through it (and through a deserializer, with caller-chosen member
+state). A call from module code pushes no frame, so a base-class method that calls an override in the subclass's
+module keeps the base module's frame, and the objects the override creates are not lent (fails closed). A thread that
+a lent method starts keeps the grant for its life; the objects it creates are not lent (no frame on that thread).
 
 The innermost capability frame is a grant like a policy barrier, ordered with them by `GrantSnapshot::seq`
 (`qore_get_innermost_capability_frame()`): the walk stops at the context entered for the method, so the caller's

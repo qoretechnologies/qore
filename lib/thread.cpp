@@ -895,6 +895,8 @@ public:
         const QoreSandboxProvenanceHelper* provenance;
         //! the state of the sources of the calling code's restrictions that are not on the stack
         GrantSnapshot snapshot;
+        //! the Program of the lent method's code: only objects of its classes that the method creates are lent
+        const QoreProgram* code_pgm;
     };
     //! the active capability frames, innermost last
     std::vector<CapabilityFrame> capability_frames;
@@ -5877,7 +5879,7 @@ void ProgramThreadCountContextHelper::markCapability(const QoreObject* obj) {
     try {
         td->capability_frames.push_back({this, td->sandbox_provenance,
             {td->runtime_po_state.caller_restrictions_gen, td->thread_caller_restrictions_gen,
-            td->call_program_context, ++td->grant_seq}});
+            td->call_program_context, ++td->grant_seq}, td->current_pgm});
     } catch (std::bad_alloc&) {
         // without the frame, the method runs for the code that calls it (fail closed)
     }
@@ -7803,14 +7805,16 @@ QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, bool span
 /** Objects that library code creates in its initialization, or for no Program (the shared state of the library), are
     not lent by anybody: their methods are checked against their callers as before
 */
-static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method) {
+static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, const QoreProgram*& lent_pgm) {
     in_lent_method = false;
+    lent_pgm = nullptr;
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     // inside a method of a lent object: what it creates is lent as it is, unless a library module is initialized
     // inside the method (its first load): the state that the initialization creates belongs to nobody
     const ThreadData::CapabilityFrame* cf = qore_get_innermost_capability_frame(td);
     if (cf && (!mib || cf->snapshot.seq > mib->seq)) {
         in_lent_method = true;
+        lent_pgm = cf->code_pgm;
         return true;
     }
     // the initialization of library module code creates the library's state for nobody
@@ -7849,10 +7853,13 @@ QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm,
     if (capability) {
         ThreadData* td = thread_data.get();
         bool in_lent_method;
-        // (in a lent method, only an object whose own class is a module's: a class that the caller supplies, such as
-        // its subclass of a module's class, is not lent by a factory that the lent method calls)
-        *capability = td && code_pgm && qore_creation_by_lending_code(td, in_lent_method)
-            && (qore_program_is_module_inline(code_pgm) || (spans && !in_lent_method))
+        const QoreProgram* lent_pgm;
+        // (in a lent method, only an object of a class of the lent method's own module (its code's Program): an
+        // object of another module's class, or of a class that the caller supplies, is not lent by a factory that the
+        // lent method calls with a class name from its caller, which would mint a capability of that class)
+        *capability = td && code_pgm && qore_creation_by_lending_code(td, in_lent_method, lent_pgm)
+            && (in_lent_method ? (code_pgm == lent_pgm && qore_program_is_module_inline(code_pgm))
+                : (qore_program_is_module_inline(code_pgm) || spans))
             && (in_lent_method ? !(origin & QoreParseOptions(QORE_GRANT_LENT_DOMAINS))
                 : (!(origin & ~QoreParseOptions(QDOM_UNCONTROLLED_API))
                     && td->sandbox_policy_barrier_snapshots.empty()));

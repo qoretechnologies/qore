@@ -8,6 +8,7 @@
 %modern
 %no-child-restrictions
 %requires CapProbe
+%requires CapInherit
 %requires CapRegistry
 %requires ConnectionProvider
 %requires RestClient
@@ -58,6 +59,10 @@ hash<auto> sub run(CapProbe::Conn lent, code host_ref, hash<string, list<auto>> 
     h.lent_thread = lent.threadProbe();
     h.lent_native = lent.nativeProbe();
     h.lent_process = lent.processProbe();
+    # a factory of the lent connection that creates an object of the class that the restricted code names: only an
+    # object of the lent module's own class is lent, not one of another module's class
+    h.factory_other_probe = lent.make(\"CapGadget::Gadget\").probe();
+    h.factory_own_get = lent.make(\"CapProbe::Conn\").get();
     # a module loaded for the first time in a lent method: what its initialization creates is not lent
     lent.loadLazy();
     h.lazy_shared_get = CapProbe::lazy_shared().get();
@@ -131,13 +136,25 @@ foreach hash<auto> i in ({"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": E
     q.parse("%modern
 %requires CapProbe
 our object lent;
+our object inh;
 our hash<auto> result;
 result.lent_get = lent.get();
 result.lent_probe = lent.probe();
+# a factory of the lent connection: only an object of a class of the lent method's module is lent
+result.factory_other_probe = lent.make(\"CapGadget::Gadget\").probe();
+result.factory_own_get = lent.make(\"CapProbe::Conn\").get();
+# a lent object of a class of another module that inherits CapProbe's: an inherited method lends the classes of the
+# module of its code (CapProbe), the subclass's own method those of its module
+result.inherited_base_get = inh.make(\"CapProbe::Conn\").get();
+result.inherited_own_probe = inh.makeOwn().probe();
+# CapProbe's method calls the subclass's override from module code: the object is created in CapProbe's lent method
+# and is not of CapProbe's classes, so it is not lent
+result.inherited_override_probe = inh.makeHooked().probe();
 CapProbe::Conn own();
 result.own_get = own.get();
 ", "top-level-" + i.key);
     q.setGlobalVarValue("lent", lent);
+    q.setGlobalVarValue("inh", new CapInherit::Sub());
     q.run();
     hash<auto> res = q.getGlobalVariable("result");
     map printf("top_%s_%s=%y\n", i.key, $1.key, $1.value), res.pairIterator();
