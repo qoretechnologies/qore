@@ -1424,8 +1424,6 @@ scheme://user:pass@hostname:port/path
 
         opts = validateOptions(getHash(config, "opts") ?? {});
         orig_opts = opts;
-        # the proof of the code that creates the connection, bound to its URL and proxy (qore#7262)
-        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(url, {"proxy": opts.proxy});
 
         if (opts.disable_automatic_pings) {
             disable_automatic_pings = True;
@@ -1433,6 +1431,9 @@ scheme://user:pass@hostname:port/path
 
         setChildCapabilities();
         setRealUrl(url);
+        # the proof of the code that creates the connection, bound to the URL that its clients use (its real URL: the
+        # HTTP URL of an HTTP-based connection, whatever its scheme) and its proxy (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(real_url ?? url, {"proxy": opts.proxy});
     }
 
     #! Called by the constructor to set the real URL
@@ -1548,7 +1549,8 @@ scheme://user:pass@hostname:port/path
         transient_info = {};
         sandbox_check = new DataProvider::DataProviderSandboxCheck();
         creator_restrictions = AbstractConnection::getCreatorRestrictions();
-        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(members.url, {"proxy": members.opts.proxy});
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(members.real_url ?? members.url,
+            {"proxy": members.opts.proxy});
         checkCreation(members.name);
         # the transient and internal members are the deserializing process's own, never the serialized data's
         self += members - TransientMembers;

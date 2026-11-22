@@ -22,6 +22,8 @@
 %requires McpClient
 %requires A2aClient
 %requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
 %requires ../../../TestCertificates.qm
 
 %try-module process >= 2.2
@@ -61,6 +63,10 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
     }
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         string path = (hdr.path ?? "").split("?")[0];
+        if (path =~ /^\/?rest/) {
+            return <HttpResponseInfo>{"code": 200, "body": "{\"ok\":true}",
+                "hdr": {"Content-Type": "application/json"}};
+        }
         if (path =~ /same$/) {
             return <HttpResponseInfo>{"code": 302, "hdr": {"Location": "/redirect/ok"}};
         }
@@ -166,6 +172,33 @@ string sub no_proxy(object conn) {
 }
 bool sub take(string url) {
     return exists HttpClientCreatorProof::forClient(url);
+}
+string sub rest_get(object conn, string path) {
+    try {
+        object c = conn.getAsync(False);
+        hash<auto> r = c.restGet(path);
+        return string(r.status_code);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_retarget(object conn, string url) {
+    try {
+        object c = conn.getAsync(False);
+        object o = c.copyWithUrl(url);
+        o.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_ping(object conn) {
+    try {
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
 }
 string sub own_rpc(string url) {
     try {
@@ -394,6 +427,7 @@ object sub lookalike() {
         addTestCase("a lent connection keeps its proxy, " + m, sub () { testProxyRemoved(m); });
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
         addTestCase("restricted code inside a trusted call takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
         addTestCase("restricted code's own clients, " + m, sub () { testOwn(m); });
         addTestCase("a look-alike proof, " + m, sub () { testLookAlike(m); });
         addTestCase("the borrower's sandbox, " + m, sub () { testSandbox(m); });
@@ -411,6 +445,7 @@ object sub lookalike() {
         });
         RedirectHandler rh();
         server.setHandler("redirect", "^/?redirect", NOTHING, rh);
+        server.setHandler("rest", "^/?rest", NOTHING, rh);
         hash<auto> plinfo = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": 0,
@@ -551,6 +586,24 @@ object sub lookalike() {
     #! returns the error code of a result of the restricted code (\c "ERR: description" or a code)
     private static string errOf(string rv) {
         return (rv =~ x/^([^:]+)/)[0] ?? rv;
+    }
+
+    #! the async client of a lent REST connection makes requests to the connection's target for restricted code (its
+    #! manager is created with the creator's proof when the client is created), not to another origin, and the
+    #! connection's ping with a ping method is up
+    testLentRest(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("rest://127.0.0.1:%d/rest", plain_port);
+        RestConnection rest("r", "r", url, {"monitor": False}, {"data": "json"});
+        assertEq("200", p.callFunction("rest_get", rest, "/rest/x"), "a request of a lent REST connection, " + mode);
+        assertRegex(OriginDenied + "http://localhost:" + plain_port, p.callFunction("rest_retarget", rest,
+            sprintf("http://localhost:%d/rest", plain_port)), "the client retargeted to another origin, " + mode);
+        RestConnection pinged("p", "p", url, {"monitor": False}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/rest/ping",
+        });
+        assertEq("UP", p.callFunction("rest_ping", pinged), "a ping with a ping method of a lent connection, " + mode);
     }
 
     #! restricted code that runs while trusted code calls getAsync() on a connection takes no grant: the connection
