@@ -981,8 +981,15 @@ conn.checkSandboxAccess(True);
         # the HTTP client that the connection creates for restricted code that was lent the connection is the
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
-        *HttpClientIo::HttpClientCreatorProofGrant grant =
-            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
+        *HttpClientIo::HttpClientCreatorProofGrant grant;
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            # a client that the connection's code creates from its members, which the restricted code can change,
+            # connects only to the target that the connection's creator gave (qore#7262)
+            checkLentClientTarget();
+            if (creator_proof) {
+                grant = creator_proof.grantNext();
+            }
+        }
         if (!connect) {
             object o = getImpl(False, rtopts);
             postProcess(o);
@@ -1325,6 +1332,19 @@ conn.checkSandboxAccess(True);
         return regex_subst(url, "^" + scheme, targ);
     }
 
+    #! Called by get() for code restricted from the NETWORK domain before the connection's client is created
+    /** A connection class whose get() creates a client that connects outside the connection manager of HttpClientIo
+        (a synchronous client) checks with checkLentNetworkTarget() the target and the proxy that the client is
+        created for from the connection's members, which restricted code that was lent the connection can change;
+        this implementation checks nothing (qore#7262)
+
+        @throw PERMISSION-DENIED the target or the proxy is not the one that the connection's creator gave
+
+        @since %ConnectionProvider 3.1
+    */
+    private checkLentClientTarget() {
+    }
+
     #! Refuses code restricted from the NETWORK domain a network connection that the connection's creator proof does not allow
     /** A connection class calls this method before it connects a client that it created outside @ref get() and
         @ref getAsync() for the calling code (a synchronous client of a ping, for example), giving the target that the
@@ -1346,29 +1366,9 @@ conn.checkSandboxAccess(True);
         if (!SandboxManager::isCallerRestricted(DOM_NETWORK)) {
             return;
         }
-        bool allowed;
-        if (creator_proof) {
-            try {
-                hash<UrlInfo> u = parse_url(url);
-                bool tls = (u.protocol ?? "http").lwr() == "https";
-                *hash<auto> proxy_info;
-                if (proxy_url.val()) {
-                    hash<UrlInfo> pu = parse_url(proxy_url);
-                    bool proxy_tls = (pu.protocol ?? "http").lwr() == "https";
-                    proxy_info = {
-                        "host": pu.host ?? "",
-                        "port": pu.port ?? (proxy_tls ? 443 : 80),
-                        "ssl": proxy_tls,
-                    };
-                }
-                allowed = u.host.val()
-                    && creator_proof.allowsOrigin(tls, u.host, u.port ?? (tls ? 443 : 80))
-                    && creator_proof.allowsProxy(proxy_info);
-            } catch (hash<ExceptionInfo> ex) {
-                # an invalid URL is no allowed target
-            }
-        }
-        if (!allowed) {
+        # the origin (TLS or not, canonical host, port; the schemes that are mapped to HTTP, such as ws and rest, as
+        # their clients map them) and the proxy are derived as for the proof itself; an invalid URL allows nothing
+        if (!creator_proof || !creator_proof.allowsUrl(url, proxy_url)) {
             throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                 "functional domain and may connect only to the target of a connection that unrestricted code created "
                 "and lent to it", name);

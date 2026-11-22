@@ -100,7 +100,9 @@ class LentClientCreatorProofTest inherits QUnit::Test {
         const OriginDenied = "^PERMISSION-DENIED: .*does not create connections to ";
         const ProxyDenied = "^PERMISSION-DENIED: .*through another proxy";
         const CaDenied = "^PERMISSION-DENIED: .*other CA certificate locations";
-        const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create)";
+        const LentTargetDenied = "^PERMISSION-DENIED: connection .*may connect only to the target of a connection";
+        const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create"
+            "|connection .*may connect only to the target of a connection)";
 
         const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 
@@ -196,6 +198,33 @@ string sub rest_ping(object conn) {
     try {
         hash<auto> h = conn.ping(True);
         return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub sync_get(object conn, *string url, *string proxy) {
+    try {
+        if (url) {
+            conn.url = url;
+            conn.real_url = url;
+        }
+        if (proxy) {
+            conn.opts.proxy = proxy;
+        }
+        conn.get(True);
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub sync_poll(object conn, *string url) {
+    try {
+        if (url) {
+            conn.url = url;
+            conn.real_url = url;
+        }
+        conn.startPollConnect();
+        return \"STARTED\";
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -428,6 +457,8 @@ object sub lookalike() {
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
         addTestCase("restricted code inside a trusted call takes no grant, " + m, sub () { testCallback(m); });
         addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
+        addTestCase("a lent HTTP connection's synchronous client, " + m, sub () { testLentSync(m); });
+        addTestCase("a lent HTTP connection's synchronous poll, " + m, sub () { testLentSyncPoll(m); });
         addTestCase("restricted code's own clients, " + m, sub () { testOwn(m); });
         addTestCase("a look-alike proof, " + m, sub () { testLookAlike(m); });
         addTestCase("the borrower's sandbox, " + m, sub () { testSandbox(m); });
@@ -653,6 +684,52 @@ object sub lookalike() {
             "cross-origin redirect of trusted code");
     }
 
+    #! returns a socket listening on a free port of 127.0.0.1
+    private static Socket listen() {
+        Socket s();
+        s.bind("127.0.0.1:0");
+        s.listen();
+        return s;
+    }
+
+    #! the synchronous client that a lent HTTP connection's get() creates connects to the connection's own target for
+    #! restricted code, not to a target or through a proxy that the restricted code set in the connection's members
+    testLentSync(string mode) {
+        Program p = getProgram(mode);
+        Socket own = listen();
+        on_exit own.close();
+        Socket other = listen();
+        on_exit other.close();
+        string own_url = sprintf("http://127.0.0.1:%d/", own.getSocketInfo().port);
+        string other_url = sprintf("http://127.0.0.1:%d/", other.getSocketInfo().port);
+        HttpConnection h("h", "h", own_url, {"monitor": False});
+        assertEq("CONNECTED", p.callFunction("sync_get", h), "the lent connection's own target, " + mode);
+        assertTrue(own.isDataAvailable(0), "the own target's listener sees the connection, " + mode);
+        HttpConnection r("r", "r", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_get", r, other_url), "a retargeted connection, " + mode);
+        HttpConnection x("x", "x", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_get", x, NOTHING, other_url),
+            "a connection with another proxy, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # unrestricted code that changes its own connection is not checked
+        HttpConnection u("u", "u", own_url, {"monitor": False});
+        u.url = other_url;
+        u.real_url = other_url;
+        u.get(True);
+        assertTrue(other.isDataAvailable(0), "trusted code connects to the target that it set");
+    }
+
+    #! the synchronous client of a lent HTTP connection's poll operation is checked as get()'s
+    testLentSyncPoll(string mode) {
+        Program p = getProgram(mode);
+        string own_url = sprintf("http://127.0.0.1:%d/", closed_port);
+        HttpConnection h("h", "h", own_url, {"monitor": False});
+        assertEq("STARTED", p.callFunction("sync_poll", h), "the lent connection's own target, " + mode);
+        HttpConnection r("r", "r", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_poll", r, sprintf("http://localhost:%d/", closed_port)),
+            "a retargeted connection, " + mode);
+    }
+
     #! the origins of a proof: TLS mode, host and port, with canonical host names
     testOrigins() {
         HttpClientCreatorProof p = HttpClientCreatorProof::get("https://Host.Example.:8443/x");
@@ -683,6 +760,29 @@ object sub lookalike() {
         # a URL without a scheme uses TLS, as the manager does
         HttpClientCreatorProof n = HttpClientCreatorProof::get("h:8000");
         assertFalse(n.allowsOrigin(False, "h", 8000), "plain HTTP for a URL without a scheme");
+        # the REST schemes are mapped to HTTP
+        HttpClientCreatorProof rs = HttpClientCreatorProof::get("rests://h/");
+        assertTrue(rs.allowsOrigin(True, "h", 443), "rests://");
+        assertFalse(rs.allowsOrigin(False, "h", 80), "rests:// is TLS");
+        HttpClientCreatorProof r = HttpClientCreatorProof::get("rest://h:8080/");
+        assertTrue(r.allowsOrigin(False, "h", 8080), "rest://");
+        # a URL and a proxy as a whole
+        assertTrue(r.allowsUrl("http://H:8080/x"), "the proof's own target");
+        assertFalse(r.allowsUrl("https://h:8080/"), "TLS to a plain origin");
+        assertFalse(r.allowsUrl("http://h:8080/", "http://proxy:3128"), "a proxy that the proof does not have");
+        assertFalse(r.allowsUrl("not a url"), "an invalid URL");
+        # an IPv6 host without brackets is ambiguous (where does the host end and the port start?): it allows nothing
+        HttpClientCreatorProof r6 = HttpClientCreatorProof::get("http://[::1]:8080/");
+        assertTrue(r6.allowsUrl("http://[::1]:8080/"), "a bracketed IPv6 host");
+        assertFalse(r6.allowsUrl("http://::1:8080/"), "an IPv6 host without brackets");
+        assertFalse(HttpClientCreatorProof::get("http://::1:8080/").allowsUrl("http://::1:8080/"),
+            "a proof of an IPv6 host without brackets");
+        HttpClientCreatorProof r6p = HttpClientCreatorProof::get("http://h/", {"proxy": "http://[::1]:3128"});
+        assertTrue(r6p.allowsUrl("http://h/", "http://[::1]:3128"), "a bracketed IPv6 proxy");
+        assertFalse(r6p.allowsUrl("http://h/", "http://::1:3128"), "an IPv6 proxy without brackets");
+        HttpClientCreatorProof rp = HttpClientCreatorProof::get("rest://h:8080/", {"proxy": "http://proxy:3128"});
+        assertTrue(rp.allowsUrl("http://h:8080/", "http://Proxy:3128"), "the proof's proxy");
+        assertFalse(rp.allowsUrl("http://h:8080/"), "without the proof's proxy");
         # a scheme that is not mapped to HTTP allows no origin
         HttpClientCreatorProof f = HttpClientCreatorProof::get("ftp://h/");
         assertFalse(f.allowsOrigin(False, "h", 80));
