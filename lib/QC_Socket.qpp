@@ -7399,6 +7399,30 @@ nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYS
     s->setSslCaLocations(ca_file ? ca_file->c_str() : nullptr, ca_path ? ca_path->c_str() : nullptr, xsink);
 }
 
+//! Sets or clears the in-memory trust store that peer certificates are verified against
+/** A trust store takes precedence over the CA locations set with
+    @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()": its certificates were read when it was
+    created, so no file is read and the environment is not consulted when a certificate is verified
+    (qoretechnologies/qore#7248)
+
+    @param store the trust store; @ref nothing to clear it
+
+    @par Example:
+    @code{.py}
+sock.setSslTrustStore(SSLTrustStore::getDefault());
+    @endcode
+
+    @note the verification mode is not changed: certificates are verified only with a verification mode set with
+    @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()", and not with
+    @ref Qore::Socket::acceptAllCertificates() "Socket::acceptAllCertificates()"
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSslTrustStore(*SSLTrustStore[QoreSSLTrustStore] store) {
+    // the socket takes a reference of its own; the holder releases the one from the argument
+    s->setSslTrustStore(store ? *store : nullptr, xsink);
+}
+
 //! Sets the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 /** @par Example:
     @code{.py}

@@ -39,6 +39,7 @@
 
 #include <openssl/err.h>
 #include <openssl/rand.h>
+#include <openssl/x509.h>
 
 #ifdef OPENSSL_3_PLUS
 #include <openssl/kdf.h>
@@ -3679,6 +3680,37 @@ hash<auto> get_crypto_info() [flags=RET_VALUE_ONLY] {
 
     return rv.release();
 #endif
+}
+
+//! Returns the locations of the CA certificates that TLS connections trust by default
+/** These are the locations that a TLS connection without CA locations of its own (such as the \c ssl_ca_file and
+    \c ssl_ca_path options of @ref Qore::HTTPClient "HTTPClient") uses: the file and directory named by the
+    \c SSL_CERT_FILE and \c SSL_CERT_DIR environment variables at the time of the call, or else the defaults of the
+    OpenSSL library.
+
+    Trusted code can capture them to fix the CA certificates of a connection, so that a later change of the process
+    environment does not change which certificates it trusts (see
+    @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials")
+
+    @par Example:
+    @code{.py}
+hash<auto> h = get_default_ssl_ca_locations();
+    @endcode
+
+    @return a hash with the following keys:
+    - \c file: the CA certificate file
+    - \c dir: the CA certificate directory
+
+    @since %Qore 3.0
+*/
+hash<auto> get_default_ssl_ca_locations() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreEnvironmentReadLock env_lock;
+    const char* file = getenv(X509_get_default_cert_file_env());
+    const char* dir = getenv(X509_get_default_cert_dir_env());
+    rv->setKeyValue("file", new QoreStringNode(file && *file ? file : X509_get_default_cert_file()), nullptr);
+    rv->setKeyValue("dir", new QoreStringNode(dir && *dir ? dir : X509_get_default_cert_dir()), nullptr);
+    return rv.release();
 }
 
 //! Returns information about the given cipher or @ref NOTHING if the cipher is unknown
