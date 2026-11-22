@@ -275,12 +275,21 @@ bool sub owner() { return True; }
 %else
 bool sub owner() { return False; }
 %endif
+%ifdef QORE_HAVE_SANDBOX_OBJECT_TRANSFER
+bool sub transfer() { return True; }
+%else
+bool sub transfer() { return False; }
+%endif
 ", "parse-define");
             assertTrue(p.callFunction("level"), i.key + ": QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL");
             assertTrue(p.callFunction("owner"), i.key + ": QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK");
+            assertTrue(p.callFunction("transfer"), i.key + ": QORE_HAVE_SANDBOX_OBJECT_TRANSFER");
         }
 %ifndef QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL
         assertTrue(False, "QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL in the test itself");
+%endif
+%ifndef QORE_HAVE_SANDBOX_OBJECT_TRANSFER
+        assertTrue(False, "QORE_HAVE_SANDBOX_OBJECT_TRANSFER in the test itself");
 %endif
     }
 
