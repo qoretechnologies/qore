@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """The callgrind row tool (tools/perf/cgrows: cgmin.sh, rows.sh and the bench scripts in bench/, qore#7193) gives the
 instructions per iteration of a loop as the minimum over allocation layouts.  These tests run it with a stand-in for
-valgrind: they check the layouts it writes (the pad before the classes, the dead statements of the loops), the value it
-computes and selects, its errors, rows.sh's output, the conventions of the bench scripts and the row list of its
-README; and, given a qore (QORE_BINARY or build/qore), that every layout of every bench script and every row of the
-list run without an error or a warning in each execution mode.
+valgrind: they check the layouts it writes (the script pad before the classes, the dead statements and the loop pad of
+the loops), the environment of its runs (the environment pad), the value it computes and selects, its errors, rows.sh's
+output, the conventions of the bench scripts and the row list of its README; and, given a qore (QORE_BINARY or
+build/qore), that every layout of every bench script and every row of the list run without an error or a warning.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
@@ -28,7 +28,7 @@ DEAD = re.compile(r"if \(False\) \{ f\((\d+)\); \}")
 PAD = re.compile(r'^const CGROW_PAD = "(p*)";$')
 
 # a stand-in for valgrind that runs no program: the instructions of a run are 1000 + N * <cost of the layout>, where
-# the layout is the number of dead statements after the first "int t = 0;" of the script (or, for an aot executable,
+# the layout is the number of numbered dead statements ("f(<i>)") after the first "int t = 0;" of the script (or, for an aot executable,
 # the number in the file), and the costs come from CGROW_TEST_COSTS
 COUNTING_VALGRIND = r"""#!/usr/bin/env python3
 import os, re, sys
@@ -37,25 +37,29 @@ prog = args[0]
 if prog.endswith("/qore"):
     text = open(args[-1]).read()
     line = [l for l in text.splitlines() if "int t = 0;" in l][0]
-    k = line.count("if (False)")
+    k = len(re.findall(r"f\(\d+\)", line))
 else:
     k = int(open(prog).read())
 log = os.environ.get("CGROW_TEST_LOG")
 if log:
     with open(log, "a") as f:
-        f.write("%s %s %s %s\n" % (os.environ["L"], os.environ["N"], os.environ.get("LD_LIBRARY_PATH", ""), " ".join(sys.argv[1:])))
-costs = [int(c) for c in os.environ["CGROW_TEST_COSTS"].split()]
-sys.stderr.write("==1== Events    : Ir\n==1== Collected : %d\n" % (1000 + int(os.environ["N"]) * costs[k]))
+        pad = os.environ.get("CGROW_ENV_PAD")
+        keys = ",".join(sorted(k for k in os.environ if k != "CGROW_ENV_PAD"))
+        f.write("%s %s %s %s %s %s\n" % (os.environ["L"], os.environ["N"], os.environ.get("LD_LIBRARY_PATH", ""),
+                                         "unset" if pad is None else "%d:%s" % (len(pad), set(pad) <= {"e"}), keys,
+                                         " ".join(sys.argv[1:])))
+costs = [float(c) for c in os.environ["CGROW_TEST_COSTS"].split()]
+sys.stderr.write("==1== Events    : Ir\n==1== Collected : %d\n" % round(1000 + int(os.environ["N"]) * costs[k]))
 """
 
 # a stand-in for qcc: writes the layout (the number of dead statements) into the executable
 COUNTING_QCC = r"""#!/usr/bin/env python3
-import sys
+import re, sys
 args = sys.argv[1:]
 out = args[args.index("-o") + 1]
 text = open(args[-1]).read()
 line = [l for l in text.splitlines() if "int t = 0;" in l][0]
-open(out, "w").write(str(line.count("if (False)")))
+open(out, "w").write(str(len(re.findall(r"f\(\d+\)", line))))
 """
 
 # a stand-in for valgrind that runs the program of the second run of a layout (N=2) without valgrind: it fails when
@@ -127,17 +131,18 @@ class CgrowsToolTest(unittest.TestCase):
                 if shutil.which("dash"):
                     self.assertEqual(0, subprocess.run(["dash", "-n", str(script)]).returncode)
 
-    def test_layouts(self):
-        keep = self.tmp / "keep"
+    def check_layouts(self, loop_step):
+        keep = self.tmp / ("keep-%d" % loop_step)
         script = BENCH / "bench-member.q"
         p = self.run_tool(["/no/build", script, "mr", "ast"],
-                          self.counting_env("7 7 7 7 7", CGROW_KEEP=str(keep), CGROW_PAD_STEP="100"))
+                          self.counting_env("7 7 7 7 7", CGROW_KEEP=str(keep), CGROW_PAD_STEP="100",
+                                            CGROW_LOOP_PAD_STEP=str(loop_step)))
         self.assertEqual(0, p.returncode, p.stderr)
         src = script.read_text().splitlines()
         anchors = sum(line.count(ANCHOR) for line in src)
         self.assertGreater(anchors, 0)
         for k in range(5):
-            with self.subTest(layout=k):
+            with self.subTest(layout=k, loop_step=loop_step):
                 lines = (keep / ("layout-%d.q" % k)).read_text().splitlines()
                 # the first line, then the pad of k * 100 characters, before every other line of the script
                 self.assertEqual(src[0], lines[0])
@@ -146,15 +151,24 @@ class CgrowsToolTest(unittest.TestCase):
                 self.assertEqual(k * 100, len(m.group(1)))
                 body = lines[2:]
                 self.assertEqual(len(src) - 1, len(body))
-                # k dead statements, numbered from 0, after each anchor, and nothing else changed
+                # k dead statements, numbered from 0, after each anchor, then (k > 0) the loop pad of
+                # k * loop_step characters, and nothing else changed
+                dead = ["if (False) { f(%d); }" % i for i in range(k)]
+                if k and loop_step:
+                    dead.append('if (False) { f("%s".size()); }' % ("l" * (k * loop_step)))
                 for a, b in zip(src[1:], body):
                     if ANCHOR in a:
                         head, tail = a.split(ANCHOR, 1)
-                        dead = " ".join("if (False) { f(%d); }" % i for i in range(k))
-                        self.assertEqual(head + ANCHOR + (" " + dead if k else "") + tail, b)
+                        self.assertEqual(head + ANCHOR + "".join(" " + d for d in dead) + tail, b)
                     else:
                         self.assertEqual(a, b)
                 self.assertEqual(anchors * k, sum(len(DEAD.findall(line)) for line in body))
+
+    def test_layouts(self):
+        self.check_layouts(50)
+
+    def test_layouts_without_loop_pad(self):
+        self.check_layouts(0)
 
     def test_no_pad(self):
         keep = self.tmp / "keep"
@@ -166,11 +180,28 @@ class CgrowsToolTest(unittest.TestCase):
         # without the pad, layout 0 is the script as it is, as with the old cgmin2.sh
         self.assertEqual(script.read_text(), (keep / "layout-0.q").read_text())
         self.assertNotIn("CGROW_PAD", (keep / "layout-2.q").read_text())
+        self.assertNotIn(".size()", (keep / "layout-2.q").read_text())
+        # nor an environment pad
+        log = self.tmp / "runs.log"
+        p = self.run_tool(["/no/build", script, "fs", "ir"],
+                          self.counting_env("7 7 7", CGROW_PAD="0", CGROW_LAYOUTS="3", CGROW_TEST_LOG=str(log)))
+        self.assertEqual(0, p.returncode, p.stderr)
+        self.assertEqual(["unset"] * 6, [line.split()[3] for line in log.read_text().splitlines()])
+
+    def test_env_pad_step(self):
+        log = self.tmp / "runs.log"
+        p = self.run_tool(["/no/build", BENCH / "bench.q", "fs", "ast"],
+                          self.counting_env("7 7 7", CGROW_LAYOUTS="3", CGROW_ENV_PAD_STEP="100",
+                                            CGROW_TEST_LOG=str(log)))
+        self.assertEqual(0, p.returncode, p.stderr)
+        self.assertEqual(["0:True", "0:True", "100:True", "100:True", "200:True", "200:True"],
+                         [line.split()[3] for line in log.read_text().splitlines()])
 
     def test_minimum_of_the_layouts(self):
         log = self.tmp / "runs.log"
-        p = self.run_tool(["/no/build", BENCH / "bench-func.q", "fc", "jit"],
-                          self.counting_env("130 120 125 140 121", CGROW_VERBOSE="1", CGROW_TEST_LOG=str(log)))
+        env = self.counting_env("130 120 125 140 121", CGROW_VERBOSE="1", CGROW_TEST_LOG=str(log))
+        self.env_keys = list(env) + ["PATH", "TMPDIR"]
+        p = self.run_tool(["/no/build", BENCH / "bench-func.q", "fc", "jit"], env)
         self.assertEqual(0, p.returncode, p.stderr)
         self.assertEqual("120\n", p.stdout)
         self.assertEqual(["layout %d %d" % (k, v) for k, v in enumerate([130, 120, 125, 140, 121])],
@@ -181,6 +212,12 @@ class CgrowsToolTest(unittest.TestCase):
             fields = run.split()
             # two runs per layout, N=2000 then N=22000, with the build as the library path, in the given mode
             self.assertEqual(["fc", "2000" if k % 2 == 0 else "22000", "/no/build"], fields[:3])
+            # the environment pad of layout k // 2: k // 2 * 816 characters "e"; the other variables (the caller's,
+            # the tool's own and those the shell adds) are the same in every run
+            self.assertEqual("%d:True" % (k // 2 * 816), fields[3])
+            keys = fields[4].split(",")
+            self.assertTrue(set(self.env_keys) | {"L", "N", "LD_LIBRARY_PATH", "QORE_JIT_SYNC_COMPILE"} <= set(keys))
+            self.assertEqual(runs[0].split()[4], fields[4])
             self.assertIn("--tool=callgrind", fields)
             self.assertIn("/no/build/qore", fields)
             self.assertIn("--exec-mode=jit", fields)
@@ -193,6 +230,17 @@ class CgrowsToolTest(unittest.TestCase):
                                             CGROW_DECIMALS="2"))
         self.assertEqual(0, p.returncode, p.stderr)
         self.assertEqual("7.00\n", p.stdout)
+
+    def test_rounding(self):
+        # 825.99 per iteration is printed as 826 (the old tool truncated it to 825), 826.4 as 826
+        env = self.counting_env("826.4 825.99 830 830 830", CGROW_VERBOSE="1")
+        p = self.run_tool(["/no/build", BENCH / "bench-member.q", "mr", "jit"], env)
+        self.assertEqual(0, p.returncode, p.stderr)
+        self.assertEqual("826\n", p.stdout)
+        self.assertEqual(["layout 0 826", "layout 1 826", "layout 2 830", "layout 3 830", "layout 4 830"],
+                         p.stderr.splitlines())
+        p = self.run_tool(["/no/build", BENCH / "bench-member.q", "mr", "jit"], dict(env, CGROW_DECIMALS="2"))
+        self.assertEqual("825.99\n", p.stdout)
 
     def test_aot_modes(self):
         self.stand_in("qcc", COUNTING_QCC)
@@ -210,6 +258,8 @@ class CgrowsToolTest(unittest.TestCase):
             (["/no/build", script, "fs", "ast"], {"CGROW_LAYOUTS": "0"}, "at least 1"),
             (["/no/build", script, "fs", "ast"], {"CGROW_N1": "100"}, "greater than"),
             (["/no/build", script, "fs", "ast"], {"CGROW_PAD_STEP": "x"}, "non-negative integers"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_ENV_PAD_STEP": "-1"}, "non-negative integers"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_LOOP_PAD_STEP": "1.5"}, "non-negative integers"),
         ]
         for args, env, message in cases:
             with self.subTest(message=message):

@@ -10,22 +10,33 @@
 # <row>     the loop to run (the script's L value)
 # <mode>    ast, ir, jit or tiered (qore --exec-mode), or aot0..aot3 (an executable built by the build's qcc -O<n>)
 #
-# For each layout k (0 .. CGROW_LAYOUTS - 1) the script is rewritten as:
+# For each layout k (0 .. CGROW_LAYOUTS - 1) the runs get an environment pad, and the script is rewritten:
+# - the environment pad: the variable CGROW_ENV_PAD of k * CGROW_ENV_PAD_STEP characters (empty in layout 0) is added
+#   to the environment of the runs, which moves the heap allocations made before the script is parsed (the process's
+#   environment is copied to the heap at startup); the rest of the environment is the caller's;
 # - a pad: after the first line, before anything else of the script is parsed, a constant string of k * CGROW_PAD_STEP
 #   characters (the pad string itself has CGROW_PAD_STEP characters more in each layout, so every later heap
 #   allocation, the member names of the classes declared first among them, moves);
 # - k dead statements ("if (False) { f(<i>); }") after each "int t = 0;", which change what the parse allocates
-#   between the objects of the loop's function;
+#   between the objects of the loop's function, and (with the pads, k > 0) the loop pad: one more dead statement with
+#   a string of k * CGROW_LOOP_PAD_STEP characters, which moves the strings of the loop relative to those of the
+#   classes declared before it (glibc's strcmp() takes its slow page-cross path by the two strings' addresses together,
+#   so both their common and their relative position must change between layouts);
 # and the instructions of a run with N=CGROW_N1 less those of a run with N=CGROW_N0, over CGROW_N1 - CGROW_N0, give its
 # value; the minimum over the layouts is printed.
 #
 # environment:
 #   CGROW_LAYOUTS    the number of layouts (default 5)
-#   CGROW_PAD        1 (default): the pad moves with the layout; 0: no pad (the layouts of the old cgmin2.sh)
-#   CGROW_PAD_STEP   the pad's growth per layout in characters (default 816)
+#   CGROW_PAD        1 (default): the pads move with the layout; 0: no pads (the layouts of the old cgmin2.sh)
+#   CGROW_PAD_STEP   the script pad's growth per layout in characters (default 816)
+#   CGROW_ENV_PAD_STEP
+#                    the environment pad's growth per layout in characters (default 816)
+#   CGROW_LOOP_PAD_STEP
+#                    the loop pad's growth per layout in characters (default 1232; 0: no loop pad)
 #   CGROW_N0         the iterations of the first run (default 2000)
 #   CGROW_N1         the iterations of the second run (default 22000)
-#   CGROW_DECIMALS   0 (default): the value as an integer (truncated, as cgmin2.sh printed it); n > 0: n decimals
+#   CGROW_DECIMALS   0 (default): the value rounded to an integer (cgmin2.sh truncated it, which printed a value
+#                    of the jit mode such as 825.99 as 825 and 826.00 as 826); n > 0: n decimals
 #   CGROW_VERBOSE    1: also print "layout <k> <value>" for each layout on stderr
 #   CGROW_VALGRIND   the valgrind command (default: valgrind)
 #   CGROW_KEEP       a directory to copy each layout's script to (layout-<k>.q), to inspect them
@@ -40,6 +51,8 @@ fi
 LAYOUTS=${CGROW_LAYOUTS:-5}
 PAD=${CGROW_PAD:-1}
 STEP=${CGROW_PAD_STEP:-816}
+ESTEP=${CGROW_ENV_PAD_STEP:-816}
+LSTEP=${CGROW_LOOP_PAD_STEP:-1232}
 N0=${CGROW_N0:-2000}
 N1=${CGROW_N1:-22000}
 DEC=${CGROW_DECIMALS:-0}
@@ -49,10 +62,10 @@ case $M in
     aot[0-3]) ;;
     *) echo "$0: unknown mode '$M' (ast, ir, jit, tiered, aot0..aot3)" >&2; exit 2 ;;
 esac
-for v in "$LAYOUTS" "$STEP" "$N0" "$N1" "$DEC"; do
+for v in "$LAYOUTS" "$STEP" "$ESTEP" "$LSTEP" "$N0" "$N1" "$DEC"; do
     case $v in
-        ''|*[!0-9]*) echo "$0: CGROW_LAYOUTS, CGROW_PAD_STEP, CGROW_N0, CGROW_N1 and CGROW_DECIMALS must be" \
-            "non-negative integers" >&2; exit 2 ;;
+        ''|*[!0-9]*) echo "$0: CGROW_LAYOUTS, CGROW_PAD_STEP, CGROW_ENV_PAD_STEP, CGROW_LOOP_PAD_STEP," \
+            "CGROW_N0, CGROW_N1 and CGROW_DECIMALS must be non-negative integers" >&2; exit 2 ;;
     esac
 done
 if [ "$LAYOUTS" -lt 1 ] || [ "$N1" -le "$N0" ]; then
@@ -73,6 +86,11 @@ trap 'exit 1' HUP INT TERM
 
 # run <n>: the instructions of a run of the layout's script (or executable) with N=<n>
 run() {
+    if [ "$PAD" = 1 ]; then
+        # the environment pad (in a subshell: command substitution); the rest of the environment is the caller's
+        CGROW_ENV_PAD=$envpad
+        export CGROW_ENV_PAD
+    fi
     case $M in
         aot*) L=$L N=$1 LD_LIBRARY_PATH=$B $VG --tool=callgrind --fair-sched=yes \
                 --callgrind-out-file="$O/cg.out" "$O/exe" -b > /dev/null 2> "$O/cg.log" ;;
@@ -99,6 +117,10 @@ while [ $k -lt "$LAYOUTS" ]; do
         dead="$dead if (False) { f($i); }"
         i=$((i + 1))
     done
+    if [ "$PAD" = 1 ] && [ $k -gt 0 ] && [ "$LSTEP" -gt 0 ]; then
+        # the loop pad: a dead statement with a string of k * LSTEP characters
+        dead="$dead if (False) { f(\"$(awk -v n=$((k * LSTEP)) 'BEGIN { while (n-- > 0) printf "l" }')\".size()); }"
+    fi
     {
         sed -n 1p "$S"
         if [ "$PAD" = 1 ]; then
@@ -107,6 +129,7 @@ while [ $k -lt "$LAYOUTS" ]; do
         fi
         sed "1d;s/int t = 0;/int t = 0;$dead/" "$S"
     } > "$O/bench.q"
+    envpad=$(awk -v n=$((k * ESTEP)) 'BEGIN { while (n-- > 0) printf "e" }')
     if [ -n "$CGROW_KEEP" ]; then
         mkdir -p "$CGROW_KEEP" && cp "$O/bench.q" "$CGROW_KEEP/layout-$k.q" || exit 1
     fi
@@ -119,7 +142,7 @@ while [ $k -lt "$LAYOUTS" ]; do
     a=$(run "$N0") || exit 1
     b=$(run "$N1") || exit 1
     v=$(awk -v a="$a" -v b="$b" -v d="$((N1 - N0))" -v p="$DEC" 'BEGIN {
-        if (p == 0) { printf "%d", int((b - a) / d) } else { printf "%." p "f", (b - a) / d } }')
+        printf "%." p "f", (b - a) / d }')
     if [ "$CGROW_VERBOSE" = 1 ]; then
         echo "layout $k $v" >&2
     fi

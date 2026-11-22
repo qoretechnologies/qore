@@ -45,48 +45,50 @@ build hosts in their count slots (`qbuild --count`), which run work whose result
 A row's value is computed from two runs of the script under `valgrind --tool=callgrind`: one with `N=2000` iterations
 of the loop and one with `N=22000`.  The difference of their total instruction counts over 20000 is the count of one
 iteration: parsing, startup, compilation (`QORE_JIT_SYNC_COMPILE=1` makes the jit mode compile before the loop runs)
-and exit cancel out.  The value is printed as an integer, truncated, as before (`CGROW_DECIMALS` for decimals).
+and exit cancel out.  The value is printed rounded to an integer (`CGROW_DECIMALS` for decimals).  The old tool truncated it; the
+values of the jit mode differ from an integer by a few hundredths between layouts and builds (ex: 825.99 and 826.00),
+which truncation printed as a difference of 1.  The values that are integers are the same as before.
 
 ### Layouts
 
 The interpreter's costs depend on the addresses of its objects: its pointer-keyed hash tables collide or not, and
-glibc's `strcmp()` (`__strcmp_avx2`) takes a slower path when a string lies within 128 bytes of the end of a page.
-One build can thus measure some instructions more or less than another for the same code, only because a change
-elsewhere moved its allocations, and two hosts (whose environments, and so heap layouts, differ) can measure one
-build differently.  To measure the code, not the layout, the tool runs each row in 5 layouts and takes the minimum:
-the cheapest layout is the one without such penalties, and with 5 layouts one is almost always found.
+glibc's `strcmp()` (`__strcmp_avx2`) takes a slower path when the bitwise OR of the offsets in their pages of the two
+strings it compares is within 128 bytes of the end of a page, which is often the case for two strings that are not
+(each of bits 7 to 11 of the OR is set in 3 of 4 address pairs).  One build can thus measure some instructions more or
+less than another for the same code, only because a change elsewhere moved its allocations, and two hosts (whose
+environments, and so heap layouts, differ) can measure one build differently.  To measure the code, not the layout,
+the tool runs each row in 5 layouts and takes the minimum: the cheapest layout is the one without such penalties.
 
-Layout `k` (0 .. 4) rewrites the script in two ways:
+Layout `k` (0 .. 4) changes the run in four ways:
 
-- the **pad**: after the first line (`%modern`), before anything else of the script is parsed, a constant string of
-  `k * 816` characters (`const CGROW_PAD = "ppp...";`).  The heap allocations made after it, the classes the script
-  declares first and their member names among them, move by an amount that grows with `k` (about `k * 816` bytes for
-  those that come from the top of the heap), so that a string that lies at the end of a page in one layout does not
-  in the others (816 bytes is about a fifth of a page);
+- the **environment pad**: the runs get the variable `CGROW_ENV_PAD` of `k * 816` characters (empty in layout 0); the
+  environment is copied to the heap at startup, so this moves the allocations made before the script is parsed.  The
+  rest of the environment is the caller's, the same for every layout and for both builds of a comparison;
+- the **script pad**: after the first line (`%modern`), before anything else of the script is parsed, a constant
+  string of `k * 816` characters (`const CGROW_PAD = "ppp...";`), which moves the allocations of the script, the
+  classes it declares first and their member names among them (816 bytes is about a fifth of a page);
 - the **dead statements**: `k` statements `if (False) { f(<i>); }` after each `int t = 0;` (the start of each loop
-  function), which change what the parse allocates between the objects of the loop's function.
+  function), which change what the parse allocates between the objects of the loop's function;
+- the **loop pad** (`k` > 0): one more dead statement there, `if (False) { f("lll...".size()); }` with a string of
+  `k * 1232` characters, which moves the strings of the loop (ex: the member name in `o.x`) relative to those of the
+  classes declared before it (the member name in the class), so that the two strings that `strcmp()` compares change
+  their relative offsets too, not only their common one.
 
-Neither changes what the loop executes: the pad is a constant that no code reads, and the dead statements are not
-executed (the parse removes them, or they branch on a constant).  Layout 0 with no pad is the script as it is.
+None of them changes what the loop executes: the pads are data that no code reads, and the dead statements are not
+executed (the parse removes them, or they branch on a constant).  With `CGROW_PAD=0` there are no pads, and layout 0
+is the script as it is: the layouts of the old tool, to compare with values measured before.
 
 The old tool had only the dead statements, so the strings allocated before the loop functions, such as member names,
-had the same addresses in all 5 layouts; on one host, all 5 layouts of a build could take `strcmp()`'s page-cross path
-in a member lookup, and the member rows measured +17 to +19 instructions that came from no change in the code (the
-member rows of batch AS, qore#7193).  `CGROW_PAD=0` gives the old layouts, to compare with values measured before.
+had the same addresses in all 5 layouts.  The size of the environment is enough to move them: with an extra
+environment variable of 704 or 3968 bytes on one host, the old layouts measured every member row (`bench-member.q:mr`,
+`mw`, `pr`, `pi`, in ast, ir and jit) 17 to 19 instructions higher for one build than for its base in all 5 layouts,
+which is no change in the code (the member rows of batch AS measured on another host, qore#7193).  With the script
+pad alone, `bench-member.q:mw` in ir still missed its minimum in all 5 layouts under some environments (by 2 to 11
+instructions, all of them in `__strcmp_avx2`), because the two strings it compares moved together; with all four,
+every member row measured the same minimum for both builds under each of 16 environment sizes from 0 to 3840 bytes.
+The rows whose values do not depend on such addresses measure the same with and without the pads.
 
-The environment is enough to move those strings: the size of the process's environment changes the heap allocations
-made before the script is parsed.  With an extra environment variable of 704 or 3968 bytes on one host, the old
-layouts measured every member row (`bench-member.q:mr`, `mw`, `pr`, `pi`, in ast, ir and jit) 17 to 19 instructions
-higher for one build than for its base in all 5 layouts, a delta that is no change in the code; with the pad, both
-builds measure the same values there, and `bench-member.q:mr` in ast measured 7009 for both under each of 16
-environment sizes from 0 to 3840 bytes.  The rows whose values do not depend on such addresses measure the same with
-and without the pad.
-
-The minimum of 5 layouts is still a sample: a row with many address-dependent costs can miss its minimum in all 5.
-`bench-member.q:mw` in ir did so in 4 of 16 environment sizes for one build (+11; 6 or more layouts found the
-minimum in all 16), and by +2 in 2 of 16 for another with up to 10 layouts (allocations made before the script, which
-no layout moves).  When a delta of a row in one mode decides something, check it with `CGROW_VERBOSE=1` and more
-layouts (`CGROW_LAYOUTS=10`).
+When a delta of a row in one mode decides something, check its per-layout values with `CGROW_VERBOSE=1`.
 
 ### Comparing two builds
 
@@ -108,10 +110,12 @@ layouts (`CGROW_LAYOUTS=10`).
 |Variable|Default|Meaning|
 |---|---|---|
 |`CGROW_LAYOUTS`|5|the number of layouts|
-|`CGROW_PAD`|1|1: the pad grows with the layout; 0: no pad (the layouts of the old `cgmin2.sh`)|
-|`CGROW_PAD_STEP`|816|the pad's growth per layout, in characters|
+|`CGROW_PAD`|1|1: the pads grow with the layout; 0: no pads (the layouts of the old `cgmin2.sh`)|
+|`CGROW_PAD_STEP`|816|the script pad's growth per layout, in characters|
+|`CGROW_ENV_PAD_STEP`|816|the environment pad's growth per layout, in characters|
+|`CGROW_LOOP_PAD_STEP`|1232|the loop pad's growth per layout, in characters (0: no loop pad)|
 |`CGROW_N0`, `CGROW_N1`|2000, 22000|the iterations of the two runs|
-|`CGROW_DECIMALS`|0|0: the value as a truncated integer; n: n decimals|
+|`CGROW_DECIMALS`|0|0: the value rounded to an integer; n: n decimals|
 |`CGROW_VERBOSE`|unset|1: also print `layout <k> <value>` for each layout on stderr|
 |`CGROW_VALGRIND`|`valgrind`|the valgrind command|
 |`CGROW_KEEP`|unset|a directory to copy each layout's script to (`layout-<k>.q`)|
