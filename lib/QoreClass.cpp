@@ -1099,31 +1099,64 @@ static bool reaches_class_publicly(const BCList& scl, const qore_class_private& 
     return false;
 }
 
-typedef std::map<const qore_class_private*, ClassAccess> class_path_access_map_t;
+typedef std::map<const qore_class_private*, ClassAccess> abstract_decl_access_map_t;
 
-//! returns the access of the least restrictive path from the class \a qc to the class \a target, the access of a
-//! path being that of its most restrictive inheritance edge: \c Public if \a qc is \a target, \c Inaccessible if no
-//! path reaches it (qore#7288)
-/** A \c private:internal edge below the first one of a path is not cut (as lookups from \a qc cut it), but gives the
-    path \c Internal access, the most restrictive one that a method of \a qc can have.  The access from each class is
-    computed once (\a done), so that the walk is linear in the hierarchy, not in its paths.
+//! returns the access of the abstract declaration of the method \a name with the abstract signature \a sig that the
+//! class \a qc declares itself, or \c Inaccessible if it declares none (qore#7288)
+/** The declaration is a variant of the class's own method, in its variant list or, once a concrete variant implements
+    it, in the abstract variants that the method replaced; the AOT loader restores both from the image, so that the
+    loaded class has the same declarations as the parsed one.
 */
-static ClassAccess class_path_access(const qore_class_private& qc, const qore_class_private& target,
-        class_path_access_map_t& done) {
-    if (qc.sameClass(target)) {
-        return Public;
+static ClassAccess own_abstract_decl_access(const qore_class_private& qc, const char* name, const char* sig) {
+    const QoreMethod* m = qc.parseFindLocalMethod(name);
+    if (!m) {
+        return Inaccessible;
     }
-    class_path_access_map_t::const_iterator i = done.find(&qc);
+    const MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+    ClassAccess rv = Inaccessible;
+    auto check = [&](const AbstractQoreFunctionVariant* i) {
+        MethodVariantBase* v = const_cast<MethodVariantBase*>(METHVB_const(i));
+        if (v->isAbstract() && v->getClass() && qore_class_private::get(*v->getClass())->sameClass(qc)
+                && rv > v->getAccess() && !strcmp(v->getAbstractSignature(), sig)) {
+            rv = v->getAccess();
+        }
+    };
+    QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(f));
+    while (qfi.next()) {
+        check(qfi.getVariant());
+    }
+    for (const AbstractQoreFunctionVariant* i : f->getReplacedAbstractVariants()) {
+        check(i);
+    }
+    return rv;
+}
+
+//! returns the least restrictive access that the class \a qc gives the abstract declarations of the method \a name
+//! with the abstract signature \a sig in its hierarchy, or \c Inaccessible if it has none (qore#7288)
+/** Each declaration has the more restrictive of its own access and of the access of the path from \a qc to the class
+    that declares it, the access of a path being that of its most restrictive inheritance edge; a class that declares
+    it itself gives it the access of its own declaration, which overrides those of its parent classes.  Every
+    declaration counts, not only the one that the class keeps of several with the same signature (the first parent's, or a const
+    one, at parse time; the first parent's in the AOT loader), so that the access does not depend on the order of the
+    parent classes, and is the same in the interpreter and in qcc executables.  A \c private:internal edge below the
+    first one of a path is not cut (as lookups from \a qc cut it), but gives the path \c Internal access, the most
+    restrictive one that a method of \a qc can have.  The access from each class is computed once (\a done), so that
+    the walk is linear in the hierarchy, not in its paths.
+*/
+static ClassAccess abstract_decl_access(const qore_class_private& qc, const char* name, const char* sig,
+        abstract_decl_access_map_t& done) {
+    abstract_decl_access_map_t::const_iterator i = done.find(&qc);
     if (i != done.end()) {
         return i->second;
     }
-    ClassAccess rv = Inaccessible;
-    if (qc.scl) {
+    // a declaration of the class itself overrides those of its parent classes, as a method of its own does
+    ClassAccess rv = own_abstract_decl_access(qc, name, sig);
+    if (rv == Inaccessible && qc.scl) {
         for (const BCNode* n : *qc.scl) {
             if (!n->sclass) {
                 continue;
             }
-            ClassAccess pa = class_path_access(*qore_class_private::get(*n->sclass), target, done);
+            ClassAccess pa = abstract_decl_access(*qore_class_private::get(*n->sclass), name, sig, done);
             if (pa == Inaccessible) {
                 continue;
             }
@@ -1143,17 +1176,18 @@ static ClassAccess class_path_access(const qore_class_private& qc, const qore_cl
 }
 
 //! sets the access \a va (that of \a v in the method of the class that has it) of the concrete variant \a v that
-//! implements the abstract variant \a av in the class \a qc (qore#7277)
-/** The variant has at least the access of \a av, except that a variant of a class that a public path from \a qc
-    reaches has its own access, as the least restrictive path to a class does (multiple_path_inheritance), and a
-    variant of \a qc itself (runtimeInit()) is its own override.
+//! implements the abstract variant \a av of the method \a name in the class \a qc (qore#7277)
+/** The variant has at least the access of the abstract declaration, except that a variant of a class that a public
+    path from \a qc reaches has its own access, as the least restrictive path to a class does
+    (multiple_path_inheritance), and a variant of \a qc itself (runtimeInit()) is its own override.
 
-    The access of \a av in \a qc is at least that of the least restrictive path from \a qc to the class that declares
-    it: a declaration that \a qc reaches only through private or private:internal inheritance does not make the
-    method public (qore#7288).
+    The access of the abstract declaration is the least restrictive one of the declarations with the signature of
+    \a av in the hierarchy of \a qc, each with at least the access of the path from \a qc to its class: a declaration
+    that \a qc reaches only through private or private:internal inheritance does not make the method public
+    (qore#7288).
 */
 static void abstract_variant_restrict_access(ClassAccess& va, const MethodVariantBase* v,
-        const MethodVariantBase* av, const qore_class_private& qc) {
+        const MethodVariantBase* av, const qore_class_private& qc, const char* name) {
     const QoreClass* vc = v->getClass();
     if (vc) {
         const qore_class_private& vcp = *qore_class_private::get(*vc);
@@ -1163,13 +1197,12 @@ static void abstract_variant_restrict_access(ClassAccess& va, const MethodVarian
             return;
         }
     }
-    ClassAccess aa = av->getAccess();
-    if (const QoreClass* ac = av->getClass()) {
-        class_path_access_map_t done;
-        ClassAccess pa = class_path_access(qc, *qore_class_private::get(*ac), done);
-        if (pa != Inaccessible && aa < pa) {
-            aa = pa;
-        }
+    abstract_decl_access_map_t done;
+    ClassAccess aa = abstract_decl_access(qc, name, const_cast<MethodVariantBase*>(av)->getAbstractSignature(),
+        done);
+    // the declaration kept is in the hierarchy; its own access applies if it could not be found
+    if (aa == Inaccessible) {
+        aa = av->getAccess();
     }
     if (va < aa) {
         va = aa;
@@ -1190,7 +1223,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
             if (v) {
                 // the variant has the more restrictive access of the abstract variant and of its own in the method of
                 // its class (qore#7277)
-                abstract_variant_restrict_access(va, v, vi->second, qc);
+                abstract_variant_restrict_access(va, v, vi->second, qc, i->first.c_str());
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;
@@ -1293,7 +1326,7 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
             }
             if (v) {
                 // as in parseInit() (qore#7277)
-                abstract_variant_restrict_access(va, v, vi->second, qc);
+                abstract_variant_restrict_access(va, v, vi->second, qc, i->first.c_str());
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;

@@ -563,16 +563,24 @@ class B2 inherits private:internal P2 { private abstract string m(); }  # privat
     the class to the class that declares it, the access of a path being that of its most restrictive inheritance edge:
     an abstract method that a class reaches only through @ref private_inheritance "private" or
     <tt><b>private:internal</b></tt> inheritance does not make the method that implements it public, so that a method
-    of a class that the class also inherits privately stays inaccessible from outside the class hierarchy (since
-    %Qore 3.0):
+    of a class that the class also inherits privately stays inaccessible from outside the class hierarchy.  When
+    several parent classes declare the abstract variant, the least restrictive of these declarations applies, in any
+    order of the parent classes, unless the class declares it itself, as its own declaration overrides them.  A
+    subclass or another parent class that declares the abstract variant again does not make a method that implements
+    it private in a parent class public: the variant keeps that access (since %Qore 3.0):
     @code{.py}
 class Secret { string m() { return "Secret::m"; } }
 class Iface { abstract string m(); }
 class X3 inherits private Secret, private Iface {}  # private: Iface is reached through private inheritance only
 class Y3 inherits private Secret, Iface {}          # public: Iface is inherited publicly
+class IfaceB { abstract string m(); }
+class W3 inherits private Secret, private Iface, IfaceB {}  # public: IfaceB is inherited publicly
+class Z3 inherits X3 { abstract string m(); }       # private: X3's method is private
 
 (new X3()).m();   # METHOD-IS-PRIVATE
 (new Y3()).m();   # "Secret::m"
+(new W3()).m();   # "Secret::m"
+(new Z3()).m();   # METHOD-IS-PRIVATE
     @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot

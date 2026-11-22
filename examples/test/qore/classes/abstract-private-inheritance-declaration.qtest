@@ -23,10 +23,12 @@
     access of the public declaration, so that code outside the class hierarchy called the privately inherited method
     (also through a subclass, call references and \c call_object_method()).  The declaration now has at least the
     access of the least restrictive path from the class to the class that declares it; a declaration reached
-    publicly, or an implementation reached publicly, keeps the method public.  The output of every execution mode and
-    of qcc executables (-O0, -O3) must be the expected one.
+    publicly, or an implementation reached publicly, keeps the method public; of several declarations of the
+    signature in the hierarchy, the least restrictive one applies, in any order of the parent classes, also when the
+    class keeps another one (a const declaration).  The output of every execution mode, of qcc executables (-O0,
+    -O3) and of a module loaded from its source and as a qcc -m .qmod must be the expected one.
 
-    The program is in \c abstract-private-inheritance-declaration/.
+    The programs and the module are in \c abstract-private-inheritance-declaration/.
 */
 class AbstractPrivateInheritanceDeclarationTest inherits QUnit::Test {
     private {
@@ -40,7 +42,13 @@ class AbstractPrivateInheritanceDeclarationTest inherits QUnit::Test {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the classes in a module and in a qcc -m .qmod", \testModule());
         set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
     }
 
     private string expected() {
@@ -70,11 +78,29 @@ class AbstractPrivateInheritanceDeclarationTest inherits QUnit::Test {
         assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
     }
 
-    testCompiled() {
-        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
+    testModule() {
+        string expected = ReadOnlyFile::readTextFile(dir + "/module-user.expected");
+        # the module's source
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", dir, qore_bin, dir);
+        int rc;
+        string result = backquote(cmd, \rc);
+        assertEq(0, rc, sprintf("source module: exit status (output: %y)", result));
+        assertEq(expected, result, "source module");
+
+        # the module compiled by qcc -m, which the AOT loader resolves
+        TmpDir tmp("qore-abstract-private-inheritance-declaration-qmod-");
+        string out = backquote(sprintf("%s -m -o %s/AbstractPrivDecl.qmod %s/AbstractPrivDecl.qm 2>&1", qccBin(),
+            tmp.path, dir), \rc);
+        if (rc || !is_file(tmp.path + "/AbstractPrivDecl.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
         }
+        result = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", tmp.path, qore_bin, dir), \rc);
+        assertEq(0, rc, sprintf("qmod: exit status (output: %y)", result));
+        assertEq(expected, result, "qmod");
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
         TmpDir tmp("qore-abstract-private-inheritance-declaration-");
         foreach string opt in (("0", "3")) {
             string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);

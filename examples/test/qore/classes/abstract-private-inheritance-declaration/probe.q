@@ -169,6 +169,35 @@ class X17 inherits private Secret, private Iface {
     abstract string m();
 }
 
+# 19: the same signature declared through a private and a public edge, in every order: public (the least
+# restrictive declaration, whichever the class keeps)
+class IfaceB {
+    abstract string m();
+}
+class A1 inherits private Secret, private Iface, IfaceB {}
+class A2 inherits private Secret, IfaceB, private Iface {}
+class A3 inherits private Iface, IfaceB, private Secret {}
+class A4 inherits IfaceB, private Iface, private Secret {}
+# both private: private
+class A5 inherits private Secret, private Iface, private IfaceB {}
+
+# 20: a const declaration through a private edge, which the class keeps instead of a public non-const one
+class IfaceC {
+    abstract string m() const;
+}
+class SecretC {
+    string m() const { return "SecretC::m"; }
+}
+class XC1 inherits private SecretC, IfaceB, private IfaceC {}
+class XC2 inherits private SecretC, private IfaceC, IfaceB {}
+class XC3 inherits private SecretC, private IfaceC, private IfaceB {}
+
+# 21: the class declares the method itself as private: its declaration overrides the public one of its parent class
+class X21 inherits private Secret, Iface {
+    private abstract string m();
+    static string u(auto o) { return o.m(); }
+}
+
 string sub u(auto o) { return o.m(); }
 string sub r(auto o) { code c = \o.m(); return c(); }
 string sub c(auto o) { return call_object_method(o, "m"); }
@@ -246,3 +275,12 @@ check("15 class", string sub () { return X15::u(new X15()); });
 check("16 outside", string sub () { return u(new X16()); });
 check("16 class", string sub () { return X16::u(new X16()); });
 check("17 outside", string sub () { return u(new X17()); });
+
+foreach string cn in ("A1", "A2", "A3", "A4", "A5", "XC1", "XC2", "XC3") {
+    object o = create_object(cn);
+    check("19/20 " + cn + " outside", string sub () { return u(o); });
+    check("19/20 " + cn + " outside ref", string sub () { return r(o); });
+    check("19/20 " + cn + " outside call_object_method", string sub () { return c(o); });
+}
+check("21 outside", string sub () { return u(new X21()); });
+check("21 class", string sub () { return X21::u(new X21()); });

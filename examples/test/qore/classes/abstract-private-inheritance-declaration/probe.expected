@@ -51,3 +51,29 @@
 16 outside: METHOD-IS-PRIVATE
 16 class: "Secret::m"
 17 outside: "Secret::m"
+19/20 A1 outside: "Secret::m"
+19/20 A1 outside ref: "Secret::m"
+19/20 A1 outside call_object_method: "Secret::m"
+19/20 A2 outside: "Secret::m"
+19/20 A2 outside ref: "Secret::m"
+19/20 A2 outside call_object_method: "Secret::m"
+19/20 A3 outside: "Secret::m"
+19/20 A3 outside ref: "Secret::m"
+19/20 A3 outside call_object_method: "Secret::m"
+19/20 A4 outside: "Secret::m"
+19/20 A4 outside ref: "Secret::m"
+19/20 A4 outside call_object_method: "Secret::m"
+19/20 A5 outside: METHOD-IS-PRIVATE
+19/20 A5 outside ref: ILLEGAL-CALL-REFERENCE
+19/20 A5 outside call_object_method: METHOD-IS-PRIVATE
+19/20 XC1 outside: "SecretC::m"
+19/20 XC1 outside ref: "SecretC::m"
+19/20 XC1 outside call_object_method: "SecretC::m"
+19/20 XC2 outside: "SecretC::m"
+19/20 XC2 outside ref: "SecretC::m"
+19/20 XC2 outside call_object_method: "SecretC::m"
+19/20 XC3 outside: METHOD-IS-PRIVATE
+19/20 XC3 outside ref: ILLEGAL-CALL-REFERENCE
+19/20 XC3 outside call_object_method: METHOD-IS-PRIVATE
+21 outside: METHOD-IS-PRIVATE
+21 class: "Secret::m"
