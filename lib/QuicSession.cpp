@@ -3346,9 +3346,28 @@ int QuicSession::submitTrailers(int64_t stream_id, const qore_http_header_pairs_
     return 0;
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h3_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 int QuicSession::submitResponse(int64_t stream_id, int status_code,
                                 const qore_http_header_pairs_t& headers,
                                 const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 1 status pseudo-header + user headers).
     //
@@ -3439,6 +3458,9 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
 int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
                                           const qore_http_header_pairs_t& headers,
                                           ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock (same pattern as submitResponse)
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 1);
@@ -3873,6 +3895,9 @@ void QuicSession::wakeDatagramWaiters() {
 
 int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 1);

@@ -7891,7 +7891,8 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     sendPendingData() calls.
 
     @param stream_id the HTTP/2 stream ID from the request
-    @param status_code the HTTP status code to send
+    @param status_code the HTTP status code to send; must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
     @param body the response body (optional)
 
@@ -7957,7 +7958,8 @@ nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
     thread and CONNECT responses are submitted from handler threads.
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @throw HTTP2-ERROR no HTTP/2 session active or submission failed
@@ -7996,7 +7998,8 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
     @endcode
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for sending the response
@@ -8113,7 +8116,8 @@ int Socket::waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) [f
     flush call is needed from the handler.
 
     @param stream_id the HTTP/2 stream ID
-    @param status_code HTTP status code (e.g., 200)
+    @param status_code HTTP status code (e.g., 200); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers response headers
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
@@ -9160,7 +9164,8 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
     @param body optional response body
 
@@ -9480,7 +9485,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
@@ -9774,7 +9780,8 @@ nothing Socket::flushQuicPendingData(int session_id) [flags=NAMED_ARGS] {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active

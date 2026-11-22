@@ -2776,6 +2776,10 @@
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
+    - the HTTP/2 and HTTP/3 response methods of the @ref Qore::Socket "Socket" class and the interactive stream requests
+      of @ref httpserverintro "HttpServer" refuse an informational status (1xx) as a final response, which made the
+      client fail the connection with its other streams or wait for the response forever
+      (<a href="https://github.com/qoretechnologies/qore/issues/7212">issue 7212</a>)
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
