@@ -14414,9 +14414,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     // call of the closure does: a closure created in a static method keeps the lexical class context needed for
     // private access and nested closure creation, and one created outside a class has no class context, whatever its
     // caller's
-    std::optional<CalleeContextHelper> closure_context;
+    std::optional<CalleeProgramContextHelper> closure_context;
     if (!self) {
-        closure_context.emplace(get_thread_data_for_native_calls(), cb ? cb->getClassCtx() : nullptr);
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        closure_context.emplace(get_thread_data_for_native_calls(), cb ? cb->getClassCtx() : nullptr, xsink);
     }
 
     // For object closures, establish the captured self in both TLS stores so that
@@ -14427,10 +14428,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     // reads td->current_obj to repopulate tl_runtime_config.obj on every call.
     std::optional<ObjectSubstitutionHelper> osh;
     if (self) {
-        osh.emplace(self, cb->getClassCtx());
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        osh.emplace(self, cb->getClassCtx(), QoreSetCallProgramContext(), xsink);
     }
-    // the call Program context of the closure's frame, as a call of the closure sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(cb ? cb->getClassCtx() : nullptr, self, xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
@@ -15443,9 +15443,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
     // defined.  This mirrors UserMethodVariant::evalMethod()'s use of getClassPriv().
     const qore_class_private* method_ctx = variant
         ? METHV_const(variant)->getClassPriv() : qore_class_private::get(*method->getClass());
-    ObjectSubstitutionHelper osh(self, method_ctx);
-    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(method_ctx, self, xsink);
+    // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+    ObjectSubstitutionHelper osh(self, method_ctx, QoreSetCallProgramContext(), xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
@@ -22058,9 +22057,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     // Inherited methods can be synthesized on a derived class to satisfy an
     // abstract sibling slot. Use the class where the executable variant body
     // was defined so private:internal member access has the correct context.
-    ObjectSubstitutionHelper osh(o, METHV_const(variant)->getClassPriv());
-    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(METHV_const(variant)->getClassPriv(), o, xsink);
+    // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+    ObjectSubstitutionHelper osh(o, METHV_const(variant)->getClassPriv(), QoreSetCallProgramContext(), xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
@@ -23874,9 +23872,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
         // the parameters are bound in the caller's object and class context; the body of a static method runs
         // without an object in the class of its variant, as a call of the method does (UserVariantBase::eval()),
         // and so is the check of its return value; the helper also sets the call's implicit arguments
-        CalleeContextHelper method_context(argv.release(), xsink, METHV_const(variant)->getClassPriv());
-        // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-        MethodCallProgramContextHelper mpch(METHV_const(variant)->getClassPriv(), nullptr, xsink);
+        // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+        CalleeProgramContextHelper method_context(argv.release(), xsink, METHV_const(variant)->getClassPriv());
         // the implicit arguments of a call that gives its arguments are released in its frame
         if constexpr (CONSUME) {
             argv_context = &method_context;

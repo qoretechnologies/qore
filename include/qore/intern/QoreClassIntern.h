@@ -5072,7 +5072,33 @@ public:
         if (!p) {
             return nullptr;
         }
-        if (p == ::getProgram()) {
+        // the current Program is read only for a class that has a source Program
+        return getSourceProgramForCallImpl(p, ::getProgram(), referenced, deleted);
+    }
+
+    //! The same, for a caller that has the Program that the thread runs in (\a current), as read from its thread data
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCall(const QoreProgram* current,
+            bool& referenced, bool* deleted = nullptr) const {
+        referenced = false;
+        QoreProgram* p = spgm.load();
+        if (!p) {
+            return nullptr;
+        }
+        return getSourceProgramForCallImpl(p, current, referenced, deleted);
+    }
+
+    //! Returns true if \a current, the Program that the thread runs in, is the source Program of the class
+    /** Then getSourceProgramForCall() returns it without a reference: the fast call paths of methods test this inline
+        before they call anything else (qore#7079)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool isSourceProgram(const QoreProgram* current) const {
+        return current && spgm.load() == current;
+    }
+
+    //! the part of getSourceProgramForCall() for a class with the source Program \a p
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCallImpl(QoreProgram* p,
+            const QoreProgram* current, bool& referenced, bool* deleted) const {
+        if (p == current) {
             return p;
         }
         // a module's Program stays allocated while any code can run (module lifetime): entering it fails once its
