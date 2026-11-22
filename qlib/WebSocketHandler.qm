@@ -3215,7 +3215,8 @@ handler.setCloseTimeout(2s);
         }
         # Debug helper for HTTP/2 WS frame headers
         # @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
-        *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
+        # the async I/O controller for the handler's code, as the handler's code would get it (qore#7213)
+        *AsyncSocketIo::AsyncSocketIoController async_ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then

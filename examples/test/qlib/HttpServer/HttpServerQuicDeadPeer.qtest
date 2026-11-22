@@ -209,7 +209,7 @@ class DeadPeerSseHandler inherits AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id;
 
         *code<nothing()> wake;
-        *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+        *AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         if (ctrl) {
             wake = sub () { ctrl.wakeSocket(s); };
         }

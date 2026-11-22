@@ -5778,7 +5778,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             int session_id = cx."header-info".session_id;
                             s.submitQuicConnectResponse(session_id, stream_id,
                                 rv."code" ?? 200, resp_hdr);
-                            *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                            *AsyncSocketIo::AsyncSocketIoController ctrl = getGlobalAsyncCtrl();
                             if (ctrl) {
                                 ctrl.wakeSocket(s);
                             }
@@ -5788,7 +5788,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, resp_hdr);
                             # Wake the I/O controller so h2op's continuePoll() flushes
                             # the pending CONNECT response
-                            *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                            *AsyncSocketIo::AsyncSocketIoController ctrl = getGlobalAsyncCtrl();
                             if (ctrl) {
                                 ctrl.wakeSocket(s);
                             }
@@ -6134,7 +6134,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 hash<auto> resp_hdr = rv.hdr ?? {};
                 # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
                 remove resp_hdr."Transfer-Encoding";
-                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                *AsyncSocketIo::AsyncSocketIoController ctrl = getGlobalAsyncCtrl();
                 Socket sse_sock = s;
                 *code<nothing()> wake_cb;
                 if (ctrl) {
@@ -6263,7 +6263,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # continuePoll() and drain the event_channel.  Without
                 # this, server-push SSE events sit in the channel until
                 # the client sends something — which it never does.
-                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                *AsyncSocketIo::AsyncSocketIoController ctrl = getGlobalAsyncCtrl();
                 if (ctrl) {
                     Socket sse_sock = s;
                     poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
@@ -7985,10 +7985,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "listener-id": id,
             "listener-name": name,
         };
-        # Every request context refers to the process-wide async I/O controller, which never refers to a request
-        # context, so the reference is opaque: an ordinary one made every scan of a request's data also walk the
-        # shared controller and its logger, which every other request's scans walk too
-        cx.async_ctrl @= serv.getGlobalAsyncCtrl();
+        # the request context, which the handlers get, does not refer to the server's process-wide async I/O
+        # controller: the server uses its own reference (getGlobalAsyncCtrl()), and a handler gets the controller
+        # for its own code from AsyncSocketIo::getGlobalAsyncIoController() (qore#7213)
         return cx;
     }
 
