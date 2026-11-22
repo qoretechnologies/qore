@@ -333,7 +333,7 @@ public:
     /** It is the serial number of the original declaration, which a copy shares (issue #7171).
     */
     DLLLOCAL uint64_t getDeclSeq() const {
-        return orig->instance_serial;
+        return decl_seq;
     }
 
 protected:
@@ -358,8 +358,13 @@ protected:
     // the module that defined this enum, if any
     std::string from_module;
 
-    // original declaration
+    // original declaration; only its address is used (isSystem()): the original can be freed with its Program while a
+    // copy in the namespace of another Program lives on, so nothing is read through it
     const qore_enum_decl_private* orig;
+
+    //! the order of declaration: the serial number of the original declaration, which a copy keeps by value (issue
+    //! #7171, #7347)
+    uint64_t decl_seq = instance_serial;
 
     // type information
     QoreEnumTypeInfo* typeInfo = nullptr;
