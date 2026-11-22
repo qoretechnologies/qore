@@ -1,0 +1,21 @@
+a tenant asks for the response type of a type of its own class: the tenant gets a type of class TenantType
+trusted code gets the response type of class SwaggerHashDataType, the same object again: True, response types cached: 4
+the tenant's code runs with the type build lock held: False
+another thread builds a type of the schema meanwhile: done
+the schema holds the tenant's object in its caches: False
+the type is built with the default "tenant-token"
+the events after trusted code released the caches: ["the tenant's code runs with the type build lock held: False", "another thread builds a type of the schema meanwhile: done", "the schema holds the tenant's object in its caches: False", "the type is built with the default \"tenant-token\""]
+the shared type has no default: null
+a tenant changes a type of the shared schema that it built: addField(): SANDBOX-REGISTRATION-ERROR
+a tenant changes a type of the shared schema that it built: Reflection: REFLECTION-ACCESS-ERROR
+a tenant changes a type of the shared schema that it built: a field: SANDBOX-REGISTRATION-ERROR
+trusted code sees the fields ["token", "name"], the name "Thing", shared: True
+a tenant builds types from its strings: built, the schema's type cache grew: False
+a tenant builds fields from its strings and defaults: built, the schema's field caches grew: False
+the tenant gets the field that the schema cached: True
+the tenant gets the type that it built again: True; another tenant gets its own: True
+the host builds a type with its REST client: default "host-secret"
+a tenant builds the type without a REST client: default null
+trusted code builds the type without a REST client: default null
+tenants with their own REST clients: "tenant-1", "tenant-2"; the first one again: "tenant-1"
+a field with the host's REST client: default "host-secret"; without: null

@@ -101,6 +101,11 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a schema that is shared by every Program keeps what it derives from the data of its caller, such as the types
+      with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
+      fields that its type builds cache (see
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildCache() "recordTypeBuildCache()";
+      <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the server-side request validation reads the fields of a request, including the header parameters, which it
       checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
       level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
@@ -1486,6 +1491,14 @@ public namespace RestSchemaValidator {
                 types (qore#6843)
             */
             transient bool shared_object = SandboxManager::createsSharedObjects();
+
+            #! The number of types with REST client defaults that a shared schema object keeps for a Program
+            /** see getRestDefaultsType() */
+            const RestDefaultsCacheSize = 64;
+
+            #! The number of fields built from a sandboxed caller's data that a shared schema object keeps for a Program
+            /** see getCallerField() */
+            const CallerFieldCacheSize = 256;
         }
 
         public {
@@ -1668,7 +1681,18 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns the data type for this schema
+        /** @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+            @param rest a REST client object whose request body defaults (see
+            @ref RestClient::AbstractRestClient::preprocessRequestBody() "AbstractRestClient::preprocessRequestBody()")
+            become the default values of the fields of the type; for a schema that is shared by every Program (see
+            @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), they are given to a
+            variant of the schema's type that is kept for the calling Program only (see getRestDefaultsType())
+        */
         AbstractDataProviderType getDataType(bool required = True, *object rest) {
+            # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+            if (rest && SandboxManager::isSharedObject(self)) {
+                return getRestDefaultsType(required, rest);
+            }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             if (schema && !schema.isTypeBuildActive()) {
                 return schema.runTypeBuild(AbstractDataProviderType sub () {
@@ -1692,6 +1716,81 @@ public namespace RestSchemaValidator {
                 getDataTypeIntern("/", False, rest);
             }
             return orNothingDataType;
+        }
+
+        #! Returns the request body defaults that a REST client gives for the fields of this schema's type
+        /** Calls the client's @ref RestClient::AbstractRestClient::preprocessRequestBody() "preprocessRequestBody()",
+            outside any type build of a shared schema, so that the client's code never runs while the schema's type
+            build lock is held (qore#6843)
+
+            @param rest the REST client object
+
+            @return the defaults by property name, only for the properties of this schema that have a value, or
+            @ref nothing if there are none
+
+            @since RestSchemaValidator 2.5
+        */
+        private *hash<auto> getRestDefaults(object rest) {
+            auto def_body = rest.preprocessRequestBody();
+            if (def_body.typeCode() != NT_HASH || !properties) {
+                return NOTHING;
+            }
+            hash<auto> rv;
+            foreach hash<auto> i in (def_body.pairIterator()) {
+                if (properties{i.key} && exists i.value) {
+                    rv{i.key} = i.value;
+                }
+            }
+            return rv ?: NOTHING;
+        }
+
+        #! Returns the type of this schema with the request body defaults that a REST client gives
+        /** The defaults are data of the caller, so the type with them is not kept in the caches of a schema that is
+            shared by every Program: the schema's own type, built from the schema alone and kept in its caches for
+            every caller, is copied with the fields that have a default replaced by a field with the default (see
+            @ref DataProvider::HashDataType::setFieldList() "HashDataType::setFieldList()"); the other fields and every
+            type that the fields refer to are the shared ones.  The copy is kept in the per-Program cache of the
+            calling code (see @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()")
+            if the defaults are plain data (qore#6843).
+
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+            @param rest the REST client object
+
+            @return the type of this schema with the defaults of the REST client; the schema's own type if the client
+            gives no default for its fields
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataProviderType getRestDefaultsType(bool required, object rest) {
+            *hash<auto> defaults = getRestDefaults(rest);
+            AbstractDataProviderType base = getDataType(required);
+            if (!defaults || !(base instanceof HashDataType)) {
+                return base;
+            }
+            *string key;
+            if (AbstractRestSchemaObject::isPlainData(defaults)) {
+                key = sprintf("rest-type-%s-%s", required ? "Y" : "N", sprintf("%y", defaults).toSHA256());
+                *AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key);
+                if (rv) {
+                    return rv;
+                }
+            }
+            HashDataType base_hash = cast<HashDataType>(base);
+            list<AbstractDataField> fields = ();
+            foreach hash<auto> i in (base_hash.getFields().pairIterator()) {
+                if (exists defaults{i.key} && properties{i.key} instanceof AbstractRestSchemaObject) {
+                    push fields, cast<AbstractRestSchemaObject>(properties{i.key}).getUseField(i.value, i.key,
+                        NOTHING, required{i.key} ?? False, defaults{i.key});
+                } else {
+                    push fields, i.value;
+                }
+            }
+            HashDataType rv = base_hash.copy();
+            rv.setFieldList(fields);
+            if (key) {
+                SandboxManager::setProgramCacheValue(self, key, rv, RestDefaultsCacheSize);
+            }
+            return rv;
         }
 
         #! Returns the given variant of the type given to replaceType(), or @ref nothing if it has not been called
@@ -1792,6 +1891,7 @@ public namespace RestSchemaValidator {
             bool opaque;
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
+                schema.recordTypeBuildCache(t);
                 *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
                 # an undo runs once only, in the build that recorded it (qore#6843)
                 int undo_build = schema.getTypeBuildId();
@@ -1905,6 +2005,7 @@ public namespace RestSchemaValidator {
             bool opaque;
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
+                schema.recordTypeBuildCache(field);
                 *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
                 # an undo runs once only, in the build that recorded it (qore#6843)
                 int undo_build = schema.getTypeBuildId();
@@ -1979,7 +2080,8 @@ public namespace RestSchemaValidator {
             }
 
             auto def_body;
-            if (rest) {
+            # a shared schema is never given a REST client here: see getRestDefaultsType()
+            if (rest && !SandboxManager::isSharedObject(self)) {
                 # preprocessRequestBody is now on AbstractRestClient (identity default);
                 # MewsRestClient-family subclasses override it to return the default body
                 # with injected auth-token fields used as required field defaults here
@@ -2034,15 +2136,112 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns a field definition from the schema parameter
+        /** For a schema that is shared by every Program (see
+            @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), a field that is built from
+            the data of a sandboxed caller (see
+            @ref Qore::SandboxManager::isCalledBySandboxedCode() "SandboxManager::isCalledBySandboxedCode()") is kept
+            in the per-Program cache of the caller instead of in the schema's caches, which it can still read; the
+            defaults of a REST client are given to a variant of the field's type that is kept for the calling Program
+            only (see getDataType()) (qore#6843)
+        */
         AbstractDataField getField(string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
-            return getFieldForUse(name, name, desc, required, rest, default_value);
+            bool caller_data = SandboxManager::isCalledBySandboxedCode() && SandboxManager::isSharedObject(self);
+            return getFieldForCaller(name, name, desc, required, rest, default_value, caller_data);
         }
 
         #! Returns a field definition from the schema parameter
+        /** @see getField(string, *string, bool, *object, auto)
+        */
         AbstractDataField getField(string path, string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
-            return getFieldForUse(path, name, desc, required, rest, default_value);
+            bool caller_data = SandboxManager::isCalledBySandboxedCode() && SandboxManager::isSharedObject(self);
+            return getFieldForCaller(path, name, desc, required, rest, default_value, caller_data);
+        }
+
+        #! Returns the field for one use of this schema for the caller of getField()
+        /** @param path the path of the field
+            @param name the field name
+            @param desc the description supplied by the use
+            @param required whether the use declares the field required
+            @param rest the REST client whose request body defaults apply, if any
+            @param default_value the default value supplied by the use
+            @param caller_data @ref True if the field is built from the data of a sandboxed caller of a shared schema,
+            which never reaches the schema's caches
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getFieldForCaller(string path, string name, *string desc, bool required,
+                *object rest, auto default_value, bool caller_data) {
+            bool shared = SandboxManager::isSharedObject(self);
+            AbstractDataField field = caller_data
+                ? getCallerField(name, desc, required, default_value)
+                : getFieldForUse(path, name, desc, required, shared ? NOTHING : rest, default_value);
+            if (!rest || !shared || (type != "object" && !hasSchemaCompositionFeatures())) {
+                return field;
+            }
+            # the field with the type with the defaults of the REST client, kept for the calling Program only
+            AbstractDataProviderType t = getRestDefaultsType(required && !nullable, rest);
+            if (t == field.getType()) {
+                return field;
+            }
+            if (!(field instanceof QoreDataField)) {
+                return field;
+            }
+            QoreDataField rv = cast<QoreDataField>(field).copy();
+            rv.updateFieldType(t);
+            return rv;
+        }
+
+        #! Returns the field for one use of a shared schema with the data of a sandboxed caller
+        /** The schema's caches are read, but not written: a field that they do not have is built from the schema with
+            no cache write, with the schema's own types, and kept in the per-Program cache of the caller (see
+            @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()") (qore#6843)
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getCallerField(string name, *string desc, bool required, auto default_value) {
+            string rstr = required ? "Y" : "N";
+            string ukey = AbstractRestSchemaObject::getFieldUseKey(name, desc, default_value);
+            if (*AbstractDataField rv = getCacheField(True, ukey, rstr)) {
+                return rv;
+            }
+            string key = "field-" + rstr + "-" + ukey;
+            if (*AbstractDataField rv = SandboxManager::getProgramCacheValue(self, key)) {
+                return rv;
+            }
+            AbstractDataField canonical = getCacheField(False, name, rstr) ?? getCallerCanonicalField(name, required);
+            AbstractDataField rv = ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)
+                ? canonical
+                : getUseField(canonical, name, desc, required, default_value);
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerFieldCacheSize);
+            return rv;
+        }
+
+        #! Builds the canonical field of a name for a sandboxed caller of a shared schema, with no cache write
+        /** As getFieldIntern(), with the schema's own types: the type of an object or composition is the schema's type
+            (see getDataType()), and the type of a scalar is built from the schema, independently of the path of the
+            use
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getCallerCanonicalField(string name, bool required) {
+            RestSchemaExampleDataField field({
+                "name": name,
+                "desc": getMergedFieldDesc(NOTHING),
+                "type": AutoType,
+                "allowed_values": getFieldEnumValues(),
+                # the schema's default is what the API assumes when the value is not sent; it is shown, never sent
+                "remote_default_value": defaultVal,
+            } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
+            bool required_value = required && !nullable;
+            if (type == "object" || hasSchemaCompositionFeatures()) {
+                field.updateFieldType(getDataType(required_value));
+            } else {
+                field.updateFieldType(getSchemaType("/", type, format, items, required_value)
+                    .copyWithConstraints(getConstraintInfo()));
+            }
+            return field;
         }
 
         #! Returns the field for one use of this schema, building or decorating it as needed
@@ -2141,6 +2340,24 @@ public namespace RestSchemaValidator {
             if (building{name}{rstr} || ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)) {
                 return canonical;
             }
+            AbstractDataField rv = getUseField(canonical, name, desc, required, default_value);
+            setCachedField(True, ukey, rstr, rv);
+            return rv;
+        }
+
+        #! Returns the field for one use of this schema, built from the canonical field and not cached
+        /** @param canonical the field cached under this name
+            @param name the field name
+            @param desc the description supplied by the use, before this schema's own is merged into it
+            @param required whether the use declares the field required
+            @param default_value the default value supplied by the use
+
+            @return the field for this use
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getUseField(AbstractDataField canonical, string name, *string desc, bool required,
+                auto default_value) {
             # built exactly as getFieldIntern() builds the canonical field, and given its finished type the
             # same way: the schema's enum values are hash keys and therefore strings, and it is
             # updateFieldType() that converts them to the type they belong to.  Constructing the copy with
@@ -2155,7 +2372,6 @@ public namespace RestSchemaValidator {
                 "remote_default_value": defaultVal,
             } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
-            setCachedField(True, ukey, rstr, rv);
             return rv;
         }
 
@@ -2764,6 +2980,9 @@ public namespace RestSchemaValidator {
 
             #! The number of the type build in progress, or of the last one; see getTypeBuildId()
             transient int type_build_id = 0;
+
+            #! The types and fields that the type build in progress cached; see recordTypeBuildCache()
+            transient list<object> type_build_cached = ();
         }
 
         #! Creates the object without a logger
@@ -2831,13 +3050,22 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             return update_shared_cache(self, auto sub () {
                 ++type_build_id;
                 on_exit type_build_undo = ();
+                on_exit type_build_cached = ();
                 # run first, while the lock is held; see stopOpaqueTypeCaches()
                 on_exit if (release_opaque_type_caches) {
                     release_opaque_type_caches = False;
                     releaseOpaqueTypeCacheHolders();
                 }
                 try {
-                    return build();
+                    auto rv = build();
+                    # the types and fields that a build of a shared schema cached are shared as the schema is, also
+                    # when sandboxed code asked for them: sandboxed code cannot change them (qore#6843)
+                    if (type_build_cached) {
+                        list<object> cached = type_build_cached;
+                        type_build_cached = ();
+                        map $1.freeze(), cached;
+                    }
+                    return rv;
                 } catch (hash<ExceptionInfo> ex) {
                     # undo the writes of the build, the latest first
                     while (type_build_undo) {
@@ -2889,6 +3117,9 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             - in the type build in progress in the calling thread (see runTypeBuild())
             - until the schema is given a value that it did not build: a type given to replaceTypeForReference(), or
               a request body default that is not plain data (see stopOpaqueTypeCaches())
+            - in a schema that is shared by every Program (see
+              @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), for its own schema
+              objects only, which are shared as it is
 
             @param so the schema object making a cache entry
 
@@ -2910,6 +3141,10 @@ if (schema && schema.isTypeBuildActive() && schema.holdTypeCacheOpaquely(self)) 
         */
         bool holdTypeCacheOpaquely(AbstractRestSchemaObject so) {
             if (!opaque_type_caches || !type_build_lock.lockOwner()) {
+                return False;
+            }
+            # a shared schema holds only its own schema objects, which are shared as it is (qore#6843)
+            if (SandboxManager::isSharedObject(self) && !SandboxManager::isSharedObject(so)) {
                 return False;
             }
             string key = so.uniqueHash();
@@ -3023,6 +3258,33 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             if (type_build_lock.lockOwner()) {
                 update_shared_cache(self, sub () { push type_build_undo, undo_write; });
             }
+        }
+
+        #! Records a type or field that the type build of this schema in progress on the calling thread caches
+        /** When the build has finished, each type or field recorded is frozen (see
+            @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()"), so that it is
+            shared as the schema is: sandboxed code cannot change it, also when it asked for it.  Has no effect if the
+            schema is not shared (see @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()")
+            or the calling thread is not building types of this schema.
+
+            @param entry the type (@ref DataProvider::AbstractDataProviderType "AbstractDataProviderType") or field
+            (@ref DataProvider::AbstractDataField "AbstractDataField") cached
+
+            @throw SHARED-OBJECT-ERROR code that sandboxed code called in the build records an entry
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        recordTypeBuildCache(object entry) {
+            if (!type_build_lock.lockOwner() || !SandboxManager::isSharedObject(self)) {
+                return;
+            }
+            if (!(entry instanceof AbstractDataProviderType) && !(entry instanceof AbstractDataField)) {
+                throw "TYPE-BUILD-ERROR", sprintf("a type build caches types and fields only; got an object of class "
+                    "%y", entry.className());
+            }
+            update_shared_cache(self, sub () { push type_build_cached, entry; });
         }
 
         #! Returns the data type corresponding to the given reusable schema reference

@@ -1750,6 +1750,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
+      @ref DataProvider::AbstractDataField::freeze() "AbstractDataField::freeze()" also mark the type or field as a
+      @ref sandbox_shared_objects "shared object" when the calling code may share objects
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - added @ref DataProvider::Observable::hasObservers() "Observable::hasObservers()" and
       @ref DataProvider::Observable::getObserverCount() "getObserverCount()" for subclasses, which cannot use the
       private members of the class when sandboxed code declares them; a subclass that needs its observers keeps track

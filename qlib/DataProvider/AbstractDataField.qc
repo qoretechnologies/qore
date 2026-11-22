@@ -401,11 +401,22 @@ public class AbstractDataField inherits Qore::Serializable {
     */
     #! Marks the field and its type as shared by every Program of the process; see
     #! AbstractDataProviderType::freeze()
-    /** @since DataProvider 3.12
+    /** Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()")
+        also marks the field as a shared object (see
+        @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()").
+
+        @since DataProvider 3.12
     */
     freeze() {
+        # a field that is a shared object was frozen when it was marked
+        if (SandboxManager::isSharedObject(self)) {
+            return;
+        }
         shared_object = True;
         getType().freeze();
+        if (SandboxManager::canShareObjects()) {
+            SandboxManager::shareObject(self);
+        }
     }
 
     #! Makes a copy of the field that belongs to the code that makes it

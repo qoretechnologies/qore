@@ -817,6 +817,12 @@ public hashdecl ComponentInfo {
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
 public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
+    private {
+        #! The number of types built from a sandboxed caller's data that a shared document keeps for a Program
+        /** see getType() */
+        const CallerTypeCacheSize = 256;
+    }
+
     public {
         #! <a href="https://swagger.io/">OpenApi3</a> Specification version being used.
         /**
@@ -1938,8 +1944,17 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     }
 
     #! Returns the data type for the given type specification
+    /** For a document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), a type that a sandboxed caller
+        asks for directly (see @ref Qore::SandboxManager::isCalledBySandboxedCode() "SandboxManager::isCalledBySandboxedCode()")
+        is taken from the document's type cache if it is there, and otherwise built with no type build and no cache
+        write, and kept in the per-Program cache of the caller (qore#6843)
+    */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
+        if (SandboxManager::isCalledBySandboxedCode() && SandboxManager::isSharedObject(self)) {
+            return getCallerType(path, typestr, format, arrayItems, required, strict);
+        }
         if (!isTypeBuildActive()) {
             return runTypeBuild(AbstractDataProviderType sub () {
                 return getType(path, typestr, format, arrayItems, required, strict);
@@ -1951,6 +1966,29 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
         setCachedType(id, required ? "Y" : "N", rv);
+        return rv;
+    }
+
+    #! Returns a type that a sandboxed caller of a shared document asks for; see getType()
+    private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required, *bool strict) {
+        # the unique hash of a schema object that the document did not build is the caller's
+        bool own_items = !arrayItems || SandboxManager::isSharedObject(arrayItems);
+        string id;
+        if (own_items) {
+            if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id, strict)) {
+                return rv;
+            }
+        } else {
+            id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems.uniqueHash(),
+                strict ? "-strict" : "");
+        }
+        string key = "type-" + (required ? "Y" : "N") + "-" + id;
+        if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+            return rv;
+        }
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
+        SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
         return rv;
     }
 
@@ -1989,7 +2027,8 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                 });
             });
         }
-        # the type built from the document
+        # the type built from the document, which is shared as the document is (qore#6843)
+        recordTypeBuildCache(t);
         update_shared_cache(self, sub () { typemap{id}{key} = t; });
     }
 
@@ -6471,19 +6510,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @return the data type of the schema as a mandatory union alternative
     */
     AbstractDataProviderType getAlternativeDataType(*object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema, and its code never runs in
+        # a type build of one (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return isPlainAlternative() ? getAlternativeDataType() : getDataType(True, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
         if (schema && !schema.isTypeBuildActive()) {
             return schema.runTypeBuild(AbstractDataProviderType sub () {
                 return getAlternativeDataType(rest);
             });
         }
-        # the conditions under which getDataType() returns a plain scalar or array type
-        bool plain = (prefix_items ? False : additional_items)
-            && !(discriminatorMapping && !oneOf && !anyOf)
-            && !isAllOfWrapper()
-            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
-            && type != "object" && !properties && !notSchema;
-        if (!plain) {
+        if (!isPlainAlternative()) {
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
@@ -6492,6 +6530,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             bool opaque;
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
+                schema.recordTypeBuildCache(t);
                 # an undo runs once only, in the build that recorded it (qore#6843)
                 int undo_build = schema.getTypeBuildId();
                 bool undone;
@@ -6513,6 +6552,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             });
         }
         return alternativeDataType;
+    }
+
+    #! Returns @ref True if getDataType() returns a plain scalar or array type, which getAlternativeDataType() builds itself
+    private bool isPlainAlternative() {
+        return (prefix_items ? False : additional_items)
+            && !(discriminatorMapping && !oneOf && !anyOf)
+            && !isAllOfWrapper()
+            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
+            && type != "object" && !properties && !notSchema;
     }
 
     #! Releases the types and fields that this object caches
@@ -6550,7 +6598,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Returns the data type for the schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getDataType() "AbstractRestSchemaObject::getDataType()"
+    */
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return getRestDefaultsType(required, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
         if (schema && !schema.isTypeBuildActive()) {
             return schema.runTypeBuild(AbstractDataProviderType sub () {

@@ -4173,6 +4173,10 @@
       @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from
       themselves with @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()" (see
       @ref dataprovider_v3_12 "DataProvider v3.12"; issues #6843, #6863)
+    - only trusted code @ref Qore::SandboxManager::shareObject() "shares objects", and what a shared REST schema
+      derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
+      @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
+      @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref DataProvider::HashDataType::addQoreFields() "HashDataType::addQoreFields()" accepts a field description
       that is a typed hash, and
       @ref DataProvider::AbstractDataProviderType::setOption() "AbstractDataProviderType::setOption()" sets an option
