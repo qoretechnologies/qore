@@ -7572,6 +7572,10 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     // restrictions composed and recorded in the override (caller_restrictions); no record of a caller's restrictions
     // is made here for any other caller
     o.sandboxed = true;
+    // the application that the module code runs for: the caller's, or for module code that calls module code, the
+    // one that the calling module code runs for (qore#7010); recorded also when the caller has no restrictions that the
+    // module does not have, which leaves module_pgm unset (see runtime_get_sandboxed_module_call_app_id())
+    o.app_pgm_id = runtime_get_sandboxed_call_app_id(td, caller_pgm);
     QoreParseOptions composed = keep_module_own_access_parse_options(
         qore_compose_module_call_parse_options(own_po,
             caller_po ? *caller_po : runtime_get_effective_parse_options_for(td, caller_pgm)), module_pgm);
@@ -7583,8 +7587,9 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
+        // the application was recorded above: also for module code that calls module code, the application of the
+        // sandboxed caller, not the Program of the calling module (qore#7010)
         o.module_pgm = module_pgm;
-        o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
 }
 

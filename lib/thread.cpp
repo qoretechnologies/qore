@@ -723,6 +723,10 @@ public:
         user call saves and restores
     */
     QoreParseOptions thread_caller_restrictions;
+    //! the application that the module code of the thread runs for if no call records one: that of the module code
+    //! that started the thread (see QoreThreadRuntimeParseOptions::start_app_pgm_id); set with
+    //! thread_caller_restrictions (qore#7010)
+    qore_program_id_t thread_start_app_pgm_id = 0;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
@@ -7546,6 +7550,11 @@ static const ThreadData::ModuleInitBarrier* qore_get_caller_module_init_barrier(
         ? nullptr : &td->module_init_barriers.back();
 }
 
+bool qore_runtime_under_library_init_barrier() {
+    ThreadData* td = thread_data.get();
+    return td && qore_get_caller_module_init_barrier(td);
+}
+
 //! the domains that a host grant lends: those of the system resources that trusted code uses for a restricted caller
 //! (qore#6844)
 /** A grant does not lend the other domains: native code (whose loading checks \c UNCONTROLLED_API) is never chosen by
@@ -9361,6 +9370,30 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
     return caller_pgm ? caller_pgm->getProgramId() : 0;
 }
 
+qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm) {
+    // module code that calls module code for a sandboxed caller passes the caller's application on
+    if (td->runtime_po_state.sandboxed && td->runtime_po_state.app_pgm_id
+            && td->runtime_po_state.override_pgm == caller_pgm) {
+        return td->runtime_po_state.app_pgm_id;
+    }
+    // a module is no application: module code that calls module code for no recorded application (the callback of an
+    // operation that a worker thread runs, for example) gives none, and the application is then that of the callback
+    // or of the calling code (see AsyncIoControllerPriv::callerAppId())
+    if (caller_pgm && qore_program_is_module(caller_pgm) && !td->runtime_po_state.module_pgm) {
+        return 0;
+    }
+    return runtime_get_module_call_app_id(caller_pgm);
+}
+
+qore_program_id_t runtime_get_sandboxed_module_call_app_id() {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->runtime_po_state.sandboxed || !td->runtime_po_state.override_pgm
+            || td->runtime_po_state.override_pgm != td->current_pgm) {
+        return 0;
+    }
+    return td->runtime_po_state.app_pgm_id;
+}
+
 bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     ThreadData* td = thread_data.get();
     // module code running for a restricted caller, or for none (application 0): the code of a thread that module
@@ -9375,6 +9408,10 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
         return false;
     }
     app_pgm_id = td->runtime_po_state.app_pgm_id;
+    // the code of a thread that module code started for an application runs for that application (qore#7010)
+    if (!app_pgm_id && td->thread_start_app_pgm_id && td->thread_start_app_pgm_id != QORE_NO_PROGRAM_ID) {
+        app_pgm_id = td->thread_start_app_pgm_id;
+    }
     return true;
 }
 
@@ -9651,6 +9688,9 @@ void QoreThreadRuntimeParseOptions::derefPrograms() {
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
     QoreThreadRuntimeParseOptions rv = capture();
     rv.override.app_pgm_id = 0;
+    // the application that module code starting the thread runs for, for the async I/O operations of the module code
+    // of the new thread (qore#7010); 0 for other code
+    rv.start_app_pgm_id = qore_async_io_thread_start_app_id();
     return rv;
 }
 
@@ -9711,6 +9751,9 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions = td->thread_caller_restrictions;
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
+    // the application of the module code that started the thread (qore#7010)
+    old_start_app_pgm_id = td->thread_start_app_pgm_id;
+    td->thread_start_app_pgm_id = o->start_app_pgm_id;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
 }
 
@@ -9718,6 +9761,12 @@ void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
+    td->thread_start_app_pgm_id = old_start_app_pgm_id;
+}
+
+qore_program_id_t runtime_get_thread_start_app_id() {
+    ThreadData* td = thread_data.get();
+    return td ? td->thread_start_app_pgm_id : 0;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

@@ -1,0 +1,121 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module for asyncio_cancel_ownership.qtest: submits, cancels and replaces async I/O operations and adds and
+#! cancels timers in threads that it starts
+module AioCancelBgLib {
+    version = "1.0";
+    desc = "test library module that acts on async I/O operations and timers in threads that it starts";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace AioCancelBgLib {
+#! an operation that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+public class Lib {
+    private:internal {
+        #! the notifiers and the operation objects of the submitted operations: an operation whose object is
+        #! deleted is canceled
+        static list<auto> held;
+        static Mutex lck();
+    }
+
+    #! runs the code in a thread that the module starts and returns its result, or the error that it raised
+    private:internal static auto inThread(code c) {
+        Queue q();
+        background sub () {
+            try {
+                q.push({"result": c()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"error": ex.err});
+            }
+        }();
+        hash<auto> h = q.get(60s);
+        return h.hasKey("error") ? h.error : h.result;
+    }
+
+    private:internal static auto submitIntern(string key, bool replace, *string owner) {
+        EventNotifier n();
+        {
+            AutoLock al(lck);
+            push held, n;
+        }
+        WaitingOperation op(n);
+        {
+            AutoLock al(lck);
+            push held, op;
+        }
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner ?? key,
+            "key": key,
+            "to": -1s,
+        }, replace);
+    }
+
+    #! submits an operation with the key in a thread that the module starts; returns its result queue
+    static auto submitBg(string key) {
+        return inThread(auto sub () { return Lib::submitIntern(key, False); });
+    }
+
+    #! submits an operation with the owner and the key in a thread that the module starts; returns its result queue
+    static auto submitBgFor(string owner, string key) {
+        return inThread(auto sub () { return Lib::submitIntern(key, False, owner); });
+    }
+
+    #! submits an operation with the key, replacing the one with the key, in a thread that the module starts; returns
+    #! its result queue
+    static auto replaceBg(string key) {
+        return inThread(auto sub () { return Lib::submitIntern(key, True); });
+    }
+
+    #! cancels by key in a thread that the module starts
+    static auto cancelBg(string key) {
+        return inThread(auto sub () { return AsyncIoController::cancelByKey(key); });
+    }
+
+    #! cancels by owner in a thread that the module starts
+    static auto cancelOwnerBg(string owner) {
+        return inThread(auto sub () { return AsyncIoController::cancelByOwner(owner); });
+    }
+
+    #! adds a timer that does not expire in the test in a thread that the module starts; returns its ID
+    static auto addTimerBg() {
+        return inThread(auto sub () { return AsyncIoController::addTimerDelay(1D, True); });
+    }
+
+    #! cancels a timer in a thread that the module starts
+    static auto cancelTimerBg(int id) {
+        return inThread(auto sub () { return AsyncIoController::cancelTimer(id); });
+    }
+}
+}

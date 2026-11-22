@@ -739,6 +739,36 @@ DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* cal
 */
 DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 
+//! returns the ID of the application Program that module code runs for when a sandboxed caller called it, or 0
+/** The module code of a call by a sandboxed caller (see runtime_module_call_inherits_caller_restrictions()), also of
+    one whose caller has no restrictions that the module does not have, records the application of its caller
+    (qore#7010); 0 if the code that runs is not such module code
+*/
+DLLLOCAL qore_program_id_t runtime_get_sandboxed_module_call_app_id();
+
+//! returns the application that the module code of the current thread runs for if no call records one (qore#7010)
+/** The application that the module code which started the thread ran for (QoreThreadRuntimeParseOptions::
+    start_app_pgm_id); 0 if the thread was not started by module code
+*/
+DLLLOCAL qore_program_id_t runtime_get_thread_start_app_id();
+
+//! returns the application that a thread started now runs its module code for (qore#7010)
+/** Defined with the async I/O controller (AsyncIoControllerPriv::callerAppId()); 0 if the code that runs now is not
+    module code, whose new thread runs the code of its own Program
+*/
+DLLLOCAL qore_program_id_t qore_async_io_thread_start_app_id();
+
+//! returns the ID of the application Program that the module code of a call by a sandboxed caller runs for
+/** The caller's application; for module code that calls module code for a sandboxed caller, the one that the calling
+    module code runs for (qore#7010); 0 (none recorded) for module code that calls module code for no recorded
+    application, as a module is no application
+*/
+DLLLOCAL qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm);
+
+//! returns true if the calling code runs under a module initialization barrier: in the initialization of library code
+//! or in a trusted build (see QoreModuleInitSandboxBarrierHelper), unless a lift applies
+DLLLOCAL bool qore_runtime_under_library_init_barrier();
+
 //! Enters a capability scope of the current thread (qorus#867, design/thread-capability-scope.md)
 /** The thread's set becomes \a caps merged over the current set, or \a caps only with \a replace.
 
@@ -1821,11 +1851,15 @@ struct QoreThreadRuntimeParseOptions {
     QoreCallParseOptionsOverride override;
     //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
     QoreParseOptions caller_domain_restrictions;
+    //! the application that module code which starts a thread runs for, which the module code of the new thread
+    //! runs for (see ThreadData::thread_start_app_pgm_id); 0 if code other than module code starts it (qore#7010)
+    qore_program_id_t start_app_pgm_id = 0;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
-            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions),
+            start_app_pgm_id(old.start_app_pgm_id) {
         refPrograms();
     }
 
@@ -1836,6 +1870,7 @@ struct QoreThreadRuntimeParseOptions {
             std::swap(po, copy.po);
             std::swap(override, copy.override);
             std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
+            std::swap(start_app_pgm_id, copy.start_app_pgm_id);
         }
         return *this;
     }
@@ -1904,10 +1939,12 @@ private:
     std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
     //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
     QoreParseOptions old_caller_restrictions;
+    //! the start application in effect before (ThreadData::thread_start_app_pgm_id)
+    qore_program_id_t old_start_app_pgm_id = 0;
     //! their generation (ThreadData::thread_caller_restrictions_gen)
     uint64_t old_caller_restrictions_gen = 0;
 
-    //! restores old_caller_restrictions
+    //! restores old_caller_restrictions and old_start_app_pgm_id
     DLLLOCAL void restoreCallerRestrictions();
 };
 

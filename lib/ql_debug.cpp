@@ -19141,6 +19141,52 @@ static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, R
     return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: waits until a thread waits in a flush of the callbacks of an owner of the global async I/O controller
+/** AsyncIoController::flushCallbacksByOwner() marks the owner, then waits for its callbacks; a test that checks what
+    the mark does waits until it is set (qore#7010)
+
+    @return True if a thread waits in a flush of an owner, False if none did when the timeout elapsed
+*/
+static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: the number of operation objects that the async I/O controllers have registered (qore#6531)
+/** The registration of an operation without a C++ poll operation by its object ends with the operation; a test
+    checks with it that a submission that is not started leaves none behind (qore#7167)
+*/
+static QoreValue f_dbg_async_io_qop_registered_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpRegisteredCount());
+}
+
+//! Debug-only: returns True if a submission takes the key of an operation that it may not replace (qore#7010)
+/** @param sandboxed if the submitting code is sandboxed
+    @param app_id the application that the submitting code runs for; -1 for none (\c QORE_NO_PROGRAM_ID)
+    @param other_app_id the application of the operation with the key; -1 for none
+    @param same_object if the submission is of the operation object with the key
+*/
+static QoreValue f_dbg_async_io_submit_takes_key_of_other(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    auto app = [](int64 id) -> qore_program_id_t {
+        return id < 0 ? QORE_NO_PROGRAM_ID : static_cast<qore_program_id_t>(id);
+    };
+    return AsyncIoControllerPriv::dbgSubmitTakesKeyOfOther(get_param_value(params, 0).getAsBool(),
+        app(get_param_value(params, 1).getAsBigInt()), app(get_param_value(params, 2).getAsBigInt()),
+        get_param_value(params, 3).getAsBool());
+}
+
 //! Debug-only: waits until the global async I/O controller has queued the given number of onComplete() calls
 /** Counted since the controller's callback dispatcher was created, once each call is queued for the workers, so that
     AsyncIoController::flushCallbacks() called after the wait covers them; a test waits with it for the completion of
@@ -29979,6 +30025,16 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 4,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "sandboxed",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "other_app_id",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "same_object");
     qns.addBuiltinVariant("dbg_async_io_wait_on_complete_queued", f_dbg_async_io_wait_on_complete_queued,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
