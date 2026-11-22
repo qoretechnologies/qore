@@ -6101,9 +6101,13 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             if (client.hasCallableMethod("startPollConnect") && client.hasCallableMethod("getURL")) {
                 # the target only (scheme, host and port): the credentials and the path, which the calling code can
                 # set, are not given to the check (issue #7236)
-                checkLentNetworkTarget(client instanceof Qore::HTTPClient
-                    ? cast<Qore::HTTPClient>(client).getURL(UC_TARGET)
-                    : client.getURL(), client.hasCallableMethod("getProxyURL") ? client.getProxyURL() : NOTHING);
+                if (client instanceof Qore::HTTPClient) {
+                    checkLentNetworkTarget(cast<Qore::HTTPClient>(client).getURL(UC_TARGET),
+                        cast<Qore::HTTPClient>(client).getProxyURL(UC_TARGET));
+                } else {
+                    checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
+                        ? client.getProxyURL() : NOTHING);
+                }
                 return client.startPollConnect();
             }
             return HttpBasedConnection::startPollConnect(logger);
@@ -6960,7 +6964,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         # target of a connection that was lent to it, as with their clients (qore#7262), checked before connecting
         # the target only (scheme, host and port): the credentials and the path, which the calling code can set, are not
         # given to the check (issue #7236)
-        checkLentNetworkTarget(conn_client.getURL(UC_TARGET), conn_client.getProxyURL());
+        checkLentNetworkTarget(conn_client.getURL(UC_TARGET), conn_client.getProxyURL(UC_TARGET));
         conn_client.connect();
     }
 

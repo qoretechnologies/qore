@@ -1382,6 +1382,44 @@ conn.checkSandboxAccess(True);
         }
     }
 
+    #! Returns the target of a configured URL (its scheme, host and port), without its user information and path
+    /** For a check with checkLentNetworkTarget() of a URL or proxy URL that the connection's client parses as it is (a
+        configured URL, which can hold credentials): the target is rebuilt from what parse_url() gives, which is what
+        the client connects to: an IPv6 address in brackets, and a UNIX domain socket path as \c "socket=" followed by
+        the path with every reserved character encoded
+
+        @param url the configured URL
+
+        @return the URL of its target
+
+        @throw PERMISSION-DENIED the URL cannot be parsed or has no host, so its target cannot be checked
+
+        @since %ConnectionProvider 3.1
+    */
+    final private string getLentTargetUrl(string url) {
+        try {
+            hash<UrlInfo> u = parse_url(url);
+            if (u.host.val()) {
+                string rv = (u.protocol ?? "http") + "://";
+                if (u.host =~ /^\//) {
+                    if (!u.port) {
+                        return rv + "socket=" + encode_url(u.host, True);
+                    }
+                } else {
+                    rv += u.host =~ /:/ ? "[" + u.host + "]" : u.host;
+                    if (u.port) {
+                        rv += ":" + u.port;
+                    }
+                    return rv;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # refused below
+        }
+        throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK functional "
+            "domain, and the target of a URL of the connection cannot be checked", name);
+    }
+
     #! Marks the connection up after a connection was made successfully with get(), unless a failed ping marked it down
     /** Sets @ref up to @ref True "True" and @ref status to \c "OK", as a successful ping does, but without calling
         @ref handlePingSuccess(), which handles pings only.  A connection that the last ping found down is left down:

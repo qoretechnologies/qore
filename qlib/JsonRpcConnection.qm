@@ -193,7 +193,9 @@ public class JsonRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         # the builtin client cannot be used by code restricted from NETWORK, but it connects here for it: only to the
         # target of the connection's creator (qore#7262)
         Qore::Json::JsonRpcClient client(real_opts, True);
-        checkLentNetworkTarget(client.getURL(), client.getProxyURL());
+        # the target only (scheme, host and port) of the client and its proxy: their credentials and path, which the
+        # calling code can set, are not given to the check (qore#7236)
+        checkLentNetworkTarget(client.getURL(UC_TARGET), client.getProxyURL(UC_TARGET));
         client.connect();
         return client;
     }
