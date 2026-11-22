@@ -17,6 +17,7 @@
 %requires FsUtil
 %requires ../../TestCertificates.qm
 %requires QUnit
+%include ../../qore/classes/TestConnectProxy.qc
 
 %exec-class RestConnectionTlsTest
 
@@ -56,6 +57,7 @@ class RestConnectionTlsTest inherits QUnit::Test {
         addTestCase("synchronous caller file policy", \syncFilePolicy());
         addTestCase("caller-selected native file options", \nativeFileOptions());
         addTestCase("opaque certificate origin", \opaqueOrigin());
+        addTestCase("connection credentials through an HTTPS proxy", \httpsProxyOrigin());
         addTestCase("configured token endpoint", sub () { tokenEndpoint(False); });
         addTestCase("configured alternate token endpoint", sub () { tokenEndpoint(True); });
         addTestCase("configured ping endpoint", \pingEndpoint());
@@ -125,6 +127,60 @@ class RestConnectionTlsTest inherits QUnit::Test {
         assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", other));
         assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", origin + "/redirect"));
         assertEq("authenticated", client.sendUrl(NOTHING, "GET", origin + "/ok").body.toString());
+    }
+
+    httpsProxyOrigin() {
+        TmpDir tmp("rest-tls-proxy-");
+        HttpServer server(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit server.stop();
+        server.setDefaultHandler("origin", new TlsPeer());
+        int port = addMtlsListener(server);
+        server.waitForAsyncIo();
+        string origin = sprintf("https://127.0.0.1:%d", port);
+
+        TestConnectProxy proxy(NOTHING, new SSLCertificate(TestCertificates::CertPem),
+            new SSLPrivateKey(TestCertificates::KeyPem), NOTHING, True);
+        on_exit proxy.shutdown();
+        string proxy_url = sprintf("https://127.0.0.1:%d", proxy.getPort());
+        # A direct connection to this listener confirms it can observe a client certificate.
+        {
+            HTTPClient direct({"url": proxy_url, "http_version": "1.1", "ssl_verify_cert": False,
+                    "error_passthru": True},
+                new SSLCertificate(TestCertificates::CertPem), new SSLPrivateKey(TestCertificates::KeyPem));
+            on_exit direct.disconnect();
+            direct.get("/");
+            assertTrue(proxy.getRequests()[0].client_cert_present);
+        }
+        # Reserve a second origin so its port cannot be reused during the test.
+        Socket unused();
+        unused.bindINET("127.0.0.1", 0);
+        string other = sprintf("https://127.0.0.1:%d", unused.getSocketInfo().port);
+        string denied = "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR";
+
+        foreach string version in ("1.1", "2.0") {
+            RestConnection conn("tunnel", "", origin, {}, tlsOptions(tmp) + {
+                "proxy": proxy_url, "http_version": version,
+            });
+            RestClient client = conn.get(False);
+            on_exit client.disconnect();
+            RestClientIo async_client = conn.getAsync(False);
+            on_exit async_client.close();
+
+            int before = proxy.getRequests().size();
+            assertEq("authenticated", client.restGet("/content").body, "sync mTLS " + version);
+            assertEq("authenticated", async_client.restGet("/content").body, "async mTLS " + version);
+            list<hash<auto>> requests = proxy.getRequests();
+            assertEq(before + 2, requests.size());
+            foreach hash<auto> request in (requests[before..]) {
+                assertTrue(request.ssl);
+                assertFalse(request.client_cert_present, "proxy TLS handshake");
+                assertTrue(request.line.startsWith(sprintf("CONNECT 127.0.0.1:%d ", port)));
+            }
+            assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", other));
+            HttpClientIo::HttpClientConnectionManager mgr = async_client.getConnectionManager();
+            assertThrows(denied, \mgr.request(), (other, "GET", "/"));
+            assertEq(requests, proxy.getRequests(), "other origin refused before CONNECT");
+        }
     }
 
     private static int addMtlsListener(HttpServer server) {
