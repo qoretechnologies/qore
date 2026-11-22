@@ -725,10 +725,6 @@ public:
         user call saves and restores
     */
     QoreParseOptions thread_caller_restrictions;
-    //! the application that the module code of the thread runs for if no call records one: that of the module code
-    //! that started the thread (see QoreThreadRuntimeParseOptions::start_app_pgm_id); set with
-    //! thread_caller_restrictions (qore#7010)
-    qore_program_id_t thread_start_app_pgm_id = 0;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
@@ -1187,6 +1183,10 @@ public:
             can assign them, and the next release takes those values
         */
         tlv_clearing : 1;
+
+    //! the generation of the work that the thread runs: its own, unique in the process (unlike its TID, which is
+    //! reused), or that of the work item of other code that it runs (see runtime_get_thread_generation(), qore#7010)
+    uint64_t work_gen = qore_new_work_generation();
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
@@ -7593,12 +7593,19 @@ bool qore_calling_code_is_sandboxed() {
     return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm);
 }
 
-bool qore_caller_is_sandboxed() {
+bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
     if (!td) {
         return false;
     }
+    // the ID of the sandboxed Program found, for the mark of the reports of the exceptions of its code (qore#7139)
+    auto found = [pgm_id] (const QoreProgram* pgm) -> bool {
+        if (pgm_id) {
+            *pgm_id = pgm ? pgm->getProgramId() : 0;
+        }
+        return true;
+    };
     // under a module initialization barrier, the code that loads library code does not create what the
     // initialization of the library code creates (see QoreModuleInitSandboxBarrierHelper); under a lift it does
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
@@ -7606,6 +7613,9 @@ bool qore_caller_is_sandboxed() {
     // a sandboxed caller that a parse or module load in another Program hid from the walk below; not one that called
     // library code whose initialization runs now (see QoreCallerSandboxHelper)
     if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
+        if (pgm_id) {
+            *pgm_id = td->sandboxed_caller->getSandboxedProgramId();
+        }
         return true;
     }
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
@@ -7613,7 +7623,7 @@ bool qore_caller_is_sandboxed() {
     // are walked as in find_thread_sandbox_stack_ref_intern()
     if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
         if (qore_program_is_sandboxed(td->current_pgm)) {
-            return true;
+            return found(td->current_pgm);
         }
     }
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
@@ -7621,20 +7631,28 @@ bool qore_caller_is_sandboxed() {
             break;
         }
         if (qore_program_is_sandboxed(ch->getOldProgram())) {
-            return true;
+            return found(ch->getOldProgram());
         }
     }
     if (!mib && td->current_pgm != td->call_program_context
         && qore_program_is_sandboxed(td->call_program_context)) {
-        return true;
+        return found(td->call_program_context);
     }
     // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
     // runs and the sandbox inherited by the thread, as for interrupts and resource limits
     try {
-        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(), nullptr);
+        qore_program_id_t sm_pgm_id = 0;
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(pgm_id ? &sm_pgm_id : nullptr),
+            nullptr);
+        if (sm && pgm_id) {
+            *pgm_id = sm_pgm_id;
+        }
         return static_cast<bool>(sm);
     } catch (std::bad_alloc&) {
         // the sandbox cannot be resolved: what the code creates is not trusted
+        if (pgm_id) {
+            *pgm_id = 0;
+        }
         return true;
     }
 }
@@ -8632,6 +8650,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         in_build = td->sandbox_budgets.inBuild();
         // the work that continues on another thread runs for the capturing code (qore#6844)
         caller_restrictions = qore_get_calling_code_restrictions(td);
+        // and continues its work (qore#7010)
+        work_gen = td->work_gen;
     }
     manager = current.release();
     policy_manager = policy.release();
@@ -8662,6 +8682,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    work_gen = src->work_gen;
     isolation = src->isolation;
     if (isolation) {
         isolation->ref();
@@ -8803,7 +8824,7 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
         previous_native_load_restriction = td->native_load_restriction;
         td->native_load_restriction = this;
     }
-    if (!qore_caller_is_sandboxed()) {
+    if (!qore_caller_is_sandboxed(&sandboxed_pgm_id)) {
         return;
     }
     previous = td->sandboxed_caller;
@@ -9723,6 +9744,33 @@ qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QorePr
     return runtime_get_module_call_app_id(caller_pgm);
 }
 
+uint64_t qore_new_work_generation() {
+    static std::atomic<uint64_t> gen{0};
+    return gen.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+uint64_t runtime_get_thread_generation() {
+    ThreadData* td = thread_data.get();
+    return td ? td->work_gen : 0;
+}
+
+QoreWorkGenerationHelper::QoreWorkGenerationHelper(uint64_t gen) {
+    if (!gen) {
+        return;
+    }
+    td = thread_data.get();
+    if (td) {
+        old_gen = td->work_gen;
+        td->work_gen = gen;
+    }
+}
+
+QoreWorkGenerationHelper::~QoreWorkGenerationHelper() {
+    if (td) {
+        td->work_gen = old_gen;
+    }
+}
+
 qore_program_id_t runtime_get_sandboxed_module_call_app_id() {
     ThreadData* td = thread_data.get();
     if (!td || !td->runtime_po_state.sandboxed || !td->runtime_po_state.override_pgm
@@ -9746,10 +9794,6 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
         return false;
     }
     app_pgm_id = td->runtime_po_state.app_pgm_id;
-    // the code of a thread that module code started for an application runs for that application (qore#7010)
-    if (!app_pgm_id && td->thread_start_app_pgm_id && td->thread_start_app_pgm_id != QORE_NO_PROGRAM_ID) {
-        app_pgm_id = td->thread_start_app_pgm_id;
-    }
     return true;
 }
 
@@ -10027,9 +10071,9 @@ void QoreThreadRuntimeParseOptions::derefPrograms() {
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
     QoreThreadRuntimeParseOptions rv = capture();
     rv.override.app_pgm_id = 0;
-    // the application that module code starting the thread runs for, for the async I/O operations of the module code
-    // of the new thread (qore#7010); 0 for other code
-    rv.start_app_pgm_id = qore_async_io_thread_start_app_id();
+    // the thread's work is its own (qore#7010)
+    rv.work_gen = 0;
+    rv.new_work = true;
     return rv;
 }
 
@@ -10070,6 +10114,8 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     // runs for that code (qore#6520); one that trusted code starts in a host grant does not run for the code that
     // established it in the lent domains
     rv.caller_domain_restrictions = qore_get_calling_code_restrictions(td, false);
+    // the work that runs with the options continues the work of the capturing code (qore#7010)
+    rv.work_gen = td->work_gen;
     rv.refPrograms();
     return rv;
 }
@@ -10090,22 +10136,21 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions = td->thread_caller_restrictions;
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
-    // the application of the module code that started the thread (qore#7010)
-    old_start_app_pgm_id = td->thread_start_app_pgm_id;
-    td->thread_start_app_pgm_id = o->start_app_pgm_id;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    // the generation of the work: that of the capturing code, a new one for work of its own (qore#7010)
+    old_work_gen = td->work_gen;
+    if (o->work_gen) {
+        td->work_gen = o->work_gen;
+    } else if (o->new_work) {
+        td->work_gen = qore_new_work_generation();
+    }
 }
 
 void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
-    td->thread_start_app_pgm_id = old_start_app_pgm_id;
-}
-
-qore_program_id_t runtime_get_thread_start_app_id() {
-    ThreadData* td = thread_data.get();
-    return td ? td->thread_start_app_pgm_id : 0;
+    td->work_gen = old_work_gen;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

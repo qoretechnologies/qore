@@ -42,20 +42,14 @@
 
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
-class HashDeclTypeParamContextHelper {
-public:
-    DLLLOCAL HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
-            : old_context(parse_hashdecl_type_param_context) {
-        parse_hashdecl_type_param_context = n_context;
-    }
+HashDeclTypeParamContextHelper::HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
+        : old_context(parse_hashdecl_type_param_context) {
+    parse_hashdecl_type_param_context = n_context;
+}
 
-    DLLLOCAL ~HashDeclTypeParamContextHelper() {
-        parse_hashdecl_type_param_context = old_context;
-    }
-
-private:
-    const typed_hash_decl_private* old_context;
-};
+HashDeclTypeParamContextHelper::~HashDeclTypeParamContextHelper() {
+    parse_hashdecl_type_param_context = old_context;
+}
 
 const typed_hash_decl_private* parse_get_hashdecl_type_param_context() {
     return parse_hashdecl_type_param_context;
@@ -271,6 +265,11 @@ int typed_hash_decl_private::parseInit() {
         return 0;
     }
     parse_init_done = true;
+
+    // the hashdecl names only its own type parameters (set below), also when it is first used in generic code: a
+    // non-generic hashdecl's member declared as *T named the type parameter T of a generic function that used it
+    // first (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     int err = 0;
 

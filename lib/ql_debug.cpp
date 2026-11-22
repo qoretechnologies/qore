@@ -26194,6 +26194,10 @@ DerefPointHold deref_marked_hold;
 DerefPointHold deref_delete_hold;
 //! the hold of dbg_hold_deref_last()
 DerefPointHold deref_last_hold;
+#ifdef DEBUG
+//! the hold of dbg_hold_container_free(); its class name is the type of the container ("list" or "hash")
+DerefPointHold container_free_hold;
+#endif
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -26238,6 +26242,13 @@ void dbg_hold_deref_delete_hook(const char* class_name) {
 void dbg_hold_deref_last_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
 }
+
+#ifdef DEBUG
+void dbg_hold_container_free_hook(const char* type_name) {
+    dbg_run_deref_point_hold(container_free_hold, qore_dbg_container_free_hook, type_name,
+        "dbg_hold_container_free");
+}
+#endif
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
 template <typename T>
@@ -26333,6 +26344,28 @@ static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
         xsink);
+}
+
+//! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
+/** The hold is taken once, in QoreListNode::derefImpl() or QoreHashNode::derefImpl(), when the last reference to a
+    list or hash that weak references (":=") hold has been released and before its entries are freed; a reference
+    taken through a weak holder by another thread meanwhile must not see the entries that are freed, and tests use
+    the hold to make that deterministic.
+
+    @param type_name \c "list" or \c "hash"
+    @param held decremented once the freeing thread is held
+    @param release the freeing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed, or the build is not a debug build
+*/
+static QoreValue f_dbg_hold_container_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return dbg_arm_deref_point_hold(container_free_hold, qore_dbg_container_free_hook, dbg_hold_container_free_hook,
+        params, xsink);
+#else
+    xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_container_free() requires a debug build");
+    return QoreValue();
+#endif
 }
 
 namespace {
@@ -30401,6 +30434,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,

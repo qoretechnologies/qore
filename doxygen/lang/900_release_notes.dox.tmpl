@@ -123,6 +123,12 @@
     registered credential resolver gives the credentials (see @ref sqlutil_serialization;
     <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
 
+    @par Code of a Class Does Not Call a Private Method That Its Own Hierarchy Overrides
+    Code of a class no longer calls a @ref private_methods "private" method of one of its parent classes (or a public
+    one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
+    object's class reaches that parent class first (see @ref multiple_inheritance_order;
+    <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
@@ -1309,6 +1315,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Hash Identity Test
+    @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
+    (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
+
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
     @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", and a trusted build that one
@@ -2729,6 +2739,10 @@
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
       object, so a shared object is expanded once per conversion (issue #7166).
+    - the link of \c qcc script objects into an executable refuses a reference to a global variable, constant, static
+      class variable or enum member that no linked object defines, which an object compiled with \c -L deferred to run
+      time (see @ref qcc_link_unresolved_references;
+      <a href="https://github.com/qoretechnologies/qore/issues/6902">issue 6902</a>)
     - the end of the process waits at most 10 seconds for a thread of another runtime (registered with
       \c q_register_foreign_thread(), such as a JVM thread of the \c jni module) whose call into the script never
       returns, and then ends; it waited for the call forever
@@ -2752,10 +2766,16 @@
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
+    - fixed reading a list or hash through a @ref weak_assignment_operator "weak reference" while another thread
+      freed it, which read its entries as they were freed; such a read now gives an empty list or hash that cannot be
+      changed (<a href="https://github.com/qoretechnologies/qore/issues/7198">issue 7198</a>)
     - fixed a crash when a @ref weak_assignment_operator "weak reference" to a list or hash whose last strong
       reference was released was copied, returned or passed to a call; changing such a list or hash through new
       references to it now raises \c LIST-ERROR or \c HASH-ERROR also when more than one is held
       (<a href="https://github.com/qoretechnologies/qore/issues/7163">issue 7163</a>)
+    - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
+      instead of sending it as the final response
+      (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -2869,13 +2889,6 @@
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
-    - the namespaces, functions and enums of a namespace are enumerated by the \c reflection module
-      (@ref Qore::Reflection::Namespace::getNamespaces() "Namespace::getNamespaces()",
-      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()",
-      @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()") in the order in which they were declared;
-      before, the order depended on how often the namespace had been copied, so a program compiled with \c qcc
-      returned another one than the interpreter
-      (<a href="https://github.com/qoretechnologies/qore/issues/7171">issue 7171</a>)
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)

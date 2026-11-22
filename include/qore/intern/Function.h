@@ -241,7 +241,7 @@ public:
     }
 
     // adds a description of the given default argument to the signature string
-    DLLLOCAL static void addDefaultArgument(std::string& str, QoreValue arg);
+    DLLEXPORT static void addDefaultArgument(std::string& str, QoreValue arg);
 
     DLLLOCAL const char* getName(unsigned i) const {
         return i < names.size() ? names[i].c_str() : 0;

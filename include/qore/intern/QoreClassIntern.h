@@ -36,6 +36,7 @@
 #include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreLValue.h"
@@ -2777,6 +2778,9 @@ public:
         It does not change once set: the hierarchy of a class does not change after it has been initialized.
     */
     bool diamond_free = false;
+    //! false if no class of the hierarchy inherits a parent class with private or private:internal access; set with
+    //! sml_complete (true, conservatively, for a hierarchy not known to be complete; qore#6798)
+    bool private_edge = true;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2786,7 +2790,7 @@ public:
     }
 
     DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
-            diamond_free(old.diamond_free) {
+            diamond_free(old.diamond_free), private_edge(old.private_edge) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -3233,6 +3237,11 @@ public:
     //! the cache of runtimeGetContextStorageMembers(): a chain of nodes, one for each class context; nodes are only added
     //! and are deleted with the class (#7180)
     mutable std::atomic<struct ContextStorageNode*> context_storage_head{nullptr};
+    //! the cache of the method that code of a class context calls in place of a method found by a run-time lookup in
+    //! this class (the object's class) in a hierarchy with a diamond (see runtime_find_context_override()): a chain of
+    //! nodes, one for each class context and method found; nodes are only added, and are deleted with the methods of
+    //! the class (qore#6798)
+    mutable std::atomic<struct ContextOverrideNode*> context_override_head{nullptr};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3489,6 +3498,10 @@ public:
         hierarchy only the record of the walk.
     */
     mutable std::atomic<bool> multi_path{false};
+
+    //! the cached result of runtimeOverridesPrivateParentMethod(): -1 if not computed yet
+    mutable std::atomic<int8_t> overrides_private_parent_method{-1};
+
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under dataLock()
@@ -5235,6 +5248,42 @@ public:
     //! computes and caches the result of getMemberInitCode()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
+    //! returns true if code of this class may call another method than a private method of one of its parent classes
+    //! (qore#6798)
+    /** True if, for a private method of one of its parent classes, the method of the name that code of this class calls
+        on an object of this class is another one (it overrides the private method), or if the hierarchy of the class is
+        not known completely; the run-time lookups from the class context of the class then skip such a private method
+        when an earlier parent class of the object's class reaches it first.  Computed once, at run time, when the
+        hierarchy of the class is known completely: it does not change then; the conservative answer for a hierarchy
+        not known completely is not cached
+    */
+    DLLLOCAL bool runtimeOverridesPrivateParentMethod() const {
+        int8_t rv = overrides_private_parent_method.load(std::memory_order_relaxed);
+        return rv < 0 ? computeOverridesPrivateParentMethod() : rv;
+    }
+
+    //! computes and caches the result of runtimeOverridesPrivateParentMethod()
+    DLLLOCAL QORE_INTERN_NOINLINE bool computeOverridesPrivateParentMethod() const;
+
+    //! returns the method that code of the class context calls in place of the public method \a w that a run-time
+    //! lookup in this class (the object's class) found with public access, or \a w (qore#6798)
+    /** A public method of one of the context's parent classes that the lookup reached first through private
+        inheritance, which a caller outside the class hierarchy does not call and which the context's own hierarchy
+        overrides, is not called; only possible in a hierarchy with a diamond and a private inheritance edge, which
+        this checks first (the lookup with a class context finds such a method with public access when a public path
+        reaches its class as well)
+    */
+    DLLLOCAL const QoreMethod* runtimeCheckPublicContextOverride(const char* nme, const QoreMethod* w,
+            ClassAccess& access, const qore_class_private* class_ctx) const {
+        return (w && class_ctx && scl && !scl->diamond_free && scl->private_edge && !isClassContext(class_ctx))
+            ? runtimeFindPublicContextOverride(nme, w, access, class_ctx)
+            : w;
+    }
+
+    //! see runtimeCheckPublicContextOverride()
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* runtimeFindPublicContextOverride(const char* nme,
+            const QoreMethod* w, ClassAccess& access, const qore_class_private* class_ctx) const;
+
     //! sets multi_path in each base class that the class's hierarchy reaches through more than one path (qore#6513)
     /** Called once for the class, by computeMemberInitCode(), before its first object's constructors run
     */
@@ -5581,9 +5630,24 @@ public:
     */
     DLLLOCAL const QoreMethod* parseCheckContextCallableMethod(const char* nme, const QoreMethod* m,
             const qore_class_private* class_ctx, bool is_static) {
-        return parseContextMayNotCall(m, class_ctx) ? parseFindContextCallableMethod(nme, m, class_ctx, is_static)
+        if (parseContextMayNotCall(m, class_ctx)) {
+            return parseFindContextCallableMethod(nme, m, class_ctx, is_static);
+        }
+        // a public method found through private inheritance in a hierarchy with a diamond (qore#6798)
+        return (m && class_ctx && scl && !scl->diamond_free && !isClassContext(class_ctx))
+            ? parseFindContextPublicOverride(nme, m, class_ctx, is_static)
             : m;
     }
+
+    //! returns the method that code of the class context calls in place of the public method \a m found by a
+    //! parse-time lookup through private inheritance, or \a m (qore#6798)
+    /** A public method of one of the context's parent classes that the class context's own hierarchy overrides, and
+        which a caller outside the class hierarchy does not call (the lookup through the public paths finds another
+        method or none), is skipped as a private method that it overrides; not inlined: called only for a lookup in
+        a hierarchy with a diamond from the class context of another class
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* parseFindContextPublicOverride(const char* nme,
+            const QoreMethod* m, const qore_class_private* class_ctx, bool is_static);
 
     //! returns true if \a m is a private method of another class than the class context, which the class context
     //! may not be able to call (see parseContextCannotCall())

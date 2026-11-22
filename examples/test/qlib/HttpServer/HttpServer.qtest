@@ -1291,7 +1291,8 @@ public class HttpServerTest inherits QUnit::Test {
 
     issue3116() {
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "501", \mClient.head(), "/test501/xyz");
-        assertNothing(mClient.get("/test102/xyz"));
+        # an informational status is not a final response: the server answers it with an error (qore#7222)
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "500", \mClient.get(), "/test102/xyz");
         assertNothing(mClient.get("/test204/xyz"));
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "304", \mClient.head(), "/test304/xyz");
         assertEq("GET, abc, /abc", mClient.get("/abc"));

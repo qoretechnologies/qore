@@ -2449,16 +2449,34 @@ static inline bool qore_rt_is_weak_reference_type(qore_type_t type) {
 // interpreter reads it (AbstractQoreNode::eval()), which for a weak reference to an object that has been destroyed is
 // the destroyed object, so that it exists and a method call through it raises OBJECT-ALREADY-DELETED; any other value
 // is returned as it is.  The weak reference keeps the target allocated.
+// The list or hash of a weak reference is returned borrowed only to the reads of native code that the code generator
+// expects borrowed (qore_rt_read_element_local(), qore_rt_get_borrowed_list_element()), whose ownership change is left
+// to the AOT batch (qore#7198), and to reads that keep nothing; qore_rt_take_weak_reference_target() gives it with a
+// reference of its own.
 static QoreValue qore_rt_get_weak_reference_target(const QoreValue& val) {
     switch (val.getType()) {
         case NT_WEAKREF:
             return QoreValue(val.get<const WeakReferenceNode>()->get());
         case NT_WEAKREF_HASH:
-            return QoreValue(val.get<const WeakHashReferenceNode>()->get());
+            return QoreValue(val.get<const WeakHashReferenceNode>()->borrow());
         case NT_WEAKREF_LIST:
-            return QoreValue(val.get<const WeakListReferenceNode>()->get());
+            return QoreValue(val.get<const WeakListReferenceNode>()->borrow());
         default:
             return val;
+    }
+}
+
+// Returns the target of a weak reference with a new reference, as qore_rt_get_weak_reference_target() reads it; the
+// list or hash of a weak reference is read with lock(), as a new empty one that cannot be changed if it was freed
+// (qore#7198)
+static QoreValue qore_rt_take_weak_reference_target(const QoreValue& val) {
+    switch (val.getType()) {
+        case NT_WEAKREF_HASH:
+            return QoreValue(val.get<const WeakHashReferenceNode>()->lock());
+        case NT_WEAKREF_LIST:
+            return QoreValue(val.get<const WeakListReferenceNode>()->lock());
+        default:
+            return qore_rt_get_weak_reference_target(val).refSelf();
     }
 }
 
@@ -2470,7 +2488,7 @@ static bool qore_rt_normalize_weak_reference_for_assignment(QoreValue& val, Valu
     if (!qore_rt_is_weak_reference_type(val.getType())) {
         return false;
     }
-    holder = qore_rt_get_weak_reference_target(val).refSelf();
+    holder = qore_rt_take_weak_reference_target(val);
     val = *holder;
     return true;
 }
@@ -2482,7 +2500,7 @@ static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, Excepti
         return false;
     }
     ValueHolder old(val, xsink);
-    val = qore_rt_get_weak_reference_target(*old).refSelf();
+    val = qore_rt_take_weak_reference_target(*old);
     return true;
 }
 
@@ -4725,21 +4743,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
 // type-path cast helper receives a precomputed value, so mirror that evaluation
 // step for weak references here.
 // always inlined: the non-generic cast by type path inlined it before its generic variant existed (qore#5661)
-static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
+// the list or hash of a weak reference is held by \a holder with a reference of its own, or is a new empty one if it was
+// freed (qore#7198)
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val, ValueHolder& holder) {
     switch (val.getType()) {
         case NT_WEAKREF: {
             // the destroyed object for a weak reference to an object that has been destroyed, as the AST interpreter
             // evaluates the input
             return QoreValue(val.get<const WeakReferenceNode>()->get());
         }
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();
-            return h ? QoreValue(h) : QoreValue();
-        }
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = val.get<const WeakListReferenceNode>()->get();
-            return l ? QoreValue(l) : QoreValue();
-        }
+        case NT_WEAKREF_HASH:
+            holder = val.get<const WeakHashReferenceNode>()->lock();
+            return *holder;
+        case NT_WEAKREF_LIST:
+            holder = val.get<const WeakListReferenceNode>()->lock();
+            return *holder;
         default:
             return val;
     }
@@ -4758,7 +4776,8 @@ static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& r
 template <bool Generic, bool OrNothingPath>
 static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
-    QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
+    ValueHolder inner_holder(xsink);
+    QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits), inner_holder);
 
     if (!type_path || !*type_path) {
         xsink->raiseException("IR-CAST-ERROR", "missing cast type path");
@@ -8189,11 +8208,9 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         return toBits(rv);
     }
     if (v.getType() == NT_WEAKREF_HASH) {
-        const QoreHashNode* h = v.get<const WeakHashReferenceNode>()->get();
-        if (!h) {
-            return toBits(QoreValue());
-        }
-        QoreValue result = qore_rt_get_hash_key_value(h, key, key_hash, prehashed, xsink);
+        // the member is read from the hash held with a reference of its own (qore#7198)
+        ReferenceHolder<QoreHashNode> h(v.get<const WeakHashReferenceNode>()->lock(), xsink);
+        QoreValue result = qore_rt_get_hash_key_value(*h, key, key_hash, prehashed, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -17669,7 +17686,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_lv_path_assign_impl(
     // assigns its target, as the AST interpreter reads it
     if (inst->mode != AssignmentMode::Weak && inst->mode != AssignmentMode::Element
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
+        eval_holder = qore_rt_take_weak_reference_target(val);
         assign_val = *eval_holder;
     }
 
@@ -17713,7 +17730,7 @@ static uint64_t qore_rt_assign_consumed(LValueHelper& lvh, QoreValue val, Assign
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
         // a weak reference is assigned as its target, as the AST interpreter reads it; the weak reference itself is
         // released here
-        ValueHolder eval_holder(qore_rt_get_weak_reference_target(val).refSelf(), xsink);
+        ValueHolder eval_holder(qore_rt_take_weak_reference_target(val), xsink);
         if (lvh.assign(eval_holder.release(), desc, true, mode)) {
             return toBits(QoreValue());
         }
@@ -17804,7 +17821,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_self_member_assign_impl(
     qore_type_t val_type = val.getType();
     if (mode != AssignmentMode::Weak && mode != AssignmentMode::Element && (val_type == NT_WEAKREF
             || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
+        eval_holder = qore_rt_take_weak_reference_target(val);
         assign_val = *eval_holder;
     }
 
@@ -18884,11 +18901,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     case NT_WEAKREF_HASH:
                     case NT_WEAKREF_LIST: {
                         ValueHolder weak_holder(res, xsink);
-                        res = (res.getType() == NT_WEAKREF
-                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get())
+                        // a list or hash is read with a new reference, or as a new empty one if it was freed (qore#7198)
+                        res = res.getType() == NT_WEAKREF
+                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf()
                             : res.getType() == NT_WEAKREF_HASH
-                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->get())
-                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->get())).refSelf();
+                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->lock())
+                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->lock());
                         break;
                     }
                     default:
@@ -22486,7 +22504,9 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
         }
 
         case NT_WEAKREF_HASH: {
-            const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method->getName());
+            // the hash is held with a reference of its own while its member is called (qore#7198)
+            ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+            const AbstractQoreNode* ref = check_call_ref(*h, method->getName());
             if (ref) {
                 ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
                 if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
@@ -22758,7 +22778,9 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
             return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     } else if (base.getType() == NT_WEAKREF_HASH) {
-        const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
+        // the hash is held with a reference of its own while its member is called (qore#7198)
+        ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+        const AbstractQoreNode* ref = check_call_ref(*h, method_name);
         if (ref) {
 #ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
             if (arg_cleanups) {
