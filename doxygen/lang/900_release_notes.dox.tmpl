@@ -2805,6 +2805,9 @@
       or with an unknown connection; these are usage errors that name the options, and the connection can also be
       given with \c qorus_app_connection, the name of the option in Qorus
       (<a href="https://github.com/qoretechnologies/qore/issues/7126">issue 7126</a>)
+    - fixed \c qdp \c listen ending with an unhandled \c TERMIOS-GET-ERROR exception when stdin was not a terminal; it
+      then stops on its timeout or a signal instead of a keystroke, and the interactive mode ends with a usage error
+      (<a href="https://github.com/qoretechnologies/qore/issues/7130">issue 7130</a>)
     - a data provider instance or action set that callers with different restrictions share no longer keeps a type
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;
