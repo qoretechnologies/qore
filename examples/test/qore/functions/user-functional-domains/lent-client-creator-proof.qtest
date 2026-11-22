@@ -846,6 +846,10 @@ object sub lookalike() {
         HttpClientCreatorProof r6p = HttpClientCreatorProof::get("http://h/", {"proxy": "http://[::1]:3128"});
         assertTrue(r6p.allowsUrl("http://h/", "http://[::1]:3128"), "a bracketed IPv6 proxy");
         assertFalse(r6p.allowsUrl("http://h/", "http://::1:3128"), "an IPv6 proxy without brackets");
+        # a proof whose proxy is ambiguous allows no proxy, also not another ambiguous one
+        HttpClientCreatorProof amb = HttpClientCreatorProof::get("http://h/", {"proxy": "http://::1:3128"});
+        assertFalse(amb.allowsUrl("http://h/", "http://::2:3128"), "another ambiguous proxy");
+        assertFalse(amb.allowsUrl("http://h/", "http://::1:3128"), "the same ambiguous proxy");
         HttpClientCreatorProof rp = HttpClientCreatorProof::get("rest://h:8080/", {"proxy": "http://proxy:3128"});
         assertTrue(rp.allowsUrl("http://h:8080/", "http://Proxy:3128"), "the proof's proxy");
         assertFalse(rp.allowsUrl("http://h:8080/"), "without the proof's proxy");

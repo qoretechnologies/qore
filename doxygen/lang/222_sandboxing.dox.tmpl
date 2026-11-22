@@ -774,8 +774,8 @@ authenticate();
     name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
     are refused to it.
 
-    @warning The connections whose clients are not HTTP clients (Telnet, SMTP, POP3, IMAP and FTP connections) are not
-    yet bound to their creator's target: their module code connects for the code that they were lent to, to the
+    @warning The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
+    Memcached, MLLP and MongoDB connections) are not yet bound to their creator's target: their module code connects for the code that they were lent to, to the
     target in the connection's members, which that code can change, and sends the connection's credentials there.
     The parse options of the restricted code do not stop it; a @ref Qore::SandboxManager "SandboxManager" that
     governs the code does, as its network policy decides the connections of the module code that it runs (see

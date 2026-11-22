@@ -240,7 +240,9 @@ public final class HttpClientCreatorProof {
             return False;
         }
         if (proxy_url.val()) {
-            return exists proxy && proxy == HttpClientCreatorProof::getProxyKey(proxy_url);
+            # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
+            *string key = HttpClientCreatorProof::getProxyKey(proxy_url);
+            return exists proxy && key.val() && proxy == key;
         }
         return !exists proxy;
     }
