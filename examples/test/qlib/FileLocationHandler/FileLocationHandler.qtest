@@ -344,9 +344,9 @@ public class FileLocationHandlerTest inherits QUnit::Test {
 
     #! Drives a poll operation to completion and returns its output
     private auto runPoller(AbstractPollOperation op, timeout to = 30s) {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         while (!op.goalReached()) {
-            if ((now_us() - start) > to) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > to) {
                 throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y", op.getState());
             }
             *hash<SocketPollInfo> pi = op.continuePoll();

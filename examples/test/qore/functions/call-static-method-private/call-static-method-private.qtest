@@ -20,13 +20,17 @@
     class context is used now: the class and its subclasses can call it, other callers get METHOD-IS-PRIVATE (or
     RUNTIME-OVERLOAD-ERROR when only a private variant would match).
 
+    call-static-method-later-parent.q: these calls call the method that a static method call in the caller's code
+    calls; a caller that cannot call the private static method of the first parent class calls the public one of a
+    later parent class (qore#7207).
+
     The script next to the test runs in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     its output must be that of the AST interpreter, which must be that of the .expected file.
 */
 class CallStaticMethodPrivateTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("call-static-method-private",);
+        const Scripts = ("call-static-method-private", "call-static-method-later-parent");
     }
 
     private {

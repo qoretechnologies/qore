@@ -35,6 +35,9 @@
 #include "qore/OutputStream.h"
 #include <qore/QoreSandboxManager.h>
 
+// see QoreLibIntern.h
+DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink);
+
 #include <unistd.h>
 #include <poll.h>
 #include <cerrno>
@@ -64,6 +67,11 @@ public:
       assert(count >= 0);
       if (count <= 0)
          return;
+      // every write (also through a StreamWriter or another stream) is refused for code that is restricted from
+      // terminal I/O, also when library code makes it (qore#7140)
+      if (qore_check_caller_terminal_io("StderrOutputStream::write()", xsink)) {
+         return;
+      }
 
       const char* current = reinterpret_cast<const char*>(ptr);
       int64 remaining = count;

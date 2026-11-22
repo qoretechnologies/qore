@@ -210,6 +210,8 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             string m = mode;
             addTestCase(sprintf("%s: the process ends when the module cleanup creates the asynchronous I/O "
                 "controller", mode), sub () { runFirstSubmitCase(m); });
+            addTestCase(sprintf("%s: the process ends when the module cleanup destroys a static Socket, which "
+                "creates the asynchronous I/O controller", mode), sub () { runStaticSocketCase(m); });
         }
         foreach string mode in (ExecModes) {
             foreach string protocol in (Protocols) {
@@ -510,6 +512,20 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertEq(0, status, out);
         assertRegex("(^|\n)started\n", out, "the module is loaded: " + out);
         assertRegex("(^|\n)submitted\n", out, "the destructor submits the operation: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! the module cleanup destroys a module's static Socket, whose destructor gets the asynchronous I/O controller, so
+    #! the cleanup creates it with no operation at all: the placeholder commands of its I/O threads' queues are not work
+    #! of the cleanup, which would wait for them forever (qore#7178); with several I/O threads, as the first drain of an
+    #! I/O thread's queue frees its placeholder
+    private runStaticSocketCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_IO_THREADS=4 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "static-socket-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the module is loaded: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
 

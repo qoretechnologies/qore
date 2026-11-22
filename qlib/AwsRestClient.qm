@@ -1670,6 +1670,15 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True, timeout_ms);
     }
 
+    #! Sends a signed raw request with a caller-owned transport cancellation registration
+    /** @copydetails restDoEncodedRawRequest()
+        @param register_cancel called with the abort callback; returns the cleanup to run on every exit
+    */
+    hash<RestClient::RestResponseInfo> restDoCancellableEncodedRawRequest(string method, string path, *data body,
+            *hash<auto> hdr, timeout timeout_ms, code<code<nothing()>(code<nothing()>)> register_cancel) {
+        return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True, timeout_ms, NOTHING, register_cancel);
+    }
+
     #! Sends an explicit target with encoded path variables and a pre-serialized body
     /** @param method HTTP method
         @param target API-relative or origin-absolute target with already encoded path variables
@@ -1825,7 +1834,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
             *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded, *timeout timeout_ms,
-            *hash<RestClient::RestRequestContext> request_context) {
+            *hash<RestClient::RestRequestContext> request_context,
+            *code<code<nothing()>(code<nothing()>)> register_cancel) {
         *int deadline_us;
         if (exists timeout_ms) {
             int started = requestNow();
@@ -1848,7 +1858,12 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         if (exists timeout_ms) {
             HttpClientIo::HttpCancellableFuture future = getConnectionManager().requestAsync(
                 getUrl(), method, path, hdr, prepared.serialized_body, False);
+            *code<nothing()> unregister;
+            on_exit { if (unregister) { unregister(); } }
             try {
+                if (register_cancel) {
+                    unregister = register_cancel(sub () { future.cancel(); });
+                }
                 int remaining_us = deadline_us - requestNow();
                 if (remaining_us <= 0) {
                     throw "HTTPCLIENT-TIMEOUT", "AWS request deadline exhausted";

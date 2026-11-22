@@ -153,8 +153,10 @@ class HttpClientIoCallerDomainsTest inherits QUnit::Test {
         on_exit {
             map $1.close(0), conns.iterator();
         }
+        # the poll operation classes are in the NETWORK domain through their builtin base classes (qore#7132): the
+        # class is refused before the exemption's check
         foreach string cls in (keys PollOperations) {
-            assertEq("PERMISSION-DENIED", p.callFunction(cls, port, conns{cls}), sprintf("%s, %s", cls, mode));
+            assertEq("CREATE-OBJECT-ERROR", p.callFunction(cls, port, conns{cls}), sprintf("%s, %s", cls, mode));
         }
         # no connection was made
         assertEq(NOTHING, listener.accept(0), "no connection, " + mode);

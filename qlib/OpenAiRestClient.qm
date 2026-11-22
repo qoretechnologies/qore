@@ -1317,6 +1317,10 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableRequestTarget("POST", wire.target, wire.body,
+                        buildAuthHeader(), getRequestTimeoutMs(opts), getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);

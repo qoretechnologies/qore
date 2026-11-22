@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code for list and hash literals of parameterized class objects
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class ListLiteralGenericOrNothingTest
+
+#! a list literal of NOTHING and an object of a parameterized class accepts the object (qore#7136)
+/** The or-nothing type of a parameterized class type (<tt>Box<int></tt>) was the or-nothing type of its base class
+    (<tt>*object<Box></tt>), without the type arguments, which does not accept the objects of the specialized class:
+    the value type of a list or hash literal of NOTHING and a <tt>Box<int></tt> object, the common type of its values,
+    was that type, and building the literal raised RUNTIME-TYPE-ERROR (<tt><type folding> expects type
+    '*object<Box>'</tt>).  The probes (list-literal-generic-or-nothing/probes.q: NOTHING before and after the object,
+    a nullable local, another type argument, two specializations, a call argument, a generic function, a hash literal
+    and a literal at the top level) run at the top level and in a child Program, in each execution mode in a child
+    process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled executables (-O0,
+    -O3).
+*/
+class ListLiteralGenericOrNothingTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "nothing first: 1 list<*object<Box<int>>>\n"
+            "nothing second: 2 list<*object<Box<int>>>\n"
+            "list<auto> local: 3 list<*object<Box<int>>>\n"
+            "auto local: 4 list<*object<Box<int>>>\n"
+            "*Box<int> local: 5 list<*object<Box<int>>>\n"
+            "string type argument: \"s\" list<*object<Box<string>>>\n"
+            "other specialization: \"t\" list<auto>\n"
+            "call argument: 7 list<*object<Box<int>>>\n"
+            "generic function: 8 list<*object<Box<int>>>\n"
+            "hash literal: 9 hash<string, *object<Box<int>>>\n"
+            "top level: 10 list<*object<Box<int>>>\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+    }
+
+    constructor() : QUnit::Test("ListLiteralGenericOrNothing", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "list-literal-generic-or-nothing" + DirSep
+            + "probes.q");
+
+        addTestCase("a literal of NOTHING and a parameterized class object accepts the object in every mode",
+            \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-list-literal-generic-or-nothing-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes() + probes_top());\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS "
+            "| PO_STRONG_ENCAPSULATION);\np.parse(ReadOnlyFile::readTextFile(%y), \"probes\");\np.run();\n"
+            "print(p.callFunction(\"probes\") + p.callFunction(\"probes_top\"));\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(Expected, backquote(sprintf("%s %s --enable-debug --exec-mode=%s %s 2>&1", env, qore_bin,
+                    mode, file)), sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(Expected, backquote(sprintf("%s %s --enable-debug --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(Expected, backquote(sprintf("%s %s --enable-debug --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                    libqore_dir, libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

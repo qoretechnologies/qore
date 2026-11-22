@@ -1704,7 +1704,8 @@ public:
             return;
         }
         for (auto i = args->rbegin(), e = args->rend(); i != e; ++i) {
-            QoreValue& p = tmp.getEntryReference(i->first);
+            auto edit = tmp.editEntry(i->first);
+            QoreValue& p = edit.get();
             p.discard(xsink);
             p = i->second;
         }
@@ -2258,7 +2259,9 @@ template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
         LexicalSemanticPolicy invocation_policy) {
-    const qore_class_private* class_ctx = qc ? (cctx ? cctx : runtime_get_class()) : nullptr;
+    // the class context given for the call, which is none for qore_no_class_ctx() (a call reference created with no
+    // class context), otherwise the class context of the code that makes the call
+    const qore_class_private* class_ctx = qc ? (cctx ? qore_given_class_ctx(cctx) : runtime_get_class()) : nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*qc->cls, class_ctx)) {
         class_ctx = nullptr;
     }
@@ -2535,7 +2538,8 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
         }
         if (use_default_arg) {
             if constexpr (ArgType & ARG_DEF) {
-                QoreValue& p = tmp.getEntryReference(i);
+                auto edit = tmp.editEntry(i);
+                QoreValue& p = edit.get();
 
                 const QoreValue& exp = defaultArgList[i];
                 // a default value that is an expression is code of the callee, and is evaluated in the context of the
@@ -2626,7 +2630,8 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
                     continue;
                 }
                 // test for change or incompatibility
-                QoreValue& p = tmp.getEntryReference(i);
+                auto edit = tmp.editEntry(i);
+                QoreValue& p = edit.get();
                 if (saved) {
                     if (!*saved) {
                         saved->reset(new arg_restore_vec_t);
@@ -3950,7 +3955,7 @@ static int qore_bind_runtime_named_args(const AbstractFunctionSignature* sig, co
         }
         supplied[target] = true;
         source_to_param[i] = target;
-        bound_args->getEntryReference(target) = args->retrieveEntry(i).refSelf();
+        qore_list_private::get(**bound_args)->initEntry(target, args->retrieveEntry(i).refSelf());
     }
     return 0;
 }
@@ -7570,6 +7575,10 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     // restrictions composed and recorded in the override (caller_restrictions); no record of a caller's restrictions
     // is made here for any other caller
     o.sandboxed = true;
+    // the application that the module code runs for: the caller's, or for module code that calls module code, the
+    // one that the calling module code runs for (qore#7010); recorded also when the caller has no restrictions that the
+    // module does not have, which leaves module_pgm unset (see runtime_get_sandboxed_module_call_app_id())
+    o.app_pgm_id = runtime_get_sandboxed_call_app_id(td, caller_pgm);
     QoreParseOptions composed = keep_module_own_access_parse_options(
         qore_compose_module_call_parse_options(own_po,
             caller_po ? *caller_po : runtime_get_effective_parse_options_for(td, caller_pgm)), module_pgm);
@@ -7581,8 +7590,9 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
+        // the application was recorded above: also for module code that calls module code, the application of the
+        // sandboxed caller, not the Program of the calling module (qore#7010)
         o.module_pgm = module_pgm;
-        o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
 }
 

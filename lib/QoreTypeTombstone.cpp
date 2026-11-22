@@ -1099,7 +1099,10 @@ bool qore_type_needs_decl_pin(const QoreTypeInfo* ti) {
     if (!ti) {
         return false;
     }
-    if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
+    // on the path of every generic call (CodeEvaluationHelper::setTypeParamInstantiation()): classified with the
+    // type's flag, not a dynamic_cast (issue #6126)
+    if (ti->isComplexCode()) {
+        const QoreComplexCodeTypeInfo* cti = static_cast<const QoreComplexCodeTypeInfo*>(ti);
         if (qore_type_needs_decl_pin(cti->getReturnType())) {
             return true;
         }

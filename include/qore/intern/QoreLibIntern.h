@@ -1607,6 +1607,14 @@ DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, i
 */
 DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 
+//! raises ILLEGAL-EXPRESSION and returns -1 if the calling code is restricted from terminal I/O (qore#7140)
+/** the check of the builtins that use the process's terminal (the standard output and error files, print(),
+    printf() and vprintf(), the standard output and error streams, TermIOS::getWindowSize()) for the code that library
+    code serves: a module is a capability, but the terminal is not lent to code that is restricted from it; see
+    SandboxManager::isTerminalIoAllowed()
+*/
+DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink);
+
 //! The most bytes read or written with one read(2) or write(2) call of a File, a file stream, or the standard streams
 /** macOS refuses a read or write of more than \c INT_MAX bytes with \c EINVAL, and Linux reads or writes at most
     about 2 GiB at once; a longer read or write is made in parts of this size
@@ -1695,6 +1703,11 @@ DLLLOCAL int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSi
 */
 DLLLOCAL int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation);
 DLLLOCAL void delete_global_variables();
+//! tags the strings of ARGV and QORE_ARGV with the default encoding once it is set (qore#7045)
+/** qore_setup_argv() makes them from the command line before the library is initialized, when the default encoding is
+    not set yet; the bytes of the command line are in the default encoding of the process
+*/
+DLLLOCAL void qore_tag_argv_encoding();
 //! releases ARGV and QORE_ARGV, which qore_setup_argv() makes before qore_init(), before a startup error ends the
 //! process with exit() (qore#7000)
 DLLLOCAL void qore_release_argv();

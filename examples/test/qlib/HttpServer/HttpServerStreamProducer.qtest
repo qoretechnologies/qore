@@ -526,8 +526,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Release all chunks upfront so the request completes quickly.
         background sub () {
             # Wait for handler to start, then release 2 more chunks.
-            date deadline = now_us() + 10s;
-            while (now_us() < deadline) {
+            date deadline = microseconds(clock_get_monotonic_us()) + 10s;
+            while (microseconds(clock_get_monotonic_us()) < deadline) {
                 *PacedInputStream ps = setup.paced_handler.getStream();
                 if (ps) {
                     # Release chunks 1 and 2 (initial_permits=1 already

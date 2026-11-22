@@ -85,24 +85,30 @@ int reflection_check_class_export(const QoreReflectionCaller& caller, const Qore
     return caller.checkModuleExport(caller.canSeeClass(target, cls), "class", cls->getName(), xsink);
 }
 
+//! returns true if code in \a pgm could name the typed hash in the language
+static bool reflection_program_can_name_typed_hash(const QoreProgram* pgm, const TypedHashDecl* th) {
+    if (!pgm) {
+        return false;
+    }
+    // it is declared in, imported into or inherited by the Program (a module's exported typed hash is imported into
+    // the Programs that load the module; a non-exported one, or a parent's that a child does not inherit, is not
+    // found there); by identity: a copy of the declaration (imported or inherited) has the same original, a
+    // hashdecl with the same path and members declared in another Program does not
+    if (th->getProgram() == pgm) {
+        return true;
+    }
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* found = pgm->findHashDecl(th->getNamespacePath().c_str(), pns);
+    return found && (found == th || found->equal(th));
+}
+
 bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const TypedHashDecl* th) {
     // a system hashdecl runs no user code
     if (th->isSystem()) {
         return true;
     }
-    // the caller could name the typed hash in the language: it is declared in, imported into or inherited by the
-    // caller's Program (a module's exported typed hash is imported into the Programs that load the module; a
-    // non-exported one, or a parent's that a child does not inherit, is not found there)
-    const QoreProgram* caller_pgm = caller.getProgram();
-    if (!caller_pgm) {
-        return false;
-    }
-    if (th->getProgram() == caller_pgm) {
-        return true;
-    }
-    const QoreNamespace* pns = nullptr;
-    const TypedHashDecl* found = caller_pgm->findHashDecl(th->getNamespacePath().c_str(), pns);
-    return found && (found == th || found->equal(th));
+    // the caller could name the typed hash in the language
+    return reflection_program_can_name_typed_hash(caller.getProgram(), th);
 }
 
 int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const QoreProgram* target,
@@ -119,6 +125,23 @@ int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const Q
     // and a caller to which the language's access rules apply must be able to name it
     if (!caller.appliesMemberAccess()) {
         return 0;
+    }
+    // library module code acts for the application Program that calls it: through a handle of that Program, a typed
+    // hash that the Program could name is one whose initializers it could run itself, as when a sandboxed Program
+    // passes a member of its own typed hash to DataProvider's HashDataType::addField(), which reads the member's
+    // default value (qore#7154).  The application is taken from the thread's call chain only
+    // (QoreReflectionCaller::getModuleCallerProgram(), which fails closed with no Program for module code that runs
+    // for no application), never from the handle or the typed hash; a handle of any other Program, and a typed hash
+    // that the application could not name, are decided by the rules below.  The initializers run under the sandbox
+    // and restrictions of the calling code
+    if (target) {
+        const QoreProgram* app_pgm = caller.getModuleCallerProgram(xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (app_pgm == target && reflection_program_can_name_typed_hash(app_pgm, th)) {
+            return 0;
+        }
     }
     const QoreProgram* decl_pgm = th->getProgram();
     if (decl_pgm && decl_pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {

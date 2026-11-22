@@ -104,9 +104,14 @@ public:
         variable is not a temporary: it is not kept after the variable is assigned another value in the same
         statement, as in the other execution modes
 
+        Inlined explicitly: the operand evaluation of every comparison operator calls it (QoreOperandEvalHolder), on
+        the hot path of a loop's condition, whose inlining depended on the size of the libqore unit (qore#7085;
+        tools/hot-inlining.txt)
+
         @param site the expression whose value the holder has (the receiver of a chain); see hold()
     */
-    DLLLOCAL static void holdReceiver(const QoreValue& site, ValueOptionalRefHolder& holder, ExceptionSink* xsink) {
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void holdReceiver(const QoreValue& site, ValueOptionalRefHolder& holder,
+            ExceptionSink* xsink) {
         if (site.getType() == NT_VARREF) {
             return;
         }

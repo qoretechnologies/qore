@@ -1,0 +1,103 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# QdpMessageFixture.qm registers a factory for an event source that also accepts messages, for QdpListenNoTty.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module QdpMessageFixture {
+    version = "1.0";
+    desc = "a data provider factory fixture: an event source that also accepts messages";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new QdpMessageFixtureFactory());
+    };
+}
+
+#! The fixture's data provider: an event source that also accepts messages, as needed by qdp's interactive mode
+/** It raises one event when its observers are ready, before qdp starts waiting for input
+*/
+public class QdpMessageFixtureProvider inherits AbstractDataProvider, DelayedObservable {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "QdpMessageFixtureProvider",
+            "supports_observable": True,
+            "supports_messages": MSG_Async,
+        };
+
+        #! the value in the event that the provider raises
+        const EventValue = "qdp-fixture-event-value";
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "QdpMessageFixtureProvider";
+    }
+
+    *string getDesc() {
+        return "an event source that also accepts messages";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    #! Raises the fixture's event
+    observersReady() {
+        notifyObservers("event", {"fixture": EventValue});
+    }
+
+    #! The provider's only event: a hash
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            "event": <DataProviderMessageInfo>{
+                "desc": "a fixture event",
+                "type": AbstractDataProviderType::get(AutoHashType),
+            },
+        };
+    }
+
+    #! The provider's only message: a string
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
+        return {
+            "message": <DataProviderMessageInfo>{
+                "desc": "a fixture message",
+                "type": AbstractDataProviderType::get(StringType),
+            },
+        };
+    }
+
+    #! Accepts a message and ignores it
+    private sendMessageImpl(string message_id, auto msg, *hash<auto> send_message_options) {
+    }
+}
+
+#! The fixture's factory
+public class QdpMessageFixtureFactory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("QdpMessageFixtureProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "qoretestqdpmessages",
+            "desc": "an event source that also accepts messages",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return QdpMessageFixtureProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}

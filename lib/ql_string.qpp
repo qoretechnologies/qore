@@ -980,11 +980,11 @@ hashdecl Qore::UnicodeByteOrderInfo {
     |\c y|Any %Qore value, formatted as a pseudo-YAML string, without any line breaks; this format option is similar to \c "%n", but uses a YAML-like format; see @ref yaml_format_specifications.  Note that the output is not guaranteed to be parsable by the yaml module's parse_yaml() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
     |\c Y|Any %Qore value, formatted as a multi-line pseudo-YAML string with proper indentation for nested structures; similar to \c "%y" but with line breaks and indentation for readability; see @ref yaml_format_specifications. Note that the output is not guaranteed to be parsable by the yaml module's parse_yaml() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
 
-    @note The value format specifications (\c "%n", \c "%N", \c "%y", and \c "%Y") expand containers with no limit
-    on the size of the output, and a container shared by more than one reference path in the value is expanded once
-    for every path leading to it, so the output can be much larger than the value itself. Use
-    @ref format_bounded(), @ref sprintf_bounded(), or @ref vsprintf_bounded() to format values whose size is not
-    known in advance, such as when logging values that reach live internal data structures.
+    @note The value format specifications (\c "%n", \c "%N", \c "%y", and \c "%Y") expand each object once
+    per conversion. A later reference displays <tt>{reference to MyClass object #2}</tt>, where 2 is the object's
+    position among the distinct objects encountered, counted from 1. Each argument starts its own numbering.
+    A reference back to an object currently being expanded keeps its recursive-reference marker. For limits on
+    depth, element count or output size, use @ref format_bounded(), @ref sprintf_bounded(), or @ref vsprintf_bounded().
 
     @subsection yaml_format_specifications YAML Format Specifications
 

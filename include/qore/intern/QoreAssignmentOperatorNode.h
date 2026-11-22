@@ -55,10 +55,18 @@ protected:
 
     DLLLOCAL QoreValue evalLexical(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
-    template <bool Lexical>
+    //! evaluates the assignment; \a Weak is true for the weak assignment operator, whose entry points
+    //! (evalInternWeak(), evalLexicalWeak()) are their own, so that the other assignments keep their code (qore#7085)
+    template <bool Lexical, bool Weak>
     DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    //! evaluates a weak assignment
+    DLLLOCAL QoreValue evalInternWeak(ExceptionSink* xsink, bool& needs_deref) const;
+
+    //! evaluates a weak assignment with lexical semantics
+    DLLLOCAL QoreValue evalLexicalWeak(ExceptionSink* xsink, bool& needs_deref) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitMode(val, parse_context, AssignmentMode::Normal);
@@ -105,7 +113,7 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(xsink, needs_deref, AssignmentMode::Weak);
+        return evalInternWeak(xsink, needs_deref);
     }
 };
 
@@ -173,7 +181,7 @@ public:
 
 protected:
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
-        return evalLexical(xsink, needs_deref, AssignmentMode::Weak);
+        return evalLexicalWeak(xsink, needs_deref);
     }
 };
 

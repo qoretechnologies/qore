@@ -1,0 +1,19 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%include ActionProviderClass.qc
+
+%exec-class ActionProviderClassPart2
+
+#! runs part 2 of 3 of the cases of ActionProviderClassBase: the other half of the modules of this source tree
+class ActionProviderClassPart2 inherits ActionProviderClassBase {
+    constructor() : ActionProviderClassBase("ActionProviderClassPart2", 2) {
+    }
+}

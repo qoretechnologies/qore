@@ -1252,6 +1252,10 @@ static code SandboxManager::bindCall(code call) [flags=RET_VALUE_ONLY] {
     valid port
     @throw QOREADDRINFO-GETINFO-ERROR \a host cannot be resolved
 
+    @note This method is in the \c NETWORK @ref function_domains "functional domain", as it resolves names: code
+    restricted from the network cannot call it, but module code that such code calls (a token cache, for example) can
+    call it, with the module's own restrictions
+
     @par Example:
     @code{.py}
 SandboxManager::checkNetworkConnect("169.254.169.254", 80);
@@ -1259,7 +1263,7 @@ SandboxManager::checkNetworkConnect("169.254.169.254", 80);
 
     @since %Qore 3.0
 */
-static nothing SandboxManager::checkNetworkConnect(string host, int port) {
+static nothing SandboxManager::checkNetworkConnect(string host, int port) [dom=NETWORK] {
     qore_sandbox_check_network_connect(host->c_str(), port, xsink);
 }
 
@@ -1875,6 +1879,38 @@ static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_
 */
 static bool SandboxManager::isCallerDomainDeniedAtEntry(softint domain) [flags=RET_VALUE_ONLY] {
     return qore_caller_denied_user_domains(domain) != 0;
+}
+
+//! Returns @ref True if the running code may use the terminal (standard output and error) for its caller
+/** Library code that writes diagnostics or debug output to @ref Qore::stdout "stdout" or @ref Qore::stderr "stderr",
+    or reads the terminal, while it serves a caller calls this first: the terminal is used only if neither the running
+    code's own @ref parse_options "parse options" (as returned by @ref Qore::get_parse_options() "get_parse_options()")
+    nor the calling code (see isCallerRestricted()) is restricted from terminal I/O
+    (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO", @ref Qore::DOM_TERMINAL_IO "DOM_TERMINAL_IO").  The terminal is
+    not lent to code that is restricted from it: the builtins that use it refuse such a caller also in library code
+    (see @ref sandbox_terminal_io), so library code calls this to leave its output out instead; the initialization
+    of library module code is not a call by the code that loads it (see isCallerRestricted()), so a library module's
+    own diagnostics while it is initialized are decided by its own options.  The terminal is the host's: when the
+    nearest code on the stack that is not a module's is trusted host code (a %Program that is not sandboxed and whose
+    options allow terminal I/O), the provenance of objects and callbacks that restricted code created does not apply
+    (see @ref sandbox_terminal_io).
+
+    It reveals only whether the running code or its caller is restricted, so it is not restricted itself.
+
+    @return @ref True if the running code may write to the terminal for its caller, @ref False if not
+
+    @par Example:
+    @code{.py}
+if (SandboxManager::isTerminalIoAllowed()) {
+    stderr.printf("error: %s\n", get_exception_string(ex));
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isTerminalIoAllowed() [flags=RET_VALUE_ONLY] {
+    return !(runtime_get_parse_options().getLo() & PO_NO_TERMINAL_IO)
+        && !qore_caller_restricts_terminal_io();
 }
 
 //! Returns @ref True if the current thread's code may use uncontrolled APIs

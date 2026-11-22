@@ -187,6 +187,16 @@ hashdecl Qore::SocketPollResultInfo {
     *hash<auto> other;
 }
 
+// a poll operation of a class with Qore code runs that code on the controller's thread and workers: an operation
+// whose class code that may not control threads authored is not run there (qore#7056)
+static int check_submitted_operation(const QoreHashNode* operation_info, const char* name, ExceptionSink* xsink) {
+    QoreValue spop = operation_info->getKeyValue("spop");
+    if (spop.getType() != NT_OBJECT || spop.get<const QoreObject>()->getClass()->isSystem()) {
+        return 0;
+    }
+    return qore_check_thread_callable(spop, QDOM_THREAD_CONTROL, name, xsink);
+}
+
 //! Async I/O controller for managing multiple concurrent socket poll operations
 /** The AsyncIoController provides a high-performance event loop for managing multiple concurrent
     socket operations. It uses the most efficient I/O mechanism available on each platform
@@ -317,7 +327,7 @@ AsyncIoController::copy() {
     @param operation_info the operation info hash; with a
     @ref Qore::SocketPollOperationInfo::stateQueue "stateQueue", the operation also reports its state; see
     @ref asynciocontroller_state_events
-    @param replace_existing if @ref True "True", cancel any existing operation with the same key
+    @param replace_existing if @ref True "True", cancel any existing operation with the same key and take its place; otherwise (also if not given) an existing operation under the key is left as it is, and the submission is refused: from an I/O thread of the controller the call raises \c ASYNC-IO-ERROR, and from any other thread the operation's result is a canceled result whose \c ex is that \c ASYNC-IO-ERROR (an operation that is submitted again, as the same object, under its own key is not a collision)
 
     @return a Queue object for receiving the result, or @ref nothing if a callback was provided
     in the info hash
@@ -377,6 +387,17 @@ AsyncIoController::copy() {
     while the controller holds it is canceled: it is not continued again, and its result is a canceled result; its
     state is released when the controller no longer uses it
 
+    @note An operation belongs to the application that it is submitted for: the Program of the submitting code, or
+    the application that module code runs for (also module code that other module code calls for it), or none for
+    the initialization of library code (also in a callback); an operation submitted by a callback of an operation
+    belongs to that operation's application, unless the callback is the sandboxed code of an application Program,
+    whose operations belong to its own application.  Code that is sandboxed, or acts for sandboxed code, does not
+    replace the operation of another application with \a replace_existing, nor, if it runs for no known application,
+    any operation other than its own operation object: on the I/O thread of the key, the submission raises
+    \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a canceled result whose
+    \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
+    (\c ASYNC-IO-ERROR).  The operation with the key is not affected
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
@@ -397,6 +418,9 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     // AsyncIoControllerPriv::submit that plugs the per-call leak); our
     // QPP-generated caller still owns its own ref on the method arg, so
     // hand submit() an explicit self-ref via hashRefSelf().
+    if (check_submitted_operation(operation_info, "AsyncIoController::submit()", xsink)) {
+        return QoreValue();
+    }
     return ctrl->submit(obj, operation_info->hashRefSelf(), replace_existing, xsink);
 }
 
@@ -406,7 +430,7 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
 
     @param operation_info the operation info hash; as with @ref Qore::AsyncIoController::submit() "submit()", a
     \c stateQueue receives the operation's state events, all of them before this method returns
-    @param replace_existing if @ref True "True", cancel any existing operation with the same key
+    @param replace_existing if @ref True "True", cancel any existing operation with the same key and take its place; otherwise (also if not given) an existing operation under the key is left as it is, and the submission is refused: from an I/O thread of the controller the call raises \c ASYNC-IO-ERROR, and from any other thread the operation's result is a canceled result whose \c ex is that \c ASYNC-IO-ERROR (an operation that is submitted again, as the same object, under its own key is not a collision)
 
     @return the operation result hash
 
@@ -424,6 +448,9 @@ static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperati
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    if (check_submitted_operation(operation_info, "AsyncIoController::exec()", xsink)) {
+        return QoreValue();
+    }
     return ctrl->exec(obj, operation_info->hashRefSelf(), replace_existing, xsink);
 }
 
@@ -469,6 +496,16 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
 //! Cancels an operation by key on the global singleton
 /** The operation is found on whichever I/O thread runs it.
 
+    Code that is sandboxed, or acts for sandboxed code, cancels only an operation of its own application: an
+    operation belongs to the application that it is submitted for (see the notes of @ref submit()); an operation of
+    another application with the key, or of none (an operation of the initialization of library code), is not
+    canceled (see @ref sandbox_process_wide_registries)
+
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     @param key the operation key to cancel
     @return @ref True "True" if an operation was found and canceled; when called on an I/O thread of the controller
     (in a poll operation's callback, for example), an operation on another I/O thread is canceled asynchronously, as
@@ -488,7 +525,18 @@ static bool AsyncIoController::cancelByKey(string key) [flags=NAMED_ARGS] {
 }
 
 //! Cancels all operations for an owner on the global singleton
-/** @param owner the owner identifier whose operations should be canceled
+/** Code that is sandboxed, or acts for sandboxed code, cancels only the operations of its own application (an
+    operation belongs to the application that it is submitted for; see the notes of @ref submit()) and records the
+    owner as canceled (which cancels the owner's operations submitted meanwhile) only if it canceled one of them; the
+    operations of another application with the owner, or of none, are not affected (see
+    @ref sandbox_process_wide_registries)
+
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
+    @param owner the owner identifier whose operations should be canceled
     @return the number of operations canceled
     @since %Qore 3.0
 */
@@ -560,6 +608,9 @@ static nothing AsyncIoController::flushCallbacks() {
     picked up by a worker while the mark is set is silently discarded instead
     of dispatched to user code.  The mark is cleared before return, so later
     submits by a new object reusing the owner string are unaffected.
+
+    Code that is sandboxed, or acts for sandboxed code, discards only the callbacks of the operations of its own
+    application (see @ref cancelByOwner()); the callbacks of other code's operations with the owner run
 
     @param owner the owner identifier to wait for
 
@@ -711,6 +762,10 @@ static bool AsyncIoController::getAutostop() {
       behind, which is a bug in %Qore); called from an I/O thread, only that thread is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
+    @note code that is sandboxed or acts for sandboxed code gets the settings of the controller only (\c running,
+    \c autostop, \c shutting_down and \c io_threads): the other keys give the operations of every caller in the
+    process (see @ref getCacheSize())
+
     @since %Qore 3.0
 */
 static hash<auto> AsyncIoController::getInfo() {
@@ -721,6 +776,11 @@ static hash<auto> AsyncIoController::getInfo() {
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    // the keys and counts of the operations of every caller of the process-wide controller are not disclosed to
+    // sandboxed code (qore#7010), as getCacheSize(); its settings are
+    if (qore_caller_is_sandboxed()) {
+        return ctrl->getSettingsInfo(xsink);
+    }
     return ctrl->getInfo(xsink);
 }
 
@@ -838,7 +898,8 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
         return 0;
     }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
-            "schedule", xsink)) {
+            "schedule", xsink)
+            || qore_check_thread_callable(user_data, QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()", xsink)) {
         return 0;
     }
     QoreObject* obj;
@@ -903,8 +964,12 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner,
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
             "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimer()", "schedule", xsink))) {
+            || qore_check_thread_callable(udata, QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimer()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimer()", xsink)))) {
         return 0;
     }
     QoreObject* obj;
@@ -960,7 +1025,9 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto user_data)
         return 0;
     }
     if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
+            "AsyncIoController::addTimerDelay()", "schedule", xsink)
+            || qore_check_thread_callable(user_data, QDOM_THREAD_CONTROL, "AsyncIoController::addTimerDelay()",
+                xsink)) {
         return 0;
     }
     QoreObject* obj;
@@ -1019,8 +1086,12 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL,
             "AsyncIoController::addTimerDelay()", "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimerDelay()", "schedule", xsink))) {
+            || qore_check_thread_callable(udata, QDOM_THREAD_CONTROL, "AsyncIoController::addTimerDelay()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimerDelay()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL,
+                    "AsyncIoController::addTimerDelay()", xsink)))) {
         return 0;
     }
     QoreObject* obj;
@@ -1038,23 +1109,36 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
 
-    @par Module Code and Restricted Callers
-    Module code that runs for an application with restrictions (a Qorus service, for example) can cancel only the
-    timers that module code added for the same application, the first %Program in the chain of callers that is not a
-    module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
-    to cancel timers of other applications or of the host; see @ref MODULE_OWNED
+    @par Sandboxed Code
+    A timer belongs to the application of the code that adds it: that of the sandboxed %Program that adds it, or of
+    the caller that module code adds it for.  Code that is sandboxed (by a @ref Qore::SandboxManager "SandboxManager"
+    or by the restrictions of its %Program) cancels only the timers of the application that it runs for, as timer
+    IDs can be guessed: a tenant cancels the timers that it added and that module code added in its calls, and not
+    those of the host or of another tenant, directly, through module code or in a thread that module code starts;
+    for any other timer, this method returns @ref False "False" (see @ref sandbox_process_wide_registries)
 
-    A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
-    a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
-    its application, so the timers that it adds on its own (for work handed to it by a call of another application,
-    for example) belong to no application: no application can cancel them, and the thread itself can cancel only
-    such timers, not those of an application nor those of the host, so it cannot be used to cancel the timers of an
-    application.  Code that does not run module code for a restricted caller (the host, code without restrictions,
-    and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
-    cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
-    other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work
-    of the thread would belong to the call's application and keep its restrictions; see
-    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+    Sandboxed code that runs for no application cancels only the timers for no application that its own work added.
+    Such is the code of a thread that module code starts, which can serve every caller of the module (a module's
+    service thread, started during the call of one application): it keeps the restrictions and the sandbox of the
+    code that started it, but not its application, so the timers that it adds belong to no application.  No
+    application can cancel them, not even the one whose call started the thread, and the thread cancels only the
+    timers that it added itself, also through the work that it hands to other threads (a task of a
+    @ref Qore::Thread::ThreadPool "ThreadPool", the code of a timer that it adds), not those of an application, of
+    the host or of another thread that module code started, even when their work runs on the same worker thread.
+    Module
+    code cannot yet give the context of a call to the thread that serves it, so that the work of the thread would
+    belong to the call's application; see <a href="https://github.com/qoretechnologies/qore/issues/6245">issue
+    #6245</a>.
+
+    @par Module Code and Restricted Callers
+    Module code that runs for an application with restrictions (a Qorus service, for example) can moreover cancel
+    only the timers that module code added for the same application, the first %Program in the chain of callers that
+    is not a module, so a restricted caller cannot use module code to cancel timers of other applications or of the
+    host; see @ref MODULE_OWNED
+
+    Code that is not sandboxed (the host, and a thread that module code starts outside the call of sandboxed code, as
+    in its initialization) can cancel any timer: a module that relays the requests of applications to such a thread
+    lets them cancel each other's timers.
 
     @since %Qore 3.0
 */
@@ -1099,6 +1183,10 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    // the callback runs on the controller's workers (qore#7056)
+    if (qore_check_thread_callable(callback, QDOM_THREAD_CONTROL, "AsyncIoController::setTimerCallback()", xsink)) {
+        return QoreValue();
+    }
     ctrl->setTimerCallback(callback ? callback->refRefSelf() : nullptr, xsink);
 }
 
@@ -1133,8 +1221,12 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
     if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
             "schedule", xsink)
-        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::submitTask()", "schedule", xsink))) {
+        || qore_check_thread_callable(task, QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()", xsink)
+        || (cancel_callback
+            && (qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+                    "AsyncIoController::submitTask()", "schedule", xsink)
+                || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
+                    xsink)))) {
         return QoreValue();
     }
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submitTask", false, xsink)) {

@@ -1855,6 +1855,7 @@ void Http3ClientPollOperationPriv::failMigrations() {
 */
 qclass Http3ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
@@ -1928,7 +1929,8 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     ReferenceHolder<SocketQuicClientPollOperation> inner(
         new SocketQuicClientPollOperation(xsink, sock_ptr, host->c_str(),
             static_cast<uint16_t>(port), static_cast<int>(family),
-            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid)),
+            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid),
+            /* http_client */ true),
         xsink
     );
     if (*xsink) {

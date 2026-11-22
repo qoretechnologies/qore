@@ -40,10 +40,50 @@
 %requires Logger
 %requires HttpServerUtil
 %requires HttpServer
+%requires HttpServerAsyncIo
 %requires HttpClientIo
 %requires ../../TestCertificates.qm
 
 %exec-class HttpClientIoStreamRecordsTest
+
+#! A listener that tells the recorder the server's socket and session of each request that it dispatches
+/** The handler of an HTTP/2 or HTTP/3 request gets a socket of its own stream, not the connection's or the
+    listener's (qore#6953, qore#7214), so the socket that holds the records is taken on the server's side
+*/
+class RecordsListener inherits HttpListener {
+    private {
+        SessionRecorder recorder;
+    }
+
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts, SessionRecorder recorder)
+            : HttpListener(server, handleRequest, id, ss, opts) {
+        self.recorder = recorder;
+    }
+
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> processNativeRequest(Socket s, hash<auto> cx, hash<auto> hdr,
+            hash<auto> header_info) {
+        if (header_info.http2 || header_info.http3) {
+            recorder.record(s, header_info.session_id);
+        }
+        return HttpListener::processNativeRequest(s, cx, hdr, header_info);
+    }
+}
+
+#! A server whose listeners are RecordsListener objects
+class RecordsServer inherits HttpServer {
+    private {
+        SessionRecorder recorder;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts, SessionRecorder recorder) : HttpServer(opts) {
+        self.recorder = recorder;
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new RecordsListener(server, \handleRequest(), id, seqSessions, info, recorder);
+    }
+}
 
 #! Remembers the server socket and session of the last request it saw
 class SessionRecorder {
@@ -56,13 +96,10 @@ class SessionRecorder {
         Mutex m();
     }
 
-    record(hash<auto> cx) {
-        if (!cx."header-info".sock) {
-            return;
-        }
+    record(Socket s, *int session) {
         AutoLock al(m);
-        sock = cx."header-info".sock;
-        session_id = cx."header-info".session_id;
+        sock = s;
+        session_id = session;
     }
 
     hash<auto> get() {
@@ -72,8 +109,7 @@ class SessionRecorder {
 }
 
 #! Answers every request with "ok"
-/** The request is dispatched as a body-streaming request, so the handler gets the server's socket and session for the
-    record check
+/** The request is dispatched as a body-streaming request
 */
 class OkHandler inherits AbstractHttpRequestHandler {
     private {
@@ -89,7 +125,6 @@ class OkHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        recorder.record(cx);
         return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
     }
 }
@@ -155,7 +190,6 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        recorder.record(cx);
         Queue input(-1);
         cx."header-info".register_body_queue(input);
         return makeResponse(200, new QueueEchoBody(input), {"Content-Type": MimeTypeOctetStream});
@@ -177,7 +211,6 @@ class ResetHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        recorder.record(cx);
         Socket sock = cx."header-info".sock;
         int stream_id = cx."header-info".stream_id;
         if (cx."header-info".http3) {
@@ -207,7 +240,7 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
         */
         const MaxRecords = 3;
 
-        HttpServer server;
+        RecordsServer server;
         SessionRecorder recorder();
         string h2_url;
         *string h3_url;
@@ -226,10 +259,10 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             return;
         }
-        server = new HttpServer(<HttpServerOptionInfo>{
+        server = new RecordsServer(<HttpServerOptionInfo>{
             "logger": new Logger("stream-records", LoggerLevel::getLevelInfo()),
             "quic_headers_only": True,
-        });
+        }, recorder);
         server.setHandler("ok", "/ok", NOTHING, new OkHandler(recorder));
         server.setHandler("reset", "/reset", NOTHING, new ResetHandler(recorder));
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler(recorder));
@@ -312,7 +345,7 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
     }
 
     #! Makes requests that are answered
-    /** The last one streams its request body, so the handler gets the server's socket and session
+    /** The last one streams its request body
     */
     private requestsImpl(string protocol, string url) {
         HttpClientConnectionManager mgr = getManager(protocol);

@@ -656,6 +656,12 @@ public:
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
     int foreign_teardown_tid = 0; // the TID of the thread whose teardown at the end of the process refuses other foreign threads; under plock
+    //! the monotonic time (us) until which the teardown at the end of the process waits for the foreign threads that
+    //! run in the Program, or 0 if it waits for them without a bound (see setProcessEndForeignWait()); under plock
+    int64 foreign_wait_deadline_us = 0;
+    //! true once the teardown no longer waits for the foreign threads that run in the Program, as after qore_cleanup()
+    //! has waited for the threads of the library (see setProcessEndForeignWait()); under plock
+    bool foreign_wait_ended = false;
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -3415,7 +3421,8 @@ public:
     */
     DLLLOCAL bool leaveForeignThreads() {
         if (!qore_shutdown.load(std::memory_order_acquire)) {
-            return false;
+            AutoLocker al(plock);
+            return foreign_wait_ended && getOtherForeignThreadCountIntern() > 0;
         }
         if (leaveForeignThreadsInModuleCode()) {
             return true;
@@ -3565,6 +3572,34 @@ public:
         return parse_tid == tid;
     }
 
+    //! Returns true if the teardown does not wait for the foreign threads that run in the Program; called with plock
+    //! held
+    /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown), or once the bound of the wait of
+        the process end has passed (see setProcessEndForeignWait())
+    */
+    DLLLOCAL bool foreignThreadsLeftIntern() const {
+        return qore_shutdown.load(std::memory_order_acquire) || foreign_wait_ended;
+    }
+
+    //! Bounds the wait of the teardown of the Program for the foreign threads that run in it, at the end of the process
+    /** Called for the Program of the script when it is deleted at the end of the process (QoreProgramHelper), after the
+        library's own threads have ended: a foreign thread (a thread of another runtime that calls into the Program,
+        such as a JVM thread through the jni module) can be blocked in a call that never returns, which made the end
+        of the process wait for it forever (qore#6904).  The teardown waits for the foreign threads at most \a
+        timeout_ms milliseconds from now, as exit() waits for the threads that are ending, and then leaves the Program
+        as it is to them, as it does once qore_cleanup() has waited for the threads of the library (see
+        leaveForeignThreads()); a call that returns within the bound is waited for, and the library's own threads
+        are waited for as before
+    */
+    DLLLOCAL void setProcessEndForeignWait(int64 timeout_ms) {
+        AutoLocker al(plock);
+        foreign_wait_deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+        if (!foreign_wait_deadline_us) {
+            // 0 means no bound
+            foreign_wait_deadline_us = 1;
+        }
+    }
+
     // called only with plock held
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
@@ -3578,16 +3613,32 @@ public:
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
-        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads())
-        while ((thread_count - adj - (qore_shutdown.load(std::memory_order_acquire)
-            ? getOtherForeignThreadCountIntern() : 0)) || parse_count || compile_holds) {
+        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads()),
+        // nor, once its bound has passed, by the teardown at the end of the process (see setProcessEndForeignWait())
+        while ((thread_count - adj - (foreignThreadsLeftIntern() ? getOtherForeignThreadCountIntern() : 0))
+                || parse_count || compile_holds) {
+            // a bounded wait while a foreign thread runs in the Program at the end of the process; a thread that
+            // leaves the Program wakes the wait (see decThreadCount())
+            int64 wait_us = 0;
+            if (foreign_wait_deadline_us && !foreign_wait_ended && getOtherForeignThreadCountIntern()) {
+                wait_us = foreign_wait_deadline_us - q_clock_getmicros_monotonic();
+                if (wait_us <= 0) {
+                    foreign_wait_ended = true;
+                    continue;
+                }
+            }
             ++thread_waiting;
 #ifdef DEBUG
             if (compile_holds) {
                 qore_program_dbg_teardown_waits_for_compile_hold();
             }
 #endif
-            pcond.wait(plock);
+            if (wait_us) {
+                // rounded up, so that the wait does not end before the deadline
+                pcond.wait2(plock, (wait_us + 999) / 1000);
+            } else {
+                pcond.wait(plock);
+            }
             --thread_waiting;
         }
     }
@@ -5938,6 +5989,11 @@ public:
     }
 
     DLLLOCAL QoreValue evalExpression(q_exp_t exp, ExceptionSink* xsink) {
+        // an expression of a Program that may not control threads is not evaluated by the expression of the
+        // background operator itself (qore#7087)
+        if (qore_check_background_direct_entry(pgm, false, xsink)) {
+            return QoreValue();
+        }
         ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();

@@ -35,8 +35,8 @@ if (started.status_code != 202 || !started.headers."operation-location".val()) {
 string path = AzureDocumentIntelligenceRestClientBase::servicePath(client.getUrl(), started.headers."operation-location");
 string result_id = split("?", split("/analyzeResults/", path)[1])[0];
 hash<auto> result;
-date deadline = now_us() + 2m;
-while (now_us() < deadline) {
+int deadline = clock_get_monotonic_us() + get_duration_microseconds(2m);
+while (clock_get_monotonic_us() < deadline) {
     result = provider.getChildProvider("get-analysis-result").doRequest({"model_id": "prebuilt-read", "result_id": result_id});
     if (inlist(result.status, TerminalStatuses)) { break; }
     usleep(1s);

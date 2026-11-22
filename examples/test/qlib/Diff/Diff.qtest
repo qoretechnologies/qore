@@ -710,9 +710,9 @@ h";
                 push l2, sprintf("line%d", i);
             }
         }
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         list<auto> r = diff(l1, l2);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed < 10s,
             sprintf("1000 lines, 5%% changes: %y (must be < 10s)", elapsed));
 
@@ -742,9 +742,9 @@ h";
                 push l2, sprintf("line%d", i);
             }
         }
-        start = now_us();
+        start = clock_get_monotonic_us();
         r = diff(l1, l2);
-        elapsed = now_us() - start;
+        elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed < 30s,
             sprintf("5000 lines, 5%% changes: %y (must be < 30s)", elapsed));
     }

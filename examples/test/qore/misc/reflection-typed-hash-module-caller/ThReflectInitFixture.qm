@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ThReflectInitFixture.qm - library module whose initialization uses a typed hash handle that another Program stored
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%new-style
+
+%requires ThReflectFixture
+
+module ThReflectInitFixture {
+    version = "1.0";
+    desc = "test module: a module initialization that uses a stored typed hash handle";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        ThReflectFixture::set_init_result("init", ThReflectFixture::default_of_stored());
+    };
+}
+
+#! the use in a static member initializer, evaluated when the module is initialized
+class ThReflectInitStatic {
+    public {
+        static string result = ThReflectFixture::set_init_result("static", ThReflectFixture::default_of_stored());
+    }
+}

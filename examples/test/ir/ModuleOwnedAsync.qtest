@@ -112,12 +112,12 @@ restricted current_thread: \"ok False True 1\"
 restricted current_thread: \"ok False True 1\"
 restricted http2_mode: True
 restricted http2_mode: True
-unsandboxed controller_caller_timer: \"added\"
-unsandboxed controller_caller_timer: \"added\"
-unsandboxed caller_timer: True
-unsandboxed caller_timer: True
-unsandboxed caller_call_async: \"caller\"
-unsandboxed caller_call_async: \"caller\"
+unsandboxed controller_caller_timer: PERMISSION-DENIED
+unsandboxed controller_caller_timer: PERMISSION-DENIED
+unsandboxed caller_timer: PERMISSION-DENIED
+unsandboxed caller_timer: PERMISSION-DENIED
+unsandboxed caller_call_async: PERMISSION-DENIED
+unsandboxed caller_call_async: PERMISSION-DENIED
 unsandboxed caller_defer: \"caller\"
 unsandboxed caller_defer: \"caller\"
 restricted cancel_unowned: False
@@ -126,7 +126,7 @@ main cancel_unowned_after: True
 other_app cancel_other_app_timer: False
 restricted cancel_own_app_timer: True
 hoppy timer probe: \"added\"
-hoppy timer probe without thread control: \"added\"
+hoppy timer probe without thread control: PERMISSION-DENIED
 sandboxed hoppy timer probe without thread control: " + sprintf(CallerClosureRefusal,
             "AsyncIoController::addTimer()", "schedule") + "
 restricted direct parse: PARSE-EXCEPTION
@@ -422,7 +422,7 @@ foreach string f in (\"discord_watchdog\", \"discord_watchdog_call_wrapper\", \"
 }
 
 # the same caller restricted only by its parse options: module code runs with the module's own options and schedules
-# the caller's code
+# its own code, but not the caller's code, which may not control threads (qore#7056)
 Program up = restricted(\"unsandboxed\", ServiceCode, False);
 foreach string f in (\"controller_caller_timer\", \"caller_timer\", \"caller_call_async\", \"caller_defer\") {
     call(\"unsandboxed\", up, f);
@@ -443,8 +443,8 @@ printf(\"restricted cancel_own_app_timer: %s\\n\", result(auto sub () { return p
     app_timer); }));
 
 # the hoppy timer probe: a caller adds a timer with its own closure; scheduling code is thread control, so a caller
-# that may control threads (with PO_NO_PROCESS_CONTROL, as in the probe) may, and a sandboxed one with
-# PO_NO_THREAD_CONTROL may not; one restricted only by its parse options restricts its own code only
+# that may control threads (with PO_NO_PROCESS_CONTROL, as in the probe) may, and one with PO_NO_THREAD_CONTROL may
+# not, sandboxed or restricted only by its parse options (qore#7056)
 sub timer_probe(string label, int po, *bool sandboxed) {
     Program h(PO_NEW_STYLE | po);
     if (sandboxed) {

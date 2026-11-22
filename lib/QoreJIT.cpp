@@ -1596,6 +1596,29 @@ static bool jit_check_handler_budget(const std::string& func_name, size_t handle
     return false;
 }
 
+//! Returns false when the lowered \a module is larger than QoreJIT::getMaxJITLLVMInstructions() (qore#7174)
+/** Checked before the module is optimized, which with the code generation takes nearly all the time of a
+    compilation; the function stays on the IR tier.
+*/
+static bool jit_check_llvm_budget(const std::string& func_name, const llvm::Module& module, std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITLLVMInstructions());
+    if (!budget) {
+        return true;
+    }
+    const size_t count = module.getInstructionCount();
+    if (count <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too large for native compilation (" + std::to_string(count)
+        + " LLVM instructions; limit " + std::to_string(budget) + "); it remains on the IR tier";
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (LLVM budget exceeded; %zu LLVM instructions; "
+            "limit %zu)\n", func_name.c_str(), count, budget);
+    }
+    printd(2, "QoreJIT: %s\n", error.c_str());
+    return false;
+}
+
 static bool jit_check_size_budget(const std::string& func_name, size_t instruction_count,
         std::string& error) {
     const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
@@ -2000,6 +2023,11 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // the teardown of a Program that it refers to (see bgEndLowering()): nothing below reads func or any other data of
     // a Program.
     bgEndLowering();
+
+    // a function whose lowered code is too large to optimize and compile in a reasonable time stays on the IR tier
+    if (!jit_check_llvm_budget(func_name, *module, error)) {
+        return false;
+    }
 
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
@@ -2575,6 +2603,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // work owns, and the names were copied above.
     bgEndLowering();
 
+    // a batch whose lowered code is too large to optimize and compile in a reasonable time stays on the IR tier
+    if (!jit_check_llvm_budget(root_func_name, *module, error)) {
+        return false;
+    }
+
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
@@ -2825,6 +2858,36 @@ uint64_t QoreJIT::getMaxJITIRInstructions() {
     });
     const uint64_t budget = budget_setting.get();
     return budget;
+}
+
+uint64_t QoreJIT::getMaxJITLLVMInstructions() {
+    // function-local so the value cannot be read before its initializer runs, and is computed once
+    static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {
+        constexpr uint64_t default_max = 150000;
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_LLVM_INSTRUCTIONS");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            // no size limit was asked for with the IR budget: none for the lowered size either
+            return QoreJIT::getMaxJITIRInstructions() ? default_max : 0;
+        }
+        // only an unsigned decimal integer, as for QORE_JIT_MAX_IR_INSTRUCTIONS
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r' || *start == '\v'
+                || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    });
+    return budget_setting.get();
 }
 
 void QoreJIT::setIRThreshold(uint64_t t) {

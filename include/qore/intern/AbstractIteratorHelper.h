@@ -83,6 +83,15 @@ public:
         if (next_access | value_access) {
             findCallableMethods(cls, fwd, next_access, value_access, class_ctx);
         }
+        // a public method found through private inheritance that the context's own hierarchy overrides (qore#6798)
+        if (next_access == Public) {
+            nextMethod = cls->runtimeCheckPublicContextOverride(fwd ? "next" : "prev", nextMethod, next_access,
+                class_ctx);
+        }
+        if (get_value && value_access == Public) {
+            getValueMethod = cls->runtimeCheckPublicContextOverride("getValue", getValueMethod, value_access,
+                class_ctx);
+        }
         nextVariant = getCheckVariant(xsink, op, nextMethod);
         if (!nextVariant)
             return;

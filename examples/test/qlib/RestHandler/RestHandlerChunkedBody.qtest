@@ -151,9 +151,9 @@ public class RestHandlerChunkedBodyTest inherits QUnit::Test {
             sh.sendData(part, $# == (parts.size() - 1));
         }
         string body;
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(30s);
         while (True) {
-            if (now_us() > deadline) {
+            if (clock_get_monotonic_us() > deadline) {
                 fail("timed out reading the response");
             }
             auto chunk = sh.readData(5s);

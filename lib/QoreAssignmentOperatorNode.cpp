@@ -40,6 +40,8 @@
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/WeakListReferenceNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
@@ -747,15 +749,99 @@ bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
         AssignmentMode mode) const {
-    return evalInternImpl<false>(xsink, needs_deref, mode);
+    return evalInternImpl<false, false>(xsink, needs_deref, mode);
 }
 
 QoreValue QoreAssignmentOperatorNode::evalLexical(ExceptionSink* xsink, bool& needs_deref,
         AssignmentMode mode) const {
-    return evalInternImpl<true>(xsink, needs_deref, mode);
+    return evalInternImpl<true, false>(xsink, needs_deref, mode);
 }
 
-template <bool Lexical>
+QoreValue QoreAssignmentOperatorNode::evalInternWeak(ExceptionSink* xsink, bool& needs_deref) const {
+    return evalInternImpl<false, true>(xsink, needs_deref, AssignmentMode::Weak);
+}
+
+QoreValue QoreAssignmentOperatorNode::evalLexicalWeak(ExceptionSink* xsink, bool& needs_deref) const {
+    return evalInternImpl<true, true>(xsink, needs_deref, AssignmentMode::Weak);
+}
+
+//! Makes a weak assignment of the value of \a new_value to \a left and returns the value of the assignment
+/** The value assigned, if it is a temporary, and a container that the type of the lvalue converts to a copy of its
+    own (ex: a hash<string, int> assigned to a hash variable), a temporary of the statement that only the weak reference
+    designates, live until the end of the statement (qore#7085); the copy is held after the lvalue is unlocked, as
+    releasing a value that the statement held before can run a destructor.  Out of line, so that the other assignments
+    keep their code.
+
+    @param policy the lexical semantic policy of the assignment, or nullptr for an assignment without one
+    @param site the expression, which the copy held is keyed by
+*/
+static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue& left,
+        QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
+        const void* site, ExceptionSink* xsink) {
+    // a weak reference does not keep the value assigned: a temporary lives until the end of the statement, as in the
+    // other execution modes, so that the weak reference and the value of the assignment designate it until then
+    // (qore#7085)
+    QoreStatementTempScope::hold(site, new_value, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the copy made by the conversion, owned by this function until it is held
+    QoreValue copy;
+    QoreValue rv;
+    {
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+        LValueHelper v(left, xsink, false, true);
+        if (!v) {
+            return QoreValue();
+        }
+        assert(!*xsink);
+
+        // the container assigned, to recognize a copy made by the conversion
+        const AbstractQoreNode* assigned_node = new_value->hasNode() ? new_value->getInternalNode() : nullptr;
+
+        if (policy) {
+            if (v.assign(new_value.takeReferencedValue(), "<lvalue>", *policy, !ident, AssignmentMode::Weak)) {
+                return QoreValue();
+            }
+        } else if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, AssignmentMode::Weak)) {
+            return QoreValue();
+        }
+
+        // the target is compared by its address; a copy is kept with a reference of its own, taken through the weak
+        // reference, or is a new empty container if it was freed (qore#7198)
+        switch (v.getType()) {
+            case NT_WEAKREF_HASH: {
+                const WeakHashReferenceNode* w = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
+                if (w->borrow() != assigned_node) {
+                    copy = w->lock();
+                }
+                break;
+            }
+            case NT_WEAKREF_LIST: {
+                const WeakListReferenceNode* w = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
+                if (w->borrow() != assigned_node) {
+                    copy = w->lock();
+                }
+                break;
+            }
+            default:
+                break;
+        }
+
+        // reference return value if necessary
+        if (ref_rv) {
+            rv = v.getReferencedValue();
+        }
+    }
+    // the site differs from that of the operand held by the caller
+    if (copy.hasNode() && !QoreStatementTempScope::hold(reinterpret_cast<const char*>(site) + 1, copy, xsink)) {
+        // there is no scope: the copy is released here, as before
+        copy.discard(xsink);
+    }
+    return rv;
+}
+
+template <bool Lexical, bool Weak>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(ExceptionSink* xsink,
         bool& needs_deref, AssignmentMode mode) const {
     /* assign new value, this value gets referenced with the
@@ -802,6 +888,18 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
         // we have to ensure that the value is referenced before the assignment in case the lvalue
         // is the same value, so it can be copied in the LValueHelper constructor
         new_value.ensureReferencedValue();
+    }
+
+    // a weak assignment holds the value assigned and the copy that the variable's type makes of a container until the
+    // end of the statement (out of line: see qore_weak_assign_hold_copy())
+    if constexpr (Weak) {
+        assert(mode == AssignmentMode::Weak);
+        if constexpr (Lexical) {
+            LexicalSemanticPolicy policy = getSemanticPolicy();
+            return qore_weak_assign_hold_copy(left, new_value, ident, ref_rv, &policy, this, xsink);
+        } else {
+            return qore_weak_assign_hold_copy(left, new_value, ident, ref_rv, nullptr, this, xsink);
+        }
     }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)

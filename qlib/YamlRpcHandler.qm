@@ -98,6 +98,8 @@ http.waitStop();
     @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
 
     @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - the introspection methods \c help, \c system.listMethods and \c system.describe return the registered
+      methods' help, names and service description (issue #7149)
     - the error of a method call and the response for a request body that cannot be parsed give the location of the
       exception in the server's code and its call stack only when the handler's debugging is enabled; with it
       disabled, the error of a method call has the argument of a user exception only (issue #6780)
@@ -453,16 +455,23 @@ public namespace YamlRpcHandler {
 
                 auto rv;
                 try {
-                    rv = found.internal
-                        ? call_object_method_args(self, found.function, params)
-                        : call_function_args(found.function, params);
+                    if (found.internal) {
+                        switch (found.function) {
+                            case "help": rv = help(); break;
+                            case "listMethods": rv = listMethods(); break;
+                            case "system_describe": rv = system_describe(); break;
+                            default:
+                                throw "YAML-RPC-INTERNAL-ERROR", sprintf("unknown internal method: %y", found.function);
+                        }
+                    } else {
+                        rv = call_function_args(found.function, params);
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # issue #2573: provide a more user-friendly error when the argument cannot be matched to the
                     # closure/call ref
                     if ((ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR")
-                        && (ex.callstack[0].file =~ /YamlRpcHandler.qm$/
-                        && (ex.callstack[0].function == "call_function_args"
-                            || ex.callstack[0].function == "call_object_method_args")))
+                        && ex.callstack[0].file =~ /YamlRpcHandler.qm$/
+                        && ex.callstack[0].function == "call_function_args")
                         throw "RPC-ARG-ERROR", sprintf("a call to YAML-RPC method %y is missing one or more required "
                             "arguments; internal call error: %s: %s", method, ex.err, ex.desc);
                     rethrow;
