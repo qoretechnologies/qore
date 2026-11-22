@@ -201,11 +201,24 @@ public class SqlTestBase inherits QUnit::Test {
 
         hash<SerializationInfo> h = table.serializeToData();
 
-        # the serialized data keeps no credentials of the datasource (qore#7016): no password
+        # the serialized data keeps no credentials of the datasource (qore#7016): not its user name and password as a
+        # datasource string has them ("user/pass@")
         AbstractDatasource ds = table.getDatasource();
         *string pass = ds.getPassword();
+        *string user = ds.getUserName();
         if (pass) {
-            assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
+            assertEq(-1, sprintf("%y", h).find((user ?? "") + "/" + pass + "@"),
+                "the serialized data has no credentials of the datasource");
+            # no password key holds the password, and no datasource or connection field has it as its password
+            list<string> leaks = SqlTestBase::findCredentialLeaks(h, pass);
+            assertEq((), leaks, "no password or datasource field of the serialized data has the password");
+            # a distinctive password is not anywhere in the data; a password that is part of another value of the
+            # configuration (as on CI: password "qore", database "qore_test_<random>") or that is short can also be in
+            # a database or schema object name, so it is looked for only where a connection string has it (above)
+            if (SqlTestBase::isDistinctivePassword(pass, ds.getConfigHash())) {
+                assertEq((), SqlTestBase::findCredentialLeaks(h, pass, "", False, True),
+                    "the distinctive password is nowhere in the serialized data");
+            }
         }
 
         # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
@@ -230,6 +243,111 @@ public class SqlTestBase inherits QUnit::Test {
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());
+    }
+
+    #! returns the paths in serialized data \a v of a password key that holds \a pass, or of a datasource or connection
+    #! field whose value has \a pass in it (qore#7016)
+    /** @param v the serialized data
+        @param pass the password
+        @param path the path of \a v in the data
+        @param in_ds True if \a v is in a datasource or connection field
+        @param anywhere True to report every key and string value that has \a pass in it (a distinctive password,
+        see isDistinctivePassword())
+    */
+    static list<string> findCredentialLeaks(auto v, string pass, string path = "", bool in_ds = False,
+            bool anywhere = False) {
+        list<string> rv = ();
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                foreach hash<auto> i in (v.pairIterator()) {
+                    string key = i.key.lwr();
+                    string p = path + "." + i.key;
+                    if (anywhere && i.key.find(pass) != -1) {
+                        rv += p + " (key)";
+                    }
+                    if ((key == "pass" || key == "password") && i.value.typeCode() == NT_STRING && i.value == pass) {
+                        rv += p;
+                        continue;
+                    }
+                    bool ds = in_ds || key =~ /^ds($|_)/ || key =~ /datasource|conn|url/;
+                    rv += SqlTestBase::findCredentialLeaks(i.value, pass, p, ds, anywhere);
+                }
+                break;
+            }
+            case NT_LIST: {
+                int n = 0;
+                foreach auto e in (v) {
+                    rv += SqlTestBase::findCredentialLeaks(e, pass, sprintf("%s[%d]", path, n++), in_ds, anywhere);
+                }
+                break;
+            }
+            case NT_STRING:
+                if ((anywhere && v.find(pass) != -1) || (in_ds && SqlTestBase::hasCredentialPassword(v, pass))) {
+                    rv += path;
+                }
+                break;
+        }
+        return rv;
+    }
+
+    #! returns True if the password \a pass can be looked for anywhere in serialized data
+    /** It is distinctive if it has at least 6 characters and is not part of another value of the configuration of
+        the datasource \a config (the user, the database, the host, an option value...): such a value can be in the
+        data, as the name of the database or of a schema object
+    */
+    static bool isDistinctivePassword(string pass, hash<auto> config) {
+        if (pass.length() < 6) {
+            return False;
+        }
+        return !SqlTestBase::hasValueWith(config - "pass", pass);
+    }
+
+    #! returns True if a key or string value of \a v at any depth has \a pass in it
+    static bool hasValueWith(auto v, string pass) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                foreach hash<auto> i in (v.pairIterator()) {
+                    if (i.key.find(pass) != -1 || SqlTestBase::hasValueWith(i.value, pass)) {
+                        return True;
+                    }
+                }
+                return False;
+            case NT_LIST:
+                foreach auto e in (v) {
+                    if (SqlTestBase::hasValueWith(e, pass)) {
+                        return True;
+                    }
+                }
+                return False;
+            case NT_STRING:
+                return v.find(pass) != -1;
+        }
+        # another value is compared as a string (a port number)
+        return exists v && sprintf("%s", v).find(pass) != -1;
+    }
+
+    #! returns True if the datasource or connection string \a v has \a pass as its password
+    /** The password is looked for only where a connection string has it: as the password of a datasource string
+        ("user/pass@db"), of a URL ("user:pass@host") or of a password option ("pass=...", "password=..."); a short
+        password can also be the name of the database, of a host or of a user, or part of one (qore#7016)
+    */
+    static bool hasCredentialPassword(string v, string pass) {
+        try {
+            if (parse_datasource(v).pass == pass) {
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # not a datasource string
+        }
+        if (v.find("/" + pass + "@") != -1 || v.find(":" + pass + "@") != -1) {
+            return True;
+        }
+        foreach string opt in (v =~ x/(?:^|[{,;&?\s])(?:pass|password|pwd)\s*=\s*([^,;&}\s]*)/gi) {
+            if (opt == pass) {
+                return True;
+            }
+        }
+        return False;
     }
 
     deferrableForeignConstraintsTest() {
