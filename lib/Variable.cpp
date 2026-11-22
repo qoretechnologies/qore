@@ -2810,6 +2810,46 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
+// documented in Variable.h
+bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
+        int64 index, const QoreValue& val, ExceptionSink* xsink) {
+    LocalVarValue* lvv = thread_try_find_lvar(lv);
+    if (!lvv) {
+        return false;
+    }
+    switch (lvv->val.getType()) {
+        case NT_WEAKREF_LIST:
+            if (lvv->val.get<const WeakListReferenceNode>()->borrow() != container) {
+                return false;
+            }
+            break;
+        case NT_WEAKREF_HASH:
+            if (lvv->val.get<const WeakHashReferenceNode>()->borrow() != container) {
+                return false;
+            }
+            break;
+        default:
+            return false;
+    }
+    LVPathStep steps[2];
+    steps[0].kind = LVPathStepKind::LocalVar;
+    steps[0].ref_ptr = lv;
+    if (key) {
+        steps[1].kind = LVPathStepKind::HashKeyConst;
+        steps[1].name = key;
+    } else {
+        steps[1].kind = LVPathStepKind::ListIndex;
+        steps[1].index = index;
+    }
+    // navigatePath() follows a reference that an element holds, as the AST interpreter assigns it (qore#6661)
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(steps, 2, false)) {
+        return true;
+    }
+    lvh.assign(val.refSelf(), "<lvalue>");
+    return true;
+}
+
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
     // a path resolved without creating its entries (for delete or remove, or only to read it) sets up the reference
