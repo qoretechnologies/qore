@@ -12479,8 +12479,10 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         const qore_method_private* mp = qore_method_private::get(*method);
         const MethodFunctionBase* mfb = mp->func;
 
-        // count user variants
-        uint32_t num_variants = 0;
+        // the user variants to write, with their positions in the variant list: then the abstract variants that
+        // concrete variants of parent classes implement, which are no longer in the list; the loader resolves them
+        // again, so that the class has the method that implements them, as when the program is parsed (qore#7277)
+        std::vector<std::pair<const AbstractQoreFunctionVariant*, size_t>> variants;
         {
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             size_t variant_index = 0;
@@ -12492,27 +12494,32 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 }
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (isAOTSerializableMethodVariant(method, v)) {
-                    ++num_variants;
+                    variants.emplace_back(v, variant_index);
                 }
                 ++variant_index;
             }
+            for (const AbstractQoreFunctionVariant* v : mfb->getReplacedAbstractVariants()) {
+                if (reinterpret_cast<const MethodVariantBase*>(v)->isAbstract()
+                        && isAOTSerializableMethodVariant(method, v)) {
+                    variants.emplace_back(v, variant_index++);
+                }
+            }
         }
-        writer.writeU32(num_variants);
+        writer.writeU32(static_cast<uint32_t>(variants.size()));
 
         // write user variant signatures
         {
             bool is_constructor = strcmp(method->getName(), "constructor") == 0;
             bool is_destructor = strcmp(method->getName(), "destructor") == 0;
             bool is_copy = strcmp(method->getName(), "copy") == 0;
-            QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
-            size_t variant_index = 0;
-            while (qfi.next()) {
+            for (const std::pair<const AbstractQoreFunctionVariant*, size_t>& vi : variants) {
+                size_t variant_index = vi.second;
                 if (variant_index && !(variant_index % 100)
                         && qore_check_cancel(nullptr, "AOT method variant serialization")) {
                     error = "operation cancelled during AOT method variant serialization";
                     return false;
                 }
-                const AbstractQoreFunctionVariant* v = qfi.getVariant();
+                const AbstractQoreFunctionVariant* v = vi.first;
                 if (isAOTSerializableMethodVariant(method, v)) {
                     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
                     // write access + flags before the signature
@@ -12684,7 +12691,6 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         }
                     }
                 }
-                ++variant_index;
             }
         }
         ++method_index;
@@ -21655,6 +21661,15 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         }
         qore_class_private* priv = qore_class_private::get(*qc);
         if (!priv->scl || priv->ahm.empty()) {
+            continue;
+        }
+        // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent
+        // class resolved them here (the classes are resolved in topological order, parent classes first) are not
+        // pending in this class, as in qore_class_private::parseResolveAbstract(); otherwise they would be
+        // implemented again here, with the first concrete variant of the whole hierarchy (qore#7219, qore#7206)
+        priv->ahm.parseDropResolvedInParents(*priv, *priv->scl);
+        if (priv->ahm.empty()) {
+            priv->parse_resolve_abstract = true;
             continue;
         }
         // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it

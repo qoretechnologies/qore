@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractPrivateInheritanceImplTest
+
+#! abstract methods that a method of a privately inherited parent class, or a private method of another parent class,
+#! implements are called as the interpreter calls them, in every execution mode and in qcc executables (qore#7277)
+/** A class that declares an abstract method and inherits a class with a concrete method of the name with
+    \c private:internal or \c private access: the method was skipped as abstract when called, and the lookup stopped
+    at the privately inherited class (\c RUNTIME-OVERLOAD-ERROR from outside the class and from the code of the parent
+    and subclasses); each variant that implements one now has the more restrictive access of its abstract
+    declaration and of its own, also for overloads of different accesses: a private or private:internal abstract
+    variant stays hidden from outside the class, also when a subclass declares it again, or when another parent
+    class declares it.  A qcc executable had no method for the abstract method at all, as
+    the image left out the abstract variant that the parent class's variant
+    replaces (\c METHOD-DOES-NOT-EXIST, \c BASE-CLASS-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR from the code of
+    another parent class where a private method of a parent class implements it); the image now keeps it, and the
+    loader resolves it again (also for a \c private:internal implementation, which the code of the class that declares
+    the abstract method cannot call: \c METHOD-IS-PRIVATE, where a qcc executable raised \c METHOD-DOES-NOT-EXIST and
+    the interpreter \c RUNTIME-OVERLOAD-ERROR).  The output of every execution mode and of qcc executables (-O0, -O3)
+    must be the expected one.
+
+    The program is in \c abstract-private-inheritance-impl/.
+*/
+class AbstractPrivateInheritanceImplTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-private-inheritance-impl";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractPrivateInheritanceImplTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-abstract-private-inheritance-impl-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

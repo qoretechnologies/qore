@@ -1,0 +1,329 @@
+1 A1 outside: "P1::m"
+1 A1 outside untyped: "P1::m"
+1 A1 outside ref: "P1::m"
+1 A1 outside com: "P1::m"
+1 A1 P1 code: "P1::m"
+1 A1 P1 code ref: "P1::m"
+1 A1 A1 code: "P1::m"
+1 A1 A1 code ref: "P1::m"
+1 A1 A1 code typed: "P1::m"
+1 S1 outside: "P1::m"
+1 S1 outside untyped: "P1::m"
+1 S1 outside com: "P1::m"
+1 S1 P1 code: "P1::m"
+1 S1 A1 code: "P1::m"
+1 S1 A1 code typed: "P1::m"
+1 S1 S1 code: "P1::m"
+1 S1 S1 code ref: "P1::m"
+2 A2 outside: "P2::m"
+2 A2 outside untyped: "P2::m"
+2 A2 outside ref: "P2::m"
+2 A2 outside com: "P2::m"
+2 A2 P2 code: "P2::m"
+2 A2 A2 code: "P2::m"
+2 S2 outside untyped: "P2::m"
+2 S2 P2 code: "P2::m"
+2 S2 A2 code: "P2::m"
+2 S2 S2 code: "P2::m"
+3 A3 outside untyped: METHOD-IS-PRIVATE
+3 Q3 outside untyped: METHOD-IS-PRIVATE
+3 A3 outside com: METHOD-IS-PRIVATE
+3 Q3 outside com: METHOD-IS-PRIVATE
+3 A3 P3 code: "P3::m"
+3 Q3 P3 code: "P3::m"
+3 A3 own code: "P3::m"
+3 Q3 own code: "P3::m"
+3 S3 outside untyped: METHOD-IS-PRIVATE
+3 T3 outside untyped: METHOD-IS-PRIVATE
+3 S3 outside com: METHOD-IS-PRIVATE
+3 T3 outside com: METHOD-IS-PRIVATE
+3 S3 P3 code: METHOD-IS-PRIVATE
+3 T3 P3 code: METHOD-IS-PRIVATE
+3 S3 own code: "P3::m"
+3 T3 own code: "P3::m"
+3 S3 subclass code: "P3::m"
+3 T3 subclass code: "P3::m"
+4 A4 outside untyped: METHOD-IS-PRIVATE
+4 A4 outside com: METHOD-IS-PRIVATE
+4 A4 P4 code: "P4::m"
+4 A4 O4 code: "P4::m"
+4 A4 O4 code ref: "P4::m"
+4 A4 A4 code: "P4::m"
+5 A5 outside untyped: METHOD-DOES-NOT-EXIST
+5 A5 P5 code: "P5::m"
+5 A5 A5 code: METHOD-IS-PRIVATE
+5 C5 outside untyped: METHOD-DOES-NOT-EXIST
+5 C5 P5 code: "P5::m"
+5 C5 A5 code: METHOD-IS-PRIVATE
+5 C5 C5 code: METHOD-DOES-NOT-EXIST
+5 B5 outside untyped: RUNTIME-OVERLOAD-ERROR
+5 B5 P5 code: "P5::m"
+5 B5 I5 code: RUNTIME-OVERLOAD-ERROR
+5 B5 B5 code: METHOD-IS-PRIVATE
+6 A6 outside: METHOD-IS-PRIVATE
+6 A6 outside untyped: METHOD-IS-PRIVATE
+6 A6 outside ref: ILLEGAL-CALL-REFERENCE
+6 A6 outside com: METHOD-IS-PRIVATE
+6 A6 P6 code: "P6::m"
+6 A6 own code: "P6::m"
+6 S6 outside untyped: METHOD-IS-PRIVATE
+6 S6 outside ref: ILLEGAL-CALL-REFERENCE
+6 S6 outside com: METHOD-IS-PRIVATE
+6 S6 parent code: "P6::m"
+6 S6 subclass code: "P6::m"
+6 B6 outside: METHOD-IS-PRIVATE
+6 B6 outside untyped: METHOD-IS-PRIVATE
+6 B6 outside ref: ILLEGAL-CALL-REFERENCE
+6 B6 outside com: METHOD-IS-PRIVATE
+6 B6 P6 code: "P6::m"
+6 B6 own code: "P6::m"
+6 SB6 outside untyped: METHOD-IS-PRIVATE
+6 SB6 outside ref: ILLEGAL-CALL-REFERENCE
+6 SB6 outside com: METHOD-IS-PRIVATE
+6 SB6 parent code: "P6::m"
+6 SB6 subclass code: "P6::m"
+6 C6 outside: BASE-CLASS-IS-PRIVATE
+6 C6 outside untyped: BASE-CLASS-IS-PRIVATE
+6 C6 outside ref: ILLEGAL-CALL-REFERENCE
+6 C6 outside com: BASE-CLASS-IS-PRIVATE
+6 C6 P6 code: "P6::m"
+6 C6 own code: "P6::m"
+6 SC6 outside untyped: BASE-CLASS-IS-PRIVATE
+6 SC6 outside ref: ILLEGAL-CALL-REFERENCE
+6 SC6 outside com: BASE-CLASS-IS-PRIVATE
+6 SC6 parent code: "P6::m"
+6 SC6 subclass code: "P6::m"
+6 D6 outside: METHOD-DOES-NOT-EXIST
+6 D6 outside untyped: METHOD-DOES-NOT-EXIST
+6 D6 outside ref: OBJECT-METHOD-REFERENCE-ERROR
+6 D6 outside com: METHOD-DOES-NOT-EXIST
+6 D6 P6 code: METHOD-DOES-NOT-EXIST
+6 D6 own code: "P6::m"
+6 SD6 outside untyped: METHOD-DOES-NOT-EXIST
+6 SD6 outside ref: OBJECT-METHOD-REFERENCE-ERROR
+6 SD6 outside com: METHOD-DOES-NOT-EXIST
+6 SD6 parent code: "P6::m"
+6 SD6 subclass code: METHOD-DOES-NOT-EXIST
+6 S6 subclass code ref: "P6::m"
+6 Q6 outside untyped: METHOD-IS-PRIVATE
+6 Q6 outside com: METHOD-IS-PRIVATE
+7 A7 int outside: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 A7 int own code: "P7::m(int)"
+7 A7 int own code ref: "P7::m(int)"
+7 SA7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SA7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SA7 int parent code: "P7::m(int)"
+7 SA7 int subclass code: "P7::m(int)"
+7 A7 string outside: "P7::m(string)"
+7 A7 string outside untyped: "P7::m(string)"
+7 A7 string outside ref: "P7::m(string)"
+7 A7 string outside com: "P7::m(string)"
+7 A7 string own code: "P7::m(string)"
+7 A7 string own code ref: "P7::m(string)"
+7 SA7 string outside untyped: "P7::m(string)"
+7 SA7 string outside com: "P7::m(string)"
+7 SA7 string parent code: "P7::m(string)"
+7 SA7 string subclass code: "P7::m(string)"
+7 B7 int outside: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 B7 int own code: "P7::m(int)"
+7 B7 int own code ref: "P7::m(int)"
+7 SB7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SB7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SB7 int parent code: "P7::m(int)"
+7 SB7 int subclass code: RUNTIME-OVERLOAD-ERROR
+7 B7 string outside: "P7::m(string)"
+7 B7 string outside untyped: "P7::m(string)"
+7 B7 string outside ref: "P7::m(string)"
+7 B7 string outside com: "P7::m(string)"
+7 B7 string own code: "P7::m(string)"
+7 B7 string own code ref: "P7::m(string)"
+7 SB7 string outside untyped: "P7::m(string)"
+7 SB7 string outside com: "P7::m(string)"
+7 SB7 string parent code: "P7::m(string)"
+7 SB7 string subclass code: "P7::m(string)"
+7 C7 int outside: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 C7 int own code: "P7::m(int)"
+7 C7 int own code ref: "P7::m(int)"
+7 SC7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SC7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SC7 int parent code: "P7::m(int)"
+7 SC7 int subclass code: "P7::m(int)"
+7 C7 string outside: "P7::m(string)"
+7 C7 string outside untyped: "P7::m(string)"
+7 C7 string outside ref: "P7::m(string)"
+7 C7 string outside com: "P7::m(string)"
+7 C7 string own code: "P7::m(string)"
+7 C7 string own code ref: "P7::m(string)"
+7 SC7 string outside untyped: "P7::m(string)"
+7 SC7 string outside com: "P7::m(string)"
+7 SC7 string parent code: "P7::m(string)"
+7 SC7 string subclass code: "P7::m(string)"
+7 D7 int outside: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 D7 int own code: "P7::m(int)"
+7 D7 int own code ref: "P7::m(int)"
+7 SD7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SD7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SD7 int parent code: "P7::m(int)"
+7 SD7 int subclass code: "P7::m(int)"
+7 D7 string outside: "P7::m(string)"
+7 D7 string outside untyped: "P7::m(string)"
+7 D7 string outside ref: "P7::m(string)"
+7 D7 string outside com: "P7::m(string)"
+7 D7 string own code: "P7::m(string)"
+7 D7 string own code ref: "P7::m(string)"
+7 SD7 string outside untyped: "P7::m(string)"
+7 SD7 string outside com: "P7::m(string)"
+7 SD7 string parent code: "P7::m(string)"
+7 SD7 string subclass code: "P7::m(string)"
+7 Y7 int outside: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 Y7 int own code: "Y7::m(int)"
+7 Y7 int own code ref: "Y7::m(int)"
+7 SY7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SY7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SY7 int parent code: "Y7::m(int)"
+7 SY7 int subclass code: "Y7::m(int)"
+7 Y7 string outside: "Y7::m(string)"
+7 Y7 string outside untyped: "Y7::m(string)"
+7 Y7 string outside ref: "Y7::m(string)"
+7 Y7 string outside com: "Y7::m(string)"
+7 Y7 string own code: "Y7::m(string)"
+7 Y7 string own code ref: "Y7::m(string)"
+7 SY7 string outside untyped: "Y7::m(string)"
+7 SY7 string outside com: "Y7::m(string)"
+7 SY7 string parent code: "Y7::m(string)"
+7 SY7 string subclass code: "Y7::m(string)"
+7 E7 int outside: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 E7 int own code: "PV7::m(int)"
+7 E7 int own code ref: "PV7::m(int)"
+7 SE7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SE7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SE7 int parent code: "PV7::m(int)"
+7 SE7 int subclass code: "PV7::m(int)"
+7 E7 string outside: "PV7::m(string)"
+7 E7 string outside untyped: "PV7::m(string)"
+7 E7 string outside ref: "PV7::m(string)"
+7 E7 string outside com: "PV7::m(string)"
+7 E7 string own code: "PV7::m(string)"
+7 E7 string own code ref: "PV7::m(string)"
+7 SE7 string outside untyped: "PV7::m(string)"
+7 SE7 string outside com: "PV7::m(string)"
+7 SE7 string parent code: "PV7::m(string)"
+7 SE7 string subclass code: "PV7::m(string)"
+8 G8 int outside: RUNTIME-OVERLOAD-ERROR
+8 G8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 G8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 G8 string outside: "P7::m(string)"
+8 G8 string outside ref: "P7::m(string)"
+8 G8 string outside com: "P7::m(string)"
+8 H8 int outside: METHOD-IS-PRIVATE
+8 H8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 H8 int outside com: METHOD-IS-PRIVATE
+8 H8 string outside: METHOD-IS-PRIVATE
+8 H8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 H8 string outside com: METHOD-IS-PRIVATE
+8 I8 int outside: RUNTIME-OVERLOAD-ERROR
+8 I8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 I8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 I8 string outside: "P7::m(string)"
+8 I8 string outside ref: "P7::m(string)"
+8 I8 string outside com: "P7::m(string)"
+8 J8 int outside: RUNTIME-OVERLOAD-ERROR
+8 J8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 J8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 J8 string outside: "P7::m(string)"
+8 J8 string outside ref: "P7::m(string)"
+8 J8 string outside com: "P7::m(string)"
+8 K8 int outside: METHOD-IS-PRIVATE
+8 K8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 K8 int outside com: METHOD-IS-PRIVATE
+8 K8 string outside: METHOD-IS-PRIVATE
+8 K8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 K8 string outside com: METHOD-IS-PRIVATE
+8 L8 int outside: RUNTIME-OVERLOAD-ERROR
+8 L8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 L8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 L8 string outside: "P7::m(string)"
+8 L8 string outside ref: "P7::m(string)"
+8 L8 string outside com: "P7::m(string)"
+8 M8 int outside: RUNTIME-OVERLOAD-ERROR
+8 M8 int outside ref: RUNTIME-OVERLOAD-ERROR
+8 M8 int outside com: RUNTIME-OVERLOAD-ERROR
+8 M8 string outside: "M8p::m(string)"
+8 M8 string outside ref: "M8p::m(string)"
+8 M8 string outside com: "M8p::m(string)"
+8 N8 int outside: METHOD-IS-PRIVATE
+8 N8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 N8 int outside com: METHOD-IS-PRIVATE
+8 N8 string outside: METHOD-IS-PRIVATE
+8 N8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 N8 string outside com: METHOD-IS-PRIVATE
+8 O8 int outside: METHOD-IS-PRIVATE
+8 O8 int outside ref: ILLEGAL-CALL-REFERENCE
+8 O8 int outside com: METHOD-IS-PRIVATE
+8 O8 string outside: METHOD-IS-PRIVATE
+8 O8 string outside ref: ILLEGAL-CALL-REFERENCE
+8 O8 string outside com: METHOD-IS-PRIVATE
+9 XQ9 outside: METHOD-IS-PRIVATE
+9 XQ9 outside untyped: METHOD-IS-PRIVATE
+9 XQ9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9 outside com: METHOD-IS-PRIVATE
+9 XQ9i outside: METHOD-IS-PRIVATE
+9 XQ9i outside untyped: METHOD-IS-PRIVATE
+9 XQ9i outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9i outside com: METHOD-IS-PRIVATE
+9 XA9 outside: METHOD-IS-PRIVATE
+9 XA9 outside untyped: METHOD-IS-PRIVATE
+9 XA9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9 outside com: METHOD-IS-PRIVATE
+9 XA9i outside: METHOD-IS-PRIVATE
+9 XA9i outside untyped: METHOD-IS-PRIVATE
+9 XA9i outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9i outside com: METHOD-IS-PRIVATE
+9 XD9 outside: METHOD-IS-PRIVATE
+9 XD9 outside untyped: METHOD-IS-PRIVATE
+9 XD9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XD9 outside com: METHOD-IS-PRIVATE
+9 YP9 outside: METHOD-IS-PRIVATE
+9 YP9 outside untyped: METHOD-IS-PRIVATE
+9 YP9 outside ref: ILLEGAL-CALL-REFERENCE
+9 YP9 outside com: METHOD-IS-PRIVATE
+9 XI9 outside: BASE-CLASS-IS-PRIVATE
+9 XI9 outside untyped: BASE-CLASS-IS-PRIVATE
+9 XI9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XI9 outside com: BASE-CLASS-IS-PRIVATE
+9 XB9 outside: BASE-CLASS-IS-PRIVATE
+9 XB9 outside untyped: BASE-CLASS-IS-PRIVATE
+9 XB9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XB9 outside com: BASE-CLASS-IS-PRIVATE
+9 XQ9c outside: METHOD-IS-PRIVATE
+9 XQ9c outside untyped: METHOD-IS-PRIVATE
+9 XQ9c outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9c outside com: METHOD-IS-PRIVATE
+9 XA9c outside: METHOD-IS-PRIVATE
+9 XA9c outside untyped: METHOD-IS-PRIVATE
+9 XA9c outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9c outside com: METHOD-IS-PRIVATE
+9 XO9 int outside: RUNTIME-OVERLOAD-ERROR
+9 XO9 int outside ref: RUNTIME-OVERLOAD-ERROR
+9 XO9 int outside com: RUNTIME-OVERLOAD-ERROR
+9 XO9 string outside: "C09o::m(string)"
+9 XO9 string outside ref: "C09o::m(string)"
+9 XO9 string outside com: "C09o::m(string)"
