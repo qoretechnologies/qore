@@ -9867,7 +9867,19 @@ static int qore_exit_wait_finishing_threads() {
     }
 #endif
     // a condition wait on thread_counter, which wakes it when a thread leaves it
-    return qore_counter_ops(thread_counter).waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
+    return qore_counter_ops(thread_counter).waitForCountAtMost(qore_thread_counter_share, QORE_PROCESS_END_WAIT_MS)
+        ? -1 : 0;
+}
+
+//! the bound of the wait of the deletion of the Program of the script for the foreign threads that run in it
+static std::atomic<int64> qore_process_end_foreign_wait = {QORE_PROCESS_END_WAIT_MS};
+
+int64 qore_process_end_foreign_wait_ms() {
+    return qore_process_end_foreign_wait.load(std::memory_order_acquire);
+}
+
+void qore_set_process_end_foreign_wait_ms(int64 ms) {
+    qore_process_end_foreign_wait.store(ms, std::memory_order_release);
 }
 
 void qore_exit_process(int rc) {

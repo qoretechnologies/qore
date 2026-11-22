@@ -25105,6 +25105,15 @@ static QoreValue f_dbg_object_external_ref(const QoreListNode* params, RuntimeCo
     return id;
 }
 
+//! Sets the bound of the wait of the deletion of the Program of the script, at the end of the process, for the foreign
+//! threads that run in it, in milliseconds (qore#6904); returns the bound that was set before
+static QoreValue f_dbg_set_process_end_foreign_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 old = qore_process_end_foreign_wait_ms();
+    qore_set_process_end_foreign_wait_ms(get_param_value(params, 0).getAsBigInt());
+    return old;
+}
+
 //! Deletes a member of an object with the C++ API QoreObject::deleteMemberValue(), as a binary module does (qore#7208)
 static QoreValue f_dbg_object_delete_member_value(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -29911,6 +29920,8 @@ void init_debug_functions(QoreNamespace& qns) {
         "timeout_ms");
     qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_set_process_end_foreign_wait", f_dbg_set_process_end_foreign_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_object_delete_member_value", f_dbg_object_delete_member_value, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", stringTypeInfo,
         QORE_PARAM_NO_ARG, "key");

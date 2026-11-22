@@ -484,7 +484,10 @@ void qore_cleanup() {
     // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
     // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
     // cleared as usual
-    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    // so are they when a Program was left to a foreign thread before (the Program of the script, whose teardown at the
+    // end of the process stopped waiting for the foreign threads in it: qore#6904), as its code can use them
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+        || qore_program_private::hasLeftPrograms();
     if (!modules_left) {
         qore_release_module_program_pins();
 
