@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
+    Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
+    event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
+    that created the connection (see @ref sandbox_lent_connections;
+    <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
@@ -134,6 +140,12 @@
     one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
     object's class reaches that parent class first (see @ref multiple_inheritance_order;
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
+    @par A Connection That Was Never Checked Is Not Up
+    A connection is not up until a successful ping or connection proves it up: one that was never checked reports
+    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
+    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
 
     @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
     Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
@@ -1350,6 +1362,13 @@
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
     of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
     and database name masked as \c "****", for exception messages and logs (issue #6988).
+
+    @par Sensitive DBI Driver Options
+    A DBI driver registers its options with option flags (\c QDBI_OPT_SENSITIVE in the C++ API, given as the
+    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
+    that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
+    the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
+    (see @ref datasource_mask_options; issue #7070).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
@@ -3069,6 +3088,9 @@
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
       wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
       once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
+    - @ref resthandlerintro "RestHandler" module: an HTTP/1.x Connect or DataStream request body with a
+      \c Content-Length reaches its stream handler in bounded parts, as over HTTP/2 and HTTP/3 (see @ref rh_1_6_8;
+      issue #7323)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
       handler leaves on a server thread (its persistence, its close notification and its user thread context) is
       kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
@@ -4367,8 +4389,9 @@
       and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
       reserving the size given in the data first (issue #6502)
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
-      that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
-      the declarations of a native module that was already deleted (issue #6501)
+      that module when the process ends, together with the native modules it requires, and when the loaded module
+      requires that module, those native modules are still deleted after it, so the cleanup no longer uses the
+      declarations of a native module that was already deleted (issues #6501, #7310)
     - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
       without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
     - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in
