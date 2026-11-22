@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of sandboxed-exception-report.qtest (qore#7232): the sandboxed code loads it by path; its initialization
+# fails with text of its choosing while another thread waits for the load
+
+%modern
+%requires ReportGate
+
+module ReportLoadFail {
+    version = "1.0";
+    desc = "a module whose initialization fails";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ReportGate::Gate::initStarted();
+        throw "TENANT-ERR", "tenant line" + chr(10) + "forged line";
+    };
+}

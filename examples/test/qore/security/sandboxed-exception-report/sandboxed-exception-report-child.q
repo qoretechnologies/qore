@@ -12,6 +12,10 @@
 %requires Logger
 # loaded by the child, so that the sandboxed Program imports it
 %requires ReportCheck
+# the rendezvous of the initialization of ReportLoadFail.qm (qore#7232)
+%requires ReportGate
+%requires json
+%requires yaml
 
 Logger sub stdout_logger() {
     Logger logger("report", LoggerLevel::getLevelInfo());
@@ -19,6 +23,16 @@ Logger sub stdout_logger() {
     appender.open();
     logger.addAppender(appender);
     return logger;
+}
+
+#! the host's input stream whose read() raises
+class HostBadInputStream inherits InputStream {
+    *binary read(int limit) {
+        throw "HOST-ERR", "host line";
+    }
+    int peek() {
+        return -1;
+    }
 }
 
 sub main() {
@@ -126,6 +140,113 @@ sub main() {
                 parallel_map(c, (1, 2), 2);
             }();
             cnt.waitForZero();
+            break;
+        }
+        case "pipeline": {
+            # a pipeline of the sandboxed code fails in a C++ step on the async I/O thread; the host gets the result
+            # of its future in a thread of its own (qore#7232)
+            Socket listener();
+            listener.bindINET("127.0.0.1", "0", True);
+            listener.listen();
+            Socket client();
+            client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+            Socket server = listener.accept();
+            # the promise and its future are the host's: no object of the sandboxed code is on the host's stack when
+            # its result is got, so only the origin that the rejection recorded marks the report
+            Promise pr();
+            Future f = pr.getFuture();
+            p.callFunction("pipeline_error", server, pr);
+            Counter cnt(1);
+            background sub () {
+                on_exit cnt.dec();
+                f.get();
+            }();
+            cnt.waitForZero();
+            break;
+        }
+        case "json-stream":
+        case "yaml-read":
+        case "yaml-write": {
+            # the host parses or writes through a stream of the sandboxed code, which raises (qore#7232)
+            InputStream input = p.callFunction("bad_input");
+            OutputStream output = p.callFunction("bad_output");
+            Counter cnt(1);
+            background sub () {
+                on_exit cnt.dec();
+                switch (mode) {
+                    case "json-stream": {
+                        JsonSaxParser j();
+                        j.parseStream(input, sub (hash<auto> event) {});
+                        break;
+                    }
+                    case "yaml-read": {
+                        YamlSaxParser y();
+                        y.parseStream(input, sub (hash<auto> event) {});
+                        break;
+                    }
+                    case "yaml-write": {
+                        YamlStreamWriter w(output);
+                        w.startDocument();
+                        w.writeScalar("value");
+                        w.endDocument();
+                        break;
+                    }
+                }
+            }();
+            cnt.waitForZero();
+            break;
+        }
+        case "module-load": {
+            # the sandboxed code loads a module by path, whose initialization fails with text of its choosing while a
+            # host thread waits for the load of the same module (qore#7232)
+            Counter done(2);
+            background sub () {
+                on_exit done.dec();
+                try {
+                    p.callFunction("load_path", get_script_dir() + "/ReportLoadFail.qm");
+                } catch (hash<ExceptionInfo> ex) {
+                    # the sandboxed code's own load: its failure is not reported here
+                }
+            }();
+            ReportGate::Gate::started.waitForZero();
+            # the host's thread waits for the load, and gets its failure
+            background sub () {
+                on_exit done.dec();
+                load_module("ReportLoadFail");
+            }();
+            if (!dbg_module_load_waiters("ReportLoadFail", 1, 60000)) {
+                throw "TEST-ERROR", "the host's thread did not wait for the load";
+            }
+            ReportGate::Gate::go.dec();
+            done.waitForZero();
+            break;
+        }
+        case "host-pipeline": {
+            # the host's own pipeline fails in a C++ step on the I/O thread: its error is not marked (qore#7232)
+            Socket listener();
+            listener.bindINET("127.0.0.1", "0", True);
+            listener.listen();
+            Socket client();
+            client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+            Socket server = listener.accept();
+            PollPipeline inner();
+            inner.addRequireContextKey("no-such-key", "HOST-ERR", "host line");
+            PollPipeline outer(server);
+            outer.addDelegate(inner);
+            Promise pr();
+            outer.setResultPromise(pr);
+            AsyncIoController::submit(<SocketPollOperationInfo>{"sock": server, "spop": outer, "to": -1s,
+                "owner": "host-pipeline"});
+            Future f = pr.getFuture();
+            background f.get();
+            break;
+        }
+        case "host-json-stream": {
+            # the host parses a stream of its own that raises: not marked (qore#7232)
+            background sub () {
+                JsonSaxParser j();
+                j.parseStream(new HostBadInputStream(), sub (hash<auto> event) {});
+            }();
             break;
         }
         # the host's own code: reported as before, without a mark

@@ -534,6 +534,37 @@ static void write_report(const QoreString& out) {
     }
 }
 
+//! the origin scope of the current thread (see QoreExceptionOriginScope)
+static thread_local const QoreExceptionOriginScope* qore_exception_origin_scope = nullptr;
+
+QoreExceptionOriginScope::QoreExceptionOriginScope(bool origin_sandboxed, qore_program_id_t origin_pgm_id)
+        : pgm_id(origin_pgm_id), active(origin_sandboxed) {
+    if (active) {
+        previous = qore_exception_origin_scope;
+        qore_exception_origin_scope = this;
+    }
+}
+
+QoreExceptionOriginScope::~QoreExceptionOriginScope() {
+    if (active) {
+        qore_exception_origin_scope = previous;
+    }
+}
+
+const QoreExceptionOriginScope* QoreExceptionOriginScope::current() {
+    return qore_exception_origin_scope;
+}
+
+bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id) {
+    if (const QoreExceptionOriginScope* scope = qore_exception_origin_scope) {
+        if (pgm_id) {
+            *pgm_id = scope->pgm_id;
+        }
+        return true;
+    }
+    return qore_caller_is_sandboxed(pgm_id);
+}
+
 //! the mark of the first exception of the chain that code that is sandboxed or acts for sandboxed code raised
 static bool qore_exception_chain_mark(const QoreException* e, QoreString& mark) {
     for (; e; e = e->next) {

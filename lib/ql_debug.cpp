@@ -439,6 +439,20 @@ static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeC
     return static_cast<int64>(freed + qore_type_retirement_free());
 }
 
+//! Waits until threads wait for the load of a module that another thread runs (qore#7232); returns false on timeout
+static QoreValue f_dbg_module_load_waiters(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    // also a short string, which has no node
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    int64 count = HARD_QORE_VALUE_INT(params, 1);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
+    return QMM.dbgWaitLoadWaiters(name->c_str(), count > 0 ? static_cast<unsigned>(count) : 0u,
+        static_cast<int>(timeout_ms));
+#else
+    return false;
+#endif
+}
+
 //! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
 static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef DEBUG
@@ -29802,6 +29816,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_module_load_waiters", f_dbg_module_load_waiters, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");

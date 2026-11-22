@@ -33,6 +33,8 @@ QoreYamlStreamWriteHandler::QoreYamlStreamWriteHandler(QoreObject* stream)
 }
 
 QoreYamlStreamWriteHandler::~QoreYamlStreamWriteHandler() {
+    // an error of the stream that was not raised is not reported
+    stream_xsink.clear();
 }
 
 int QoreYamlStreamWriteHandler::write(unsigned char* buffer, size_t size) {
@@ -56,7 +58,9 @@ int QoreYamlStreamWriteHandler::write(unsigned char* buffer, size_t size) {
             QoreStringValueHelper errstr(err);
             error_message = errstr->c_str();
         }
-        xsink.clear();
+        // kept to be raised with the writer's error (see raiseStreamError())
+        stream_xsink.clear();
+        stream_xsink.assimilate(xsink);
         return 0;
     }
     return 1;
@@ -129,6 +133,7 @@ int QoreYamlStreamWriter::emitEvent(const char* event_name, ExceptionSink* xsink
         if (write_handler && write_handler->hasError()) {
             xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to emit %s event: stream write error: %s",
                 event_name, write_handler->getErrorMessage());
+            write_handler->raiseStreamError(xsink);
         } else {
             xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to emit %s event: %s",
                 event_name, emitter.problem ? emitter.problem : "unknown error");
@@ -508,6 +513,10 @@ int QoreYamlStreamWriter::flush(ExceptionSink* xsink) {
 
     if (!yaml_emitter_flush(&emitter)) {
         xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to flush emitter");
+        // the error of the stream, which made the flush fail (qore#7232)
+        if (write_handler) {
+            write_handler->raiseStreamError(xsink);
+        }
         return -1;
     }
     return 0;
@@ -558,6 +567,7 @@ int QoreYamlStreamWriter::close(ExceptionSink* xsink) {
     if (write_handler && write_handler->hasError()) {
         xsink->raiseException(QY_STREAM_EMIT_ERR, "stream write error: %s",
             write_handler->getErrorMessage());
+        write_handler->raiseStreamError(xsink);
         state = YWS_CLOSED;
         return -1;
     }

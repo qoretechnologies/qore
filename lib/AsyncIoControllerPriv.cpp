@@ -2239,10 +2239,14 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
+    // the exceptions of the operation's C++ steps on the async I/O thread are raised for a sandboxed submitter
+    // (qore#7232)
+    // (also an operation that such a step submits on the I/O thread, which inherits the step's origin)
+    ctx->origin_sandboxed = qore_code_origin_sandboxed(&ctx->origin_pgm_id);
     // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
     // capturing code alone, which the step runs with (qore#6844)
     if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
-            || ctx->caller_restrictions) {
+            || ctx->caller_restrictions || ctx->origin_sandboxed) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -8086,6 +8090,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // the result replaces the operation's poll info, so a previous hash that only the operation
                     // references is lent to the call for reuse (see SocketPollInfoLender)
                     SocketPollInfoLender lender(node->second.poll_info, xsink);
+                    // the exceptions and errors of the step are raised for the operation's submitter, which no sandbox
+                    // context on this thread records (qore#7232)
+                    const QoreSandboxContext* ctx = node->second.sandbox_ctx.get();
+                    QoreExceptionOriginScope origin(ctx && ctx->origin_sandboxed, ctx ? ctx->origin_pgm_id : 0);
                     new_info = op.spop_base->continuePoll(&poll_xsink);
                 }
                 // the step can have removed or replaced its own operation (a direct submit with its key), which may
