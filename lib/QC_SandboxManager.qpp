@@ -1777,8 +1777,9 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
 
 //! Hands an object that trusted code created to the sandboxed code that it serves, which then owns it
 /** An object is owned by a sandbox if sandboxed code created it, or if the code of a class that trusted code declared
-    created it directly in a method of an object that the sandbox owns; an object that trusted code creates while it
-    serves sandboxed code is governed by that code's sandbox but owned by none (see @ref sandbox_object_ownership).
+    created it directly in a method of an object that the sandbox owns while it served that sandbox; an object that
+    trusted code creates while it serves sandboxed code is governed by that code's sandbox but owned by none (see
+    @ref sandbox_object_ownership).
     Trusted code that creates an object for the sandboxed code that it serves, such as a factory or host code that
     configures the object for its caller, hands it to that code with this method; the transfer is one-way.
 

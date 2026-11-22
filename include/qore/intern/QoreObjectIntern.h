@@ -223,7 +223,10 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
 //! Returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842)
-DLLLOCAL bool qore_creator_is_sandbox_owner();
+/** @param owner_provenance set to the provenance of the object in whose method trusted class code creates the object
+    (which the new object takes), if that object decides; not changed for sandboxed code
+*/
+DLLLOCAL bool qore_creator_is_sandbox_owner(const QoreSandboxContext*& owner_provenance);
 
 class qore_object_private : public RObject {
 public:
@@ -258,10 +261,11 @@ public:
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
     //! The sandbox context that owns the object, or nullptr if no sandbox owns it (qore#6842)
-    /** Set if sandboxed code created the object, or trusted class code directly in a method of an object that a
-        sandbox owns: then it is \c sandbox_provenance (not referenced again); or if trusted code transferred the object
-        to the sandboxed code that it served (qore_transfer_object_to_caller()): then it is the caller's context
-        (referenced), which is set once and never changed
+    /** Set if sandboxed code created the object, or trusted class code directly in a method of an object that the
+        sandbox that its caller is governed by owns (the object then also takes that object's provenance): then it
+        is \c sandbox_provenance (not referenced again); or if trusted code transferred the object to the sandboxed
+        code that it served (qore_transfer_object_to_caller()): then it is the caller's context (referenced), which
+        is set once and never changed
     */
     std::atomic<QoreSandboxContext*> sandbox_owner{nullptr};
     cdmap_t* cdmap = nullptr;
@@ -786,6 +790,12 @@ public:
     DLLLOCAL QoreSandboxContext* getSandboxOwner() const {
         return sandbox_owner.load(std::memory_order_acquire);
     }
+
+    //! Marks a new object owned by a sandbox if the code that creates it makes it owned (qore#6842)
+    /** See qore_creator_is_sandbox_owner(): an object that trusted class code creates in a method of an object that
+        the sandbox owns also takes that object's provenance; called by the constructor while sandboxed code exists
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void setCreatorOwnership();
 
     //! the implementation of getReferencedMemberNoMethod() and getReferencedMemberForSelf()
     /** @tparam CheckRead true to check the sandboxed read rule (qore#7033), false for a member of self

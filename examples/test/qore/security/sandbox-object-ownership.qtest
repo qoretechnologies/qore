@@ -8,7 +8,8 @@
 # tenant, such as a shared object that it creates lazily for its first caller or an object that it caches through a
 # static method or a function, is owned by no tenant, unless trusted code hands it to the tenant with
 # SandboxManager::transferObjectToCaller(), which is refused for sandboxed code, for an object that a sandbox owns
-# already, and for a caller that no sandbox at the enforcement level of tenant isolation governs.
+# already, and for a caller that no sandbox at the enforcement level of tenant isolation governs.  An object that the
+# code of a trusted class creates in a method of a tenant's object is owned only while the code serves that tenant.
 
 %modern
 %no-child-restrictions
@@ -74,6 +75,30 @@ public class Lib {
     static LoggerWrapper fill() {
         return Lib::cache ?? (Lib::cache = new LoggerWrapper(new Logger("static-cache")));
     }
+}
+
+#! a library service whose object creates an object lazily, in a method of its own
+public class HostSvc {
+    private {
+        *LoggerWrapper lw;
+    }
+
+    LoggerWrapper getWrapper() {
+        return lw ?? (lw = new LoggerWrapper(new Logger("svc")));
+    }
+}
+
+#! a service that a tenant registered with the host
+our *HostSvc registered_svc;
+
+#! registers a tenant's service with the host
+sub host_register(HostSvc svc) {
+    registered_svc = svc;
+}
+
+#! returns the object of the registered service, which it creates for the code that it serves first
+LoggerWrapper sub host_registered_wrapper() {
+    return registered_svc.getWrapper();
 }
 
 #! the global cache that Lib::viaFunction() fills
@@ -142,6 +167,22 @@ hash<string, string> sub lib() {
     };
 }
 
+#! registers a new service of the tenant with the host
+sub register_svc() {
+    host_register(new HostSvc());
+}
+
+#! the object of the registered service
+string sub registered() {
+    return access(host_registered_wrapper());
+}
+
+#! the object of a service of the tenant's own
+string sub own_svc() {
+    HostSvc svc();
+    return access(svc.getWrapper());
+}
+
 #! the host transfers its shared object
 string sub transfer_shared() {
     return host_transfer(host_get_shared());
@@ -206,6 +247,7 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
     constructor() : QUnit::Test("sandbox object ownership", "1.0", \ARGV) {
         foreach string mode in (keys ExecModes) {
             addTestCase("ownership in " + mode, getTest(mode));
+            addTestCase("lazy object of a tenant's service in " + mode, getLazyServiceTest(mode));
             addTestCase("transfer to a code-safety caller in " + mode, getCodeSafetyTransferTest(mode));
         }
         set_return_value(main());
@@ -213,6 +255,10 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
 
     private code getTest(string mode) {
         return sub () { ownershipTest(mode); };
+    }
+
+    private code getLazyServiceTest(string mode) {
+        return sub () { lazyServiceTest(mode); };
     }
 
     private code getCodeSafetyTransferTest(string mode) {
@@ -226,7 +272,8 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
         SandboxManager sm();
         sm.setEnforcementLevel(level);
         p.setSandboxManager(sm);
-        map p.importFunction($1), ("host_get_shared", "host_make_for_caller", "host_make", "host_transfer");
+        map p.importFunction($1), ("host_get_shared", "host_make_for_caller", "host_make", "host_transfer",
+            "host_register", "host_registered_wrapper");
         p.parse(TenantSource, "tenant");
         return p;
     }
@@ -267,6 +314,21 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
         assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("transfer_host_object", new LoggerWrapper()),
             mode + ": an object that the host made before it served A");
         assertEq("SANDBOX-ACCESS-ERROR", host_transfer(new LoggerWrapper()), mode + ": no sandboxed caller");
+    }
+
+    lazyServiceTest(string mode) {
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+
+        # an object that a tenant's service creates lazily: owned by the tenant only if it is created while the
+        # service serves that tenant
+        a.callFunction("register_svc");
+        assertEq(Owned, a.callFunction("registered"), mode + ": A on its registered service's object made for A");
+        assertEq(NotOwned, b.callFunction("registered"), mode + ": B on A's service's object made for A");
+        a.callFunction("register_svc");
+        assertEq(NotOwned, b.callFunction("registered"), mode + ": B on A's service's object made for B");
+        assertEq(NotOwned, a.callFunction("registered"), mode + ": A on its service's object made for B");
+        assertEq(Owned, a.callFunction("own_svc"), mode + ": A on the object of a service of its own");
     }
 
     codeSafetyTransferTest(string mode) {

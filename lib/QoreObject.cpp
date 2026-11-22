@@ -192,23 +192,59 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     sandbox_provenance = provenance.release();
     // a sandbox owns the object if sandboxed code executes the expression that creates it (qore#6842)
     if (sandbox_provenance && qore_sandboxed_code_active()) {
-        if (qore_creator_is_sandbox_owner()) {
-            sandbox_owner.store(sandbox_provenance, std::memory_order_relaxed);
-        }
+        setCreatorOwnership();
     }
+}
+
+void qore_object_private::setCreatorOwnership() {
+    const QoreSandboxContext* owner_provenance = nullptr;
+    if (!qore_creator_is_sandbox_owner(owner_provenance)) {
+        return;
+    }
+    // an object that trusted class code creates in a method of an object that a sandbox owns is owned as that object
+    // is: it takes that object's provenance, not the one of the code on the call stack (qore#6842)
+    if (owner_provenance && owner_provenance != sandbox_provenance) {
+        QoreSandboxContext* ctx;
+        if (owner_provenance->origin_restrictions == sandbox_provenance->origin_restrictions) {
+            owner_provenance->ref();
+            ctx = const_cast<QoreSandboxContext*>(owner_provenance);
+        } else {
+            try {
+                // keeps the functional-domain restrictions of the creating code (qore#6520)
+                ctx = new QoreSandboxContext(owner_provenance, false);
+                ctx->origin_restrictions = sandbox_provenance->origin_restrictions;
+            } catch (std::bad_alloc&) {
+                // the provenance cannot be set: the object is owned by no sandbox (fails closed)
+                return;
+            }
+        }
+        sandbox_provenance->deref();
+        sandbox_provenance = ctx;
+    }
+    sandbox_owner.store(sandbox_provenance, std::memory_order_relaxed);
 }
 
 // returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842): sandboxed code
 // (the code of a sandboxed Program), or trusted class code executing directly in a non-static method of an object that
-// a sandbox owns, whose ownership the new object inherits; not a static method or a function, which has no object of
-// its own, nor a method of another object, whose own object decides
-bool qore_creator_is_sandbox_owner() {
+// a sandbox owns, if the code on the call stack is that sandbox's (it owns the object), whose ownership and provenance
+// the new object takes (returned in \a owner_provenance); not a static method or a function, which has no object of
+// its own, nor a method of another object, whose own object decides, nor a method of an object that the sandbox that
+// the code serves does not own
+bool qore_creator_is_sandbox_owner(const QoreSandboxContext*& owner_provenance) {
     QoreProgram* pgm = getProgram();
     if (pgm && qore_program_is_sandboxed(pgm)) {
         return true;
     }
     const QoreObject* self = runtime_get_stack_object();
-    return self && qore_object_private::get(*self)->getSandboxOwner();
+    if (!self) {
+        return false;
+    }
+    const QoreSandboxContext* self_owner = qore_object_private::get(*self)->getSandboxOwner();
+    if (!self_owner || !qore_sandbox_current_code_created(self_owner, true)) {
+        return false;
+    }
+    owner_provenance = self_owner;
+    return true;
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
