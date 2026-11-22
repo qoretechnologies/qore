@@ -2877,9 +2877,34 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 handler error response");
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
+                        session_id, stream_id, uh);
+                    wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
+                    return;
+                }
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",
                     session_id, stream_id, uh, ex.err, ex.desc);
+                # the client must not wait for a response that is not sent: a response that is refused before
+                # anything is sent (such as a content-length that does not match its body) is answered with an
+                # error; otherwise the stream is cancelled (qoretechnologies/qore#7212)
+                try {
+                    cinfo.sock.submitQuicResponse(session_id, stream_id, 500, {"Content-Type": "text/plain"},
+                        HttpServer::HttpCodes{500});
+                } catch (hash<ExceptionInfo> ex2) {
+                    # a stream that has a response already, which the handler submitted itself, is left to it: it
+                    # is complete or still being sent
+                    if (ex2.desc !~ /^response already submitted/) {
+                        try {
+                            cinfo.sock.cancelQuicStream(session_id, stream_id);
+                        } catch () {
+                        }
+                    }
+                }
+                wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 refused response");
             }
             # connections{uh} stays: it's the h3op's socket-level entry, not
             # per-request.  Cleaned up on h3op close/error or result.close.
@@ -6053,15 +6078,39 @@ public class HttpAsyncSocketIoController {
                     connection_gone = !cinfo.sock.isOpen();
                 } catch (hash<ExceptionInfo> ex2) {
                 }
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream=%d on %y: the handler submitted the response", stream_id,
+                        uh);
+                    # as after a response that the controller submits
+                    try {
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
+                        controller.wakeSocket(cinfo.sock);
+                    } catch () {}
+                    return;
+                }
                 log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
                 if (!connection_gone) {
-                    # Send RST_STREAM so the client gets an error instead of waiting forever
+                    # a response that is refused before anything is sent (such as a content-length that does not
+                    # match its body) is answered with an error (qoretechnologies/qore#7212); otherwise RST_STREAM is
+                    # sent, so the client gets an error instead of waiting forever
                     try {
-                        cinfo.sock.resetHttp2Stream(stream_id);
+                        cinfo.sock.submitHttp2Response(stream_id, 500, {"Content-Type": "text/plain"},
+                            HttpServer::HttpCodes{500});
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
                         controller.wakeSocket(cinfo.sock);
-                    } catch () {}
+                    } catch (hash<ExceptionInfo> ex2) {
+                        # a stream that has a response already, which the handler submitted itself, is left to it
+                        if (ex2.desc !~ /^response already submitted/) {
+                            try {
+                                cinfo.sock.resetHttp2Stream(stream_id);
+                                controller.wakeSocket(cinfo.sock);
+                            } catch () {}
+                        }
+                    }
                 }
             }
             return;
