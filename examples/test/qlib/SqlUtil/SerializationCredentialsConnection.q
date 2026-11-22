@@ -17,6 +17,7 @@ Sqlite3Table sub table(AbstractDatasource ds) {
 
 # the datasource of a named connection: DatasourceConnection::getImpl() names it
 {
+    # live-provider-optin: the test's own sqlite connection with fake credentials
     Datasource ds = ConnectionProvider::get_connection("conn7016").get();
     on_exit ds.close();
     printf("name: %s\n", ds.getConnectionName());
@@ -34,6 +35,7 @@ Sqlite3Table sub table(AbstractDatasource ds) {
 
 # a pool of a named connection is restored as a pool of the connection
 {
+    # live-provider-optin: the test's own sqlite connection with fake credentials
     Datasource ds = ConnectionProvider::get_connection("conn7016").get();
     DatasourcePool pool(ds.getConfigHash() + {"options": {"min": 1, "max": 2}});
     ds.close();

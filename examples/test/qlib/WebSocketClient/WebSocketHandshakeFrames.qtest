@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A frame that a WebSocketClient receives with the handshake is delivered as soon as the connection's event loop runs,
+# as later frames are, and not only by the connecting thread when it gets to its initial drain (issue #7123).  Before,
+# the frames of an HTTP/2 or HTTP/3 tunnel that arrived before the event loop started waited for the connecting
+# thread, which first runs other work (for example the closing callbacks of the connections that the connect
+# replaces), or for the next frame: a greeting that a server sent at once was delivered only with its next heartbeat.
+#
+# The server sends a greeting when the connection is registered and nothing else (no heartbeat on either side).  The
+# client waits until the greeting's frame is queued for the tunnel before its event loop starts, and its connecting
+# thread is then held before the initial drain until the greeting has been delivered; the wait for the greeting is
+# bounded only as a failure deadline.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketHandshakeFramesTest
+
+#! sends greetings as soon as the connection is registered: "HELLO", or "G1" to "G<n>" for an X-Greet-Count of n
+class GreetConnection inherits WebSocketConnection {
+    private {
+        int count;
+    }
+
+    constructor(WebSocketHandler handler, int count) : WebSocketConnection(handler) {
+        self.count = count;
+    }
+
+    registered() {
+        if (!count) {
+            send("HELLO");
+            return;
+        }
+        for (int i = 1; i <= count; ++i) {
+            send("G" + i);
+        }
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+}
+
+class GreetHandler inherits WebSocketHandler {
+    #! no heartbeat during the test: the greeting is the only frame that the server sends on its own
+    constructor() : WebSocketHandler(NOTHING, {"heartbeat": 3600}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new GreetConnection(self, (hdr."x-greet-count" ?? 0).toInt());
+    }
+}
+
+#! holds the connecting thread at the steps of the connect
+class HoldClient inherits WebSocketClient {
+    public {
+        #! the steps that the connecting thread reached
+        Queue events();
+        #! released by the test to let the connecting thread go on to its initial drain; 0 = not held
+        Counter release_drain;
+        #! the bound of the waits of the client; only reached if the test fails
+        const Bound = 60s;
+    }
+
+    private {
+        #! the number of frames that are waited for to arrive with the handshake (HTTP/2 and HTTP/3)
+        int frames;
+    }
+
+    public {
+        #! the number of frames that were queued with the handshake when the event loop started (HTTP/2 and HTTP/3)
+        int queued;
+    }
+
+    constructor(code cb, hash<auto> opts, int frames = 1, bool hold = True) : WebSocketClient(cb, opts) {
+        self.frames = frames;
+        release_drain = new Counter(hold ? 1 : 0);
+    }
+
+    #! an HTTP/2 or HTTP/3 tunnel: the event loop starts once the greetings' frames are queued for the tunnel
+    private startAsyncIo() {
+        if (hcio_frame_queue) {
+            # all the frames are waited for, and put back in front in their order
+            list<auto> l = ();
+            while (l.size() < frames) {
+                l += hcio_frame_queue.get(Bound);
+            }
+            queued = l.size();
+            for (int i = l.size() - 1; i >= 0; --i) {
+                hcio_frame_queue.insert(l[i]);
+            }
+            events.push("frame-queued");
+        }
+        WebSocketClient::startAsyncIo();
+    }
+
+    #! the connecting thread is held before its initial drain until the test releases it
+    private runInitialDrain(WscConnection c) {
+        events.push("drain-held");
+        release_drain.waitForZero(Bound);
+        WebSocketClient::runInitialDrain(c);
+    }
+}
+
+class WebSocketHandshakeFramesTest inherits QUnit::Test {
+    public {
+        #! the deadline of the wait for the greeting; only reached if the test fails
+        const Deadline = 30s;
+    }
+
+    private {
+        HttpServer server;
+        hash<string, int> ports;
+        Logger logger("test", LoggerLevel::getLevelInfo());
+    }
+
+    constructor() : QUnit::Test("WebSocketHandshakeFrames", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        GreetHandler handler();
+        server.setDefaultHandler("ws-handler", handler);
+        ports.h1 = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        try {
+            ports.h2 = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+                "enable_h3": False,
+            }).port;
+            ports.h3 = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+            }).port;
+            server.waitForAsyncIo();
+        } catch (hash<ExceptionInfo> ex) {
+            # TLS listeners not available: the HTTP/2 and HTTP/3 cases are skipped
+        }
+
+        foreach string proto in (("h1", "h2", "h3")) {
+            addTestCase(proto + ": a frame received with the handshake is delivered while the connecting thread is "
+                "held", \handshakeFrameTest(), proto);
+            addTestCase(proto + ": the frames received with the handshake and after it are delivered in order",
+                \frameOrderTest(), proto);
+        }
+        set_return_value(main());
+
+        server.stop();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    #! returns the options of a client of the given protocol
+    private hash<auto> getOpts(string proto) {
+        hash<auto> opts = {
+            "logger": logger,
+            # no heartbeat: no frame but the greeting reaches the client
+            "heartbeat": 0,
+        };
+        switch (proto) {
+            case "h1":
+                opts += {"url": "ws://localhost:" + ports.h1, "http_version": "1.1"};
+                break;
+            case "h2":
+                opts += {"url": "wss://localhost:" + ports.h2, "http_version": "2.0", "ssl_verify_cert": False};
+                break;
+            case "h3":
+                opts += {"url": "wss://localhost:" + ports.h3, "http_version": "3.0", "ssl_verify_cert": False};
+                break;
+        }
+        return opts;
+    }
+
+    #! the connecting thread is not held: the delivery task of the frames received with the handshake races its
+    #! initial drain, and either way the frames are delivered in order, before the frame sent after them
+    frameOrderTest(string proto) {
+        if (!ports{proto}) {
+            testSkip(sprintf("%s listener not available", proto));
+        }
+        for (int run = 0; run < 20; ++run) {
+            Queue msgs();
+            HoldClient wsc(sub (*data msg) {
+                if (exists msg) {
+                    msgs.push(msg);
+                }
+            }, getOpts(proto), 2, False);
+            wsc.connect({"hdr": {"X-Greet-Count": "2"}});
+            if (proto != "h1") {
+                assertEq("frame-queued", wsc.events.get(HoldClient::Bound));
+            }
+            wsc.send("three");
+            list<string> got = ();
+            for (int i = 0; i < 3; ++i) {
+                try {
+                    got += msgs.get(HoldClient::Bound);
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("run %d, %d frame(s) queued with the handshake: only %y were delivered (%s: %s)",
+                        run, wsc.queued, got, ex.err, ex.desc));
+                }
+            }
+            assertEq(("G1", "G2", "ECHO:three"), got, sprintf("run %d, %d frame(s) queued with the handshake", run,
+                wsc.queued));
+            wsc.disconnect();
+        }
+    }
+
+    handshakeFrameTest(string proto) {
+        if (!ports{proto}) {
+            testSkip(sprintf("%s listener not available", proto));
+        }
+        Queue msgs();
+        hash<auto> opts = getOpts(proto);
+        HoldClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, opts);
+        Queue connected();
+        background sub () {
+            try {
+                wsc.connect();
+                connected.push("connected");
+            } catch (hash<ExceptionInfo> ex) {
+                connected.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        on_exit {
+            if (wsc.release_drain.getCount()) {
+                wsc.release_drain.dec();
+            }
+            connected.get(HoldClient::Bound);
+        }
+
+        if (proto != "h1") {
+            assertEq("frame-queued", wsc.events.get(HoldClient::Bound), "the greeting arrived with the handshake");
+        }
+        assertEq("drain-held", wsc.events.get(HoldClient::Bound), "the connecting thread is held before its drain");
+        # the greeting is delivered while the connecting thread is held: there is no other frame that could deliver
+        # it, so before the fix this wait ended at its deadline
+        string greeting;
+        try {
+            greeting = msgs.get(Deadline);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("the frame received with the handshake was not delivered while the connecting thread was "
+                "held (%s: %s)", ex.err, ex.desc));
+        }
+        assertEq("HELLO", greeting);
+        wsc.release_drain.dec();
+        string result = connected.get(HoldClient::Bound);
+        connected.push(result);
+        assertEq("connected", result);
+        wsc.send("one");
+        assertEq("ECHO:one", msgs.get(HoldClient::Bound));
+        wsc.disconnect();
+    }
+}

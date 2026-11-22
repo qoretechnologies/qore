@@ -17,25 +17,412 @@
 %requires FsUtil
 %requires ../../TestCertificates.qm
 %requires QUnit
+%include ../../qore/classes/TestConnectProxy.qc
 
 %exec-class RestConnectionTlsTest
 
 class TlsPeer inherits AbstractHttpRequestHandler {
+    private {
+        *string redirect;
+        *string endpoint;
+    }
+
+    constructor(*string redirect, *string endpoint) {
+        self.endpoint = endpoint;
+        self.redirect = redirect;
+    }
+
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/redirect" && redirect) {
+            return makeResponse({"Location": redirect}, 302, binary(""));
+        }
+        if (endpoint && cx.raw_path != endpoint && cx.raw_path != "/redirect") {
+            return makeResponse(404, "unexpected endpoint", {"Content-Type": "text/plain"});
+        }
+        if (cx.raw_path == "/token") {
+            return makeResponse(200, "{\"access_token\":\"test-token\",\"token_type\":\"Bearer\"}",
+                {"Content-Type": "application/json"});
+        }
+        if (cx.raw_path == "/resource") {
+            return makeResponse(200, hdr.authorization ?? "missing", {"Content-Type": "text/plain"});
+        }
         return makeResponse(200, "authenticated", {"Content-Type": "text/plain"});
+    }
+}
+
+# A service can expose its OAuth options under service-specific names and compute its ping URL.
+class EffectiveEndpointConnection inherits RestConnection {
+    constructor(string url, hash<auto> options) : RestConnection("effective", "", url, {}, options) {
+    }
+
+    hash<ConnectionSchemeInfo> getConnectionSchemeInfo() {
+        hash<ConnectionSchemeInfo> info = RestConnection::getConnectionSchemeInfo();
+        info.options.oauth2_auth_url.subst_env_vars = True;
+        return info;
+    }
+
+    string getOAuth2OptionName(string opt) {
+        return {"oauth2_token_url": "oauth2_auth_url", "oauth2_alt_token_url": "oauth2_redirect_url"}{opt} ?? opt;
+    }
+
+    string getTokenUrl(*bool allow_relative) {
+        return opts.oauth2_redirect_url == "auto" ? "https://[::1]:30405/token"
+            : RestConnection::getTokenUrl(allow_relative);
+    }
+
+    private *string getPingPath() {
+        return real_opts.ping_path == "auto"
+            ? substitute_env_vars(real_opts.ping_headers.("Ping-Endpoint")) : real_opts.ping_path;
     }
 }
 
 class RestConnectionTlsTest inherits QUnit::Test {
     constructor() : Test("REST connection TLS file ownership", "1.0") {
         addTestCase("configured credentials", \credentials());
+        addTestCase("local credential bindings", \localBindings());
+        addTestCase("synchronous caller file policy", \syncFilePolicy());
+        addTestCase("caller-selected native file options", \nativeFileOptions());
+        addTestCase("opaque certificate origin", \opaqueOrigin());
+        addTestCase("connection credentials through an HTTPS proxy", \httpsProxyOrigin());
+        addTestCase("configured token endpoint", sub () { tokenEndpoint(False); });
+        addTestCase("configured alternate token endpoint", sub () { tokenEndpoint(True); });
+        addTestCase("configured ping endpoint", \pingEndpoint());
+        addTestCase("effective configured origins", \effectiveOrigins());
+        addTestCase("uppercase token URL", sub () { tokenEndpoint(False, True); });
         set_return_value(main());
     }
 
-    private static writePem(string path, string value) {
+    nativeFileOptions() {
+        TmpDir tmp("rest-native-policy-");
+        string url = "http://127.0.0.1";
+        Program caller(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        caller.parse("%requires RestClient\n"
+            "object sub rest(hash<auto> opts) { return new RestClient(opts, True); }"
+            "object sub acquire(object conn) { return conn.get(False); }"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }"
+            "object sub restore(hash<SerializationInfo> saved) { return Serializable::deserialize(saved); }",
+            "restricted-native-options");
+        assertTrue(caller.callFunction("rest", {"url": url}) instanceof RestClient);
+        RestClient explicit_data = caller.callFunction("rest", {"url": url, "ssl_cert_data": TestCertificates::CertPem});
+        assertTrue(explicit_data.getHttpConfig().hasKey("ssl_cert_data"));
+        hash<SerializationInfo> original = Serializable::serializeToData(new HTTPClient({"url": url}));
+        assertTrue(caller.callFunction("restore", original) instanceof HTTPClient);
+        foreach string option in ("ssl_cert_path", "ssl_key_path") {
+            string path = tmp.path + DirSep + option;
+            hash<auto> opts = {"url": url};
+            opts{option} = path;
+            HttpConnection conn("http", "", url, {}, {option: path});
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("rest", opts), option);
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("acquire", conn), option);
+
+            hash<SerializationInfo> saved = original;
+            saved._index{saved._data._index}._class_data."Qore::HTTPClient"{option} = path;
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("restore", saved), option);
+
+            # The ordinary parent's path is retained in its constructor options. A later copy must
+            # check its own caller even when the file has since disappeared.
+            writeFixture(path, option == "ssl_cert_path" ? TestCertificates::CertPem : TestCertificates::KeyPem);
+            RestClient parent(opts, True);
+            assertEq(0, unlink(path));
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", parent, url), option);
+        }
+    }
+
+    opaqueOrigin() {
+        # The second port stays bound but never listens. Only the original origin accepts requests.
+        Socket unused();
+        unused.bindINET("127.0.0.1", 0);
+        string authority = sprintf("//127.0.0.1:%d", unused.getSocketInfo().port);
+        string other = "http:" + authority;
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("origin", new TlsPeer(other));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        string origin = sprintf("http://127.0.0.1:%d", port);
+        string denied = "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR";
+        HTTPClient client({"url": origin}, new SSLCertificate(TestCertificates::CertPem), NOTHING);
+        client.setURL(origin + "/base");
+        client.setConnectionPath("/root");
+        assertEq("/root", client.getConnectionPath());
+        foreach string dest in (authority, other) {
+            assertThrows(denied, \client.setConnectionPath(), dest);
+            assertEq("/root", client.getConnectionPath());
+        }
+        foreach string dest in (other, sprintf("http://localhost:%d", port), sprintf("https://127.0.0.1:%d", port)) {
+            assertThrows(denied, \client.setURL(), dest);
+        }
+        assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", other));
+        assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", origin + "/redirect"));
+        assertEq("authenticated", client.sendUrl(NOTHING, "GET", origin + "/ok").body.toString());
+    }
+
+    httpsProxyOrigin() {
+        TmpDir tmp("rest-tls-proxy-");
+        HttpServer server(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit server.stop();
+        server.setDefaultHandler("origin", new TlsPeer());
+        int port = addMtlsListener(server);
+        server.waitForAsyncIo();
+        string origin = sprintf("https://127.0.0.1:%d", port);
+
+        TestConnectProxy proxy(NOTHING, new SSLCertificate(TestCertificates::CertPem),
+            new SSLPrivateKey(TestCertificates::KeyPem), NOTHING, True);
+        on_exit proxy.shutdown();
+        string proxy_url = sprintf("https://127.0.0.1:%d", proxy.getPort());
+        # A direct connection to this listener confirms it can observe a client certificate.
+        {
+            HTTPClient direct({"url": proxy_url, "http_version": "1.1", "ssl_verify_cert": False,
+                    "error_passthru": True},
+                new SSLCertificate(TestCertificates::CertPem), new SSLPrivateKey(TestCertificates::KeyPem));
+            on_exit direct.disconnect();
+            direct.get("/");
+            assertTrue(proxy.getRequests()[0].client_cert_present);
+        }
+        # Reserve a second origin so its port cannot be reused during the test.
+        Socket unused();
+        unused.bindINET("127.0.0.1", 0);
+        string other = sprintf("https://127.0.0.1:%d", unused.getSocketInfo().port);
+        string denied = "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR";
+
+        foreach string version in ("1.1", "2.0") {
+            RestConnection conn("tunnel", "", origin, {}, tlsOptions(tmp) + {
+                "proxy": proxy_url, "http_version": version,
+            });
+            RestClient client = conn.get(False);
+            on_exit client.disconnect();
+            RestClientIo async_client = conn.getAsync(False);
+            on_exit async_client.close();
+
+            int before = proxy.getRequests().size();
+            assertEq("authenticated", client.restGet("/content").body, "sync mTLS " + version);
+            assertEq("authenticated", async_client.restGet("/content").body, "async mTLS " + version);
+            list<hash<auto>> requests = proxy.getRequests();
+            assertEq(before + 2, requests.size());
+            foreach hash<auto> request in (requests[before..]) {
+                assertTrue(request.ssl);
+                assertFalse(request.client_cert_present, "proxy TLS handshake");
+                assertTrue(request.line.startsWith(sprintf("CONNECT 127.0.0.1:%d ", port)));
+            }
+            assertThrows(denied, \client.sendUrl(), (NOTHING, "GET", other));
+            HttpClientIo::HttpClientConnectionManager mgr = async_client.getConnectionManager();
+            assertThrows(denied, \mgr.request(), (other, "GET", "/"));
+            assertEq(requests, proxy.getRequests(), "other origin refused before CONNECT");
+        }
+    }
+
+    private static int addMtlsListener(HttpServer server) {
+        return server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "get_remote_certs": True,
+            "ssl_verify_flags": SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+        }).port;
+    }
+
+    private static hash<auto> tlsOptions(TmpDir tmp) {
+        string cert = tmp.path + DirSep + "cert.pem";
+        string key = tmp.path + DirSep + "key.pem";
+        writeFixture(cert, TestCertificates::CertPem);
+        writeFixture(key, TestCertificates::KeyPem);
+        return {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_verify_cert": False};
+    }
+
+    effectiveOrigins() {
+        TmpDir tmp("rest-effective-origins-");
+        string ping = "https://127.0.0.1:30403/ping";
+        string other = "https://127.0.0.1:30404/later";
+        # The unset variable expands to empty; the origin is only valid after expansion.
+        string prefix = "https://127.0.0.1:${QORE_TEST_7134_UNSET_" + get_random_string(16) + "}";
+        string raw_ping = prefix + "30403/ping";
+        string token = "https://127.0.0.1:30401/token";
+        hash<auto> opts = tlsOptions(tmp) + {"oauth2_auth_url": prefix + "30401/token",
+            "oauth2_redirect_url": "https://127.0.0.1:30402/alt", "ping_method": "GET", "ping_path": "auto",
+            "ping_headers": {"Ping-Endpoint": raw_ping}};
+        EffectiveEndpointConnection conn("https://127.0.0.1:30400", opts);
+        conn.real_opts.ping_path = other;
+        RestClient sync = conn.get(False);
+        RestClientIo async = conn.getAsync(False);
+        assertEq(token, conn.real_opts.oauth2_auth_url);
+        foreach string url in (token, opts.oauth2_redirect_url, ping) {
+            try {
+                sync.setURL(url);
+                async.getConnectionManager().checkTlsCredentialOrigin(url);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("configured target %s refused: %s", url, ex.err));
+            }
+        }
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \sync.setURL(), other);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \async.getConnectionManager().checkTlsCredentialOrigin(),
+            other);
+        opts.oauth2_redirect_url = "auto";
+        EffectiveEndpointConnection derived("https://127.0.0.1:30400", opts);
+        derived.get(False).setURL("https://[::1]:30405/token");
+        derived.getAsync(False).getConnectionManager().checkTlsCredentialOrigin("https://[::1]:30405/token");
+    }
+
+    tokenEndpoint(bool alternate, bool uppercase = False) {
+        TmpDir tmp("rest-token-origin-");
+        Socket unused();
+        unused.bindINET("127.0.0.1", 0);
+        string other = sprintf("https://127.0.0.1:%d", unused.getSocketInfo().port);
+        HttpServer server(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit server.stop();
+        server.setDefaultHandler("resource", new TlsPeer(other, "/resource"));
+        HttpServer tokens(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit tokens.stop();
+        tokens.setDefaultHandler("token", new TlsPeer(NOTHING, "/token"));
+        string main_url = sprintf("https://127.0.0.1:%d", addMtlsListener(server));
+        string token_url = sprintf("https://127.0.0.1:%d/token", addMtlsListener(tokens));
+        server.waitForAsyncIo();
+        tokens.waitForAsyncIo();
+        hash<auto> opts = tlsOptions(tmp) + {"oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "client", "oauth2_client_secret": "secret",
+            "oauth2_token_url": alternate ? main_url + "/token" : token_url};
+        if (uppercase) {
+            opts.oauth2_token_url = replace(token_url, "https://", "HTTPS://");
+        }
+        if (alternate) {
+            opts.oauth2_alt_token_url = token_url;
+        }
+        RestConnection conn("token", "", main_url, {}, opts);
+        # Both listeners require a client certificate. The resource echoes the token obtained on the other port.
+        RestClientIo async_client = conn.getAsync();
+        assertEq("Bearer test-token", async_client.restGet("/resource").body);
+        assertEq("Bearer test-token", conn.get().restGet("/resource").body);
+        hash<auto> refresh = async_client.startOAuth2PollRefreshToken();
+        assertEq("/token", refresh.path);
+        assertTrue(refresh.rcio.getConnectionManager() == async_client.getConnectionManager(),
+            "poll refresh uses the same origin-bound transport");
+        RestClient client = conn.get(False);
+        RestClient sibling = cast<RestClient>(client.copyWithUrl(token_url));
+        sibling.setURL(main_url);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \sibling.setURL(), other);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \client.setURL(), other);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \client.sendUrl(), (NOTHING, "GET", main_url + "/redirect"));
+
+        Program caller(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        caller.parse("sub change(object c, string url, string opt, bool async) {"
+            " hash<auto> saved = c.real_opts; on_exit c.real_opts = saved;"
+            " c.real_opts{opt} = url; if (async) { c.getAsync(); } else { c.get(); } }"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }", "token-client");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", refresh.rcio, token_url));
+        string option = alternate ? "oauth2_alt_token_url" : "oauth2_token_url";
+        foreach bool async in (False, True) {
+            assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \caller.callFunction(),
+                ("change", conn, other + "/token", option, async));
+            if (!alternate) {
+                assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \caller.callFunction(),
+                    ("change", conn, other + "/alt", "oauth2_alt_token_url", async));
+            }
+        }
+    }
+
+    pingEndpoint() {
+        TmpDir tmp("rest-ping-origin-");
+        HttpServer server(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit server.stop();
+        server.setDefaultHandler("resource", new TlsPeer(NOTHING, "/resource"));
+        HttpServer pings(<HttpServerOptionInfo>{"idle_threads": 2, "min_idle_handler_threads": 1});
+        on_exit pings.stop();
+        pings.setDefaultHandler("ping", new TlsPeer(NOTHING, "/ping"));
+        string main_url = sprintf("https://127.0.0.1:%d", addMtlsListener(server));
+        string ping_url = sprintf("https://127.0.0.1:%d/ping", addMtlsListener(pings));
+        server.waitForAsyncIo();
+        pings.waitForAsyncIo();
+        RestConnection conn("ping", "", main_url, {}, tlsOptions(tmp) + {"ping_method": "GET", "ping_path": ping_url});
+        hash<PingInfo> result = conn.ping();
+        assertTrue(result.ok, result.ex.desc ?? "configured mTLS ping");
+    }
+
+    private static writeFixture(string path, data value) {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
         f.write(value);
+    }
+
+    localBindings() {
+        TmpDir tmp("rest-tls-bindings-");
+        string cert = tmp.path + DirSep + "cert.der";
+        string key = tmp.path + DirSep + "key.der";
+        writeFixture(cert, new SSLCertificate(TestCertificates::CertPem).getDER());
+        writeFixture(key, new SSLPrivateKey(TestCertificates::KeyPem).getDER());
+        Program reader(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        reader.parse("%requires RestClient\nobject sub acquire(object c) { return c.getAsync(False); }"
+            "class RestrictedRest inherits RestConnection { constructor(string u, hash<auto> o)"
+            " : RestConnection(\"r\", \"r\", u, {}, o) {} }"
+            "object sub create(string u, hash<auto> o) { return new RestrictedRest(u, o); }", "client");
+
+        string url = "rests://localhost";
+        hash<auto> opts = {"ssl_cert_path": "cert.der", "ssl_key_path": "file://" + key};
+        string cwd = getcwd();
+        RestConnection c;
+        {
+            assertEq(0, chdir(tmp.path));
+            on_exit chdir(cwd);
+            c = new RestConnection("local", "", url, {}, opts);
+        }
+        # DER flags belong to the client options assembled by a connection.
+        c.real_opts.ssl_cert_der = True;
+        c.real_opts.ssl_key_der = True;
+        assertTrue(reader.callFunction("acquire", c) instanceof RestClientIo);
+        assertTrue(reader.callFunction("acquire", c.copy()) instanceof RestClientIo);
+        assertThrows("PERMISSION-DENIED", \reader.callFunction(),
+            ("acquire", reader.callFunction("create", url, opts)));
+        string endpoint = c.real_url;
+        c.real_url = "https://other.invalid";
+        assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c));
+        c.real_url = endpoint;
+
+        Program sandbox(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        sandbox.parse("object sub acquire(object c) { return c.getAsync(False); }"
+            "object sub sync_client(object c) { return c.get(False); }", "sandbox-client");
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        sandbox.setSandboxManager(manager);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("acquire", c));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("sync_client", c));
+
+        # An empty substitution expands to an empty prefix in every module Program.
+        foreach string loc in (cert + "{max_file_len=1}", tmp.path + "/literal-$-name", "${}" + cert,
+                "example+test://cert") {
+            RestConnection expression("expr", "", url, {}, {"ssl_cert_path": loc});
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", expression), loc);
+        }
+        RestConnection clipped("limit", "", url, {}, {"ssl_cert_path": cert + "{max_file_len=1}"});
+        clipped.real_opts.ssl_cert_der = True;
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \clipped.getAsync(), False);
+    }
+
+    syncFilePolicy() {
+        TmpDir tmp("rest-sync-policy-");
+        RestConnection c("sync", "", "rests://localhost", {}, {});
+        Program reader(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        reader.parse("object sub acquire(object c, *hash<auto> opts) { return c.get(False, opts); }"
+            "hash<auto> sub wire(object c) { hash<SerializationInfo> s = Serializable::serializeToData(c);"
+            " return s._index{s._data._index}._class_data.\"Qore::HTTPClient\"; }", "sync-client");
+        assertTrue(reader.callFunction("acquire", c) instanceof RestClient);
+        HTTPClient ordinary({"ssl_cert_data": TestCertificates::CertPem, "ssl_key_data": TestCertificates::KeyPem});
+        HTTPClient opaque({}, new SSLCertificate(TestCertificates::CertPem), new SSLPrivateKey(TestCertificates::KeyPem));
+        HTTPClient mixed({"ssl_key_data": TestCertificates::KeyPem}, new SSLCertificate(TestCertificates::CertPem),
+            NOTHING);
+        assertFalse(mixed.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(mixed.getHttpConfig().hasKey("ssl_key_data"));
+        foreach string field in ("ssl_cert_data", "ssl_key_data") {
+            assertTrue(reader.callFunction("wire", ordinary).hasKey(field));
+            assertFalse(reader.callFunction("wire", opaque).hasKey(field));
+        }
+        foreach string option in ("ssl_cert_path", "ssl_key_path") {
+            # A policy refusal must precede file I/O, including for a filename that does not exist.
+            string missing = tmp.path + DirSep + option;
+            hash<auto> overrides();
+            overrides{option} = missing;
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c, overrides));
+            c.real_opts{option} = missing;
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c));
+            remove c.real_opts{option};
+        }
     }
 
     credentials() {
@@ -59,9 +446,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
             {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_verify_cert": False});
         TestStore::rest_tls = conn;
         on_exit remove TestStore::rest_tls;
-        writePem(cert, TestCertificates::CertPem);
-        writePem(key, TestCertificates::KeyPem);
-        writePem(other, TestCertificates::CertPem);
+        writeFixture(cert, TestCertificates::CertPem);
+        writeFixture(key, TestCertificates::KeyPem);
+        writeFixture(other, TestCertificates::CertPem);
         Program providers(PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
         providers.setGlobalVarValue("ENV", ENV + {"QORE_CONNECTION_PROVIDERS":
             get_script_dir() + "FileLocationTestConnectionProvider.qm"});
@@ -72,6 +459,62 @@ class RestConnectionTlsTest inherits QUnit::Test {
             "{\"ssl_cert_path\": c, \"ssl_key_path\": k}); }\n"
             "object sub client(object c, *hash<auto> opts) { return c.getAsync(True, opts); }\n"
             "string sub read(string loc) { return FileLocationHandler::getTextFileFromLocation(loc); }", "reader");
+        Program sync(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        sync.parse("%requires RestClient\n"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }"
+            "hash<auto> sub check(object c) { object client = c.get(False);"
+            " hash<auto> config = client.getHttpConfig(); hash<auto> saved = client.getConstructorOptions();"
+            " hash<SerializationInfo> state = Serializable::serializeToData(client);"
+            " hash<auto> wire = state._index{state._data._index}._class_data.\"Qore::HTTPClient\";"
+            " return {\"body\": client.restGet(\"/content\").body,"
+            " \"wire_cert\": wire.hasKey(\"ssl_cert_data\"), \"wire_key\": wire.hasKey(\"ssl_key_data\"),"
+            " \"exports_cert\": config.hasKey(\"ssl_cert_data\") || saved.hasKey(\"ssl_cert_data\"),"
+            " \"exports_key\": config.hasKey(\"ssl_key_data\") || saved.hasKey(\"ssl_key_data\"),"
+            " \"cert_path\": saved.ssl_cert_path, \"key_path\": saved.ssl_key_path}; }", "sync-check");
+        hash<auto> result = sync.callFunction("check", conn);
+        assertEq("authenticated", result.body);
+        assertFalse(result.exports_cert);
+        assertFalse(result.exports_key);
+        assertFalse(result.wire_cert);
+        assertFalse(result.wire_key);
+        assertEq(cert, result.cert_path);
+        assertEq(key, result.key_path);
+        RestClient bound = conn.get(False);
+        RestClientIo bound_async = conn.getAsync(False);
+        foreach hash<auto> opts in (bound.getConstructorOptions(), bound_async.getConstructorOptions()) {
+            assertEq(cert, opts.ssl_cert_path);
+            assertEq(key, opts.ssl_key_path);
+            assertFalse(opts.hasKey("ssl_cert_data"));
+            assertFalse(opts.hasKey("ssl_key_data"));
+        }
+        assertFalse(bound.getHttpConfig().hasKey("ssl_cert_data"));
+        assertFalse(bound.getHttpConfig().hasKey("ssl_key_data"));
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", bound, conn.real_url + "/sibling"));
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", bound_async, conn.real_url + "/sibling"));
+        RestClient sync_copy = cast<RestClient>(bound.copyWithUrl(conn.real_url + "/sibling"));
+        assertFalse(sync_copy.getHttpConfig().hasKey("ssl_cert_data"));
+        assertFalse(sync_copy.getHttpConfig().hasKey("ssl_key_data"));
+        RestClientIo async_copy = bound_async.copyWithUrl(conn.real_url + "/sibling");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", async_copy, conn.real_url));
+        RestClientIo no_paths({"url": conn.real_url});
+        assertTrue(sync.callFunction("sibling", no_paths, conn.real_url) instanceof RestClientIo);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \bound_async.copyWithUrl(),
+            sprintf("http://127.0.0.1:%d", port));
+        RestClient supplied({"url": conn.real_url, "ssl_cert_path": cert, "ssl_key_path": key}, True);
+        assertTrue(supplied.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(supplied.getHttpConfig().hasKey("ssl_key_data"));
+        assertEq(key, supplied.getConstructorOptions().ssl_key_path);
+        RestConnection mixed("mixed", "", conn.getUrl(), {}, {
+            "ssl_cert_path": cert, "ssl_key_data": TestCertificates::KeyPem,
+        });
+        RestClient mixed_sync = mixed.get(False);
+        RestClientIo mixed_async = mixed.getAsync(False);
+        foreach hash<auto> opts in (mixed_sync.getConstructorOptions(), mixed_async.getConstructorOptions()) {
+            assertFalse(opts.hasKey("ssl_cert_data"));
+            assertTrue(opts.hasKey("ssl_key_data"));
+        }
+        assertFalse(mixed_sync.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(mixed_sync.getHttpConfig().hasKey("ssl_key_data"));
         string loc = "conn://rest-tls/content";
         assertEq("authenticated", restricted.callFunction("read", loc));
         assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", cert));
@@ -91,9 +534,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
         conn.real_opts.ssl_key_path = key;
         assertThrows("LOCATION-ERROR", "unsupported read option.*ssl_cert_path", \restricted.callFunction(),
             ("read", loc + "{ssl_cert_path=" + other + "}"));
-        writePem(cert, "");
+        writeFixture(cert, "");
         assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \restricted.callFunction(), ("read", loc));
-        writePem(cert, TestCertificates::CertPem);
+        writeFixture(cert, TestCertificates::CertPem);
         assertEq("authenticated", restricted.callFunction("read", loc));
     }
 }

@@ -491,7 +491,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # SIGKILL: the client vanishes without a close frame and without a QUIC
         # CONNECTION_CLOSE — the server will never hear from it again
         kill(pid, SIGKILL);
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         # past the idle timeout of the server's connection, which then sees no packet from the dead peer
         advanceClockPastIdle(pid_path);
 
@@ -500,7 +500,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # The heartbeat is pinned an hour out, so nothing but the transport could
         # have done this; assert the timing anyway to keep that guarantee honest.
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
         assertLt(seconds(NoHeartbeat), elapsed,
             sprintf("handler was reaped by the transport in %y, not by a heartbeat",
                 elapsed));

@@ -7,6 +7,10 @@
     do (pollers, servers, event callbacks).  A caller that may not start threads itself
     (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can still cause threads through this module; those
     threads are governed by the caller's sandbox, including its thread limit.
+
+    The module runs the caller's code from closures of its own: the caller's code itself is never started in another
+    thread (\c "background c()" with the caller's code \c c is refused with \c PERMISSION-DENIED for such a caller,
+    qore#7056), while a closure of the module, which then calls the caller's code, is the module's capability.
 */
 module SandboxThreadFixture {
     version = "1.0";
@@ -19,11 +23,11 @@ module SandboxThreadFixture {
 public namespace SandboxThreadFixture {
     #! Starts threads for its callers; its methods run in the module's Program
     public class Runner {
-        #! Runs the caller's code in a new thread with the background operator
+        #! Runs the caller's code in a new thread that a closure of the module starts with the background operator
         /** @return the TID of the new thread
         */
         static int start(code c) {
-            return background c();
+            return background sub () { c(); }();
         }
 
         #! Runs the caller's code in a new thread with call_async() through a closure of the module
@@ -45,7 +49,7 @@ public namespace SandboxThreadFixture {
         static int startNested(code c, Queue result, Queue gate) {
             code outer = sub () {
                 try {
-                    result.push(background c());
+                    result.push(background sub () { c(); }());
                 } catch (hash<ExceptionInfo> ex) {
                     result.push(sprintf("%s: %s", ex.err, ex.desc));
                 }
@@ -67,6 +71,6 @@ public namespace SandboxThreadFixture {
     /** @return the TID of the new thread
     */
     public int sub start_thread(code c) {
-        return background c();
+        return background sub () { c(); }();
     }
 }

@@ -947,10 +947,10 @@ public class FileLocationHandlerResourceTest inherits QUnit::Test {
 
     #! Drives a poll operation on this thread until it completes and returns its output
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 30s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - microseconds(clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

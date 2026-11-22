@@ -1873,9 +1873,14 @@ class WebSocketStreamProcessor {
 
         @param cb the code to call
 
+        @throw PERMISSION-DENIED \a cb was created by code restricted from the \c THREAD_CONTROL domain, as it is
+        called in the thread that closes the stream (see @ref Qore::check_thread_callable() "check_thread_callable()")
+
         @since WebSocketHandler 2.8
     */
     setDoneCallback(code<nothing()> cb) {
+        # the code is called in another thread: an async I/O worker that closes the stream (qore#7056)
+        check_thread_callable(cb, "WebSocketStreamProcessor::setDoneCallback()");
         {
             AutoLock al(close_lock);
             if (!closed) {

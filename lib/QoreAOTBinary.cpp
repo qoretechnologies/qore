@@ -7574,20 +7574,22 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 state.classes.push_back({cls, priv, ns_idx});
 
                 // Collect user methods for this class
-                for (auto& mi : priv->hm) {
+                // in the order in which they were declared: the loader creates the methods of a class in the order
+                // of the binary, and the enumeration of a class's methods follows that order (issue #7169)
+                for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
                     if (cancelled()) {
                         return false;
                     }
-                    if (mi.second->isUser()) {
-                        state.methods.push_back({mi.second, class_idx, false});
+                    if (m->isUser()) {
+                        state.methods.push_back({m, class_idx, false});
                     }
                 }
-                for (auto& mi : priv->shm) {
+                for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
                     if (cancelled()) {
                         return false;
                     }
-                    if (mi.second->isUser()) {
-                        state.methods.push_back({mi.second, class_idx, true});
+                    if (m->isUser()) {
+                        state.methods.push_back({m, class_idx, true});
                     }
                 }
             }
@@ -7741,12 +7743,12 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         }
     }
 
-    // Collect user functions
-    for (auto fi = ns->func_list.begin(), fe = ns->func_list.end(); fi != fe; ++fi) {
+    // Collect user functions, in the order in which they were declared: the loader creates them in the order of the
+    // binary, and the enumeration of a namespace's functions follows that order (issue #7171)
+    for (FunctionEntry* entry : ns->func_list.getEntriesInDeclarationOrder()) {
         if (cancelled()) {
             return false;
         }
-        FunctionEntry* entry = fi->second;
         QoreFunction* func = entry->getFunction();
         if (func && !entry->hasBuiltin()) {
             // Filter out functions from reexported dependencies
@@ -7792,11 +7794,11 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     }
 
     // Recurse into child namespaces (filter out namespaces from reexported dependencies)
-    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+    // (in the order in which they were declared, as the loader creates them in the order of the binary: issue #7171)
+    for (QoreNamespace* child_ns : qore_namespaces_in_declaration_order(ns->nsl.nsmap)) {
         if (cancelled()) {
             return false;
         }
-        QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
             // Cross-module namespace shells (e.g. ::OMQ, ::Qore, ::Priv)

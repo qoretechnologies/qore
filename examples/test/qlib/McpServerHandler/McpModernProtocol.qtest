@@ -990,8 +990,8 @@ public class McpModernProtocolTest inherits QUnit::Test {
         nondeterministic
     */
     private hash<auto> pollTask(string taskId, hash<auto> meta, *string until) {
-        date deadline = now_us() + 20s;
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + 20s;
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             hash<auto> r = post("tasks/get", {"taskId": taskId}, {"meta": meta});
             if (r.status != 200) {
                 throw "TEST-ERROR", sprintf("tasks/get for %y failed with HTTP %d: %y", taskId,

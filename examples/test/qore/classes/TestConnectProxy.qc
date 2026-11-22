@@ -25,6 +25,7 @@ class TestConnectProxy {
         *SSLPrivateKey key;
         #! the addresses of target host names that cannot be resolved, such as a name in a test certificate
         *hash<string, string> host_map;
+        bool request_client_certificate;
         bool quit;
         Counter threads();
         Mutex m();
@@ -35,12 +36,15 @@ class TestConnectProxy {
         @param cert the certificate of an HTTPS proxy; clients then connect to the proxy with TLS
         @param key the private key of \a cert
         @param host_map the addresses to connect to for target host names, such as a name in a test certificate
+        @param request_client_certificate request an optional client certificate and record its presence
     */
-    constructor(*string required_auth, *SSLCertificate cert, *SSLPrivateKey key, *hash<string, string> host_map) {
+    constructor(*string required_auth, *SSLCertificate cert, *SSLPrivateKey key, *hash<string, string> host_map,
+            bool request_client_certificate = False) {
         self.required_auth = required_auth;
         self.cert = cert;
         self.key = key;
         self.host_map = host_map;
+        self.request_client_certificate = request_client_certificate;
         listener.bindINET("127.0.0.1", "0", True);
         listener.listen();
         port = listener.getSocketInfo().port;
@@ -128,6 +132,11 @@ class TestConnectProxy {
             try {
                 s.setCertificate(cert);
                 s.setPrivateKey(key);
+                if (request_client_certificate) {
+                    s.setSslVerifyMode(SSL_VERIFY_PEER);
+                    s.acceptAllCertificates();
+                    s.captureRemoteCertificates();
+                }
                 s.upgradeServerToSSL(10s);
             } catch (hash<ExceptionInfo> ex) {
                 # the client failed the TLS handshake
@@ -144,13 +153,17 @@ class TestConnectProxy {
         if (!req) {
             return;
         }
+        hash<auto> entry = {
+            "line": req.line,
+            "proxy-authorization": req.hdr."proxy-authorization",
+            "ssl": s.isSecure(),
+        };
+        if (request_client_certificate) {
+            entry.client_cert_present = exists s.getRemoteCertificate();
+        }
         {
             AutoLock al(m);
-            requests += {
-                "line": req.line,
-                "proxy-authorization": req.hdr."proxy-authorization",
-                "ssl": s.isSecure(),
-            };
+            requests += entry;
         }
         if (required_auth && req.hdr."proxy-authorization" != required_auth) {
             s.send("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"test\"\r\n"

@@ -61,6 +61,8 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreSandboxLimits.h"
 
 // to register object types
@@ -857,6 +859,12 @@ public:
     int64 bg_thread_id = 0;
     //! the ID of the Program of the background thread in bg_thread_id; it is the parent only of that Program's threads
     qore_program_id_t bg_pgm_id = 0;
+    //! the call stack frame of the expression of the background operator while it runs in this thread, or nullptr
+    /** A call that has only builtin frames (call_function(), for example) between its own frame and this one is made
+        by the expression itself: code that may not control threads, which the expression calls so, is refused
+        (qore_check_background_direct_entry(), qore#7087)
+    */
+    const QoreStackLocation* bg_expr_frame = nullptr;
 
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
@@ -9305,6 +9313,80 @@ int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 do
     return check_module_owned_code(code, domain, name, action, xsink);
 }
 
+int qore_check_thread_callable(const QoreValue v, int64 domain, const char* name, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreParseOptions denied = qore_callable_authored_restrictions_po(v) & QoreParseOptions(domain);
+    if (!denied) {
+        return 0;
+    }
+    if (denied & QoreParseOptions(QDOM_THREAD_CONTROL)) {
+        xsink->raiseException("PERMISSION-DENIED", "%s: the code was created by code that may not control threads "
+            "(PO_NO_THREAD_CONTROL), so it cannot be run in another thread", name);
+    } else {
+        xsink->raiseException("PERMISSION-DENIED", "%s: the code was created by code that may not use the thread "
+            "classes (PO_NO_THREAD_CLASSES), so it cannot be run in another thread", name);
+    }
+    return -1;
+}
+
+int qore_check_thread_callable(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
+        ExceptionSink* xsink) {
+    return code
+        ? qore_check_thread_callable(QoreValue(const_cast<ResolvedCallReferenceNode*>(code)), domain, name, xsink)
+        : 0;
+}
+
+// returns true if the call is made by the expression of the background operator that the thread runs: only builtin
+// frames (call_function(), for example) are between the call and the expression's frame; \a callee_frame_pushed
+// means that the current frame is the call's own
+static bool qore_background_expression_call(const ThreadData* td, bool callee_frame_pushed) {
+    const QoreStackLocation* f = td->current_stack_location.load(std::memory_order_relaxed);
+    if (callee_frame_pushed && f && f != td->bg_expr_frame) {
+        f = f->getNext();
+    }
+    while (f && f != td->bg_expr_frame && f->getCallType() == CT_BUILTIN) {
+        f = f->getNext();
+    }
+    return f == td->bg_expr_frame;
+}
+
+static void raise_background_expression_call(ExceptionSink* xsink) {
+    xsink->raiseException("PERMISSION-DENIED", "background operator: the code that the expression calls was created "
+        "by code that may not control threads (PO_NO_THREAD_CONTROL), so it cannot be run in another thread");
+}
+
+int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed, ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame
+            || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
+            || !qore_background_expression_call(td, callee_frame_pushed)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
+int qore_check_background_direct_call(ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame || !qore_background_expression_call(td, false)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
+int qore_check_background_direct_callable(const QoreValue v, ExceptionSink* xsink) {
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame || !qore_background_expression_call(td, false)) {
+        return 0;
+    }
+    if (!(qore_callable_authored_restrictions_po(v) & QoreParseOptions(QDOM_THREAD_CONTROL))) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
+}
+
 // rcr is the code, or nullptr if the value is not code
 static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 domain, const char* name,
         const char* action, ExceptionSink* xsink) {
@@ -10823,6 +10905,18 @@ namespace {
                         BGTypeParamInstantiationHelper type_param_helper(btp->type_param_inst,
                             btp->receiver_type_info);
                         QoreStatementTempScope temps(&xsink);
+                        // the calls that the expression makes itself are checked (qore#7087)
+                        class BackgroundExpressionFrameHelper {
+                        public:
+                            BackgroundExpressionFrameHelper(ThreadData* td, const QoreStackLocation* frame) : td(td) {
+                                td->bg_expr_frame = frame;
+                            }
+                            ~BackgroundExpressionFrameHelper() {
+                                td->bg_expr_frame = nullptr;
+                            }
+                        private:
+                            ThreadData* td;
+                        } bg_expr_frame_helper(td, &stack_loc);
                         rv = btp->exec(&xsink);
                     } else {
                         btp->discardExpression(&xsink);
@@ -11013,6 +11107,23 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
     if (*xsink || !nl) {
         return QoreValue();
     }
+    // a call of a closure or call reference, or of a method of an object of a class, that code restricted from
+    // thread control authored is not started in another thread, whichever code starts it (qore#7056, qore#7087);
+    // the copy holds the value of the callee and of the object; code that the new thread computes and that the
+    // expression calls itself is checked when it is called (qore_check_background_direct_entry())
+    if (nl->getType() == NT_FUNCREFCALL) {
+        if (qore_check_thread_callable(nl->get<const CallReferenceCallNode>()->getExp(), QDOM_THREAD_CONTROL,
+                "background operator", xsink)) {
+            return QoreValue();
+        }
+    } else if (nl->getType() == NT_OPERATOR) {
+        const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(nl->getInternalNode());
+        if (call && call->getExpression().getType() == NT_OBJECT
+                && qore_check_thread_callable(call->getExpression(), QDOM_THREAD_CONTROL, "background operator",
+                    xsink)) {
+            return QoreValue();
+        }
+    }
 
     int tid = get_thread_entry();
     if (tid == -1) {
@@ -11047,7 +11158,7 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 }
 
 QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, int callee, ExceptionSink* xsink) {
     if (q_check_background_start_allowed(xsink)) {
         return QoreValue();
     }
@@ -11082,6 +11193,18 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         ExceptionSink* xsink;
     } value_releaser(helper, xsink);
     for (size_t i = 0; i < num; ++i) {
+        // the callee of a call of a closure or call reference is checked, as the AST interpreter checks it
+        // (qore#7087); a value that is only an argument is module code's to give to the code that it calls, as for a
+        // closure of the module that calls it; when the starting code does not say which value is the callee (a
+        // compiled module), every closure and call reference is checked, which refuses more than the AST
+        // interpreter (ex: "background f(c, x + 1)" with a closure c of code that may not control threads) (qore#7056)
+        // the object of a call of a method is the callee as well (its class's code runs)
+        qore_type_t t = values[i].getType();
+        if ((t == NT_RUNTIME_CLOSURE || t == NT_FUNCREF || t == NT_OBJECT)
+                && (callee == QBH_CALLEE_UNKNOWN || callee == static_cast<int>(i))
+                && qore_check_thread_callable(values[i], QDOM_THREAD_CONTROL, "background operator", xsink)) {
+            return QoreValue();
+        }
         helper->values.push_back(background_check_value_capture(values[i].refSelf(), xsink));
         if (*xsink) {
             return QoreValue();

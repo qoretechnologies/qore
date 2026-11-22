@@ -1653,6 +1653,13 @@ private:
     //! Set while the expression of a background helper is lowered, null otherwise
     BackgroundHelperLowering* bg_helper = nullptr;
 
+    //! Returns the index of the helper parameter that is the callee of a background expression (qore#7087)
+    /** See QoreIRBackgroundInstruction::helper_callee; \a params are the helper's parameters: the local variables of
+        the starting code, then those of \a state
+    */
+    DLLLOCAL static int backgroundHelperCallee(const QoreValue& expr, const std::vector<LocalVar*>& params,
+        const BackgroundHelperLowering& state);
+
     //! The number of background helpers lowered by this lowering and the lowerings nested in it
     unsigned bg_helper_count_own = 0;
     //! Counts background helpers for the outermost lowering, so that the names of their parameters are unique and

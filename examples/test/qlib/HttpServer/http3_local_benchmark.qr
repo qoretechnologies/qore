@@ -234,9 +234,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
         # HTTP/1.1 - new connections each iteration (reuse has known issue in async mode)
         try {
             list<float> latencies = ();
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < iterations; ++i) {
-                date req_start = now_us();
+                int req_start = clock_get_monotonic_us();
                 HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
                 h1.acceptAllCertificates(True);
                 h1.send("", "GET", "/simple", NOTHING, True);
@@ -259,9 +259,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             h2.send("", "GET", "/simple", NOTHING, True);  # warmup
 
             list<float> latencies = ();
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < iterations; ++i) {
-                date req_start = now_us();
+                int req_start = clock_get_monotonic_us();
                 h2.send("", "GET", "/simple", NOTHING, True);
                 latencies += elapsedMs(req_start);
             }
@@ -288,9 +288,9 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             mgr.request(h3_url, "GET", "/simple");  # warmup
 
             list<float> latencies = ();
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < iterations; ++i) {
-                date req_start = now_us();
+                int req_start = clock_get_monotonic_us();
                 mgr.request(h3_url, "GET", "/simple");
                 latencies += elapsedMs(req_start);
             }
@@ -316,7 +316,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             list<float> latencies = ();
             for (int i = 0; i < connect_iters; ++i) {
                 try {
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 30s});
                     h1.acceptAllCertificates(True);
                     h1.send("", "GET", "/simple", NOTHING, True);
@@ -335,7 +335,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             list<float> latencies = ();
             for (int i = 0; i < connect_iters; ++i) {
                 try {
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     HTTPClient h2({"url": https_url, "http_version": "2.0", "timeout": 30s});
                     h2.acceptAllCertificates(True);
                     h2.send("", "GET", "/simple", NOTHING, True);
@@ -354,7 +354,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             list<float> latencies = ();
             for (int i = 0; i < connect_iters; ++i) {
                 try {
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     HttpClientIo::HttpClientConnectionManager mgr(
                         <HttpClientIo::HttpClientConnectionManagerOptions>{
                             "protocol": "h3",
@@ -381,7 +381,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         # HTTP/1.1 - separate connection per concurrent request
         try {
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -393,7 +393,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                     try {
                         HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 30s});
                         h1.acceptAllCertificates(True);
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h1.send("", "GET", "/simple", NOTHING, True);
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -420,7 +420,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             h2.acceptAllCertificates(True);
             h2.send("", "GET", "/simple", NOTHING, True);  # establish connection
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -430,7 +430,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                 background sub() {
                     on_exit cnt.dec();
                     try {
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h2.send("", "GET", "/simple", NOTHING, True);
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -463,7 +463,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             on_exit mgr.closeAll();
             mgr.request(h3_url, "GET", "/simple");  # establish connection
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -473,7 +473,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                 background sub() {
                     on_exit cnt.dec();
                     try {
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         mgr.request(h3_url, "GET", "/simple");
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -516,7 +516,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                 for (int i = 0; i < download_iters; ++i) {
                     HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
                     h1.acceptAllCertificates(True);
-                    date req_start = now_us();
+                    int req_start = clock_get_monotonic_us();
                     h1.send("", "GET", sprintf("/large/%d", size), NOTHING, True);
                     latencies += elapsedMs(req_start);
                 }
@@ -536,7 +536,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                 list<float> latencies = ();
                 int download_iters = max(3, min(20, iterations / 10));
                 for (int i = 0; i < download_iters; ++i) {
-                    date req_start = now_us();
+                    int req_start = clock_get_monotonic_us();
                     h2.send("", "GET", sprintf("/large/%d", size), NOTHING, True);
                     latencies += elapsedMs(req_start);
                 }
@@ -559,7 +559,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                 list<float> latencies = ();
                 int download_iters = max(3, min(20, iterations / 10));
                 for (int i = 0; i < download_iters; ++i) {
-                    date req_start = now_us();
+                    int req_start = clock_get_monotonic_us();
                     mgr.request(h3_url, "GET", sprintf("/large/%d", size));
                     latencies += elapsedMs(req_start);
                 }
@@ -595,7 +595,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             Counter inflight(0);
             Mutex m();
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < request_count; ++i) {
                 while (inflight.getCount() >= flight_limit) {
                     usleep(100us);
@@ -609,7 +609,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                     try {
                         HTTPClient h1({"url": https_url, "http_version": "1.1", "timeout": 5s});
                         h1.acceptAllCertificates(True);
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h1.send("", "GET", "/simple", NOTHING, True);
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -640,7 +640,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             Counter inflight(0);
             Mutex m();
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < request_count; ++i) {
                 while (inflight.getCount() >= flight_limit) {
                     usleep(100us);
@@ -652,7 +652,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                         done.dec();
                     }
                     try {
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h2.send("", "GET", "/simple", NOTHING, True);
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -689,7 +689,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
             Counter inflight(0);
             Mutex m();
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < request_count; ++i) {
                 while (inflight.getCount() >= flight_limit) {
                     usleep(100us);
@@ -701,7 +701,7 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
                         done.dec();
                     }
                     try {
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         mgr.request(h3_url, "GET", "/simple");
                         float lat = elapsedMs(req_start);
                         m.lock();
@@ -774,8 +774,8 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
     # ---- Utility Methods ----
 
-    private float elapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000.0;
+    private float elapsedMs(int start) {
+        return (clock_get_monotonic_us() - start) / 1000.0;
     }
 
     private printLatencyStats(list<float> latencies) {

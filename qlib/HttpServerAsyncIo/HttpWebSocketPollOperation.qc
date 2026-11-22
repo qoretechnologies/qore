@@ -170,8 +170,13 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
 
         @param cb the code to call; it runs user code (the connection's close callbacks) and must handle the
         exceptions that it raises
+
+        @throw PERMISSION-DENIED \a cb was created by code restricted from the \c THREAD_CONTROL domain, as it runs
+        on another thread (see @ref Qore::check_thread_callable() "check_thread_callable()")
     */
     public setDoneCallback(code<nothing()> cb) {
+        # the code runs on a thread of the handler pool or a new thread (qore#7056)
+        check_thread_callable(cb, "HttpWebSocketPollOperation::setDoneCallback()");
         bool do_call = False;
         {
             AutoLock al(dispatch_mutex);

@@ -352,6 +352,9 @@ foreach hash<HttpRedirectInfo> hop in (info.redirects) {
     TLS verification settings, the timeouts, and the connection manager are all untouched, so requests to
     different targets can be made at the same time on one client and a failed request leaves nothing behind.
 
+    A client constructed with separate TLS credential objects raises \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR
+    if the target or a followed redirect selects a different scheme, host, or effective port.
+
     This is what a caller needs when a target is named by the data it processes — a WSDL port address with an
     operation reference, a service document that names its own endpoints — rather than configured up front.
     Note that @ref send() takes a request target and not a URL: an absolute URL passed to @ref send() is sent as
@@ -605,8 +608,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash, or the \c username, \c password, \c default_path or \c http_version option or a name or value of the \c headers option contains a NUL or another control character than horizontal tab (since %Qore 3.0); passwords, paths and header values are not shown in the exception
     @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
-    @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM
-    sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
+    @throw ILLEGAL-FILESYSTEM-ACCESS if the current Program or a caller is restricted from filesystem access
+    and supplies \c ssl_cert_path or \c ssl_key_path (see @ref Qore::PO_NO_FILESYSTEM)
     @throw HTTP-CLIENT-URL-ERROR the URL host contains a NUL character; see @ref path_nul_characters
     @throw HTTP-CLIENT-OPTION-ERROR a path given with \c ssl_cert_path, \c ssl_key_path, \c ssl_ca_file or
     \c ssl_ca_path contains a NUL character; see @ref path_nul_characters
@@ -673,6 +676,46 @@ HTTPClient httpclient();
  */
 HTTPClient::constructor() {
     self->setPrivate(CID_HTTPCLIENT, new QoreHttpClientObject);
+}
+
+//! Creates an HTTP client with TLS credentials supplied for use by this client
+/** @param options ordinary HTTP client constructor options
+    @param certificate when present, supplies the TLS certificate in place of the certificate options
+    @param private_key when present, supplies the TLS private key in place of the key options
+
+    Credentials supplied as objects can be used only at the configured URL's origin (scheme, host and effective
+    port). Supply a URL at construction to use the objects for a connection.
+    A request URL or redirect that changes origin raises \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR.
+    A credential supplied as an object here is omitted from getHttpConfig() and from serialization.
+    A deserialized client must be supplied that credential again to use it.
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), nullptr, xsink);
+    if (!client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
+}
+
+//! Creates an HTTP client that may present the supplied TLS credentials at specified additional origins
+/** @param options ordinary HTTP client constructor options, including the primary URL
+    @param certificate client certificate omitted from configuration exports
+    @param private_key client key omitted from configuration exports
+    @param additional_origins absolute HTTP(S) URLs fixed by the credential owner at construction.
+    The scheme, host and effective port identify each permitted origin.
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR an origin is invalid or a request selects an unconfigured origin
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key, list<string> additional_origins) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), additional_origins,
+        xsink);
+    if (!*xsink && !client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
 }
 
 //! Copying objects of this class is not supported, an exception will be thrown
@@ -1399,9 +1442,10 @@ httpclient.setSecure(True);
     @endcode
 
     @param secure if @ref True, a SSL/TLS connection will be attempted on the next connection. If @ref False, an unencrypted cleartext connection will be established
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the new setting changes the scheme of connection-owned TLS credentials
  */
 nothing HTTPClient::setSecure(softbool secure = True) [flags=NAMED_ARGS] {
-    client->setSecure(secure);
+    qore_httpclient_set_secure(*client, secure, xsink);
 }
 
 //! Returns @ref True if the current connection is encrypted, @ref False if not
@@ -3141,6 +3185,8 @@ httpclient.setURL("https://user:password@hostname:8080/path");
     @throw HTTP-CLIENT-URL-ERROR the URL host (for example a decoded UNIX socket path) contains a NUL character;
     see @ref path_nul_characters
 
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the new URL changes the origin of connection-owned TLS credentials
+
     @see HTTPClient::getURL()
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
@@ -3787,6 +3833,8 @@ string HTTPClient::getDefaultPath() [flags=CONSTANT] {
 httpclient.setConnectionPath(new_path);
     @endcode
 
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the URI selects another origin for connection-owned TLS credentials
+
     @see getConnectionPath()
 
     @since %Qore 0.9.3.2
@@ -3796,7 +3844,7 @@ HTTPClient::setConnectionPath(*string uri_path) [flags=NAMED_ARGS] {
     if (uri_path && !path.set(uri_path, QCS_DEFAULT, xsink)) {
         return QoreValue();
     }
-    client->setConnectionPath(uri_path ? path->c_str() : nullptr);
+    qore_httpclient_set_connection_path(*client, uri_path ? path->c_str() : nullptr, xsink);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -4190,7 +4238,11 @@ bool HTTPClient::getPreEncodedUrls() [flags=CONSTANT] {
 }
 
 //! Returns the configuration of the HTTP client
-/** @return the configuration of the HTTP client
+/** TLS credentials passed separately as objects at construction are omitted from this configuration and from
+    serialization. Credentials passed through the options hash, including \c ssl_key_data, retain their ordinary
+    export behavior.
+
+    @return the configuration of the HTTP client
 
     @since %Qore 2.0
 */

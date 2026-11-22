@@ -230,9 +230,9 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
             "connect_timeout": 5s,
         });
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<auto> resp = rc.restGet("/normal");
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(200, resp.status_code, "H3 request succeeds");
         assertTrue(resp.body.ok, "H3 response body correct");
@@ -273,7 +273,7 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
             "connect_timeout": 3s,
         });
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         bool got_timeout = False;
         try {
             rc.restGet("/silent");
@@ -285,7 +285,7 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
                 printf("  timeout error: %s: %s\n", ex.err, ex.desc);
             }
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(got_timeout, "silent server request timed out");
         # Must complete within 10s — if it takes longer, something is busy-looping
@@ -320,9 +320,9 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
         }
 
         # Third request should succeed (either on same or new connection)
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<auto> resp3 = rc.restGet("/normal");
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(200, resp3.status_code, "third request succeeds after error");
         assertTrue(elapsed < 5s,

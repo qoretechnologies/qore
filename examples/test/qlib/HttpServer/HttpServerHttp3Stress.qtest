@@ -234,11 +234,11 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Duration: 5s is a reasonable CI default; valgrind runs are auto-detected
         # via low throughput (testSkip if < 500 requests)
-        date end_time = now_us() + 5s;
+        date end_time = microseconds(clock_get_monotonic_us()) + 5s;
         int count = 0;
         list<string> errors = ();
 
-        while (now_us() < end_time) {
+        while (microseconds(clock_get_monotonic_us()) < end_time) {
             try {
                 hash<auto> resp = mgr.request(mH3Url, "GET", "/hello");
                 if (resp.status_code == 200) {
@@ -279,12 +279,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit mgr.closeAll();
 
         int body_size = 10000;  # 10KB per response
-        date end_time = now_us() + 5s;
+        date end_time = microseconds(clock_get_monotonic_us()) + 5s;
         int count = 0;
         int total_bytes = 0;
         list<string> errors = ();
 
-        while (now_us() < end_time) {
+        while (microseconds(clock_get_monotonic_us()) < end_time) {
             try {
                 hash<auto> resp = mgr.request(mH3Url, "GET",
                     sprintf("/large/%d", body_size));
@@ -556,10 +556,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit mgr.closeAll();
 
         # Determine count based on environment (valgrind vs normal)
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         hash<auto> probe = mgr.request(mH3Url, "GET", "/hello");
         assertEq(200, probe.status_code, "probe request should succeed");
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
 
         # If probe takes > 500ms, likely under valgrind; use fewer iterations
         int count = probe_elapsed > 500ms ? 10 : 100;
@@ -649,10 +649,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit mgr.closeAll();
 
         # Determine count based on environment
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         hash<auto> probe = mgr.request(mH3Url, "GET", "/hello");
         assertEq(200, probe.status_code, "probe request should succeed");
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
 
         int count = probe_elapsed > 500ms ? 10 : 50;
 

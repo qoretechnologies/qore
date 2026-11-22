@@ -1353,14 +1353,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 {"sequence": (geminiRateLimited({"Retry-After": "3600"}), geminiTextResponse("late"))},
         });
         LlmBackend llm(config);
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         *hash<ExceptionInfo> failure;
         try {
             llm.chatCompletions(request);
         } catch (hash<ExceptionInfo> ex) {
             failure = ex;
         }
-        assertTrue((now_us() - start) < 30s, "no wait for the hour");
+        assertTrue((microseconds(clock_get_monotonic_us()) - start) < 30s, "no wait for the hour");
         assertEq(1, gemini_handler.requests.size());
         assertEq("retry_after_too_long", failure.arg.arg.retry.stopped);
         assertEq(3600000, failure.arg.arg.retry.failures[0].retry_after_ms);
@@ -1393,14 +1393,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "retry_delay_ms": 3600000,
             "timeout_ms": 5000,
         });
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         *hash<ExceptionInfo> failure;
         try {
             llm.chatCompletions({"messages": ({"role": "user", "content": "test deadline"},)});
         } catch (hash<ExceptionInfo> ex) {
             failure = ex;
         }
-        assertTrue((now_us() - start) < 5s, "the call ended before its deadline instead of waiting");
+        assertTrue((microseconds(clock_get_monotonic_us()) - start) < 5s,
+            "the call ended before its deadline instead of waiting");
         assertEq(1, gemini_handler.requests.size());
         assertEq("deadline", failure.arg.arg.retry.stopped);
     }
