@@ -513,6 +513,25 @@ string s = a.create(1);
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a
     call of the method, also an unqualified or qualified call through \c self, then calls that definition, also when
     the class that declares the abstract variant has concrete variants of the method as well.\n\n
+    @anchor abstract_parent_implementation A concrete variant of a parent class of the class that declares an abstract
+    variant implements it for that class and its subclasses, also a @ref private_methods "private" variant: the method
+    then has the access of the variants that implement it, so that a public abstract method implemented by a private
+    variant of a parent class is private, as a method that a class implements with a private method of its own; a
+    subclass does not implement such a variant again.  Code outside the class hierarchy then calls the public method
+    of the name of a later parent class, as for any private method (see @ref private_methods), while code of the
+    class hierarchy calls the first method in the @ref multiple_inheritance_order "resolution order" that it can
+    access; a call reference resolves the method for the class of the object when it is made, as a call does:
+    @code{.py}
+class P1 { private string m() { return "P1::m"; } }
+class A1 inherits P1 {}
+class B1 inherits P1 { abstract string m(); string viaB() { return m(); } }  # P1::m() implements m() for B1
+class C1 { string m() { return "C1::m"; } }
+class X1 inherits A1, B1, C1 {}
+
+X1 x1();
+x1.m();       # "C1::m": P1::m() is private
+x1.viaB();    # "P1::m": B1's code can call P1::m()
+    @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n

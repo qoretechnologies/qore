@@ -2711,6 +2711,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an abstract method that a private method of a parent class implements is private, so that code outside the
+      class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
+      executables did, also through a call reference (see @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7206">issue 7206</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it

@@ -272,6 +272,15 @@ struct AbstractMethodMap : amap_t {
 
     DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
 
+    //! drops the abstract variants inherited from the parent classes that none of them has pending any more
+    /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
+        parseResolveAbstract()): the variants of the parent classes are merged to the class before that
+        (qore_class_private::parseInitPartialIntern()), so that a variant that a parent class implements itself, with
+        a variant of one of its own parent classes, would stay pending in the class and be implemented again there, by
+        the first concrete variant of its whole hierarchy (qore#7206)
+    */
+    DLLLOCAL void parseDropResolvedInParents(const qore_class_private& qc, const BCList& scl);
+
     // runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
     DLLLOCAL void runtimeInit(qore_class_private& qc, BCList* scl);
 

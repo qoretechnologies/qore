@@ -1121,6 +1121,49 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
     }
 }
 
+//! returns true if a parent class in \a scl has the abstract variant of the method \a name with the signature \a sig
+//! pending
+static bool parent_has_pending_abstract_variant(const BCList& scl, const std::string& name, const char* sig) {
+    for (const BCNode* n : scl) {
+        if (!n->sclass) {
+            continue;
+        }
+        const AbstractMethodMap& pahm = qore_class_private::get(*n->sclass)->ahm;
+        amap_t::const_iterator i = pahm.find(name);
+        if (i != pahm.end() && i->second->vlist.find(sig) != i->second->vlist.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc, const BCList& scl) {
+    for (amap_t::iterator i = begin(), e = end(); i != e;) {
+        AbstractMethod& am = *i->second;
+        for (vmap_t::iterator vi = am.vlist.begin(), ve = am.vlist.end(); vi != ve;) {
+            // the class's own abstract variants are kept, as are those that a parent class has pending
+            if (qore_class_private::get(*vi->second->getClass()) == &qc
+                    || parent_has_pending_abstract_variant(scl, i->first, vi->first)) {
+                ++vi;
+                continue;
+            }
+            // as for a variant that a parent class implemented before the merge (AbstractMethod::parseMergeBase())
+            if (!am.pending_save.insert(*vi).second) {
+                // the reference of the vlist entry is released if the variant is already saved
+                vi->second->deref();
+            }
+            vi = am.vlist.erase(vi);
+        }
+        // as in parseInit() (issue #2741)
+        if (am.vlist.empty()) {
+            delete i->second;
+            erase(i++);
+        } else {
+            ++i;
+        }
+    }
+}
+
 // runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
 // issue #5056: allows abstract method resolution for classes created at runtime
 void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
@@ -9628,6 +9671,10 @@ void qore_class_private::parseResolveAbstract() {
         }
         scl->parseResolveAbstract();
 
+        // the abstract variants that the parent classes have implemented since they were merged are not pending here
+        // (qore#7206)
+        ahm.parseDropResolvedInParents(*this, *scl);
+
         // search for new concrete variants of abstract variants last
         ahm.parseInit(*this, scl);
     }
@@ -10889,9 +10936,16 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
 void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
     replaceAbstractVariantIntern(variant);
 
+    // the method has the access of its least restrictive variant, now without the abstract variant replaced: a public
+    // abstract method that only a private variant of a parent class implements is private, as a method that the class
+    // implements with a private variant of its own (qore#7206)
     ClassAccess ma = variant->getAccess();
-    if (access > ma) {
-        access = ma;
+    access = Internal;
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        ClassAccess va = METHVB_const(*i)->getAccess();
+        if (access > va) {
+            access = va;
+        }
     }
 
     if (!has_final && variant->isFinal()) {
