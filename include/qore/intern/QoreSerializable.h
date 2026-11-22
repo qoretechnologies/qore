@@ -54,8 +54,9 @@ typedef std::map<std::string, QoreValue> oimap_t;
 
     This holds a weak reference (an existence reference for objects) to the node.  The reference keeps the node's
     memory allocated, and therefore its address unique, until the serialization context is destroyed; it does not
-    keep the node's value alive, change its strong reference count or delay its destruction.  Releasing the
-    reference cannot raise an exception.
+    keep the node's value alive, change its strong reference count or delay its destruction, except for a list or
+    hash that was freed and whose other weak holders released their references: the weak holders of such a node hold
+    a strong reference to it (see QoreContainerWeakRefs).  Releasing the reference cannot raise an exception.
 */
 class QoreSerializationIdentity {
 public:
