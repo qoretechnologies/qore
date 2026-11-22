@@ -2990,8 +2990,16 @@ public class AbstractStreamRequest {
 
         # build and submit early 200 streaming response headers (no body)
         hash<HttpHandlerResponseInfo> rh = getResponseHeaderMessage();
-        http_set_reply_headers(s, cx, \rh);
         int rcode = rh."code" ?? 200;
+        # the status of the response must be a final one: a protocol upgrade (101) exists in HTTP/1.x only and makes
+        # the client fail its HTTP/2 or HTTP/3 stream or connection, with the other streams on it, and another
+        # informational (1xx) status leaves the client waiting; it is refused before anything is sent, so the server
+        # answers the request with an error (qoretechnologies/qore#7212, #7222)
+        if (rcode < 200 || rcode > 599) {
+            throw "HTTP-RESPONSE-STATUS-ERROR", sprintf("status %d returned for an interactive HTTP/%s stream is not "
+                "the status of a final response", rcode, http3 ? "3" : "2");
+        }
+        http_set_reply_headers(s, cx, \rh);
         hash<auto> resp_hdr = rh.hdr ?? {};
         # HTTP/2 and HTTP/3 do not use chunked transfer encoding
         remove resp_hdr."Transfer-Encoding";

@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A handler cannot send an informational (1xx) status, such as 101, as the final response of an HTTP/2 or HTTP/3
+# stream on any path: an interactive stream request's status is refused as sendReply() refuses it, and the HTTP/2 and
+# HTTP/3 sessions refuse it at the lowest layer; the other streams of the connection are not affected
+# (qoretechnologies/qore#7212, #7222)
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) server streams over TLS and the client connections that share them
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerInteractiveStatusTest
+
+#! an interactive stream request whose status is given by the request's x-code header
+class StatusStreamRequest inherits HttpServer::AbstractStreamRequest {
+    private {
+        bool replied;
+    }
+
+    constructor(HttpServer::HttpListenerInterface listener, HttpServer::AbstractHttpRequestHandler handler,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, auto body)
+            : HttpServer::AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    bool wantsInteractiveStreaming() {
+        return True;
+    }
+
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpServer::HttpHandlerResponseInfo>{
+            "code": hdr."x-code".toInt(),
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+    }
+
+    #! replies once, so that the client sees the response in its first readData() with every protocol
+    private auto sendImpl() {
+        if (!replied) {
+            replied = True;
+            return binary("y");
+        }
+    }
+}
+
+class StatusStreamHandler inherits HttpServer::AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private HttpServer::AbstractStreamRequest getStreamRequestImpl(HttpServer::HttpListenerInterface listener,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return new StatusStreamRequest(listener, self, s, cx, hdr, body);
+    }
+
+    hash<HttpServer::HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected non-streaming dispatch");
+    }
+}
+
+#! submits the status of the request's x-code header itself on its stream with its handler socket, with the submit
+#! API of the x-api header: "response" (a complete response), "streaming" (the headers of a streaming response) or
+#! "connect" (the response to an extended CONNECT request)
+class SocketStatusHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        int code = hdr."x-code".toInt();
+        int sid = cx."header-info".stream_id;
+        try {
+            if (cx."header-info".http3) {
+                int session_id = cx."header-info".session_id;
+                switch (hdr."x-api") {
+                    case "streaming": s.submitQuicResponseStreaming(session_id, sid, code, {}); break;
+                    case "connect": s.submitQuicConnectResponse(session_id, sid, code, {}); break;
+                    default: s.submitQuicResponse(session_id, sid, code, {}, binary("sent")); break;
+                }
+            } else {
+                switch (hdr."x-api") {
+                    case "streaming": s.submitHttp2StreamingResponseHeaders(sid, code, {}); break;
+                    case "connect": s.submitHttp2ConnectResponse(sid, code, {}); break;
+                    default: s.submitHttp2Response(sid, code, {}, binary("sent")); break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return <HttpResponseInfo>{"code": 200, "body": "refused: " + ex.err + ": " + ex.desc};
+        }
+        return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+    }
+}
+
+#! answers at once, or when released for /held
+class PlainHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?held/) {
+            release.get();
+            return <HttpResponseInfo>{"code": 200, "body": "held-ok"};
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+class HttpServerInteractiveStatusTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PlainHandler plain();
+        string url;
+    }
+
+    constructor() : QUnit::Test("HttpServerInteractiveStatus", "1.0") {
+        addTestCase("an interactive stream's 1xx status is refused; the connection's other streams go on",
+            \interactiveTest());
+        addTestCase("a handler socket cannot submit a 1xx final status", \socketTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
+        server.setHandler("stream", "/session", NOTHING, new StatusStreamHandler());
+        server.setHandler("sock", "/sock", NOTHING, new SocketStatusHandler());
+        server.setDefaultHandler("plain", plain);
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private HttpClientConnectionManager manager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": 15s,
+            "request_timeout": 30s,
+        });
+    }
+
+    #! returns the status of an interactive stream request with the given status, or the error that ended it
+    private string streamStatus(HttpClientConnectionManager mgr, int code) {
+        HttpClientIo::HttpClientStreamHandle st = mgr.acquireStream(url);
+        st.startStreaming("POST", "/session", {"Content-Type": "text/plain", "x-code": code.toString()}, True);
+        st.sendData(binary("x"));
+        # the first event has the response headers, alone or with body data (HTTP/3 coalesces them when the
+        # response is complete), or the error; a bound only guards against a hang
+        auto d = st.readData(30s);
+        if (d.typeCode() == NT_HASH && d.error) {
+            return d.error.err;
+        }
+        *hash<auto> resp = st.getResponse();
+        if (resp.status_code) {
+            return resp.status_code.toString();
+        }
+        return sprintf("no response: %y", d);
+    }
+
+    interactiveTest() {
+        foreach string protocol in ("h2", "h3") {
+            HttpClientConnectionManager mgr = manager(protocol);
+            on_exit delete mgr;
+            # a stream of another handler is held open on the same connection; it is released however the case ends
+            auto held = mgr.requestAsync(url, "GET", "/held");
+            bool released;
+            on_exit if (!released) {
+                plain.release.push(1);
+            }
+            assertEq(200, mgr.request(url, "GET", "/").status_code, protocol + ": the connection is up");
+            assertEq("200", streamStatus(mgr, 200), protocol + ": a final status is sent");
+            foreach int code in ((101, 103, 100)) {
+                assertEq("500", streamStatus(mgr, code), sprintf("%s: status %d is refused with 500", protocol,
+                    code));
+                assertEq(200, mgr.request(url, "GET", "/").status_code, sprintf("%s: the connection goes on after %d",
+                    protocol, code));
+            }
+            plain.release.push(1);
+            released = True;
+            assertEq(200, held.get(30s).status_code, protocol + ": the held stream on the connection completed");
+        }
+    }
+
+    socketTest() {
+        foreach string protocol in ("h2", "h3") {
+            HttpClientConnectionManager mgr = manager(protocol);
+            on_exit delete mgr;
+            string err = protocol == "h3" ? "QUIC-HTTP3-ERROR" : "HTTP2-ERROR";
+            foreach string api in ("response", "streaming", "connect") {
+                foreach int code in ((101, 103, 100, 199, 600)) {
+                    string what = sprintf("%s %s %d", protocol, api, code);
+                    hash<auto> r = mgr.request(url, "GET", "/sock", {"x-code": code.toString(), "x-api": api});
+                    assertEq(200, r.status_code, what);
+                    # the QUIC methods of the Socket class refuse a status above 599 before the HTTP/3 layer does
+                    string expected = (protocol == "h3" && code > 599)
+                        ? "^refused: QUIC-ERROR: invalid status_code " + code
+                        : "^refused: " + err + ": the status of a final response must be between 200 and 599; got "
+                            + code;
+                    assertRegex(expected, r.body, what);
+                }
+            }
+            hash<auto> r = mgr.request(url, "GET", "/sock", {"x-code": "200"});
+            assertEq("sent", r.body.typeCode() == NT_BINARY ? r.body.toString() : r.body, protocol + ": 200 is sent");
+        }
+    }
+}

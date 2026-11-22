@@ -51,15 +51,85 @@ public:
 
 typedef std::list<HashMember*> qhlist_t;
 
-#ifdef HAVE_QORE_HASH_MAP
-//#warning compiling with hash_map
-#include <qore/hash_map_include.h>
+#include <unordered_map>
 #include "qore/intern/xxhash.h"
 #include "qore/intern/qore_container_free.h"
+#include "qore/intern/QoreKeyCompare.h"
 
-typedef HASH_MAP<const char*, qhlist_t::iterator, qore_hash_str, eqstr> hm_hm_t;
+//! A key to look up in the key map of a hash: the key, its length and its hash (qore#7194)
+/** The hash is the one that qore_hash_str gives for the key, so that a hash computed in advance with qore_hash_str
+    (ex: by the JIT for a constant key) finds the key.
+*/
+struct qore_hash_lookup_key {
+    const char* str;
+    size_t len;
+    size_t hash;
+
+    //! returns the hash of the key of \a len bytes at \a str; the same as qore_hash_str for the key
+    DLLLOCAL static size_t hashBytes(const char* str, size_t len) {
+#if TARGET_BITS == 64
+        return XXH64(str, len, 0);
 #else
-typedef std::map<const char*, qhlist_t::iterator, ltstr> hm_hm_t;
+        return XXH32(str, len, 0);
+#endif
+    }
+
+    DLLLOCAL explicit qore_hash_lookup_key(const char* str) : str(str), len(strlen(str)), hash(hashBytes(str, len)) {
+    }
+
+    DLLLOCAL qore_hash_lookup_key(const char* str, size_t len) : str(str), len(len), hash(hashBytes(str, len)) {
+        assert(strlen(str) == len);
+    }
+
+    DLLLOCAL qore_hash_lookup_key(const char* str, size_t len, size_t hash) : str(str), len(len), hash(hash) {
+        assert(strlen(str) == len);
+        assert(hash == hashBytes(str, len));
+    }
+};
+
+//! The hash function of the key map of a hash (qore#7194)
+/** Not noexcept: libstdc++ then keeps the hash of each key in its node and compares it before the keys, so that the
+    keys of a lookup are compared only when their hashes are equal (see the static_assert after hm_hm_t)
+*/
+struct qore_hash_member_key_hash {
+    using is_transparent = void;
+
+    DLLLOCAL size_t operator()(const std::string* key) const {
+        return qore_hash_lookup_key::hashBytes(key->data(), key->size());
+    }
+
+    DLLLOCAL size_t operator()(const qore_hash_lookup_key& key) const {
+        return key.hash;
+    }
+};
+
+//! The key comparison of the key map of a hash: by length, then inline (qore#7194)
+struct qore_hash_member_key_eq {
+    using is_transparent = void;
+
+    DLLLOCAL bool operator()(const std::string* a, const std::string* b) const {
+        return a == b || qore_key_equal(a->data(), a->size(), b->data(), b->size());
+    }
+
+    DLLLOCAL bool operator()(const qore_hash_lookup_key& a, const std::string* b) const {
+        return qore_key_equal(a.str, a.len, b->data(), b->size());
+    }
+
+    DLLLOCAL bool operator()(const std::string* a, const qore_hash_lookup_key& b) const {
+        return qore_key_equal(a->data(), a->size(), b.str, b.len);
+    }
+};
+
+//! The key map of a hash: the key of each member (the key string of its HashMember) to its place in the member list
+/** The map refers to the key of the member (HashMember::key), which is not changed while the member is in the hash,
+    so that a key comparison knows the length of the key (qore#7194)
+*/
+typedef std::unordered_map<const std::string*, qhlist_t::iterator, qore_hash_member_key_hash,
+    qore_hash_member_key_eq> hm_hm_t;
+#ifdef __GLIBCXX__
+// the hash of each key is kept in its node and compared before the keys (see qore_hash_member_key_hash)
+static_assert(std::__cache_default<const std::string*, qore_hash_member_key_hash>::value,
+    "the key map of a hash must keep the hash of each key");
 #endif
 
 // QoreHashIterator private class
@@ -209,6 +279,44 @@ public:
         return 0;
     }
 
+    //! returns the key map entry of \a key, or hm.end()
+    /** An empty hash is not searched, so that its key is not hashed (qore#7194)
+    */
+    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const char* key) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
+    }
+
+    //! returns the key map entry of \a key of \a len bytes, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key, size_t len) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const char* key, size_t len) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
+    }
+
+    //! returns the key map entry of \a key, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIter(const qore_hash_lookup_key& key) const {
+        return hm.empty() ? hm.end() : hm.find(key);
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const qore_hash_lookup_key& key) {
+        return hm.empty() ? hm.end() : hm.find(key);
+    }
+
+    //! returns the key map entry of \a key, whose hash is \a hash, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIterPrehashed(const char* key, size_t hash) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIterPrehashed(const char* key, size_t hash) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
+    }
+
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 
     DLLLOCAL QoreValue getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const;
@@ -235,8 +343,32 @@ public:
 
     DLLLOCAL QoreValue getReferencedKeyValueIntern(const char* key, bool& exists) const {
         assert(key);
+        hm_hm_t::const_iterator i = findIter(key);
+        if (i != hm.end()) {
+            exists = true;
+            return (*(i->second))->val.refSelf();
+        }
 
-        hm_hm_t::const_iterator i = hm.find(key);
+        exists = false;
+        return QoreValue();
+    }
+
+    //! returns the value of the key \a key of \a len bytes with a reference, or no value; \a exists is set if the
+    //! key exists
+    DLLLOCAL QoreValue getReferencedKeyValueIntern(const char* key, size_t len, bool& exists) const {
+        hm_hm_t::const_iterator i = findIter(key, len);
+        if (i != hm.end()) {
+            exists = true;
+            return (*(i->second))->val.refSelf();
+        }
+
+        exists = false;
+        return QoreValue();
+    }
+
+    //! returns the value of the key with a reference, or no value; \a exists is set if the key exists
+    DLLLOCAL QoreValue getReferencedKeyValueIntern(const qore_hash_lookup_key& key, bool& exists) const {
+        hm_hm_t::const_iterator i = findIter(key);
         if (i != hm.end()) {
             exists = true;
             return (*(i->second))->val.refSelf();
@@ -249,18 +381,13 @@ public:
     DLLLOCAL QoreValue getReferencedKeyValuePrehashedIntern(
             const char* key, size_t hash) const {
         assert(key);
-#ifdef HAVE_QORE_HASH_MAP
-        hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-        (void)hash;
-        hm_hm_t::const_iterator i = hm.find(key);
-#endif
+        hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
         return i != hm.end() ? (*(i->second))->val.refSelf() : QoreValue();
     }
 
     DLLLOCAL int64 getKeyAsBigInt(const char* key, bool &found) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
 
         if (i != hm.end()) {
             found = true;
@@ -273,7 +400,7 @@ public:
 
     DLLLOCAL bool getKeyAsBool(const char* key, bool& found) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
 
         if (i != hm.end()) {
             found = true;
@@ -286,12 +413,12 @@ public:
 
     DLLLOCAL bool existsKey(const char* key) const {
         assert(key);
-        return hm.find(key) != hm.end();
+        return findIter(key) != hm.end();
     }
 
     DLLLOCAL bool existsKeyValue(const char* key) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
         if (i == hm.end())
             return false;
         return !(*(i->second))->val.isNothing();
@@ -299,18 +426,24 @@ public:
 
     DLLLOCAL HashMember* findMember(const char* key) {
         assert(key);
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    //! returns the member with the key \a key of \a len bytes, or nullptr
+    DLLLOCAL HashMember* findMember(const char* key, size_t len) {
+        hm_hm_t::iterator i = findIter(key, len);
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) {
+        hm_hm_t::iterator i = findIter(key);
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
     DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) {
         assert(key);
-#ifdef HAVE_QORE_HASH_MAP
-        hm_hm_t::iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-        (void)hash;
-        hm_hm_t::iterator i = hm.find(key);
-#endif
+        hm_hm_t::iterator i = findIterPrehashed(key, hash);
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
@@ -349,7 +482,7 @@ public:
         // add to the map
         qhlist_t::iterator i = member_list.end();
         --i;
-        hm[om->key.c_str()] = i;
+        hm[&om->key] = i;
 
         // return the new member
         return om;
@@ -374,7 +507,7 @@ public:
     DLLLOCAL void deleteKey(const char* key, ExceptionSink *xsink) {
         assert(key);
 
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
 
         if (i == hm.end())
             return;
@@ -406,7 +539,7 @@ public:
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, bool& exists) {
         assert(key);
 
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
 
         if (i == hm.end()) {
             exists = false;

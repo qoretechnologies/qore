@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of sandboxed-exception-report.qtest (qore#7232): the rendezvous of the initialization of ReportLoadFail.qm,
+# which the child loads before the test, so that the initialization starts, waits and fails when the test says
+
+%modern
+
+module ReportGate {
+    version = "1.0";
+    desc = "the rendezvous of the initialization of ReportLoadFail";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ReportGate {
+#! the rendezvous
+public class Gate {
+    public {
+        #! counted down when the initialization has started
+        static Counter started(1);
+        #! counted down to let the initialization go on
+        static Counter go(1);
+    }
+
+    #! the initialization: tells that it started, and waits until it may go on
+    static initStarted() {
+        Gate::started.dec();
+        Gate::go.waitForZero();
+    }
+}
+}

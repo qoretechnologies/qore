@@ -906,10 +906,29 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h2_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 template<typename HeaderRange>
 int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         const HeaderRange& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -978,6 +997,9 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -3573,6 +3595,9 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");

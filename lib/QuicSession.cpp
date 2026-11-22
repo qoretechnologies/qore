@@ -1401,7 +1401,14 @@ static std::string quic_ticket_cache_key(const char* host, uint16_t port, int ss
     std::string key = std::string(host) + ":" + std::to_string(port) + "|v" + std::to_string(ssl_verify_mode);
     if (sock) {
         key += sock->ssl_accept_all_certs ? "|a1" : "|a0";
-        key += "|f" + sock->ssl_ca_file + "|p" + sock->ssl_ca_path;
+        // the fields that can hold any text are given with their lengths, so that no value can be taken for another
+        // field (qoretechnologies/qore#7248)
+        key += "|f" + std::to_string(sock->ssl_ca_file.size()) + ":" + sock->ssl_ca_file
+            + "|p" + std::to_string(sock->ssl_ca_path.size()) + ":" + sock->ssl_ca_path;
+        // a session resumed under other trust anchors would skip their verification (qoretechnologies/qore#7248)
+        if (sock->ssl_trust_store) {
+            key += "|t" + sock->ssl_trust_store->getId();
+        }
     }
     // the client identity is part of the session
     if (client_cert && client_cert->getData()) {
@@ -1433,7 +1440,11 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // the trust configuration of the socket, as with a TLS connection over TCP (see SSLSocketHelper::setVerifyMode())
     bool accept_all = sock_ && sock_->ssl_accept_all_certs;
-    if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
+    if (sock_ && sock_->ssl_trust_store) {
+        // an in-memory trust store: the session's own SSL_CTX takes a reference on the shared, immutable store; no
+        // file is read and the environment is not consulted (qoretechnologies/qore#7248)
+        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+    } else if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
         // the configured CA certificates are trusted instead of the default CAs
         if (!SSL_CTX_load_verify_locations(ssl_ctx_,
                 sock_->ssl_ca_file.empty() ? nullptr : sock_->ssl_ca_file.c_str(),
@@ -1621,10 +1632,16 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                     "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
             } else {
                 SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
-                // Load system default CA certificates for client cert validation; OpenSSL reads the
-                // SSL_CERT_FILE and SSL_CERT_DIR environment variables
-                QoreEnvironmentReadLock env_lock;
-                SSL_CTX_set_default_verify_paths(ssl_ctx_);
+                if (sock_ && sock_->ssl_trust_store) {
+                    // the in-memory trust store of the listener; the session's own SSL_CTX takes a reference on
+                    // the shared, immutable store (qoretechnologies/qore#7248)
+                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+                } else {
+                    // Load system default CA certificates for client cert validation; OpenSSL reads the
+                    // SSL_CERT_FILE and SSL_CERT_DIR environment variables
+                    QoreEnvironmentReadLock env_lock;
+                    SSL_CTX_set_default_verify_paths(ssl_ctx_);
+                }
                 printd(3, "QuicSession::setupServerSslCtx(): mTLS enabled "
                     "(verify_mode=0x%x, accept_all_certs=false)\n", ssl_verify_mode);
             }
@@ -3346,9 +3363,28 @@ int QuicSession::submitTrailers(int64_t stream_id, const qore_http_header_pairs_
     return 0;
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h3_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 int QuicSession::submitResponse(int64_t stream_id, int status_code,
                                 const qore_http_header_pairs_t& headers,
                                 const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 1 status pseudo-header + user headers).
     //
@@ -3439,6 +3475,9 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
 int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
                                           const qore_http_header_pairs_t& headers,
                                           ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock (same pattern as submitResponse)
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 1);
@@ -3873,6 +3912,9 @@ void QuicSession::wakeDatagramWaiters() {
 
 int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h3_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return -1;
+    }
     // Build header name-value pairs OUTSIDE the lock
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 1);
@@ -4249,6 +4291,15 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
             // a streaming response whose body is complete gets no more DATA: it is erased below, as a long-lived
             // session must not keep an entry for every streaming request it served
             if (it->second->connect_tunnel_active || (it->second->streaming && !it->second->body_complete)) {
+                // a streaming response whose headers were delivered and that has received nothing since has nothing
+                // to deliver: the stream was queued more than once (when its headers arrived, then for data that an
+                // earlier entry delivered); an event without data would look like the response headers again
+                // (qore#7285)
+                if (!it->second->connect_tunnel_active && !is_server_ && it->second->headers_delivered
+                        && it->second->body.empty() && it->second->error_message.empty()) {
+                    continue;
+                }
+                it->second->headers_delivered = true;
                 // CONNECT tunnel streams and streaming response streams must stay
                 // in streams_ for continued DATA accumulation.  Clone essential
                 // fields for the caller; move body and clear the original so the
@@ -4350,8 +4401,9 @@ void QuicSession::setStreamStreaming(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end()) {
         it->second->streaming = true;
-        if (!is_server_ && it->second->headers_complete
-                && (!it->second->body.empty() || it->second->body_complete)) {
+        // the response headers are delivered when they arrive (see h3EndHeadersCallback()); if they arrived before
+        // the stream was marked, they are delivered now, with any data received (qore#7285)
+        if (!is_server_ && it->second->headers_complete) {
             completed_streams_.push(stream_id);
             has_completed_streams_.store(true, std::memory_order_release);
         }
@@ -6164,6 +6216,18 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                     " client CONNECT headers ready (body_complete=false, tunnel open)\n",
                     (int64)stream_id);
             }
+            return 0;
+        }
+
+        // a client's streaming response delivers its headers when they arrive, also when no data comes with them
+        // (ex: a server that answers an interactive stream with its status and waits for the client), as HTTP/2 does
+        // (Http2Session::takeStreamingHeadersReadyCopy()); data that arrives before the event is taken goes with it,
+        // and the end of the stream is queued by markStreamComplete() (qore#7285)
+        if (!session->is_server_ && !fin && stream->streaming) {
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
+            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " client streaming response headers "
+                "ready\n", (int64)stream_id);
             return 0;
         }
 

@@ -181,6 +181,13 @@ printf("%Y\n", ans.body);
       server, as its polling ping does, instead of succeeding without a check, and every ping, also a polling ping,
       of a connection whose configuration cannot work (not yet authorized, for example) fails with its error
       (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
+    - OAuth2 client credentials that trusted code supplies can be sealed into a client with
+      @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials" and the \c oauth2_sealed_credentials option:
+      the client makes its token requests with them, but the secret is never given out, and it is sent only to its
+      sealed \c https token endpoint, with the certificate verified with an in-memory trust store
+      (@ref Qore::SSLTrustStore "SSLTrustStore"), without redirects and through a proxy only as a \c CONNECT tunnel
+      (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
+    - the \c ssl_trust_store option is passed to @ref Qore::HTTPClient "HTTPClient"
     - a client with invalid OAuth2 options raises \c OAUTH2-ERROR when it is created also with \c do_not_connect, as
       @ref restclientiointro "RestClientIo" does, instead of being created with a grant type that cannot acquire a
       token; an empty value of an option that the grant type requires counts as missing, also for a connection's
@@ -1217,6 +1224,351 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     }
 }
 
+#! OAuth2 client credentials that a client uses for its token requests but never gives out
+/** Trusted code, such as a platform or an app catalogue, creates the object with an OAuth2 client secret and the token
+    endpoint that the secret is for, and gives it to a client with the \c oauth2_sealed_credentials option of
+    @ref RestClient::RestClient::constructor() "RestClient" or @ref restclientiointro "RestClientIo": the client
+    then makes its OAuth2 token requests with the secret, while the secret is never returned by the client, its
+    options, its connection or this object (qoretechnologies/qore#7248).
+
+    The object can be used by any code that has it, but only as the trusted code that created it allows:
+    - the secret is sent only to the sealed token endpoint (an \c https URL), with the server's certificate verified
+      and without following redirects, whatever the options of the client are; a proxy of the client is used only as
+      an HTTPS \c CONNECT tunnel, so it never sees the secret
+    - only the grant types given when the object was created can use it
+    - the request is made with a client of its own: no logger, header, signer or other setting of the client that uses
+      the object takes part in it
+    - the server's certificate is verified with an in-memory @ref Qore::SSLTrustStore "SSLTrustStore" made when the
+      object was created: from the CA certificates given, or else from those that TLS connections trust by default at
+      that time (@ref Qore::SSLTrustStore::getDefault() "SSLTrustStore::getDefault()"); the request reads no file, so
+      it works under the filesystem policy of any caller, and a later change of the process environment or of the
+      files does not change the certificates; create the object in trusted code
+    - only the token fields of a response are returned (@ref TokenResponseFields), and errors give the HTTP status and
+      the OAuth2 error code of the response, never the request, the response or the secret
+
+    The object cannot be changed after it has been created, it cannot be serialized, and a copy holds the same
+    credentials.  Code that a sandbox governs cannot read its members, also not with the reflection module; trusted
+    code can read the members of any object with the reflection module.
+
+    @par Example:
+    @code{.py}
+SealedOAuth2Credentials creds({
+    "client_id": "my-client",
+    "client_secret": secret,
+    "token_url": "https://auth.example.com/oauth/token",
+    "grant_types": ("authorization_code", "refresh_token"),
+});
+RestClient rest({"url": "https://api.example.com", "oauth2_grant_type": "authorization_code",
+    "oauth2_client_id": "my-client", "oauth2_sealed_credentials": creds, ...});
+    @endcode
+
+    @since %RestClient 2.7
+*/
+public final class SealedOAuth2Credentials {
+    public {
+        #! The grant types that the object can be used with when none are given
+        const DefaultGrantTypes = ("authorization_code", "refresh_token");
+
+        #! The fields of a token response that are returned
+        const TokenResponseFields = ("access_token", "token_type", "expires_in", "refresh_token", "scope", "id_token");
+    }
+
+    private:internal {
+        string client_id;
+        string client_secret;
+        string token_url;
+        hash<string, bool> grant_types;
+        bool use_basic_auth;
+        bool secret_only;
+        SSLTrustStore trust_store;
+        timeout timeout_ms;
+        timeout connect_timeout_ms;
+    }
+
+    #! Creates the object
+    /** @param opts the options of the object:
+        - \c client_id (required): the OAuth2 client ID
+        - \c client_secret (required): the OAuth2 client secret
+        - \c token_url (required): the absolute \c https URL of the token endpoint; the secret is sent only there
+        - \c grant_types: the grant types that can use the secret (default: @ref DefaultGrantTypes)
+        - \c token_use_basic_auth: send the client ID and secret with HTTP basic authentication
+        - \c token_auth_secret_only: send only the secret with HTTP basic authentication
+        - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" with the CA certificates that verify the
+          token endpoint's certificate
+        - \c ssl_ca_file: a file of CA certificates in PEM format that verify the token endpoint's certificate; read
+          now, into a trust store
+        - \c ssl_ca_path: a directory of CA certificates in PEM format, as with \c ssl_ca_file; read now
+        - if none of them is given, the CA certificates that TLS connections trust by default are read now
+          (@ref Qore::SSLTrustStore::getDefault() "SSLTrustStore::getDefault()"); only one of them can be given
+        - \c timeout: the I/O timeout of a token request (default: 30 seconds)
+        - \c connect_timeout: the connect timeout of a token request (default: 30 seconds)
+
+        @throw OAUTH2-SEALED-ERROR an option is missing or invalid
+    */
+    constructor(hash<auto> opts) {
+        foreach string k in ("client_id", "client_secret", "token_url") {
+            if (opts{k}.typeCode() != NT_STRING || !opts{k}.val()) {
+                # only the option's name: its value can be the secret
+                throw "OAUTH2-SEALED-ERROR", sprintf("option %y is required and must be a non-empty string", k);
+            }
+        }
+        if (opts.token_url !~ /^https:\/\/[^\/?#]+/i) {
+            # not the value, which can be anything
+            throw "OAUTH2-SEALED-ERROR", "the token URL must be an absolute \"https\" URL";
+        }
+        client_id = opts.client_id;
+        client_secret = opts.client_secret;
+        token_url = opts.token_url;
+        softlist<auto> gl = opts.grant_types ?? DefaultGrantTypes;
+        if (!gl) {
+            throw "OAUTH2-SEALED-ERROR", "at least one grant type is required";
+        }
+        foreach auto g in (gl) {
+            if (g.typeCode() != NT_STRING || !RestClient::OAuth2GrantOptions{g} && g != "refresh_token") {
+                throw "OAUTH2-SEALED-ERROR", sprintf("invalid grant type %y; known grant types: %y", g,
+                    keys RestClient::OAuth2GrantOptions + ("refresh_token",));
+            }
+            grant_types{g} = True;
+        }
+        use_basic_auth = opts.token_use_basic_auth ?? False;
+        secret_only = opts.token_auth_secret_only ?? False;
+        # the CA certificates are read now, into an in-memory trust store: the token requests read no file, so they
+        # work under the filesystem policy of any caller, and a later change of the files or of the environment that
+        # OpenSSL reads its default locations from does not change them (qoretechnologies/qore#7248)
+        list<string> given = (map $1, ("ssl_trust_store", "ssl_ca_file", "ssl_ca_path"), exists opts{$1}) ?? ();
+        if (given.size() > 1) {
+            throw "OAUTH2-SEALED-ERROR", sprintf("only one of the options %y can be given", given);
+        }
+        if (exists opts.ssl_trust_store) {
+            if (!(opts.ssl_trust_store instanceof SSLTrustStore)) {
+                throw "OAUTH2-SEALED-ERROR", sprintf("option \"ssl_trust_store\" must be an SSLTrustStore object; got "
+                    "type %y", opts.ssl_trust_store.fullType());
+            }
+            trust_store = opts.ssl_trust_store;
+        } else {
+            foreach string k in ("ssl_ca_file", "ssl_ca_path") {
+                if (exists opts{k} && (opts{k}.typeCode() != NT_STRING || !opts{k}.val())) {
+                    throw "OAUTH2-SEALED-ERROR", sprintf("option %y must be a non-empty string", k);
+                }
+            }
+            trust_store = opts.ssl_ca_file
+                ? SSLTrustStore::fromFile(opts.ssl_ca_file)
+                : (opts.ssl_ca_path
+                    ? SSLTrustStore::fromDirectory(opts.ssl_ca_path)
+                    : SSLTrustStore::getDefault());
+        }
+        timeout_ms = opts.timeout ?? 30s;
+        connect_timeout_ms = opts.connect_timeout ?? 30s;
+    }
+
+    #! Returns the OAuth2 client ID
+    string getClientId() {
+        return client_id;
+    }
+
+    #! Returns the token endpoint that the secret is sent to
+    string getTokenUrl() {
+        return token_url;
+    }
+
+    #! Returns the grant types that can use the secret
+    list<string> getGrantTypes() {
+        return keys grant_types;
+    }
+
+    #! Makes an OAuth2 token request with the secret and returns the deserialized response body
+    /** @param form the form arguments of the request, with its \c grant_type; the client authentication arguments
+        (\c client_id, \c client_secret, client assertions) and the arguments of an alternate token endpoint are
+        replaced or removed
+        @param proxy the URL of a proxy, used only as an HTTPS \c CONNECT tunnel
+
+        @return the deserialized response body
+
+        @throw OAUTH2-SEALED-ERROR the grant type cannot use the secret, or the request failed: the exception gives
+        the HTTP status and the OAuth2 \c error code of the response, never the request or the secret
+    */
+    hash<auto> requestToken(hash<auto> form, *string proxy) {
+        hash<auto> info;
+        hash<auto> hdr;
+        RestClient rc = getClient(\form, \hdr, proxy);
+        try {
+            auto body = rc.doRequest("POST", "", form, \info, True, hdr).body;
+            if (body.typeCode() != NT_HASH || !body.access_token.val()) {
+                throw "OAUTH2-SEALED-ERROR", sprintf("the token endpoint %y returned no access token", token_url);
+            }
+            return SealedOAuth2Credentials::getTokenFields(body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-SEALED-ERROR") {
+                rethrow;
+            }
+            throw "OAUTH2-SEALED-ERROR", errorText(info, ex);
+        }
+    }
+
+    #! Returns the token fields of a token response (@ref TokenResponseFields)
+    static hash<auto> getTokenFields(hash<auto> body) {
+        return body{TokenResponseFields} - (map $1, TokenResponseFields, !exists body{$1});
+    }
+
+    #! Starts an OAuth2 token request with the secret in a non-blocking I/O operation
+    /** @param form the form arguments of the request; see requestToken()
+        @param proxy the URL of a proxy, used only as an HTTPS \c CONNECT tunnel
+
+        @return the poll operation; its output has the \c "code", \c "response-body" and \c "info" keys of an HTTP
+        response: the body is a JSON object with only the token fields of the response (@ref TokenResponseFields), or
+        only its OAuth2 \c error code, and \c "info" has only the JSON \c "content-type" response header and the
+        \c "response-uri" and \c "request-uri" of the response: no other part of the request or the response
+
+        @throw OAUTH2-SEALED-ERROR the grant type cannot use the secret
+    */
+    AbstractPollOperation startPollRequestToken(hash<auto> form, *string proxy) {
+        hash<auto> hdr;
+        RestClient rc = getClient(\form, \hdr, proxy);
+        hdr."Content-Type" = MimeTypeFormUrlEncoded;
+        return new SealedOAuth2PollOperation(rc, rc.startPollSendRecv("POST", "", mime_get_form_urlencoded_string(form),
+            hdr), client_secret);
+    }
+
+    #! Returns a client for a token request and prepares its form arguments and headers
+    private:internal RestClient getClient(reference<hash<auto>> form, reference<hash<auto>> hdr, *string proxy) {
+        if (form.grant_type.typeCode() != NT_STRING || !grant_types{form.grant_type}) {
+            throw "OAUTH2-SEALED-ERROR", sprintf("grant type %y cannot use the sealed credentials; allowed grant "
+                "types: %y", form.grant_type, keys grant_types);
+        }
+        form -= ("client_id", "client_secret", "client_assertion", "client_assertion_type", "oauth2_token_url",
+            "oauth2_token_use_basic_auth", "oauth2_token_auth_secret_only");
+        hdr = {"Accept": MimeTypeJson + "," + MimeTypeFormUrlEncoded};
+        if (use_basic_auth) {
+            # OAuth2 Basic credentials are individually form-encoded (RFC 6749 section 2.3.1)
+            hdr.Authorization = "Basic " + sprintf("%s:%s", mime_get_urlencoded_string(client_id),
+                mime_get_urlencoded_string(client_secret)).toBase64();
+        } else if (secret_only) {
+            hdr.Authorization = "Basic " + sprintf("%s:", client_secret).toBase64();
+        } else {
+            form += {"client_id": client_id, "client_secret": client_secret};
+        }
+        hash<auto> opts = {
+            "url": token_url,
+            "data": "url",
+            "ssl_verify_cert": True,
+            "max_redirects": 0,
+            "timeout": timeout_ms,
+            "connect_timeout": connect_timeout_ms,
+        };
+        if (proxy.val()) {
+            opts.proxy = proxy;
+        }
+        opts.ssl_trust_store = trust_store;
+        return new RestClient(opts, True);
+    }
+
+    #! Returns the text of the error of a token request: the HTTP status and the OAuth2 error code, never the secret
+    private:internal string errorText(*hash<auto> info, hash<ExceptionInfo> ex) {
+        string rv = sprintf("the OAuth2 token request to %y failed", token_url);
+        if (info."response-code") {
+            rv += sprintf(" with HTTP status %d", info."response-code");
+        }
+        *string error_code;
+        try {
+            auto body = info."response-body";
+            if (body.typeCode() == NT_STRING && body =~ /^\s*\{/) {
+                body = parse_json(body);
+            }
+            # an error code that holds the secret is not given
+            if (body.typeCode() == NT_HASH && body.error.typeCode() == NT_STRING
+                    && body.error.find(client_secret) < 0) {
+                error_code = body.error;
+            }
+        } catch () {
+        }
+        if (error_code.val()) {
+            rv += sprintf(" (OAuth2 error %y)", error_code);
+        } else {
+            rv += sprintf(" (%s)", ex.err);
+        }
+        return rv;
+    }
+}
+
+#! The non-blocking I/O operation of a token request with sealed credentials
+/** Its output has only the parts of the response that a client needs: no request header or body, which can hold the
+    secret (qoretechnologies/qore#7248)
+
+    @since %RestClient 2.7
+*/
+public final class SealedOAuth2PollOperation inherits Qore::AbstractPollOperation<auto> {
+    private:internal {
+        RestClient rc;
+        AbstractPollOperation poller;
+        string secret;
+    }
+
+    #! Creates the object from a client, its poll operation and the secret to mask in its output
+    constructor(RestClient rc, AbstractPollOperation poller, string secret) {
+        self.rc = rc;
+        self.poller = poller;
+        self.secret = secret;
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return poller.getGoal();
+    }
+
+    #! Returns the current state
+    string getState() {
+        return poller.getState();
+    }
+
+    #! Returns @ref True when the goal has been reached
+    bool goalReached() {
+        return poller.goalReached();
+    }
+
+    #! Returns a socket poll hash if polling should continue or @ref nothing if complete
+    *hash<SocketPollInfo> continuePoll() {
+        return poller.continuePoll();
+    }
+
+    #! Aborts the operation
+    nothing abort() {
+        poller.abort();
+    }
+
+    #! Returns the response: its code, a JSON body with only its token fields or OAuth2 error code, and its URIs
+    *hash<auto> getOutput() {
+        *hash<auto> h = poller.getOutput();
+        if (!h) {
+            return;
+        }
+        hash<auto> body = {};
+        try {
+            string text = RestClient::getPollResponseBodyText(h);
+            *string ct = h.info."response-headers"."content-type";
+            auto parsed = ct =~ /form-urlencoded/i
+                ? mime_parse_form_urlencoded_string(text)
+                : parse_json(text);
+            if (parsed.typeCode() == NT_HASH) {
+                if ((h."code" / 100) == 2) {
+                    body = SealedOAuth2Credentials::getTokenFields(parsed);
+                } else if (parsed.error.typeCode() == NT_STRING && parsed.error.find(secret) < 0) {
+                    # an error code that holds the secret is not given
+                    body.error = parsed.error;
+                }
+            }
+        } catch () {
+            # an unparsable response gives no body
+        }
+        return {
+            "code": h."code",
+            "response-body": make_json(body),
+            "info": h.info{"response-uri", "request-uri"} + {
+                "response-headers": {"content-type": MimeTypeJson},
+            },
+        };
+    }
+}
+
 #! this class provides the REST client API
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
         ConnectionProvider::OptionHelper, AbstractRestClient {
@@ -1432,6 +1784,14 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         *list<string> connection_tls_paths;
     }
 
+    # the sealed OAuth2 credentials: not visible to subclasses (qoretechnologies/qore#7248)
+    private:internal {
+        #! OAuth2 credentials that the client uses for its token requests but never gives out; set once
+        /** transient: they are never serialized, and a deserialized client has none (qoretechnologies/qore#7248)
+        */
+        transient *SealedOAuth2Credentials sealed_creds;
+    }
+
     private {
         #! Explicit path override for the additive target API, including an explicitly cleared root
         transient Mutex target_path_lock();
@@ -1620,6 +1980,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           to acquire an access token
         - \c oauth2_client_id: The OAuth2 client ID; ignored if the \c token option is set
         - \c oauth2_client_secret: the OAuth2 client secret; ignored if the \c token option is set
+        - \c oauth2_sealed_credentials: a @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials" object
+          that trusted code created: the client makes its token requests with it and never gives its secret out; it
+          replaces \c oauth2_client_secret and \c oauth2_token_url, and cannot be replaced once set
+          (qoretechnologies/qore#7248)
         - \c oauth2_grant_type: the OAuth2 grant type; ignored if the \c token option is set; possible values:
           - \c authorization_code: requires \c oauth2_client_id, \c oauth2_client_secret, \c oauth2_auth_url, as well
             as \c oauth2_token_url; note that this grant type cannot be handled automatically but rather must be
@@ -1725,7 +2089,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
 
     private:internal initRestClient(*hash<auto> opts, *softbool do_not_connect) {
         # capture caller options verbatim for copyWithUrl() sibling construction
-        saved_opts = opts ?? {};
+        # the sealed credentials are kept in their transient member only, so the client can be serialized
+        # (qoretechnologies/qore#7248); getConstructorOptions() and copyWithUrl() give them to other clients
+        saved_opts = (opts ?? {}) - "oauth2_sealed_credentials";
         # set logger, if any
         self.logger = remove opts.logger;
         # set update token code, if any
@@ -1908,6 +2274,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         @since RestClient 2.1
     */
     setOAuth2Options(hash<auto> new_opts) {
+        if (exists new_opts.oauth2_sealed_credentials) {
+            setSealedOAuth2Credentials(new_opts.oauth2_sealed_credentials);
+        }
         if (new_opts.username.val()) {
             setUserPassword(new_opts.username, new_opts.password ?? "");
         }
@@ -1920,7 +2289,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         @since RestClient 2.2
     */
     hash<auto> getOAuth2Options() {
-        return {
+        # sealed credentials are given only when set: the object gives out no secret (qoretechnologies/qore#7248)
+        return (sealed_creds ? {"oauth2_sealed_credentials": sealed_creds} : {}) + {
             "username": username,
             "password": password,
             "token": token,
@@ -2111,6 +2481,9 @@ hash<auto> h = rest.getDefaultHeaders();
         # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
         # values of other types to the returned hash, such as a token or flags, to create another client
         hash<auto!> rv = saved_opts;
+        if (sealed_creds) {
+            rv.oauth2_sealed_credentials = sealed_creds;
+        }
         return rv;
     }
 
@@ -2686,6 +3059,10 @@ hash<auto> ans = rest.del("/orders/1");
     AbstractRestClient copyWithUrl(string new_url) {
         # values of any type are added below, so the hash is not narrowed to the type of the saved options
         hash<auto!> opts = saved_opts + {"url": new_url};
+        # the copy uses the same sealed credentials (qoretechnologies/qore#7248)
+        if (sealed_creds) {
+            opts.oauth2_sealed_credentials = sealed_creds;
+        }
         # the copy keeps the headers declared sensitive, also those declared after this client was created
         if (sensitive_headers) {
             opts.sensitive_headers = keys sensitive_headers;
@@ -3558,8 +3935,40 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             setupUserPassword(opts);
         }
 
+        # sealed OAuth2 credentials replace the client secret and token URL (qoretechnologies/qore#7248)
+        if (exists opts.oauth2_sealed_credentials) {
+            setSealedOAuth2Credentials(opts.oauth2_sealed_credentials);
+        }
+
         # check any OAuth2 options; invalid options are an error also when the client does not connect (qore#6906)
         checkOAuth2Options(opts);
+    }
+
+    #! Sets the sealed OAuth2 credentials of the client once
+    /** @throw OAUTH2-SEALED-ERROR the value is not a SealedOAuth2Credentials object, or the client has other sealed
+        credentials already: they cannot be replaced
+    */
+    private:internal synchronized setSealedOAuth2Credentials(auto creds) {
+        if (!(creds instanceof SealedOAuth2Credentials)) {
+            throw "OAUTH2-SEALED-ERROR", sprintf("option \"oauth2_sealed_credentials\" must be a "
+                "SealedOAuth2Credentials object; got type %y", creds.fullType());
+        }
+        if (sealed_creds) {
+            if (sealed_creds == creds) {
+                return;
+            }
+            throw "OAUTH2-SEALED-ERROR", "the sealed OAuth2 credentials of a client cannot be replaced";
+        }
+        sealed_creds = creds;
+    }
+
+    #! Returns the sealed OAuth2 credentials of the client, if any
+    /** The object gives out no secret; see @ref SealedOAuth2Credentials
+
+        @since %RestClient 2.7
+    */
+    *SealedOAuth2Credentials getSealedOAuth2Credentials() {
+        return sealed_creds;
     }
 
     #! Setup username and password consistently
@@ -3795,14 +4204,23 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             "username": opts.username ?? username ?? getUsername(),
             "password": opts.password ?? password ?? getPassword(),
         };
+        # sealed credentials replace the client secret and the token URL (qoretechnologies/qore#7248)
+        *hash<string, bool> satisfied;
+        if (sealed_creds) {
+            satisfied = {"oauth2_client_secret": True, "oauth2_token_url": True};
+            if (!effective.oauth2_client_id.val()) {
+                effective.oauth2_client_id = sealed_creds.getClientId();
+                opts.oauth2_client_id = sealed_creds.getClientId();
+            }
+        }
         # a token that is given is used without the options to acquire a new one
-        if (!checkOAuth2GrantOptions(grant_type, effective, opts.token.val() || token.val())) {
+        if (!checkOAuth2GrantOptions(grant_type, effective, opts.token.val() || token.val(), satisfied)) {
             debug("OAuth2 grant type %y requires options that are not set; the token given is used and cannot be "
                 "refreshed", grant_type);
             return;
         }
         oauth2_grant_type = grant_type;
-        map self{$1} = opts{$1}, OAuth2GrantOptions{grant_type};
+        map self{$1} = opts{$1}, OAuth2GrantOptions{grant_type}, !satisfied{$1} || exists opts{$1};
     }
 
     #! Validates the options of an OAuth2 grant type
@@ -3908,6 +4326,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     /** @since %RestClient 2.0
     */
     private AbstractPollOperation startOAuth2AuthPoll(hash<auto> login) {
+        # a request with sealed credentials is made by them, with a client of their own (qoretechnologies/qore#7248)
+        if (sealed_creds) {
+            return sealed_creds.startPollRequestToken(login, getProxyURL());
+        }
         # do not send a basic auth header with the username and password in the request
         clearUserPassword();
         hash<auto> auth_hdr = getOAuth2AuthHeaders() + {
@@ -3953,6 +4375,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     /** @since %RestClient 2.0
     */
     private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info, *bool refresh) {
+        # a request with sealed credentials is made by them, with a client of their own (qoretechnologies/qore#7248)
+        if (sealed_creds) {
+            return gotOAuth2LoginInfo(sealed_creds.requestToken(login, getProxyURL()), refresh);
+        }
         # do not send a basic auth header in the request
         clearUserPassword();
         # restore the username and password on exit
