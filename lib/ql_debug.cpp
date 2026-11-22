@@ -17310,6 +17310,172 @@ static void ut_qorevalue_resolve_indirect_opaque(UnitTestCounters& c) {
     }
 }
 
+// QoreValue::resolveIndirectRef() resolves the target that resolveIndirect() resolves, with a reference of its own
+// (qore#7231): a binary module that walks the list or hash of a weak reference must hold it, as another thread can
+// free it while it is walked.  Once the free of the list or hash has started, the language reads it through a weak
+// reference as a new empty one that cannot be changed (qore#7198), and so does this call; the object of a weak
+// reference is returned only while it is referenced and has not been deleted.
+static void ut_qorevalue_resolve_indirect_ref(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // the list of a weak reference: a new reference while it is referenced, the freed stand-in once it is freed
+    {
+        QoreListNode* l = new QoreListNode(autoTypeInfo);
+        l->push(QoreValue(1), &xsink);
+        QoreValue w(new WeakListReferenceNode(l));
+        int refs = l->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_LIST, (int)r->getType(), "a weak list reference resolves to its list");
+            UT_ASSERT(c, r->get<const QoreListNode>() == l, "a weak list reference resolves to its own list");
+            UT_ASSERT_EQ(c, refs + 1, l->reference_count(), "the list is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, l->reference_count(), "the reference returned for the list is the caller's");
+        // the last reference is released: the list is freed, and the weak reference keeps its node allocated
+        l->deref(&xsink);
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_LIST, (int)r->getType(), "a freed weak list resolves to a list");
+            QoreListNode* sl = r->get<QoreListNode>();
+            UT_ASSERT(c, sl != l, "a freed weak list resolves to a stand-in, not to the freed list");
+            UT_ASSERT(c, sl->empty(), "the stand-in of a freed list is empty");
+            UT_ASSERT(c, sl->is_unique(), "the stand-in of a freed list has the caller's reference only");
+            UT_ASSERT(c, sl->getTypeInfo() == w.get<const WeakListReferenceNode>()->getTypeInfo(),
+                "the stand-in of a freed list has its type");
+            sl->push(QoreValue(2), &xsink);
+            UT_ASSERT(c, xsink.isException(), "the stand-in of a freed list cannot be changed");
+            xsink.clear();
+            UT_ASSERT(c, sl->empty(), "the stand-in of a freed list stays empty");
+        }
+        w.discard(&xsink);
+    }
+
+    // the hash of a weak reference, likewise
+    {
+        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+        h->setKeyValue("a", QoreValue(1), &xsink);
+        QoreValue w(new WeakHashReferenceNode(h));
+        int refs = h->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_HASH, (int)r->getType(), "a weak hash reference resolves to its hash");
+            UT_ASSERT(c, r->get<const QoreHashNode>() == h, "a weak hash reference resolves to its own hash");
+            UT_ASSERT_EQ(c, refs + 1, h->reference_count(), "the hash is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, h->reference_count(), "the reference returned for the hash is the caller's");
+        h->deref(&xsink);
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_HASH, (int)r->getType(), "a freed weak hash resolves to a hash");
+            QoreHashNode* sh = r->get<QoreHashNode>();
+            UT_ASSERT(c, sh != h, "a freed weak hash resolves to a stand-in, not to the freed hash");
+            UT_ASSERT(c, sh->empty(), "the stand-in of a freed hash is empty");
+            UT_ASSERT(c, sh->is_unique(), "the stand-in of a freed hash has the caller's reference only");
+            sh->setKeyValue("b", QoreValue(2), &xsink);
+            UT_ASSERT(c, xsink.isException(), "the stand-in of a freed hash cannot be changed");
+            xsink.clear();
+            UT_ASSERT(c, sh->empty(), "the stand-in of a freed hash stays empty");
+        }
+        w.discard(&xsink);
+    }
+
+    // the object of a weak reference: a new reference while it is valid, NOTHING once it is deleted
+    {
+        QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+        QoreValue w(new WeakReferenceNode(obj));
+        int refs = obj->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_OBJECT, (int)r->getType(), "a weak object reference resolves to its object");
+            UT_ASSERT(c, r->get<const QoreObject>() == obj, "a weak object reference resolves to its own object");
+            UT_ASSERT_EQ(c, refs + 1, obj->reference_count(), "the object is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, obj->reference_count(), "the reference returned for the object is the caller's");
+        // deleted, but still referenced
+        obj->doDelete(&xsink);
+        UT_ASSERT(c, !xsink, "the object is deleted");
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->isNothing(), "a weak reference to a deleted object resolves to NOTHING");
+        }
+        UT_ASSERT_EQ(c, refs, obj->reference_count(), "no reference is kept for a deleted object");
+        obj->deref(&xsink);
+        w.discard(&xsink);
+    }
+
+    // the object of a weak reference whose last reference was released
+    {
+        QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+        QoreValue w(new WeakReferenceNode(obj));
+        obj->deref(&xsink);
+        UT_ASSERT_EQ(c, 0, obj->reference_count(), "the last reference to the object was released");
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->isNothing(), "a weak reference to a released object resolves to NOTHING");
+        }
+        UT_ASSERT_EQ(c, 0, obj->reference_count(), "no reference is taken to a released object");
+        w.discard(&xsink);
+    }
+
+    // opaque references resolve to their targets as ordinary values, with references of their own
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        QoreValue op = QoreValue::makeOpaqueList(*l);
+        int refs = l->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from a list reference");
+            UT_ASSERT(c, r->get<const QoreListNode>() == *l, "an opaque list reference resolves to its list");
+            UT_ASSERT_EQ(c, refs + 1, l->reference_count(), "the opaque list is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+    {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        QoreValue op = QoreValue::makeOpaqueHash(*h);
+        int refs = h->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from a hash reference");
+            UT_ASSERT(c, r->get<const QoreHashNode>() == *h, "an opaque hash reference resolves to its hash");
+            UT_ASSERT_EQ(c, refs + 1, h->reference_count(), "the opaque hash is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+    {
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_COUNTER, getProgram(), new Counter(0)), &xsink);
+        QoreValue op = QoreValue::makeOpaqueObject(*obj);
+        int refs = obj->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from an object reference");
+            UT_ASSERT(c, r->get<const QoreObject>() == *obj, "an opaque object reference resolves to its object");
+            UT_ASSERT_EQ(c, refs + 1, obj->reference_count(), "the opaque object is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+
+    // any other value is returned with a new reference
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        QoreValue plain(*l);
+        {
+            ValueHolder r(plain.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->get<const QoreListNode>() == *l, "a plain value is returned unchanged");
+            UT_ASSERT_EQ(c, 2, l->reference_count(), "a plain value is returned with a new reference");
+        }
+        UT_ASSERT_EQ(c, 1, l->reference_count(), "the reference returned for a plain value is the caller's");
+        QoreValue i(static_cast<int64>(5));
+        ValueHolder r(i.resolveIndirectRef(), &xsink);
+        UT_ASSERT_EQ(c, (int64)5, r->getAsBigInt(), "an int is returned unchanged");
+    }
+
+    UT_ASSERT(c, !xsink, "resolveIndirectRef() raises no exception");
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -24183,6 +24349,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_adopt_socket_simple_request(c);
     ut_http2_adopt_socket_construct(c);
     ut_qorevalue_resolve_indirect_opaque(c);
+    ut_qorevalue_resolve_indirect_ref(c);
     ut_manager_negotiate_plaintext_uses_h1(c);
     ut_manager_negotiate_refused_port(c);
     ut_negotiate_close_cancels_after_closed_state(c);
