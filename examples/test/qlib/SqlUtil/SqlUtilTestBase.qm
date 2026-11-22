@@ -201,11 +201,19 @@ public class SqlTestBase inherits QUnit::Test {
 
         hash<SerializationInfo> h = table.serializeToData();
 
-        # the serialized data keeps no credentials of the datasource (qore#7016): no password
+        # the serialized data keeps no credentials of the datasource (qore#7016): not its user name and password as a
+        # datasource string has them ("user/pass@"); the password alone is not searched for, as a short password can
+        # also be the name of the database or of a schema object that the serialized data names
         AbstractDatasource ds = table.getDatasource();
         *string pass = ds.getPassword();
+        *string user = ds.getUserName();
         if (pass) {
-            assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
+            assertEq(-1, sprintf("%y", h).find((user ?? "") + "/" + pass + "@"),
+                "the serialized data has no credentials of the datasource");
+            # no password key holds the password, and no datasource or connection field has it anywhere in its value;
+            # only a database or object name elsewhere in the data can be the same text as a short password
+            list<string> leaks = SqlTestBase::findCredentialLeaks(h, pass);
+            assertEq((), leaks, "no password or datasource field of the serialized data has the password");
         }
 
         # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
@@ -230,6 +238,40 @@ public class SqlTestBase inherits QUnit::Test {
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());
+    }
+
+    #! returns the paths in serialized data \a v of a password key that holds \a pass, or of a datasource or connection
+    #! field whose value has \a pass in it (qore#7016)
+    static list<string> findCredentialLeaks(auto v, string pass, string path = "", bool in_ds = False) {
+        list<string> rv = ();
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                foreach hash<auto> i in (v.pairIterator()) {
+                    string key = i.key.lwr();
+                    string p = path + "." + i.key;
+                    if ((key == "pass" || key == "password") && i.value.typeCode() == NT_STRING && i.value == pass) {
+                        rv += p;
+                        continue;
+                    }
+                    bool ds = in_ds || key =~ /^ds($|_)/ || key =~ /datasource|conn|url/;
+                    rv += SqlTestBase::findCredentialLeaks(i.value, pass, p, ds);
+                }
+                break;
+            }
+            case NT_LIST: {
+                int n = 0;
+                foreach auto e in (v) {
+                    rv += SqlTestBase::findCredentialLeaks(e, pass, sprintf("%s[%d]", path, n++), in_ds);
+                }
+                break;
+            }
+            case NT_STRING:
+                if (in_ds && v.find(pass) != -1) {
+                    rv += path;
+                }
+                break;
+        }
+        return rv;
     }
 
     deferrableForeignConstraintsTest() {
