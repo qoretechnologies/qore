@@ -81,7 +81,11 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         # eagerly derive the record type so that getStaticInfoImpl() can report
         # has_record correctly on the first call (hasRecord() reads the static
         # info before getRecordType() is called)
-        record_type = getRecordTypeIntern();
+        # a provider that a sandboxed caller creates does not keep a type that it built for the callers that it is
+        # shared with (qore#7104); getRecordTypeImpl() builds it for them
+        if (DataProvider::mayRegisterShared()) {
+            record_type = getRecordTypeIntern();
+        }
     }
 
     #! Returns the data provider name
@@ -171,7 +175,10 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
             }
             rv.addField(new QoreDataField("formData", "REST request form data", formData));
         }
-        return request_type = required ? rv : rv.getOrNothingType();
+        AbstractDataProviderType rt = required ? rv : rv.getOrNothingType();
+        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+        # that caller and is not kept in the instance for the others (qore#7104)
+        return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
     }
 
     #! Returns the description of the record type, if any
@@ -179,7 +186,13 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         if (!record_type) {
-            record_type = getRecordTypeIntern();
+            *hash<string, AbstractDataField> rt = getRecordTypeIntern();
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            if (!DataProvider::mayRegisterShared()) {
+                return rt;
+            }
+            record_type = rt;
         }
         return record_type;
     }
@@ -207,7 +220,10 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
 
         *ResponseObject response = getSuccessResponse();
         if (response) {
-            return response_type = getResponseTypeIntern(response, "success");
+            AbstractDataProviderType rt = getResponseTypeIntern(response, "success");
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            return DataProvider::mayRegisterShared() ? (response_type = rt) : rt;
         }
     }
 

@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the end of the process with a foreign thread blocked in a call, and the exit of the process
+# test-exec-mode: children - its checks run in child processes that set their own --exec-mode, and in qcc binaries
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class ForeignCallAtExitTest
+
+#! the end of the process when a thread of another runtime is blocked in a call of the script (qore#6904)
+/** The deletion of the Program of the script at the end of the process (QoreProgramHelper) waited for every thread
+    that runs in it, also for a thread of another runtime (registered with q_register_foreign_thread(): a JVM thread
+    through the jni module, for example) whose call of a closure of the script never returns, so the process never
+    ended.  The end of the process now waits for such threads at most as long as exit() waits for the threads that are
+    ending (10 seconds), and then leaves the Program to them, as qore_cleanup() leaves the Programs in which foreign
+    threads run; a call that returns within the bound is waited for, and the library's own threads are waited for as
+    before.
+
+    The foreign thread is started by staticpgm_foreign_call() of the test module "staticpgmcode"; the scripts make
+    the wait short with dbg_set_process_end_foreign_wait() except for one run, which checks the default bound.  Each
+    run is limited by a timeout, so a hang fails the test instead of the run.
+*/
+class ForeignCallAtExitTest inherits QUnit::Test {
+    public {
+        #! the output of a script whose foreign call never returns
+        const BlockedOutput = "script ends\nbackground thread ended\n";
+
+        #! the output of a script whose foreign call never returns, ended with exit(5): exit() ends a process in which
+        #! other threads run at once (with _Exit()), without its exit hooks
+        const BlockedExitOutput = "script exits\n";
+
+        #! the output of a script whose foreign call is released by an exit hook
+        const ReturnsOutput = "script ends\nexit hook releases the call\nforeign call returned\n";
+
+        #! the limit of a run, in seconds
+        const Limit = 120;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+        *string timeout_cmd;
+    }
+
+    constructor() : QUnit::Test("foreign call at exit", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        dir = get_script_dir();
+        foreach string cmd in (("timeout", "gtimeout")) {
+            if (strlen(backquote(sprintf("command -v %s 2>/dev/null || true", cmd)))) {
+                timeout_cmd = sprintf("%s -k 10 %d ", cmd, Limit);
+                break;
+            }
+        }
+        addTestCase("a blocked foreign call does not keep the process from ending", \blockedTest());
+        addTestCase("exit() with a blocked foreign call", \blockedExitTest());
+        addTestCase("a foreign call that returns is waited for", \returnsTest());
+        addTestCase("the default bound", \defaultBoundTest());
+        addTestCase("qcc executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs a command with its output and status; skips the test if the module "staticpgmcode" is not available
+    private hash<auto> run(string cmd) {
+        if (!timeout_cmd) {
+            testSkip("no timeout command: a hang would hang the test");
+        }
+        if (system(sprintf("%s %s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env, qore_bin))) {
+            testSkip("the test module 'staticpgmcode' cannot be loaded; build it with: cmake --build <build "
+                "directory> --target staticpgmcode");
+        }
+        TmpDir tmp("foreign-call-at-exit-");
+        string out = tmp.path + "/out.txt";
+        int rc = system(sprintf("%s %s%s > %s 2>&1", env, timeout_cmd, cmd, out));
+        return {
+            "rc": rc,
+            "out": ReadOnlyFile::readTextFile(out),
+        };
+    }
+
+    #! runs a script in an execution mode
+    private hash<auto> runScript(string mode, string script, string args = "") {
+        return run(sprintf("%s --enable-debug --exec-mode=%s -l staticpgmcode %s/%s %s", qore_bin, mode, dir, script,
+            args));
+    }
+
+    #! checks the output of a run; the module's own message is not part of it
+    private checkRun(hash<auto> r, int rc, string output, string label) {
+        assertEq(rc, r.rc, label + ": status (124: the run hung): " + r.out);
+        assertEq(output, replace(r.out, "staticpgmcode: teardown complete\n", ""), label + ": output");
+    }
+
+    blockedTest() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            checkRun(runScript(mode, "foreign-call-blocked.q", "100"), 0, BlockedOutput, mode);
+        }
+    }
+
+    blockedExitTest() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            checkRun(runScript(mode, "foreign-call-blocked.q", "100 exit"), 5, BlockedExitOutput, mode);
+        }
+    }
+
+    returnsTest() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            checkRun(runScript(mode, "foreign-call-returns.q"), 0, ReturnsOutput, mode);
+        }
+    }
+
+    #! the default bound: the process ends after it
+    defaultBoundTest() {
+        date start = now_us();
+        checkRun(runScript("ast", "foreign-call-blocked.q"), 0, BlockedOutput, "default bound");
+        # the end waits for the call for the whole bound (10 seconds), but not for the limit of the run
+        assertGe(10s, now_us() - start, "the end of the process waits for the bound");
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("foreign-call-at-exit-aot-");
+        foreach string script in (("foreign-call-blocked", "foreign-call-returns")) {
+            string exe = tmp.path + "/" + script;
+            hash<auto> r = run(sprintf("%s -O0 -l staticpgmcode -o %s %s/%s.q", qcc_bin, exe, dir, script));
+            assertTrue(is_file(exe), script + ": qcc compiles the script: " + r.out);
+            if (!is_file(exe)) {
+                continue;
+            }
+            if (script == "foreign-call-blocked") {
+                checkRun(run(exe + " 100"), 0, BlockedOutput, script + ": AOT");
+                checkRun(run(exe + " 100 exit"), 5, BlockedExitOutput, script + ": AOT exit()");
+            } else {
+                checkRun(run(exe), 0, ReturnsOutput, script + ": AOT");
+            }
+        }
+    }
+}

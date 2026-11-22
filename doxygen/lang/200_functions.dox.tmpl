@@ -59,6 +59,17 @@ sub handle(const auto payload, const *string request_id = NOTHING) {
     variable will be reflected in the original variable for variables passed by reference. Also note that it is
     illegal to pass a local variable by reference in a @ref background "background" expression.
 
+    @subsubsection function_param_default_values Default Values of Parameters
+    A parameter can declare a default value (ex: <tt>int timeout = 30</tt>), which it is given when the call gives no
+    value for it.  A default value that is an expression is evaluated when the function is called, as code of the
+    function, not of the code that calls it: in the @ref Qore::Program "Program" of the function, with its
+    @ref parse_options "parse options" and @ref sandboxing "sandbox", and with no class context, also when the function
+    is called from a method of a class, so it cannot use the private or \c private:internal members or the private
+    methods of that class.  The default values of a @ref class_methods "method" are evaluated in the method's class
+    (the class that declared the method, also when it is called on an object of a subclass) and, for a normal method,
+    with the object of the call as \c self, whoever calls the method, and those of a @ref closure "closure" in the
+    context in which the closure was created (see @ref closure_default_values).
+
     @note In order to process a variable number of arguments to a function, use @ref implicit_arguments "implicit argument references" (<tt>$1</tt>) or the <tt>argv</tt> variable (an automatic local variable); these are automatically instantiated at run time when additional arguments in excess of the declared parameters are passed to the function at run time.  No declaration needs to be made in the function signature to use the <tt>argv</tt> variable.
 
     @subsubsection function_param_varargs Ellipses For Variable Arguments

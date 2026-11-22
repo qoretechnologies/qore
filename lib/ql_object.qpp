@@ -38,6 +38,32 @@
 // q_get_runtime_call_program() is declared DLLLOCAL in qore_program_private.h and defined
 // once in ql_misc.cpp; the calls below resolve to that single definition.
 
+// returns the class context of a call of a method of the object of the class \a cls by name in a builtin function:
+// in a builtin function, the class context of the code that called the function is the caller class, not the current
+// one (which a builtin function does not have), as for call_static_method() (issue #5767); it is only used to reach
+// the public methods of the private:internal parent classes of the class context (see
+// qore_class_private::evalMethodFromCallerImpl(); qore#6859); a class context outside the class hierarchy of the object
+// has no more access than code without a class context, as for a call reference (qore#6782)
+static const qore_class_private* q_call_object_method_ctx(const qore_class_private* cls) {
+    const qore_class_private* class_ctx = runtime_get_caller_class();
+    return class_ctx && cls->runtimeCheckPrivateClassAccess(class_ctx) ? class_ctx : nullptr;
+}
+
+// calls the method of the name of an object as code of the caller's class context calls it (see
+// q_call_object_method_ctx())
+static QoreValue q_call_object_method_intern(QoreObject* obj, const QoreStringNode* method, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    TempEncodingHelper name(method, QCS_DEFAULT, xsink);
+    if (!name) {
+        return QoreValue();
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    const qore_class_private* cls = qore_class_private::get(*obj->getClass());
+    const qore_class_private* class_ctx = q_call_object_method_ctx(cls);
+    return class_ctx ? cls->evalMethodFromCaller(obj, name->c_str(), args, class_ctx, rc, xsink)
+        : cls->evalMethod(obj, name->c_str(), args, nullptr, rc, xsink);
+}
+
 template <bool Lexical>
 static QoreValue q_call_static_method_args_impl(LexicalSemanticPolicy policy, QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
     // the names are looked up as C strings, which would be cut at a NUL character and name another class or method
@@ -64,13 +90,6 @@ static QoreValue q_call_static_method_args_impl(LexicalSemanticPolicy policy, Qo
         return QoreValue();
     }
 
-    const QoreMethod* m = cls->findStaticMethod(method_name->c_str());
-    if (!m) {
-        xsink->raiseException("UNKNOWN-METHOD", "cannot resolve static method '%s::%s()'",
-            cls_path->c_str(), method_name->c_str());
-        return QoreValue();
-    }
-
     // the method is called in the caller's class context, as a static method call in the caller's code would be: a
     // private method (or variant) is accessible only to a caller with private access to the class (issue #5767); in
     // a builtin function or method, the caller's class context is the caller class, not the current one (none in a
@@ -79,9 +98,15 @@ static QoreValue q_call_static_method_args_impl(LexicalSemanticPolicy policy, Qo
     if (class_ctx && !qore_class_private::get(*cls)->runtimeCheckPrivateClassAccess(class_ctx)) {
         class_ctx = nullptr;
     }
-    if (!class_ctx && m->isPrivate()) {
-        xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
-            cls_path->c_str(), method_name->c_str());
+    // the method is the one that a static method call in the caller's code calls: a caller that cannot call the
+    // method found first calls the method of a later parent class that it can call (qore#7207)
+    const QoreMethod* m = qore_class_private::get(*cls)->runtimeFindCallableStaticMethod(method_name->c_str(),
+        class_ctx, xsink);
+    if (!m) {
+        if (!*xsink) {
+            xsink->raiseException("UNKNOWN-METHOD", "cannot resolve static method '%s::%s()'",
+                cls_path->c_str(), method_name->c_str());
+        }
         return QoreValue();
     }
     // the receiver of a static method of a generic class called through a class that inherits a specialization of it
@@ -229,7 +254,7 @@ auto callObjectMethod(object obj, string method, ...) [flags=DEPRECATED] {
         call_args = args->copyListFrom(2);
     }
 
-    return obj->evalMethod(method, *call_args, xsink);
+    return q_call_object_method_intern(obj, method, *call_args, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -258,6 +283,12 @@ auto result = call_object_method(obj, "method", arg1, arg2);
 
     @note the method called could cause additional exceptions to be thrown
 
+    @note the code of a class can call a public method of a @ref private_inheritance "private:internal" parent class
+    of its own with this function, also on an object of a subclass, as it calls the method directly (since %Qore 3.0);
+    a call follows only the \c private:internal inheritance edges of the class of the calling code: a method that a
+    class inherits through a \c private (hierarchy) edge cannot be called with it, also not from the code of a base
+    class, and neither can a private method
+
     @since %Qore 0.8.12 as a replacement for deprecated camel-case callObjectMethod()
 
     @see
@@ -278,7 +309,7 @@ auto call_object_method(object object_value, string method, ...) {
         call_args = args->copyListFrom(2);
     }
 
-    return object_value->evalMethod(method, *call_args, xsink);
+    return q_call_object_method_intern(object_value, method, *call_args, xsink);
 }
 
 //! Calls a method of an object, using the optional third argument as the argument list to the method
@@ -303,7 +334,7 @@ auto callObjectMethodArgs(object obj, string method, *softlist<auto> varg) [flag
     if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
         return QoreValue();
     }
-    return obj->evalMethod(method, varg, xsink);
+    return q_call_object_method_intern(obj, method, varg, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -332,6 +363,12 @@ auto result = call_object_method_args(obj, "method", arglist);
 
     @note the method called could cause additional exceptions to be thrown
 
+    @note the code of a class can call a public method of a @ref private_inheritance "private:internal" parent class
+    of its own with this function, also on an object of a subclass, as it calls the method directly (since %Qore 3.0);
+    a call follows only the \c private:internal inheritance edges of the class of the calling code: a method that a
+    class inherits through a \c private (hierarchy) edge cannot be called with it, also not from the code of a base
+    class, and neither can a private method
+
     @since %Qore 0.8.12 as a replacement for deprecated camel-case callObjectMethodArgs()
 
     @see
@@ -344,7 +381,7 @@ auto call_object_method_args(object object_value, string method, *softlist<auto>
     if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
         return QoreValue();
     }
-    return object_value->evalMethod(method, arguments, xsink);
+    return q_call_object_method_intern(object_value, method, arguments, xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
@@ -378,6 +415,10 @@ auto result = call_static_method("Namespace::Class", "method", arg1, arg2);
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 */
 auto call_static_method(string class_name, string method, ...) {
     ReferenceHolder<QoreListNode> call_args(xsink);
@@ -421,6 +462,10 @@ auto result = call_static_method_args("Namespace::Class", "method", (arg1, arg2)
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 */
 auto call_static_method_args(string class_name, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return call_static_method_args_intern(q_get_runtime_call_program(runtime_cfg), class_name, method, arguments,
@@ -550,8 +595,11 @@ static QoreValue q_call_object_lexical(const QoreListNode* args, RuntimeConfig& 
         TempEncodingHelper name(*method, QCS_DEFAULT, xsink);
         if (!name) return QoreValue();
         QoreObject* obj = HARD_QORE_VALUE_OBJECT(args, 0);
-        return qore_class_private::get(*obj->getClass())->evalMethod(policy, obj, name->c_str(), forwarded_args,
-            runtime_get_class(), rc, xsink);
+        // as code of the caller's class context calls it (see q_call_object_method_intern())
+        const qore_class_private* cls = qore_class_private::get(*obj->getClass());
+        const qore_class_private* class_ctx = q_call_object_method_ctx(cls);
+        return class_ctx ? cls->evalMethodFromCaller(policy, obj, name->c_str(), forwarded_args, class_ctx, rc, xsink)
+            : cls->evalMethod(policy, obj, name->c_str(), forwarded_args, nullptr, rc, xsink);
     }
 }
 

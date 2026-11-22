@@ -250,6 +250,11 @@ public class VoyageRestClientBase {
         changed API key is a different account and gets its own client.  Clients are safe to share between
         threads.
 
+        The code of a sandboxed %Program, and code that acts for it, shares a client only with other code of the same
+        %Program: a client is an object that its users can configure and that carries their requests, so one tenant
+        does not get a client that the host or another tenant uses (qore#6749); where the %Program cannot be
+        identified, the client is not shared.
+
         @param url the endpoint URL; NOTHING for @ref DefaultUrl
         @param api_key the API key
         @param req_timeout the default request timeout of the client, if any
@@ -261,6 +266,16 @@ public class VoyageRestClientBase {
             *timeout connect_timeout) {
         string key = sprintf("%s|%s|%y|%y", getRateLimitAccount(url ?? DefaultUrl, api_key), url ?? "",
             req_timeout, connect_timeout);
+        # a sandboxed caller shares clients only with its own Program's code (qore#6749)
+        bool unshared;
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            *int pgm_id = SandboxManager::getCallerProgramId();
+            if (exists pgm_id) {
+                key += sprintf("|pgm:%d", pgm_id);
+            } else {
+                unshared = True;
+            }
+        }
         int now = clock_get_monotonic_us();
         AutoLock al(shared_client_lock);
         # release clients unused for the idle period
@@ -269,7 +284,7 @@ public class VoyageRestClientBase {
                 remove shared_clients{k};
             }
         }
-        if (*hash<auto> entry = shared_clients{key}) {
+        if (*hash<auto> entry = (unshared ? NOTHING : shared_clients{key})) {
             shared_clients{key}.last_used_us = now;
             return entry.client;
         }
@@ -284,12 +299,21 @@ public class VoyageRestClientBase {
             opts.connect_timeout = connect_timeout;
         }
         VoyageRestClientIo client(opts);
-        shared_clients{key} = {"client": client, "last_used_us": now};
+        if (!unshared) {
+            shared_clients{key} = {"client": client, "last_used_us": now};
+        }
         return client;
     }
 
     #! Returns the number of shared clients (see @ref getSharedClient())
-    static int getSharedClientCount() {
+    /** @return the number of shared clients in the process, or @ref nothing "NOTHING" for code that is sandboxed or
+        acts for sandboxed code, as the count covers the clients of every caller (qore#6749)
+    */
+    static *int getSharedClientCount() {
+        # the count covers the clients of every caller, also of other tenants: not given to sandboxed code
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
         AutoLock al(shared_client_lock);
         return shared_clients.size();
     }

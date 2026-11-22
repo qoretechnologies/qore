@@ -189,6 +189,21 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 */
 // Keep invocation arguments as scalar values instead of addresses captured by the evaluation lambdas.  This lets
 // SCU inline the thin eval entries without reserving capture/parameter storage in ordinary object dot-call frames.
+//! The dispatch of pseudo_classes_dispatch() for the list or hash of a weak reference, out of its path for other values
+/** The target is held with a reference of its own while the pseudo-method runs, which can keep it, or is a new empty
+    one if it was freed (qore#7198).
+*/
+template <typename F, typename... Args>
+static __attribute__((noinline, cold)) QoreValue pseudo_classes_dispatch_weak(const QoreValue n, ExceptionSink* xsink,
+        F f, Args... args) {
+    if (n.getType() == NT_WEAKREF_HASH) {
+        ReferenceHolder<QoreHashNode> target(n.get<WeakHashReferenceNode>()->lock(), xsink);
+        return f(po_list[NT_HASH], QoreValue(*target), args...);
+    }
+    ReferenceHolder<QoreListNode> target(n.get<WeakListReferenceNode>()->lock(), xsink);
+    return f(po_list[NT_LIST], QoreValue(*target), args...);
+}
+
 template <typename F, typename... Args>
 static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink, F f, Args... args) {
     switch (n.getType()) {
@@ -205,10 +220,8 @@ static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink
             return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()), args...);
 
         case NT_WEAKREF_HASH:
-            return f(po_list[NT_HASH], QoreValue(n.get<WeakHashReferenceNode>()->get()), args...);
-
         case NT_WEAKREF_LIST:
-            return f(po_list[NT_LIST], QoreValue(n.get<WeakListReferenceNode>()->get()), args...);
+            return pseudo_classes_dispatch_weak(n, xsink, f, args...);
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();

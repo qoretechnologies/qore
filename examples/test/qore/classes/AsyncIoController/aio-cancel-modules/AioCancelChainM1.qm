@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%no-locale-control
+%requires AioCancelChainM2
+
+#! a library module for asyncio_cancel_ownership.qtest: the first module of a chain of module calls, which calls the
+#! second one (AioCancelChainM2) to submit and cancel async I/O operations; it has a restriction (PO_NO_LOCALE_CONTROL)
+#! that the second one does not have, which it passes on to the code that it calls
+module AioCancelChainM1 {
+    version = "1.0";
+    desc = "test library module that calls another module to submit and cancel async I/O operations";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace AioCancelChainM1 {
+public class Lib {
+    static auto submit(string owner, string key) {
+        return AioCancelChainM2::Lib::submit(owner, key);
+    }
+
+    static bool cancelByKey(string key) {
+        return AioCancelChainM2::Lib::cancelByKey(key);
+    }
+}
+}

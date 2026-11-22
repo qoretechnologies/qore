@@ -86,7 +86,9 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
 
         case NT_WEAKREF_HASH: {
             // FIXME: inefficient
-            const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
+            // the hash is held with a reference of its own while its member is called (qore#7198)
+            ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+            const AbstractQoreNode* ref = check_call_ref(*h, m->getName());
             if (ref) {
                 if constexpr (Lexical) {
                     return qore_resolved_call_reference_node_ops(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)).invokeLexical(m->getArgs(), xsink,
@@ -200,11 +202,14 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
             obj = base.get<WeakReferenceNode>()->get();
             break;
 
-        case NT_WEAKREF_HASH:
-            if (const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), name)) {
+        case NT_WEAKREF_HASH: {
+            // a check that keeps nothing: the hash is held while its member is checked (qore#7198)
+            ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+            if (const AbstractQoreNode* ref = check_call_ref(*h, name)) {
                 return qore_check_hash_call_ref(ref, xsink);
             }
             break;
+        }
 
         case NT_OBJECT:
             obj = const_cast<QoreObject*>(base.get<const QoreObject>());

@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# keeps objects that a destructor of AbServers creates until the module cleanup deletes the data of this module, after
+# that of AbServers and the cleanup's wait for its work (the cleanup deletes the data of the user modules in the order
+# of their names) (qore#7027); see servers-client.qr
+
+%modern
+
+module AcKeeper {
+    version = "1.0";
+    desc = "keeps objects until the module cleanup deletes the data of this module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AcKeeper {
+#! the data of this module
+public class Keeper {
+    public {
+        #! the objects kept
+        static *list<auto> keep;
+    }
+}
+}

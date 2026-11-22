@@ -34,6 +34,8 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreFuture.h>
+#include <qore/QoreSSLCertificate.h>
+#include <qore/QoreSSLPrivateKey.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
@@ -78,6 +80,13 @@ static void raise_new_connection_error(HttpClientConnectionBase* conn, Exception
 HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& opts,
         ExceptionSink* xsink)
     : opts_(opts) {
+    // A pending operation can keep its manager alive after the client has been released.
+    if (opts_.client_cert) {
+        opts_.client_cert->ref();
+    }
+    if (opts_.client_key) {
+        opts_.client_key->ref();
+    }
     // Validate options
     if (opts_.max_connections_per_host < 0) {
         xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
@@ -160,6 +169,12 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
     ExceptionSink xsink;
     closeAll(&xsink);
     xsink.clear();
+    if (opts_.client_cert) {
+        opts_.client_cert->deref();
+    }
+    if (opts_.client_key) {
+        opts_.client_key->deref();
+    }
     // a connection whose back-pointer is still set can call onConnectionClosed() on this manager after it has been
     // destroyed: every connection that the manager releases has its back-pointer cleared first
     assert(!attached_connections_.load(std::memory_order_acquire));

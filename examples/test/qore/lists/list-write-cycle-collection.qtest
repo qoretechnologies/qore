@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a background call transfers object arguments to another thread
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path ${SCRIPT_DIR}/../../../../qlib
+%requires QUnit
+%exec-class ListWriteCycleCollectionTest
+
+class ListCycle {
+    public { list<auto> edges; }
+    private { static int destroyed = 0; }
+
+    destructor() { ++destroyed; }
+    static int count() { return destroyed; }
+
+    link(ListCycle target, int tag = 1) { edges = (tag, target); }
+    link(string tag, ListCycle target) { edges = (target, tag); }
+}
+
+class ListWriteCycleCollectionTest inherits QUnit::Test {
+    constructor() : Test("List writes retain collectible edges", "1.0", \ARGV) {
+        addTestCase("reverse preserves direct and nested edges", \reverseEdges());
+        addTestCase("argument evaluation and binding", \arguments());
+        addTestCase("sorting and splicing preserve edges", \rearranged());
+        set_return_value(main());
+    }
+
+    private static directReverse(bool nested) {
+        ListCycle h();
+        h.edges = nested ? reverse(((h,), 1)) : reverse((h, 1));
+    }
+
+    reverseEdges() {
+        int before = ListCycle::count();
+        directReverse(False);
+        int direct = ListCycle::count() - before;
+        directReverse(True);
+        assertEq((1, 2), (direct, ListCycle::count() - before), "direct and nested object edges");
+    }
+
+    private static defaulted(ListCycle node = new ListCycle()) { node.link(node); }
+    private static typed(list<ListCycle> values) { values[0].edges = values; }
+
+    private static callPaths() {
+        ListCycle a();
+        a.link(tag: 1, target: a);
+        ListCycle dynamic();
+        auto tag = 2;
+        dynamic.link(tag: tag, target: dynamic);
+        ListCycle worker();
+        int tid = background worker.link(tag: 3, target: worker);
+        thread_join(tid);
+        defaulted();
+        list<auto> untyped = (new ListCycle(),);
+        typed(untyped);
+    }
+
+    arguments() {
+        int before = ListCycle::count();
+        callPaths();
+        assertEq(before + 5, ListCycle::count());
+    }
+
+    private static changeOrder() {
+        ListCycle a();
+        a.edges = sort_stable((a, a), int sub (auto x, auto y) { return 0; });
+        ListCycle b();
+        list<auto> values = (b, 2);
+        splice values, 1, 1, (b, b);
+        b.edges = values;
+    }
+
+    rearranged() {
+        int before = ListCycle::count();
+        changeOrder();
+        assertEq(before + 2, ListCycle::count());
+    }
+}

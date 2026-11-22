@@ -138,6 +138,15 @@ public:
     DLLLOCAL explicit qore_value_ops(const QoreValue& r) : b(const_cast<QoreValue*>(&r)) {
     }
 
+    //! QoreValue::needsEval(), inline for the library's call paths (qore#7066)
+    DLLLOCAL bool needsEval() const {
+        if (!b->isPointer()) {
+            return false;
+        }
+        AbstractQoreNode* n = b->getPointerUnsafe();
+        return n && n->needs_eval();
+    }
+
     //! Evaluates the value with RuntimeConfig and returns the result with deref flag
     DLLLOCAL static QoreValue evalImpl(QoreValue* b, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink);
     DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {

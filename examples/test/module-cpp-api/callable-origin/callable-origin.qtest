@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class CallableOriginTest
+
+#! host code: its callables run with the host's Program, which is not restricted
+class HostClass {
+    bool m() {
+        return True;
+    }
+
+    static bool s() {
+        return True;
+    }
+}
+
+bool sub host_func() {
+    return True;
+}
+
+#! Tests qore_callable_origin_restrictions(): the restrictions that a scheduler sees for a callable or an object
+#! (issue #7056)
+/** The restrictions recorded with a call reference, closure or object when it was created, combined with the options
+    of the Program whose code it runs if that is not a module's Program
+*/
+class CallableOriginTest inherits QUnit::Test {
+    private {
+        TmpDir mods("callable-origin-");
+        Program tenant;
+    }
+
+    const TenantSource = "%modern
+%requires CallableOriginProbe
+class TenantClass {
+    bool m() { return True; }
+    static bool s() { return True; }
+}
+bool sub tenant_func() { return True; }
+hash<auto> sub make(object lent) {
+    TenantClass t();
+    CallableOriginProbe::Obj mo();
+    HostClass hc();
+    Program child(PO_NEW_STYLE);
+    child.parse(\"code sub mk() { return sub () {}; }\", \"child\");
+    return {
+        \"builtin_object\": new Mutex(),
+        \"module_made_closure\": CallableOriginProbe::make_closure(),
+        \"module_made_object\": CallableOriginProbe::make(),
+        \"module_made_builtin_object\": CallableOriginProbe::make_builtin(),
+        \"imported_object\": hc,
+        \"imported_method_ref\": \\hc.m(),
+        \"imported_static_ref\": \\HostClass::s(),
+        \"lent_object_method_ref\": \\lent.m(),
+        \"child_closure\": child.callFunction(\"mk\"),
+        \"closure\": bool sub () { return True; },
+        \"func_ref\": \\tenant_func(),
+        \"method_ref\": \\t.m(),
+        \"static_ref\": \\TenantClass::s(),
+        \"builtin_ref\": \\strlen(),
+        \"object\": t,
+        \"module_object\": mo,
+        \"module_method_ref\": \\mo.m(),
+        \"module_func_ref\": \\CallableOriginProbe::f(),
+    };
+}
+";
+
+    const ModuleSource = "%modern
+module CallableOriginProbe {
+    version = \"1.0\"; desc = \"probe\"; author = \"Qore\"; url = \"https://qore.org\"; license = \"MIT\";
+}
+public namespace CallableOriginProbe {
+    public bool sub f() { return True; }
+    public class Obj {
+        public bool m() { return True; }
+    }
+    public Obj sub make() { return new Obj(); }
+    public code sub make_closure() { return sub () {}; }
+    public Mutex sub make_builtin() { return new Mutex(); }
+}
+";
+
+    constructor() : Test("CallableOrigin", "1.0", \ARGV) {
+        addTestCase("callables and objects of unrestricted code", \hostTest());
+        addTestCase("callables and objects of restricted code", \tenantTest());
+        addTestCase("values that are not callable", \otherTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # a module loaded by its path, whose code is not the creating Program's own
+        string path = mods.path + DirSep + "CallableOriginProbe.qm";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        load_module(path);
+        tenant = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_NETWORK);
+        tenant.importClass("HostClass");
+        tenant.parse(TenantSource, "tenant");
+    }
+
+    hostTest() {
+        HostClass h();
+        object mo = call_function("CallableOriginProbe::make");
+        foreach hash<auto> i in ({
+                "builtin_object": new Mutex(),
+                "module_made_closure": call_function("CallableOriginProbe::make_closure"),
+                "module_made_builtin_object": call_function("CallableOriginProbe::make_builtin"),
+                "closure": bool sub () { return True; },
+                "func_ref": \host_func(),
+                "method_ref": \h.m(),
+                "static_ref": \HostClass::s(),
+                "builtin_ref": \strlen(),
+                "object": h,
+                "module_object": mo,
+            }.pairIterator()) {
+            assertEq(0, cpp_api_callable_origin_restrictions(i.value), i.key);
+        }
+    }
+
+    #! every value that the tenant created, or that module code created for it, has its restrictions: also objects of
+    #! builtin classes and of the host's classes that it imported, references to their methods and to the methods of
+    #! an object that the host lent it, and the code of a Program that it created (which inherits its restrictions)
+    tenantTest() {
+        HostClass lent();
+        hash<auto> h = tenant.callFunction("make", lent);
+        int expected = PO_NO_FILESYSTEM | PO_NO_NETWORK;
+        # an object of a builtin class that module code created for the tenant records nothing yet: its creating
+        # Program is the module's (issue #7039)
+        assertEq(0, cpp_api_callable_origin_restrictions(remove h.module_made_builtin_object),
+            "module_made_builtin_object (issue #7039)");
+        foreach hash<auto> i in (h.pairIterator()) {
+            assertEq(expected, cpp_api_callable_origin_restrictions(i.value) & expected, i.key);
+        }
+        assertEq(17, h.size());
+        # the object that the host lent is the host's
+        assertEq(0, cpp_api_callable_origin_restrictions(lent));
+    }
+
+    otherTest() {
+        assertEq(0, cpp_api_callable_origin_restrictions(1));
+        assertEq(0, cpp_api_callable_origin_restrictions("x"));
+        assertEq(0, cpp_api_callable_origin_restrictions());
+        assertEq(0, cpp_api_callable_origin_restrictions({"a": 1}));
+    }
+}

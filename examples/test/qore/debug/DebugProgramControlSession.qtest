@@ -2133,8 +2133,8 @@ f();
         lock.writeUnlockHook = {
             "tid": gettid(),
             "code": bool sub () {
-                date timeout = now_us() + EventTimeout;
-                while (!dpc.hasEndedCode(p.pgmId, p.tid) && now_us() < timeout) {
+                date timeout = microseconds(clock_get_monotonic_us()) + EventTimeout;
+                while (!dpc.hasEndedCode(p.pgmId, p.tid) && microseconds(clock_get_monotonic_us()) < timeout) {
                     usleep(1ms);
                 }
                 return True;

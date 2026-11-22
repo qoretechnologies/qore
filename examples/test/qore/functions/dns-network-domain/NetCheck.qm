@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of dns-network-domain.qtest that checks a network destination for its caller, as a token cache does
+# (qore#7133): its code calls SandboxManager::checkNetworkConnect() with the module's own restrictions
+
+%modern
+
+module NetCheck {
+    version = "1.0";
+    desc = "checks a network destination for its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace NetCheck {
+#! checks the destination for the caller; returns "allowed" or the error
+public string sub check(string host, int port) {
+    try {
+        SandboxManager::checkNetworkConnect(host, port);
+        return "allowed";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

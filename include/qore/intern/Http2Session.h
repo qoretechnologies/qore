@@ -1267,6 +1267,9 @@ private:
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
     std::unordered_map<int32_t, size_t> stream_refused_len;
+    //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
+    //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
@@ -1461,6 +1464,11 @@ public:
     //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
     //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
     DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
+    //! Returns the bytes of the stream's buffered data that nghttp2 has taken so far (never decreases)
+    /** @return the byte count, or -1 if the session is closed or nghttp2 no longer has the stream
+    */
+    DLLLOCAL int64_t streamTakenBytes(int32_t stream_id);
 
     //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,

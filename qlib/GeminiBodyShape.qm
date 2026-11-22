@@ -3038,6 +3038,10 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         hash<auto> retry_info;
         try {
             hash<auto> resp = withRetry(hash<auto> sub () {
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableRequestTarget("POST", <RestClient::RestRequestTarget>{"path": path},
+                        body, hdr, getRequestTimeoutMs(opts), getRequestCancelRegistration(opts));
+                }
                 return rest_client.restPostWithTimeout(path, body, hdr,
                     getRequestTimeoutMs(opts));
             }, opts, \retry_info);

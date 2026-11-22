@@ -656,9 +656,9 @@ QoreValue Var::eval() const {
                 return o->refSelf();
             }
             case NT_WEAKREF_HASH:
-                return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
+                return static_cast<WeakHashReferenceNode*>(val.v.n)->lock();
             case NT_WEAKREF_LIST:
-                return static_cast<WeakListReferenceNode*>(val.v.n)->get()->refSelf();
+                return static_cast<WeakListReferenceNode*>(val.v.n)->lock();
         }
         return val.getReferencedValue();
     }
@@ -673,9 +673,9 @@ QoreValue Var::eval() const {
             return o->refSelf();
         }
         case NT_WEAKREF_HASH:
-            return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
+            return static_cast<WeakHashReferenceNode*>(val.v.n)->lock();
         case NT_WEAKREF_LIST:
-            return static_cast<WeakListReferenceNode*>(val.v.n)->get()->refSelf();
+            return static_cast<WeakListReferenceNode*>(val.v.n)->lock();
     }
     return val.getReferencedValue();
 }
@@ -1602,6 +1602,28 @@ void LValueHelper::keepCreatedNode(QoreValue rv) const {
     }
 }
 
+QoreListNode* LValueHelper::lockWeakList() {
+    QoreListNode* l = getValue().get<WeakListReferenceNode>()->lock();
+    try {
+        tvec.push_back(l);
+    } catch (...) {
+        l->deref(nullptr);
+        throw;
+    }
+    return l;
+}
+
+QoreHashNode* LValueHelper::lockWeakHash() {
+    QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
+    try {
+        tvec.push_back(h);
+    } catch (...) {
+        h->deref(nullptr);
+        throw;
+    }
+    return h;
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (val.isEnum()) {
         val.discard(nullptr);
@@ -1835,7 +1857,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         shared = true;
-        l = getValue().get<WeakListReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made (qore#7198)
+        l = lockWeakList();
         if (negative_offsets && ind < 0) {
             ind += static_cast<int64>(l->size());
         }
@@ -1860,7 +1883,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
         }
         ensureUnique();
-        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made (qore#7198)
+        QoreHashNode* h = lockWeakHash();
         pushPathContainer(h, true, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
@@ -1993,7 +2017,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         shared = true;
-        l = getValue().get<WeakListReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made (qore#7198)
+        l = lockWeakList();
         if (negative_offsets && ind < 0) {
             ind += static_cast<int64>(l->size());
         }
@@ -2018,7 +2043,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
         }
         ensureUnique();
-        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made (qore#7198)
+        QoreHashNode* h = lockWeakHash();
         pushPathContainer(h, true, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
@@ -2165,7 +2191,8 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         h = getValue().get<QoreHashNode>();
     } else if (t == NT_WEAKREF_HASH) {
         ensureUnique();
-        h = getValue().get<WeakHashReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made (qore#7198)
+        h = lockWeakHash();
     } else {
         if (for_remove)
             return -1;
@@ -2991,7 +3018,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     ensureUnique();
                     QoreHashNode* h = t == NT_HASH
                         ? getValue().get<QoreHashNode>()
-                        : getValue().get<WeakHashReferenceNode>()->get();
+                        : getValue().get<WeakHashReferenceNode>()->borrow();
+                    if (t == NT_WEAKREF_HASH) [[unlikely]] {
+                        // held by the helper while the change through the weak reference is made (qore#7198); not in
+                        // the expression above, which keeps the code of the path of a hash as it is
+                        h = lockWeakHash();
+                    }
                     pushPathContainer(h, t == NT_WEAKREF_HASH, for_remove);
                     // a dynamic index keeps the value it was given
                     QoreHashKeyHelper key(step.slice_values.size() == 1 ? step.slice_values[0]
@@ -3012,7 +3044,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     ensureUnique();
                     l = t == NT_LIST
                         ? reinterpret_cast<QoreListNode*>(getValue().getPtr())
-                        : getValue().get<WeakListReferenceNode>()->get();
+                        : getValue().get<WeakListReferenceNode>()->borrow();
+                    if (t == NT_WEAKREF_LIST) [[unlikely]] {
+                        // held by the helper while the change through the weak reference is made (qore#7198); see
+                        // above
+                        l = lockWeakList();
+                    }
                     if (negative_offsets && idx < 0) {
                         idx += static_cast<int64_t>(l->size());
                     }

@@ -429,20 +429,16 @@ QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSeri
         }
 
         case NT_WEAKREF_HASH: {
-            const QoreHashNode* h = val.get<WeakHashReferenceNode>()->get();
-            if (!h) {
-                return QoreValue();
-            }
-            ValueHolder rv(serializeHashToData(*h, true, context, xsink), xsink);
+            // serialized with a reference of its own, or as a new empty hash if it was freed (qore#7198)
+            ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeHashToData(**h, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_LIST: {
-            const QoreListNode* l = val.get<WeakListReferenceNode>()->get();
-            if (!l) {
-                return QoreValue();
-            }
-            ValueHolder rv(serializeListToData(*l, true, context, xsink), xsink);
+            // serialized with a reference of its own, or as a new empty list if it was freed (qore#7198)
+            ReferenceHolder<QoreListNode> l(val.get<WeakListReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeListToData(**l, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 

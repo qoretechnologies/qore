@@ -973,7 +973,7 @@ map removeTools($1), info.removed;
         waitForIndexReaders("reload the data provider index");
         installIndexState(state);
         remove index_read_error;
-        log(LoggerLevel::LevelInfo, "Reloaded the data provider index %y (previous index %y): %d app(s) added, %d "
+        logDiagnostic(LoggerLevel::LevelInfo, "Reloaded the data provider index %y (previous index %y): %d app(s) added, %d "
             "removed, %d changed", rv.sha256, rv.previous_sha256, rv.added.size(), rv.removed.size(),
             rv.changed.size());
         return rv;
@@ -1916,13 +1916,17 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
             loaded_module_cache{mod} = True;
             return True;
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Error loading module %y: %s: %s", mod, ex.err, ex.desc);
+            logDiagnostic(LoggerLevel::LevelError, "Error loading module %y: %s: %s", mod, ex.err, ex.desc);
             return False;
         }
     }
 
     #! Returns a list of all app modules that have not been returned by a call to this method yet and are not loaded
-    static *list<string> getAllAppModulesToLoad() {
+    /** This reserves the pending modules for the caller. Callers restricted from process control and sandboxed callers
+        cannot mark the list as processed. Individual app lookups load their indexed dependencies on demand.
+    */
+    static *list<string> getAllAppModulesToLoad() [dom=PROCESS_CONTROL] {
+        ProviderIndexUtil::checkChange("claim the pending app modules of");
         if (apps_loaded) {
             return;
         }
@@ -2177,7 +2181,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         try {
             app_info = deserializeAppInfo(raw_info, metadata_context);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error deserializing app %y from the data provider index: %s",
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error deserializing app %y from the data provider index: %s",
                 app, get_exception_string(ex));
             app_info = raw_info;
         }
@@ -2229,7 +2233,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
             action_map = deserializeActionsWithContext({app: getUnrestoredActions(raw_actions, restored)},
                 metadata_context);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error deserializing actions for app %y from the data provider "
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error deserializing actions for app %y from the data provider "
                 "index: %s", app, get_exception_string(ex));
         }
 
@@ -2323,7 +2327,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         try {
             restored = getIndexedAction(raw_action, metadata_context, True);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index metadata; it "
+            logDiagnostic(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index metadata; it "
                 "cannot be read: %s: %s", action, app, ex.err, ex.desc);
         }
 
@@ -2378,7 +2382,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
                 $1.key: deserializeAppInfo($1.value, metadata_context),
             }, raw_apps.pairIterator();
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error deserializing apps from the data provider index: %s",
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error deserializing apps from the data provider index: %s",
                 get_exception_string(ex));
             app_map = raw_apps;
         }
@@ -2433,7 +2437,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
                 (map {$1.key: getUnrestoredActions($1.value, restored{$1.key})}, raw_actions.pairIterator()),
                 metadata_context);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error deserializing actions from the data provider index: %s",
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error deserializing actions from the data provider index: %s",
                 get_exception_string(ex));
             action_map = map {$1: {}}, apps.iterator();
         }
@@ -2556,7 +2560,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
                     "provider index from %y: %s: %s", path ?? "<unknown>", ex.err, ex.desc));
             }
         } else {
-            log(LoggerLevel::LevelInfo, "The data provider index was published before action summaries were "
+            logDiagnostic(LoggerLevel::LevelInfo, "The data provider index was published before action summaries were "
                 "recorded; they are read from the metadata of each app; recreate the index to list actions faster");
         }
         # the actions of each chunk are dropped as soon as their summaries are taken, and no type description is
@@ -2630,7 +2634,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
                     }
                     actions{action.key} = castActionSummary(action.value, ctx);
                 } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::LevelError, "Omitting the summary of action %y of app %y from the data provider "
+                    logDiagnostic(LoggerLevel::LevelError, "Omitting the summary of action %y of app %y from the data provider "
                         "index; it cannot be read: %s: %s", action.key, app.key, ex.err, ex.desc);
                 }
             }
@@ -2735,19 +2739,13 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns the global data provider logger
-    /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
-        get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
-        directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
-        such code, also those of log(), still go to the logger
+    /** @return the configured logger, or @ref nothing "NOTHING" when no logger is set or the caller may not use it
 
-        @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
-        is sandboxed or acts for sandboxed code
-
-        @since ProviderIndexUtil 1.2 sandboxed code does not get the logger
+        The process-wide logger is visible to trusted code with terminal I/O. Module-generated diagnostics may
+        still reach the logger while serving a restricted caller (see @ref sandbox_process_wide_registries).
     */
     static *LoggerInterface getGlobalLogger() {
-        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
-        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        if (!ProviderIndexUtil::mayUseGlobalLogger()) {
             return;
         }
         return logger;
@@ -2927,7 +2925,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                         rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider metadata of app %y: "
                             "%s: %s", app, ex.err, ex.desc);
                     }
-                    log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                    logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                         get_exception_string(ex));
                     write_cache = False;
                 }
@@ -2967,7 +2965,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider factory info: %s: %s",
                         ex.err, ex.desc);
                 }
-                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                     get_exception_string(ex));
                 write_cache = False;
             }
@@ -2991,7 +2989,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider failures: %s: %s",
                         ex.err, ex.desc);
                 }
-                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                     get_exception_string(ex));
                 write_cache = False;
             }
@@ -3015,7 +3013,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                     rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider action summaries: %s: "
                         "%s", ex.err, ex.desc);
                 }
-                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                     get_exception_string(ex));
                 write_cache = False;
             }
@@ -3038,7 +3036,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                         "manifest: %s: %s", ex.err, ex.desc);
                 }
                 remove cache_sha256;
-                log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
                     get_exception_string(ex));
             }
         }
@@ -3059,7 +3057,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                 rethrow "PROVIDER-INDEX-ERROR", sprintf("cannot write the data provider routing index: %s: %s",
                     ex.err, ex.desc);
             }
-            log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
+            logDiagnostic(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
                 get_exception_string(ex));
             return <ProviderIndexInfo>{
                 "path": path,
@@ -3430,7 +3428,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                 removeIndexFile(dir + DirSep + name);
             }
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelWarn, "Unable to scan the data provider index directory for stale metadata "
+            logDiagnostic(LoggerLevel::LevelWarn, "Unable to scan the data provider index directory for stale metadata "
                 "cache files: %s: %s", ex.err, ex.desc);
         }
         if (!canonical) {
@@ -3446,7 +3444,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         try {
             unlink(path);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelWarn, "Unable to remove stale data provider index file %y: %s: %s", path, ex.err,
+            logDiagnostic(LoggerLevel::LevelWarn, "Unable to remove stale data provider index file %y: %s: %s", path, ex.err,
                 ex.desc);
         }
     }
@@ -3753,7 +3751,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 rethrow;
             }
             # a missing or unreadable file, as while files are copied
-            log(LoggerLevel::LevelDebug, "Cannot read the data provider metadata cache in %y: %s: %s", dir, ex.err,
+            logDiagnostic(LoggerLevel::LevelDebug, "Cannot read the data provider metadata cache in %y: %s: %s", dir, ex.err,
                 ex.desc);
         }
 %endif
@@ -3964,7 +3962,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     */
     static private:internal setIndexReadError(string err, string desc) {
         recordIndexReadError(sprintf("%s: %s", err, desc));
-        log(LoggerLevel::LevelError, "Error reading the data provider index: %s: %s", err, desc);
+        logDiagnostic(LoggerLevel::LevelError, "Error reading the data provider index: %s: %s", err, desc);
     }
 
     #! Records an error reading a published index
@@ -4168,7 +4166,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             }
             return cast<*hash<DataProviderIndexInfo>>(index);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
         }
     }
 
@@ -4465,7 +4463,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 }, rv.appinfomap.pairIterator();
             }
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
+            logDiagnostic(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
         }
         # rebuilt from the typed action metadata; serialized entries from the file are never returned
         rv.top_actioninfomap = {};
@@ -4474,7 +4472,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 rv.actioninfomap = deserializeActionsWithContext(rv.actioninfomap, ctx);
             } catch (hash<ExceptionInfo> ex) {
                 # serialized entries must not be returned in place of typed ones
-                log(LoggerLevel::LevelError, "Ignoring error reading actions from the data provider index: %s",
+                logDiagnostic(LoggerLevel::LevelError, "Ignoring error reading actions from the data provider index: %s",
                     get_exception_string(ex));
                 rv.actioninfomap = {};
             }
@@ -4560,7 +4558,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 try {
                     actions{j.key} = getIndexedAction(j.value, ctx, True);
                 } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index "
+                    logDiagnostic(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index "
                         "metadata; it cannot be read: %s: %s", j.key, i.key, ex.err, ex.desc);
                 }
             }
@@ -4662,7 +4660,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         if (exists option.type) {
             # types serialized by unreleased development versions of ProviderIndex 1.2 are not restored, since
             # restoring them loads the provider modules that define them
-            log(LoggerLevel::LevelWarn, "The type of option %y of action %y of app %y in the data provider index "
+            logDiagnostic(LoggerLevel::LevelWarn, "The type of option %y of action %y of app %y in the data provider index "
                 "cannot be read; the index must be recreated", name, action.action, action.app);
         }
         return ctx.type_map."auto".getInfo();
@@ -4851,11 +4849,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 if (missing) {
                     # the normal state before the first write; reporting it as an error would make every
                     # fresh deployment look broken
-                    log(LoggerLevel::LevelInfo, "No %s provider index at %y yet", type, path ?? "<unknown>");
+                    logDiagnostic(LoggerLevel::LevelInfo, "No %s provider index at %y yet", type, path ?? "<unknown>");
                 } else {
                     # the file is named because without it neither a permissions problem nor a corrupt file
                     # can be acted on
-                    log(LoggerLevel::LevelError, "Ignoring error reading the %s provider index %y: %s: %s",
+                    logDiagnostic(LoggerLevel::LevelError, "Ignoring error reading the %s provider index %y: %s: %s",
                         type, path ?? "<unknown>", ex.err, ex.desc);
                 }
             }
@@ -5121,7 +5119,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             if (throw_exception) {
                 throw "PROVIDER-INDEX-ERROR", err;
             }
-            log(LoggerLevel::LevelWarn, "%s", err);
+            logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
             return;
         }
         dir =~ s/[\/\\]+$//;
@@ -5138,7 +5136,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 if (throw_exception) {
                     rethrow "PROVIDER-INDEX-ERROR", err;
                 }
-                log(LoggerLevel::LevelWarn, "%s", err);
+                logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
                 return;
             }
         } else if (info.type != "DIRECTORY") {
@@ -5147,7 +5145,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             if (throw_exception) {
                 throw "PROVIDER-INDEX-ERROR", err;
             }
-            log(LoggerLevel::LevelWarn, "%s", err);
+            logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
             return;
         }
         if (for_write) {
@@ -5155,7 +5153,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 if (throw_exception) {
                     throw "PROVIDER-INDEX-ERROR", err;
                 }
-                log(LoggerLevel::LevelWarn, "%s", err);
+                logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
                 return;
             }
         }
@@ -5191,18 +5189,63 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             sprintf("%o", IndexDirMode), dir);
     }
 
-    #! Log a message to the global logger if possible
+    #! Logs a message through the process-wide sink
+    /** @throw PERMISSION-DENIED the caller is sandboxed or lacks terminal I/O */
     static log(Qore::Logger::LoggerLevel level, string fmt, ...) {
         logArgs(level, fmt, argv);
     }
 
-    #! Log a message to the global logger if possible; falls back to stderr for errors
+    #! Logs a caller's message, falling back to stderr for errors
+    /** @throw PERMISSION-DENIED the caller is sandboxed or lacks terminal I/O */
     static logArgs(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
+        ProviderIndexUtil::checkLogAccess();
+        ProviderIndexUtil::writeLogArgs(level, fmt, args);
+    }
+
+    #! Only trusted callers with terminal I/O can write their own messages to a process-wide sink
+    private:internal static checkLogAccess() {
+        if (!ProviderIndexUtil::mayUseGlobalLogger()) {
+            throw "PERMISSION-DENIED", "the caller cannot use the process-wide provider index logger";
+        }
+    }
+
+    private:internal static bool mayUseGlobalLogger() {
+        return !SandboxManager::isCallerRestricted(DOM_TERMINAL_IO)
+            && SandboxManager::isProcessWideRegistrationAllowed();
+    }
+
+    #! Returns the provider diagnostic sink for trusted library initialization
+    /** A library keeps this call reference in a private:internal static, and uses it only for its
+        diagnostic messages. The sink resolves the current logger and caller at the time of each write.
+        A sandboxed or terminal-I/O-restricted caller gets NOTHING. No logger object is returned.
+        The sink takes a level, a format string and its argument list.
+    */
+    static *code getModuleDiagnosticSink() {
+        if (SandboxManager::isProcessWideRegistrationAllowed()
+                && !SandboxManager::isCallerDomainDeniedAtEntry(DOM_TERMINAL_IO)) {
+            return \ProviderIndexUtil::writeModuleDiagnostic();
+        }
+    }
+
+    private:internal static writeModuleDiagnostic(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
+        if (!ProviderIndexUtil::mayUseGlobalLogger()) {
+            *int id = SandboxManager::getCallerProgramId();
+            fmt = (exists id ? sprintf("[caller Program %d] ", id) : "[caller Program unknown] ") + fmt;
+        }
+        ProviderIndexUtil::writeLogArgs(level, fmt, args);
+    }
+
+    #! Reports the module's own diagnostic while it handles a lookup
+    private:internal static logDiagnostic(Qore::Logger::LoggerLevel level, string fmt, ...) {
+        ProviderIndexUtil::writeLogArgs(level, fmt, argv);
+    }
+
+    private:internal static writeLogArgs(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
         if (logger) {
             logger.logArgs(level, fmt, args);
         } else if (level.getValue() >= LoggerLevel::LevelError.getValue()) {
             # ensure errors are never silently dropped when the logger is not yet configured
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
             }
         }

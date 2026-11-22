@@ -1453,6 +1453,13 @@ public:
 
     DLLLOCAL void saveTemp(QoreValue n);
 
+    //! Returns the list of the weak reference that the lvalue holds, with a reference that the helper holds until it
+    //! is destroyed, or a new empty list that cannot be changed if the list was freed (qore#7198)
+    DLLLOCAL __attribute__((cold)) QoreListNode* lockWeakList();
+
+    //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
+    DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
+
     //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
     /** The value is released as it is held: a value stored in a container can be held through an opaque reference,
         whose registration with the opaque target registry ends with its reference (see design/dgc.md, "Opaque

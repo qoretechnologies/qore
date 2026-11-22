@@ -751,6 +751,21 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    // an operation that is closed has an error, as the HTTP/2 operation does: a connection that leaves the connecting
+    // state without one (closed before it connected, for example) gave a reader of the error nothing to report
+    // (issue #6970)
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode("HTTP3-ABORT"), xsink);
+            info->setKeyValue("desc", new QoreStringNode("connection aborted"), xsink);
+            if (!*xsink) {
+                error_info = info.release();
+                has_error.store(true, std::memory_order_release);
+            }
+        }
+    }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     failMigrations();
     wakeSettingsWaiters();
@@ -887,10 +902,23 @@ void Http3ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     }
 
     // Pure C++ error dispatch — no execValue()
+    std::vector<int64_t> failed_streams;
     for (auto& [sid, action] : actions_copy) {
         if (action) {
             action->executeError(err, desc, xsink);
             action->deref(xsink);
+            failed_streams.push_back(std::strtoll(sid.c_str(), nullptr, 10));
+        }
+    }
+
+    // A stream that a listener reads (WebSocket/SSE over HTTP/3) gets the end of the stream as a sentinel in its queue:
+    // the listener is woken, as it is by the end of a stream that the peer ended; otherwise it learns that the
+    // connection is gone only when something else makes it look (its next heartbeat; issue #6965).  The registrations
+    // are not checked: the connection's close has cleared them, and a stream without a listener only has its
+    // notification kept, on a connection that is gone
+    for (int64_t sid64 : failed_streams) {
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid64) == data_ready_streams.end()) {
+            data_ready_streams.push_back(sid64);
         }
     }
 }
@@ -1827,6 +1855,7 @@ void Http3ClientPollOperationPriv::failMigrations() {
 */
 qclass Http3ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
@@ -1900,7 +1929,8 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     ReferenceHolder<SocketQuicClientPollOperation> inner(
         new SocketQuicClientPollOperation(xsink, sock_ptr, host->c_str(),
             static_cast<uint16_t>(port), static_cast<int>(family),
-            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid)),
+            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid),
+            /* http_client */ true),
         xsink
     );
     if (*xsink) {
@@ -2010,6 +2040,12 @@ bool Http3ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
     \c arg, as for a TLS connection over TCP
 */
 *hash<auto> Http3ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+#ifdef DEBUG
+    // a test makes the operation report no error (see dbg_http3_client_hide_error())
+    if (qore_dbg_h3_client_error_hidden()) {
+        return QoreValue();
+    }
+#endif
     return priv->getErrorInfo();
 }
 

@@ -1,0 +1,39 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# measures the module cleanup at the end of the process: the cleanup deletes the data of the user modules in the
+# order of their names, so the data of this module after that of DeadlineA, DeadlineB and DeadlineC and the waits
+# for their work (qore#7027); see deadline-client.qr
+
+%modern
+
+module DeadlineZClock {
+    version = "1.0";
+    desc = "measures the module cleanup at the end of the process";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DeadlineZClock {
+#! writes the time since the end of the script when the cleanup deletes it
+public class Clock {
+    public {
+        #! the time of the end of the script, set by the script
+        int start_us;
+    }
+
+    destructor() {
+        printf("the module cleanup took %d ms\n", (clock_getmicros() - start_us) / 1000);
+        flush();
+    }
+}
+
+#! the data of this module
+public class Start {
+    public {
+        static Clock clock();
+    }
+}
+}

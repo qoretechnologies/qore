@@ -1285,6 +1285,10 @@ list<NormalMethod> l = cls.getNormalMethods();
     @return a list of all normal (non-static, non-special) class methods
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note the methods are returned in the order in which they were declared (a method that has several variants at
+    the place of its first declaration), also for a class that was copied and for a program compiled with \c qcc
+    (qore#7169)
 */
 list<NormalMethod> Class::getNormalMethods() [flags=RET_VALUE_ONLY] {
     // get read access to program object
@@ -1325,6 +1329,10 @@ list<StaticMethod> l = cls.getStaticMethods();
     @note like all \c get*() enumerators in this class, only methods declared in the class itself are
     returned; to retrieve inherited static methods as well, use getAllStaticMethods(), resolve a single
     method name with findStaticMethod(), or iterate the class hierarchy with getClassHierarchy()
+
+    @note the methods are returned in the order in which they were declared (a method that has several variants at
+    the place of its first declaration), also for a class that was copied and for a program compiled with \c qcc
+    (qore#7169)
 
     @see
     - getAllStaticMethods()

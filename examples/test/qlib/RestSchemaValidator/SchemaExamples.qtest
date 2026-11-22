@@ -161,9 +161,9 @@ class SchemaExamplesTest inherits QUnit::Test {
             }
             type = parent;
         }
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         assertNothing(type.getExampleValue(), "an exponentially large example is omitted");
-        assertLt(5s, now_us() - start, "validation stays bounded on a shared type graph");
+        assertLt(5s, microseconds(clock_get_monotonic_us()) - start, "validation stays bounded on a shared type graph");
     }
 
     swaggerTest() {

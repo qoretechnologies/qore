@@ -69,6 +69,11 @@ class TestRestClass inherits AbstractRestClass {
         return RestHandler::makeResponse(200, ah);
     }
 
+    # a private method with the name and the signature of a REST method: never called for a request
+    private hash<HttpHandlerResponseInfo> getSecret(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, "secret");
+    }
+
     hash<HttpHandlerResponseInfo> putEcho(hash<auto> cx, *hash<auto> ah) {
         return RestHandler::makeResponse(200, cx.body);
     }
@@ -370,6 +375,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("query parameter name with a NUL character", \queryNulTest());
         addTestCase("Accept header not valid in its encoding", \invalidAcceptTest());
         addTestCase("Test direct interface", \directTest());
+        addTestCase("private REST method", \privateMethodTest());
         addTestCase("Test external serialization", \serializationTest());
         addTestCase("Raw response test", \rawResponseTest());
         addTestCase("Test xml", \xmlTest());
@@ -571,6 +577,24 @@ public class RestHandlerTest inherits QUnit::Test {
             assertEq(400, info."response-headers".status_code);
             assertEq("True", info."response-headers".error);
 
+        }
+    }
+
+    #! a private method of a REST class is not called for a request that names it
+    /** The handler calls the method named by a request with call_object_method_args(), which never calls a private
+        method, also when called in the code of the class; a guard for that rule
+    */
+    privateMethodTest() {
+        foreach string path in (("test?action=secret", "test/secret")) {
+            *string err;
+            auto val;
+            try {
+                val = mHandler.handleExternalRequest("GET", path);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertNeq("secret", val, path);
+            assertTrue(exists err, path);
         }
     }
 

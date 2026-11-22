@@ -103,10 +103,12 @@ public class QoreDataField inherits AbstractDataField {
     #! creates the field from the argument
     constructor(Qore::Reflection::TypedHashMember mem) {
         name = mem.getName();
+        display_name = AbstractDataField::getDisplayName(name);
+        # the type must be set before the default value, which is checked against it
+        type = AbstractDataProviderType::get(mem.getType());
         if (exists (auto dv = mem.getDefaultValue())) {
             setDefaultValue(dv);
         }
-        type = AbstractDataProviderType::get(mem.getType());
     }
 
     #! creates the field from the arguments

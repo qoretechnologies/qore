@@ -143,6 +143,10 @@ public class HttpAsyncSocketIoController {
 
         #! the test hook that the destructor calls first (see dbgSetDestructorHook()): not readable by subclasses
         static *code<nothing(HttpAsyncSocketIoController)> dbg_destructor_hook;
+
+        #! Thread pool configuration for recreation after stop(); internal, as it selects functionality such as the
+        #! reverse lookup of peers (qore#7056)
+        hash<auto> pool_opts;
     }
 
     private {
@@ -158,8 +162,6 @@ public class HttpAsyncSocketIoController {
         #! Thread pool for request handler dispatch
         Priv::HttpHandlerPool handler_pool;
 
-        #! Thread pool configuration for recreation after stop()
-        hash<auto> pool_opts;
 
         #! The time allowed for an I/O operation of a connection (the \c io_operation_timeout option)
         date io_operation_timeout;
@@ -719,7 +721,7 @@ public class HttpAsyncSocketIoController {
         }
     }
 
-    private stopIntern() {
+    private:internal stopIntern() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
         # to avoid deadlock with controller callbacks that also acquire m
@@ -1074,7 +1076,7 @@ public class HttpAsyncSocketIoController {
         @param callback the callback for the result
         @param sent the transmission result
     */
-    dispatchResponseSendResult(HttpAsyncTarget target, code<nothing(bool)> callback, bool sent) {
+    private:internal dispatchResponseSendResult(HttpAsyncTarget target, code<nothing(bool)> callback, bool sent) {
         try {
             submitToHandlerPool(target, sub () {
                 callback(sent);
@@ -1084,7 +1086,11 @@ public class HttpAsyncSocketIoController {
             # called exactly once
             log(LoggerLevel::DEBUG, "cannot submit a response transmission result to the handler pool: %s: %s",
                 ex.err, ex.desc);
-            background callback(sent);
+            # the callback runs in a closure of this module, as on the handler pool: a callable that restricted
+            # code created is not scheduled onto another thread itself (qore#7056)
+            background sub () {
+                callback(sent);
+            }();
         }
     }
 
@@ -1114,9 +1120,16 @@ public class HttpAsyncSocketIoController {
 
         @param target the async target whose dispatch hooks should wrap the call
         @param body the user-code closure to run on a handler-pool thread
+        @throw PERMISSION-DENIED \a body, or the class of \a target, whose dispatch hooks run around it, was authored
+        by code restricted from the \c THREAD_CONTROL domain (see
+        @ref Qore::check_thread_callable() "check_thread_callable()")
         @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
     */
     submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
+        # the body runs on a thread of the handler pool: code that cannot start threads cannot have its code run there
+        # (qore#7056)
+        check_thread_callable(body, "HttpAsyncSocketIoController::submitToHandlerPool()");
+        check_thread_callable(target, "HttpAsyncSocketIoController::submitToHandlerPool()");
         Priv::HttpHandlerPool pool = handler_pool;
         pool.submit(handlerTaskRunner(pool));
         pool.tasks.push({"target": target, "body": body});
@@ -2005,7 +2018,7 @@ public class HttpAsyncSocketIoController {
         });
     }
 
-    private *Future startPeerInfoFuture(hash<auto> peer_info) {
+    private:internal *Future startPeerInfoFuture(hash<auto> peer_info) {
         # a reverse lookup costs a resolver channel and a query for every connection: only if asked for
         if (!pool_opts.peer_hostname_lookup) {
             return NOTHING;
@@ -5120,7 +5133,7 @@ public class HttpAsyncSocketIoController {
     #! stopping), or in the calling thread if no thread can be started
     /** For code that must run exactly once, such as the end of a stream.
     */
-    private runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+    private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5138,7 +5151,7 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
-    private runOnThreadOfItsOwn(code<nothing()> c) {
+    private:internal runOnThreadOfItsOwn(code<nothing()> c) {
         try {
             background c();
         } catch () {

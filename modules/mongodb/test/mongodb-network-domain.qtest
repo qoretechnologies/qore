@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the classes that reach a MongoDB server are in the NETWORK functional domain (qore#7105): code that may not use the
+# network (PO_NO_NETWORK) cannot create a client, by its name in code or by a name given at run time, nor call the
+# methods of a client or of the objects that it returns; ObjectId, which is only data, stays available; needs no
+# server
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires mongodb
+
+%exec-class MongoNetworkDomainTest
+
+class MongoNetworkDomainTest inherits QUnit::Test {
+    public {
+        const Restricted = PO_MODERN | PO_NO_NETWORK;
+        const Plain = PO_MODERN;
+        # a URI that nothing listens on: no check here connects
+        const Uri = "mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=1";
+    }
+
+    constructor() : QUnit::Test("MongoNetworkDomainTest", "1.0") {
+        addTestCase("parse", \parseTest());
+        addTestCase("runtime", \runtimeTest());
+        addTestCase("unrestricted", \unrestrictedTest());
+        set_return_value(main());
+    }
+
+    #! the error of parsing \a code in a new Program with \a po and the mongodb module, or "parsed"
+    private static string parseErr(int po, string code) {
+        Program p(po);
+        p.loadModule("mongodb");
+        try {
+            p.parse(code, "probe");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! a call of a method of each class on an object that the code is given
+    const MethodCalls = {
+        "MongoClient": "bool sub f(mongodb::MongoClient o) { return o.ping(); }",
+        "MongoDatabase": "auto sub f(mongodb::MongoDatabase o) { return o.listCollectionNames(); }",
+        "MongoCollection": "int sub f(mongodb::MongoCollection o) { return o.countDocuments(); }",
+        "MongoCursor": "bool sub f(mongodb::MongoCursor o) { return o.more(); }",
+    };
+
+    parseTest() {
+        assertEq("ILLEGAL-CLASS-INSTANTIATION", parseErr(Restricted,
+            sprintf("sub f() { mongodb::MongoClient c(%y); }", Uri)), "new client");
+        # the classes can be named as types, as can Socket, but their methods cannot be called
+        foreach hash<auto> i in (MethodCalls.pairIterator()) {
+            assertEq("PARSE-EXCEPTION", parseErr(Restricted, i.value), i.key);
+        }
+        assertEq("parsed", parseErr(Restricted, "sub f() { mongodb::ObjectId oid(); }"), "ObjectId");
+    }
+
+    runtimeTest() {
+        Program p(Restricted);
+        p.loadModule("mongodb");
+        p.parse("auto sub f(string cls, string uri) { return create_object(cls, uri); }", "probe");
+        assertThrows("CREATE-OBJECT-ERROR", \p.callFunction(), ("f", "mongodb::MongoClient", Uri));
+    }
+
+    unrestrictedTest() {
+        assertEq("parsed", parseErr(Plain, sprintf("sub f() { mongodb::MongoClient c(%y); }", Uri)));
+        foreach hash<auto> i in (MethodCalls.pairIterator()) {
+            assertEq("parsed", parseErr(Plain, i.value), i.key);
+        }
+    }
+}

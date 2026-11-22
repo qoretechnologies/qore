@@ -27,10 +27,13 @@ if (sandbox) {
     p.setSandboxManager(sm);
 }
 p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n"
+    # live-provider-optin: the test's own named connections, to its local servers on 127.0.0.1
     "string sub lookup(string name) { try { get_connection(name); return \"created\"; } "
     "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+    # live-provider-optin: the test's own named connections, to its local servers on 127.0.0.1
     "string sub client(string name) { try { get_connection(name).get(False); return \"client\"; } "
     "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+    # live-provider-optin: the test's own named connections, to its local servers on 127.0.0.1
     "string sub connect(string name) { try { get_connection(name).get(True); return \"connected\"; } "
     "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
     "string sub create(string name) { try { new RestConnection(name, \"d\", \"http://127.0.0.1:1\", "

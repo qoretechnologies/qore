@@ -1301,6 +1301,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamDrain",
             ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "getQuicClientStreamAckedBytes", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "getHttp2StreamTakenBytes", ("stream_id",));
         assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamFlushed",
             ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "cancelQuicStream", ("session_id", "stream_id"));
@@ -3572,7 +3573,7 @@ class ReflectionTest inherits QUnit::Test {
                 ++count;
             }
             assertEq(2, count);
-            assertEq("pub", c.getStaticMethods()[1].call(1));
+            assertEq("pub", c.getStaticMethods()[0].call(1), "static methods are in declaration order");
 
             # getMethods() returns special methods, getStaticMethods() does not
             assertEq(("constructor", "copy", "destructor", "intM", "intStatic", "privM", "pubM", "pubStatic"),

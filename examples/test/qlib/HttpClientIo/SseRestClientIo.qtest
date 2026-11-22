@@ -101,9 +101,9 @@ class TestObserver inherits DataProvider::Observer {
 
     bool waitForEvents(timeout t = 10s) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        date end_time = microseconds(clock_get_monotonic_us()) + t;
         while (events.size() < expected_count) {
-            date remaining = end_time - now_us();
+            date remaining = end_time - microseconds(clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -289,7 +289,7 @@ class SseRestClientIoTest inherits Test {
         int lport = listener.getSocketInfo().port;
 
         background sub () {
-            Socket conn = listener.accept(5s);
+            Socket conn = listener.accept(30s);
             on_exit conn.close();
 
             hash<auto> req = conn.readHTTPHeader(5s);
@@ -371,7 +371,7 @@ class SseRestClientIoTest inherits Test {
         lport = listener.getSocketInfo().port;
         background sub () {
             try {
-                Socket conn = listener.accept(5s);
+                Socket conn = listener.accept(30s);
                 on_exit conn.close();
                 hash<auto> req = conn.readHTTPHeader(5s);
                 if (req."content-length") {
@@ -542,7 +542,7 @@ class SseRestClientIoTest inherits Test {
         client.connect("localhost:" + lport, 5s);
         on_exit client.close();
 
-        Socket server_sock = listener.accept(5s);
+        Socket server_sock = listener.accept(30s);
         on_exit server_sock.close();
 
         # the operation starts its heartbeat interval when it is created, and continuePoll() arms the poll with the

@@ -1536,7 +1536,7 @@ if (!exists host)
     @since %Qore 3.0 a hostname with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
     \c EINVAL; previously the hostname was cut at the NUL character and the name before it was looked up
  */
-*string gethostbyname(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+*string gethostbyname(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the hostname is passed to the resolver as a C string, which would be cut at a NUL character
    if (q_check_no_nul(hostname->c_str(), hostname->size())) {
       return QoreValue();
@@ -1575,7 +1575,7 @@ if (!exists hostname)
 
     @see gethostbyaddr_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
-*string gethostbyaddr(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+*string gethostbyaddr(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the address is parsed as a C string, which would be cut at a NUL character
    if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "GETHOSTBYADDR-ERROR", xsink)) {
       return QoreValue();
@@ -1609,7 +1609,7 @@ if (!ah)
     @since %Qore 3.0 a hostname with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
     \c EINVAL; previously the hostname was cut at the NUL character and the name before it was looked up
  */
-*hash<auto> gethostbyname_long(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+*hash<auto> gethostbyname_long(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the hostname is passed to the resolver as a C string, which would be cut at a NUL character
    if (q_check_no_nul(hostname->c_str(), hostname->size())) {
       return QoreValue();
@@ -1648,7 +1648,7 @@ if (!ah)
 
     @see gethostbyaddr() for a simpler version of this function that returns just a single hostname for the address
  */
-*hash<auto> gethostbyaddr_long(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+*hash<auto> gethostbyaddr_long(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the address is parsed as a C string, which would be cut at a NUL character
    if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "GETHOSTBYADDR-ERROR", xsink)) {
       return QoreValue();
@@ -1704,7 +1704,7 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @since %Qore 3.0 a node or service name with a NUL character raises \c QOREADDRINFO-GETINFO-ERROR; previously the
     name was cut at the NUL character
  */
-list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the names are passed to the resolver as C strings, which would be cut at a NUL character
    if (q_check_host_service(node, service, "QOREADDRINFO-GETINFO-ERROR", xsink)) {
       return QoreValue();
@@ -1745,7 +1745,7 @@ list<hash<auto>> l = f.get();
 
     @since %Qore 3.0
  */
-Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
+Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the names are passed to the resolver as C strings, which would be cut at a NUL character
    if (q_check_host_service(node, service, "QOREADDRINFO-GETINFO-ERROR", xsink)) {
       return QoreValue();
@@ -1779,7 +1779,7 @@ hash<auto> peer_info = f.get(100ms);
 
     @since %Qore 3.0
  */
-Future getnameinfo_async(string address, softint family = AF_INET, softint port = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
+Future getnameinfo_async(string address, softint family = AF_INET, softint port = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO,NETWORK] {
    // the address is parsed as a C string, which would be cut at a NUL character
    if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "QOREADDRINFO-GETNAMEINFO-ERROR",
          xsink)) {

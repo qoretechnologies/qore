@@ -122,10 +122,12 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         try {
             resp = api_callback(callback_method, callback_path, body);
         } catch (hash<ExceptionInfo> ex) {
+            checkRequestCancelled(opts);
             throw "LLM-ERROR", sprintf("callback chat request failed: %s",
                 ex.desc), ex;
         }
 
+        checkRequestCancelled(opts);
         return parseOpenAiChatResponse(resp);
     }
 
