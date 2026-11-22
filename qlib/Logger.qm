@@ -288,6 +288,9 @@ if (laq.isFull()) {
     @tableofcontents
 
     @section logger_v1_1 v1.1
+    - @ref Logger::LoggerWrapper::assertLog() "LoggerWrapper::assertLog()" logs the message at the \c ERROR level when
+      the assertion fails, as \c Logger::assertLog() does, instead of raising \c METHOD-DOES-NOT-EXIST
+      (<a href="https://github.com/qoretechnologies/qore/issues/7190">issue 7190</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
       @ref Logger::StdoutAppender "StdoutAppender" writes with @ref Qore::stdout "stdout", which needs terminal I/O only
       when it is written (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -3067,9 +3070,13 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     assertLog(bool assertion, string message, ...) {
+        # as Logger::assertLog(): the message is logged at the ERROR level when the assertion fails (qore#7190)
+        if (assertion) {
+            return;
+        }
         *LoggerInterface logger = getLogger();
         if (logger) {
-            logger.assertLogArgs(assertion, message, argv);
+            logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }
     }
 

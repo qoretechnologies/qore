@@ -2519,6 +2519,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Logger::LoggerWrapper::assertLog() "LoggerWrapper::assertLog()" of the @ref loggerintro "Logger" module logs
+      a failed assertion at the \c ERROR level instead of raising \c METHOD-DOES-NOT-EXIST
+      (<a href="https://github.com/qoretechnologies/qore/issues/7190">issue 7190</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
