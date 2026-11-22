@@ -5453,6 +5453,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 "hdr": {"Content-Type": "text/plain"},
             };
         }
+        # an informational (1xx) status other than 101 is never a final response: a handler's 1xx response is answered
+        # with an error, as a 101 response that is not possible on the connection (qore#7222)
+        if (exists rv."code" && rv."code" < 200 && rv."code" != 101) {
+            string err = sprintf("informational status %d returned from handler %y as the final response",
+                rv."code", cx.handler_name);
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            rv = <HttpResponseInfo>{
+                "code": 500,
+                "body": "an informational status is not a final response",
+                "hdr": {"Content-Type": "text/plain"},
+            };
+        }
         if (request_helper.log_info) {
             listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
                 rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
