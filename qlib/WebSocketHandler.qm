@@ -808,7 +808,8 @@ public class WebSocketConnection {
         is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
         not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
         limit is set, @ref AsyncSocketIo::AbstractStreamContext::sendDataWithTimeout() "sendDataWithTimeout()" waits
-        for a full stream send buffer to drain for at most the send timeout, after which the connection is closed.
+        for a full stream send buffer to drain, and the connection is closed once the peer has taken none of the
+        stream's data for the send timeout.
 
         @since %WebSocketHandler 2.8
     */
@@ -826,8 +827,8 @@ public class WebSocketConnection {
                 return;
             }
         } else {
-            # a full stream send buffer is waited for, as on HTTP/1.1, for at most the send timeout; a client that
-            # does not read in that time is disconnected, so the peer never sees a gap in the message stream
+            # a full stream send buffer is waited for, as on HTTP/1.1; a client that takes none of the data for the
+            # send timeout is disconnected, so the peer never sees a gap in the message stream
             try {
                 stream_ctx.sendDataWithTimeout(encoded, get_duration_milliseconds(handler.getSendTimeout()));
             } catch (hash<ExceptionInfo> ex) {

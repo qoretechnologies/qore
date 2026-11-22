@@ -9998,6 +9998,11 @@ class Http3HandlerSocket inherits Qore::Socket {
         return real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
     }
 
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        checkStream(session_id, stream_id);
+        return real.getQuicStreamAckedBytes(session_id, stream_id);
+    }
+
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
         checkStream(session_id, stream_id);
         return real.waitForQuicStreamDrain(session_id, stream_id, timeout_ms);
