@@ -201,61 +201,35 @@ public class SqlTestBase inherits QUnit::Test {
 
         hash<SerializationInfo> h = table.serializeToData();
 
-        # the serialized data keeps no credentials of the datasource (qore#7016): no password, and the masked
-        # configuration of the datasource has no password and a masked user name
+        # the serialized data keeps no credentials of the datasource (qore#7016): no password
         AbstractDatasource ds = table.getDatasource();
         *string pass = ds.getPassword();
         if (pass) {
             assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
         }
-        list<hash<auto>> masked = SqlTestBase::findMasked(h);
-        assertGt(0, masked.size(), "the serialized data has the masked configuration of the datasource");
-        foreach hash<auto> m in (masked) {
-            assertFalse(m.hasKey("pass"), "the masked configuration has no password");
-            if (exists m.user) {
-                assertEq("****", m.user, "the masked configuration has a masked user name");
-            }
-        }
 
-        # the credentials are restored by a resolver of the datasource's configuration
+        # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
+        # configuration of the serialized data: no password, and a masked user name
         hash<auto> config = ds.getConfigHash();
-        int calls = 0;
+        list<hash<auto>> calls = ();
         sqlutil_register_ds_credential_resolver(hash<auto> sub (string type, hash<auto> masked_config) {
-            ++calls;
+            calls += masked_config;
             return config;
         });
         on_exit sqlutil_register_ds_credential_resolver();
 
         AbstractTable t = AbstractTable::deserialize(h);
         assertTrue(t instanceof AbstractTable);
-        assertGt(0, calls, "the credential resolver gives the credentials");
+        assertGt(0, calls.size(), "the credential resolver gives the credentials");
+        foreach hash<auto> m in (calls) {
+            assertFalse(m.hasKey("pass"), "the masked configuration has no password");
+            if (exists m.user) {
+                assertEq("****", m.user, "the masked configuration has a masked user name");
+            }
+        }
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());
-    }
-
-    #! returns the masked datasource configurations (\c ds_masked) in serialized data (qore#7016)
-    static list<hash<auto>> findMasked(auto v) {
-        list<hash<auto>> rv = ();
-        switch (v.typeCode()) {
-            case NT_HASH: {
-                foreach hash<auto> i in (v.pairIterator()) {
-                    if (i.key == "ds_masked" && i.value.typeCode() == NT_HASH) {
-                        rv += i.value;
-                    } else {
-                        rv += SqlTestBase::findMasked(i.value);
-                    }
-                }
-                break;
-            }
-            case NT_LIST: {
-                foreach auto e in (v) {
-                    rv += SqlTestBase::findMasked(e);
-                }
-                break;
-            }
-        }
-        return rv;
     }
 
     deferrableForeignConstraintsTest() {
