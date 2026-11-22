@@ -210,7 +210,8 @@ printf(\"%s\\n\", q.get(30000));
 
         #! a sandboxed caller of module code that the process loaded before: the module code runs with the restriction
         #! of its caller, which the thread that it starts inherits (the override of a call of module code); without the
-        #! sandbox, the module code runs with its own options
+        #! sandbox, the module code runs with its own options, but the terminal is not used for a caller restricted from
+        #! it, which the thread that module code starts records (qore#7140, qore#6337)
         const SandboxedCaller = "%modern
 %no-child-restrictions
 %requires BgRuntimeOpts
@@ -342,9 +343,15 @@ printf(\"%y\\n\", rv);
                         how, mode));
                     assertFalse(out =~ /printed/, sprintf("%s module %s, sandboxed caller, mode %s: %s", dir.key, how,
                         mode, out));
-                    assertEq("module: printed\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s "
-                        "%s open %s 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode, how)),
-                        sprintf("%s module %s, caller without a sandbox, mode %s", dir.key, how, mode));
+                    # the caller is restricted from terminal I/O: the module code's thread does not print for it,
+                    # with or without a sandbox (qore#7140)
+                    out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s open %s 2>&1", env(),
+                        dir.value, qore_bin, mode, sandboxed, mode, how));
+                    assertRegex("ILLEGAL-EXPRESSION: File::print\\(\\) cannot be called for code that is restricted "
+                        "from terminal I/O", out, sprintf("%s module %s, caller without a sandbox, mode %s", dir.key,
+                        how, mode));
+                    assertFalse(out =~ /printed/, sprintf("%s module %s, caller without a sandbox, mode %s: %s",
+                        dir.key, how, mode, out));
                 }
             }
         }
