@@ -49,6 +49,32 @@ class TlsPeer inherits AbstractHttpRequestHandler {
     }
 }
 
+# A service can expose its OAuth options under service-specific names and compute its ping URL.
+class EffectiveEndpointConnection inherits RestConnection {
+    constructor(string url, hash<auto> options) : RestConnection("effective", "", url, {}, options) {
+    }
+
+    hash<ConnectionSchemeInfo> getConnectionSchemeInfo() {
+        hash<ConnectionSchemeInfo> info = RestConnection::getConnectionSchemeInfo();
+        info.options.oauth2_auth_url.subst_env_vars = True;
+        return info;
+    }
+
+    string getOAuth2OptionName(string opt) {
+        return {"oauth2_token_url": "oauth2_auth_url", "oauth2_alt_token_url": "oauth2_redirect_url"}{opt} ?? opt;
+    }
+
+    string getTokenUrl(*bool allow_relative) {
+        return opts.oauth2_redirect_url == "auto" ? "https://[::1]:30405/token"
+            : RestConnection::getTokenUrl(allow_relative);
+    }
+
+    private *string getPingPath() {
+        return real_opts.ping_path == "auto"
+            ? substitute_env_vars(real_opts.ping_headers.("Ping-Endpoint")) : real_opts.ping_path;
+    }
+}
+
 class RestConnectionTlsTest inherits QUnit::Test {
     constructor() : Test("REST connection TLS file ownership", "1.0") {
         addTestCase("configured credentials", \credentials());
@@ -59,6 +85,8 @@ class RestConnectionTlsTest inherits QUnit::Test {
         addTestCase("configured token endpoint", sub () { tokenEndpoint(False); });
         addTestCase("configured alternate token endpoint", sub () { tokenEndpoint(True); });
         addTestCase("configured ping endpoint", \pingEndpoint());
+        addTestCase("effective configured origins", \effectiveOrigins());
+        addTestCase("uppercase token URL", sub () { tokenEndpoint(False, True); });
         set_return_value(main());
     }
 
@@ -145,7 +173,40 @@ class RestConnectionTlsTest inherits QUnit::Test {
         return {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_verify_cert": False};
     }
 
-    tokenEndpoint(bool alternate) {
+    effectiveOrigins() {
+        TmpDir tmp("rest-effective-origins-");
+        string ping = "https://127.0.0.1:30403/ping";
+        string other = "https://127.0.0.1:30404/later";
+        # The unset variable expands to empty; the origin is only valid after expansion.
+        string prefix = "https://127.0.0.1:${QORE_TEST_7134_UNSET_" + get_random_string(16) + "}";
+        string raw_ping = prefix + "30403/ping";
+        string token = "https://127.0.0.1:30401/token";
+        hash<auto> opts = tlsOptions(tmp) + {"oauth2_auth_url": prefix + "30401/token",
+            "oauth2_redirect_url": "https://127.0.0.1:30402/alt", "ping_method": "GET", "ping_path": "auto",
+            "ping_headers": {"Ping-Endpoint": raw_ping}};
+        EffectiveEndpointConnection conn("https://127.0.0.1:30400", opts);
+        conn.real_opts.ping_path = other;
+        RestClient sync = conn.get(False);
+        RestClientIo async = conn.getAsync(False);
+        assertEq(token, conn.real_opts.oauth2_auth_url);
+        foreach string url in (token, opts.oauth2_redirect_url, ping) {
+            try {
+                sync.setURL(url);
+                async.getConnectionManager().checkTlsCredentialOrigin(url);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("configured target %s refused: %s", url, ex.err));
+            }
+        }
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \sync.setURL(), other);
+        assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \async.getConnectionManager().checkTlsCredentialOrigin(),
+            other);
+        opts.oauth2_redirect_url = "auto";
+        EffectiveEndpointConnection derived("https://127.0.0.1:30400", opts);
+        derived.get(False).setURL("https://[::1]:30405/token");
+        derived.getAsync(False).getConnectionManager().checkTlsCredentialOrigin("https://[::1]:30405/token");
+    }
+
+    tokenEndpoint(bool alternate, bool uppercase = False) {
         TmpDir tmp("rest-token-origin-");
         Socket unused();
         unused.bindINET("127.0.0.1", 0);
@@ -163,14 +224,17 @@ class RestConnectionTlsTest inherits QUnit::Test {
         hash<auto> opts = tlsOptions(tmp) + {"oauth2_grant_type": "client_credentials",
             "oauth2_client_id": "client", "oauth2_client_secret": "secret",
             "oauth2_token_url": alternate ? main_url + "/token" : token_url};
+        if (uppercase) {
+            opts.oauth2_token_url = replace(token_url, "https://", "HTTPS://");
+        }
         if (alternate) {
             opts.oauth2_alt_token_url = token_url;
         }
         RestConnection conn("token", "", main_url, {}, opts);
         # Both listeners require a client certificate. The resource echoes the token obtained on the other port.
-        assertEq("Bearer test-token", conn.get().restGet("/resource").body);
         RestClientIo async_client = conn.getAsync();
         assertEq("Bearer test-token", async_client.restGet("/resource").body);
+        assertEq("Bearer test-token", conn.get().restGet("/resource").body);
         hash<auto> refresh = async_client.startOAuth2PollRefreshToken();
         assertEq("/token", refresh.path);
         assertTrue(refresh.rcio.getConnectionManager() == async_client.getConnectionManager(),
@@ -185,7 +249,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
         Program caller(PO_NEW_STYLE | PO_NO_FILESYSTEM);
         caller.parse("sub change(object c, string url, string opt, bool async) {"
             " hash<auto> saved = c.real_opts; on_exit c.real_opts = saved;"
-            " c.real_opts{opt} = url; if (async) { c.getAsync(); } else { c.get(); } }", "changed-token-url");
+            " c.real_opts{opt} = url; if (async) { c.getAsync(); } else { c.get(); } }"
+            "object sub sibling(object client, string url) { return client.copyWithUrl(url); }", "token-client");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", refresh.rcio, token_url));
         string option = alternate ? "oauth2_alt_token_url" : "oauth2_token_url";
         foreach bool async in (False, True) {
             assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \caller.callFunction(),
@@ -368,10 +434,14 @@ class RestConnectionTlsTest inherits QUnit::Test {
         assertFalse(bound.getHttpConfig().hasKey("ssl_cert_data"));
         assertFalse(bound.getHttpConfig().hasKey("ssl_key_data"));
         assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", bound, conn.real_url + "/sibling"));
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", bound_async, conn.real_url + "/sibling"));
         RestClient sync_copy = cast<RestClient>(bound.copyWithUrl(conn.real_url + "/sibling"));
         assertFalse(sync_copy.getHttpConfig().hasKey("ssl_cert_data"));
         assertFalse(sync_copy.getHttpConfig().hasKey("ssl_key_data"));
-        assertTrue(bound_async.copyWithUrl(conn.real_url + "/sibling") instanceof RestClientIo);
+        RestClientIo async_copy = bound_async.copyWithUrl(conn.real_url + "/sibling");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \sync.callFunction(), ("sibling", async_copy, conn.real_url));
+        RestClientIo no_paths({"url": conn.real_url});
+        assertTrue(sync.callFunction("sibling", no_paths, conn.real_url) instanceof RestClientIo);
         assertThrows("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", \bound_async.copyWithUrl(),
             sprintf("http://127.0.0.1:%d", port));
         RestClient supplied({"url": conn.real_url, "ssl_cert_path": cert, "ssl_key_path": key}, True);

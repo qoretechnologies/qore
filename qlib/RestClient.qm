@@ -3958,7 +3958,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         string request_body = mime_get_form_urlencoded_string(login);
         string path = oauth2_alt_token_url ?? oauth2_token_url;
         # check if the path is a URL
-        if (path =~ /^http/) {
+        if (path =~ /^https?:\/\//i) {
             setURL(path);
             path = "";
         }
@@ -4018,7 +4018,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         string orig_url = getURL();
         # use oauth2_alt_token_url if it's set
         string oauth2_token_url = oauth2_alt_token_url ?? self.oauth2_token_url;
-        bool set_url = oauth2_token_url =~ /^http/;
+        bool set_url = oauth2_token_url =~ /^https?:\/\//i;
         # set the full URL if the token URL is possibly on another server
         if (set_url) {
             setURL(oauth2_token_url);
@@ -4678,6 +4678,7 @@ public hashdecl RestConnectionTlsCredentials {
     the origin of its main URL and the origins of absolute HTTP(S) URLs supplied at construction in
     \c oauth2_token_url, \c oauth2_alt_token_url and \c ping_path. Scheme, host and effective port identify
     an origin. Relative paths use the main origin. Later option changes cannot authorize another origin.
+    The snapshot uses the connection's effective OAuth option names and ping URL after option expansion.
     Configuration exports and serialization omit the file contents even for trusted callers.
     Restoring an exported client requires supplying its credentials again for mutual TLS. Credentials supplied
     directly as option data, including \c ssl_key_data, retain their ordinary export behavior.
@@ -5385,6 +5386,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             : HttpBasedConnection(name, description, url, attributes, AbstractRestConnection::processOptions(name, options)) {
         bindConfiguredTlsFiles(options);
         setupRest();
+        captureTlsEndpointOrigins();
     }
 
     #! creates the RestConnection connection object
@@ -5408,6 +5410,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     constructor(hash<auto> config, *hash<auto> attr) : HttpBasedConnection(config, attr) {
         bindConfiguredTlsFiles(config.opts);
         setupRest();
+        captureTlsEndpointOrigins();
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
@@ -5976,11 +5979,18 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         if (configured.ssl_key_path == opts.ssl_key_path) {
             key_reader = bindTlsFile(opts.ssl_key_path, real_url);
         }
+    }
+
+    private:internal captureTlsEndpointOrigins() {
+        # Snapshot the effective endpoints once, after validated options and real_opts are available
+        # to service-specific accessors. Later option or environment changes cannot add an origin.
         if (cert_reader || key_reader) {
-            foreach string option in ("oauth2_token_url", "oauth2_alt_token_url", "ping_path") {
-                *string url = configured{option};
-                if (url && url == opts{option} && url =~ /^https?:\/\//i) {
-                    string origin = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(url));
+            *string token_url = opts{getOAuth2OptionName("oauth2_token_url")};
+            *string alt_url = opts{getOAuth2OptionName("oauth2_alt_token_url")};
+            foreach *string endpoint in (token_url, alt_url, token_url || alt_url ? getTokenUrl(True) : NOTHING,
+                    getPingPath()) {
+                if (endpoint && endpoint =~ /^https?:\/\//i) {
+                    string origin = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(endpoint));
                     if (origin !~ /[${}]/) {
                         push tls_endpoint_origins, origin;
                     }
@@ -6258,7 +6268,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since %RestClient 2.2
     */
     private string getUrlOptionIntern(string uri, *bool allow_relative) {
-        if (!allow_relative && uri !~ /^http/) {
+        if (!allow_relative && uri !~ /^https?:\/\//i) {
             string url = real_url;
             if (url !~ /\/$/) {
                 url += "/";
@@ -6520,12 +6530,8 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         # connection manager
         AbstractRestClient parent = client;
         hash<RestRequestTarget> target = <RestRequestTarget>{"path": ping_path};
-        if (ping_path =~ /^https?:\/\//) {
-            hash<UrlInfo> ui = parse_url(ping_path);
-            string origin = sprintf("%s://%s", ui.protocol, ui.host);
-            if (ui.port) {
-                origin += ":" + ui.port;
-            }
+        if (ping_path =~ /^https?:\/\//i) {
+            string origin = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(ping_path));
             client = parent.copyWithUrl(origin);
             target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
                 "path": get_http_request_target(ping_path)};
@@ -6834,13 +6840,13 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
         self.real_opts = real_opts;
         method = real_opts.ping_method ?? "GET";
         path = real_opts.ping_path ?? "/";
-        ping_url = path =~ /^https?:\/\// ? path : conn.real_url;
+        ping_url = path =~ /^https?:\/\//i ? path : conn.real_url;
         body = method != "GET" ? real_opts.ping_body : NOTHING;
         headers += real_opts.ping_headers;
 
         rc.postponeUpdateOptions(rc.getLogger());
 
-        if (path =~ /^https?:\/\//) {
+        if (path =~ /^https?:\/\//i) {
             ping_target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
                 "path": get_http_request_target(path)};
         } else if (path[0] == "/" && !conn.pingInheritsConnectionPath()) {

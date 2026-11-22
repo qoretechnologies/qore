@@ -1628,7 +1628,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 remains caller-owned.
         */
         RestClient::AbstractRestClient copyWithUrl(string new_url) {
-            mgr.checkTlsCredentialOrigin(new_url);
+            mgr.checkTlsCredentialCopy(new_url);
             # values of any type are added below, so the hash is not narrowed to the type of the saved options
             hash<auto!> opts = saved_opts + {
                 "url": new_url,
@@ -3454,12 +3454,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # Determine base URL and request path (same logic as doOAuth2TokenRequest)
             string base_url_str;
             string req_path;
-            if (token_url_str =~ /^https?:\/\//) {
-                hash<UrlInfo> ui = parse_url(token_url_str);
-                base_url_str = sprintf("%s://%s", ui.protocol, ui.host);
-                if (ui.port) {
-                    base_url_str += sprintf(":%d", ui.port);
-                }
+            if (token_url_str =~ /^https?:\/\//i) {
+                base_url_str = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(token_url_str));
                 req_path = get_http_request_target(token_url_str);
             } else {
                 base_url_str = url;
@@ -4759,12 +4755,8 @@ rest.addSensitiveHeaders("Qorus-Token");
             # Determine base URL and request path
             string base_url;
             string req_path;
-            if (token_url =~ /^https?:\/\//) {
-                hash<UrlInfo> url_info = parse_url(token_url);
-                base_url = sprintf("%s://%s", url_info.protocol, url_info.host);
-                if (url_info.port) {
-                    base_url += sprintf(":%d", url_info.port);
-                }
+            if (token_url =~ /^https?:\/\//i) {
+                base_url = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(token_url));
                 req_path = get_http_request_target(token_url);
             } else {
                 base_url = url;
@@ -5308,7 +5300,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (credentials.cert || credentials.key) {
                 mgr_opts.origin_tls_credentials = <HttpClientIo::HttpClientOriginTlsCredentials>{
                     "url": opts.url, "cert": credentials.cert, "key": credentials.key,
-                    "additional_origins": credentials.additional_origins};
+                    "additional_origins": credentials.additional_origins,
+                    "file_backed": (credentials.cert && exists opts.ssl_cert_path)
+                        || (credentials.key && exists opts.ssl_key_path)};
             }
             # Explicit options remain ordinary socket credentials when paired with a connection-owned credential.
             *SSLCertificate client_cert = credentials.cert ? NOTHING : RestClientIo::loadSslCertificate(opts);
@@ -6971,13 +6965,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # it then asks the host for something it never named, and the ping
         # 404s while every other request on the connection succeeds.
         hash<RestClient::RestRequestTarget> target = <RestClient::RestRequestTarget>{"path": ping_path};
-        if (ping_path =~ /^https?:\/\//) {
+        if (ping_path =~ /^https?:\/\//i) {
             ping_url_parent = rcio;
-            hash<UrlInfo> ui = parse_url(ping_path);
-            string origin = sprintf("%s://%s", ui.protocol, ui.host);
-            if (ui.port) {
-                origin += ":" + ui.port;
-            }
+            string origin = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(ping_path));
             rcio = cast<RestClientIo>(ping_url_parent.copyWithUrl(origin));
             target = <RestClient::RestRequestTarget>{"mode": RestClient::RestPathMode::OriginAbsolute,
                 "path": get_http_request_target(ping_path)};

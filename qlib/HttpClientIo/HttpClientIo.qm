@@ -596,6 +596,9 @@ public namespace HttpClientIo {
         #! Additional origins fixed by the credential owner
         *list<string> additional_origins;
 
+        #! File-backed connection credentials require filesystem access when copying a REST client sharing the transport
+        bool file_backed = False;
+
         #! The certificate to use at these origins
         *SSLCertificate cert;
 
