@@ -2981,6 +2981,17 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return rv;
     }
 
+    // A wildcard starts its accept specs with itself. A union may start with a wildcard
+    // member, so check its identity before writing the bound instead of the whole union.
+    if (!ti->isAcceptVecEmpty()) {
+        const auto* wildcard = ti->getFirstAcceptSpec().spec.getWildcardTypeInfo();
+        if (wildcard == ti && qore_type_contains_type_parameter(wildcard->getBound())) {
+            const char* prefix = wildcard->getKind() == QoreWildcardKind::Extends ? "? extends " : "? super ";
+            std::string bound_path = getAOTSerializableTypePath(wildcard->getBound());
+            return bound_path.empty() ? std::string() : prefix + bound_path;
+        }
+    }
+
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
         std::string rv = cti->isOrNothing() ? "*code<" : "code<";
         rv += cti->getReturnType() ? getAOTSerializableTypePath(cti->getReturnType()) : "nothing";
@@ -6776,6 +6787,22 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveUnionShorthandType(const char* p
 const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char* path) {
     bool or_nothing = false;
     std::vector<std::string> args;
+
+    // The source-type parser handles concrete wildcard bounds. An encoded type parameter
+    // inside a bound must be resolved with this resolver's current signature or class.
+    if (*path == '?' && strstr(path, "typeparam<")) {
+        constexpr char extends_prefix[] = "? extends ";
+        constexpr char super_prefix[] = "? super ";
+        const bool upper = !strncmp(path, extends_prefix, sizeof(extends_prefix) - 1);
+        if (upper || !strncmp(path, super_prefix, sizeof(super_prefix) - 1)) {
+            std::string error;
+            const char* bound_path = path + (upper ? sizeof(extends_prefix) - 1 : sizeof(super_prefix) - 1);
+            if (const QoreTypeInfo* bound = resolve(bound_path, error)) {
+                return upper ? qore_get_wildcard_extends_type(bound) : qore_get_wildcard_super_type(bound);
+            }
+            return nullptr;
+        }
+    }
 
     if (extract_aot_type_args(path, "object", or_nothing, args)) {
         if (args.size() != 1) {
