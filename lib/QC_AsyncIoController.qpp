@@ -1341,7 +1341,7 @@ static int AsyncIoController::holdModuleCleanupWork() [flags=CONSTANT] {
             where += *qore_module_cleanup_counted_owner;
             where += "'";
         } else {
-            where = "a task";
+            where = "a task or work handed over";
         }
         // the location of the code that called this method
         ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(0), xsink);
@@ -1371,4 +1371,35 @@ static int AsyncIoController::holdModuleCleanupWork() [flags=CONSTANT] {
 */
 static bool AsyncIoController::releaseModuleCleanupWork(int handle) [flags=CONSTANT] {
     return qore_module_cleanup_release_work(handle);
+}
+
+//! Runs code that work of the module cleanup handed over to the current thread, then releases its handle
+/** While the code runs, the current thread runs work that the module cleanup counts (if the handle is held), so that
+    the code can hand work over in turn (see
+    @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"); the handle is released when the
+    code returns, also if it raises an exception.  For a handle of 0 (taken outside of such work) or one that is not
+    held, the code runs as usual.
+
+    @param handle a handle of @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"
+    @param c the code to run
+
+    @par Example:
+    @code{.py}
+int h = AsyncIoController::holdModuleCleanupWork();
+background AsyncIoController::runModuleCleanupWork(h, sub () { notifyListeners(); });
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing AsyncIoController::runModuleCleanupWork(int handle, code<nothing()> c) {
+    // released when the code has run, also if it raises an exception
+    struct ReleaseHelper {
+        int64 handle;
+        DLLLOCAL ~ReleaseHelper() {
+            qore_module_cleanup_release_work(handle);
+        }
+    } release_helper{handle};
+    QoreModuleCleanupCountedWorkScope counted_scope(qore_module_cleanup_handle_held(handle), nullptr);
+    c->execValue(nullptr, xsink).discard(xsink);
+    return QoreValue();
 }

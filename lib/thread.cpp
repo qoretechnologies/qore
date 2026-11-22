@@ -6036,6 +6036,15 @@ void qore_module_cleanup_work_end() {
     }
 }
 
+bool qore_module_cleanup_handle_held(int64 id) {
+    if (id <= 0) {
+        return false;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.handles.find(id) != work.handles.end();
+}
+
 size_t qore_module_cleanup_handle_count() {
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
     AutoLocker al(work.lock);

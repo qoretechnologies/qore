@@ -5134,6 +5134,8 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239)
+        c = wrapCleanupHandover(c);
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5150,8 +5152,27 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Returns code that runs \a c, holding a handle of the work of the module cleanup that the current thread runs
+    /** At the end of the process, the module cleanup waits for the work that it counts before it deletes the modules;
+        code that such work leaves to another thread (a thread of its own, a thread of the handler pool) is waited for
+        too, until it has run (see
+        @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+        qore#7239); outside of such work \a c is returned as it is
+    */
+    private:internal static code<nothing()> wrapCleanupHandover(code<nothing()> c) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        if (!handle) {
+            return c;
+        }
+        return sub () {
+            AsyncIoController::runModuleCleanupWork(handle, c);
+        };
+    }
+
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239)
+        c = wrapCleanupHandover(c);
         try {
             background c();
         } catch () {

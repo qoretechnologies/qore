@@ -2412,6 +2412,8 @@ DLLLOCAL bool qore_module_cleanup_release_work(int64 id);
 //! returns true once the module cleanup has stopped waiting for handles of handed-over work that were not released
 //! in time: the modules and their Programs are then left as they are (qore#7239)
 DLLLOCAL bool qore_module_cleanup_abandoned();
+//! returns true if the given handle of handed-over module cleanup work is held (qore#7239)
+DLLLOCAL bool qore_module_cleanup_handle_held(int64 id);
 //! returns the number of handles of handed-over module cleanup work that are held (qore#7239)
 DLLLOCAL size_t qore_module_cleanup_handle_count();
 //! true while the current thread runs a dispatcher item that the module cleanup counts (qore#7239)

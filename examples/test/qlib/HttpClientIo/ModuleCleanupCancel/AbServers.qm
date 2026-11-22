@@ -64,6 +64,14 @@ class EchoWsConnection inherits WebSocketConnection {
     gotMessage(string msg) {
         send(msg);
     }
+
+    #! the end of the connection runs in work that the module cleanup waits for: the cleanup canceled the server's
+    #! connection, whose end the controller notifies on a thread of its own, which the work of the cleanup handed
+    #! itself over to (qore#7239)
+    connectionClosed() {
+        printf("server connection closed: handles held: %d\n", call_function("dbg_module_cleanup_handle_count"));
+        flush();
+    }
 }
 
 #! the WebSocket echo handler, with a heartbeat

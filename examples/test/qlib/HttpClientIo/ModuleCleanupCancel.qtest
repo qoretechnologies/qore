@@ -352,6 +352,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "re-armed at the end of the process: ASYNC-IO-SHUTDOWN-ERROR", out, "the server stream's refused re-arm, "
             "after the deadline, is logged at the debug level: " + out);
         assertRegex("(^|\n)sse stream created: canceled: True\n", out, "the SSE stream is created: " + out);
+        # the end of the server's connection, which the controller notifies on a thread of its own once the cleanup
+        # canceled the connection, runs in work that the cleanup waits for: the work of the cleanup handed itself over
+        # to that thread (qore#7239)
+        assertRegex("(^|\n)server connection closed: handles held: [1-9][0-9]*\n", out, "the end of the server's "
+            "connection is work that the cleanup waits for: " + out);
         assertNRegex("notification of the frame was not held", out, "the frame is processed after the deadline: "
             + out);
         assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
