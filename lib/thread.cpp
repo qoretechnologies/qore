@@ -5854,6 +5854,47 @@ std::atomic<bool> module_cleanup_timeout_set{false};
 std::atomic<int64> module_cleanup_start_us{-1};
 //! true once the module cleanup has reached its deadline and canceled the work that it waited for
 std::atomic<bool> module_cleanup_deadline_reached{false};
+//! the time that the module cleanup waits after its deadline for the handles of work handed over to another thread
+//! (qore_module_cleanup_hold_work()), in milliseconds, or -1 for the default (qore#7239)
+std::atomic<int64> module_cleanup_handover_grace_ms{-1};
+//! true once qore_set_module_cleanup_handover_grace() has set it, which the environment variable then does not
+std::atomic<bool> module_cleanup_handover_grace_set{false};
+//! true once the module cleanup has stopped waiting for handles that were not released in time: the modules and
+//! their Programs are left as they are, as the threads that hold the handles can still run in them (qore#7239)
+std::atomic<bool> module_cleanup_abandoned{false};
+}
+
+//! the work of the module cleanup that the current thread runs and that the cleanup counts: the owner of the
+//! dispatcher item, if any (see QoreModuleCleanupCountedWorkScope)
+thread_local const std::string* qore_module_cleanup_counted_owner = nullptr;
+//! true while the current thread runs a dispatcher item that the module cleanup counts
+thread_local bool qore_module_cleanup_counted_item_running = false;
+
+int qore_set_module_cleanup_handover_grace(int64 grace_ms) {
+    if (grace_ms < 0) {
+        return -1;
+    }
+    module_cleanup_handover_grace_ms.store(grace_ms, std::memory_order_relaxed);
+    module_cleanup_handover_grace_set.store(true, std::memory_order_relaxed);
+    return 0;
+}
+
+int64 qore_get_module_cleanup_handover_grace() {
+    int64 grace = module_cleanup_handover_grace_ms.load(std::memory_order_relaxed);
+    if (grace >= 0) {
+        return grace;
+    }
+    int64 timeout = qore_get_module_cleanup_timeout();
+    return timeout > QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS ? timeout
+        : QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS;
+}
+
+bool qore_module_cleanup_abandoned() {
+    return module_cleanup_abandoned.load(std::memory_order_acquire);
+}
+
+bool qore_module_cleanup_counted_work_running() {
+    return qore_module_cleanup_counted_item_running || qore_module_cleanup_task_running;
 }
 
 int qore_set_module_cleanup_timeout(int64 timeout_ms) {
@@ -5890,6 +5931,27 @@ void qore_init_module_cleanup_timeout() {
     module_cleanup_timeout_ms.store(v, std::memory_order_relaxed);
 }
 
+void qore_init_module_cleanup_handover_grace() {
+    if (module_cleanup_handover_grace_set.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const char* env = getenv("QORE_MODULE_CLEANUP_HANDOVER_GRACE");
+    if (!env) {
+        return;
+    }
+    // a non-negative decimal integer of milliseconds, nothing else
+    char* end = nullptr;
+    errno = 0;
+    long long v = *env >= '0' && *env <= '9' ? strtoll(env, &end, 10) : -1;
+    if (v < 0 || errno || !end || *end) {
+        fprintf(stderr, "error: QORE_MODULE_CLEANUP_HANDOVER_GRACE='%s' is not valid: expecting a non-negative integer "
+            "number of milliseconds; the default is used\n", env);
+        fflush(stderr);
+        return;
+    }
+    module_cleanup_handover_grace_ms.store(v, std::memory_order_relaxed);
+}
+
 bool qore_module_cleanup_deadline_passed() {
     return module_cleanup_deadline_reached.load(std::memory_order_acquire);
 }
@@ -5922,6 +5984,7 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
         // in the child, so the condition is initialized again
         qore_condition_ops(&cond).reinitAfterFork();
         count = 0;
+        handles.clear();
         forked = true;
 #ifdef DEBUG
         dbg_held = false;
@@ -5934,8 +5997,13 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
     //! true in a child process created with fork(): work that the forking thread held when the count was reset can
     //! end in it, which is not counted
     bool forked = false;
-    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
+    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag), including the handles below
     size_t count = 0;
+    //! the handles of counted work handed over to another thread that are still held, with who took them and where
+    //! (qore_module_cleanup_hold_work(), qore#7239); each one is counted in @ref count
+    std::map<int64, std::string> handles;
+    //! the last handle given
+    int64 last_handle = 0;
 #ifdef DEBUG
     //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
     bool dbg_held = false;
@@ -5968,6 +6036,72 @@ void qore_module_cleanup_work_end() {
     }
 }
 
+size_t qore_module_cleanup_handle_count() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.handles.size();
+}
+
+int64 qore_module_cleanup_hold_work(const std::string& where) {
+    // only the work that the cleanup counts can hand it over, so that a handle cannot keep the cleanup waiting for
+    // work that it does not wait for in the first place
+    if (!qore_module_cleanup_counted_work_running() || qore_module_cleanup_abandoned()) {
+        return 0;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    try {
+        int64 id = ++work.last_handle;
+        work.handles.emplace(id, where);
+        ++work.count;
+        return id;
+    } catch (std::bad_alloc&) {
+        // without memory, the work is not handed over: the cleanup does not wait for it, as before
+        return 0;
+    }
+}
+
+bool qore_module_cleanup_release_work(int64 id) {
+    if (id <= 0) {
+        return false;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    // a handle released before, or that the cleanup no longer counts once it stopped waiting for it
+    std::map<int64, std::string>::iterator i = work.handles.find(id);
+    if (i == work.handles.end()) {
+        return false;
+    }
+    work.handles.erase(i);
+    assert(work.count);
+    if (!--work.count) {
+        work.cond.broadcast();
+    }
+    return true;
+}
+
+//! stops counting the handles that are still held; returns their descriptions; called with the lock held
+static std::vector<std::string> qore_module_cleanup_drop_handles(QoreModuleCleanupWork& work) {
+    std::vector<std::string> names;
+    try {
+        names.reserve(work.handles.size());
+        for (auto& i : work.handles) {
+            names.push_back(i.second);
+        }
+    } catch (std::bad_alloc&) {
+        // the handles are dropped anyway; the warning then names fewer of them
+    }
+    assert(work.count >= work.handles.size());
+    work.count -= work.handles.size();
+    work.handles.clear();
+    // the threads that hold them can still run in the Programs of the modules: those are left as they are
+    module_cleanup_abandoned.store(true, std::memory_order_release);
+    if (!work.count) {
+        work.cond.broadcast();
+    }
+    return names;
+}
+
 #ifdef DEBUG
 void qore_dbg_module_cleanup_work_held() {
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
@@ -5988,7 +6122,9 @@ static size_t qore_module_cleanup_work_count() {
 /** With \a deadline_us >= 0 (a time of q_clock_getmicros_monotonic()), the wait ends at that time: returns true if it
     ended there with work still counted
 */
-static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) {
+static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names);
+
+static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us, int64 handle_deadline_us) {
 #ifdef DEBUG
     if (after_cancel) {
         qore_dbg_module_cleanup_drain_point(QDMCDP_WAIT_AFTER_CANCEL);
@@ -6015,6 +6151,21 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) 
             return false;
         }
         if (deadline_us < 0) {
+            // after the deadline: the work handed over to other threads is waited for until the end of the grace
+            // period (qore_get_module_cleanup_handover_grace()); then the handles that are still held are no longer
+            // waited for, and the modules are left as they are; the other work is waited for as before (qore#7239)
+            if (!work.handles.empty()) {
+                int64 remaining_us = handle_deadline_us - q_clock_getmicros_monotonic();
+                if (remaining_us <= 0) {
+                    std::vector<std::string> names = qore_module_cleanup_drop_handles(work);
+                    sl.unlock();
+                    qore_module_cleanup_report_dropped_handles(names);
+                    sl.lock();
+                    continue;
+                }
+                work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
+                continue;
+            }
             work.cond.wait(work.lock);
             continue;
         }
@@ -6025,6 +6176,33 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) 
         // rounded up, so that the wait does not end before the deadline
         work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
     }
+}
+
+//! writes the warning that the cleanup no longer waits for the handles of work handed over to other threads
+static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names) {
+    char head[256];
+    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process waited " QLLD " ms after its "
+        "deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, which "
+        "did not end; the modules are left as they are:", qore_get_module_cleanup_handover_grace(), names.size(),
+        names.size() == 1 ? "" : "s");
+    // written with one call, so that the output of other threads does not split it
+    try {
+        std::string msg = head;
+        for (size_t i = 0; i < names.size(); ++i) {
+            msg += i ? ", " : " ";
+            msg += names[i];
+        }
+        msg += '\n';
+        fputs(msg.c_str(), stderr);
+    } catch (std::bad_alloc&) {
+        fputs(head, stderr);
+        for (size_t i = 0; i < names.size(); ++i) {
+            fputs(i ? ", " : " ", stderr);
+            fputs(names[i].c_str(), stderr);
+        }
+        fputc('\n', stderr);
+    }
+    fflush(stderr);
 }
 
 void qore_module_cleanup_report_canceled(int kind, const std::vector<std::string>& names) {
@@ -6094,10 +6272,16 @@ void qore_module_cleanup_drain_work() {
             || __builtin_add_overflow(deadline_us, start_us, &deadline_us)) {
         deadline_us = std::numeric_limits<int64>::max();
     }
+    int64 grace_us;
+    int64 handle_deadline_us;
+    if (__builtin_mul_overflow(qore_get_module_cleanup_handover_grace(), static_cast<int64>(1000), &grace_us)
+            || __builtin_add_overflow(grace_us, deadline_us, &handle_deadline_us)) {
+        handle_deadline_us = std::numeric_limits<int64>::max();
+    }
     bool after_cancel = false;
     while (true) {
         bool timed = !module_cleanup_deadline_reached.load(std::memory_order_acquire);
-        if (qore_module_cleanup_wait_work(after_cancel, timed ? deadline_us : -1)) {
+        if (qore_module_cleanup_wait_work(after_cancel, timed ? deadline_us : -1, handle_deadline_us)) {
             // set before the cancel round: the work of the cleanup cannot start new asynchronous work from now on,
             // and the rounds that follow cancel all of its operations that are not canceled yet
             module_cleanup_deadline_reached.store(true, std::memory_order_release);

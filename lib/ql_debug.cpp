@@ -18918,6 +18918,20 @@ static QoreValue f_dbg_async_io_wait_held_module_cleanup_work(const QoreListNode
         cls ? cls.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
 }
 
+//! Debug-only: waits until the given number of items held by the module cleanup test hook have ended; False if the
+//! wait timed out (qore#7239)
+static QoreValue f_dbg_async_io_wait_held_module_cleanup_work_ended(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_held_module_cleanup_work_ended(get_param_value(params, 0).getAsBigInt(),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the number of handles of handed-over module cleanup work that are held (qore#7239)
+static QoreValue f_dbg_module_cleanup_handle_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_module_cleanup_handle_count());
+}
+
 //! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
 //! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
 static QoreValue f_dbg_async_io_module_cleanup_drain_releases(const QoreListNode* params, RuntimeConfig& rc,
@@ -29973,6 +29987,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold",
         boolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "stream_data");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_module_cleanup_work_ended",
+        f_dbg_async_io_wait_held_module_cleanup_work_ended, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_module_cleanup_handle_count", f_dbg_module_cleanup_handle_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 0);
     qns.addBuiltinVariant("dbg_async_io_wait_held_module_cleanup_work", f_dbg_async_io_wait_held_module_cleanup_work,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",

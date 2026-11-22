@@ -285,6 +285,37 @@ DLLEXPORT int qore_set_module_cleanup_timeout(int64 timeout_ms);
 */
 DLLEXPORT int64 qore_get_module_cleanup_timeout();
 
+//! defined for qore_set_module_cleanup_handover_grace(), qore_get_module_cleanup_handover_grace() and
+//! QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS (qore#7239)
+#define _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE 1
+
+//! the least default grace period of the work that the module cleanup hands over to other threads, in milliseconds
+#define QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS 5000
+
+//! sets the time that the module cleanup waits after its deadline for the work handed over to other threads
+/** Work of the module cleanup that hands itself over to another thread (Qore::AsyncIoController::holdModuleCleanupWork())
+    is waited for until this time after the deadline of the cleanup (qore_set_module_cleanup_timeout()); then the
+    cleanup writes a warning that names it, no longer waits for it, and leaves the modules and their Programs as they
+    are.  Takes precedence over the \c QORE_MODULE_CLEANUP_HANDOVER_GRACE environment variable; must be called before
+    the end of the process starts (qore_cleanup())
+
+    @param grace_ms the time in milliseconds; the default is the deadline of the cleanup, but at least
+    \c QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS
+
+    @return 0 for success, -1 if \a grace_ms is negative (the time is not changed)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_set_module_cleanup_handover_grace(int64 grace_ms);
+
+//! returns the time that the module cleanup waits after its deadline for the work handed over to other threads, in
+//! milliseconds
+/** @see qore_set_module_cleanup_handover_grace()
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int64 qore_get_module_cleanup_handover_grace();
+
 //! returns true if all the bits set in the argument are also set in the qore library init option variable
 DLLEXPORT bool qore_check_option(int opt);
 

@@ -2393,6 +2393,54 @@ DLLLOCAL void qore_module_cleanup_report_canceled(int kind, const std::vector<st
 
 //! Reads and validates the QORE_MODULE_CLEANUP_TIMEOUT environment variable; called by qore_init()
 DLLLOCAL void qore_init_module_cleanup_timeout();
+//! sets the grace period of the handles of handed-over module cleanup work from QORE_MODULE_CLEANUP_HANDOVER_GRACE,
+//! unless qore_set_module_cleanup_handover_grace() has set it (qore#7239)
+DLLLOCAL void qore_init_module_cleanup_handover_grace();
+//! returns true if the current thread runs work of the module cleanup that the cleanup counts (a dispatcher item or
+//! a task) (qore#7239)
+DLLLOCAL bool qore_module_cleanup_counted_work_running();
+//! hands the work of the module cleanup that the current thread runs over to another thread: returns a handle that
+//! the cleanup counts until qore_module_cleanup_release_work() releases it, or 0 if the current thread does not run
+//! work that the cleanup counts (qore#7239)
+/** @param where who takes the handle and where, for the warning of the cleanup if the handle is not released within
+    the grace period after its deadline (qore_get_module_cleanup_handover_grace())
+*/
+DLLLOCAL int64 qore_module_cleanup_hold_work(const std::string& where);
+//! releases a handle of qore_module_cleanup_hold_work(); returns false if it was released before, if the cleanup no
+//! longer counts it, or for 0 (qore#7239)
+DLLLOCAL bool qore_module_cleanup_release_work(int64 id);
+//! returns true once the module cleanup has stopped waiting for handles of handed-over work that were not released
+//! in time: the modules and their Programs are then left as they are (qore#7239)
+DLLLOCAL bool qore_module_cleanup_abandoned();
+//! returns the number of handles of handed-over module cleanup work that are held (qore#7239)
+DLLLOCAL size_t qore_module_cleanup_handle_count();
+//! true while the current thread runs a dispatcher item that the module cleanup counts (qore#7239)
+DLLLOCAL extern thread_local bool qore_module_cleanup_counted_item_running;
+
+//! the owner of the dispatcher item that the module cleanup counts and that the current thread runs, if any
+//! (qore#7239)
+DLLLOCAL extern thread_local const std::string* qore_module_cleanup_counted_owner;
+
+//! marks the dispatcher item that the current thread runs as work that the module cleanup counts (qore#7239)
+class QoreModuleCleanupCountedWorkScope {
+public:
+    DLLLOCAL QoreModuleCleanupCountedWorkScope(bool counted, const std::string* owner)
+            : prev(qore_module_cleanup_counted_item_running), prev_owner(qore_module_cleanup_counted_owner) {
+        if (counted) {
+            qore_module_cleanup_counted_item_running = true;
+            qore_module_cleanup_counted_owner = owner;
+        }
+    }
+
+    DLLLOCAL ~QoreModuleCleanupCountedWorkScope() {
+        qore_module_cleanup_counted_item_running = prev;
+        qore_module_cleanup_counted_owner = prev_owner;
+    }
+
+private:
+    bool prev;
+    const std::string* prev_owner;
+};
 
 #ifdef DEBUG
 //! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held
@@ -2400,6 +2448,11 @@ DLLLOCAL void qore_init_module_cleanup_timeout();
     there are any; with \a end_hold, the hook holds no more items
 */
 DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
+//! Debug-only: an item held by the dbg_async_io_hold_module_cleanup_work() test hook has run (or been discarded) and
+//! ended (qore#7239)
+DLLLOCAL void qore_dbg_held_module_cleanup_item_ended();
+//! Debug-only: waits until \a count items held by the test hook have ended; returns false on timeout (qore#7239)
+DLLLOCAL bool qore_dbg_wait_held_module_cleanup_work_ended(int64 count, int64 timeout_ms);
 
 //! Debug-only: holds the calling ThreadPool task of the module cleanup while the
 //! dbg_async_io_hold_module_cleanup_work() test hook holds its work, until the cleanup waits for its work

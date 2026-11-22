@@ -222,6 +222,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     qore_library_options = n_qore_library_options;
     // a value that is not valid is reported now, at the start of the process (qore#7027)
     qore_init_module_cleanup_timeout();
+    qore_init_module_cleanup_handover_grace();
 
     // the canonical path of this libqore, for the module manager
     std::string libqore_path;
@@ -491,8 +492,10 @@ void qore_cleanup() {
     // cleared as usual
     // so are they when a Program was left to a foreign thread before (the Program of the script, whose teardown at the
     // end of the process stopped waiting for the foreign threads in it: qore#6904), as its code can use them
+    // and when the module cleanup stopped waiting for work that it handed over to other threads, which can still run
+    // in the modules' Programs (qore#7239)
     const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
-        || qore_program_private::hasLeftPrograms();
+        || qore_program_private::hasLeftPrograms() || qore_module_cleanup_abandoned();
     if (!modules_left) {
         qore_release_module_program_pins();
 
@@ -512,7 +515,7 @@ void qore_cleanup() {
     // thread can be blocked in Qore code for as long as the process lives and uses the library's data (the types, the
     // system namespace, the thread data), so the library is not torn down any further; everything that remains is
     // reachable and is released with the process
-    if (modules_left || qore_program_private::hasLeftPrograms()) {
+    if (modules_left || qore_program_private::hasLeftPrograms() || qore_module_cleanup_abandoned()) {
         printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
         // a background compile still in LLVM is waited for, so that no compile is in LLVM when this function returns
         // (issue #6296); the engine stays, as the foreign thread can still run compiled code

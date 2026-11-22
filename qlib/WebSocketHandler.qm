@@ -1796,6 +1796,14 @@ class WebSocketStreamProcessor {
         */
         bool notify_pending = False;
 
+        #! The handles of work of the module cleanup that left its notification to the thread in the loop
+        /** Protected by @ref notify_lock; released by the thread in the loop once it has read the stream for them,
+            so that the cleanup at the end of the process waits for that thread as it waits for the work itself
+            (see @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7239)
+        */
+        list<int> pending_cleanup_work = ();
+
         #! Dedicated fast lock for the closed flag — never held during I/O
         /** This lock is ONLY held to perform the check-and-set on @ref closed and
             signal @ref done. Shutdown must always be able to acquire this lock quickly,
@@ -2088,6 +2096,13 @@ class WebSocketStreamProcessor {
             AutoLock al(notify_lock);
             if (processing) {
                 notify_pending = True;
+                # work of the module cleanup at the end of the process that leaves its notification to the thread in
+                # the loop hands itself over to it, so that the cleanup waits until that thread has read the stream
+                # (0 outside of such work) (qore#7239)
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work, handle;
+                }
                 return;
             }
             processing = True;
@@ -2101,6 +2116,15 @@ class WebSocketStreamProcessor {
         }
 
         while (True) {
+            # the handles of the work of the module cleanup that this pass reads the stream for, released after it
+            list<int> handed;
+            {
+                AutoLock al(notify_lock);
+                handed = pending_cleanup_work;
+                pending_cleanup_work = ();
+            }
+            on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
+
             processFrames();
 
             AutoLock al(notify_lock);
