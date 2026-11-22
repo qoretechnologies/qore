@@ -549,6 +549,9 @@ public class WebSocketConnection {
     }
 
     #! Returns the socket used by the server for the connection
+    /** For an HTTP/1.1 connection, this is the connection's own socket after the upgrade, which serves no other
+        request; the server's I/O reads its frames
+    */
     Socket getSocket() {
         return sock;
     }

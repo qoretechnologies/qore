@@ -142,7 +142,8 @@ class TestDisconnectStreamRequest inherits AbstractStreamRequest {
     }
 
     hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
-        s.close();
+        # the server's code (not sandboxed) aborts the connection of its request (qore#7305)
+        http_abort_connection(s);
         return <HttpResponseInfo>{};
     }
 }
