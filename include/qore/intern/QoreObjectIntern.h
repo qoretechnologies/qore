@@ -400,7 +400,30 @@ public:
 
     template <bool Lexical>
     DLLLOCAL void mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const;
+            LexicalSemanticPolicy policy, const qore_class_private* class_ctx,
+            const qore_class_private* storage_ctx) const;
+
+    //! a declared member that a class context with no private access to the object's class uses on the object, and the
+    //! storage that holds its value (qore#7180)
+    struct ContextStorageMember {
+        const char* key;
+        const QoreHashNode* store;
+    };
+
+    //! returns the declared members that a class context with no private access to the object's class uses on the
+    //! object, in the order in which they were declared, with the storage of their values; the object's lock must be held
+    /** A class that is on the path of a private:internal inheritance to a member (the class that declares it, and the
+        classes between it and the class that inherits it with private:internal) uses the member on the objects of the
+        subclasses of that class, as through self, and the member's value is in the storage that the class context has
+        for it, which is not the object's data hash (issue #6800): the enumerations of the members list it as the
+        access of the member finds it.  The keys are valid as long as the object's class lives; the storages while the
+        object's lock is held.
+
+        The members are found in the internal data of the object, so an object with none has no such member, and
+        nothing is done for a class context that is not in the object's hierarchy.
+    */
+    DLLLOCAL void getContextStorageMembers(const qore_class_private* storage_ctx,
+            std::vector<ContextStorageMember>& out) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -474,14 +497,68 @@ public:
     DLLLOCAL int checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
             const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
-    //! returns the first name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
-    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) const {
-        return getRuntimeEdgeMemberKey(false, xsink);
+    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
+        // get the current class context
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
+            class_ctx = nullptr;
+
+        QoreAutoVarRWReadLocker al(rml);
+
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
+
+        // all the members only in the object's class: another class context sees the members that it can use (issue
+        // #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
+            const char* str = data->getFirstKey();
+            //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
+            return !str ? nullptr : new QoreStringNode(str);
+        }
+
+        // get first accessible non-internal member
+        ConstHashIterator hi(data);
+        while (hi.next()) {
+            //printd(5, "qore_object_private::firstKey() checking '%s'\n", hi.getKey());
+            const qore_class_private* member_class_ctx = nullptr;
+            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
+                return new QoreStringNode(hi.getKey());
+            //printd(5, "qore_object_private::firstKey() skipping '%s' (private)\n", hi.getKey());
+        }
+
+        return nullptr;
     }
 
-    //! returns the last name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
-    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) const {
-        return getRuntimeEdgeMemberKey(true, xsink);
+    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) {
+        // get the current class context
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
+            class_ctx = nullptr;
+
+        QoreAutoVarRWReadLocker al(rml);
+
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
+
+        // all the members only in the object's class (issue #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
+            const char* str = data->getLastKey();
+            return !str ? nullptr : new QoreStringNode(str);
+        }
+
+        // get last accessible non-internal member
+        ReverseConstHashIterator hi(data);
+        while (hi.next()) {
+            const qore_class_private* member_class_ctx = nullptr;
+            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
+                return new QoreStringNode(hi.getKey());
+        }
+
+        return nullptr;
     }
 
     DLLLOCAL QoreHashNode* getSlice(const QoreListNode* l, ExceptionSink* xsink) const;
@@ -559,12 +636,18 @@ public:
         return -1;
     }
 
+    /** @param declared if not null, set to true if the member is declared by the class, false if not (a member that
+        can be added to and removed from the object)
+    */
     DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
-            const QoreTypeInfo*& typeInfo) const {
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
         assert(!member_class_ctx);
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
+        if (declared) {
+            *declared = mi != nullptr;
+        }
         if (mi) {
             if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
@@ -588,6 +671,12 @@ public:
 
     DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
         bool for_delete = false, bool* exists = nullptr);
+
+    //! Takes the value of a member out of the object's member hash \a odata, which must be locked for writing
+    /** A declared member keeps its slot, with no value; the key of a member that the class does not declare is removed,
+        as from a hash, so that the object's keys no longer report it (qore#7179).  A missing member is not created.
+    */
+    DLLLOCAL QoreValue takeMemberValue(QoreHashNode* odata, const char* key, bool declared, bool& exists);
 
     //! Removes a mixed native/ordinary member slice after detaching its parent lvalue
     DLLLOCAL __attribute__((noinline)) void takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
@@ -882,16 +971,10 @@ public:
     //! returns @ref true if the calling code can see a member of the object; stops at the first one (#7048)
     DLLLOCAL bool hasRuntimeMembers() const;
 
-    //! returns the first or last name of getRuntimeMemberList() as a new string, or nullptr if there is none
-    /** @param last @ref true for the last name
-        @param xsink raises an exception if the object has been deleted
-    */
-    DLLLOCAL QoreStringNode* getRuntimeEdgeMemberKey(bool last, ExceptionSink* xsink) const;
-
-    //! returns the first or last name of getRuntimeMemberList() for the class context; the object's lock must be held
+    //! returns the first name of getRuntimeMemberList() for the class context; the object's lock must be held
     /** the name is valid while the lock is held
     */
-    DLLLOCAL const char* getRuntimeEdgeMemberKeyIntern(const qore_class_private* class_ctx, bool last) const;
+    DLLLOCAL const char* getFirstRuntimeMemberKeyIntern(const qore_class_private* class_ctx) const;
 
     DLLLOCAL void incScanCount(int dt) {
         assert(dt);

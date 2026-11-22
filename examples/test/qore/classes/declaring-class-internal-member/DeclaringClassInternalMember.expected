@@ -2,8 +2,8 @@ declaring class through self: 1
 declaring class through a reference: 1
 declaring class dynamically: 1
 declaring class writes through a reference: 2
-declaring class: keys through self: []
-declaring class: keys through a reference: []
+declaring class: keys through self: ["v"]
+declaring class: keys through a reference: ["v"]
 inheriting class through a reference: 2
 declaring class on the inheriting class: 1
 declaring class beside a sibling: 1

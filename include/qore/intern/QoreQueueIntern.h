@@ -102,6 +102,10 @@ private:
     bool room_wanted = false;
     std::string err;
     QoreStringNode* desc;
+    //! the ID of the sandboxed Program whose code set the error (0 if not known), if \a err_sandboxed (qore#7139)
+    qore_program_id_t err_pgm_id = 0;
+    //! true if code that is sandboxed or acts for sandboxed code set the error: its exception is raised marked
+    bool err_sandboxed = false;
     // len, read_waiting and write_waiting are only written with the lock held, but size(), empty(),
     // getReadWaiting() and getWriteWaiting() read them without the lock, so they are atomic; these readers only
     // report a snapshot of the counter and no other data is published through it, so relaxed ordering is
@@ -232,7 +236,8 @@ public:
         //printd(5, "qore_queue_private::qore_queue_private() this: %p max: %d\n", this, max);
     }
 
-    DLLLOCAL qore_queue_private(const qore_queue_private &orig) : head(0), tail(0), err(orig.err), desc(orig.desc ? orig.desc->stringRefSelf() : 0), len(0), max(orig.max), read_waiting(0), write_waiting(0) {
+    DLLLOCAL qore_queue_private(const qore_queue_private &orig) : head(0), tail(0), err(orig.err), desc(orig.desc ? orig.desc->stringRefSelf() : 0), err_pgm_id(orig.err_pgm_id),
+        err_sandboxed(orig.err_sandboxed), len(0), max(orig.max), read_waiting(0), write_waiting(0) {
         AutoLocker al(orig.l);
         if (orig.getLenIntern() == Queue_Deleted) {
             return;
@@ -368,6 +373,10 @@ public:
     DLLLOCAL void destructor(ExceptionSink* xsink);
 
     DLLLOCAL void setError(const char* err, const QoreStringNode* desc, QoreObject* self, ExceptionSink* xsink);
+
+    //! raises the error set with setError(), marked if code that is sandboxed or acts for sandboxed code set it
+    //! (qore#7139); the lock must be held
+    DLLLOCAL void raiseErrorIntern(ExceptionSink* xsink);
 
     DLLLOCAL void clearError();
 

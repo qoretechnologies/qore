@@ -1485,7 +1485,21 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
         AutoLocker al(state.lock);
         // the tasks held: those that the cleanup counts when it waits for its work, all when the hold ends
         tasks = state.held_counted_tasks + (end_hold ? state.held_uncounted_tasks : 0);
+        if (end_hold && state.hold.load(std::memory_order_relaxed)) {
+            // the work that the cleanup hands over from now on is queued
+            state.hold.store(false, std::memory_order_release);
+            hold_ended = true;
+        }
+        // printed before the tasks are released, under the lock that they wait with: a task released prints its own
+        // output only after these lines, whose order a test checks
+        if (hold_ended) {
+            fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
+            fflush(stderr);
+        }
         if (tasks) {
+            fprintf(stderr, "held module cleanup work: %d task%s released (%s)\n", tasks, tasks == 1 ? "" : "s",
+                by);
+            fflush(stderr);
             ++state.counted_task_release_gen;
             state.held_counted_tasks = 0;
             if (end_hold) {
@@ -1493,11 +1507,6 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
                 state.held_uncounted_tasks = 0;
             }
             state.task_cond.broadcast();
-        }
-        if (end_hold && state.hold.load(std::memory_order_relaxed)) {
-            // the work that the cleanup hands over from now on is queued
-            state.hold.store(false, std::memory_order_release);
-            hold_ended = true;
         }
         if (end_hold) {
             held.swap(state.held);
@@ -1520,14 +1529,6 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
                 }
             }
         }
-    }
-    if (hold_ended) {
-        fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
-        fflush(stderr);
-    }
-    if (tasks) {
-        fprintf(stderr, "held module cleanup work: %d task%s released (%s)\n", tasks, tasks == 1 ? "" : "s", by);
-        fflush(stderr);
     }
     if (held.empty()) {
         return;
@@ -2046,11 +2047,13 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                             cmd.submit_other->refSelf(), &hash_xsink);
                     }
                     if (rc) {
-                        QoreStringValueHelper err(hash_xsink.getExceptionErr());
-                        QoreStringValueHelper desc(hash_xsink.getExceptionDesc());
-                        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to populate the canceled result "
-                            "hash for an abandoned command (owner: '%s'): %s: %s", cmd.owner.c_str(),
-                            *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+                        // marked and escaped, as the owner that the submitter chose (qore#7139)
+                        QoreString mark, err_text, desc_text, owner_text;
+                        qore_log_exception_text(hash_xsink, mark, err_text, desc_text);
+                        qore_append_escaped_report_text(owner_text, cmd.owner.c_str());
+                        log(QORE_LOG_LEVEL_ERROR, "%sAsyncIoController: failed to populate the canceled result "
+                            "hash for an abandoned command (owner: '%s'): %s: %s", mark.c_str(),
+                            owner_text.c_str(), err_text.c_str(), desc_text.c_str());
                         hash_xsink.clear();
                     }
                     result = r.release();
@@ -3547,34 +3550,46 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         const uint64_t cleanup_module_entry_refusals = qore_module_entry_refusals();
 
         if (work_xsink) {
-            QoreStringValueHelper err_str(work_xsink.getExceptionErr());
-            QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
             const char* type_name = getDispatchTypeName(async_item.type);
             const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName()
                 : (!step_class_name.empty() ? step_class_name.c_str() : "null");
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
             const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
             const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
+            // the exception of code that is sandboxed or acts for sandboxed code is logged marked; the text of the
+            // exception and the names that the submitter chose are escaped, so that the line stays one line
+            // (qore#7139); the report on stderr is marked as well (see ExceptionSink::handleExceptions())
+            QoreString mark, err_text, desc_text, class_text, owner_text, key_text, stream_key_text;
+            qore_log_exception_text(work_xsink, mark, err_text, desc_text);
+            qore_append_escaped_report_text(class_text, class_name);
+            qore_append_escaped_report_text(owner_text, owner);
+            qore_append_escaped_report_text(key_text, key);
+            qore_append_escaped_report_text(stream_key_text, stream_key);
+            class_name = class_text.c_str();
+            owner = owner_text.c_str();
+            key = key_text.c_str();
+            stream_key = stream_key_text.c_str();
             // the exception is logged at the error level; without a logger it is reported on stderr as an unhandled
             // exception, as one raised by a task (submitTask()) or a background thread is, after a line that names
             // the work item, so that the failure of a callback is never silent; a logger that raises an exception
             // itself has both exceptions reported on stderr (qore#6275)
             ExceptionSink logger_xsink;
             bool logged = ctrl && ctrl->logWithSink(&logger_xsink, QORE_LOG_LEVEL_ERROR,
-                "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
+                "%sQoreCallDispatcher::workerLoop() %s exception: %s: %s "
                 "(type=%s class=%s owner=%s key=%s stream_key=%s)",
+                mark.c_str(),
                 method_name ? method_name : "unknown",
-                *err_str ? err_str->c_str() : "?",
-                *desc_str ? desc_str->c_str() : "?",
+                err_text.c_str(),
+                desc_text.c_str(),
                 type_name, class_name, owner, key, stream_key);
             if (logged && !logger_xsink) {
                 work_xsink.clear();
             } else {
                 // a callback that called thread_exit leaves no exception, and nothing is reported for it
                 if (work_xsink.isException()) {
-                    printe("unhandled exception in an AsyncIoController %s (type=%s class=%s owner=%s key=%s "
-                    "stream_key=%s)%s:\n", method_name ? method_name : "unknown", type_name, class_name, owner, key,
-                        stream_key, logged ? ", which the logger could not log" : "");
+                    printe("%sunhandled exception in an AsyncIoController %s (type=%s class=%s owner=%s key=%s "
+                    "stream_key=%s)%s:\n", mark.c_str(), method_name ? method_name : "unknown", type_name,
+                        class_name, owner, key, stream_key, logged ? ", which the logger could not log" : "");
                 }
                 work_xsink.handleExceptions();
                 if (logger_xsink) {
@@ -3730,19 +3745,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             xsink->clear();
         }
         if (*xsink) {
-            QoreStringValueHelper err(xsink->getExceptionErr());
-            QoreStringValueHelper desc(xsink->getExceptionDesc());
+            // the exception of a destructor that code that is sandboxed or acts for sandboxed code ran is logged
+            // marked, with its text escaped (qore#7139)
+            QoreString mark, err_text, desc_text;
+            qore_log_exception_text(*xsink, mark, err_text, desc_text);
             // without a logger, reported on stderr as an unhandled exception, as an exception of the work item is
             ExceptionSink logger_xsink;
-            bool logged = ctrl && ctrl->logWithSink(&logger_xsink, QORE_LOG_LEVEL_ERROR, "QoreCallDispatcher::"
-                "workerLoop() discarding an exception left pending by %s cleanup: %s: %s",
-                getDispatchTypeName(async_item.type), *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+            bool logged = ctrl && ctrl->logWithSink(&logger_xsink, QORE_LOG_LEVEL_ERROR, "%sQoreCallDispatcher::"
+                "workerLoop() discarding an exception left pending by %s cleanup: %s: %s", mark.c_str(),
+                getDispatchTypeName(async_item.type), err_text.c_str(), desc_text.c_str());
             if (logged && !logger_xsink) {
                 xsink->clear();
             } else {
                 if (xsink->isException()) {
-                    printe("unhandled exception in the cleanup of an AsyncIoController work item (type=%s)%s:\n",
-                        getDispatchTypeName(async_item.type), logged ? ", which the logger could not log" : "");
+                    printe("%sunhandled exception in the cleanup of an AsyncIoController work item (type=%s)%s:\n",
+                        mark.c_str(), getDispatchTypeName(async_item.type),
+                        logged ? ", which the logger could not log" : "");
                 }
                 xsink->handleExceptions();
                 if (logger_xsink) {
@@ -12222,10 +12240,13 @@ void AsyncIoControllerPriv::pushStateEvent(Queue* state_queue, QoreObject* state
         state_queue->push(&event_xsink, state_queue_obj, event.release());
     }
     if (event_xsink) {
-        QoreStringValueHelper err(event_xsink.getExceptionErr());
-        QoreStringValueHelper desc(event_xsink.getExceptionDesc());
-        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to report a state event for an operation "
-            "(owner: '%s'): %s: %s", owner.c_str(), *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+        // the error of a state queue can be text that sandboxed code set (Queue::setError()): marked and escaped,
+        // as the owner that the submitter chose (qore#7139)
+        QoreString mark, err_text, desc_text, owner_text;
+        qore_log_exception_text(event_xsink, mark, err_text, desc_text);
+        qore_append_escaped_report_text(owner_text, owner.c_str());
+        log(QORE_LOG_LEVEL_ERROR, "%sAsyncIoController: failed to report a state event for an operation "
+            "(owner: '%s'): %s: %s", mark.c_str(), owner_text.c_str(), err_text.c_str(), desc_text.c_str());
         event_xsink.clear();
     }
 }
@@ -12234,10 +12255,12 @@ void AsyncIoControllerPriv::logAndClearStrayException(const char* phase, Excepti
     if (!xsink || !*xsink) {
         return;
     }
-    QoreStringValueHelper err(xsink->getExceptionErr());
-    QoreStringValueHelper desc(xsink->getExceptionDesc());
-    log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: discarding an exception left pending by %s: %s: %s", phase,
-        *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+    // the exception of code that is sandboxed or acts for sandboxed code is logged marked, with its text escaped
+    // (qore#7139)
+    QoreString mark, err_text, desc_text;
+    qore_log_exception_text(*xsink, mark, err_text, desc_text);
+    log(QORE_LOG_LEVEL_ERROR, "%sAsyncIoController: discarding an exception left pending by %s: %s: %s", mark.c_str(),
+        phase, err_text.c_str(), desc_text.c_str());
     xsink->clear();
 }
 
@@ -12274,11 +12297,13 @@ QoreHashNode* AsyncIoControllerPriv::buildResultHash(PollInfo& pinfo, bool cance
         // must not happen: the member types are fixed and the values always match them.  Report it rather than
         // delivering a malformed completion silently; the result is still returned so that the deliver-exactly-once
         // invariant holds and any waiter is released
-        QoreStringValueHelper err(hash_xsink.getExceptionErr());
-        QoreStringValueHelper desc(hash_xsink.getExceptionDesc());
-        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to populate the result hash for an operation "
-            "(owner: '%s'): %s: %s; delivering an incomplete completion", pinfo.owner.c_str(),
-            *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+        // marked and escaped, as the owner that the submitter chose (qore#7139)
+        QoreString mark, err_text, desc_text, owner_text;
+        qore_log_exception_text(hash_xsink, mark, err_text, desc_text);
+        qore_append_escaped_report_text(owner_text, pinfo.owner.c_str());
+        log(QORE_LOG_LEVEL_ERROR, "%sAsyncIoController: failed to populate the result hash for an operation "
+            "(owner: '%s'): %s: %s; delivering an incomplete completion", mark.c_str(), owner_text.c_str(),
+            err_text.c_str(), desc_text.c_str());
     }
     hash_xsink.clear();
     return result.release();

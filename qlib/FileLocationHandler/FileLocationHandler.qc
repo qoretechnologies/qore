@@ -1519,7 +1519,7 @@ getHandlerNames
                 try {
                     load_module(handler);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("error loading FileLocationHandler module %y: %s\n", handler,
                             get_exception_string(ex));
                     }

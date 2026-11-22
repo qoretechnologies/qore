@@ -629,6 +629,11 @@ DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
 DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id);
+//! Debug-only: makes the next \a count barriers of library code (QoreModuleInitSandboxBarrierHelper(true)) on the
+//! current thread fail to be recorded as if no memory could be allocated; 0 disarms it
+DLLLOCAL void qore_dbg_fail_next_module_init_barrier_records(int count);
+//! Debug-only: returns the number of active barriers of library code on the current thread that could not be recorded
+DLLLOCAL unsigned qore_dbg_module_init_barrier_unrecorded();
 #endif
 
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
@@ -641,6 +646,20 @@ DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_progr
 */
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
     ExceptionSink* xsink, const QoreClass* cls = nullptr);
+
+//! Returns the application Program that library module code runs for, or nullptr
+/** Walks from the captured caller (a library module Program) through the contexts of library module code only, as
+    qore_reflection_has_module_caller() does, and returns the first non-module Program: the code that the module
+    chain runs for.  The Program is taken from the thread's call chain only.
+
+    Fails closed, returning nullptr: if the caller is not library module code (see qore_program_is_library_module()),
+    if a module initialization barrier (QoreModuleInitSandboxBarrierHelper) is active or could not be recorded, if a
+    module lifecycle barrier (QoreModuleLifecycleBarrierHelper) is reached first or could not be recorded, if module
+    code that is not library code is reached first, if no such Program is on the call chain (a thread that module
+    code started), or if the walk is canceled (reported in xsink).
+*/
+DLLLOCAL const QoreProgram* qore_reflection_get_module_application_program(const QoreProgram* caller,
+    ExceptionSink* xsink);
 
 //! returns the effective parse options of the Program running on the current thread
 /** These are the parse options of the current Program with the active runtime parse options override applied: the
@@ -689,6 +708,11 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
       pass on to the module code it calls, also through module code whose own options have them already
 */
 DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
+
+//! Runs the process-end callbacks of the modules once (see qore_register_process_end_callback(), qore#7191)
+/** Called by qore_cleanup() (#QPE_CLEANUP) and qore_exit_process() (#QPE_EXIT, #QPE_QUICK_EXIT)
+*/
+DLLLOCAL void qore_run_process_end_callbacks(qore_process_end_e reason);
 
 //! returns the data of the current thread, for the functions that take it to look it up only once
 DLLLOCAL ThreadData* qore_get_thread_data();
@@ -1068,6 +1092,8 @@ public:
 private:
     bool pushed = false;
     bool record_failed = false;
+    //! true if the barrier of library code could not be recorded for lack of memory (counted on the thread)
+    bool unrecorded = false;
 };
 
 //! Marks module code that runs for no application: a module's init or del closure
@@ -2191,7 +2217,53 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
-DLLLOCAL bool qore_caller_is_sandboxed();
+DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true and sets \a mark if an exception in \a xsink was raised by code that is sandboxed or acts for
+//! sandboxed code (qore#7139)
+/** The mark is \c "[caller Program N] " (\c N the ID of the sandboxed Program of the first such exception, see
+    qore_caller_is_sandboxed()), or \c "[caller Program unknown] "; a report of the exceptions starts each line with it
+    and escapes the text of the code's choosing (see qore_append_escaped_report_text())
+*/
+DLLLOCAL bool qore_exception_sandboxed_mark(const ExceptionSink& xsink, QoreString& mark);
+
+//! Marks the last exception in \a xsink as raised for the sandboxed Program \a pgm_id (0 if not known): one whose
+//! text sandboxed code stored earlier, such as the error of a Queue (qore#7139)
+DLLLOCAL void qore_mark_last_exception_sandboxed(ExceptionSink& xsink, qore_program_id_t pgm_id);
+
+//! Returns true and sets \a pgm_id if an exception in \a xsink was raised by code that is sandboxed or acts for
+//! sandboxed code: the ID of the sandboxed Program of the first such exception, or 0 (qore#7139)
+DLLLOCAL bool qore_exception_sandboxed_origin(const ExceptionSink& xsink, qore_program_id_t& pgm_id);
+
+//! Sets the mark of the first exception in \a xsink if code that is sandboxed or acts for sandboxed code raised it
+//! (else \a mark stays empty), and appends its error and description escaped for a log line (qore#7139)
+DLLLOCAL void qore_log_exception_text(ExceptionSink& xsink, QoreString& mark, QoreString& err, QoreString& desc);
+
+//! Appends \a text to \a out, converted to UTF-8, with the characters that could end or rewrite the line of a report
+//! escaped (qore#7139)
+/** Backslash, the C0 and C1 control characters and DEL, the Unicode line and paragraph separators, and the bidirectional
+    formatting characters are escaped (\c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN, \c \\u{NNNN}),
+    as are the bytes of invalid UTF-8 and of text that cannot be converted to UTF-8 (\c \\xNN)
+*/
+DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const QoreString* text);
+
+//! Appends \a text (UTF-8, as the names of files and functions) to \a out escaped as by the variant above
+DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const char* text);
+
+//! Appends UTF-8 \a text to \a out with the characters that could end or rewrite a log line escaped (line breaks,
+//! the other C0 and C1 control characters except tab, DEL, the Unicode line and paragraph separators and the
+//! bidirectional formatting characters), and \c % doubled if \a double_percent (qore#7216)
+/** Backslash is not escaped, so text escaped with qore_append_escaped_report_text() is kept as it is
+*/
+DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent);
+
+//! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
+/** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
+    stack that is not a module's is trusted host code (a Program that is not sandboxed and whose options allow terminal
+    I/O), the provenance of objects and callbacks that restricted code created does not apply, so that the output
+    that the host chose (its loggers, its own code called from such an object) is written
+*/
+DLLLOCAL bool qore_caller_restricts_terminal_io();
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
@@ -2242,6 +2314,11 @@ public:
         return barrier_depth;
     }
 
+    //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
+    DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
+        return sandboxed_pgm_id;
+    }
+
     DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
     DLLLOCAL QoreCallerSandboxHelper& operator=(const QoreCallerSandboxHelper&) = delete;
 
@@ -2250,6 +2327,8 @@ private:
     const QoreCallerSandboxHelper* previous = nullptr;
     const QoreCallerSandboxHelper* previous_native_load_restriction = nullptr;
     size_t barrier_depth = 0;
+    //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
+    qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
 };
 
@@ -3079,40 +3158,6 @@ private:
             QoreClassSourceProgramInfo* spgm_info);
 };
 
-//! Sets the call Program context of the frame of a method or a closure that runs without CodeContextHelperBase
-/** The paths that run the body of a method or a closure without UserVariantBase::eval() (the runtime fast-call
-    helpers, the IR interpreter's inline calls) set its object and class context with ObjectSubstitutionHelper or
-    CalleeContextHelper; this helper sets its call Program context (call_program_context) as CodeContextHelperBase
-    does: the source Program of the class, or else the Program of the object.  The calls made in the body take it as
-    the Program of their caller (qore_get_call_program_context()): their frames record it, which the code that reads
-    the Programs of the frames (Program::getCallerCapabilityMask(), for example) sees, and a call into a module's
-    Program takes it as its caller (CodeEvaluationHelper) (qore#7079).
-
-    It is created once the thread has entered the Program the code runs in (ProgramThreadCountContextHelper), so that
-    in the usual case, a class whose source Program is that Program, it takes no reference to it, and it changes
-    nothing when the thread has that context already.
-*/
-class MethodCallProgramContextHelper {
-public:
-    //! sets the call Program context for code of the class \a c (if any) run with the object \a obj (if any)
-    DLLLOCAL MethodCallProgramContextHelper(const qore_class_private* c, QoreObject* obj, ExceptionSink* xsink);
-
-    //! restores the caller's call Program context
-    DLLLOCAL ~MethodCallProgramContextHelper();
-
-    MethodCallProgramContextHelper(const MethodCallProgramContextHelper&) = delete;
-    MethodCallProgramContextHelper& operator=(const MethodCallProgramContextHelper&) = delete;
-
-private:
-    //! the current thread if the context was changed, otherwise nullptr
-    ThreadData* td = nullptr;
-    //! the caller's call Program context, restored by the destructor if \a td is set
-    QoreProgram* old_call_program_context = nullptr;
-    //! the source Program of the class if a reference to it was taken (see CodeContextHelperBase); released last
-    QoreProgram* referenced_class_pgm = nullptr;
-    ExceptionSink* xsink;
-};
-
 //! Runs the body of a plain function or a static method in its own object and class context
 /** A call of user code runs a plain function's body without an object or a class, and a static method's body
     without an object in the class of its variant (UserVariantBase::eval()); the paths that run the body without that
@@ -3124,6 +3169,26 @@ private:
     data, and the runtime helpers set the call's implicit arguments with it (as ArgvContextHelper does) in the same
     lookup.
 */
+//! The tag of the constructor of ObjectSubstitutionHelper that also sets the call Program
+//! context of the frame of a method or a closure that runs without CodeContextHelperBase (qore#7079)
+/** The paths that run the body of a method or a closure without UserVariantBase::eval() (the runtime fast-call
+    helpers, the IR interpreter's inline calls) set its object and class context with ObjectSubstitutionHelper or
+    CalleeContextHelper; with this tag, ObjectSubstitutionHelper (and CalleeProgramContextHelper, which extends
+    CalleeContextHelper) also sets its call Program context (call_program_context) as
+    CodeContextHelperBase does: the source Program of the class, or else the Program of the object.  The calls made in
+    the body take it as the Program of their caller (qore_get_call_program_context()): their frames record it, which
+    the code that reads the Programs of the frames (Program::getCallerCapabilityMask(), for example) sees, and a call
+    into a module's Program takes it as its caller (CodeEvaluationHelper).
+
+    The helper is created once the thread has entered the Program the code runs in (ProgramThreadCountContextHelper):
+    in the usual case, a class whose source Program is that Program, no reference is taken to it, and nothing is
+    written when the thread has that context already.  The helper uses the thread data that it has already and reads
+    the current Program from it, so that the fast call paths make no other call for this (qore#7079: the separate
+    helper that did it cost about 140 instructions per call).  The context is restored, and a reference taken to the
+    class's Program released, when the helper is destroyed, before its object and class context are restored.
+*/
+struct QoreSetCallProgramContext {};
+
 class CalleeContextHelper {
 public:
     //! Switches to the callee's context if the thread does not have it
@@ -3152,7 +3217,7 @@ public:
 
     //! Restores the context that the constructor replaced, if any, and the implicit arguments, if it set them
     DLLLOCAL ~CalleeContextHelper() {
-        if (argv_xsink) {
+        if (argv_set) {
             restoreArgv();
         }
         if (switched) {
@@ -3167,19 +3232,27 @@ public:
     //! AST interpreter releases them (issue #5882); the destructor restores the caller's
     DLLLOCAL void releaseArgv();
 
-private:
+protected:
     //! the current thread
     ThreadData* td;
-    //! true if the constructor switched the context
-    bool switched = false;
+    //! the sink for the dereference of the call's implicit arguments, if it set them (\a argv_set), and for
+    //! CalleeProgramContextHelper's release of the class's source Program; one member for both, which are the same
+    //! sink, so that the helpers, locals of the frames of calls, are no larger than they must be
+    ExceptionSink* xsink = nullptr;
+
+private:
     QoreObject* old_obj;
     const qore_class_private* old_class;
     QoreObject* old_rc_obj;
     const qore_class_private* old_rc_class;
     //! the implicit arguments that the call's replaced, if it set them
     QoreListNode* old_argv = nullptr;
-    //! the sink for the dereference of the call's implicit arguments, if it set them
-    ExceptionSink* argv_xsink = nullptr;
+    // the flags last: CalleeProgramContextHelper's own flags are placed in the padding after them (the helpers are
+    // locals of the frames of calls, and of each level of a recursion, see CalleeProgramContextHelper)
+    //! true if the constructor switched the context
+    bool switched = false;
+    //! true if the constructor set the call's implicit arguments
+    bool argv_set = false;
 
     DLLLOCAL void switchContext(const qore_class_private* cls);
     DLLLOCAL void switchObjectContext(QoreObject* obj, const qore_class_private* cls);
@@ -3187,16 +3260,78 @@ private:
     DLLLOCAL void restoreArgv();
 };
 
+//! Switches to the context of a static method or of a closure without an object, as CalleeContextHelper does, and
+//! sets the call Program context of its frame (see QoreSetCallProgramContext)
+/** A class of its own, so that the calls of plain functions, which use CalleeContextHelper, do not pay for it
+    (qore#7079)
+*/
+class CalleeProgramContextHelper : public CalleeContextHelper {
+public:
+    //! Switches to the context of code of the class \a cls and sets the call Program context of its frame
+    /** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+        @param cls the class of the static method or of the closure, or nullptr if it has none
+        @param xsink for an exception raised when a reference to the class's source Program is released
+    */
+    DLLLOCAL CalleeProgramContextHelper(void* thread_data_ptr, const qore_class_private* cls, ExceptionSink* xsink);
+
+    //! Sets the implicit arguments of the call, switches to the context of a static method of \a cls and sets the
+    //! call Program context of its frame
+    DLLLOCAL CalleeProgramContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls);
+
+    //! Restores the call Program context, before the base class restores the rest
+    DLLLOCAL ~CalleeProgramContextHelper() {
+        if (call_pgm_restore) {
+            restoreCallProgramContext();
+        }
+    }
+
+private:
+    // the flags first: they take the padding at the end of CalleeContextHelper (whose last members are flags), and
+    // the sink is CalleeContextHelper's, so that the helper, a local of the frame of each inline call of a static
+    // method or closure in the IR interpreter and so of each level of a recursion, adds only the two Programs to it
+    // (examples/test/qore/stack/recursion-frame-budget.qtest)
+    //! true if the constructor changed the call Program context
+    bool call_pgm_switched = false;
+    //! true if the destructor has to restore the call Program context or release \a referenced_class_pgm
+    bool call_pgm_restore = false;
+    //! the caller's call Program context, restored if \a call_pgm_switched
+    QoreProgram* old_call_pgm = nullptr;
+    //! the source Program of the class if a reference to it was taken; released after the context is restored (with
+    //! CalleeContextHelper::xsink)
+    QoreProgram* referenced_class_pgm = nullptr;
+
+    //! restores the call Program context and releases the reference to the class's source Program, if any
+    DLLLOCAL void restoreCallProgramContext();
+};
+
 class ObjectSubstitutionHelper {
 private:
+   //! the current thread
+   ThreadData* td;
    QoreObject* old_obj;
    const qore_class_private* old_class;
    QoreObject* old_rc_obj;
    const qore_class_private* old_rc_class;
+   //! the caller's call Program context, restored if \a call_pgm_switched (QoreSetCallProgramContext)
+   QoreProgram* old_call_pgm = nullptr;
+   //! the source Program of the class if a reference to it was taken; released after the context is restored
+   QoreProgram* referenced_class_pgm = nullptr;
+   //! the sink for the release of \a referenced_class_pgm
+   ExceptionSink* call_pgm_xsink = nullptr;
    bool do_rc_update;
+   //! true if the constructor changed the call Program context
+   bool call_pgm_switched = false;
 
 public:
    DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c);
+
+   //! Substitutes the object and class context of a method of \a c run with \a obj and sets the call Program context
+   //! of its frame (see QoreSetCallProgramContext)
+   /** @param xsink for an exception raised when a reference to the class's source Program is released
+   */
+   DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, QoreSetCallProgramContext,
+         ExceptionSink* xsink);
+
    DLLLOCAL ~ObjectSubstitutionHelper();
 };
 
@@ -4683,6 +4818,19 @@ DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 /** A child process created with fork() by the thread keeps only this count; see QoreForkHandlers.h
 */
 DLLLOCAL extern thread_local int qore_thread_counter_share;
+
+//! The bound, in milliseconds, of the waits of the end of the process for threads that do not end: exit() for the
+//! threads that are ending (qore_exit_process()), and the deletion of the Program of the script for the foreign threads
+//! that run in it (QoreProgramHelper, qore#6904)
+static constexpr int64 QORE_PROCESS_END_WAIT_MS = 10 * 1000;
+
+//! Returns the bound of the wait of the deletion of the Program of the script for the foreign threads that run in it
+/** QORE_PROCESS_END_WAIT_MS unless the tests changed it (dbg_set_process_end_foreign_wait())
+*/
+DLLLOCAL int64 qore_process_end_foreign_wait_ms();
+
+//! Sets the bound of qore_process_end_foreign_wait_ms(); for the tests (dbg_set_process_end_foreign_wait())
+DLLLOCAL void qore_set_process_end_foreign_wait_ms(int64 ms);
 //! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
 DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 

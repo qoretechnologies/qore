@@ -428,7 +428,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
         @debug {
-            if (m_debug && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (m_debug && SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
                     hdr.method, hdr.path, http_get_field(hdr, "content-type"), body.size());
             }
@@ -909,7 +909,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                     rethrow;
                 }
                 @debug {
-                    if (m_debug && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (m_debug && SandboxManager::isTerminalIoAllowed()) {
                         stdout.printf("ConnectHandler: fire-and-forget handler error: %s: %s\n",
                             ex.err, ex.desc);
                     }

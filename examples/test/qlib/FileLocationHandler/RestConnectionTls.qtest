@@ -331,9 +331,19 @@ class RestConnectionTlsTest inherits QUnit::Test {
         string ping_url = sprintf("https://127.0.0.1:%d/ping", addMtlsListener(pings));
         server.waitForAsyncIo();
         pings.waitForAsyncIo();
-        RestConnection conn("ping", "", main_url, {}, tlsOptions(tmp) + {"ping_method": "GET", "ping_path": ping_url});
+        hash<auto> opts = tlsOptions(tmp) + {"ping_method": "GET"};
+        RestConnection conn("ping", "", main_url, {}, opts + {"ping_path": ping_url});
+        Program caller(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        caller.parse("hash<auto> sub ping(object conn) { return conn.ping(); }", "restricted-ping");
+        hash<auto> denied = caller.callFunction("ping", conn);
+        assertFalse(denied.ok, "restricted ping to the configured secondary origin");
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", denied.ex.err);
+
         hash<PingInfo> result = conn.ping();
-        assertTrue(result.ok, result.ex.desc ?? "configured mTLS ping");
+        assertTrue(result.ok, result.ex.desc ?? "trusted ping to the same secondary origin");
+        RestConnection local("local", "", main_url, {}, opts + {"ping_path": "/resource"});
+        hash<auto> allowed = caller.callFunction("ping", local);
+        assertTrue(allowed.ok, allowed.ex.desc ?? "restricted ping using a relative path on the main origin");
     }
 
     private static writeFixture(string path, data value) {

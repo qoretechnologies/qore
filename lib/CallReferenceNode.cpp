@@ -809,7 +809,18 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                     if (check_call_reference_domain(loc, parse_context, m) && !err) {
                         err = -1;
                     }
-                    qc = n_qc;
+                    // a method with abstract variants that its class does not implement is resolved for the class of
+                    // the object when the reference is made, as a call of it is (QoreDotEvalOperatorNode): another
+                    // parent class of the object's class implements them, and the abstract methods of the classes
+                    // are resolved after this code is parsed, so that the method found here may not be the one that
+                    // is called (qore#7206)
+                    if (!m->isStatic() && (qore_method_private::get(*m)->isAbstract()
+                            || qore_class_private::get(*m->getClass())->hasUnimplementedAbstractVariants(
+                                method.c_str()))) {
+                        m = nullptr;
+                    } else {
+                        qc = n_qc;
+                    }
                 } else {
                     // issue #995: a pseudo-method of objects, such as className(), or a member, which a direct call
                     // calls if it holds code; the reference is made for the object's class when the expression is
@@ -949,6 +960,15 @@ void RunTimeResolvedMethodReferenceNode::init(QoreProgram* creator) {
     // the restrictions that a call of the reference is checked against: those of the creating context (#5803)
     captureCreatorParseOptions();
     printd(5, "RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
+    // the class context of the creator selects the variants of a call wherever it is made: with none, only the
+    // public variants, not those that the class context of the caller could select.  The class is referenced, as it
+    // can belong to another Program than the object, which releases it when it is deleted, while the reference can
+    // be called afterwards; as for a static method call reference (qore#6622), the class only, not its Program
+    if (qc) {
+        qc->ref();
+    } else {
+        qc = qore_no_class_ctx();
+    }
     obj->tRef();
     QoreProgram* opgm = qore_object_private::get(*obj)->pgm;
     // created in the object's own Program, the usual case, or a user method: the reference runs there, as before,
@@ -977,6 +997,9 @@ RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
     // Program, free of an extra call; the weak reference only keeps the Program's memory
     if (pgm_ref & PGM_CREATOR) {
         reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR)->depDeref();
+    }
+    if (qc != qore_no_class_ctx()) {
+        const_cast<qore_class_private*>(qc)->deref(false, false, false);
     }
     obj->tDeref();
 }
@@ -1129,7 +1152,8 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
     if (val.getType() == NT_HASH) {
         hash_member = check_call_ref(val.getInternalNode(), method) != nullptr;
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        hash_member = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method) != nullptr;
+        ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+        hash_member = check_call_ref(*h, method) != nullptr;
     }
     if (!hash_member && pseudo_classes_check_method(val, method, xsink)) {
         return QoreValue();
@@ -1138,8 +1162,7 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
 }
 
 RunTimePseudoMethodReferenceNode::RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val,
-        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method),
-        cctx(runtime_get_class()) {
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method) {
     assert(val.getType() != NT_OBJECT);
     // the restrictions that a call of the reference is checked against: those of the creating context
     captureCreatorParseOptions();
@@ -1156,12 +1179,14 @@ bool RunTimePseudoMethodReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
 }
 
-const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember() const {
+const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember(
+        ReferenceHolder<QoreHashNode>& hash_holder) const {
     const AbstractQoreNode* ref = nullptr;
     if (val.getType() == NT_HASH) {
         ref = check_call_ref(val.getInternalNode(), method.c_str());
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        ref = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method.c_str());
+        hash_holder = val.get<WeakHashReferenceNode>()->lock();
+        ref = check_call_ref(*hash_holder, method.c_str());
     }
     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref);
 }
@@ -1175,7 +1200,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* ar
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // a code member of a hash with the name of the method, as a direct call calls (QoreDotEvalOperatorNode)
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         return ref->execValue(args, xsink);
     }
     return pseudo_classes_eval(val, method.c_str(), args, xsink);
@@ -1189,7 +1215,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListN
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member runs with its own declaration policy
         return ref->execValue(args, xsink);
     }
@@ -1204,7 +1231,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member binds the names, as a named call through it does
         if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
             return iref->dispatchNamed(args, arg_names, policy, xsink);
@@ -1219,8 +1247,10 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         assert(*xsink);
         return QoreValue();
     }
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false, cctx,
-        arg_names, policy);
+    // with no class context: a pseudo-method has no private variants, and the reference keeps no class, which could
+    // belong to a Program that is deleted before the reference is called
+    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false,
+        qore_no_class_ctx(), arg_names, policy);
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -1261,7 +1291,7 @@ template <typename F>
 QoreValue RunTimeObjectMethodReferenceNode::evalInContext(F f) const {
     // a direct call of a pseudo-method runs in the class context of its code: a call through the reference runs in
     // that of the code that made the reference, which can differ from the context it is called in
-    if (missing && qc != runtime_get_class()) {
+    if ((missing || !qc) && qc != runtime_get_class()) {
         ClassOnlySubstitutionHelper csh(qc);
         return f();
     }
@@ -1277,6 +1307,11 @@ RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QorePro
     captureCreatorParseOptions();
     printd(5, "RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, n_method, qc);
+    // the class context can belong to another Program than the object, which releases it when it is deleted; as for a
+    // static method call reference (qore#6622), the class is referenced, not its Program
+    if (qc) {
+        qc->ref();
+    }
     // the method is called as a direct call in the Program that creates the reference would be; the object holds a
     // weak reference to its own Program, which is where a reference is usually created; any other Program is held
     // with a weak reference of the reference's own, as a strong one could cause a recursive reference
@@ -1295,6 +1330,9 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
     // Program, free of an extra call; the weak reference only keeps the Program's memory
     if (pgm_ref & PGM_WEAK_REF) {
         reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF)->depDeref();
+    }
+    if (qc) {
+        const_cast<qore_class_private*>(qc)->deref(false, false, false);
     }
     obj->tDeref();
 }
@@ -1401,8 +1439,9 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
             method.c_str());
         return QoreValue();
     }
-    return qore_method_private::evalNamed(*m, xsink, rc, obj, args, false, qc, nullptr, nullptr, arg_names, policy,
-        pgm_ctx);
+    // with no class context, only the public variants of the method, as for a call with positional arguments
+    return qore_method_private::evalNamed(*m, xsink, rc, obj, args, false, qc ? qc : qore_no_class_ctx(), nullptr,
+        nullptr, arg_names, policy, pgm_ctx);
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
@@ -1943,6 +1982,11 @@ StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLo
             classes[i]->ref();
             held_classes[i] = classes[i];
         }
+    }
+    // a reference created with no class context is called with none, so that a call selects only the public variants
+    // of the method, not those that the class context of the code calling it could select
+    if (!class_ctx) {
+        class_ctx = qore_no_class_ctx();
     }
 }
 

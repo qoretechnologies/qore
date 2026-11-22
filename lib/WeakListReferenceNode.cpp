@@ -37,3 +37,35 @@
 #include "qore/intern/qore_list_private.h"
 
 QoreString WeakListReferenceNode::nstr("weak list reference");
+
+QoreListNode* WeakListReferenceNode::lock() const {
+    return qore_list_private::lockWeak(*l);
+}
+
+bool WeakListReferenceNode::getAsBoolImpl() const {
+    // a destructor run by the release of the last reference raises its exceptions here
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> holder(lock(), &xsink);
+    return holder->getAsBoolImpl();
+}
+
+int WeakListReferenceNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> holder(lock(), xsink);
+    return holder->getAsString(str, foff, xsink);
+}
+
+QoreString* WeakListReferenceNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> holder(lock(), xsink);
+    // a string that is not new (del false) is a static one, not part of the target
+    return holder->getAsString(del, foff, xsink);
+}
+
+bool WeakListReferenceNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> holder(lock(), xsink);
+    return holder->is_equal_soft(v, xsink);
+}
+
+bool WeakListReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreListNode> holder(lock(), xsink);
+    return holder->is_equal_hard(v, xsink);
+}

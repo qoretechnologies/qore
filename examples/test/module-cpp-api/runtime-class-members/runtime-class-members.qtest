@@ -114,8 +114,9 @@ class RuntimeClassMembersTest inherits QUnit::Test {
         hash<auto> h = o{"x", "y"};
         assertEq(1, h.x);
         assertEq("y", h.y);
-        # the same keys as for an object of a parsed subclass; the private:internal member is stored separately
-        assertEq(("ctor_x", "local", "p", "x", "y"), sort(o.keys()));
+        # the same keys as for an object of a parsed subclass: code outside the class does not see the private member,
+        # and the private:internal member is stored separately (issue #7048)
+        assertEq(("ctor_x", "local", "x", "y"), sort(o.keys()));
         assertThrows("RUNTIME-TYPE-ERROR", sub () { o.x = "not an int"; });
         assertEq(1, o.x);
 

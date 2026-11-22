@@ -592,11 +592,13 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
     { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
     { "qore_rt_self_member_assign", reinterpret_cast<void*>(&qore_rt_self_member_assign) },
+    { "qore_rt_self_member_assign_mode", reinterpret_cast<void*>(&qore_rt_self_member_assign_mode) },
     { "qore_rt_self_member_assign_consume", reinterpret_cast<void*>(&qore_rt_self_member_assign_consume) },
     { "qore_rt_self_member_compound", reinterpret_cast<void*>(&qore_rt_self_member_compound) },
     { "qore_rt_self_member_compound_consume", reinterpret_cast<void*>(&qore_rt_self_member_compound_consume) },
     { "qore_rt_self_member_update", reinterpret_cast<void*>(&qore_rt_self_member_update) },
     { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
+    { "qore_rt_lv_path_assign_mode", reinterpret_cast<void*>(&qore_rt_lv_path_assign_mode) },
     { "qore_rt_lv_path_assign_consume", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume) },
     { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
     { "qore_rt_lv_path_compound_consume", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume) },
@@ -605,6 +607,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_binary_mut_consume", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_consume) },
     { "qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary) },
     { "qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot) },
+    { "qore_rt_lv_path_assign_mode_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_mode_aot) },
     { "qore_rt_lv_path_assign_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume_aot) },
     { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
     { "qore_rt_lv_path_compound_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume_aot) },
@@ -2446,16 +2449,34 @@ static inline bool qore_rt_is_weak_reference_type(qore_type_t type) {
 // interpreter reads it (AbstractQoreNode::eval()), which for a weak reference to an object that has been destroyed is
 // the destroyed object, so that it exists and a method call through it raises OBJECT-ALREADY-DELETED; any other value
 // is returned as it is.  The weak reference keeps the target allocated.
+// The list or hash of a weak reference is returned borrowed only to the reads of native code that the code generator
+// expects borrowed (qore_rt_read_element_local(), qore_rt_get_borrowed_list_element()), whose ownership change is left
+// to the AOT batch (qore#7198), and to reads that keep nothing; qore_rt_take_weak_reference_target() gives it with a
+// reference of its own.
 static QoreValue qore_rt_get_weak_reference_target(const QoreValue& val) {
     switch (val.getType()) {
         case NT_WEAKREF:
             return QoreValue(val.get<const WeakReferenceNode>()->get());
         case NT_WEAKREF_HASH:
-            return QoreValue(val.get<const WeakHashReferenceNode>()->get());
+            return QoreValue(val.get<const WeakHashReferenceNode>()->borrow());
         case NT_WEAKREF_LIST:
-            return QoreValue(val.get<const WeakListReferenceNode>()->get());
+            return QoreValue(val.get<const WeakListReferenceNode>()->borrow());
         default:
             return val;
+    }
+}
+
+// Returns the target of a weak reference with a new reference, as qore_rt_get_weak_reference_target() reads it; the
+// list or hash of a weak reference is read with lock(), as a new empty one that cannot be changed if it was freed
+// (qore#7198)
+static QoreValue qore_rt_take_weak_reference_target(const QoreValue& val) {
+    switch (val.getType()) {
+        case NT_WEAKREF_HASH:
+            return QoreValue(val.get<const WeakHashReferenceNode>()->lock());
+        case NT_WEAKREF_LIST:
+            return QoreValue(val.get<const WeakListReferenceNode>()->lock());
+        default:
+            return qore_rt_get_weak_reference_target(val).refSelf();
     }
 }
 
@@ -2467,7 +2488,7 @@ static bool qore_rt_normalize_weak_reference_for_assignment(QoreValue& val, Valu
     if (!qore_rt_is_weak_reference_type(val.getType())) {
         return false;
     }
-    holder = qore_rt_get_weak_reference_target(val).refSelf();
+    holder = qore_rt_take_weak_reference_target(val);
     val = *holder;
     return true;
 }
@@ -2479,7 +2500,7 @@ static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, Excepti
         return false;
     }
     ValueHolder old(val, xsink);
-    val = qore_rt_get_weak_reference_target(*old).refSelf();
+    val = qore_rt_take_weak_reference_target(*old);
     return true;
 }
 
@@ -2493,6 +2514,28 @@ static void qore_rt_evaluate_owned_list_element(QoreValue& val, ExceptionSink* x
 // as well: the weak reference held by the list keeps it allocated
 static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t i) {
     return qore_rt_get_weak_reference_target(l->retrieveEntry(i));
+}
+
+//! Returns the value of a weak or opaque assignment that the lvalue helper made (qore#7084)
+/** The value that the lvalue holds: the value assigned, converted to the lvalue's type, with a weak reference
+    replaced by its target, as the AST interpreter gives the value to its consumers; owned by the caller
+*/
+static QoreValue qore_rt_store_converted_value(LValueHelper& helper, ExceptionSink* xsink) {
+    QoreValue rv = helper.getReferencedValue();
+    qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
+    return rv;
+}
+
+//! Returns the value of a weak or opaque assignment to the code, owned by it
+/** Called after the lvalue helper of the store is destroyed: releasing the lvalue's previous value can raise an
+    exception, in which case the store gives no value and the value is released here
+*/
+static uint64_t qore_rt_store_converted_result(QoreValue converted, ExceptionSink* xsink) {
+    if (xsink && *xsink) {
+        converted.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(converted);
 }
 
 //! Returns the mode of a weak or opaque store helper (see qore_rt_assign_local_mode())
@@ -2510,7 +2553,7 @@ static AssignmentMode qore_rt_store_mode(int32_t mode) {
 */
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
         bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>",
-        AssignmentMode mode = AssignmentMode::Normal) {
+        AssignmentMode mode = AssignmentMode::Normal, QoreValue* converted = nullptr) {
     if (!var || *xsink) {
         return;
     }
@@ -2528,12 +2571,14 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, desc, check_types, mode);
+    if (!helper.assign(stored, desc, check_types, mode) && converted) {
+        *converted = qore_rt_store_converted_value(helper, xsink);
+    }
 }
 
 static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>",
-        AssignmentMode mode = AssignmentMode::Normal) {
+        AssignmentMode mode = AssignmentMode::Normal, QoreValue* converted = nullptr) {
     if (!cvv || *xsink) {
         return;
     }
@@ -2550,7 +2595,9 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         return;
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, desc, true, mode);
+    if (!helper.assign(stored, desc, true, mode) && converted) {
+        *converted = qore_rt_store_converted_value(helper, xsink);
+    }
 }
 
 // Variant of qore_rt_assign_local_impl() that TRANSFERS ownership of value's
@@ -2594,9 +2641,11 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
     qore_rt_assign_local_impl(var, value, xsink, true, true);
 }
 
-extern "C" DLLEXPORT void qore_rt_assign_local_mode(LocalVar* var, uint64_t value, int32_t mode,
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_mode(LocalVar* var, uint64_t value, int32_t mode,
         ExceptionSink* xsink) {
-    qore_rt_assign_local_impl(var, value, xsink, true, false, "<lvalue>", qore_rt_store_mode(mode));
+    QoreValue converted;
+    qore_rt_assign_local_impl(var, value, xsink, true, false, "<lvalue>", qore_rt_store_mode(mode), &converted);
+    return qore_rt_store_converted_result(converted, xsink);
 }
 
 //! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
@@ -4196,7 +4245,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink
 }
 
 static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* xsink,
-        bool normalize_weak_refs, AssignmentMode mode = AssignmentMode::Normal) {
+        bool normalize_weak_refs, AssignmentMode mode = AssignmentMode::Normal, QoreValue* converted = nullptr) {
     if (!var) {
         return;
     }
@@ -4224,15 +4273,20 @@ static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* x
             return;
         }
     }
-    helper.assign(stored, "<lvalue>", true, mode);
+    if (!helper.assign(stored, "<lvalue>", true, mode) && converted) {
+        *converted = qore_rt_store_converted_value(helper, xsink);
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_store_global_impl(var, value, xsink, false);
 }
 
-extern "C" DLLEXPORT void qore_rt_store_global_mode(Var* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
-    qore_rt_store_global_impl(var, value, xsink, false, qore_rt_store_mode(mode));
+extern "C" DLLEXPORT uint64_t qore_rt_store_global_mode(Var* var, uint64_t value, int32_t mode,
+        ExceptionSink* xsink) {
+    QoreValue converted;
+    qore_rt_store_global_impl(var, value, xsink, false, qore_rt_store_mode(mode), &converted);
+    return qore_rt_store_converted_result(converted, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_eval_weak(Var* var, uint64_t value,
@@ -4689,21 +4743,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
 // type-path cast helper receives a precomputed value, so mirror that evaluation
 // step for weak references here.
 // always inlined: the non-generic cast by type path inlined it before its generic variant existed (qore#5661)
-static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
+// the list or hash of a weak reference is held by \a holder with a reference of its own, or is a new empty one if it was
+// freed (qore#7198)
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val, ValueHolder& holder) {
     switch (val.getType()) {
         case NT_WEAKREF: {
             // the destroyed object for a weak reference to an object that has been destroyed, as the AST interpreter
             // evaluates the input
             return QoreValue(val.get<const WeakReferenceNode>()->get());
         }
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();
-            return h ? QoreValue(h) : QoreValue();
-        }
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = val.get<const WeakListReferenceNode>()->get();
-            return l ? QoreValue(l) : QoreValue();
-        }
+        case NT_WEAKREF_HASH:
+            holder = val.get<const WeakHashReferenceNode>()->lock();
+            return *holder;
+        case NT_WEAKREF_LIST:
+            holder = val.get<const WeakListReferenceNode>()->lock();
+            return *holder;
         default:
             return val;
     }
@@ -4722,7 +4776,8 @@ static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& r
 template <bool Generic, bool OrNothingPath>
 static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink, QoreProgram* pgm) {
-    QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
+    ValueHolder inner_holder(xsink);
+    QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits), inner_holder);
 
     if (!type_path || !*type_path) {
         xsink->raiseException("IR-CAST-ERROR", "missing cast type path");
@@ -8153,11 +8208,9 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         return toBits(rv);
     }
     if (v.getType() == NT_WEAKREF_HASH) {
-        const QoreHashNode* h = v.get<const WeakHashReferenceNode>()->get();
-        if (!h) {
-            return toBits(QoreValue());
-        }
-        QoreValue result = qore_rt_get_hash_key_value(h, key, key_hash, prehashed, xsink);
+        // the member is read from the hash held with a reference of its own (qore#7198)
+        ReferenceHolder<QoreHashNode> h(v.get<const WeakHashReferenceNode>()->lock(), xsink);
+        QoreValue result = qore_rt_get_hash_key_value(*h, key, key_hash, prehashed, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -14378,9 +14431,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     // call of the closure does: a closure created in a static method keeps the lexical class context needed for
     // private access and nested closure creation, and one created outside a class has no class context, whatever its
     // caller's
-    std::optional<CalleeContextHelper> closure_context;
+    std::optional<CalleeProgramContextHelper> closure_context;
     if (!self) {
-        closure_context.emplace(get_thread_data_for_native_calls(), cb ? cb->getClassCtx() : nullptr);
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        closure_context.emplace(get_thread_data_for_native_calls(), cb ? cb->getClassCtx() : nullptr, xsink);
     }
 
     // For object closures, establish the captured self in both TLS stores so that
@@ -14391,10 +14445,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     // reads td->current_obj to repopulate tl_runtime_config.obj on every call.
     std::optional<ObjectSubstitutionHelper> osh;
     if (self) {
-        osh.emplace(self, cb->getClassCtx());
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        osh.emplace(self, cb->getClassCtx(), QoreSetCallProgramContext(), xsink);
     }
-    // the call Program context of the closure's frame, as a call of the closure sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(cb ? cb->getClassCtx() : nullptr, self, xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
@@ -15407,9 +15460,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
     // defined.  This mirrors UserMethodVariant::evalMethod()'s use of getClassPriv().
     const qore_class_private* method_ctx = variant
         ? METHV_const(variant)->getClassPriv() : qore_class_private::get(*method->getClass());
-    ObjectSubstitutionHelper osh(self, method_ctx);
-    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(method_ctx, self, xsink);
+    // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+    ObjectSubstitutionHelper osh(self, method_ctx, QoreSetCallProgramContext(), xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
@@ -16661,9 +16713,9 @@ extern "C" DLLEXPORT void qore_rt_store_global_eval_weak_aot(QoreAOTContext* ctx
     qore_rt_store_global_eval_weak(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_store_global_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+extern "C" DLLEXPORT uint64_t qore_rt_store_global_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         int32_t mode, ExceptionSink* xsink) {
-    qore_rt_store_global_mode(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, mode, xsink);
+    return qore_rt_store_global_mode(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, mode, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -16706,18 +16758,19 @@ extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+extern "C" DLLEXPORT uint64_t qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         int32_t mode, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
     const bool disable_direct_store = disable_direct_store_env.get();
     if (!disable_direct_store) {
         if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
-            qore_rt_assign_closure_impl(cvv, val, xsink, false, "<lvalue>", qore_rt_store_mode(mode));
-            return;
+            QoreValue converted;
+            qore_rt_assign_closure_impl(cvv, val, xsink, false, "<lvalue>", qore_rt_store_mode(mode), &converted);
+            return qore_rt_store_converted_result(converted, xsink);
         }
     }
-    qore_rt_assign_local_mode(ctx->locals[idx], val, mode, xsink);
+    return qore_rt_assign_local_mode(ctx->locals[idx], val, mode, xsink);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_add_assign_local_int_aot(
@@ -17013,38 +17066,43 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_aot_th
 // --- The store helpers of weak and opaque assignments to closure, global and thread-local variables ---
 // Each is given the value assigned and the mode of the assignment: the type of the value is checked before the
 // weak or opaque reference that the variable holds is made, as the AST interpreter does (LValueHelper::assign();
-// qore#6979).  A thread-local variable is stored with the helpers of a global, as by qore_rt_store_thread_local().
+// qore#6979).  Each returns the value of the assignment, owned by the caller (see qore_rt_store_converted_value();
+// qore#7084).  A thread-local variable is stored with the helpers of a global, as by qore_rt_store_thread_local().
 
-extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_mode_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_mode_throwing(
         LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
-    qore_rt_assign_local_mode(var, value, mode, xsink);
+    uint64_t rv = qore_rt_assign_local_mode(var, value, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return rv;
 }
 
-extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_mode_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_store_global_mode_throwing(
         Var* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
-    qore_rt_store_global_mode(var, value, mode, xsink);
+    uint64_t rv = qore_rt_store_global_mode(var, value, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return rv;
 }
 
-extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_mode_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_store_closure_mode_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
-    qore_rt_store_closure_mode_aot(ctx, idx, val, mode, xsink);
+    uint64_t rv = qore_rt_store_closure_mode_aot(ctx, idx, val, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return rv;
 }
 
-extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_mode_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_store_global_mode_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
-    qore_rt_store_global_mode_aot(ctx, idx, val, mode, xsink);
+    uint64_t rv = qore_rt_store_global_mode_aot(ctx, idx, val, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return rv;
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_eval_weak_aot_throwing(
@@ -17595,7 +17653,20 @@ static int patchLVPath(IRLVPath& path,
     return 0;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
+//! Returns the value of a weak or opaque assignment to an lvalue path, with a reference for the caller
+/** The value assigned, converted to the lvalue's type, with a weak reference replaced by its target, read while the
+    helper keeps a container that the conversion copied (qore#7122; see qore_rt_store_converted_value())
+*/
+static uint64_t qore_rt_path_assign_result(LValueHelper& lvh, ExceptionSink* xsink) {
+    return toBits(qore_rt_store_converted_value(lvh, xsink));
+}
+
+//! Assigns to an lvalue path, borrowing the value; see qore_rt_lv_path_assign() and qore_rt_lv_path_assign_mode()
+/** @tparam Converts true for a weak or opaque assignment, whose value is the converted value (see
+    qore_rt_path_assign_result()); a template parameter, so that the other assignments keep their code (qore#7122)
+*/
+template <bool Converts>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_lv_path_assign_impl(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     if (*xsink) {
@@ -17615,7 +17686,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     // assigns its target, as the AST interpreter reads it
     if (inst->mode != AssignmentMode::Weak && inst->mode != AssignmentMode::Element
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
+        eval_holder = qore_rt_take_weak_reference_target(val);
         assign_val = *eval_holder;
     }
 
@@ -17626,7 +17697,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (lvh.assign(assign_val.refSelf(), "<lvalue>", true, inst->mode)) {
         return toBits(QoreValue());
     }
+    if constexpr (Converts) {
+        return qore_rt_path_assign_result(lvh, xsink);
+    }
     return toBits(lvh.getReferencedValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    return qore_rt_lv_path_assign_impl<false>(inst, dyn_vals, rhs_bits, xsink);
+}
+
+//! Makes a weak or opaque assignment to an lvalue path, borrowing the value; returns the value of the assignment,
+//! the converted value, with a reference for the caller (qore#7122)
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_mode(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    return qore_rt_lv_path_assign_impl<true>(inst, dyn_vals, rhs_bits, xsink);
 }
 
 //! Assigns a value that the caller hands over to an lvalue; see qore_rt_lv_path_assign_consume()
@@ -17642,7 +17730,7 @@ static uint64_t qore_rt_assign_consumed(LValueHelper& lvh, QoreValue val, Assign
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
         // a weak reference is assigned as its target, as the AST interpreter reads it; the weak reference itself is
         // released here
-        ValueHolder eval_holder(qore_rt_get_weak_reference_target(val).refSelf(), xsink);
+        ValueHolder eval_holder(qore_rt_take_weak_reference_target(val), xsink);
         if (lvh.assign(eval_holder.release(), desc, true, mode)) {
             return toBits(QoreValue());
         }
@@ -17709,7 +17797,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_consume(const char* mem
         "<self member assign>", xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
+//! Assigns to a member of self, borrowing the value; see qore_rt_self_member_assign() and
+//! qore_rt_self_member_assign_mode()
+/** @tparam Converts true for a weak or opaque assignment, whose value is the converted value (see
+    qore_rt_path_assign_result()); a template parameter, so that the other assignments keep their code (qore#7122)
+*/
+template <bool Converts>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_self_member_assign_impl(
         const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
         ExceptionSink* xsink) {
     // mode_raw is an AssignmentMode, not a boolean: Normal/Weak are 0/1, so code emitted before
@@ -17727,7 +17821,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
     qore_type_t val_type = val.getType();
     if (mode != AssignmentMode::Weak && mode != AssignmentMode::Element && (val_type == NT_WEAKREF
             || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
+        eval_holder = qore_rt_take_weak_reference_target(val);
         assign_val = *eval_holder;
     }
 
@@ -17736,7 +17830,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
             || lvh.assign(assign_val.refSelf(), "<self member assign>", true, mode)) {
         return toBits(QoreValue());
     }
+    if constexpr (Converts) {
+        return qore_rt_path_assign_result(lvh, xsink);
+    }
     return toBits(lvh.getReferencedValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    return qore_rt_self_member_assign_impl<false>(member_name, rhs_bits, mode_raw, xsink);
+}
+
+//! Makes a weak or opaque assignment to a member of self, borrowing the value; returns the value of the
+//! assignment, the converted value, with a reference for the caller (qore#7122)
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_mode(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    return qore_rt_self_member_assign_impl<true>(member_name, rhs_bits, mode_raw, xsink);
 }
 
 // documented in QoreIRInterpreter.h
@@ -18790,11 +18901,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     case NT_WEAKREF_HASH:
                     case NT_WEAKREF_LIST: {
                         ValueHolder weak_holder(res, xsink);
-                        res = (res.getType() == NT_WEAKREF
-                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get())
+                        // a list or hash is read with a new reference, or as a new empty one if it was freed (qore#7198)
+                        res = res.getType() == NT_WEAKREF
+                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf()
                             : res.getType() == NT_WEAKREF_HASH
-                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->get())
-                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->get())).refSelf();
+                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->lock())
+                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->lock());
                         break;
                     }
                     default:
@@ -19254,6 +19366,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_aot(
     return qore_rt_lv_path_assign(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_mode_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath assign: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_assign_mode(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
@@ -19614,6 +19738,39 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_ternary_aot(ctx, slot, dyn_vals, a_bits,
             b_bits, c_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_mode_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_mode(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_mode_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_mode_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_mode_throwing(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_assign_mode(member_name, rhs_bits, mode_raw, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();
@@ -21918,9 +22075,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     // Inherited methods can be synthesized on a derived class to satisfy an
     // abstract sibling slot. Use the class where the executable variant body
     // was defined so private:internal member access has the correct context.
-    ObjectSubstitutionHelper osh(o, METHV_const(variant)->getClassPriv());
-    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(METHV_const(variant)->getClassPriv(), o, xsink);
+    // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+    ObjectSubstitutionHelper osh(o, METHV_const(variant)->getClassPriv(), QoreSetCallProgramContext(), xsink);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
@@ -22348,7 +22504,9 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
         }
 
         case NT_WEAKREF_HASH: {
-            const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method->getName());
+            // the hash is held with a reference of its own while its member is called (qore#7198)
+            ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+            const AbstractQoreNode* ref = check_call_ref(*h, method->getName());
             if (ref) {
                 ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
                 if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
@@ -22620,7 +22778,9 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
             return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     } else if (base.getType() == NT_WEAKREF_HASH) {
-        const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
+        // the hash is held with a reference of its own while its member is called (qore#7198)
+        ReferenceHolder<QoreHashNode> h(base.get<WeakHashReferenceNode>()->lock(), xsink);
+        const AbstractQoreNode* ref = check_call_ref(*h, method_name);
         if (ref) {
 #ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
             if (arg_cleanups) {
@@ -23734,9 +23894,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
         // the parameters are bound in the caller's object and class context; the body of a static method runs
         // without an object in the class of its variant, as a call of the method does (UserVariantBase::eval()),
         // and so is the check of its return value; the helper also sets the call's implicit arguments
-        CalleeContextHelper method_context(argv.release(), xsink, METHV_const(variant)->getClassPriv());
-        // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-        MethodCallProgramContextHelper mpch(METHV_const(variant)->getClassPriv(), nullptr, xsink);
+        // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+        CalleeProgramContextHelper method_context(argv.release(), xsink, METHV_const(variant)->getClassPriv());
         // the implicit arguments of a call that gives its arguments are released in its frame
         if constexpr (CONSUME) {
             argv_context = &method_context;
@@ -24864,9 +25023,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* cl
                 method_name);
             return toBits(QoreValue());
         }
-        // by identity, as SelfFunctionCallNode::evalUnresolvedQualified() (qore#7036)
+        // by identity, as SelfFunctionCallNode::evalUnresolvedQualified() (qore#7036, qore#6859)
         bool priv;
-        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv, runtime_get_class())) {
             xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
                 "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
             return toBits(QoreValue());

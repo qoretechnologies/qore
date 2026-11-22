@@ -900,6 +900,10 @@ class QdpCmd {
             on_error rethrow $1.err, sprintf("%s (try using \"listen\" instead)", $1.desc);
             provider.checkMessages();
         }
+        # the interactive mode reads lines from a terminal (qore#7130)
+        if (!stdin.isTty()) {
+            QdpCmd::error("the interactive mode requires a terminal on stdin; use \"listen\" instead");
+        }
         hash<DataProviderInfo> info = provider.getInfo();
         MyObserver observer(info);
         Observable observable = cast<Observable>(provider);
@@ -1051,18 +1055,34 @@ class QdpCmd {
             cast<DataProvider::DelayedObservable>(observable).observersReady();
         }
 
+        # a key stops listening only if stdin is a terminal; otherwise (input from /dev/null, a pipe or a file, as in
+        # CI or a background job) listening stops on its timeout, on a signal or when the event source ends
+        # (qore#7130)
+        bool read_keys = stdin.isTty();
+
         # a Ctrl+C during the open has already asked for shutdown; do not then invite a keystroke
         if (!shutdown_requested) {
             # print a message
             string timeout_msg = opts.timeout
                 ? sprintf(" %s", color.dim(sprintf("(timeout: %ds)", opts.timeout)))
                 : "";
-            stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
-                color.green("listening to events from"),
-                color.cyan(provider.getName()),
-                timeout_msg,
-                color.dim("Ctrl+C"));
+            if (read_keys) {
+                stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
+                    color.green("listening to events from"),
+                    color.cyan(provider.getName()),
+                    timeout_msg,
+                    color.dim("Ctrl+C"));
+            } else {
+                stdout.printf("%s %s%s; send %s or %s to stop listening...\n",
+                    color.green("listening to events from"),
+                    color.cyan(provider.getName()),
+                    timeout_msg,
+                    color.dim("SIGINT"),
+                    color.dim("SIGTERM"));
+            }
         }
+        # set if listening stopped on its timeout
+        bool timed_out;
         {
             Term t();
 
@@ -1071,11 +1091,17 @@ class QdpCmd {
                 # Check timeout
                 if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
                     printf("\n%s listen timed out after %d seconds\n", color.warning("TIMEOUT:"), opts.timeout);
+                    timed_out = True;
                     break;
                 }
-                if (stdin.isDataAvailable(250ms)) {
-                    stdin.readBinary(1);
-                    break;
+                if (read_keys) {
+                    if (stdin.isDataAvailable(250ms)) {
+                        stdin.readBinary(1);
+                        break;
+                    }
+                } else {
+                    # the timeout, a signal and the end of the event source are checked as often as with a terminal
+                    usleep(250ms);
                 }
             }
         }
@@ -1083,6 +1109,8 @@ class QdpCmd {
         delete provider;
         if (shutdown_requested) {
             printf("listening stopped due to signal\n");
+        } else if (timed_out) {
+            printf("listening stopped on its timeout\n");
         } else if (active) {
             printf("listening stopped on user request\n");
         } else {
@@ -2984,13 +3012,18 @@ class ProgressMetricsCollector inherits DataProvider::AbstractPipelineMetricsCol
     }
 }
 
+#! Puts the terminal on stdin in raw mode for its lifetime, if stdin is a terminal (qore#7130)
 class Term {
     public {}
     private {
-        TermIOS orig;
+        #! the original attributes of the terminal on stdin; not set if stdin is not a terminal
+        *TermIOS orig;
     }
 
     constructor() {
+        if (!stdin.isTty()) {
+            return;
+        }
         TermIOS t();
 
         # get current terminal attributes for stdin
@@ -3030,7 +3063,9 @@ class Term {
 
     restore() {
         # restore terminal attributes
-        stdin.setTerminalAttributes(TCSADRAIN, orig);
+        if (orig) {
+            stdin.setTerminalAttributes(TCSADRAIN, orig);
+        }
     }
 }
 
@@ -3039,13 +3074,17 @@ class MyObserver inherits Observer {
 
     private {
         hash<DataProviderInfo> info;
-        TermIOS t();
+        #! the attributes of the terminal on stdin, restored when the process exits; not set if stdin is not a terminal
+        *TermIOS t;
     }
 
     constructor(hash<DataProviderInfo> info) {
         self.info = info;
-        # get current terminal attributes for stdin
-        stdin.getTerminalAttributes(t);
+        # get current terminal attributes for stdin, if stdin is a terminal (qore#7130)
+        if (stdin.isTty()) {
+            t = new TermIOS();
+            stdin.getTerminalAttributes(t);
+        }
     }
 
     update(string event_id, hash<auto> data_) {
@@ -3069,7 +3108,9 @@ class MyObserver inherits Observer {
                 log("<", "%s; auto_reconnect not enabled; exiting",
                     QdpCmd::color.error("disconnected from server"));
                 # restore original terminal attributes
-                stdin.setTerminalAttributes(TCSADRAIN, t);
+                if (t) {
+                    stdin.setTerminalAttributes(TCSADRAIN, t);
+                }
                 QdpCmd::exitProgram(0);
             }
         }

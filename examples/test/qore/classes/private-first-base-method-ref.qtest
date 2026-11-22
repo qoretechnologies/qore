@@ -26,9 +26,7 @@
     of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
 
     The program \c probe-static covers the references to a static method (\c \\Class::s(), \c \\o.s()) in every
-    execution mode; qcc executables still refer to the private method of the first parent class, as they look the
-    method up by the name of the class that the reference was written with (qore#6679), so their check is skipped
-    until that is fixed.
+    execution mode and in qcc executables (-O0, -O3), which refer to the method that the parser resolved (qore#6679).
 
     The program \c probe-module covers the classes of a module compiled with qcc -m (\c PrivateFirstBaseMod), whose
     objects have the module's own class while a compiled image resolves the declared class to its copy in the Program
@@ -96,9 +94,7 @@ class PrivateFirstBaseMethodRefTest inherits QUnit::Test {
     }
 
     testCompiledStatic() {
-        # to be replaced with checkCompiled("probe-static") when qore#6679 is fixed
-        testSkip("qcc executables resolve a reference to a static method by the name of the class it was written "
-            "with (qore#6679)");
+        checkCompiled("probe-static");
     }
 
     testModule() {

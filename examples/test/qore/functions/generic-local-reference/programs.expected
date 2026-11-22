@@ -77,3 +77,4 @@
 2/13 empty: null
 2/13 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo2>', but got type 'string' instead
 deleted-library: PROGRAM-ERROR
+wildcard bound: RUNTIME-TYPE-ERROR

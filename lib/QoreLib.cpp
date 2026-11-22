@@ -1167,6 +1167,49 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
     return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
 }
 
+thread_local QoreFormatBoundsHelper* QoreFormatBoundsHelper::graph = nullptr;
+
+QoreFormatBoundsHelper::~QoreFormatBoundsHelper() {
+    if (entered) {
+        ctx->exitContainer();
+    }
+    if (output) {
+        graph = previous;
+        if (objects) {
+            for (const auto& entry : *objects) {
+                const_cast<QoreObject*>(entry.first)->tDeref();
+            }
+        }
+    }
+}
+
+bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObject& obj, int foff) {
+    if (ctx) {
+        return false; // explicitly bounded formatting uses its own anchors and aliases
+    }
+    assert(graph && graph->output == &str);
+    auto& objects = graph->objects;
+    if (!objects) {
+        objects.reset(new ObjectIds);
+    }
+    auto entry = objects->emplace(&obj, objects->size() + 1);
+    if (entry.second) {
+        // Keep the address valid if another thread changes the graph. Existence references allow
+        // the Qore destructor to run normally, and their release does not execute user code.
+        obj.tRef();
+        return false;
+    }
+    if (foff < FMT_YAML_LONG) {
+        str.addch(' ', FMT_YAML_LONG - foff);
+    }
+    if (q_yaml_format(foff)) {
+        str.sprintf("\"{reference to %s object #%zu}\"", obj.getClassName(), entry.first->second);
+    } else {
+        str.sprintf("{reference to %s object #%zu}", obj.getClassName(), entry.first->second);
+    }
+    return true;
+}
+
 // applies the format bounds while the standard formatter expands the value, so that the bounds work with every
 // value format specification ("%n", "%N", "%y", and "%Y") and their output formats are preserved
 void QoreFormatBoundsContext::scan(const QoreValue val) {
@@ -1634,10 +1677,14 @@ static bool runtime_call_ref_ctx_may_access(const qore_class_private* cls) {
     (qore_class_private::getMethodForEval()), so a class-scoped name cannot reach a private method of a parent class
     through an object of another branch of the hierarchy (qore#6806); a static method does not depend on the object
 
+    @param found_ctx set to the class context that the method was found with, if any, which a call of a reference
+    to it selects its variants with (qore#6859)
+
     @return the method found, or nullptr if there is no method of the name
 */
 static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* pcls, const char* name,
-        ClassAccess& access, bool& callable, const qore_class_private* obj_cls = nullptr) {
+        ClassAccess& access, bool& callable, const qore_class_private*& found_ctx,
+        const qore_class_private* obj_cls = nullptr) {
     const qore_class_private* class_ctx = runtime_call_ref_ctx(pcls);
     const qore_class_private* normal_ctx = class_ctx;
     if (normal_ctx && obj_cls && obj_cls != pcls && !obj_cls->runtimeCheckPrivateClassAccess(normal_ctx)) {
@@ -1653,9 +1700,13 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
         callable = false;
         return nullptr;
     }
+    found_ctx = ctx;
     if (access > Public) {
         // the method that a call of the name makes from here, if the caller cannot call the method found first
         meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, ctx);
+    } else {
+        // a public method found through private inheritance that the context's own hierarchy overrides (qore#6798)
+        meth = pcls->runtimeCheckPublicContextOverride(name, meth, access, ctx);
     }
     // a method found with a class context does not have the access of the method of the class itself that the
     // context may access (see qore_class_private::runtimeFindCommittedMethodForEval()), so the method is checked
@@ -1664,7 +1715,7 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, bool callable,
-        const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
+        const char* name, const qore_class_private* pcls, const qore_class_private* found_ctx, ExceptionSink* xsink) {
     // the constructor, destructor and copy method run only when an object is created, deleted or copied, also when
     // a base class declares them (qore#6783)
     if (qore_class_private::checkReferenceable(*meth, xsink)) {
@@ -1688,9 +1739,12 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     // see if non-static method is part of self's class hierarchy
     if (!meth->isStatic()) {
         // by identity: a method of another class with the same name and signature is not a method of the object
-        // (qore#7036)
+        // (qore#7036); a method of a private:internal parent class of the caller's class context is bound for the
+        // context's code, which calls it directly on the objects of its subclasses, if the context is a class of the
+        // object's hierarchy, by identity (qore#6859)
         bool priv;
-        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *meth->getClass(), priv)) {
+        if (!qore_class_private::getBoundMethodClass(*self->getClass(), *meth->getClass(), priv,
+                runtime_get_class())) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
             // no call reference with the error (issue #5866)
@@ -1705,7 +1759,12 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         }
     }
     if (self) {
-        return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, qore_class_private::get(*meth->getClass())));
+        // the reference has the class context that the creating code looked the method up with, for the variants
+        // that a call of it can select, as a call reference made in that code (\o.m()) has: not the class of the
+        // method, whose context could select every variant of the method, also a private:internal or private variant
+        // that the creating code cannot call (qore#6859); a reference to a private method made in its class can still
+        // be called from anywhere
+        return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, found_ctx));
     }
     // a value created at run time: it records the permissions of the code creating it, which a call through it runs
     // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
@@ -1732,21 +1791,23 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
             const qore_class_private* pcls = qore_class_private::get(*cls);
             ClassAccess access;
             bool callable;
+            const qore_class_private* found_ctx = nullptr;
             // the object's class is checked as for a method call on the object (qore#6806)
             const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access, callable,
-                self ? qore_class_private::get(*self->getClass()) : nullptr);
+                found_ctx, self ? qore_class_private::get(*self->getClass()) : nullptr);
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
-                return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
+                return do_method_intern(self, meth, access, callable, name->c_str(), pcls, found_ctx, xsink);
             }
         }
     } else if (self) {
         const qore_class_private* pcls = qore_class_private::get(*self->getClass());
         ClassAccess access;
         bool callable;
-        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access, callable);
+        const qore_class_private* found_ctx = nullptr;
+        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access, callable, found_ctx);
         if (meth) {
-            return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
+            return do_method_intern(self, meth, access, callable, name->c_str(), pcls, found_ctx, xsink);
         }
     }
 
@@ -2010,6 +2071,10 @@ char* make_class_name(const char* str) {
 
 void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink) {
     printd(5, "print_node() node: %s\n", qv.getTypeName());
+    // print(), printf() and vprintf() for code that library code serves (qore#7140)
+    if (qore_check_caller_terminal_io("print(), printf() and vprintf()", xsink)) {
+        return;
+    }
     QoreStringValueHelper str(qv);
     // the text is written up to its first NUL character, as fputs(3) wrote it before; write errors are ignored as
     // they were then
@@ -2025,6 +2090,32 @@ void qore_setup_argv(int pos, int argc, char* argv[]) {
         if (i < end)
             ARGV->push(new QoreStringNode(argv[i + pos]), nullptr);
         QORE_ARGV->push(new QoreStringNode(argv[i]), nullptr);
+    }
+}
+
+// returns a list with the strings of the given list tagged with the default encoding; a string is read with
+// QoreStringDataHelper, which reads both of its representations, as one of up to QoreValue::SHORTSTR_MAX_BYTES bytes
+// can be held inline, with no QoreStringNode to change (qore#7038)
+static QoreListNode* qore_argv_in_default_encoding(const QoreListNode* l) {
+    QoreListNode* rv = new QoreListNode(stringTypeInfo);
+    ConstListIterator li(l);
+    while (li.next()) {
+        QoreStringDataHelper str(li.getValue());
+        assert(str);
+        rv->push(new QoreStringNode(str.c_str(), str.size(), QCS_DEFAULT), nullptr);
+    }
+    return rv;
+}
+
+void qore_tag_argv_encoding() {
+    // the lists are replaced before any Program copies them (see qore_program_private)
+    for (QoreListNode** l : {&ARGV, &QORE_ARGV}) {
+        if (!*l) {
+            continue;
+        }
+        QoreListNode* tagged = qore_argv_in_default_encoding(*l);
+        (*l)->deref(nullptr);
+        *l = tagged;
     }
 }
 

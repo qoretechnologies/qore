@@ -356,6 +356,8 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 
     // initialize charset encoding support
     qore_encoding_manager_ops(QEM).init(def_charset);
+    // ARGV and QORE_ARGV are made before the default encoding is set (qore#7045)
+    qore_tag_argv_encoding();
 
     // init character maps
     init_charmaps();
@@ -415,6 +417,9 @@ void qore_cleanup() {
     // would otherwise run forever, run first, unless they have run already (see ~QoreProgramHelper())
     qore_run_exit_hooks(nullptr);
     qore_counter_ops(thread_counter).waitForZero();
+
+    // the process-end callbacks of the modules run before anything is torn down (qore#7191)
+    qore_run_process_end_callbacks(QPE_CLEANUP);
 
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
@@ -484,7 +489,10 @@ void qore_cleanup() {
     // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
     // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
     // cleared as usual
-    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    // so are they when a Program was left to a foreign thread before (the Program of the script, whose teardown at the
+    // end of the process stopped waiting for the foreign threads in it: qore#6904), as its code can use them
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+        || qore_program_private::hasLeftPrograms();
     if (!modules_left) {
         qore_release_module_program_pins();
 

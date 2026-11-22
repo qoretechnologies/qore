@@ -72,49 +72,10 @@ public:
     }
 
     //! Rejects the future with an error
-    DLLLOCAL void setError(const char* err, const char* desc, QoreValue arg, ExceptionSink* xsink) {
-        AutoLocker al(&lock);
-        if (state != PENDING) {
-            arg.discard(xsink);
-            xsink->raiseException("PROMISE-ERROR", "Promise has already been %s",
-                state == RESOLVED ? "resolved" : "rejected");
-            return;
-        }
-        err_code = err;
-        err_desc = desc;
-        err_arg = arg;
-        state = REJECTED;
-        cond.broadcast();
-    }
+    DLLLOCAL void setError(const char* err, const char* desc, QoreValue arg, ExceptionSink* xsink);
 
     //! Rejects the future by assimilating exceptions from an ExceptionSink
-    DLLLOCAL void setException(ExceptionSink& xs) {
-        AutoLocker al(&lock);
-        if (state != PENDING) {
-            xs.clear();
-            return;
-        }
-        // Store the exception info from the sink
-        QoreHashNode* ex = xs.getExceptionInfo();
-        if (ex) {
-            QoreValue errv = ex->getKeyValue("err");
-            QoreValue descv = ex->getKeyValue("desc");
-            QoreValue argv = ex->getKeyValue("arg");
-            if (errv.getType() == NT_STRING) {
-                QoreStringValueHelper err(errv);
-                err_code = err->c_str();
-            }
-            if (descv.getType() == NT_STRING) {
-                QoreStringValueHelper desc(descv);
-                err_desc = desc->c_str();
-            }
-            err_arg = argv.refSelf();
-            ex->deref(nullptr);
-        }
-        xs.clear();
-        state = REJECTED;
-        cond.broadcast();
-    }
+    DLLLOCAL void setException(ExceptionSink& xs);
 
     //! Gets the result (blocking)
     /** Returns the result value; on error, raises exception and returns nothing
@@ -122,82 +83,7 @@ public:
         @param xsink exception sink
         @return the result value
     */
-    DLLLOCAL QoreValue get(int64 timeout_ms, ExceptionSink* xsink) {
-        // The timeout is a wall-clock deadline, not a per-wait window.
-        //
-        // Earlier versions passed `timeout_ms` directly to waitWithInterrupt
-        // on every loop iteration.  If the cond fired (signal OR pthread
-        // spurious wake) but state was still PENDING, the loop re-entered
-        // the wait with the FULL ORIGINAL timeout — restarting the
-        // countdown.  Empirically this caused HTTPCLIENT-TIMEOUT failures
-        // observed in Qorus issue 1704 (120s request_timeout failed to
-        // fire; thread parked in FutureImpl::get() for 30+ minutes against
-        // slow-streaming LLM endpoints).  Compute an absolute deadline in
-        // microseconds and recompute `remaining` per iteration so the
-        // timeout fires at the intended time regardless of spurious wakes.
-        //
-        // Use a monotonic clock for both the deadline and the per-iteration `now_us` below so the
-        // timeout measures true elapsed (physical) time and cannot be shortened or extended by
-        // wall-clock (CLOCK_REALTIME) steps from NTP / host time adjustments.  QoreCondition's timed
-        // wait is likewise monotonic, so the relative cond_timeout_ms maps to the same physical
-        // interval.  Mirrors the deadline pattern in
-        // include/qore/AbstractHttpPollConnection.h:109-111.
-        const bool has_deadline = (timeout_ms > 0);
-        int64 deadline_us = 0;
-        if (has_deadline) {
-            deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000LL;
-        }
-
-        AutoLocker al(&lock);
-        ++waiting;
-        while (state == PENDING) {
-            int64 cond_timeout_ms;
-            if (has_deadline) {
-                int64 now_us = q_clock_getmicros_monotonic();
-                int64 remaining_us = deadline_us - now_us;
-                if (remaining_us <= 0) {
-                    --waiting;
-                    xsink->raiseException("FUTURE-TIMEOUT",
-                        "timed out after " QLLD "ms waiting for future result",
-                        timeout_ms);
-                    return QoreValue();
-                }
-                // Round up sub-millisecond remainder so we never pass 0
-                // (which waitWithInterrupt treats as poll-don't-wait at
-                // some sites; here ms < 0 means infinite, but 0 would be
-                // a no-wait that consumes CPU until the deadline).
-                cond_timeout_ms = (remaining_us + 999) / 1000;
-            } else {
-                cond_timeout_ms = -1;  // infinite
-            }
-            int rc = cond.waitWithInterrupt(&lock, cond_timeout_ms, xsink);
-            if (rc == QORE_COND_RESULT_INTERRUPTED) {
-                --waiting;
-                return QoreValue();
-            }
-            if (state != PENDING) {
-                break;
-            }
-            if (rc == QORE_COND_RESULT_TIMEOUT) {
-                --waiting;
-                xsink->raiseException("FUTURE-TIMEOUT",
-                    "timed out after " QLLD "ms waiting for future result", timeout_ms);
-                return QoreValue();
-            }
-            // Spurious wake or unrelated broadcast: the loop re-enters
-            // waitWithInterrupt with a freshly-computed `remaining` so the
-            // overall wait still respects the wall-clock deadline.
-        }
-        --waiting;
-
-        if (state == REJECTED) {
-            xsink->raiseExceptionArg(err_code.c_str(), err_arg.refSelf(), "%s", err_desc.c_str());
-            return QoreValue();
-        }
-
-        assert(state == RESOLVED);
-        return result.refSelf();
-    }
+    DLLLOCAL QoreValue get(int64 timeout_ms, ExceptionSink* xsink);
 
     //! Non-blocking check if the future is done (resolved or rejected)
     DLLLOCAL bool isDone() const {
@@ -279,6 +165,11 @@ private:
     QoreCondition cond;
     QoreValue result;
     std::string err_code;
+    //! true if code that is sandboxed or acts for sandboxed code rejected the future: get() raises its error marked
+    //! (qore#7139)
+    bool err_sandboxed = false;
+    //! the ID of the sandboxed Program of that code, or 0 if it is not known
+    qore_program_id_t err_pgm_id = 0;
     std::string err_desc;
     QoreValue err_arg;
     State state;

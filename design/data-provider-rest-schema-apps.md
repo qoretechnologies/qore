@@ -299,7 +299,8 @@ options. The constructor still resolves every operation and builds every request
 each action are derived from its request and the catalog needs them when the module registers its actions; the
 output types, which are most of the types a schema produces, are built by the `get_output_type` callback of each
 generated definition when the action is first read. Loading every module that registers an application (what
-`ActionProviderClass.qtest` does) went from about 61 s and 2.6 GB to about 40 s and 2.2 GB on a debug build, and
+`ActionProviderClass-1.qtest` and `-2.qtest` do together) went from about 61 s and 2.6 GB to about 40 s and 2.2 GB on a
+debug build, and
 the REST-schema modules' share from about 50 s and 1.37 GB to 30 s and 0.97 GB. The cost moves rather than
 disappears where a schema's types are one connected graph: Stripe loads in 3.5 s instead of 16 s, but the first
 output type opened then takes about 11 s, because it builds most of that graph.

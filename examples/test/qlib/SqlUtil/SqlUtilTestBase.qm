@@ -200,8 +200,33 @@ public class SqlTestBase inherits QUnit::Test {
         if (!table) testSkip("no DB connection");
 
         hash<SerializationInfo> h = table.serializeToData();
+
+        # the serialized data keeps no credentials of the datasource (qore#7016): no password
+        AbstractDatasource ds = table.getDatasource();
+        *string pass = ds.getPassword();
+        if (pass) {
+            assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
+        }
+
+        # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
+        # configuration of the serialized data: no password, and a masked user name
+        hash<auto> config = ds.getConfigHash();
+        list<hash<auto>> calls = ();
+        sqlutil_register_ds_credential_resolver(hash<auto> sub (string type, hash<auto> masked_config) {
+            calls += masked_config;
+            return config;
+        });
+        on_exit sqlutil_register_ds_credential_resolver();
+
         AbstractTable t = AbstractTable::deserialize(h);
         assertTrue(t instanceof AbstractTable);
+        assertGt(0, calls.size(), "the credential resolver gives the credentials");
+        foreach hash<auto> m in (calls) {
+            assertFalse(m.hasKey("pass"), "the masked configuration has no password");
+            if (exists m.user) {
+                assertEq("****", m.user, "the masked configuration has a masked user name");
+            }
+        }
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());

@@ -2444,6 +2444,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 resolveRequestTarget(target, method));
         }
 
+        #! Sends a request with a deadline and lets the caller register a callback to abort its transport
+        /** @param register_cancel called with the abort callback after submission; its return value unregisters
+            that callback when the request ends, including on error
+            @see restDoRequestTargetWithTimeout() for the target and timeout semantics
+        */
+        hash<RestClient::RestResponseInfo> restDoCancellableRequestTarget(string method,
+                hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr, int timeout_ms,
+                code<code<nothing()>(code<nothing()>)> register_cancel) {
+            return waitForSubmittedRequest(method, target.path, body, hdr, timeout_ms,
+                resolveRequestTarget(target, method), register_cancel);
+        }
+
         #! Starts an async request with explicit path semantics
         /** @param method HTTP method
             @param target API-relative endpoint or origin-absolute target
@@ -2549,6 +2561,12 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(
                 string method, string path, auto body, *hash<auto> hdr,
                 int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
+            return waitForSubmittedRequest(method, path, body, hdr, timeout_ms, request_context, NOTHING);
+        }
+
+        private hash<RestClient::RestResponseInfo> waitForSubmittedRequest(string method, string path,
+                auto body, *hash<auto> hdr, int timeout_ms, *hash<RestClient::RestRequestContext> request_context,
+                *code<code<nothing()>(code<nothing()>)> register_cancel) {
             int started = requestNow();
             if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
                 throw "RESTCLIENTIO-OPTION-ERROR",
@@ -2556,7 +2574,12 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             int deadline = started + timeout_ms * 1000;
             RestFuture future = restDoRequestAsyncWithTimeout(method, path, body, hdr, timeout_ms, request_context);
+            *code<nothing()> unregister;
+            on_exit { if (unregister) { unregister(); } }
             try {
+                if (register_cancel) {
+                    unregister = register_cancel(sub () { future.cancel(); });
+                }
                 int remaining_us = deadline - requestNow();
                 if (remaining_us <= 0) {
                     throw "HTTPCLIENT-TIMEOUT", "REST request deadline exhausted";

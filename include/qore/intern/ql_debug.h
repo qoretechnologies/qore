@@ -117,6 +117,12 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_
 typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
 
+//! called by QoreListNode::derefImpl() and QoreHashNode::derefImpl() when the free of a list or hash that has weak
+//! holders starts, before its entries are freed; called with no lock held; \a type_name is "list" or "hash"; set by
+//! dbg_hold_container_free() (qore#7198)
+typedef void (*qore_dbg_container_free_hook_t)(const char* type_name);
+DLLLOCAL extern std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -447,6 +453,26 @@ struct QoreDbgCaresLocalTransport {
     @return the previous setting
 */
 DLLLOCAL QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport);
+
+//! Sets the longest wait of a thread that reaches an end point of the process while the process-end callbacks run on
+//! another thread (qore#7191)
+DLLLOCAL void qore_dbg_process_end_set_wait_ms(int64 ms);
+
+//! Waits until the process-end callbacks have started to run, at most \a timeout_ms; returns true if they have
+DLLLOCAL bool qore_dbg_process_end_wait_started(int64 timeout_ms);
+
+//! Waits until a thread waits for the process-end callbacks that run, at most \a timeout_ms; returns true if one does
+DLLLOCAL bool qore_dbg_process_end_wait_waiter(int64 timeout_ms);
+
+//! A registry of process-end callbacks for the unit tests, with its own process ID and wait bound; see
+//! qore_register_process_end_callback()
+DLLLOCAL void* qore_dbg_process_end_cbs_new(int64 wait_ms);
+DLLLOCAL void qore_dbg_process_end_cbs_delete(void* cbs);
+DLLLOCAL int64 qore_dbg_process_end_cbs_add(void* cbs, qore_process_end_callback_t cb, void* arg, pid_t pid);
+DLLLOCAL int qore_dbg_process_end_cbs_remove(void* cbs, int64 id);
+DLLLOCAL bool qore_dbg_process_end_cbs_run(void* cbs, qore_process_end_e reason, pid_t pid);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_started(void* cbs, int64 timeout_ms);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms);
 
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file

@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the scripts run in child processes that set their own --exec-mode, or as AOT executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AbstractPrivateParentDiamondTest
+
+#! an abstract declaration between a parent class's private method and its implementation by a later parent class
+#! (qore#7206)
+/** In <tt>class X1 inherits A1, B1, C1</tt>, where A1 and B1 inherit P1, P1 has a private method m(), B1 declares
+    m() abstract and C1 implements it, the interpreter refused a call of m() from outside the classes
+    (METHOD-IS-PRIVATE) that a qcc executable made (C1::m()): X1 copied B1's abstract variant before B1 had
+    implemented it with P1's private variant, and implemented it again with the first variant of its whole hierarchy,
+    P1's, in a method of its own that hid C1's; B1's method stayed public with only P1's private variant, and a call
+    reference outside the classes kept that method from parsing.  Now a class drops the abstract variants that its
+    parent classes have implemented, a method takes the access of its variants when an abstract variant is replaced,
+    and a call reference does not keep a method with unimplemented abstract variants, as a call does not.
+
+    The scripts run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3; their output must
+    be that of the AST interpreter, which must be that of their .expected files:
+    - abstract-private-parent-diamond.q: calls, call_object_method(), call references and hasCallableMethod() from
+      outside the classes, from a class outside the hierarchy and from the code of each class
+    - abstract-public-parent-diamond.q: the same hierarchy with a public P1::m(), which every call calls, and an
+      abstract method implemented by another parent class
+*/
+class AbstractPrivateParentDiamondTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("abstract-private-parent-diamond", "abstract-public-parent-diamond");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("abstract declaration below a private method", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        foreach string script in (Scripts) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string script_value = script;
+            addTestCase(script + ": execution modes", sub () { modesTest(script_value); });
+            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script_value, "-O0"); });
+            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script_value, "-O3"); });
+        }
+        set_return_value(main());
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            fail(script + ": no .expected file");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("abstract-private-parent-diamond-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

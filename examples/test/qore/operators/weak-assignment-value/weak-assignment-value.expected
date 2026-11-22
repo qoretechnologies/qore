@@ -1,0 +1,67 @@
+function level closure value: C
+function level closure value released: deleted
+function level global value: C
+function level plain value: C
+function level plain value released: deleted
+function level thread_local value: C
+closure list C hash C argument C
+plain list C hash C argument C
+global C thread_local C
+plain opaque value: C
+closure opaque value: C
+plain float 1.0 number 2 softint 3 hash "hash<string, int>"
+closure float 1.0 float softint 4 integer
+global float 5.0 float softint 6 integer
+list [7.0, 8.0, 9.0]
+plain strip: {a: 1} hash ph={a: 1}
+closure strip: {a: 1} hash ch={a: 1}
+strip released: ph={} ch={}
+global strip: {a: 1} thread_local strip: {a: 1}
+self member temp: C destroyed=0
+self member value: C
+self member receiver: C
+self member float: 1.0 float
+self member strip: {a: 1}
+member temp: C destroyed=0
+member value: C
+member receiver: C
+hash key temp: C destroyed=0
+hash key value: C
+hashdecl key temp: C destroyed=0
+hashdecl key value: C
+opaque member value: C
+opaque member strip: {a: 1}
+list element temp: C destroyed=0
+list element value: C
+softlist value: [1] list<auto> sl=[1]
+softlist released: sl=[]
+softlist in the statement: [2]
+softlist after the statement: sl2=[]
+closure softlist value: [1] list<auto>
+closure softlist released: csl=[]
+member store: DESTRUCTOR-ERROR
+member store: destroyed=1
+plain: DESTRUCTOR-ERROR
+plain: destroyed=1
+closure: DESTRUCTOR-ERROR
+closure: destroyed=1
+global: DESTRUCTOR-ERROR
+global: destroyed=1
+thread_local: DESTRUCTOR-ERROR
+thread_local: destroyed=1
+plain typed: C destroyed=0
+plain typed after the statement: deleted destroyed=1
+plain auto: C destroyed=0
+closure auto: C destroyed=1
+closure typed: C destroyed=2
+closure typed after the statement: deleted
+global auto: C destroyed=0
+global typed: C destroyed=1
+thread_local: C destroyed=2
+plain receiver: C
+global receiver: C
+closure receiver: C
+thread_local receiver: C
+map plain: ["C:0", "C:1"]
+map closure: ["C:0", "C:1"]
+done destroyed=42

@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ThBarrierOomLoad.qm - library module whose load is made to fail; records whether its initialization ran
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%new-style
+
+module ThBarrierOomLoad {
+    version = "1.0";
+    desc = "test module: a library module that records that its initialization ran";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        init_done = True;
+    };
+}
+
+#! set by the module's initialization
+our *bool init_done;
+
+public namespace ThBarrierOomLoad {
+#! returns True if the module's initialization ran
+public bool sub init_ran() {
+    return init_done ?? False;
+}
+}

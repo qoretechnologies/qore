@@ -1,0 +1,87 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ThReflectFixture.qm - library module code that uses typed hash handles for the Program that calls it
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%new-style
+
+%requires reflection
+
+module ThReflectFixture {
+    version = "1.0";
+    desc = "test module: library module code that uses typed hash handles for its caller";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! the member stored for a later use; the use is not made for the Program that stored it
+our *Reflection::TypedHashMember stored_member;
+#! the results of the uses in the initialization of ThReflectInitFixture
+our hash<string, string> init_results;
+
+public namespace ThReflectFixture {
+#! returns the result of a call as a string: the value, or the exception's code
+public string sub run(code c) {
+    try {
+        return sprintf("ok: %y", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! reads the default value of the member in this module's code
+public string sub default_of(*Reflection::TypedHashMember mem) {
+    return run(auto sub () { return mem.getDefaultValue(); });
+}
+
+#! casts the hash to the typed hash in this module's code, which evaluates the missing members' initializers
+public string sub cast(Reflection::TypedHash th) {
+    return run(auto sub () { return th.doCast({}); });
+}
+
+#! stores the member for a later use
+public sub store(Reflection::TypedHashMember mem) {
+    stored_member = mem;
+}
+
+#! reads the default value of the stored member in this module's code
+public string sub default_of_stored() {
+    return default_of(stored_member);
+}
+
+#! reads the default value of the stored member in a thread that this module's code starts
+public string sub default_of_stored_in_thread() {
+    Queue q();
+    background sub () {
+        try {
+            q.push(default_of_stored());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+    return q.get(60s);
+}
+
+#! loads ThReflectInitFixture, whose initialization reads the default value of the stored member
+/** @return the results of the module's static member initializer and of its init closure
+*/
+public string sub default_of_stored_in_module_init() {
+    load_module("ThReflectInitFixture");
+    return sprintf("static initializer: %s, init closure: %s", init_results.static ?? "no result",
+        init_results.init ?? "no result");
+}
+
+#! records the result of a use in the initialization of ThReflectInitFixture
+public string sub set_init_result(string key, string result) {
+    init_results{key} = result;
+    return result;
+}
+
+#! calls the code: module code that calls back into the Program that the code belongs to
+public string sub call_back(code c) {
+    return c();
+}
+}

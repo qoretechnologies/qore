@@ -3787,12 +3787,12 @@ void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSL
         if (!((it.index() + 1) % 100) && qore_check_cancel(xsink, "reading TLS credential origins")) {
             return;
         }
-        const QoreStringNode* value = it.getValue().get<const QoreStringNode>();
-        if (q_check_no_nul(value->c_str(), value->size(), "credential origin", "HTTP client credentials",
+        QoreStringDataHelper value(it.getValue());
+        if (q_check_no_nul(value.c_str(), value.size(), "credential origin", "HTTP client credentials",
                 "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", xsink)) {
             return;
         }
-        QoreURL url(value->c_str());
+        QoreURL url(value.c_str());
         const QoreString* scheme = url.getProtocol();
         if (!url.isValid() || !url.getHost() || !scheme
                 || (strcasecmp(scheme->c_str(), "https") && strcasecmp(scheme->c_str(), "http"))) {

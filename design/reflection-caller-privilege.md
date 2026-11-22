@@ -159,6 +159,38 @@ source Program, else to the caller's own, where the boundary would not apply. It
 A `PO_NO_*` caller is refused by `checkProgramAccess()` when the module Program has fewer restrictions; when the module
 Program inherited the caller's restrictions (the caller loaded it first), only this boundary refuses.
 
+#### Library module code acts for its application (typed hash initializers)
+
+Library module code evaluates typed hash initializers for the application Program that calls it (qore#7154):
+DataProvider's `HashDataType::addField()` and `HashDataType(TypedHash)` read the member defaults of the typed hash
+that a sandboxed Program passes to them, and a sandboxed Program could cast to its own typed hash itself.
+`reflection_check_typed_hash_init()` allows it only if all of these hold:
+
+- the caller has access to the handle's Program (`checkProgramAccess()`, as before);
+- `QoreReflectionCaller::getModuleCallerProgram()` (`qore_reflection_get_module_application_program()` in
+  `lib/thread.cpp`) returns an application Program, and it **is** the handle's Program: a handle of any other Program
+  (another tenant's, the host's, one taken from the type of a value that the tenant passes) is decided by the rules
+  that applied before, so a value or name that the tenant supplies cannot select another Program;
+- that Program could name the typed hash (by identity: a typed hash with the same path in another Program is another
+  typed hash; `TypedHashDecl::equal()` compares the original declaration).
+
+`qore_reflection_get_module_application_program()` takes the application from the thread's call chain only and fails
+closed (no Program, so the earlier rules decide, which refuse a sandboxed caller):
+
+- the caller must be library module code (`qore_program_is_library_module()`); a module loaded by its path is
+  calling code, as for the caller-domain walk, and so is one reached on the walk before the application;
+- no module initialization barrier (`QoreModuleInitSandboxBarrierHelper`) may be active, and none may have failed to
+  be recorded (`module_init_barrier_unrecorded`): the code that loads a module does not call its initialization;
+- the walk does not cross the innermost module lifecycle barrier (init and del closures), and returns nothing if one
+  could not be recorded (`module_lifecycle_unrecorded`);
+- module code with no application Program on the chain (a thread that module code started) finds none.
+
+The initializers then run under the restrictions and sandbox of the calling code, as before.  A handle of a Program
+that reaches other code (the Program handed it out, and it was stored in a library module, for example) is used for
+that Program only while module code runs for it: its initializers are then that Program's own code, run in it.  The
+module initialization barrier covers what the lifecycle barrier does not, such as the static member initializers
+of a module being loaded; `examples/test/qore/misc/reflection-typed-hash-module-caller.qtest` checks each rule.
+
 ### 3. Access is classified per operation
 
 `QoreReflectionCaller::Access` distinguishes structural navigation, value access and member-default evaluation.

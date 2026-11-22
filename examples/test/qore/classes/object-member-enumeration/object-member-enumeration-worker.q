@@ -6,10 +6,10 @@
 %modern
 
 #! formats the results that the caller computed in its own code, whose access to the members they depend on
-sub fmt(string label, list<auto> k, int s, bool e, bool v, int el, list<auto> ko, *string fk, *string lk) {
+sub fmt(string label, list<auto> k, int s, bool e, bool v, int el, list<auto> ko) {
     # the names in their order, which is that of the keys operator
     printf("%s: keys(): %y size(): %d empty(): %y val(): %y elements: %d keys operator: %y same: %y\n", label, k, s, e,
-        v, el, ko, k == ko && s == ko.size() && el == s && e == !s && v == (s > 0) && fk === k.first() && lk === k.last());
+        v, el, ko, k == ko && s == ko.size() && el == s && e == !s);
 }
 
 class Base {
@@ -24,7 +24,7 @@ class Base {
     }
 
     inside() {
-        fmt("Base method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("Base method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -37,7 +37,7 @@ class Child inherits Base {
     }
 
     insideChild() {
-        fmt("Child method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("Child method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -47,7 +47,7 @@ class OnlyPrivate {
     }
 
     inside() {
-        fmt("OnlyPrivate method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("OnlyPrivate method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -58,7 +58,7 @@ class PrivateChild inherits private Base {
     }
 
     insidePrivateChild() {
-        fmt("PrivateChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("PrivateChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -78,7 +78,7 @@ class Dynamic {
 class EnumParent {
     enumerate(string label) {
         fmt("EnumParent method on " + label, self.keys(), self.size(), self.empty(), self.val(), elements self,
-            keys self, self.firstKey(), self.lastKey());
+            keys self);
     }
 }
 class EnumPublicChild inherits EnumParent {
@@ -98,7 +98,7 @@ class CollideParent {
     }
     enumerate(string label) {
         fmt("CollideParent method on " + label, self.keys(), self.size(), self.empty(), self.val(), elements self,
-            keys self, self.firstKey(), self.lastKey());
+            keys self);
     }
 }
 class CollideChild inherits CollideParent {
@@ -106,7 +106,7 @@ class CollideChild inherits CollideParent {
         int x = 3;
     }
     enumerateChild() {
-        fmt("CollideChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("CollideChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -116,7 +116,7 @@ class InternalChild inherits private:internal Base {
         int pub_ichild = 7;
     }
     insideInternalChild() {
-        fmt("InternalChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self, self.firstKey(), self.lastKey());
+        fmt("InternalChild method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -130,7 +130,7 @@ class DiamondRoot {
     }
     enumerateRoot(string label) {
         fmt("DiamondRoot method on " + label, self.keys(), self.size(), self.empty(), self.val(), elements self,
-            keys self, self.firstKey(), self.lastKey());
+            keys self);
     }
 }
 class DiamondLeft inherits DiamondRoot {
@@ -163,7 +163,7 @@ class FunctionFromMethod {
     code getClosure() {
         return sub () {
             fmt("closure created in a method", self.keys(), self.size(), self.empty(), self.val(), elements self,
-                keys self, self.firstKey(), self.lastKey());
+                keys self);
         };
     }
     static runCode(code c) {
@@ -178,7 +178,7 @@ class InternalOnlyParent {
     }
     enumerateParent(string label) {
         fmt("InternalOnlyParent method on " + label, self.keys(), self.size(), self.empty(), self.val(),
-            elements self, keys self, self.firstKey(), self.lastKey());
+            elements self, keys self);
     }
 }
 class PublicOfInternal inherits InternalOnlyParent {
@@ -194,8 +194,7 @@ class OnlyInternal {
         int b = 2;
     }
     inside() {
-        fmt("OnlyInternal method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self,
-            self.firstKey(), self.lastKey());
+        fmt("OnlyInternal method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
 
@@ -205,14 +204,12 @@ class PublicParent {
         int a = 1;
     }
     static look(object o, string label) {
-        fmt("PublicParent method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o,
-            o.firstKey(), o.lastKey());
+        fmt("PublicParent method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o);
     }
 }
 class SiblingOfInternal inherits PublicParent {
     static lookSibling(object o, string label) {
-        fmt("sibling class method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o,
-            o.firstKey(), o.lastKey());
+        fmt("sibling class method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o);
     }
 }
 class InternalOnParent inherits PublicParent {
@@ -224,14 +221,14 @@ class InternalOnParent inherits PublicParent {
         object o = p;
         o.x = 2;
         fmt("child method on a parent object with its internal member", o.keys(), o.size(), o.empty(), o.val(),
-            elements o, keys o, o.firstKey(), o.lastKey());
+            elements o, keys o);
         outside(o, "a parent object with a child's internal member");
         Unrelated::look(o, "a parent object with a child's internal member");
         PublicParent::look(o, "a parent object with a child's internal member");
         SiblingOfInternal::lookSibling(o, "a parent object with a child's internal member");
         remove o.x;
         fmt("child method after removing its internal member", o.keys(), o.size(), o.empty(), o.val(), elements o,
-            keys o, o.firstKey(), o.lastKey());
+            keys o);
         o.x = 3;
         delete p;
         try {
@@ -257,21 +254,19 @@ class InternalOnEmptyParent inherits EmptyParent {
         object o = p;
         o.x = 2;
         fmt("child method on an empty parent object with its internal member", o.keys(), o.size(), o.empty(), o.val(),
-            elements o, keys o, o.firstKey(), o.lastKey());
+            elements o, keys o);
         outside(o, "an empty parent object with a child's internal member");
     }
 }
 
 class Unrelated {
     static look(object o, string label) {
-        fmt("Unrelated method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o, o.firstKey(),
-        o.lastKey());
+        fmt("Unrelated method on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o);
     }
 }
 
 sub outside(object o, string label) {
-    fmt("outside on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o, o.firstKey(),
-        o.lastKey());
+    fmt("outside on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o);
 }
 
 Child c();

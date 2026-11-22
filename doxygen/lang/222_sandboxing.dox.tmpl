@@ -755,6 +755,87 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_terminal_io The Terminal Is Not Lent
+
+    A module is a capability (see @ref sandbox_caller_domains), but the terminal is not lent to code that is
+    restricted from terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): the builtins that use the
+    process's terminal refuse such a caller (\c ILLEGAL-EXPRESSION) also when library code calls them for it, also
+    through an object that other code created and lent to it:
+    - the methods of the system @ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and @ref Qore::stderr "stderr"
+      files that are refused for code with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO" (for example reading,
+      writing, redirecting, the terminal attributes and locks), and @ref Qore::print() "print()", @ref Qore::printf() "printf()"
+      and @ref Qore::vprintf() "vprintf()"
+    - @ref Qore::StdoutOutputStream "StdoutOutputStream" and @ref Qore::StderrOutputStream "StderrOutputStream", also
+      when another stream or a @ref Qore::StreamWriter "StreamWriter" writes to them
+    - @ref Qore::TermIOS::getWindowSize() "TermIOS::getWindowSize()"
+    - the variants of @ref Qore::GetOpt "GetOpt" that write an error to @ref Qore::stderr "stderr" and exit raise the
+      error instead (\c GETOPT-ERROR)
+
+    The standard modules check @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()"
+    before they use the terminal and leave the output out for such a caller: their diagnostics, the
+    \c LoggerAppenderStdOut, \c LoggerAppenderStdErr and \c StdoutAppender appenders of the
+    @ref loggerintro "Logger" module and its \c LoggerAppenderStream whose stream is a \c StdoutOutputStream or a
+    \c StderrOutputStream, the console debug collector of the data providers and the progress display of the
+    \c TerminalFormat module (a stream that wraps one of them, such as an \c EncodingConversionOutputStream, refuses
+    the write, so the appenders after it in that logger are not reached).  So the lines that a
+    logger with such an appender, which the host created, would write to the terminal while its code serves a caller
+    that is restricted from terminal I/O are left out; the logger's other appenders are unaffected (qore#7140).  This
+    holds for an appender that writes synchronously; one that a queue processes in a thread of its own
+    (\c LoggerAppenderQueue) writes as the code of that thread may.  The output of the \c QUnit tests that such code
+    runs is refused (its output is written with the builtins above), so a test cannot run under that restriction.
+
+    The terminal is the host's: the caller is the nearest code on the stack that is not a module's, and when that is
+    trusted host code (a %Program that is not sandboxed and whose options allow terminal I/O), the output is the
+    host's choice and is written, also when the host's code runs under an object or a callback that restricted code
+    created (whose provenance otherwise restricts the code that runs under it).  So an embedding application's own
+    loggers with a terminal appender write the lines of the host's own logging calls, also those it makes for
+    restricted code; they leave out only the lines that library code writes while restricted code is its nearest
+    caller (for example through a \c LoggerWrapper or the logger of a data provider that restricted code uses).
+    It follows that when the host calls a method of a module object that restricted code created (such as a logger
+    with a terminal appender and a layout of its own), the module code writes to the terminal what the object holds:
+    the host decides whether to make the call, and should not call such objects when the terminal must stay closed to
+    that code.  The code of a %Program that has released its classes runs in its caller's %Program with the caller's
+    options, so the code of a released restricted %Program that the host calls is the host's code for the terminal.
+
+    @subsection sandbox_exception_reports Exception Reports of Sandboxed Code
+
+    An exception that code that is sandboxed or acts for sandboxed code raises (the code of a sandboxed %Program, and
+    the code that runs for it, such as module code that it calls or code that runs under its sandbox) records it with
+    the ID of the sandboxed %Program, and keeps it when it is rethrown; so does an exception that such code rethrows
+    with values of its own, and the error of a @ref Qore::Thread::Queue "Queue" that such code sets with
+    @ref Qore::Thread::Queue::setError() "Queue::setError()", whichever code then reads from or writes to the queue, the
+    exception of such code that @ref Qore::parallel_map() "parallel_map()" or
+    @ref Qore::parallel_foreach() "parallel_foreach()" raises again in the calling thread, and the error of
+    a @ref Qore::Thread::Future "Future" that such code rejects (with @ref Qore::Thread::Promise::setError()
+    "Promise::setError()", or by raising in @ref Qore::call_async() "call_async()"), whichever code then gets its
+    result.  Wherever and in
+    whichever thread the library reports it (the unhandled exception report on @ref Qore::stderr "stderr" of a
+    background thread, a @ref Qore::Thread::ThreadPool "ThreadPool" task, an asynchronous I/O timer, callback or task,
+    the release of thread-local data or of thread resources, also when the host runs the code, and the error log lines
+    of the asynchronous I/O controller's logger or the one set with
+    @ref Qore::set_async_io_logger() "set_async_io_logger()", and the warnings of a parse that an embedding application
+    reports with the default warning handler), the report cannot pass for the host's own (qore#7139):
+    - each line starts with the mark \c "[caller Program N] " (\c N is the ID of the sandboxed %Program, or
+      \c unknown if it is not known); in a log line, the message starts with it; the report of a chain of exceptions
+      that has such an exception is marked whole, with the ID of the first one
+    - the text of the code's choosing (the error code, the description and the argument, the names of functions, files
+      and sources) is converted to UTF-8 and escaped, so that it stays on its marked line: line breaks, backslash, the
+      C0 and C1 control characters and DEL, the Unicode line and paragraph separators and the bidirectional formatting
+      characters (as \c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN and \c \\u{NNNN}), as are the bytes of
+      invalid UTF-8 (\c \\xNN); the asynchronous I/O controller's error log lines escape the text of every exception
+      and the names that the submitter chose (owner, key), and every message of the asynchronous I/O loggers and of
+      the controller's debug trace (\c QORE_ASYNC_IO_TRACE) keeps the text that submitting code chose on its line:
+      its line breaks and other control characters except tab are escaped (backslash is kept) and a \c % is printed as
+      it is (qore#7216)
+
+    The marked report on @ref Qore::stderr "stderr" is a compact form of the report of other code: for each exception of
+    the chain, the location where it was raised, the error, description and argument, and the function, file and line
+    of each frame of the call stack (without the language and the code type of each frame); a log line names the first
+    exception of a chain, as for other code.  The exceptions
+    of the host's own code are reported as before.  The mark is a property of the report: Qore code that catches the
+    exception (such as a host that logs it with @ref Util::get_exception_string() "get_exception_string()") gets its
+    values as they are, and escapes them itself before it writes them where they could pass for its own.
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
