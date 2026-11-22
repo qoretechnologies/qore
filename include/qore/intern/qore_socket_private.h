@@ -177,6 +177,12 @@ DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t
 DLLLOCAL int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id,
         ExceptionSink* xsink);
 
+//! Returns the bytes of a server-side HTTP/3 stream's data that the peer has acknowledged (never decreases)
+/** @return the byte count, -1 if the stream has no data record or the session is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
 DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr

@@ -5,6 +5,9 @@
 # Http2StreamContext and Http3StreamContext sendDataWithTimeout(): a full stream send buffer is waited for, for at
 # most the given time, and the data is then sent or STREAM-SEND-TIMEOUT is raised; the socket is a fake that reports
 # a full buffer a given number of times, so the tests need no network
+#
+# The time bounds a wait in which the peer takes none of the data, not the total wait (qore#7252): a large message that
+# a slow or loaded peer was still taking ended the connection
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -24,6 +27,16 @@ class FullBufferSocket inherits Socket {
         list<int> drain_waits();
         #! an error raised by the next send instead of a full buffer
         *string send_error;
+        #! the number of reads of the progress count that each see more data taken by the peer
+        int progress_reads = 0;
+        #! the progress count
+        int progress = 0;
+        #! the error raised by a read of the progress count
+        *string progress_error;
+        #! True if the progress count is not known (-1), as for a stream or session that is gone
+        bool unknown_progress = False;
+        #! the result of every drain wait, if set: -1 reports a stream that has ended
+        *int drain_result;
     }
 
     constructor(int full_sends) {
@@ -63,9 +76,35 @@ class FullBufferSocket inherits Socket {
         return drainWait(timeout_ms);
     }
 
+    int getHttp2StreamTakenBytes(int stream_id) {
+        return readProgress();
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        return readProgress();
+    }
+
+    #! returns the progress count, which grows with each of the next progress_reads reads
+    private int readProgress() {
+        if (progress_error) {
+            throw progress_error, "no session";
+        }
+        if (unknown_progress) {
+            return -1;
+        }
+        if (progress_reads > 0) {
+            --progress_reads;
+            ++progress;
+        }
+        return progress;
+    }
+
     #! records the time given to a drain wait; a buffer that never drains times out after it, others drain at once
     private int drainWait(int timeout_ms) {
         drain_waits += timeout_ms;
+        if (exists drain_result) {
+            return drain_result;
+        }
         if (full_sends >= 0) {
             return 0;
         }
@@ -94,10 +133,18 @@ class StreamContextSendTimeoutTest inherits QUnit::Test {
         addTestCase("HTTP/2: a buffer that does not drain in time raises STREAM-SEND-TIMEOUT", \h2TimeoutTest());
         addTestCase("HTTP/2: no timeout waits without a limit", \h2NoTimeoutTest());
         addTestCase("HTTP/2: other send errors are raised", \h2ErrorTest());
+        addTestCase("HTTP/2: a buffer that the peer is draining is not cut off by the time", \h2ProgressTest());
+        addTestCase("HTTP/2: a session that ended during the wait is reported by the send", \h2SessionGoneTest());
+        addTestCase("HTTP/2: an unknown progress count does not extend the wait", \h2UnknownProgressTest());
+        addTestCase("HTTP/2: a stream that ended with its buffer full ends the wait", \h2EndedTest());
         addTestCase("HTTP/3: a full buffer is waited for", \h3WaitTest());
         addTestCase("HTTP/3: a buffer that does not drain in time raises STREAM-SEND-TIMEOUT", \h3TimeoutTest());
         addTestCase("HTTP/3: no timeout waits without a limit", \h3NoTimeoutTest());
         addTestCase("HTTP/3: other send errors are raised", \h3ErrorTest());
+        addTestCase("HTTP/3: a buffer that the peer is draining is not cut off by the time", \h3ProgressTest());
+        addTestCase("HTTP/3: the acknowledged byte count of a server stream", \h3AckedBytesTest());
+        addTestCase("HTTP/3: an unknown progress count does not extend the wait", \h3UnknownProgressTest());
+        addTestCase("HTTP/3: a stream that ended with its buffer full ends the wait", \h3EndedTest());
         set_return_value(main());
     }
 
@@ -134,6 +181,98 @@ class StreamContextSendTimeoutTest inherits QUnit::Test {
         Http2StreamContext ctx(sock, 1, new Queue(), True);
         assertThrows("HTTP2-STREAM-RESET", \ctx.sendDataWithTimeout(), (<0102>, 10s));
         assertEq((), sock.drain_waits, "an error that is not a full buffer is not waited for");
+    }
+
+    #! the peer takes data before each of the first three waits, and none after: the send raises a full timeout after
+    #! the last progress
+    h2ProgressTest() {
+        FullBufferSocket sock(-1);
+        sock.progress_reads = 3;
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "granted no credit", \ctx.sendDataWithTimeout(), (<0102>, 20ms));
+        assertEq(3, sock.drain_waits.size(), "the wait goes on while the peer takes data");
+        assertEq((), sock.sent, "nothing is sent");
+    }
+
+    h2SessionGoneTest() {
+        FullBufferSocket sock(1);
+        sock.progress_error = "HTTP2-ERROR";
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 10s);
+        assertEq((<0102>,), sock.sent, "the send is made again after the wait");
+        # another error of the query is not hidden
+        sock = new FullBufferSocket(1);
+        sock.progress_error = "OTHER-ERROR";
+        ctx = new Http2StreamContext(sock, 1, new Queue(), True);
+        assertThrows("OTHER-ERROR", \ctx.sendDataWithTimeout(), (<0102>, 10s));
+    }
+
+    h3ProgressTest() {
+        FullBufferSocket sock(-1);
+        sock.progress_reads = 3;
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "acknowledged no data", \ctx.sendDataWithTimeout(), (<0102>, 20ms));
+        assertEq(3, sock.drain_waits.size(), "the wait goes on while the peer takes data");
+        assertEq((), sock.sent, "nothing is sent");
+    }
+
+    h2UnknownProgressTest() {
+        FullBufferSocket sock(-1);
+        sock.progress_error = "HTTP2-ERROR";
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "granted no credit", \ctx.sendDataWithTimeout(), (<0102>, 20ms));
+    }
+
+    h2EndedTest() {
+        FullBufferSocket sock(-1);
+        sock.drain_result = -1;
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "ended with its send buffer full", \ctx.sendDataWithTimeout(),
+            (<0102>, 10s));
+        assertEq(2, sock.drain_waits.size(), "a second wait that finds the stream ended ends the send");
+        # without a time limit as well
+        sock = new FullBufferSocket(-1);
+        sock.drain_result = -1;
+        ctx = new Http2StreamContext(sock, 1, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "ended with its send buffer full", \ctx.sendDataWithTimeout(), (<0102>, 0));
+        # a stream that had drained when the wait ended takes the data
+        sock = new FullBufferSocket(1);
+        sock.drain_result = -1;
+        ctx = new Http2StreamContext(sock, 1, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 10s);
+        assertEq((<0102>,), sock.sent);
+    }
+
+    h3UnknownProgressTest() {
+        FullBufferSocket sock(-1);
+        sock.unknown_progress = True;
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "acknowledged no data", \ctx.sendDataWithTimeout(), (<0102>, 20ms));
+    }
+
+    h3EndedTest() {
+        FullBufferSocket sock(-1);
+        sock.drain_result = -1;
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "ended with its send buffer full", \ctx.sendDataWithTimeout(),
+            (<0102>, 10s));
+        assertEq(2, sock.drain_waits.size(), "a second wait that finds the stream ended ends the send");
+        sock = new FullBufferSocket(-1);
+        sock.drain_result = -1;
+        ctx = new Http3StreamContext(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", "ended with its send buffer full", \ctx.sendDataWithTimeout(), (<0102>, 0));
+        sock = new FullBufferSocket(1);
+        sock.drain_result = -1;
+        ctx = new Http3StreamContext(sock, 1, 0, NOTHING, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 10s);
+        assertEq((<0102>,), sock.sent);
+    }
+
+    h3AckedBytesTest() {
+        Socket plain();
+        assertEq(-1, plain.getQuicStreamAckedBytes(1, 0), "no session");
+        assertThrows("QUIC-ERROR", "invalid session_id", \plain.getQuicStreamAckedBytes(), (0, 0));
+        assertThrows("QUIC-ERROR", "invalid stream_id", \plain.getQuicStreamAckedBytes(), (1, -1));
     }
 
     h3WaitTest() {
