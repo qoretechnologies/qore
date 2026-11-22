@@ -42,6 +42,9 @@ const SendTimeoutMs = 1000;
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! far below the client's timeout (@ref HangGuard), which a disconnect that gets no answer waits for, in milliseconds
+const DisconnectBoundMs = 30000;
+
 #! Pushes the messages about a send that timed out to a Queue
 class SendLogAppender inherits LoggerAppenderWithLayout {
     public {
@@ -214,6 +217,18 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
         # from the start of the sends to the timeout, wherever the wait was made: the return of a send says nothing,
         # as a send before direct sends are enabled only queues its frame
         int elapsed = (timed_out.at - handler.started.get(HangGuard)) / 1000;
+        # the release of the hold resumes the stream, whose data and end go out with the session's next write, which the
+        # client's close makes happen, so that the close is not left waiting for them until its timeout
+        call_function("dbg_quic_simulate_stream_progress", 0, 0);
+        call_function("dbg_quic_release_stream_data");
+        call_function("dbg_http2_release_stream_data");
+        int disconnect_start = clock_get_monotonic_us();
+        try {
+            wsc.disconnect();
+        } catch () {
+        }
+        assertLt(DisconnectBoundMs, (clock_get_monotonic_us() - disconnect_start) / 1000,
+            "the disconnect does not wait for its timeout");
         return {"msg": timed_out.msg, "elapsed": elapsed};
     }
 

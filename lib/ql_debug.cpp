@@ -27620,11 +27620,13 @@ static QoreValue f_dbg_http2_hold_stream_data(const QoreListNode* params, Runtim
 }
 
 //! stops holding the buffered data of the HTTP/2 stream held with dbg_http2_hold_stream_data()
-/** The next send on the stream resumes it.
+/** The held streams are resumed; their data is written with the session's next write.
 */
 static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     dbg_h2_hold_stream.store(-1, std::memory_order_release);
+    // a deferred stream is otherwise resumed only by its next send, which a closing connection never makes
+    Http2Session::dbgResumeHeldStreams();
     return QoreValue();
 }
 

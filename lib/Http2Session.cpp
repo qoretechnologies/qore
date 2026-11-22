@@ -2853,6 +2853,25 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     return 0;
 }
 
+#ifdef DEBUG
+namespace {
+//! the sessions with a stream held by dbg_http2_hold_stream_data(), which its release resumes
+std::mutex dbg_h2_held_sessions_m;
+std::vector<std::weak_ptr<Http2Session>> dbg_h2_held_sessions;
+
+void dbg_h2_note_held_session(Http2Session* h2) {
+    std::weak_ptr<Http2Session> w = h2->weak_from_this();
+    std::lock_guard<std::mutex> lg(dbg_h2_held_sessions_m);
+    for (const auto& i : dbg_h2_held_sessions) {
+        if (!i.owner_before(w) && !w.owner_before(i)) {
+            return;
+        }
+    }
+    dbg_h2_held_sessions.push_back(std::move(w));
+}
+}
+#endif
+
 ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data) {
@@ -2921,9 +2940,14 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     BodyData& bd = it->second;
 #ifdef DEBUG
     // tests hold the buffered data back, as a peer that grants no flow-control credit does: it stays buffered, and
-    // the next send on the stream resumes the stream once the hold is released
+    // the release of the hold resumes the stream
+    // the session is recorded so that the release resumes the stream (dbgResumeHeldStreams()), and the hold is checked
+    // again after it is recorded: a release in between finds the session recorded, or this check sees it released
     if (qore_dbg_h2_stream_data_held(stream_id)) {
-        return NGHTTP2_ERR_DEFERRED;
+        dbg_h2_note_held_session(h2);
+        if (qore_dbg_h2_stream_data_held(stream_id)) {
+            return NGHTTP2_ERR_DEFERRED;
+        }
     }
 #endif
     size_t remaining = bd.data.size() - bd.offset;
@@ -3683,6 +3707,30 @@ void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, Exce
         (long long)content_length);
 }
 
+#ifdef DEBUG
+void Http2Session::dbgResumeHeldStreams() {
+    std::vector<std::weak_ptr<Http2Session>> sessions;
+    {
+        std::lock_guard<std::mutex> lg(dbg_h2_held_sessions_m);
+        sessions.swap(dbg_h2_held_sessions);
+    }
+    for (auto& w : sessions) {
+        std::shared_ptr<Http2Session> h2 = w.lock();
+        if (!h2) {
+            continue;
+        }
+        std::lock_guard<std::recursive_mutex> lg(h2->m);
+        if (!h2->session) {
+            continue;
+        }
+        for (auto& i : h2->pending_body_data) {
+            // NGHTTP2_ERR_INVALID_ARGUMENT: the stream is not deferred, or is gone
+            nghttp2_session_resume_data(h2->session, i.first);
+        }
+    }
+}
+
+#endif
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     (void)timeout_ms;
     constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
