@@ -5934,10 +5934,13 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
             stack.pop();
             continue;
         }
-        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
+        const BCNode& n = *(*f.list)[f.next++];
+        const QoreClass* nqc = n.sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc) {
+        // a class that a parent class inherits with private:internal access is not in the hierarchy of the class:
+        // its variants do not implement the class's abstract variants (qore#7316)
+        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -5979,10 +5982,12 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
             stack.pop();
             continue;
         }
-        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
+        const BCNode& n = *(*f.list)[f.next++];
+        const QoreClass* nqc = n.sclass;
         // nqc may be nullptr if there were errors earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc) {
+        // as in matchNonAbstractVariant() (qore#7316)
+        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();

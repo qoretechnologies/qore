@@ -1,0 +1,13 @@
+AIE::J2: ABSTRACT-CLASS-ERROR
+AIE::J1: ABSTRACT-CLASS-ERROR
+AIE::J3: ABSTRACT-CLASS-ERROR
+AIE::P1: "Secret::m"
+AIE::P1 call_object_method: "Secret::m"
+AIE::P6: "Secret::m"
+AIE::P6 call_object_method: "Secret::m"
+UJ2: ABSTRACT-CLASS-ERROR
+UJ3: ABSTRACT-CLASS-ERROR
+UP1: "Secret::m"
+UP1 call_object_method: "Secret::m"
+UP6: "Secret::m"
+UP6 call_object_method: "Secret::m"

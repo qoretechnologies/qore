@@ -582,6 +582,22 @@ class Z3 inherits X3 { abstract string m(); }       # private: X3's method is pr
 (new W3()).m();   # "Secret::m"
 (new Z3()).m();   # METHOD-IS-PRIVATE
     @endcode
+    A variant of a class that a parent class inherits with <tt><b>private:internal</b></tt> access does not implement
+    an abstract variant of that parent class's subclasses, as that class is not in their class hierarchy (see
+    @ref private_inheritance): the class stays abstract unless a method of its own, a method of a parent class (also
+    one that the parent class implements with that variant) or a class that another path reaches implements it; the
+    class that inherits the class with <tt><b>private:internal</b></tt> access itself can implement an abstract
+    variant with it, as above (since %Qore 3.0):
+    @code{.py}
+class K4 inherits private:internal Secret {}
+class J4 inherits K4, Iface {}           # abstract: J4 does not reach Secret
+class P4 inherits K4, Secret, Iface {}   # Secret::m() implements m(): Secret is inherited publicly
+class Q4 inherits private:internal Secret, Iface {}
+class R4 inherits Q4, IfaceB {}          # Q4's method implements IfaceB's m()
+
+create_object("J4");   # ABSTRACT-CLASS-ERROR
+(new R4()).m();        # "Secret::m"
+    @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n

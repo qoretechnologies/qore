@@ -2940,6 +2940,7 @@ public:
     //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
     //! substituted in \a v's signature (issue #5773)
     //! @param access the access of the variant returned in the method of the class that has it (qore#7277)
+    //! a private:internal edge of a parent class is not followed: the class does not reach that class (qore#7316)
     DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
             ClassAccess& access, const QoreTypeInfo* receiver = nullptr) const;
 
