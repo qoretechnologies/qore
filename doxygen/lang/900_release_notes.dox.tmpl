@@ -123,6 +123,12 @@
     registered credential resolver gives the credentials (see @ref sqlutil_serialization;
     <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
 
+    @par Code of a Class Does Not Call a Private Method That Its Own Hierarchy Overrides
+    Code of a class no longer calls a @ref private_methods "private" method of one of its parent classes (or a public
+    one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
+    object's class reaches that parent class first (see @ref multiple_inheritance_order;
+    <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has

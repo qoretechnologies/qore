@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OwnSubtreeMethodFirstTest
+
+#! code of a class calls its own method rather than a private method of a common parent class that an earlier parent
+#! class of the object reaches first (qore#6798)
+/** In a diamond (\c X2 inherits \c A2 and \c B22, which both inherit \c P2), code of \c B22 calling a method on an
+    object of \c X2 called the private method of \c P2 that \c B22 overrides, as the lookup reaches \c P2 through \c A2
+    before \c B22, in every execution mode.  Code of a class now skips a private method of one of its parent classes
+    that its own hierarchy overrides and continues in the usual order (\c multiple_inheritance_order).  The program
+    covers calls through \c self, calls without it, typed and untyped calls, call references, getCallReference(),
+    call_object_method(), closures, static methods (also call_static_method()), private:hierarchy and private:internal
+    methods, an override between the class and the common parent class, a public override in a subclass of the object's
+    class and in a class of an earlier branch (which are still called), the calls that still call the private method
+    (from the common parent class, from the other branch and from the object's class), the policy-base example of the
+    documentation and typed calls parsed in a child Program; the output of every execution mode and of qcc executables
+    (-O0, -O3) must be the expected one.
+
+    The program is in \c own-subtree-method-first/.
+*/
+class OwnSubtreeMethodFirstTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/own-subtree-method-first";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("OwnSubtreeMethodFirstTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-own-subtree-method-first-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}
