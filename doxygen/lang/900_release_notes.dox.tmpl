@@ -3069,6 +3069,10 @@
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
       wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
       once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
+    - @ref resthandlerintro "RestHandler" and @ref datastreamrequesthandlerintro "DataStreamRequestHandler" modules:
+      an HTTP/1.x Connect or DataStream request body with a \c Content-Length reaches its stream handler in bounded
+      parts, as over HTTP/2 and HTTP/3, and a DataStream body with compressed records given whole is decoded instead
+      of refused (see @ref rh_1_6_8 and @ref datastreamrequesthandler_v1_2; issue #7323)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
       handler leaves on a server thread (its persistence, its close notification and its user thread context) is
       kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
