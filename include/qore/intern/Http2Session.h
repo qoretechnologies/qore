@@ -738,6 +738,14 @@ public:
         notifyStreamDrain();
     }
 
+#ifdef DEBUG
+    //! Resumes the streams deferred while dbg_http2_hold_stream_data() held them
+    /** A deferred stream is otherwise resumed only by its next send, which a connection that has stopped sending never
+        makes: its data and its end stayed unsent, and the peer's close waited for its timeout
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+#endif
+
     //! Returns true once @ref markClosed has been called.
     DLLLOCAL bool isSessionClosed() const {
         return session_closed_.load(std::memory_order_acquire);
