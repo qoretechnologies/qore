@@ -582,9 +582,9 @@ public class TelnetClient {
 
     #! this method provides the value that will be given as the terminal window size in protocol negotiation
     /** The default implementation of this method is to return the actual terminal size by calling
-        TermIOS::getWindowSize(), or 80 columns and 24 rows if the module's code or the code that calls it has no
-        terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO", see
-        @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
+        TermIOS::getWindowSize(), or 80 columns and 24 rows if the module's code has no terminal I/O
+        (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO": when code without it loaded the module first, or a sandbox
+        without it governs the call).
         Override this method in a subclass to provide a different value.
 
         @return a hash with the following keys:
@@ -594,7 +594,7 @@ public class TelnetClient {
     private hash getWindowSize() {
         # the TermIOS class needs terminal I/O: it is called by name, so that the module can be loaded by code
         # without terminal I/O, which reports the classic 80x24 window size (qore#6438)
-        if (!SandboxManager::isTerminalIoAllowed()) {
+        if (get_parse_options() & PO_NO_TERMINAL_IO) {
             return {"rows": 24, "columns": 80};
         }
         return call_static_method("TermIOS", "getWindowSize");

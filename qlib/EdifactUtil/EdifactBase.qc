@@ -166,7 +166,7 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
             }
 
             @debug {
-                if (getenv("QORE_EDIFACT_DEBUG") && SandboxManager::isTerminalIoAllowed()) {
+                if (getenv("QORE_EDIFACT_DEBUG") && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                     stdout.printf("EdifactBase::parseSegment(): tag=%y len=%d\n", tag, segment_str.size());
                 }
             }

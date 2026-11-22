@@ -117,7 +117,7 @@ public class McpResourcesListDataProvider inherits McpClientDataProviderBase {
         @debug("Listing resources");
         list<auto> resources = mcp.listResources();
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Found %d resources\n", resources.size());
             }
         }
@@ -176,7 +176,7 @@ public class McpResourceReadDataProvider inherits McpClientDataProviderBase {
         @debug("Reading resource: %y", req.uri);
         hash<auto> result = mcp.readResource(req.uri);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Resource %y returned %d content items\n", req.uri, result.contents.size());
             }
         }

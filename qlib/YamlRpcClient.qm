@@ -291,21 +291,21 @@ public class YamlRpcClient inherits Qore::HTTPClient {
     auto callArgs(string method, auto args) {
         @assert(method);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path);
             }
         }
         # create outgoing message in YamlRpc Call format
         string msg = YamlRpcClient::makeRequest(method, args, flags);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("YamlRpcClient::callArgs() request=%y\n", msg);
             }
         }
         # send the message to the server and get the response as an YAML string
         string ans = post(path, msg, headers);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("YamlRpcClient::callArgs() response=%y\n", ans);
             }
         }

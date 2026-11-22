@@ -1881,35 +1881,6 @@ static bool SandboxManager::isCallerDomainDeniedAtEntry(softint domain) [flags=R
     return qore_caller_denied_user_domains(domain) != 0;
 }
 
-//! Returns @ref True if the running code may use the terminal (standard output and error) for its caller
-/** Library code that writes diagnostics or debug output to @ref Qore::stdout "stdout" or @ref Qore::stderr "stderr",
-    or reads the terminal, while it serves a caller calls this first: the terminal is used only if neither the running
-    code's own @ref parse_options "parse options" (as returned by @ref Qore::get_parse_options() "get_parse_options()")
-    nor the calling code (see isCallerRestricted()) is restricted from terminal I/O
-    (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO", @ref Qore::DOM_TERMINAL_IO "DOM_TERMINAL_IO").  The terminal is
-    not lent to code that is restricted from it: the builtins that use it refuse such a caller also in library code
-    (see @ref sandbox_terminal_io), so library code calls this to leave its output out instead; the initialization
-    of library module code is not a call by the code that loads it (see isCallerRestricted()), so a library module's
-    own diagnostics while it is initialized are decided by its own options.
-
-    It reveals only whether the running code or its caller is restricted, so it is not restricted itself.
-
-    @return @ref True if the running code may write to the terminal for its caller, @ref False if not
-
-    @par Example:
-    @code{.py}
-if (SandboxManager::isTerminalIoAllowed()) {
-    stderr.printf("error: %s\n", get_exception_string(ex));
-}
-    @endcode
-
-    @since %Qore 3.0
-*/
-static bool SandboxManager::isTerminalIoAllowed() [flags=RET_VALUE_ONLY] {
-    return !(runtime_get_parse_options().getLo() & PO_NO_TERMINAL_IO)
-        && !qore_caller_restricts_domain(QDOM_TERMINAL_IO);
-}
-
 //! Returns @ref True if the current thread's code may use uncontrolled APIs
 /** Resolves the sandboxes that govern the code as isGoverned() does, as the filesystem and network checks do: a policy
     barrier (callWithSystemPolicy()) and a system-policy capability of trusted code (createSystemPolicyCall()) are

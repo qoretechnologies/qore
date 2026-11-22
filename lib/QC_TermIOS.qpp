@@ -874,9 +874,6 @@ hash wh = termios.getWindowSize();
     @endcode
  */
 static hash TermIOS::getWindowSize() [flags=RET_VALUE_ONLY; dom=TERMINAL_IO] {
-   if (qore_check_caller_terminal_io("TermIOS::getWindowSize()", xsink)) {
-      return QoreValue();
-   }
 #ifdef HAVE_TERMIOS_H
    int rows, columns;
 

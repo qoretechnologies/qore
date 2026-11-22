@@ -1774,10 +1774,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       sensitive, a value that its type or its allowed values refuse is still given
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - the errors of data provider modules that are written to @ref Qore::stderr "stderr" without a logger are left out
-      when the module's code or the code that calls it has no terminal I/O
-      (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
-      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
+      when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising
+      an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - the errors of an option whose value or type is a hash, list or object no longer contain its value, which can
       hold credentials, such as headers; a type error names the field of a hash type that refused its value
       (<a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)

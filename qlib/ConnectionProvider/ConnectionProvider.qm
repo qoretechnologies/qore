@@ -215,9 +215,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       date is still given, and a string that is not a date raises \c CONNECTION-OPTION-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
-      output of @ref ConnectionProvider::get_connections() "get_connections()" is left out when the module's code or
-      the code that calls it has no terminal I/O (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue
-      6438</a>, <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
+      output of @ref ConnectionProvider::get_connections() "get_connections()" is left out when the module's code has no
+      terminal I/O (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - @ref ConnectionProvider::AbstractConnection::parseUrl() "AbstractConnection::parseUrl()" is declared to return
       \c hash<auto>, as a connection with another URL scheme returns its own hash (see @ref override_return_types)
     - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data
@@ -850,9 +849,8 @@ public AbstractConnection sub get_connection(string conn) {
     @endcode
 
     @param verbose display connection provider module errors on stdout (otherwise errors are ignored); nothing is
-        displayed when the module's code or the code that calls it has no terminal I/O
-        (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO", see
-        @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()")
+        displayed when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
+        when code without it loaded the module first, or a sandbox without it governs the call
 
     @return a hash keyed by connection identifier; values are AbstractConnection objects; @ref nothing is returned if no connections are known
 
@@ -873,7 +871,7 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
             } catch (hash<ExceptionInfo> ex) {
                 # the stdout constant needs terminal I/O only when it is written, so that the module can be loaded
                 # by code without it; such code gets no output (qore#6438)
-                if (verbose && SandboxManager::isTerminalIoAllowed()) {
+                if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                     stdout.printf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
                 }
             }
@@ -890,8 +888,7 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
     @endcode
 
     @param verbose display connection provider module errors on stdout (otherwise errors are silently ignored);
-        nothing is displayed when the module's code or the code that calls it has no terminal I/O (see
-        get_connections())
+        nothing is displayed when the module's code has no terminal I/O (see get_connections())
 
     @return a hash keyed by connection identifier; values are @ref ConnectionInfo hashes as returned by @ref AbstractConnection::getInfo() (with passwords included); @ref nothing is returned if no connections are known
 

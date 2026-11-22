@@ -389,10 +389,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
-    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code or the
-      code that calls it has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an
-      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
-      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
+    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
+      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - \c WebSocketConnectionObject::getImpl() is declared to return a
       @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
       @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
@@ -5479,7 +5478,7 @@ ws.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("WebSocketClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stderr.printf("WebSocketClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
                     vsprintf(message, args));
             }
@@ -6420,7 +6419,7 @@ class MyObserver inherits Observer {
             # EVENT_WS_ERROR, data-processing errors would otherwise be silently dropped if the
             # logger has no appender, and the caller would see an unexplained timeout (e.g.,
             # parse_json failure on a non-JSON payload when serialization is "json").
-            if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
+            if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
                     serialization, ex.err, ex.desc, buf_summary);
             }
@@ -6450,7 +6449,7 @@ class MyObserver inherits Observer {
                 });
                 # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
                 # and the logger may have no appender
-                if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
+                if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                     stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
                         ex.err, ex.desc);
                 }

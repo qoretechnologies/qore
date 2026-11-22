@@ -88,7 +88,7 @@ public class McpCompletionDataProvider inherits McpClientDataProviderBase {
 
         hash<auto> result = mcp.complete(ref, argument);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Completion returned %d values\n", result.completion.values.size());
             }
         }
@@ -144,7 +144,7 @@ public class McpPingDataProvider inherits McpClientDataProviderBase {
         @debug("Pinging MCP server");
         mcp.ping();
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Ping successful\n");
             }
         }

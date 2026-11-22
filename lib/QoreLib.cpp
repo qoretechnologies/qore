@@ -2025,10 +2025,6 @@ char* make_class_name(const char* str) {
 
 void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink) {
     printd(5, "print_node() node: %s\n", qv.getTypeName());
-    // print(), printf() and vprintf() for code that library code serves (qore#7140)
-    if (qore_check_caller_terminal_io("print(), printf() and vprintf()", xsink)) {
-        return;
-    }
     QoreStringValueHelper str(qv);
     // the text is written up to its first NUL character, as fputs(3) wrote it before; write errors are ignored as
     // they were then

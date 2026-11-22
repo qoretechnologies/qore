@@ -117,7 +117,7 @@ public class McpPromptsListDataProvider inherits McpClientDataProviderBase {
         @debug("Listing prompts");
         list<auto> prompts = mcp.listPrompts();
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Found %d prompts\n", prompts.size());
             }
         }
@@ -176,7 +176,7 @@ public class McpPromptGetDataProvider inherits McpClientDataProviderBase {
         @debug("Getting prompt %y with arguments: %y", req.name, req.arguments);
         hash<auto> result = mcp.getPrompt(req.name, req.arguments);
         @debug {
-            if (SandboxManager::isTerminalIoAllowed()) {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("Prompt %y returned %d messages\n", req.name, result.messages.size());
             }
         }
