@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
+    Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
+    event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
+    that created the connection (see @ref sandbox_lent_connections;
+    <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and

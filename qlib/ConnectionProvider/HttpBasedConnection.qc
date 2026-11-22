@@ -716,8 +716,9 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     }
 
     #! Checks the client that get() or getPollImpl() creates for code restricted from NETWORK (qore#7262)
-    /** A connection whose client is not bound to its creator (see hasBoundClient()) gives no client to restricted
-        code, which uses getAsync(), whose clients are; otherwise the connection's real URL and the real URL of its
+    /** A connection whose client is not bound to its creator (see hasBoundClient()) gives no synchronous client to
+        restricted code (its async client is bound, if it is, see @ref sandbox_lent_connections); otherwise the
+        connection's real URL and the real URL of its
         \c url member, which restricted code that was lent the connection can change, must be the target that the
         connection's creator gave, and its \c proxy option its proxy
 
@@ -728,7 +729,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         if (!hasBoundClient()) {
             throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                 "functional domain, and the connection's synchronous client is not bound to the target of the code "
-                "that created the connection; use getAsync() where the connection's async client is bound", name);
+                "that created the connection", name);
         }
         *string proxy = opts.proxy;
         checkLentNetworkTarget(real_url ?? url, proxy);
