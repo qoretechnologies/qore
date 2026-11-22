@@ -1284,6 +1284,12 @@
     \c SANDBOX-ISOLATION-ERROR for such code, which cannot create a sandbox, a %Program or a thread either (see
     @ref sandbox_isolation_domains; <a href="https://github.com/qoretechnologies/qore/issues/7009">issue 7009</a>).
 
+    @par TLS credentials in REST connection clients
+    REST connection clients use configured TLS files only at the
+    original service, OAuth2 token, alternate token and ping origins and omit their contents from exports and
+    serialization for all callers (see @ref Qore::HTTPClient::constructor()). Opening credential files in other
+    clients or copies requires filesystem access.
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
@@ -1304,12 +1310,6 @@
     @ref Qore::SQL::make_datasource_string() "make_datasource_string()" writes one so (see
     @ref Qore::SQL::parse_datasource() "parse_datasource()";
     <a href="https://github.com/qoretechnologies/qore/issues/6997">issue 6997</a>).
-
-    @par TLS credentials in REST connection clients
-    REST connection clients use configured TLS files only at the
-    original service, OAuth2 token, alternate token and ping origins and omit their contents from exports and
-    serialization for all callers (see @ref Qore::HTTPClient::constructor()). Opening credential files in other
-    clients or copies requires filesystem access.
 
     @par TLS credentials for HTTP clients
     @ref Qore::HTTPClient::constructor() "HTTPClient" accepts a client certificate and private key for TLS use
