@@ -12506,7 +12506,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeU32(mi.class_idx);
         writer.writeStringRef(method->getName());
         writer.writeU8(mi.is_static ? 1 : 0);
-        // the position of the method in the declaration order of the user methods of its map (format v52, #7169)
+        // the position of the method in the declaration order of the user methods of its map (format v53, #7169)
         writer.writeU32(mi.decl_index);
 
         // get the method's underlying function

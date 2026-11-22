@@ -655,10 +655,12 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v52 (the reader refuses v51 and older images, including images embedded in executables):
 //!      - wildcard bounds in type paths record the declaring type parameter owner and index recursively;
 //!        older readers cannot safely restore these bounds (qore#7184)
+//! v53 (the reader refuses v52 and older images, including images embedded in executables):
 //!      - METHODS records carry the position of each method in the declaration order of the user methods of its map
 //!        (instance or static) after the static flag, as a u32; the records keep the order of the method maps, so
 //!        the loader builds the maps as the parser did, and restores the declaration order that reflection
-//!        enumerates (qore#7169)
+//!        enumerates (qore#7169); a v52 METHODS record has no such field, so a v52 image is refused before any of
+//!        its records is read
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -669,6 +671,8 @@ constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
 constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
 //! First format version that resolves owner-qualified type parameters inside wildcard bounds.
 constexpr uint16_t QORE_AOT_WILDCARD_BOUND_VERSION = 52;
+//! First format version whose METHODS records carry the declaration index of their method (see v53 above).
+constexpr uint16_t QORE_AOT_METHOD_DECL_INDEX_VERSION = 53;
 //! First format version whose static method call references record the class that declares their method (see v49
 //! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
 //! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
@@ -677,8 +681,9 @@ constexpr uint16_t QORE_AOT_WILDCARD_BOUND_VERSION = 52;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Reject older images, including those embedded in standalone executables, before reading any type paths.
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_WILDCARD_BOUND_VERSION;
+//! Reject older images, including those embedded in standalone executables, before reading any record: a v52 image
+//! has METHODS records without the declaration index (see v53 above), which this reader would misread
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_METHOD_DECL_INDEX_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -818,7 +823,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_WILDCARD_BOUND_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_METHOD_DECL_INDEX_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
