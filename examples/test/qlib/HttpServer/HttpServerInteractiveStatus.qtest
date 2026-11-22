@@ -213,12 +213,8 @@ class HttpServerInteractiveStatusTest inherits QUnit::Test {
                     string what = sprintf("%s %s %d", protocol, api, code);
                     hash<auto> r = mgr.request(url, "GET", "/sock", {"x-code": code.toString(), "x-api": api});
                     assertEq(200, r.status_code, what);
-                    # the QUIC methods of the Socket class refuse a status above 599 before the HTTP/3 layer does
-                    string expected = (protocol == "h3" && code > 599)
-                        ? "^refused: QUIC-ERROR: invalid status_code " + code
-                        : "^refused: " + err + ": the status of a final response must be between 200 and 599; got "
-                            + code;
-                    assertRegex(expected, r.body, what);
+                    assertRegex("^refused: " + err + ": the status of a final response must be between 200 and 599; got "
+                        + code, r.body, what);
                 }
             }
             hash<auto> r = mgr.request(url, "GET", "/sock", {"x-code": "200"});

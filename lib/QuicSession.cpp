@@ -2082,6 +2082,7 @@ int QuicSession::resetHttp3(ExceptionSink* xsink) {
     streams_.clear();
     body_data_.clear();
     streaming_body_data_.clear();
+    responded_streams_.clear();
     updateKeepAliveAfterStreamStateChangeLocked();
     // Clear any pre-H3 buffered data and completed streams from the 0-RTT attempt
     pre_h3_buffer_.clear();
@@ -2516,6 +2517,10 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
     const size_t max_packet = ngtcp2_conn_get_path_max_tx_udp_payload_size2(conn_);
 
     for (;;) {
+        // the streams whose streamed response broke its declared length are reset before more is written
+        if (!pending_length_resets_.empty()) {
+            applyLengthResetsLocked();
+        }
         if (++iterations > MAX_WRITE_ITERATIONS) {
             xsink->raiseException("QUIC-WRITE-ERROR",
                 "writePackets() exceeded %d iteration safety limit; "
@@ -2736,6 +2741,12 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 local_addrlen_ = ps.path.local.addrlen;
             }
         }
+    }
+
+    // a reset found in the last iteration is sent with the next write
+    if (!pending_length_resets_.empty()) {
+        applyLengthResetsLocked();
+        pending_write_.store(true, std::memory_order_release);
     }
 
     // Account for the complete batch at its write timestamp, as ngtcp2_conn_write_aggregate_pkt() does.
@@ -3443,12 +3454,33 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
         return -1;
     }
 
-    // Guard against double submitResponse() for the same stream (would overwrite
-    // body_data_ while nghttp3 may still hold pointers to the previous body)
-    if (body_data_.count(stream_id)) {
+    // Guard against a second response on the stream, streamed or not, with or without a body: a second HEADERS
+    // frame is a malformed message (qoretechnologies/qore#7212), and a second body would overwrite body_data_ while
+    // nghttp3 may still hold pointers to the previous one
+    if (responseSubmittedLocked(stream_id)) {
         xsink->raiseException("QUIC-HTTP3-ERROR",
             "response already submitted for stream %" PRId64, stream_id);
         return -1;
+    }
+
+    // the server never sends a response that the client's HTTP/3 layer rejects as malformed: the client would close
+    // the connection with the other streams on it (qoretechnologies/qore#7212; see QoreHttpResponseBodyRule)
+    {
+        std::string method = streamMethodLocked(stream_id);
+        QoreHttpResponseBodyRule rule(status_code, method.c_str());
+        for (const auto& h : headers) {
+            rule.add(h.first.data(), h.first.size(), h.second.data(), h.second.size());
+        }
+        std::string err = rule.check(body && body_len ? static_cast<int64>(body_len) : 0);
+        if (!err.empty()) {
+            xsink->raiseException("QUIC-HTTP3-ERROR", "%s", err.c_str());
+            return -1;
+        }
+        // a response without content sends no body, as with HTTP/1.1
+        if (rule.noBody()) {
+            body_len = 0;
+            drp = nullptr;
+        }
     }
 
     // Copy body into owned storage (must be under lock since body_data_ is shared)
@@ -3464,6 +3496,7 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
         body_data_.erase(stream_id);
         return -1;
     }
+    responded_streams_.insert(stream_id);
 
     // Signal that there's data to write
     pending_write_.store(true, std::memory_order_release);
@@ -3524,9 +3557,22 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
     }
 
     // Guard against double submit for the same stream
-    if (body_data_.count(stream_id) || streaming_body_data_.count(stream_id)) {
+    if (responseSubmittedLocked(stream_id)) {
         xsink->raiseException("QUIC-HTTP3-ERROR",
             "response already submitted for stream %" PRId64, stream_id);
+        return -1;
+    }
+
+    // the server never sends a response that the client's HTTP/3 layer rejects as malformed (qoretechnologies/qore#7212;
+    // see QoreHttpResponseBodyRule): the length of the streamed content is enforced by h3ReadDataCallback()
+    std::string method = streamMethodLocked(stream_id);
+    QoreHttpResponseBodyRule rule(status_code, method.c_str());
+    for (const auto& h : headers) {
+        rule.add(h.first.data(), h.first.size(), h.second.data(), h.second.size());
+    }
+    std::string rule_err = rule.check(-1);
+    if (!rule_err.empty()) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "%s", rule_err.c_str());
         return -1;
     }
 
@@ -3534,6 +3580,8 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
     auto& sbd = streaming_body_data_[stream_id];
     sbd = QuicStreamingBodyData{};
     sbd.deferred = true;
+    sbd.no_body = rule.noBody();
+    sbd.content_length = rule.streamLength();
 
     int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
     if (rv != 0) {
@@ -3542,6 +3590,7 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
         streaming_body_data_.erase(stream_id);
         return -1;
     }
+    responded_streams_.insert(stream_id);
 
     // Signal that there's data to write (HEADERS frame)
     pending_write_.store(true, std::memory_order_release);
@@ -3975,7 +4024,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     }
 
     // Guard against double submit
-    if (body_data_.count(stream_id) || streaming_body_data_.count(stream_id)) {
+    if (responseSubmittedLocked(stream_id)) {
         xsink->raiseException("QUIC-HTTP3-ERROR",
             "response already submitted for stream %" PRId64, stream_id);
         return -1;
@@ -3997,6 +4046,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
         streaming_body_data_.erase(stream_id);
         return -1;
     }
+    responded_streams_.insert(stream_id);
 
     pending_write_.store(true, std::memory_order_release);
 #ifdef DEBUG
@@ -5215,6 +5265,13 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
                 pos += static_cast<size_t>(w);
             }
             hex_buf[pos] = '\0';
+            // the connection is closed on every error: nghttp3 documents that a negative return from
+            // nghttp3_conn_read_stream2() means a connection error after which no nghttp3 API other than
+            // nghttp3_conn_del() may be called (nghttp3.h), also for a malformed message, which RFC 9114 section 4.1.2
+            // makes a stream error: nghttp3 has no state to go on with the stream or the connection after it.  Do not
+            // reset only the stream here.  A server therefore never sends a malformed response, so that one stream's
+            // handler cannot end its client's connection with the other streams on it (qoretechnologies/qore#7212):
+            // see QuicSession::submitResponse(), submitResponseStreaming() and h3ReadDataCallback()
             qore_async_io_log(QORE_LOG_LEVEL_WARN,
                 "QuicSession::recvStreamDataCallback nghttp3_conn_read_stream2 "
                 "rejected stream: session=%lld stream_id=%lld err=%s datalen=%zu "
@@ -5384,6 +5441,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // Clean up body data
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
+        session->responded_streams_.erase(stream_id);
 
         // Clean up extended CONNECT tunnel data, Queue, and notify callback
         {
@@ -6756,6 +6814,41 @@ void QuicSession::dbgResumeHeldStreams() {
 }
 #endif
 
+void QuicSession::noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData& sbd, uint64_t len) {
+    if (sbd.length_error) {
+        return;
+    }
+    qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: the streamed response on stream %lld of session %lld has %s "
+        "content (%llu bytes) than its content-length (%lld); the stream is reset", (long long)stream_id,
+        (long long)session_id_, len > static_cast<uint64_t>(sbd.content_length) ? "more" : "less",
+        (unsigned long long)len, (long long)sbd.content_length);
+    sbd.length_error = true;
+    sbd.deferred = true;
+    sbd.data.clear();
+    sbd.pending_pong.clear();
+    pending_length_resets_.push_back(stream_id);
+    pending_write_.store(true, std::memory_order_release);
+}
+
+void QuicSession::applyLengthResetsLocked() {
+    std::vector<int64_t> ids;
+    ids.swap(pending_length_resets_);
+    for (int64_t id : ids) {
+        // the response is not ended with FIN, which would make it malformed: RESET_STREAM ends it with an error of
+        // the stream, which the client handles without closing the connection (RFC 9114 section 4.1.1)
+        if (h3_conn_) {
+            nghttp3_conn_shutdown_stream_write(h3_conn_, id);
+        }
+        if (conn_) {
+            int rv = ngtcp2_conn_shutdown_stream_write(conn_, 0, id, NGHTTP3_H3_INTERNAL_ERROR);
+            if (rv && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+                printd(1, "QuicSession::applyLengthResetsLocked() stream %lld: %s\n", (long long)id,
+                    ngtcp2_strerror(rv));
+            }
+        }
+    }
+}
+
 nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                                nghttp3_vec* vec, size_t veccnt,
                                                uint32_t* pflags,
@@ -6804,6 +6897,23 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
             }
         }
 #endif
+        // a stream reset for its length sends nothing more
+        if (sbd.length_error) {
+            sbd.deferred = true;
+            return NGHTTP3_ERR_WOULDBLOCK;
+        }
+        // a response without content sends none of the data staged for it (qoretechnologies/qore#7212)
+        if (sbd.no_body && !sbd.data.empty()) {
+            sbd.data.clear();
+            sbd.pending_pong.clear();
+        }
+        // content beyond the declared length would make the response malformed: the stream is reset instead
+        // (qoretechnologies/qore#7212)
+        if (!sbd.data.empty() && sbd.content_length >= 0
+                && sbd.provided + sbd.data.size() > static_cast<uint64_t>(sbd.content_length)) {
+            session->noteLengthErrorLocked(stream_id, sbd, sbd.provided + sbd.data.size());
+            return NGHTTP3_ERR_WOULDBLOCK;
+        }
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
                 // Move staging data into sent_bufs for stable pointer lifetime.
@@ -6830,8 +6940,15 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
                 // Notify waitForStreamDrain() that buffer space freed up
                 session->notifyStreamDrain();
 
+                sbd.provided += buf.size();
                 if (sbd.eof) {
-                    *pflags = NGHTTP3_DATA_FLAG_EOF;
+                    // content shorter than declared is not ended normally (qoretechnologies/qore#7212)
+                    if (sbd.content_length >= 0 && sbd.provided != static_cast<uint64_t>(sbd.content_length)) {
+                        session->noteLengthErrorLocked(stream_id, sbd, sbd.provided);
+                        *pflags = 0;
+                    } else {
+                        *pflags = NGHTTP3_DATA_FLAG_EOF;
+                    }
                 } else {
                     *pflags = 0;
                 }
@@ -6843,6 +6960,11 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
         }
 
         if (sbd.eof) {
+            // content shorter than declared is not ended normally (qoretechnologies/qore#7212)
+            if (sbd.content_length >= 0 && sbd.provided != static_cast<uint64_t>(sbd.content_length)) {
+                session->noteLengthErrorLocked(stream_id, sbd, sbd.provided);
+                return NGHTTP3_ERR_WOULDBLOCK;
+            }
             // No data and EOF: signal end of stream
             *pflags = NGHTTP3_DATA_FLAG_EOF;
             return 0;

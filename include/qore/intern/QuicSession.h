@@ -242,6 +242,14 @@ struct QuicStreamingBodyData {
     std::vector<uint8_t> pending_pong;
     //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
     bool close_frame_staged = false;
+    //! a response without content (to HEAD, or with status 204 or 304): its data is not sent (qore#7212)
+    bool no_body = false;
+    //! the declared length of the response's content, -1 if not declared (qore#7212)
+    int64_t content_length = -1;
+    //! the bytes of the response's content provided to nghttp3 so far
+    uint64_t provided = 0;
+    //! true once the content is longer or shorter than declared: the stream is reset instead of ended (qore#7212)
+    bool length_error = false;
 };
 
 class qore_socket_private;
@@ -1744,6 +1752,7 @@ private:
     */
     DLLLOCAL void recordPeerStreamReset(int64_t stream_id, uint64_t app_error_code);
 
+
     //! Handshake completed
     DLLLOCAL static int handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data);
 
@@ -2104,6 +2113,35 @@ private:
 
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
+    //! server: the streams whose response has been submitted, with or without a body, until they close
+    /** A second response on a stream would send a second HEADERS frame, a malformed message (RFC 9114 section 4.1),
+        so every response submit refuses a stream in this set (qoretechnologies/qore#7212)
+    */
+    std::unordered_set<int64_t> responded_streams_;
+
+    //! server: the streams whose streamed response broke its declared length, to be reset after the HTTP/3 layer's
+    //! callback that found it (qore#7212)
+    std::vector<int64_t> pending_length_resets_;
+
+    //! Resets the streams of pending_length_resets_; the caller holds the lock and is outside of nghttp3's callbacks
+    DLLLOCAL void applyLengthResetsLocked();
+
+    //! Records that a streamed response broke its declared length (\a len bytes): the stream is reset after the
+    //! callback; the caller holds the lock
+    DLLLOCAL void noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData& sbd, uint64_t len);
+
+    //! Returns the request method of a server stream, or an empty string; the caller holds the lock
+    DLLLOCAL std::string streamMethodLocked(int64_t stream_id) const {
+        auto it = streams_.find(stream_id);
+        return it == streams_.end() ? std::string() : it->second->method;
+    }
+
+    //! Returns true if a response has been submitted on the stream; the caller holds the lock
+    DLLLOCAL bool responseSubmittedLocked(int64_t stream_id) const {
+        return responded_streams_.count(stream_id) || body_data_.count(stream_id)
+            || streaming_body_data_.count(stream_id);
+    }
 
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int64_t, size_t> deferred_stream_credit_;

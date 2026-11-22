@@ -1,0 +1,408 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A handler cannot make the server send a malformed response on its HTTP/2 or HTTP/3 stream, which an HTTP/3 client
+# answers by closing its whole connection with the other streams on it: a content-length that does not match the
+# body (complete or streamed), several or invalid content-length fields, content in a response that has none, a
+# second response after the one that the handler submitted itself, trailers before the response, or a status that
+# does not fit; each case runs with another handler's request held on the same connection, which must complete
+# (qoretechnologies/qore#7212)
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) server streams over TLS and the client connections that share them
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerMalformedResponseTest
+
+#! the case of the request is the last element of its path; the status of a submit is given by the x-code header
+class BadHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string c = (hdr.path =~ x/([^\/]+)$/)[0];
+        bool h3 = cx."header-info".http3 ?? False;
+        int sid = cx."header-info".stream_id;
+        int session_id = cx."header-info".session_id ?? 0;
+        int xcode = (hdr."x-code" ?? "200").toInt();
+
+        # submits a complete response on the handler's stream
+        code submit = sub (int status, hash<auto> h, *binary b) {
+            h3 ? s.submitQuicResponse(session_id, sid, status, h, b) : s.submitHttp2Response(sid, status, h, b);
+        };
+        # submits the headers of a streamed response, then the given data with the end of the stream
+        code stream = sub (hash<auto> h, binary b) {
+            if (h3) {
+                s.submitQuicResponseStreaming(session_id, sid, 200, h);
+                s.submitQuicStreamData(session_id, sid, b, True);
+            } else {
+                s.submitHttp2StreamingResponseHeaders(sid, 200, h);
+                s.sendHttp2StreamData(sid, b, True);
+            }
+        };
+        try {
+            switch (c) {
+                case "ret-cl":
+                    # a content-length larger than the body, in the handler's return value
+                    return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Length": "100"}, "body": "x"};
+                case "ret-cl-case":
+                    # two content-length fields in different case, in the handler's return value: the server uses
+                    # one name for them
+                    return <HttpResponseInfo>{"code": 200, "hdr": {"content-length": "1", "Content-Length": "1"},
+                        "body": "x"};
+                case "ret-gzip":
+                    # a content-length of the uncompressed body, which the server compresses
+                    return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Length": "20000"},
+                        "body": strmul("a", 20000)};
+                case "sock-cl":
+                    submit(200, {"content-length": "100"}, binary("x"));
+                    break;
+                case "sock-cl-dup":
+                    submit(200, {"content-length": "1", "Content-Length": "1"}, binary("x"));
+                    break;
+                case "sock-cl-invalid":
+                    submit(200, {"content-length": "1x"}, binary("x"));
+                    break;
+                case "sock-204-cl":
+                    submit(204, {"content-length": "5"});
+                    break;
+                case "head-cl":
+                    # a content-length without a body, as in a response to HEAD, is sent
+                    submit(200, {"content-length": "100"});
+                    break;
+                case "head-body":
+                    # a body given for a response to HEAD is not sent
+                    submit(200, {}, binary("not sent"));
+                    break;
+                case "stream-long":
+                    stream({"content-length": "2"}, binary("longer"));
+                    break;
+                case "stream-short":
+                    stream({"content-length": "100"}, binary("short"));
+                    break;
+                case "stream-exact":
+                    stream({"content-length": "5"}, binary("exact"));
+                    break;
+                case "stream-head":
+                    # data given for a streamed response to HEAD is not sent
+                    stream({}, binary("not sent"));
+                    break;
+                case "second":
+                    # a second response after the headers of a streamed one
+                    if (h3) {
+                        s.submitQuicResponseStreaming(session_id, sid, 200, {});
+                    } else {
+                        s.submitHttp2StreamingResponseHeaders(sid, 200, {});
+                    }
+                    try {
+                        submit(201, {}, binary("second"));
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the first response is completed
+                        h3 ? s.submitQuicStreamData(session_id, sid, binary("refused: " + ex.err + ": " + ex.desc),
+                                True)
+                           : s.sendHttp2StreamData(sid, binary("refused: " + ex.err + ": " + ex.desc), True);
+                    }
+                    break;
+                case "withstream": {
+                    # a streamed response that the handler submits itself, then reply_sent without "streaming"; with
+                    # 1, the stream cannot be read on the I/O thread, and the response is submitted as a whole
+                    int rv = h3
+                        ? s.submitQuicStreamingResponseWithStream(session_id, sid, xcode, {},
+                            new BinaryInputStream(binary("sent")))
+                        : s.submitHttp2StreamingResponseWithStream(sid, xcode, {},
+                            new BinaryInputStream(binary("sent")));
+                    if (rv) {
+                        submit(xcode, {}, binary("sent"));
+                    }
+                    break;
+                }
+                case "nobody":
+                    # a complete response without a body, then reply_sent
+                    submit(204, {});
+                    break;
+                case "status":
+                    # the status of the x-code header, which does not fit in an int, through every response API
+                    switch (hdr."x-api") {
+                        case "response":
+                            submit(xcode, {}, binary("sent"));
+                            break;
+                        case "streaming":
+                            h3 ? s.submitQuicResponseStreaming(session_id, sid, xcode, {})
+                               : s.submitHttp2StreamingResponseHeaders(sid, xcode, {});
+                            break;
+                        case "connect":
+                            h3 ? s.submitQuicConnectResponse(session_id, sid, xcode, {})
+                               : s.submitHttp2ConnectResponse(sid, xcode, {});
+                            break;
+                        case "withstream":
+                            h3 ? s.submitQuicStreamingResponseWithStream(session_id, sid, xcode, {},
+                                    new BinaryInputStream(binary("sent")))
+                               : s.submitHttp2StreamingResponseWithStream(sid, xcode, {},
+                                    new BinaryInputStream(binary("sent")));
+                            break;
+                    }
+                    break;
+                case "trailers-first":
+                    # trailers before any response on the handler's own HTTP/2 stream
+                    s.sendHttp2Trailers(sid, {"x-t": "1"});
+                    return <HttpResponseInfo>{"code": 200, "body": "after-trailers"};
+                case "close-after-refused":
+                    # a refused status, then close(): the stream is reset as if nothing had been submitted
+                    try {
+                        s.submitHttp2StreamingResponseHeaders(sid, 103, {});
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                    s.close();
+                    return <HttpResponseInfo>{"code": 200, "body": "after-close"};
+                case "close-control":
+                    s.close();
+                    return <HttpResponseInfo>{"code": 200, "body": "after-close"};
+                default:
+                    throw "BAD-CASE", c;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return <HttpResponseInfo>{"code": 200, "body": "refused: " + ex.err + ": " + ex.desc};
+        }
+        return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+    }
+}
+
+#! answers at once, or when released for /held
+class PlainHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?held/) {
+            # bounded, so that the server ends if a broken connection leaves the request unreleased
+            try {
+                release.get(20s);
+            } catch () {
+            }
+            return <HttpResponseInfo>{"code": 200, "body": "held-ok"};
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+class HttpServerMalformedResponseTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PlainHandler plain();
+        string url;
+
+        #! statuses that do not fit in an int; the first two become 200 and 101 when narrowed
+        const OverflowCodes = (4294967496, 4294967397, -4294967096);
+    }
+
+    constructor() : QUnit::Test("HttpServerMalformedResponse", "1.0") {
+        addTestCase("content-length fields that do not match the body are refused", \contentLengthTest());
+        addTestCase("a response without content sends no body", \noBodyTest());
+        addTestCase("a streamed body of another length than declared resets its stream", \streamLengthTest());
+        addTestCase("a compressed body is sent with its own length", \compressedTest());
+        addTestCase("no second response on a stream", \secondResponseTest());
+        addTestCase("a status that does not fit in an int is refused", \overflowStatusTest());
+        addTestCase("HTTP/2 trailers before the response are refused", \trailersFirstTest());
+        addTestCase("HTTP/2 close() after a refused response resets the stream", \closeAfterRefusedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
+        server.setHandler("bad", "/bad", NOTHING, new BadHandler());
+        server.setDefaultHandler("plain", plain);
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private HttpClientConnectionManager manager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 10s,
+        });
+    }
+
+    #! returns the body of a response as a string
+    private static string bodyStr(hash<auto> r) {
+        return r.body.typeCode() == NT_BINARY ? r.body.toString() : (r.body ?? "");
+    }
+
+    #! runs the request of a case while another handler's request is held on the same connection
+    /** Checks that the held request and a later request on the connection complete, and returns the response of the
+        case, or the exception that it raised
+    */
+    private hash<auto> withHeldStream(string protocol, string what, string method, string path, *hash<auto> hdr) {
+        HttpClientConnectionManager mgr = manager(protocol);
+        on_exit delete mgr;
+        auto held = mgr.requestAsync(url, "GET", "/held");
+        bool released;
+        on_exit if (!released) {
+            plain.release.push(1);
+        }
+        string msg = sprintf("%s %s", protocol, what);
+        assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection is up");
+        hash<auto> rv;
+        try {
+            rv.response = mgr.request(url, method, path, hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.ex = ex;
+        }
+        assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection goes on");
+        plain.release.push(1);
+        released = True;
+        assertEq(200, held.get(10s).status_code, msg + ": the held stream of another handler completes");
+        return rv;
+    }
+
+    #! checks that the handler socket refused the response of a case with the given message
+    private checkRefused(string protocol, string c, string desc, *int status) {
+        string err = protocol == "h3" ? "QUIC-HTTP3-ERROR" : "HTTP2-ERROR";
+        hash<auto> rv = withHeldStream(protocol, c, "GET", "/bad/" + c);
+        string msg = sprintf("%s %s", protocol, c);
+        assertNothing(rv.ex, msg + ": the client gets the handler's answer");
+        assertEq(200, rv.response.status_code, msg);
+        assertEq("refused: " + err + ": " + desc, bodyStr(rv.response), msg);
+    }
+
+    contentLengthTest() {
+        foreach string protocol in ("h2", "h3") {
+            checkRefused(protocol, "sock-cl",
+                "the content-length of the response (100) does not match the length of its body (1 bytes)");
+            checkRefused(protocol, "sock-cl-dup", "the response has 2 content-length fields");
+            checkRefused(protocol, "sock-cl-invalid", "the content-length of the response ('1x') is not a valid length");
+            checkRefused(protocol, "sock-204-cl", "a 204 response has a content-length of 5, not 0");
+
+            # the server does not send it for the handler's return value: the request gets an error response
+            hash<auto> rv = withHeldStream(protocol, "ret-cl", "GET", "/bad/ret-cl");
+            assertNothing(rv.ex, protocol + " ret-cl: the client gets a response");
+            assertEq(500, rv.response.status_code, protocol + " ret-cl: the server answers with an error");
+
+            # fields whose names differ in case are one field of the response
+            rv = withHeldStream(protocol, "ret-cl-case", "GET", "/bad/ret-cl-case");
+            assertNothing(rv.ex, protocol + " ret-cl-case: the client gets the response");
+            assertEq(200, rv.response.status_code, protocol + " ret-cl-case");
+            assertEq("x", bodyStr(rv.response), protocol + " ret-cl-case");
+        }
+    }
+
+    noBodyTest() {
+        foreach string protocol in ("h2", "h3") {
+            # a content-length without a body is the length of the response to GET
+            hash<auto> rv = withHeldStream(protocol, "head-cl", "HEAD", "/bad/head-cl");
+            assertNothing(rv.ex, protocol + " head-cl: the client gets the response");
+            assertEq(200, rv.response.status_code, protocol + " head-cl");
+
+            foreach string c in ("head-body", "stream-head") {
+                rv = withHeldStream(protocol, c, "HEAD", "/bad/" + c);
+                assertNothing(rv.ex, sprintf("%s %s: the client gets the response", protocol, c));
+                assertEq(200, rv.response.status_code, protocol + " " + c);
+                assertEq("", bodyStr(rv.response), protocol + " " + c + ": no body is sent");
+            }
+        }
+    }
+
+    streamLengthTest() {
+        foreach string protocol in ("h2", "h3") {
+            # a body of the declared length is sent
+            hash<auto> rv = withHeldStream(protocol, "stream-exact", "GET", "/bad/stream-exact");
+            assertNothing(rv.ex, protocol + " stream-exact: the client gets the response");
+            assertEq("exact", bodyStr(rv.response), protocol + " stream-exact");
+
+            # longer or shorter: the stream is reset, so that only its request fails
+            foreach string c in ("stream-long", "stream-short") {
+                rv = withHeldStream(protocol, c, "GET", "/bad/" + c);
+                assertEq(Type::Hash, rv.ex.type(), sprintf("%s %s: the request fails", protocol, c));
+                assertRegex("RESET", rv.ex.desc, sprintf("%s %s: the stream is reset", protocol, c));
+            }
+        }
+    }
+
+    compressedTest() {
+        foreach string protocol in ("h2", "h3") {
+            hash<auto> rv = withHeldStream(protocol, "ret-gzip", "GET", "/bad/ret-gzip", {"Accept-Encoding": "gzip"});
+            assertNothing(rv.ex, protocol + " ret-gzip: the client gets the response");
+            assertEq(200, rv.response.status_code, protocol + " ret-gzip");
+            assertEq(strmul("a", 20000), bodyStr(rv.response), protocol + " ret-gzip: the body is received");
+        }
+    }
+
+    secondResponseTest() {
+        foreach string protocol in ("h2", "h3") {
+            # refused by the handler socket; the first response completes
+            hash<auto> rv = withHeldStream(protocol, "second", "GET", "/bad/second");
+            assertNothing(rv.ex, protocol + " second: the client gets the first response");
+            assertEq(200, rv.response.status_code, protocol + " second: the first response");
+            assertRegex("^refused: (HTTP2-ERROR|QUIC-HTTP3-ERROR): response already submitted for stream",
+                bodyStr(rv.response), protocol + " second");
+
+            # the server adds no response after the handler's own
+            rv = withHeldStream(protocol, "withstream", "GET", "/bad/withstream");
+            assertNothing(rv.ex, sprintf("%s withstream: the client gets the response (%s: %s)", protocol, rv.ex.err,
+                rv.ex.desc));
+            assertEq(200, rv.response.status_code, protocol + " withstream: the handler's response");
+            assertEq("sent", bodyStr(rv.response), protocol + " withstream: the handler's body");
+
+            rv = withHeldStream(protocol, "nobody", "GET", "/bad/nobody");
+            assertNothing(rv.ex, protocol + " nobody: the client gets the response");
+            assertEq(204, rv.response.status_code, protocol + " nobody: the handler's response");
+        }
+    }
+
+    overflowStatusTest() {
+        foreach string protocol in ("h2", "h3") {
+            string err = protocol == "h3" ? "QUIC-HTTP3-ERROR" : "HTTP2-ERROR";
+            HttpClientConnectionManager mgr = manager(protocol);
+            on_exit delete mgr;
+            foreach string api in ("response", "streaming", "connect", "withstream") {
+                foreach int code in (OverflowCodes) {
+                    string what = sprintf("%s %s %d", protocol, api, code);
+                    hash<auto> r = mgr.request(url, "GET", "/bad/status", {"x-code": code.toString(), "x-api": api});
+                    assertEq(200, r.status_code, what);
+                    assertEq(sprintf("refused: %s: the status of a final response must be between 200 and 599; got %d",
+                        err, code), bodyStr(r), what);
+                }
+            }
+            assertEq(200, mgr.request(url, "GET", "/").status_code, protocol + ": the connection goes on");
+        }
+    }
+
+    trailersFirstTest() {
+        hash<auto> rv = withHeldStream("h2", "trailers-first", "GET", "/bad/trailers-first");
+        assertEq(200, rv.response.status_code, "trailers-first");
+        assertRegex("^refused: HTTP2-ERROR: cannot send trailers on stream [0-9]+ before its response$",
+            bodyStr(rv.response), "trailers-first");
+    }
+
+    closeAfterRefusedTest() {
+        HttpClientConnectionManager mgr = manager("h2");
+        on_exit delete mgr;
+        # a stream closed by the handler without a response is reset, also after a refused response
+        foreach string c in ("close-control", "close-after-refused") {
+            *hash<auto> ex;
+            try {
+                mgr.request(url, "GET", "/bad/" + c);
+            } catch (hash<ExceptionInfo> ex1) {
+                ex = ex1;
+            }
+            assertEq(Type::Hash, ex.type(), c + ": the stream is reset");
+            assertEq(200, mgr.request(url, "GET", "/").status_code, c + ": the connection goes on");
+        }
+    }
+}
