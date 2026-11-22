@@ -293,6 +293,7 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         addTestCase("a WebSocket connection over HTTP/3 ends its own stream only", \webSocketTest());
         addTestCase("a dedicated connection over HTTP/3 ends its own stream only", \dedicatedTest());
         addTestCase("an SSE connection over HTTP/3 gets its own socket", \sseTest());
+        addTestCase("a listener class cannot drop the mark of a QUIC listener", \listenerMarkTest());
         addTestCase("a look-alike of the handler socket class cannot read the listener's socket", \lookAlikeTest());
         set_return_value(main());
     }
@@ -461,6 +462,25 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         assertEq(("setup: own=ok cipher=QUIC-SESSION-ERROR", "stream: own=ok cipher=QUIC-SESSION-ERROR"),
             (to_host.get(HangGuard), to_host.get(HangGuard)));
         assertEq(victim_session, getOrError(victim, "/whoami"), "the victim's session continues");
+    }
+
+    #! A subclass of HttpListener cannot override the method that marks a QUIC listener, whose handlers would then
+    #! get the listener's socket
+    listenerMarkTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        string src = "%modern\n%requires HttpServer\n"
+            "class MyListener inherits HttpServer::HttpListener {\n"
+            "    setQuicListener() {\n"
+            "    }\n"
+            "}\n";
+        string err;
+        try {
+            p.parse(src, "listener");
+            err = "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err + ": " + ex.desc;
+        }
+        assertRegex("final", err, "the override is refused");
     }
 
     #! A tenant's class with the name and signature of the handler socket class cannot read its members (qore#7036)

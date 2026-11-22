@@ -7933,11 +7933,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Marks the listener as one whose requests share a QUIC socket, that of the HTTP/3 sessions of the listener
     /** Called by the server when it attaches a QUIC socket to the listener (see HttpServer::addQuicListener()): the
         handler of each request of the listener then gets an Http3HandlerSocket for its own session and stream
-        instead of the listener's QUIC socket (qore#6953).  The mark cannot be removed.
+        instead of the listener's QUIC socket (qore#6953).  The mark cannot be removed, and the method cannot be
+        overridden.
 
         @since HttpServer 1.7
     */
-    setQuicListener() {
+    final setQuicListener() {
         quic = True;
     }
 
