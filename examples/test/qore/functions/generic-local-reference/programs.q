@@ -38,3 +38,12 @@ snapshots = ();
 delete lib;
 try { kept(NOTHING); printf("deleted-library: ran\n"); }
 catch (hash<ExceptionInfo> ex) { printf("deleted-library: %s\n", ex.err); }
+
+# A bound that mentions T is not a bare T alternative. Parse it in its own Program so
+# this checks runtime specialization independently of qcc's encoding of wildcard bounds.
+Program bounds(PO_NO_CHILD_PO_RESTRICTIONS);
+bounds.parse("%modern\nclass Box<T> {}\n"
+    "auto sub check<T>(auto input) { union<Box<T>, ? super T> value = input; return value; }\n"
+    "auto sub run(auto input) { return check<string>(input); }\n", "wildcard-bound");
+try { bounds.callFunction("run", NOTHING); printf("wildcard bound: accepted NOTHING\n"); }
+catch (hash<ExceptionInfo> ex) { printf("wildcard bound: %s\n", ex.err); }
