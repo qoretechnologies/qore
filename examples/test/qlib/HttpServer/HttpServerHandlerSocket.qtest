@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The socket of an HTTP/1.x request is the connection's: the code of a handler class that sandboxed code declares,
+    and the code that serves a stream request, get a placeholder that is not connected, so that they cannot read a
+    request that the client sends after its own on the connection, nor close the connection; the stream request
+    itself and the trusted code of a handler use the connection's socket (qore#6843)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerHandlerSocketTest
+
+const TenantOpts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION;
+
+#! the tenant's code
+const Tenant = "
+class Ops {
+    #! what the socket allows
+    static hash<auto> ops(Qore::Socket s, bool all = True) {
+        hash<auto> rv = {
+            'open': s.isOpen(),
+            'read-header': Ops::attempt(auto sub () {
+                hash<auto> h = s.readHTTPHeader(1s);
+                return exists h.headers.authorization || exists h.authorization ? 'CREDENTIALS' : 'headers';
+            }),
+            'recv': Ops::attempt(auto sub () { return s.recv(-1, 0); }),
+        };
+        if (all) {
+            rv.send = Ops::attempt(auto sub () { s.send('x'); return 'sent'; });
+            rv.shutdown = Ops::attempt(auto sub () { s.shutdown(); return 'done'; });
+            rv.close = Ops::attempt(auto sub () { s.close(); return 'done'; });
+        }
+        return rv;
+    }
+
+    static string attempt(code c) {
+        try {
+            auto v = c();
+            return 'OK ' + v.type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! a handler class that sandboxed code declares, which overrides the handler's dispatch
+class TenantHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpServer::HttpResponseInfo> handleRequest(HttpServer::HttpListenerInterface listener, Qore::Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpServer::HttpResponseInfo>{
+            'code': 200,
+            'hdr': {'Content-Type': 'text/plain'},
+            'body': sprintf('%y', Ops::ops(s)),
+        };
+    }
+}
+
+#! a stream handler class that sandboxed code declares
+class TenantStreamHandler inherits HttpServer::AbstractHttpRequestHandler {
+    constructor() : HttpServer::AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private HttpServer::AbstractStreamRequest getStreamRequestImpl(HttpServer::HttpListenerInterface listener,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return new TS(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! the tenant's stream request, which the host's handler creates with the tenant's factory
+class TS inherits HttpServer::AbstractStreamRequest {
+    private:internal {
+        hash<auto> ops;
+        bool sent;
+    }
+
+    constructor(HttpServer::HttpListenerInterface listener, HttpServer::AbstractHttpRequestHandler handler,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, auto body)
+            : HttpServer::AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        ops = Ops::ops(s);
+    }
+
+    private hash<HttpServer::HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpServer::HttpResponseInfo>{
+            'code': 200,
+            'hdr': {'Content-Type': 'text/plain', 'Transfer-Encoding': 'chunked'},
+        };
+    }
+
+    private auto sendImpl() {
+        if (sent) {
+            return;
+        }
+        sent = True;
+        return sprintf('%y', ops);
+    }
+}
+
+HttpServer::AbstractHttpRequestHandler sub handler() {
+    return new TenantHandler();
+}
+
+HttpServer::AbstractHttpRequestHandler sub stream_handler() {
+    return new TenantStreamHandler();
+}
+
+HttpServer::AbstractStreamRequest sub make(HttpServer::HttpListenerInterface listener,
+        HttpServer::AbstractHttpRequestHandler handler, Qore::Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+    return new TS(listener, handler, s, cx, hdr, body);
+}
+";
+
+#! the host's stream handler: its trusted code uses the connection's socket; the request is the tenant's
+class HostStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the socket that the trusted code got from the raw request
+        *bool raw_open;
+    }
+
+    private {
+        Program tenant;
+    }
+
+    constructor(Program tenant) : AbstractHttpRequestHandler(NOTHING, True) {
+        self.tenant = tenant;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        raw_open = getRawRequest().s.isOpen();
+        return tenant.callFunction("make", listener, self, s, cx, hdr, body);
+    }
+}
+
+class HttpServerHandlerSocketTest inherits QUnit::Test {
+    private {
+        Program tenant;
+        HttpServer server;
+        HostStreamHandler host;
+        int port;
+    }
+
+    constructor() : Test("HttpServerHandlerSocketTest", "1.0") {
+        addTestCase("a handler class that sandboxed code declares", \testTenantHandler());
+        addTestCase("the code that serves a stream request", \testStreamRequest());
+        addTestCase("a stream handler class that sandboxed code declares", \testTenantStreamHandler());
+
+        tenant = new Program(TenantOpts);
+        tenant.setSandboxManager(new SandboxManager());
+        tenant.loadModule("HttpServerUtil");
+        tenant.parse(Tenant, "tenant");
+
+        server = new HttpServer(<HttpServerOptionInfo>{"debug": True});
+        server.setHandler("tenant", "^tenant", NOTHING, tenant.callFunction("handler"));
+        host = new HostStreamHandler(tenant);
+        server.setHandler("stream", "^stream", NOTHING, host);
+        server.setHandler("tenant-stream", "^tsh", NOTHING, tenant.callFunction("stream_handler"));
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        on_exit server.stop();
+        set_return_value(main());
+    }
+
+    #! the placeholder: every operation fails, and nothing reaches the connection
+    const PlaceholderOps = {
+        "open": False,
+        "read-header": "SOCKET-NOT-OPEN",
+        "recv": "SOCKET-NOT-OPEN",
+        "send": "SOCKET-NOT-OPEN",
+        # nothing to shut down or close: the connection is not affected
+        "shutdown": "OK string",
+        "close": "OK string",
+    };
+
+    testTenantHandler() {
+        # the request, and one with credentials pipelined after it on the connection
+        hash<auto> r = pipelined("/tenant/all");
+        assertEq(200, r.first.status_code);
+        assertEq(sprintf("%y", PlaceholderOps), r.first.body);
+        # the next request is served
+        assertEq(200, r.next.status_code);
+    }
+
+    testStreamRequest() {
+        hash<auto> r = pipelined("/stream/x");
+        assertEq(200, r.first.status_code);
+        assertEq(sprintf("%y", PlaceholderOps), r.first.body);
+        assertEq(200, r.next.status_code);
+        # the trusted code of the host's handler got the connection's socket
+        assertTrue(host.raw_open);
+    }
+
+    testTenantStreamHandler() {
+        HTTPClient c({"url": "http://127.0.0.1:" + port});
+        on_exit c.disconnect();
+        hash<auto> info;
+        try {
+            c.send("x", "POST", "/tsh/x", {"Authorization": "Basic dGVzdDp0ZXN0"}, False, \info);
+            assertTrue(False, "the request is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            # refused when the request is created, without naming the request's header fields
+            assertEq(500, ex.arg.status_code);
+            assertRegex("HTTP-HANDLER-ERROR: a stream request handler of a class that sandboxed code declared "
+                "cannot serve an HTTP/1.x request", ex.arg.body);
+            assertNRegex("dGVzdDp0ZXN0", ex.arg.body);
+        }
+    }
+
+    #! sends a request and a request with credentials after it on the same connection; returns both responses
+    private hash<auto> pipelined(string path) {
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send(sprintf("GET %s HTTP/1.1\r\nHost: x\r\n\r\n"
+            "GET %s HTTP/1.1\r\nHost: x\r\nAuthorization: Basic dGVzdDp0ZXN0\r\n\r\n", path, path));
+        hash<auto> rv;
+        foreach string key in (("first", "next")) {
+            hash<auto> resp = s.readHTTPHeader(10s);
+            string body;
+            if (resp."transfer-encoding" == "chunked") {
+                body = s.readHTTPChunkedBody(10s).body;
+            } else {
+                body = s.recv(resp."content-length".toInt(), 10s);
+            }
+            rv{key} = {"status_code": resp.status_code, "body": body};
+        }
+        return rv;
+    }
+}

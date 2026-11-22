@@ -168,8 +168,9 @@ class EchoHandler inherits AbstractHttpRequestHandler {
             throw "ENCODING-ERROR", sprintf("string = %y; Content-Type = %y", body, hdr._qore_orig_content_type);
         }
         # the request context gives the client's certificate: the socket of an HTTP/2 or HTTP/3 request is the
-        # handler's own, not connected (qore#7214)
-        remote_cert = cx."client-cert";
+        # handler's own, not connected (qore#7214); the code that serves a stream request gets the request without the
+        # server's objects, so the handler's own code reads it from the raw request (qore#6843)
+        remote_cert = getRawRequest().cx."client-cert";
         if (hdr."x-test-disconnect") {
             return new TestDisconnectStreamRequest(listener, self, s, cx, hdr, body);
         }

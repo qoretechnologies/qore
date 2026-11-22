@@ -281,6 +281,9 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a handler class that sandboxed code declared gets a placeholder that is not connected in place of the socket of
+      an HTTP/1.x request, which is the socket of the connection (see @ref httpserverutil_request_credentials; issue
+      #6843); the handler socket of an HTTP/2 or HTTP/3 request is given as before
     - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
       "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
       it was skipped; an error that it raises is logged with the listener's logger
@@ -5261,9 +5264,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                     }
 
-                    # the socket that the handler gets (qore#6953)
-                    hash<auto!> hrv = handler.handleRequest(hview, request_helper.handler_sock ?? s, cx, hdr,
-                        body);
+                    # the socket that the handler gets (qore#6953): the connection's socket of an HTTP/1.x request only
+                    # for a handler class that trusted code declared; one that sandboxed code declared gets a
+                    # placeholder, which is not connected (qore#6843)
+                    Socket hsock = request_helper.handler_sock ?? s;
+                    if (!(hsock instanceof Http2HandlerSocket || hsock instanceof Http3HandlerSocket)
+                            && SandboxManager::isSandboxDeclared(handler)) {
+                        hsock = new Socket();
+                    }
+                    hash<auto!> hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
