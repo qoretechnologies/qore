@@ -337,6 +337,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - QdpNoTty (#7125): its checks run qdp in child processes in a new session, without a controlling terminal
         # - QdpAppActionOptions (#7126): its checks run qdp in child processes of its own binary
+        # - QdpListenNoTty (#7130): its checks run qdp in child processes in a new session, with stdin not a terminal
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
@@ -444,6 +445,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/DataProvider/TabularProfilerEncoding.qtest",
                                  "examples/test/qlib/DataProvider/QdpNoTty.qtest",
                                  "examples/test/qlib/DataProvider/QdpAppActionOptions.qtest",
+                                 "examples/test/qlib/DataProvider/QdpListenNoTty.qtest",
                                  "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
