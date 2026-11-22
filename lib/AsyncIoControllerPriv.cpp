@@ -2235,6 +2235,27 @@ QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* c
 }
 
 QoreCallDispatcher::~QoreCallDispatcher() {
+    // a dispatcher is never deleted while a mark or a clear of a Program uses it (qore#7226)
+    assert(!dbg_users.load(std::memory_order_acquire));
+}
+
+#ifdef DEBUG
+//! test hook: called by releaseWorkItem() before it releases an item (qore#7226)
+static thread_local std::function<void()> dbg_release_hook;
+
+#endif
+
+//! the cancelByProgram() calls in progress in the current thread, by controller, outermost first (qore#7226)
+static thread_local std::vector<const AsyncIoControllerPriv*> cancel_by_program_stack;
+
+//! returns true if the current thread is in cancelByProgram() of the given controller
+static bool in_cancel_by_program(const AsyncIoControllerPriv* ctrl) {
+    for (const AsyncIoControllerPriv* c : cancel_by_program_stack) {
+        if (c == ctrl) {
+            return true;
+        }
+    }
+    return false;
 }
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
@@ -2354,6 +2375,11 @@ void QoreCallDispatcher::dispatchNativeTaskAsync(AsyncIoNativeTask* task) {
 }
 
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+#ifdef DEBUG
+    if (dbg_release_hook) {
+        dbg_release_hook();
+    }
+#endif
     // the release (a destructor, a native task's discard()) runs for the code that submitted the work, also on a thread
     // of other code that drains or cancels it, and on a release of a Program's parked items (qore#6844)
     // (a deferred release of the controller's own references carries them with the references)
@@ -2791,12 +2817,73 @@ void QoreCallDispatcher::waitForProgramIdle(QoreProgram* pgm) {
     }
 }
 
+#ifdef DEBUG
+//! test hook: the allocation of markProgramShuttingDown() that fails with std::bad_alloc (1 = the first), 0 = none
+static thread_local int dbg_mark_alloc_fail_at = 0;
+//! counts an allocation of markProgramShuttingDown() and fails it if the test hook asks for it
+static void dbg_mark_alloc(int& n) {
+    if (dbg_mark_alloc_fail_at && ++n == dbg_mark_alloc_fail_at) {
+        throw std::bad_alloc();
+    }
+}
+
+void QoreCallDispatcher::dbgSetMarkAllocFailAt(int n) {
+    dbg_mark_alloc_fail_at = n;
+}
+
+void QoreCallDispatcher::dbgSetReleaseHook(std::function<void()> hook) {
+    dbg_release_hook = std::move(hook);
+}
+
+//! counts a use of the dispatcher that must end before it is deleted
+struct QoreCallDispatcherDbgUse {
+    std::atomic<int>& users;
+    DLLLOCAL QoreCallDispatcherDbgUse(std::atomic<int>& users) : users(users) {
+        users.fetch_add(1, std::memory_order_acq_rel);
+    }
+    DLLLOCAL ~QoreCallDispatcherDbgUse() {
+        users.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+#endif
+
 void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreCallDispatcherDbgUse dbg_use(dbg_users);
+#endif
     // Items are moved out of the queue under the lock and released after it is
     // dropped; see releaseWorkItem() for why the derefs cannot run under the lock.
     std::vector<AsyncWorkItem> drained;
     {
         AutoLocker al(m);
+
+        // the memory for the items taken is reserved before any state is changed: a failure to allocate leaves the
+        // queue, the owner counts and the mark as they were, instead of items taken out of the queue and never
+        // released, whose waiters would wait forever (qore#7226)
+        size_t release_count = 0;
+        size_t other_count = 0;
+        for (const auto& qi : async_queue) {
+            if (qi.pgm == pgm) {
+                if (!stopping && qi.type == DT_RELEASE) {
+                    ++release_count;
+                } else {
+                    ++other_count;
+                }
+            }
+        }
+#ifdef DEBUG
+        int dbg_allocs = 0;
+        dbg_mark_alloc(dbg_allocs);
+#endif
+        drained.reserve(other_count);
+        std::vector<AsyncWorkItem>* parked = nullptr;
+        if (release_count) {
+#ifdef DEBUG
+            dbg_mark_alloc(dbg_allocs);
+#endif
+            parked = &parked_program_releases[pgm];
+            parked->reserve(parked->size() + release_count);
+        }
         shutting_down_programs.insert(pgm);
 
         // Drop already-queued items belonging to this program in the same critical
@@ -2820,7 +2907,14 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
                         }
                     }
                 }
-                drained.push_back(std::move(*it));
+                // a release item is parked as one enqueued after the mark is (see enqueue()): it is released in the
+                // Program, with its parse options and counted in its threads, by clearProgramShuttingDown(), not here
+                // in the calling thread outside the Program (qore#7226); the memory was reserved above
+                if (parked && it->type == DT_RELEASE) {
+                    parked->push_back(std::move(*it));
+                } else {
+                    drained.push_back(std::move(*it));
+                }
                 it = async_queue.erase(it);
             } else {
                 ++it;
@@ -2869,6 +2963,9 @@ QoreHashNode* AsyncIoControllerPriv::dbgParkProgramReleaseTest(QoreObject* obj, 
 #endif
 
 void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreCallDispatcherDbgUse dbg_use(dbg_users);
+#endif
     // the parked release items are released before the mark is cleared: a release can park more of them
     while (true) {
         std::vector<AsyncWorkItem> parked;
@@ -6207,6 +6304,29 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         // nothing of the Program runs in this controller in this process (see forked())
         return;
     }
+    // the dispatchers that a stop() in this call replaces are deleted when the outermost call of this thread
+    // returns, as this call can still use them (qore#7226)
+    struct CancelByProgramScope {
+        AsyncIoControllerPriv* ctrl;
+        DLLLOCAL CancelByProgramScope(AsyncIoControllerPriv* ctrl) : ctrl(ctrl) {
+            cancel_by_program_stack.push_back(ctrl);
+        }
+        DLLLOCAL ~CancelByProgramScope() {
+            cancel_by_program_stack.pop_back();
+            if (in_cancel_by_program(ctrl)) {
+                return;
+            }
+            std::vector<QoreCallDispatcher*> retired;
+            {
+                AutoLocker al(ctrl->m);
+                retired.swap(ctrl->retired_dispatchers);
+            }
+            // stopped already, by the stop() that retired them
+            for (QoreCallDispatcher* cd : retired) {
+                delete cd;
+            }
+        }
+    } cancel_scope(this);
     // Mark the program as shutting down in the call dispatcher FIRST.
     // This ensures any worker that picks up a callback for this program
     // will silently discard it, even if the callback was dispatched after
@@ -6477,12 +6597,7 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     // was null at the start but created during Phase 2 processing).  Also
     // drains any items that were enqueued onto the lazily-created dispatcher
     // before the I/O thread observed the original mark.
-    {
-        QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
-        if (cd) {
-            cd->markProgramShuttingDown(pgm, xsink);
-        }
-    }
+    remarkProgram(pgm, xsink);
 
     // Deliver cancel results while program type info is still valid.
     // The cleanup callback runs BEFORE ptid is set, so call_dispatcher
@@ -6508,6 +6623,20 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         if (cd) {
             cd->clearProgramShuttingDown(pgm, xsink);
         }
+    }
+}
+
+void AsyncIoControllerPriv::remarkProgram(QoreProgram* pgm, ExceptionSink* xsink) {
+    // a dispatcher that replaces the marked one while it is marked (a stop() and a delivery in a destructor that the
+    // mark runs) is marked as well; each iteration marks a new dispatcher, which only such a destructor creates
+    QoreCallDispatcher* marked = nullptr;
+    while (true) {
+        QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
+        if (!cd || cd == marked) {
+            break;
+        }
+        cd->markProgramShuttingDown(pgm, xsink);
+        marked = cd;
     }
 }
 
@@ -6814,7 +6943,15 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
         }
         if (cd) {
             cd->stop(xsink);
-            delete cd;
+            // a stop from a destructor that cancelByProgram() runs in this thread (releasing a work item of the
+            // Program) leaves the dispatcher to that call, which uses it further up the stack: it is deleted when the
+            // outermost call returns (qore#7226)
+            if (in_cancel_by_program(this)) {
+                AutoLocker al(m);
+                retired_dispatchers.push_back(cd);
+            } else {
+                delete cd;
+            }
         }
     }
 

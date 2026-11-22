@@ -9908,6 +9908,209 @@ private:
     }
 };
 
+//! The callback dispatcher while a Program's asynchronous work is canceled (qore#7226)
+/** AsyncIoControllerPriv::cancelByProgram() marks the Program in the dispatcher, which drains its queued items, and
+    clears the mark at the end, which releases the release items parked meanwhile in the Program:
+    1. a release item that the mark drained was released at once in the calling thread, outside the Program, unlike
+       the release items enqueued after the mark, which are parked and released in the Program by the clear;
+    2. an allocation that failed while the mark drained left the items drained so far unreleased and their owner
+       counts decremented;
+    3. a destructor run by the last re-mark that stopped the controller and then made a delivery left an item of the
+       Program on a new dispatcher that was not marked;
+    4. a destructor run by the clear that stopped the controller deleted the dispatcher that the clear was using.
+
+    The work items are put in the dispatcher's queue directly, so that no worker runs them; a debug hook runs code in
+    releaseWorkItem() as the destructor that releasing an item runs would.
+*/
+class AsyncIoDispatcherCancelTest {
+    typedef AsyncIoControllerPriv Ctrl;
+    typedef QoreCallDispatcher Disp;
+
+public:
+    static void run(UnitTestCounters& c) {
+        parkedOnMarkCase(c);
+        markAllocCase(c);
+        remarkCase(c);
+        clearStopCase(c);
+    }
+
+private:
+    //! queues a work item of the Program directly in the dispatcher's queue; counts its owner as enqueue() does
+    static void queueItem(Disp* cd, Disp::DispatchType type, QoreProgram* pgm, const char* owner = nullptr) {
+        Disp::AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, type, nullptr, std::string()};
+        if (type == Disp::DT_RELEASE) {
+            item.release = new AsyncIoDeferredRelease;
+        }
+        item.pgm = pgm;
+        pgm->depRef();
+        AutoLocker al(cd->m);
+        if (owner) {
+            item.owner = owner;
+            ++cd->active_per_owner[owner];
+        }
+        cd->async_queue.push_back(std::move(item));
+    }
+
+    //! returns the number of queued items of the Program
+    static size_t queued(Disp* cd, QoreProgram* pgm) {
+        AutoLocker al(cd->m);
+        size_t n = 0;
+        for (const auto& i : cd->async_queue) {
+            if (i.pgm == pgm) {
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    //! returns true if the Program is marked in the dispatcher
+    static bool marked(Disp* cd, QoreProgram* pgm) {
+        AutoLocker al(cd->m);
+        return cd->shutting_down_programs.count(pgm) > 0;
+    }
+
+    //! creates a controller that is not started, with its dispatcher
+    static Ctrl* newCtrl(ExceptionSink& xsink) {
+        Ctrl* ctrl = new Ctrl(false, &xsink);
+        ctrl->ensureCallDispatcher();
+        return ctrl;
+    }
+
+    //! stops the controller and releases it on every exit path; the release hook is removed first
+    struct CtrlRelease {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        DLLLOCAL ~CtrlRelease() {
+            Disp::dbgSetReleaseHook(std::function<void()>());
+            Disp::dbgSetMarkAllocFailAt(0);
+            ctrl->stopClear(&xsink);
+            ctrl->deref(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! 1: a release item drained by the mark is parked and released by the clear, in the Program
+    static void parkedOnMarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        int released = 0;
+        Disp::dbgSetReleaseHook([&released]() { ++released; });
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        cd->markProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT_EQ(c, 0, released, "a release item that the mark drains is not released by the mark");
+        UT_ASSERT_EQ(c, 1, (int)cd->dbgParkedReleases(pgm), "a release item that the mark drains is parked");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT_EQ(c, 1, released, "the clear releases the parked release item");
+        UT_ASSERT_EQ(c, 0, (int)cd->dbgParkedReleases(pgm), "no release item is left parked");
+        UT_ASSERT(c, !xsink, "the mark and the clear raise no exception");
+    }
+
+    //! 2: a mark whose allocation fails changes nothing
+    static void markAllocCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        queueItem(cd, Disp::DT_RELEASE, pgm, "o7226");
+        queueItem(cd, Disp::DT_NATIVE_TASK, pgm, "o7226");
+        queueItem(cd, Disp::DT_RELEASE, pgm, "o7226");
+        for (int n : {1, 2}) {
+            Disp::dbgSetMarkAllocFailAt(n);
+            bool thrown = false;
+            try {
+                cd->markProgramShuttingDown(pgm, &xsink);
+            } catch (const std::bad_alloc&) {
+                thrown = true;
+            }
+            Disp::dbgSetMarkAllocFailAt(0);
+            std::string what = "allocation " + std::to_string(n);
+            UT_ASSERT(c, thrown, (what + ": the mark fails").c_str());
+            UT_ASSERT_EQ(c, 3, (int)queued(cd, pgm), (what + ": every item is still queued").c_str());
+            {
+                AutoLocker al(cd->m);
+                auto i = cd->active_per_owner.find("o7226");
+                UT_ASSERT_EQ(c, 3, i == cd->active_per_owner.end() ? 0 : i->second,
+                    (what + ": the owner count is unchanged").c_str());
+            }
+            UT_ASSERT(c, !marked(cd, pgm), (what + ": the Program is not marked").c_str());
+            UT_ASSERT_EQ(c, 0, (int)cd->dbgParkedReleases(pgm), (what + ": nothing is parked").c_str());
+        }
+        cd->markProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT_EQ(c, 0, (int)queued(cd, pgm), "the mark that succeeds takes every item");
+        UT_ASSERT_EQ(c, 2, (int)cd->dbgParkedReleases(pgm), "it parks the release items");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT(c, !xsink, "the marks and the clear raise no exception");
+    }
+
+    //! 3: a destructor that the re-mark runs stops the controller and makes a delivery: the new dispatcher is marked
+    static void remarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd1 = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp* cd2 = nullptr;
+        int calls = 0;
+        // the first release (the first mark) queues an item that only the re-mark finds; its release (the re-mark)
+        // stops the controller and queues an item of the Program on the new dispatcher, as a delivery would
+        Disp::dbgSetReleaseHook([&]() {
+            ++calls;
+            if (calls == 1) {
+                queueItem(cd1, Disp::DT_NATIVE_TASK, pgm);
+            } else if (calls == 2) {
+                ExceptionSink stop_xsink;
+                ctrl->stop(&stop_xsink);
+                ctrl->ensureCallDispatcher();
+                cd2 = ctrl->call_dispatcher.load();
+                queueItem(cd2, Disp::DT_NATIVE_TASK, pgm);
+            }
+        });
+        queueItem(cd1, Disp::DT_NATIVE_TASK, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, cd2 && cd2 != cd1, "the destructor replaced the dispatcher");
+        if (cd2) {
+            UT_ASSERT_EQ(c, 0, (int)queued(cd2, pgm), "no item of the canceled Program is left on the new dispatcher");
+        }
+        UT_ASSERT(c, calls >= 3, "the item on the new dispatcher was released by the cancellation");
+        UT_ASSERT(c, !xsink, "the cancellation raises no exception");
+    }
+
+    //! 4: a destructor that the clear runs stops the controller: the dispatcher in use is not deleted
+    static void clearStopCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        bool stopped = false;
+        // the parked release item is released by the clear at the end of the cancellation
+        Disp::dbgSetReleaseHook([&]() {
+            if (!stopped) {
+                stopped = true;
+                ExceptionSink stop_xsink;
+                ctrl->stop(&stop_xsink);
+            }
+        });
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, stopped, "the release of the parked item stopped the controller");
+        UT_ASSERT(c, ctrl->call_dispatcher.load() != cd, "the stopped dispatcher was replaced");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "the retired dispatcher was deleted when the cancellation "
+                "returned");
+        }
+        UT_ASSERT(c, !xsink, "the cancellation raises no exception");
+    }
+};
+
 //! A socket closed by another thread while the I/O thread registers its descriptor with its event queue
 /** The I/O thread registers a socket's descriptor with the system's event queue of the thread (kqueue on macOS,
     epoll on Linux) when an operation on the socket waits for I/O, and changes the registration when the events it
@@ -24520,6 +24723,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoErrorCheckLockTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoPreservedSubmitTest::run(c);
+    AsyncIoDispatcherCancelTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);

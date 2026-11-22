@@ -403,6 +403,7 @@ private:
 };
 
 class QoreCallDispatcher {
+    friend class AsyncIoDispatcherCancelTest;
 public:
     //! Dispatch type for async work items
     enum DispatchType {
@@ -647,6 +648,18 @@ public:
     */
     DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
 
+    //! Debug-only: makes the given allocation of markProgramShuttingDown() in the calling thread fail with
+    //! std::bad_alloc (1 = the first), 0 for none (qore#7226)
+    DLLLOCAL static void dbgSetMarkAllocFailAt(int n);
+
+    //! Debug-only: a function that releaseWorkItem() calls in the calling thread before it releases an item, as the
+    //! destructor that releasing an item runs could (qore#7226); empty for none
+    DLLLOCAL static void dbgSetReleaseHook(std::function<void()> hook);
+
+    //! Debug-only: the number of calls of markProgramShuttingDown() and clearProgramShuttingDown() in progress; the
+    //! dispatcher must not be deleted while one is in progress (qore#7226)
+    std::atomic<int> dbg_users{0};
+
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
@@ -660,7 +673,9 @@ public:
         is set).
 
         This call also drops any already-queued items belonging to \a pgm and
-        releases their object references in-place.  The combined mark + drain
+        releases their object references in-place, except the release items (DT_RELEASE), which are parked and
+        released in the Program by clearProgramShuttingDown(), as release items enqueued after the mark are; the memory
+        for the items is reserved before any state is changed (qore#7226).  The combined mark + drain
         runs under the dispatcher lock, closing the race where a worker pops
         a pgm-owned item between an out-of-band mark and a separate drain
         and then derefs an spop_obj whose underlying class has just been torn
@@ -864,6 +879,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
+    friend class AsyncIoDispatcherCancelTest;
     friend class AsyncIoPreservedSubmitTest;
     friend class AsyncIoFrameSendTest;
 #endif
@@ -1345,6 +1361,13 @@ public:
         @param xsink for exception handling
     */
     DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! Marks the Program as shutting down in the current dispatcher, again until the dispatcher is one that was marked
+    /** The mark drains and releases the Program's queued items: releasing one can run a destructor that stops the
+        controller, which replaces the dispatcher, and makes a delivery, which creates a new one; the new dispatcher is
+        marked too, so that no item of the Program is left on an unmarked dispatcher (qore#7226)
+    */
+    DLLLOCAL void remarkProgram(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Cancels for the module cleanup the operations and timers of work of the cleanup that it does not count
     /** Called by the module cleanup when it waits for its work (qore_module_cleanup_drain_work()), on its own thread:
@@ -3245,6 +3268,9 @@ private:
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
+    //! dispatchers that a stop() replaced while cancelByProgram() ran in the stopping thread; stopped, and deleted when
+    //! the outermost cancelByProgram() of that thread returns, as it can still use them (guarded by m; qore#7226)
+    std::vector<QoreCallDispatcher*> retired_dispatchers;
 
     //! Configured max callback workers; 0 = auto
     int max_callback_workers = 0;
