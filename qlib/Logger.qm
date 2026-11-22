@@ -1984,6 +1984,11 @@ public class LoggerAppenderNull inherits LoggerAppender {
 /**
     Qore streams are not designed to accept input from multiple threads simultaneously, so writing must be serialized and processed
     in a dedicated thread
+
+    Nothing is written for code that is restricted from terminal I/O, also when the appender belongs to other code,
+    if its stream is a @ref Qore::StdoutOutputStream "StdoutOutputStream" or a
+    @ref Qore::StderrOutputStream "StderrOutputStream"; a stream that wraps one of them refuses the write (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
     private:internal {
@@ -2024,6 +2029,14 @@ public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
                 throw "LOGGER-ERROR", "Cannot reopen stream";
             }
         } else {
+            # a stream to the terminal writes nothing for code that is restricted from terminal I/O, or that library
+            # code serves for it (qore#7140); its stream would refuse the write
+            if (type == EVENT_LOG && !SandboxManager::isTerminalIoAllowed()) {
+                OutputStream os = writer.getOutputStream();
+                if (os instanceof StdoutOutputStream || os instanceof StderrOutputStream) {
+                    return;
+                }
+            }
             if (assignThread) {
                 writer.getOutputStream().reassignThread();
             }
@@ -2047,7 +2060,9 @@ public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
 #! Implements appender writing to a stdout file
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::stdout "stdout" instance is reused.
-    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied.
+    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied; nothing is written for code that is
+    restricted from terminal I/O, also when the appender belongs to other code (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
     #! Creates the object
@@ -2066,7 +2081,11 @@ public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_LOG:
-                stdout.print(params);
+                # nothing is written for code that is restricted from terminal I/O, or that library code serves
+                # for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stdout.print(params);
+                }
                 break;
         }
     }
@@ -2075,7 +2094,9 @@ public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
 #! Implements appender writing to a stderr file
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::stderr "stderr" instance is reused.
-    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied.
+    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied; nothing is written for code that is
+    restricted from terminal I/O, also when the appender belongs to other code (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStdErr inherits LoggerAppenderWithLayout {
     #! Creates the object
@@ -2094,7 +2115,11 @@ public class LoggerAppenderStdErr inherits LoggerAppenderWithLayout {
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_LOG:
-                stderr.print(params);
+                # nothing is written for code that is restricted from terminal I/O, or that library code serves
+                # for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stderr.print(params);
+                }
                 break;
         }
     }
@@ -3374,8 +3399,11 @@ public class StdoutAppender inherits LoggerAppenderWithLayout {
         switch (type) {
             case EVENT_LOG:
                 # the stdout constant needs terminal I/O only when it is written, so that the module can be loaded
-                # by code without it (qore#6438)
-                stdout.print(params);
+                # by code without it (qore#6438); nothing is written for code that is restricted from terminal I/O, or
+                # that library code serves for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stdout.print(params);
+                }
                 break;
         }
     }

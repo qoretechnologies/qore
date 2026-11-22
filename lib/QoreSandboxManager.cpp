@@ -2437,6 +2437,19 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
     return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
+int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // a module is a capability, but the terminal is not lent to code that is restricted from it: library code that
+    // serves such code writes nothing to the process's terminal for it (qore#7140)
+    if (!qore_caller_restricts_domain(QDOM_TERMINAL_IO)) {
+        return 0;
+    }
+    xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
+        "(functional domain TERMINAL_IO, PO_NO_TERMINAL_IO)", what);
+    return -1;
+}
+
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
     assert(what);
     assert(xsink);

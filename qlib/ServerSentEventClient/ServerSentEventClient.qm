@@ -147,8 +147,9 @@ sse.observersReady();
       used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      terminal I/O, nor the code that calls it (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"), instead of raising an
+      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - fixed the \c token option with a \c headers option whose values all have the same type, such as a literal
       <tt>{"X-Count": 1}</tt>: adding the \c Authorization header raised \c RUNTIME-TYPE-ERROR in
       @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient" and

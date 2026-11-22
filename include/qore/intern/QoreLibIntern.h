@@ -1607,6 +1607,14 @@ DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, i
 */
 DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 
+//! raises ILLEGAL-EXPRESSION and returns -1 if the calling code is restricted from terminal I/O (qore#7140)
+/** the check of the builtins that use the process's terminal (the standard output and error files, print(),
+    printf() and vprintf(), the standard output and error streams, TermIOS::getWindowSize()) for the code that library
+    code serves: a module is a capability, but the terminal is not lent to code that is restricted from it; see
+    SandboxManager::isTerminalIoAllowed()
+*/
+DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink);
+
 //! The most bytes read or written with one read(2) or write(2) call of a File, a file stream, or the standard streams
 /** macOS refuses a read or write of more than \c INT_MAX bytes with \c EINVAL, and Linux reads or writes at most
     about 2 GiB at once; a longer read or write is made in parts of this size
