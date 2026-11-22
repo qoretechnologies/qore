@@ -3438,6 +3438,11 @@ protected:
 
     ClassAccess access;
 
+    //! the variants of parent classes that implement abstract variants of the method with an access more restrictive
+    //! than their own, which the abstract declaration gives them in this method: the variant objects are shared with
+    //! the methods of their classes (qore#7277)
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, ClassAccess>> implemented_access;
+
     DLLLOCAL int checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const;
 
     DLLLOCAL void replaceAbstractVariantIntern(MethodVariantBase* variant);
@@ -3459,7 +3464,8 @@ public:
             has_final(old.has_final),
             is_abstract(old.is_abstract),
             has_private_internal_variants(old.has_private_internal_variants),
-            access(old.access) {
+            access(old.access),
+            implemented_access(old.implemented_access) {
         //printd(5, "MethodFunctionBase() copying old=%p -> new=%p %p %s::%s() %p %s::%s()\n",& old, this, old.qc, old.qc->getName(), old.getName(), qc, qc->getName(), old.getName());
 
         // set a pointer to the new function
@@ -3551,6 +3557,24 @@ public:
 
     DLLLOCAL ClassAccess getAccess() const {
         return access;
+    }
+
+    //! returns true if a variant of a parent class has another access in this method (see getVariantAccess())
+    DLLLOCAL bool hasImplementedVariantAccess() const {
+        return !implemented_access.empty();
+    }
+
+    //! returns the access of the variant \a v in this method, whose own access is \a va: more restrictive for a
+    //! variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
+    /** called only if hasImplementedVariantAccess() is true, so that ordinary calls do not search
+    */
+    DLLLOCAL ClassAccess getVariantAccess(const AbstractQoreFunctionVariant* v, ClassAccess va) const {
+        for (const std::pair<const AbstractQoreFunctionVariant*, ClassAccess>& i : implemented_access) {
+            if (i.first == v) {
+                return i.second;
+            }
+        }
+        return va;
     }
 
     //! returns true if the method inherits a public variant of an ancestor through a public path that none of its

@@ -11579,6 +11579,12 @@ void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
         }
     }
 
+    // the variant object is the parent class's: its access in this method is recorded here (qore#7277)
+    ClassAccess va = getImplementedVariantAccess(variant);
+    if (va != ma) {
+        implemented_access.emplace_back(variant, va);
+    }
+
     if (!has_final && variant->isFinal()) {
         has_final = true;
     }
@@ -13975,7 +13981,13 @@ bool MethodFunctionBase::hasInheritedPublicVariant() const {
         }
         const VList& ancestor_variants = static_cast<const MethodFunctionBase*>(i->func)->vlist;
         for (vlist_t::const_iterator vi = ancestor_variants.begin(), ve = ancestor_variants.end(); vi != ve; ++vi) {
-            if (METHVB_const(*vi)->getAccess() != Public) {
+            const MethodFunctionBase* af = static_cast<const MethodFunctionBase*>(i->func);
+            ClassAccess va = METHVB_const(*vi)->getAccess();
+            // the access of the variant in the ancestor's method (qore#7277)
+            if (af->hasImplementedVariantAccess()) {
+                va = af->getVariantAccess(*vi, va);
+            }
+            if (va != Public) {
                 continue;
             }
             const AbstractFunctionSignature* vs;

@@ -159,6 +159,78 @@ class Q6 inherits private P6 {
     private string m() { return "Q6::m"; }
 }
 
+# 7: overloaded abstract methods with different accesses: each variant of a parent class that implements one has the
+# more restrictive access of its abstract declaration and of its own; Y7 is the control with methods of its own
+class Calls7 {
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+    static string c(auto o, auto a) { return call_object_method_args(o, "m", (a,)); }
+}
+class P7 {
+    string m(int i) { return "P7::m(int)"; }
+    string m(string s) { return "P7::m(string)"; }
+}
+class A7 inherits private P7 {
+    private abstract string m(int i);
+    abstract string m(string s);
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SA7 inherits A7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+class B7 inherits private:internal P7 {
+    private:internal abstract string m(int i);
+    abstract string m(string s);
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SB7 inherits B7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+class C7 inherits private:internal P7 {
+    private:hierarchy abstract string m(int i);
+    abstract string m(string s);
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SC7 inherits C7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+class D7 inherits private P7 {
+    private:hierarchy abstract string m(int i);
+    abstract string m(string s);
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SD7 inherits D7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+class Y7 {
+    private string m(int i) { return "Y7::m(int)"; }
+    string m(string s) { return "Y7::m(string)"; }
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SY7 inherits Y7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+# public abstract overloads implemented by a private and a public variant of a parent class (qore#7206): the private
+# one stays private
+class PV7 {
+    private string m(int i) { return "PV7::m(int)"; }
+    string m(string s) { return "PV7::m(string)"; }
+}
+class E7 inherits PV7 {
+    abstract string m(int i);
+    abstract string m(string s);
+    static string u(auto o, auto a) { return o.m(a); }
+    static string r(auto o, auto a) { return call_function_args(\o.m(), (a,)); }
+}
+class SE7 inherits E7 {
+    static string u(auto o, auto a) { return o.m(a); }
+}
+
 A1 a1();
 S1 s1();
 check("1 A1 outside", auto sub () { return a1.m(); });
@@ -258,3 +330,31 @@ check("6 S6 subclass code ref", auto sub () { return S6::r(new S6()); });
 Q6 q6();
 check("6 Q6 outside untyped", auto sub () { return Calls::u(q6); });
 check("6 Q6 outside com", auto sub () { return Calls::c(q6); });
+
+foreach list<auto> l in ((new A7(), new SA7(), \A7::u(), \A7::r(), \SA7::u()),
+        (new B7(), new SB7(), \B7::u(), \B7::r(), \SB7::u()),
+        (new C7(), new SC7(), \C7::u(), \C7::r(), \SC7::u()),
+        (new D7(), new SD7(), \D7::u(), \D7::r(), \SD7::u()),
+        (new Y7(), new SY7(), \Y7::u(), \Y7::r(), \SY7::u()),
+        (new E7(), new SE7(), \E7::u(), \E7::r(), \SE7::u())) {
+    object x = l[0];
+    object s = l[1];
+    code own = l[2];
+    code own_ref = l[3];
+    code sub_code = l[4];
+    string cx = x.className();
+    string cs = s.className();
+    foreach auto a in ((1, "a")) {
+        string t = a.typeCode() == NT_INT ? "int" : "string";
+        check(sprintf("7 %s %s outside", cx, t), auto sub () { return x.m(a); });
+        check(sprintf("7 %s %s outside untyped", cx, t), auto sub () { return Calls7::u(x, a); });
+        check(sprintf("7 %s %s outside ref", cx, t), auto sub () { return Calls7::r(x, a); });
+        check(sprintf("7 %s %s outside com", cx, t), auto sub () { return Calls7::c(x, a); });
+        check(sprintf("7 %s %s own code", cx, t), auto sub () { return own(x, a); });
+        check(sprintf("7 %s %s own code ref", cx, t), auto sub () { return own_ref(x, a); });
+        check(sprintf("7 %s %s outside untyped", cs, t), auto sub () { return Calls7::u(s, a); });
+        check(sprintf("7 %s %s outside com", cs, t), auto sub () { return Calls7::c(s, a); });
+        check(sprintf("7 %s %s parent code", cs, t), auto sub () { return own(s, a); });
+        check(sprintf("7 %s %s subclass code", cs, t), auto sub () { return sub_code(s, a); });
+    }
+}

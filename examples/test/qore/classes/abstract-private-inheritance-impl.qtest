@@ -21,9 +21,10 @@
 /** A class that declares an abstract method and inherits a class with a concrete method of the name with
     \c private:internal or \c private access: the method was skipped as abstract when called, and the lookup stopped
     at the privately inherited class (\c RUNTIME-OVERLOAD-ERROR from outside the class and from the code of the parent
-    and subclasses); the method now has the more restrictive access of its abstract declaration and of the method
-    that implements it: a private or private:internal abstract method stays hidden from outside the class.  A qcc executable had no method
-    for the abstract method at all, as the image left out the abstract variant that the parent class's variant
+    and subclasses); each variant that implements one now has the more restrictive access of its abstract
+    declaration and of its own, also for overloads of different accesses: a private or private:internal abstract
+    variant stays hidden from outside the class.  A qcc executable had no method for the abstract method at all, as
+    the image left out the abstract variant that the parent class's variant
     replaces (\c METHOD-DOES-NOT-EXIST, \c BASE-CLASS-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR from the code of
     another parent class where a private method of a parent class implements it); the image now keeps it, and the
     loader resolves it again (also for a \c private:internal implementation, which the code of the class that declares

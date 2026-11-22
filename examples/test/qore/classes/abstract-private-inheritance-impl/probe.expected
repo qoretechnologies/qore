@@ -107,3 +107,123 @@
 6 S6 subclass code ref: "P6::m"
 6 Q6 outside untyped: METHOD-IS-PRIVATE
 6 Q6 outside com: METHOD-IS-PRIVATE
+7 A7 int outside: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 A7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 A7 int own code: "P7::m(int)"
+7 A7 int own code ref: "P7::m(int)"
+7 SA7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SA7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SA7 int parent code: "P7::m(int)"
+7 SA7 int subclass code: "P7::m(int)"
+7 A7 string outside: "P7::m(string)"
+7 A7 string outside untyped: "P7::m(string)"
+7 A7 string outside ref: "P7::m(string)"
+7 A7 string outside com: "P7::m(string)"
+7 A7 string own code: "P7::m(string)"
+7 A7 string own code ref: "P7::m(string)"
+7 SA7 string outside untyped: "P7::m(string)"
+7 SA7 string outside com: "P7::m(string)"
+7 SA7 string parent code: "P7::m(string)"
+7 SA7 string subclass code: "P7::m(string)"
+7 B7 int outside: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 B7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 B7 int own code: "P7::m(int)"
+7 B7 int own code ref: "P7::m(int)"
+7 SB7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SB7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SB7 int parent code: "P7::m(int)"
+7 SB7 int subclass code: RUNTIME-OVERLOAD-ERROR
+7 B7 string outside: "P7::m(string)"
+7 B7 string outside untyped: "P7::m(string)"
+7 B7 string outside ref: "P7::m(string)"
+7 B7 string outside com: "P7::m(string)"
+7 B7 string own code: "P7::m(string)"
+7 B7 string own code ref: "P7::m(string)"
+7 SB7 string outside untyped: "P7::m(string)"
+7 SB7 string outside com: "P7::m(string)"
+7 SB7 string parent code: "P7::m(string)"
+7 SB7 string subclass code: "P7::m(string)"
+7 C7 int outside: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 C7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 C7 int own code: "P7::m(int)"
+7 C7 int own code ref: "P7::m(int)"
+7 SC7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SC7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SC7 int parent code: "P7::m(int)"
+7 SC7 int subclass code: "P7::m(int)"
+7 C7 string outside: "P7::m(string)"
+7 C7 string outside untyped: "P7::m(string)"
+7 C7 string outside ref: "P7::m(string)"
+7 C7 string outside com: "P7::m(string)"
+7 C7 string own code: "P7::m(string)"
+7 C7 string own code ref: "P7::m(string)"
+7 SC7 string outside untyped: "P7::m(string)"
+7 SC7 string outside com: "P7::m(string)"
+7 SC7 string parent code: "P7::m(string)"
+7 SC7 string subclass code: "P7::m(string)"
+7 D7 int outside: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 D7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 D7 int own code: "P7::m(int)"
+7 D7 int own code ref: "P7::m(int)"
+7 SD7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SD7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SD7 int parent code: "P7::m(int)"
+7 SD7 int subclass code: "P7::m(int)"
+7 D7 string outside: "P7::m(string)"
+7 D7 string outside untyped: "P7::m(string)"
+7 D7 string outside ref: "P7::m(string)"
+7 D7 string outside com: "P7::m(string)"
+7 D7 string own code: "P7::m(string)"
+7 D7 string own code ref: "P7::m(string)"
+7 SD7 string outside untyped: "P7::m(string)"
+7 SD7 string outside com: "P7::m(string)"
+7 SD7 string parent code: "P7::m(string)"
+7 SD7 string subclass code: "P7::m(string)"
+7 Y7 int outside: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 Y7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 Y7 int own code: "Y7::m(int)"
+7 Y7 int own code ref: "Y7::m(int)"
+7 SY7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SY7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SY7 int parent code: "Y7::m(int)"
+7 SY7 int subclass code: "Y7::m(int)"
+7 Y7 string outside: "Y7::m(string)"
+7 Y7 string outside untyped: "Y7::m(string)"
+7 Y7 string outside ref: "Y7::m(string)"
+7 Y7 string outside com: "Y7::m(string)"
+7 Y7 string own code: "Y7::m(string)"
+7 Y7 string own code ref: "Y7::m(string)"
+7 SY7 string outside untyped: "Y7::m(string)"
+7 SY7 string outside com: "Y7::m(string)"
+7 SY7 string parent code: "Y7::m(string)"
+7 SY7 string subclass code: "Y7::m(string)"
+7 E7 int outside: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside ref: RUNTIME-OVERLOAD-ERROR
+7 E7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 E7 int own code: "PV7::m(int)"
+7 E7 int own code ref: "PV7::m(int)"
+7 SE7 int outside untyped: RUNTIME-OVERLOAD-ERROR
+7 SE7 int outside com: RUNTIME-OVERLOAD-ERROR
+7 SE7 int parent code: "PV7::m(int)"
+7 SE7 int subclass code: "PV7::m(int)"
+7 E7 string outside: "PV7::m(string)"
+7 E7 string outside untyped: "PV7::m(string)"
+7 E7 string outside ref: "PV7::m(string)"
+7 E7 string outside com: "PV7::m(string)"
+7 E7 string own code: "PV7::m(string)"
+7 E7 string own code ref: "PV7::m(string)"
+7 SE7 string outside untyped: "PV7::m(string)"
+7 SE7 string outside com: "PV7::m(string)"
+7 SE7 string parent code: "PV7::m(string)"
+7 SE7 string subclass code: "PV7::m(string)"
