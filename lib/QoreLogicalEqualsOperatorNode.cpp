@@ -448,7 +448,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const qore_hash_private* right_hash = qore_hash_private::get(*rh);
         ConstHashIterator hi(lh);
         while (hi.next()) {
-            hm_hm_t::const_iterator found = right_hash->hm.find(hi.getKey());
+            hm_hm_t::const_iterator found = right_hash->findIter(hi.getKey());
             if (found == right_hash->hm.end()
                     || !softEqualImpl<Lexical, Native>(hi.get(), (*found->second)->val, xsink, policy)
                     || (xsink && *xsink)) return false;

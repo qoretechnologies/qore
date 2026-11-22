@@ -51,6 +51,7 @@ class ExceptionSink;
 class QoreHashNode;
 class QoreSSLCertificate;
 class QoreSSLPrivateKey;
+class QoreSSLTrustStore;
 class HttpClientEventSink;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
@@ -211,6 +212,13 @@ public:
         /** @since %Qore 3.0
         */
         std::string ssl_ca_path;
+
+        //! An in-memory trust store that server certificates are verified against; takes precedence over
+        //! ssl_ca_file and ssl_ca_path; the manager holds a reference while it exists
+        /** @since %Qore 3.0 (qoretechnologies/qore#7248)
+        */
+        QoreSSLTrustStore* ssl_trust_store = nullptr;
+
         //! Maximum size in bytes of a response body received into memory; 0 = no limit
         /** A response body that is returned whole and exceeds it fails the request with
             \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; a body delivered incrementally to a streaming consumer is not

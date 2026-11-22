@@ -101,12 +101,20 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     // allocated a list and its entries for each call; the caller keeps its reference and releases the list
     {
         bool evaluated = true;
-        for (size_t i = 0, e = exp->size(); i < e; ++i) {
-            const QoreValue& ev = exp->retrieveEntry(i);
-            if (ev.needsEval() && ev.getType() != NT_REFERENCE && ev.getType() != NT_WEAKREF
-                    && ev.getType() != NT_WEAKREF_HASH && ev.getType() != NT_WEAKREF_LIST) {
-                evaluated = false;
-                break;
+        // only a node can need evaluation; it is checked with the inline accessors, as this is done for every call
+        // (qore#6052)
+        for (size_t i = 0, e = ep->length; i < e; ++i) {
+            const QoreValue& ev = ep->entry[i];
+            if (!ev.isPointer()) {
+                continue;
+            }
+            const AbstractQoreNode* n = ev.getPtr();
+            if (n && n->needs_eval()) {
+                qore_type_t t = n->getType();
+                if (t != NT_REFERENCE && t != NT_WEAKREF && t != NT_WEAKREF_HASH && t != NT_WEAKREF_LIST) {
+                    evaluated = false;
+                    break;
+                }
             }
         }
         if (evaluated) {
@@ -558,18 +566,18 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
         holder = init = l = new QoreListNode(autoTypeInfo);
     } else {
         const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+        // the value is converted in the holder, which owns it: a conversion (ex: of a string to softint) replaces the
+        // value and releases the one it converted, which must not be released or read again (qore#7300)
         if (ctor_args) {
             // a single argument of the constructor, which is the element of the list
-            if (!QoreTypeInfo::superSetOf(vti, init.getTypeInfo())) {
-                acceptConstructorArg<Lexical>(vti, 0, init, xsink, policy);
+            if (!QoreTypeInfo::superSetOf(vti, holder->getTypeInfo())) {
+                acceptConstructorArg<Lexical>(vti, 0, *holder, xsink, policy);
             }
         } else if constexpr (Lexical) {
-            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink, policy);
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", *holder, xsink, policy);
         } else {
-            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", *holder, xsink);
         }
-        holder.release();
-        holder = init;
         if (*xsink) {
            return nullptr;
         }
@@ -835,7 +843,10 @@ QoreValue QoreListNode::shift() {
     priv->entry[pos] = QoreValue();
     priv->resize(pos);
 
-    if (needs_scan(rv)) {
+    // no value of a list whose scan count is zero needs a scan, which, for a call reference, is a dynamic cast
+    // (qore#6052)
+    assert(priv->obj_count || !needs_scan(rv));
+    if (priv->obj_count && needs_scan(rv)) {
         priv->incScanCount(-1);
     }
 
@@ -852,7 +863,10 @@ QoreValue QoreListNode::pop() {
     priv->entry[pos] = QoreValue();
     priv->resize(pos);
 
-    if (needs_scan(rv)) {
+    // no value of a list whose scan count is zero needs a scan, which, for a call reference, is a dynamic cast
+    // (qore#6052)
+    assert(priv->obj_count || !needs_scan(rv));
+    if (priv->obj_count && needs_scan(rv)) {
         priv->incScanCount(-1);
     }
 

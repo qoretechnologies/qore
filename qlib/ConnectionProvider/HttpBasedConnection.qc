@@ -448,7 +448,8 @@ public class HttpConnectPollOperation inherits HttpClientIoPollOperation {
         @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
     */
     constructor(string url, *hash<auto> http_opts, *Logger::LoggerInterface logger)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), url, "GET",
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, url), url,
+                "GET",
                 NOTHING, NOTHING, <HttpClientIoPollOptions>{
                     "goal": "connect",
                     "connect_only": True,
@@ -510,7 +511,7 @@ public class HttpPingPollOperation inherits HttpClientIoPollOperation {
     constructor(string base_url, string method, string path, *hash<auto> http_opts, *hash<auto> headers, auto body,
             *Logger::LoggerInterface logger, string err_code = "HTTP-PING-ERROR",
             string log_prefix = "HttpConnection")
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger),
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
                 HttpClientIoPollOperation::getRequestUrl(base_url, path ?? "/"), method ?? "GET",
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts, headers),
                 HttpClientIoPollOperation::getRequestBody(method ?? "GET", body),
@@ -565,7 +566,7 @@ public class HttpRequestPollOperation inherits HttpClientIoPollOperation {
     */
     constructor(string base_url, string method, string path, auto body, *hash<auto> http_opts,
             *hash<auto> headers, *Logger::LoggerInterface logger)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger),
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
                 HttpClientIoPollOperation::getRequestUrl(base_url, path), method,
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts, headers),
                 HttpClientIoPollOperation::getRequestBody(method, body),

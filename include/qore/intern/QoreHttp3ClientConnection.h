@@ -44,6 +44,7 @@
 class QoreSocketObject;
 class Http3ClientPollOperationPriv;
 class QoreSSLCertificate;
+class QoreSSLTrustStore;
 class QoreSSLPrivateKey;
 
 //! HTTP/3 (QUIC) C++ client connection.
@@ -90,7 +91,8 @@ public:
         QoreSSLCertificate* client_cert = nullptr,
         QoreSSLPrivateKey* client_key = nullptr,
         const std::string& ssl_ca_file = std::string(),
-        const std::string& ssl_ca_path = std::string());
+        const std::string& ssl_ca_path = std::string(),
+        QoreSSLTrustStore* ssl_trust_store = nullptr);
 
     DLLLOCAL virtual ~Http3ClientConnection();
 
@@ -260,6 +262,8 @@ private:
     bool ssl_accept_all_certs_ = false;
     std::string ssl_ca_file_;
     std::string ssl_ca_path_;
+    //! An in-memory trust store, if set; the connection holds a reference
+    QoreSSLTrustStore* ssl_trust_store_ = nullptr;
     QoreSSLCertificate* client_cert_ = nullptr;
     QoreSSLPrivateKey* client_key_ = nullptr;
 

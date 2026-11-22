@@ -4114,6 +4114,7 @@ QoreSocket* qore_socket_ops::createAcceptedSocketImpl(QoreSocket* b, int descrip
     }
     s->priv->ssl_ca_file = b->priv->ssl_ca_file;
     s->priv->ssl_ca_path = b->priv->ssl_ca_path;
+    s->priv->setSslTrustStore(b->priv->ssl_trust_store);
     // the placement of the fields of the HTTP messages read (qore#6761)
     s->priv->http_fields_at_top_level.store(b->priv->http_fields_at_top_level.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
@@ -6080,7 +6081,8 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // set verification mode
     if (qs.ssl_verify_mode != SSL_VERIFY_NONE
             && setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target)) {
-        sslError(xsink, mname, "SSL_CTX_load_verify_locations", true, SslCall::Setup);
+        sslError(xsink, mname, qs.ssl_trust_store ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
+            SslCall::Setup);
         assert(*xsink);
         return -1;
     }
@@ -6842,7 +6844,13 @@ int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::s
         (int)accept_all_certs, target.c_str());
     int rc = 0;
     if (!accept_all_certs) {
-        if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
+        if (qs.ssl_trust_store) {
+            // an in-memory trust store: the connection takes a reference of its own on the shared, immutable store;
+            // no file is read and the environment is not consulted (qoretechnologies/qore#7248)
+            if (qs.ssl_trust_store->applyTo(ssl)) {
+                rc = -1;
+            }
+        } else if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
             // the configured CA certificates are trusted instead of the default CAs
             if (!SSL_CTX_load_verify_locations(ctx, qs.ssl_ca_file.empty() ? nullptr : qs.ssl_ca_file.c_str(),
                     qs.ssl_ca_path.empty() ? nullptr : qs.ssl_ca_path.c_str())) {
@@ -16619,21 +16627,21 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
         rv.discard(xsink);
         return nullptr;
     }
-    if (rv.getType() == NT_OBJECT) {
+    // an opaque reference to an object reports the type of an object, but get<QoreObject>() does not read it
+    if (!rv.isOpaque() && rv.getType() == NT_OBJECT) {
         // the reference of the read is the reference returned
         return rv.get<QoreObject>();
     }
-    // a weak reference, for example
+    // a weak or an opaque reference, for example: the object is read with a reference of its own, which is taken
+    // only while the object is referenced (qore#7231)
     ValueHolder holder(rv, xsink);
-    QoreValue v = holder->resolveIndirect();
-    if (v.getType() != NT_OBJECT) {
+    ValueHolder v(holder->resolveIndirectRef(), xsink);
+    if (v->getType() != NT_OBJECT) {
         xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",
-            v.getFullTypeName());
+            v->getFullTypeName());
         return nullptr;
     }
-    QoreObject* obj = v.get<QoreObject>();
-    obj->ref();
-    return obj;
+    return v.release().get<QoreObject>();
 }
 
 //! returns the members of the operation of the object that it keeps with the operation, or nullptr (qore#6839)
