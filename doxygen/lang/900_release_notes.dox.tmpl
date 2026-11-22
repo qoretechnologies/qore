@@ -4364,8 +4364,9 @@
       and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
       reserving the size given in the data first (issue #6502)
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
-      that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
-      the declarations of a native module that was already deleted (issue #6501)
+      that module when the process ends, together with the native modules it requires, and when the loaded module
+      requires that module, those native modules are still deleted after it, so the cleanup no longer uses the
+      declarations of a native module that was already deleted (issues #6501, #7310)
     - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
       without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
     - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in
