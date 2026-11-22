@@ -1368,7 +1368,6 @@ sub legacy() {
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
     |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); raises \c INVALID-ENCODING if the string is not valid in its encoding
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
-    |\a expression @ref object_type "object"|Returns the number of members of the object that the calling code can access: only the public members when called from outside the object's class hierarchy, as with the @ref keys "keys operator"
 
     @see @ref <value>::size()
 
@@ -2540,6 +2539,12 @@ if (x || y)
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
     variable's own value and shows the changes later made through the variable; this is the same in every
+    @ref exec_mode_overview "execution mode".\n<br>
+    The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
+    variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
+    <tt>w := new C()</tt>, and a copy that the type of the lvalue makes of a container (ex: a
+    <tt>hash<string, int></tt> assigned to a \c hash variable) live until the end of the statement, as any temporary
+    value does, so that the weak reference and the value of the operator designate them until then, in every
     @ref exec_mode_overview "execution mode".\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox

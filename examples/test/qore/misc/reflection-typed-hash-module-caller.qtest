@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires Util
+%requires reflection
+
+%exec-class ReflectionTypedHashModuleCallerTest
+
+#! Library module code uses typed hash handles for the Program that calls it (qore#7154)
+/** A sandboxed Program has library module code (DataProvider's HashDataType::addField() and HashDataType(TypedHash),
+    and a test module that reads member defaults and casts) use the handles of its own typed hashes: allowed, as the
+    Program could cast to the typed hashes itself; also a Program's closure that module code calls back for another
+    Program, and a Program that inherits the trusted Program's typed hashes, with its own handles.  Still refused: the
+    handles of another Program's typed hashes of the same names (governed by the same or by another sandbox manager,
+    also through a callback), the trusted Program's typed hashes (also through the type of a value that the trusted
+    Program passes, and for a Program that inherits them), and module code that runs for no application Program (a
+    thread that module code starts; the static member initializers and the init closure of a module being loaded) or
+    that is not library code (a module loaded by its path).  Trusted Programs are unaffected.  The script runs in
+    every execution mode and as a qcc-compiled executable.
+*/
+class ReflectionTypedHashModuleCallerTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "sandbox own addField: ok: [\"m\"]
+sandbox own public addField: ok: [\"m\"]
+sandbox own forName addField: ok: [\"m\"]
+sandbox own public forName addField: ok: [\"m\"]
+sandbox own HashDataType: ok: [\"m\"]
+sandbox own public HashDataType: ok: [\"m\"]
+sandbox own module default: ok: \"d\"
+sandbox own public module default: ok: \"p\"
+sandbox own module cast: ok: {m: \"d\"}
+sandbox own handle module default: ok: \"d\"
+sandbox own stored module default: ok: \"d\"
+sandbox other same-manager addField: REFLECTION-ACCESS-ERROR
+sandbox other same-manager module default: REFLECTION-ACCESS-ERROR
+sandbox other same-manager module cast: REFLECTION-ACCESS-ERROR
+sandbox other other-manager addField: REFLECTION-ACCESS-ERROR
+sandbox other other-manager module default: REFLECTION-ACCESS-ERROR
+sandbox other closure own handle via callback: ok: \"d\"
+sandbox other closure caller's handle via callback: REFLECTION-ACCESS-ERROR
+sandbox trusted addField: REFLECTION-ACCESS-ERROR
+sandbox trusted HashDataType: REFLECTION-ACCESS-ERROR
+sandbox trusted module default: REFLECTION-ACCESS-ERROR
+sandbox trusted module cast: REFLECTION-ACCESS-ERROR
+sandbox trusted module default of value: REFLECTION-ACCESS-ERROR
+sandbox own same-name module default: ok: \"tenant\"
+sandbox inherited own handle addField: ok: [\"m\"]
+sandbox inherited own handle module default: ok: 1
+sandbox inherited trusted handle addField: REFLECTION-ACCESS-ERROR
+sandbox inherited trusted handle module default: REFLECTION-ACCESS-ERROR
+sandbox own module thread: REFLECTION-ACCESS-ERROR
+sandbox own path module default: REFLECTION-ACCESS-ERROR
+sandbox own path module direct default: REFLECTION-ACCESS-ERROR
+sandbox own module init: static initializer: REFLECTION-ACCESS-ERROR, init closure: REFLECTION-ACCESS-ERROR
+trusted own addField: ok: [\"m\"]
+trusted own public addField: ok: [\"m\"]
+trusted own forName addField: ok: [\"m\"]
+trusted own public forName addField: ok: [\"m\"]
+trusted own HashDataType: ok: [\"m\"]
+trusted own public HashDataType: ok: [\"m\"]
+trusted own module default: ok: \"d\"
+trusted own public module default: ok: \"p\"
+trusted own module cast: ok: {m: \"d\"}
+trusted own handle module default: ok: \"d\"
+trusted own stored module default: ok: \"d\"
+trusted other same-manager addField: ok: [\"m\"]
+trusted other same-manager module default: ok: \"d\"
+trusted other same-manager module cast: ok: {m: \"d\"}
+trusted other other-manager addField: ok: [\"m\"]
+trusted other other-manager module default: ok: \"d\"
+trusted other closure own handle via callback: ok: \"d\"
+trusted other closure caller's handle via callback: ok: \"d\"
+trusted trusted addField: ok: [\"m\"]
+trusted trusted HashDataType: ok: [\"m\"]
+trusted trusted module default: ok: 2
+trusted trusted module cast: ok: {m: 3}
+trusted trusted module default of value: ok: 4
+trusted own same-name module default: ok: \"tenant\"
+trusted inherited own handle addField: ok: [\"m\"]
+trusted inherited own handle module default: ok: 5
+trusted inherited trusted handle addField: ok: [\"m\"]
+trusted inherited trusted handle module default: ok: 6
+trusted own module thread: ok: \"d\"
+trusted own path module default: ok: \"d\"
+trusted own path module direct default: ok: \"d\"
+trusted initializer calls: 6
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script = get_script_dir() + "/reflection-typed-hash-module-caller/typed-hash-module-caller.q";
+    }
+
+    constructor() : QUnit::Test("reflection typed hash module caller test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("module callers decide on the calling Program in every execution mode and in AOT",
+            \testModuleCaller());
+        set_return_value(main());
+    }
+
+    testModuleCaller() {
+        # the child processes load the reflection module that this test loaded, the modules of this tree and the
+        # test's modules, which are library modules there (found in the module path)
+        string dir = normalize_dir(get_script_dir());
+        string module_path = dirname(get_module_hash().reflection.filename) + ":" + dir + "/../../../../qlib:" + dir
+            + "/reflection-typed-hash-module-caller";
+        # the module of reflection-typed-hash-module-caller-path is loaded by its path; that directory is not in the
+        # module path, so the module is not library code
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s%s QORE_JIT_SYNC_COMPILE=1 "
+            "TH_REFLECT_PATH_MODULE_DIR=%s/reflection-typed-hash-module-caller-path", libqore_dir, libqore_dir,
+            module_path, ENV.QORE_MODULE_DIR.val() ? ":" + ENV.QORE_MODULE_DIR : "", dir);
+        foreach string mode in (ExecModes) {
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, script)), mode);
+        }
+        TmpDir tmp("qore-reflection-typed-hash-module-caller-");
+        string exe = tmp.path + DirSep + "script";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+    }
+}

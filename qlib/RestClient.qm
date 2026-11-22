@@ -6645,6 +6645,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
       validation; only used if \a validator not provided (see the @ref openapi3intro "OpenApi3" module)
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
+    - \c "ping_path": request target for a ping using \c "ping_method". If the connection uses a certificate or
+      key from a file, a caller subject to \c PO_NO_FILESYSTEM cannot ping a different origin, even when that URL
+      was configured on the connection. In this case \c ping() returns a failed result with
+      \c ILLEGAL-FILESYSTEM-ACCESS in \c ex.err.
     - \c "proxy": proxy URL to use
     - \c "redirect_passthru": if @ref True "True" then redirect responses wil0l be passed to the caller instead of
       processed

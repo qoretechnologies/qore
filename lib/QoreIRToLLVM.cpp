@@ -463,6 +463,7 @@ static bool isFastMethodCallEligible(
 #include "qore/intern/QoreValueEncoding.h"
 #include <qore/QoreStringNode.h>
 #include <atomic>
+#include <tuple>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
@@ -6796,6 +6797,33 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
     llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
     auto saved_ip = builder->GetInsertPoint();
     llvm::DebugLoc saved_loc = builder->getCurrentDebugLocation();
+    // the releases of the temporaries on the edges are shared by the edges whose remaining releases are the same
+    // (qore#7174): a release continues with the release of the rest of its edge's temporaries, and the edges of the
+    // exception checks of a statement share the releases of the temporaries that they release last, so that they
+    // take code for each of its temporaries, not for each check and temporary (a statement of untyped code has
+    // dozens of checks); a release is shared only by the checks of a line, whose location it has.  The releases form
+    // a tree whose root is the error return; a release that is the entry of an edge, or that more than one release
+    // continues with, starts a block, and the others are in the block of the release before them, so that edges that
+    // share nothing take one block each, as before
+    struct SharedRelease {
+        llvm::Value* alloca_ptr;
+        //! the release that it continues with, or -1 for the error return
+        ptrdiff_t next;
+        llvm::DebugLoc loc;
+        //! the number of edges that enter at it and of releases that continue with it
+        size_t preds = 0;
+        llvm::BasicBlock* block = nullptr;
+    };
+    std::vector<SharedRelease> releases;
+    std::map<std::tuple<llvm::Value*, ptrdiff_t, unsigned, const llvm::MDNode*>, size_t> release_index;
+    struct EdgePlan {
+        const OrderedErrorReturnSite* site;
+        //! the first release of the edge, or -1 if it releases no temporary or releases them with a table
+        ptrdiff_t entry = -1;
+        //! the temporaries that a table releases
+        std::vector<llvm::Value*> table_released;
+    };
+    std::vector<EdgePlan> plans;
     size_t count = 0;
     for (const OrderedErrorReturnSite& site : ordered_error_return_sites) {
         if (!(++count % 100)) {
@@ -6824,12 +6852,92 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
         if (!orderExceptionTemps(indices, true, temps)) {
             continue;
         }
-        llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
-        builder->SetInsertPoint(edge);
-        builder->SetCurrentDebugLocation(site.loc);
-        emitOperatorIteratorRelease(module, site.iter_start, site.iter_end);
-        emitOrderedErrorReturnTemps(module, temps);
-        builder->CreateBr(error_return_block);
+        // the temporaries that the edge releases (see emitOrderedErrorReturnTemps())
+        std::vector<llvm::Value*> released;
+        released.reserve(temps.size());
+        for (llvm::Value* a : temps) {
+            if (return_value_ids.empty() || !isReturnValueAlloca(a)) {
+                released.push_back(a);
+            }
+        }
+        EdgePlan plan;
+        plan.site = &site;
+        if (released.size() >= MinTableTempRelease && invoke_cleanup_table.active && !invoke_cleanup_array_overflow) {
+            // a single call releases them with a table (emitTempReleaseSequence())
+            plan.table_released = std::move(released);
+        } else if (!released.empty()) {
+            unsigned line = site.loc ? site.loc.getLine() : 0;
+            const llvm::MDNode* scope = site.loc ? site.loc.getScope() : nullptr;
+            // from the last release: the edge enters at the release of its first temporary
+            ptrdiff_t next = -1;
+            for (size_t i = released.size(); i; --i) {
+                auto key = std::make_tuple(released[i - 1], next, line, scope);
+                auto [it, inserted] = release_index.try_emplace(key, releases.size());
+                if (inserted) {
+                    if (next >= 0) {
+                        ++releases[next].preds;
+                    }
+                    releases.push_back(SharedRelease{released[i - 1], next, site.loc});
+                }
+                next = static_cast<ptrdiff_t>(it->second);
+            }
+            plan.entry = next;
+            ++releases[next].preds;
+        }
+        if (plan.entry < 0 && plan.table_released.empty() && site.iter_start >= site.iter_end) {
+            continue;
+        }
+        plans.push_back(std::move(plan));
+    }
+    // the blocks of the releases that start one
+    for (SharedRelease& release : releases) {
+        if (release.preds != 1) {
+            release.block = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+        }
+    }
+    for (const EdgePlan& plan : plans) {
+        if (plan.entry >= 0 && !releases[plan.entry].block) {
+            releases[plan.entry].block = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+        }
+    }
+    llvm::FunctionCallee decref = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (size_t r = 0, e = releases.size(); r < e; ++r) {
+        if (!releases[r].block) {
+            continue;
+        }
+        if (!((r + 1) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM ordered error return releases");
+        }
+        builder->SetInsertPoint(releases[r].block);
+        // this release and those that continue in its block
+        ptrdiff_t i = static_cast<ptrdiff_t>(r);
+        do {
+            builder->SetCurrentDebugLocation(releases[i].loc);
+            emitCleanupSlotRelease(releases[i].alloca_ptr, decref);
+            i = releases[i].next;
+        } while (i >= 0 && !releases[i].block);
+        builder->CreateBr(i >= 0 ? releases[i].block : error_return_block);
+    }
+    for (const EdgePlan& plan : plans) {
+        const OrderedErrorReturnSite& site = *plan.site;
+        llvm::BasicBlock* edge = plan.entry >= 0 ? releases[plan.entry].block : error_return_block;
+        if (!plan.table_released.empty()) {
+            edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+            builder->SetInsertPoint(edge);
+            builder->SetCurrentDebugLocation(site.loc);
+            emitTempReleaseSequence(module, plan.table_released, 0, plan.table_released.size());
+            builder->CreateBr(error_return_block);
+        }
+        // the iterators of the operators of the statement are released first
+        if (site.iter_start < site.iter_end) {
+            llvm::BasicBlock* iterators = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+            builder->SetInsertPoint(iterators);
+            builder->SetCurrentDebugLocation(site.loc);
+            emitOperatorIteratorRelease(module, site.iter_start, site.iter_end);
+            builder->CreateBr(edge);
+            edge = iterators;
+        }
 #ifdef DEBUG
         // the recorded branch leads to the error return directly: the exception check's own, or the single block of
         // the implicit-context restore (getImplicitContextRestoreEdge()); otherwise the edge would be lost silently
@@ -8016,6 +8124,21 @@ bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* targ
         cur = next;
     }
     return false;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitConvertedStoreResult(llvm::Value* converted, const QoreIRInstruction* inst, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    assert(converted);
+    if (inst->result.isValid()) {
+        values[inst->result.id] = converted;
+        nanboxed_values.insert(inst->result.id);
+        trackResultForCleanup(converted, inst->result.id, llvm_func);
+        return;
+    }
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(decref_fn, {converted, xsink_arg});
 }
 
 bool QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
@@ -17116,6 +17239,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                 }
             }
+            // a local assigned with := through an lvalue path whose only step is the local itself (a softlist
+            // variable: see QoreIRLowering::lowerAssignment()) holds a weak reference as a local assigned with a
+            // StoreLocal does: it is not reloaded into its cache, which would read the reference's target and keep
+            // it after the statement (qore#7142)
+            if (inst_ptr->opcode == QoreIROpcode::LValuePathAssign) {
+                const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst_ptr.get());
+                if (path_inst->mode == AssignmentMode::Weak && path_inst->path.size() == 1
+                        && path_inst->path[0].kind == LVPathStepKind::LocalVar && path_inst->path[0].ref_ptr) {
+                    weak_assigned_locals.insert(path_inst->path[0].ref_ptr);
+                }
+            }
             // a captured local is assigned with := in the function that captures it or in another closure, whose
             // stores are not in this function: the parse records every weak assignment of a local
             // (LocalVar::isWeakAssigned()), so that the receiver of a call read from it keeps the object of a weak
@@ -21171,6 +21305,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     boxed = val;
                 }
+                // the value of a weak or opaque assignment: the value assigned, converted to the local's type
+                // (qore#7084)
+                llvm::Value* assigned_outer = nullptr;
 
                 // Check if typed: apply coercion or type stripping
                 const QoreTypeInfo* outer_ti = linst->local->getTypeInfoForLValue();
@@ -21285,8 +21422,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                     llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {boxed, xsink_arg});
                     track_owned_value_cleanup(weak_boxed, "weak_cleanup_outer");
-                    clear_cleanup_alloca(consumed_cleanup_outer);
-                    clear_consumed_operand_cleanup(inst->operands[0].id);
+                    // neither the value assigned nor its conversion is consumed: a temporary lives until the end of
+                    // the statement, which releases it, so that the weak reference designates it until then
+                    // (qore#7085); the converted value is the value of the assignment
+                    assigned_outer = boxed;
                     boxed = weak_boxed;
                 }
 
@@ -21314,7 +21453,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     builder->CreateCall(assign_helper, {var_as_ptr, boxed, xsink_arg});
                 }
-                // the store took its own reference; a weak or opaque store released the operand above
+                // the store took its own reference; a weak or opaque store keeps the operand and its conversion to
+                // the end of the statement (see above)
                 if (!qore_assignment_mode_converts_value(linst->mode)) {
                     clear_cleanup_alloca(consumed_cleanup_outer);
                     clear_consumed_operand_cleanup(inst->operands[0].id);
@@ -21331,11 +21471,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     //     at function cleanup time.
                     // A later write to the variable before the result's last use would release it, so such a
                     // result takes a reference of its own (see overwritten_local_reads).
+                    // the value of a weak or opaque assignment is the value assigned, held by the operand until the
+                    // end of the statement, as the AST interpreter gives it to its consumers (qore#7084)
+                    llvm::Value* result_value = qore_assignment_mode_converts_value(linst->mode) ? assigned_outer
+                        : boxed;
                     if (overwritten_local_reads.count(inst->result.id)) {
-                        boxed = emitHelperRef(module, boxed);
-                        trackResultForCleanup(boxed, inst->result.id, llvm_func);
+                        result_value = emitHelperRef(module, result_value);
+                        trackResultForCleanup(result_value, inst->result.id, llvm_func);
                     }
-                    values[inst->result.id] = boxed;
+                    values[inst->result.id] = result_value;
                     nanboxed_values.insert(inst->result.id);
                 }
                 return true;
@@ -21578,6 +21722,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // the operand's own NaN-boxed value, which an IR-only store can take over (see below)
             llvm::Value* operand_bits = nanboxed_values.count(inst->operands[0].id) ? boxed : nullptr;
+            // the value of a weak or opaque assignment: the value assigned, converted to the local's type (qore#7084)
+            llvm::Value* assigned = nullptr;
             // Type handling before storing to the local alloca.
             bool is_aot_body_local = aot_mode && aot_body_locals.count(key);
             const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfoForLValue() : nullptr;
@@ -21760,8 +21906,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (block_scoped_locals.count(key)) {
                     local_cleanup_allocas[key].push_back(weak_cleanup);
                 }
-                clear_cleanup_alloca(consumed_cleanup);
-                clear_consumed_operand_cleanup(inst->operands[0].id);
+                // neither the value assigned nor its conversion is consumed: a temporary lives until the end of the
+                // statement, which releases it, so that the weak reference designates it until then (qore#7085); the
+                // converted value is the value of the assignment
+                assigned = boxed;
                 boxed = weak_boxed;
             }
 
@@ -21949,7 +22097,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             markLocalCacheFresh(key, llvm_func);
             if (inst->result.isValid()) {
-                llvm::Value* store_value = reference_slot_store_value ? reference_slot_store_value : boxed;
+                // the value of a weak or opaque assignment is the value assigned, held by the operand until the end of
+                // the statement, as the AST interpreter gives it to its consumers (qore#7084)
+                llvm::Value* store_value = qore_assignment_mode_converts_value(linst->mode) ? assigned
+                    : (reference_slot_store_value ? reference_slot_store_value : boxed);
                 // the value is the local's (or the operand's, which a consumer of the operand can release); a later
                 // write to the local before the result's last use would release it, so such a result takes a
                 // reference of its own (see overwritten_local_reads)
@@ -21958,6 +22109,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     trackResultForCleanup(store_value, inst->result.id, llvm_func);
                 }
                 values[inst->result.id] = store_value;
+                // the value of a weak or opaque assignment is NaN-boxed: a consumer read it as an integer (qore#7084);
+                // only these assignments give the store's result as their value (QoreIRLowering::lowerAssignment()),
+                // so the other stores keep their code
+                if (qore_assignment_mode_converts_value(linst->mode)) {
+                    nanboxed_values.insert(inst->result.id);
+                }
             }
             // Track cleanup alloca for block-scoped locals: if the stored value has
             // an invoke-result cleanup alloca, record the mapping so UninstantiateLocal
@@ -22118,14 +22275,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     reloadLocalFromRuntime(key, module, llvm_func, false);
                 }
-                // the store took its own reference; a weak or opaque store released the operand above
+                // the store took its own reference; a weak or opaque store keeps the operand and its conversion to the
+                // end of the statement (see above)
                 if (!qore_assignment_mode_converts_value(linst->mode)) {
                     clear_cleanup_alloca(consumed_cleanup);
                     clear_consumed_operand_cleanup(inst->operands[0].id);
                 }
-            } else if (is_ir_only) {
+            } else if (is_ir_only && !qore_assignment_mode_converts_value(linst->mode)) {
                 // The local cache owns the assigned value. Keeping the coercion's extra reference until frame
-                // exit would keep a replaced object alive after the local releases it (#6657).
+                // exit would keep a replaced object alive after the local releases it (#6657).  A weak or opaque
+                // store keeps it to the end of the statement, as its result (see above).
                 clear_cleanup_alloca(consumed_cleanup);
             }
             return true;
@@ -33702,67 +33861,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-            auto clear_cleanup_alloca = [&](llvm::Value* cleanup) {
-                if (!cleanup) {
-                    return;
-                }
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-            };
-            auto clear_consumed_operand_cleanup = [&](uint32_t value_id) {
-                auto uses_it = operand_remaining_uses.find(value_id);
-                if (uses_it != operand_remaining_uses.end() && uses_it->second > 1) {
-                    return;
-                }
-                auto alloca_it = invoke_alloca_map.find(value_id);
-                if (alloca_it == invoke_alloca_map.end()) {
-                    return;
-                }
-                llvm::Value* ca = alloca_it->second;
-                if (!ca) {
-                    ca = promoteSsaEntryToAlloca(value_id, module, llvm_func);
-                }
-                clear_cleanup_alloca(ca);
-            };
-            auto track_owned_value_cleanup = [&](llvm::Value* owned, const char* name) {
-                llvm::Function* func = builder->GetInsertBlock()->getParent();
-                llvm::BasicBlock* entry = &func->getEntryBlock();
-                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-                llvm::AllocaInst* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, name);
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-                builder->CreateStore(owned, cleanup);
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-                registerInvokeCleanupAlloca(cleanup);
-            };
             // a weak or opaque store gives the variable the value assigned and the mode: the type of the value is
             // checked before the weak or opaque reference is made, as the AST interpreter does (qore#6979); a
             // thread-local variable is stored with the helper of a global
             const bool converts = qore_assignment_mode_converts_value(vinst->mode);
             llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(vinst->mode));
+            // the value of a weak or opaque assignment, owned by the frame (see emitConvertedStoreResult())
+            llvm::Value* converted_value = nullptr;
             if (converts && aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getGlobalSlot(
                         reinterpret_cast<const void*>(vinst->var));
-                auto ft = llvm::FunctionType::get(void_type,
+                auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_store_global_mode_aot", ft);
                 auto helper_throwing = module.getOrInsertFunction("qore_rt_store_global_mode_aot_throwing", ft);
-                emitMaybeInvoke(helper, helper_throwing,
+                converted_value = emitMaybeInvoke(helper, helper_throwing,
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val_boxed, mode_arg, xsink_arg},
                         module, llvm_func, inst);
             } else if (converts) {
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(vinst->var));
                 llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
-                auto ft = llvm::FunctionType::get(void_type, {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_store_global_mode", ft);
                 auto helper_throwing = module.getOrInsertFunction("qore_rt_store_global_mode_throwing", ft);
-                emitMaybeInvoke(helper, helper_throwing, {var_as_ptr, val_boxed, mode_arg, xsink_arg},
+                converted_value = emitMaybeInvoke(helper, helper_throwing, {var_as_ptr, val_boxed, mode_arg, xsink_arg},
                         module, llvm_func, inst);
             } else if (aot_mode) {
                 const char* helper_name = vinst->mode != AssignmentMode::Normal
@@ -33814,19 +33937,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             emitExceptionCheck(module, llvm_func, inst);
+            // a weak or opaque store does not consume the value assigned: a temporary lives until the end of the
+            // statement, which releases it, so that the weak reference designates it until then (qore#7085)
             if (converts) {
-                // the value of the assignment is a weak or opaque reference of its own, owned by the frame
-                if (inst->result.isValid()) {
-                    auto weak_fn = module.getOrInsertFunction(
-                            qore_assignment_mode_value_helper(vinst->mode),
-                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                    llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
-                    track_owned_value_cleanup(weak_boxed, "weak_var_cleanup");
-                    val_boxed = weak_boxed;
-                }
-                clear_consumed_operand_cleanup(inst->operands[0].id);
-            }
-            if (inst->result.isValid()) {
+                emitConvertedStoreResult(converted_value, inst, module, llvm_func);
+            } else if (inst->result.isValid()) {
                 values[inst->result.id] = val_boxed;
                 nanboxed_values.insert(inst->result.id);
             }
@@ -33945,45 +34060,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // a weak or opaque store gives the variable the value assigned and the mode: the type of the value is
             // checked before the weak or opaque reference is made, as the AST interpreter does (qore#6979)
             const bool converts = qore_assignment_mode_converts_value(linst->mode);
-            auto clear_cleanup_alloca = [&](llvm::Value* cleanup) {
-                if (!cleanup) {
-                    return;
-                }
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-            };
-            auto clear_consumed_operand_cleanup = [&](uint32_t value_id) {
-                auto uses_it = operand_remaining_uses.find(value_id);
-                if (uses_it != operand_remaining_uses.end() && uses_it->second > 1) {
-                    return;
-                }
-                auto alloca_it = invoke_alloca_map.find(value_id);
-                if (alloca_it == invoke_alloca_map.end()) {
-                    return;
-                }
-                llvm::Value* ca = alloca_it->second;
-                if (!ca) {
-                    ca = promoteSsaEntryToAlloca(value_id, module, llvm_func);
-                }
-                clear_cleanup_alloca(ca);
-            };
-            auto track_owned_value_cleanup = [&](llvm::Value* owned, const char* name) -> llvm::AllocaInst* {
-                llvm::Function* func = builder->GetInsertBlock()->getParent();
-                llvm::BasicBlock* entry = &func->getEntryBlock();
-                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-                llvm::AllocaInst* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, name);
-                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-                builder->CreateStore(owned, cleanup);
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-                registerInvokeCleanupAlloca(cleanup);
-                return cleanup;
-            };
             {
                 auto key = reinterpret_cast<const void*>(linst->local);
                 // a weak or opaque store is given the value assigned (see below)
@@ -34006,6 +34082,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(linst->mode));
+            // the value of a weak or opaque assignment, owned by the frame (see emitConvertedStoreResult())
+            llvm::Value* converted_value = nullptr;
             if (aot_mode) {
                 const void* key = reinterpret_cast<const void*>(linst->local);
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -34022,12 +34100,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
                 if (converts) {
-                    auto mode_ft = llvm::FunctionType::get(void_type,
+                    auto mode_ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction("qore_rt_store_closure_mode_aot", mode_ft);
                     auto helper_throwing = module.getOrInsertFunction("qore_rt_store_closure_mode_aot_throwing",
                             mode_ft);
-                    emitMaybeInvoke(helper, helper_throwing,
+                    converted_value = emitMaybeInvoke(helper, helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val_boxed, mode_arg, xsink_arg},
                             module, llvm_func, inst);
                 } else {
@@ -34062,11 +34140,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(instantiate, {var_as_ptr});
                 }
                 if (converts) {
-                    auto mode_ft = llvm::FunctionType::get(void_type, {ptr_type, i64_type, i32_type, ptr_type},
+                    auto mode_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i32_type, ptr_type},
                             false);
                     auto helper = module.getOrInsertFunction("qore_rt_assign_local_mode", mode_ft);
                     auto helper_throwing = module.getOrInsertFunction("qore_rt_assign_local_mode_throwing", mode_ft);
-                    emitMaybeInvoke(helper, helper_throwing, {var_as_ptr, val_boxed, mode_arg, xsink_arg},
+                    converted_value = emitMaybeInvoke(helper, helper_throwing,
+                            {var_as_ptr, val_boxed, mode_arg, xsink_arg},
                             module, llvm_func, inst);
                 } else {
                     auto al_ft = llvm::FunctionType::get(void_type,
@@ -34086,21 +34165,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             emitExceptionCheck(module, llvm_func, inst);
+            // a weak or opaque store does not consume the value assigned: a temporary lives until the end of the
+            // statement, which releases it, so that the weak reference designates it until then (qore#7085)
             if (converts) {
-                // the value of the assignment is a weak or opaque reference of its own, owned by the frame and
-                // released at the end of the variable's scope
-                if (inst->result.isValid()) {
-                    auto weak_fn = module.getOrInsertFunction(
-                            qore_assignment_mode_value_helper(linst->mode),
-                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                    llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
-                    llvm::AllocaInst* weak_cleanup = track_owned_value_cleanup(weak_boxed, "weak_closure_cleanup");
-                    local_cleanup_allocas[reinterpret_cast<const void*>(linst->local)].push_back(weak_cleanup);
-                    val_boxed = weak_boxed;
-                }
-                clear_consumed_operand_cleanup(inst->operands[0].id);
-            }
-            if (inst->result.isValid()) {
+                emitConvertedStoreResult(converted_value, inst, module, llvm_func);
+            } else if (inst->result.isValid()) {
                 values[inst->result.id] = val_boxed;
                 nanboxed_values.insert(inst->result.id);
             }
@@ -40564,7 +40633,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* rhs_val = getVal(rhs_id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, rhs_id);
-                    bool consume = consume_rhs(rhs_id);
+                    // a weak or opaque store does not consume its operand: a temporary lives until the end of the
+                    // statement, so that the weak reference designates it until then, and its own helpers ("_mode")
+                    // give the converted value, so that the other stores keep theirs (qore#7122)
+                    const bool converts = qore_assignment_mode_converts_value(path_inst->mode);
+                    bool consume = !converts && consume_rhs(rhs_id);
                     // the result of a statement-form assignment is invalid: the helper returns no reference
                     int32_t flags = inst->result.isValid() ? 0 : QORE_RT_ASSIGN_RESULT_UNUSED;
                     if (direct_self_mutation) {
@@ -40586,10 +40659,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i64_type, i32_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction(
-                                "qore_rt_self_member_assign", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_self_member_assign_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_self_member_assign_mode" : "qore_rt_self_member_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_self_member_assign_mode_throwing" : "qore_rt_self_member_assign_throwing",
+                                ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {direct_member_ptr, rhs_boxed, mode_val, xsink_arg},
                                 module, llvm_func, inst);
@@ -40608,9 +40682,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_lv_path_assign_aot_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_aot" : "qore_rt_lv_path_assign_aot", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_aot_throwing" : "qore_rt_lv_path_assign_aot_throwing",
+                                ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
                                  dyn_array, rhs_boxed, xsink_arg},
@@ -40630,9 +40706,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, i64_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_lv_path_assign_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode" : "qore_rt_lv_path_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_throwing" : "qore_rt_lv_path_assign_throwing", ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
                                 module, llvm_func, inst);

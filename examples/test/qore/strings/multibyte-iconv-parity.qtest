@@ -30,22 +30,68 @@
 
 class MultiByteIconvParityTest inherits QUnit::Test {
     public {
-        #! the sequences that a strict iconv decodes and the character functions refuse, by the upper-case name
-        /** the first bytes of the sequences and their number; they are no characters of the encoding
-        */
+        #! the known differences of the strict iconv implementations: the sequences that iconv decodes and the character
+        #! functions refuse, which are no characters of the encoding, and which isEncodingValid() and the conversions
+        #! refuse; by implementation and encoding, with the exact first bytes and count, so that a change is caught
         const KnownDifferences = {
-            # glibc decodes the byte 0x80 as U+0080 (it is none, as for the WHATWG Encoding Standard): 0x80 alone,
-            # followed by each ASCII byte, and twice
-            "BIG5": {"leads": "80", "count": 130},
-            "BIG5-HKSCS": {"leads": "80", "count": 130},
-            "BIG5HKSCS": {"leads": "80", "count": 130},
-            "CP950": {"leads": "80", "count": 130},
-            "CN-BIG5": {"leads": "80", "count": 130},
-            # Apple's libiconv decodes the user-defined area of CP932 as private use characters: each of the lead
-            # bytes 0xf0 - 0xf9 followed by each of the 188 trail bytes
-            "SHIFT_JIS": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
-            "SJIS//IGNORE": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
+            "glibc": {
+                # glibc decodes the byte 0x80 as U+0080 (it is none, as for the WHATWG Encoding Standard): 0x80 alone,
+                # followed by each ASCII byte, and twice
+                "BIG5": {"leads": "80", "count": 130},
+                "BIG5-HKSCS": {"leads": "80", "count": 130},
+                "BIG5HKSCS": {"leads": "80", "count": 130},
+                "CP950": {"leads": "80", "count": 130},
+                "CN-BIG5": {"leads": "80", "count": 130},
+            },
+            # the libiconv of macOS 15 (Darwin 24, the CI runner); the libiconv of macOS 26 (Darwin 25) decodes none of
+            # the EUC sequences below, and has no eucJP-ms or eucJP-win (see qore#7155 for its SJIS//IGNORE)
+            "apple": {
+                # the user-defined area of CP932 as private use characters: each of the lead bytes 0xf0 - 0xf9 followed
+                # by each of the 188 trail bytes
+                "SHIFT_JIS": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
+                "SJIS//IGNORE": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
+                # two-byte sequences of the rows of the EUC encodings (and of the lead bytes of Big5) that are no
+                # characters of the encoding (ex: EUC-JP 8e 21, SS2 followed by a byte that is no half-width katakana;
+                # EUC-KR a1 21); the first bytes and counts as the libiconv of macOS 15 gives them
+                "EUC-JP": {"leads": EucJpAppleLeads, "count": 6942},
+                "EUCJP": {"leads": EucJpAppleLeads, "count": 6942},
+                "EUCJP-MS": {"leads": EucJpMsAppleLeads, "count": 7965},
+                "EUCJP-WIN": {"leads": EucJpMsAppleLeads, "count": 7965},
+                "EUC-KR": {"leads": EucKrAppleLeads, "count": 8227},
+                "EUCKR": {"leads": EucKrAppleLeads, "count": 8227},
+                "GB2312": {"leads": EucCnAppleLeads, "count": 7445},
+                "EUC-CN": {"leads": EucCnAppleLeads, "count": 7445},
+                "CN-GB": {"leads": EucCnAppleLeads, "count": 7445},
+                "BIG5": {"leads": Big5AppleLeads, "count": 5809},
+                "CN-BIG5": {"leads": Big5AppleLeads, "count": 5809},
+                "BIG5HKSCS": {"leads": Big5HkscsAppleLeads, "count": 942},
+                "BIG5-HKSCS": {"leads": Big5HkscsAppleLeads, "count": 942},
+            },
         };
+
+        #! the first bytes of the Apple differences of KnownDifferences (the libiconv of macOS 15)
+        const EucKrAppleLeads = "a1,a2,a3,a4,a5,a6,a7,a8,a9,aa,ab,ac,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,ba,bb,bc,bd,be,bf,"
+            "c0,c1,c2,c3,c4,c5,c6,c7,c8,ca,cb,cc,cd,ce,cf,d0,d1,d2,d3,d4,d5,d6,d7,d8,d9,da,db,dc,"
+            "dd,de,df,e0,e1,e2,e3,e4,e5,e6,e7,e8,e9,ea,eb,ec,ed,ee,ef,f0,f1,f2,f3,f4,f5,f6,f7,f8,"
+            "f9,fa,fb,fc,fd";
+        const EucCnAppleLeads = "a1,a2,a3,a4,a5,a6,a7,a8,a9,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,ba,bb,bc,bd,be,bf,c0,c1,c2,"
+            "c3,c4,c5,c6,c7,c8,c9,ca,cb,cc,cd,ce,cf,d0,d1,d2,d3,d4,d5,d6,d7,d8,d9,da,db,dc,dd,de,"
+            "df,e0,e1,e2,e3,e4,e5,e6,e7,e8,e9,ea,eb,ec,ed,ee,ef,f0,f1,f2,f3,f4,f5,f6,f7";
+        const Big5AppleLeads = "81,82,83,84,85,86,87,88,89,8a,8b,8c,8d,8e,8f,90,91,92,93,94,95,96,97,98,99,9a,9b,9c,"
+            "9d,9e,9f,a0,fa,fb,fc,fd,fe";
+        const Big5HkscsAppleLeads = "81,82,83,84,85,86";
+
+        #! the first bytes of the eucJP-ms sequences that the libiconv of macOS 15 decodes and the character functions
+        #! refuse (see KnownDifferences)
+        const EucJpMsAppleLeads = "8e,a1,a2,a3,a4,a5,a6,a7,a8,ad,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,ba,bb,bc,bd,be,bf,c0,c1,"
+            "c2,c3,c4,c5,c6,c7,c8,c9,ca,cb,cc,cd,ce,cf,d0,d1,d2,d3,d4,d5,d6,d7,d8,d9,da,db,dc,dd,de,df,e0,e1,e2,e3,e4,e5,"
+            "e6,e7,e8,e9,ea,eb,ec,ed,ee,ef,f0,f1,f2,f3,f4,f5,f6,f7,f8,f9,fa,fb,fc,fd,fe";
+
+        #! the first bytes of the EUC-JP sequences that the libiconv of macOS 15 decodes and the character functions
+        #! refuse (see KnownDifferences)
+        const EucJpAppleLeads = "8e,a1,a2,a3,a4,a5,a6,a7,a8,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,ba,bb,bc,bd,be,bf,c0,c1,c2,c3,"
+            "c4,c5,c6,c7,c8,c9,ca,cb,cc,cd,ce,cf,d0,d1,d2,d3,d4,d5,d6,d7,d8,d9,da,db,dc,dd,de,df,e0,e1,e2,e3,e4,e5,e6,e7,"
+            "e8,e9,ea,eb,ec,ed,ee,ef,f0,f1,f2,f3,f4";
     }
 
     constructor() : QUnit::Test("multi-byte character functions and iconv", "1.0", \ARGV) {
@@ -69,6 +115,8 @@ class MultiByteIconvParityTest inherits QUnit::Test {
         bool strict = impl == "glibc" || impl == "apple";
         int available = 0;
         list<string> lenient = ();
+        # the differences of a strict iconv that KnownDifferences does not describe
+        list<string> unexpected = ();
         foreach string line in (lines[1..]) {
             # an encoding that iconv does not know, or decodes but cannot encode (musl's EUC-KR), is not probed and has
             # no character functions
@@ -91,21 +139,22 @@ class MultiByteIconvParityTest inherits QUnit::Test {
                 # every sequence that iconv decodes is valid for the character functions, but the known differences
                 # of the strict implementations, which are no characters of the encoding, and which
                 # isEncodingValid() and the conversions refuse
-                *hash<auto> known = KnownDifferences{enc.upr()};
-                if (iconv_only && known) {
-                    assertEq(known.leads, leads, sprintf("%s: the first bytes of the sequences that iconv decodes and "
-                        "the character functions refuse: %s", enc, m[6]));
-                    assertEq(known.count, iconv_only, sprintf("%s: sequences that iconv decodes and the character "
-                        "functions refuse: %s", enc, m[6]));
-                } else {
-                    assertEq(0, iconv_only, sprintf("%s: sequences that iconv decodes and the character functions "
-                        "refuse: %s", enc, m[6]));
+                *hash<auto> known = KnownDifferences{impl}{enc.upr()};
+                # every encoding is checked, and the differences are reported together, so that one run gives the
+                # first bytes and the count of each difference of a platform's iconv that KnownDifferences does not
+                # describe
+                if (iconv_only && (!known || known.leads != leads || known.count != iconv_only)) {
+                    unexpected += sprintf("%s (iconv %s): %d sequences that iconv decodes and the character functions "
+                        "refuse, with the first bytes [%s]%s: %s", enc, impl, iconv_only, leads,
+                        known ? sprintf(" (known: %d, [%s])", known.count, known.leads) : "", m[6]);
                 }
             } else if (iconv_only) {
                 lenient += sprintf("%s: %d (%s)", enc, iconv_only, m[6]);
             }
         }
         assertGt(0, available, "multi-byte encodings that the platform's iconv has");
+        assertEq((), unexpected, "sequences that a strict iconv decodes and the character functions refuse, which "
+            "KnownDifferences does not describe");
         if (lenient) {
             # musl: the sequences that iconv decodes are refused by the conversions, as by isEncodingValid()
             testSkip("the iconv of the platform (" + impl + ") decodes sequences that the character functions refuse; "

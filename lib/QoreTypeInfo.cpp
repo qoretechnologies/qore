@@ -4886,9 +4886,11 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         bool changed = false;
         bool nullable = uti->isOrNothing();
         for (const QoreTypeInfo*& member : members) {
-            // Match union construction: a single original member must both accept and return NOTHING.
-            // A direct symbolic parameter can do so even if its eventual argument cannot.
-            nullable = nullable || QoreTypeInfo::parseAcceptsReturns(member, NT_NOTHING);
+            // A bare T can accept and return NOTHING before binding. Preserve that property
+            // when specializing, regardless of T's position among the declared alternatives.
+            if (!nullable && member->isTypeParameter()) {
+                nullable = QoreTypeInfo::parseAcceptsReturns(member, NT_NOTHING);
+            }
             const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
             if (subst != member) {
                 member = subst;

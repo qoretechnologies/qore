@@ -2699,6 +2699,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a temporary value given to the @ref weak_assignment_operator "weak assignment operator" (ex:
+      <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
+      destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -2739,6 +2743,13 @@
       @ref remove "remove" and @ref delete "delete" operators on a member of an object reached through a member of the
       object itself, as in <tt>t.o = t; t.o += {"a": 2};</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7107">issue 7107</a>)
+    - code of a class calls a public method of a \c private:internal parent class on an object of a subclass through
+      @ref Qore::call_object_method() "call_object_method()" and \c getCallReference() as it calls it directly, and a
+      call reference to a method selects only the variants that the code creating it can call, wherever it is called
+      (see @ref private_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/6859">issue 6859</a>)
+    - a call reference to a method created in the code of a class of another Program could crash when it was called
+      after that Program had been deleted; it is now called with the access of the code that created it (see
+      @ref private_inheritance)
     - the default values of a function, method or closure are evaluated in the class context of the code that
       declared them; they were evaluated in the class context of the caller with its private access, which a default
       value that uses the private declarations of the caller's class no longer has (see
@@ -2781,10 +2792,6 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/7135">issue 7135</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/7144">issue 7144</a>)
 
-    - @ref <object>::keys(), @ref <object>::size(), @ref <object>::empty(), @ref <object>::val(),
-      @ref <object>::firstKey(), @ref <object>::lastKey() and the @ref elements "elements operator" report the same
-      members as the @ref keys "keys operator", where some gave private members to code outside the class hierarchy
-      (<a href="https://github.com/qoretechnologies/qore/issues/7048">issue 7048</a>)
     - the methods of a class are enumerated by the \c reflection module (@ref Qore::Reflection::Class::getNormalMethods()
       "Class::getNormalMethods()", @ref Qore::Reflection::Class::getStaticMethods() "Class::getStaticMethods()",
       @ref Qore::Reflection::AbstractClass::getMethods() "AbstractClass::getMethods()") in the order in which they were

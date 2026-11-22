@@ -968,6 +968,10 @@ public:
         QoreSandboxManager* native_file_policy = nullptr;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
+    // the module initialization barriers of library code (and of trusted builds) that could not be recorded for lack
+    // of memory: while one is active, no application Program is found for module code (see
+    // qore_reflection_get_module_application_program())
+    unsigned module_init_barrier_unrecorded = 0;
 
     // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
     // without touching the pending request, so that a bounded cleanup critical section (acquire a
@@ -7909,6 +7913,9 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const Qor
             nullptr, tag.creator});
         pushed = true;
     } catch (std::bad_alloc&) {
+        // fail closed: no application Program is found for module code while it is active
+        ++td->module_init_barrier_unrecorded;
+        unrecorded = true;
     }
 }
 
@@ -7934,6 +7941,9 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
             pushed = true;
         } catch (std::bad_alloc&) {
             record_failed = true;
+            // fail closed: no application Program is found for module code while it is active
+            ++td->module_init_barrier_unrecorded;
+            unrecorded = true;
         }
         return;
     }
@@ -7966,6 +7976,12 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
 }
 
 QoreModuleInitSandboxBarrierHelper::~QoreModuleInitSandboxBarrierHelper() {
+    if (unrecorded) {
+        ThreadData* td = thread_data.get();
+        assert(td && td->module_init_barrier_unrecorded);
+        --td->module_init_barrier_unrecorded;
+        return;
+    }
     if (!pushed) {
         return;
     }
@@ -8069,6 +8085,62 @@ bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProg
         }
     }
     return false;
+}
+
+const QoreProgram* qore_reflection_get_module_application_program(const QoreProgram* caller,
+        ExceptionSink* xsink) {
+    // fail closed: nullptr (no application Program) unless library module code is called by an application Program
+    // on this thread now
+    ThreadData* td = thread_data.get();
+    if (!td || !caller) {
+        return nullptr;
+    }
+    // module code that runs for no application: a module's init or del closure (module lifecycle barrier), or the
+    // initialization of library module code (module initialization barrier), also if a barrier could not be
+    // recorded; the Program that loads a module does not call its initialization on its own behalf
+    if (td->module_lifecycle_unrecorded || td->module_init_barrier_unrecorded
+            || !td->module_init_barriers.empty()) {
+        return nullptr;
+    }
+    // only library module code acts for its caller: a module that is not library code (one loaded by its path) is
+    // calling code itself (see qore_program_is_library_module())
+    if (!qore_program_is_library_module(caller)
+            || !caller->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        return nullptr;
+    }
+    // the same walk as qore_reflection_has_module_caller(): from the captured caller outwards through the contexts
+    // of library module code only, never beyond the innermost module lifecycle barrier; the application is the
+    // nearest Program that is not a module's, and is taken from the thread's call chain only, never from a value
+    const ProgramThreadCountContextHelper* barrier_ctx = td->module_lifecycle_barrier_ctx.empty()
+        ? nullptr : td->module_lifecycle_barrier_ctx.back();
+    bool found_caller = td->current_pgm == caller;
+    unsigned iterations = 0;
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (++iterations % 100 == 0 && qore_check_cancel(xsink, "checking reflection module callers")) {
+            return nullptr;
+        }
+        if (barrier_ctx && ch == barrier_ctx) {
+            return nullptr;
+        }
+        const QoreProgram* pgm = ch->getOldProgram();
+        if (!pgm) {
+            continue;
+        }
+        if (!found_caller) {
+            found_caller = pgm == caller;
+            continue;
+        }
+        if (!pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            return pgm;
+        }
+        // module code between the caller and the application that is not library code is calling code
+        if (!qore_program_is_library_module(pgm)) {
+            return nullptr;
+        }
+    }
+    // no application Program on the thread's call chain: module code that a thread that module code started runs,
+    // or that the embedding application calls
+    return nullptr;
 }
 
 QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref() {

@@ -202,7 +202,8 @@ auto sub open_pool(string host) {
     }
 
     testSocket() {
-        TmpDir dir("dbi-sandbox-targets");
+        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
+        TmpDir dir("dbi-sandbox-targets", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
         string path = dir.path + "/.s.PGSQL.5432";
         # only the socket of the connection is denied
         SandboxManager deny_socket = denyTestNet();

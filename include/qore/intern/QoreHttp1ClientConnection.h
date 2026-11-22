@@ -167,6 +167,9 @@ public:
 
     DLLLOCAL virtual ~Http1ClientConnection();
 
+    //! Transfers the socket and poll operation to their Qore wrapper's internal members during construction.
+    DLLLOCAL void moveTransportToMembers(QoreObject* owner, ExceptionSink* xsink);
+
     //! Sets the controller-submission owner string before submission to
     //! the AsyncIoController.
     /** Must be called BEFORE construction submits the poll op (i.e., the
@@ -327,33 +330,15 @@ protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
-    //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
-    /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
-        poll-op QoreObjects.  They are raw, not stored in any qclass's
-        @c internal_members slot — because @c Http1ClientConnection is
-        itself a pure C++ class (not wrapped in a QoreObject) and so is
-        not a participant in DGC cycle collection.
-
-        Lifetime is managed by the @ref Http1ClientConnection destructor,
-        which derefs both when the connection is released.  See
-        @c design/dgc.md — Pattern A (internal_members) does not apply
-        here because there is no enclosing QoreObject whose data/cdmap
-        the scanner could walk.  If a future refactor wraps this class
-        in a @c qclass, both refs should move into @c internal_members
-        at that point.
-
+    //! @name Transport ownership
+    /** A manager-created connection owns the two wrapper objects. A Qore-created connection transfers
+        them to the Http1Connection internal members and retains references only to their private data.
+        The private data must survive even if a cycle is collected starting at a transport object.
         @{
     */
-    //! The socket QoreObject (ref'd).  Owns a QoreSocketObject priv.
     QoreObject* sock_obj = nullptr;
-
-    //! The socket priv (raw pointer — ownership via sock_obj)
     QoreSocketObject* sock_priv = nullptr;
-
-    //! The poll op QoreObject (ref'd).  Owns a Http1ClientPollOperationPriv.
     QoreObject* poll_op_obj = nullptr;
-
-    //! The poll op priv (raw pointer — ownership via poll_op_obj).
     Http1ClientPollOperationPriv* poll_op_priv = nullptr;
     //! @}
 

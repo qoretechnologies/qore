@@ -151,7 +151,8 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
     }
 
     globalSetUp() {
-        tmp = new TmpDir("httpclientio-unix-");
+        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
+        tmp = new TmpDir("httpclientio-unix-", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
         sock_path = tmp.path + "/rest.sock";
         url = "http://socket=" + encode_url(sock_path, True);
         server = new HttpServer(<HttpServerOptionInfo>{

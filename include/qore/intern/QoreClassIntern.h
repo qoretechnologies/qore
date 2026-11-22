@@ -114,6 +114,22 @@ class qore_class_private;
 /** The iteration order of the map itself is not defined: see qore_method_private::decl_seq
 */
 DLLLOCAL std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m);
+
+//! the class context given for a method call that has none, unlike nullptr, with which the call takes the class context
+//! of the code that makes it (see CodeEvaluationHelper::findVariantImpl())
+/** A call reference created with no class context passes it, so that a call of it selects only the public variants of
+    its method wherever it is called.  It is never dereferenced: the functions that take a class context for a method
+    call convert it to nullptr with qore_given_class_ctx() where they use the class context
+*/
+DLLLOCAL inline const qore_class_private* qore_no_class_ctx() {
+    return reinterpret_cast<const qore_class_private*>(static_cast<uintptr_t>(1));
+}
+
+//! returns the class context given for a method call, or nullptr for qore_no_class_ctx()
+DLLLOCAL inline const qore_class_private* qore_given_class_ctx(const qore_class_private* cctx) {
+    return cctx == qore_no_class_ctx() ? nullptr : cctx;
+}
+
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 
@@ -3194,9 +3210,6 @@ public:
         serializes its setting.
     */
     std::atomic<bool> reachable{false};
-    //! the cached result of runtimeAllMembersPublic(): -1 if not determined yet, otherwise 0 or 1; beside the flag above,
-    //! in its padding, so that the size of the class's data does not change (#7048)
-    mutable std::atomic<int8_t> runtime_all_members_public{-1};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -4004,19 +4017,6 @@ public:
             const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver);
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
-
-    //! Returns true if the class hierarchy declares no member that is non-public for code outside it and no
-    //! private:internal member; cached once the class can get no more members (#7048)
-    /** This covers the members that the class and its parents declare: a caller must also check that the object holds
-        no internal data, as a child class's method can store its private:internal members on an object of this class
-    */
-    DLLLOCAL bool runtimeAllMembersPublic() const {
-        int8_t cached = runtime_all_members_public.load(std::memory_order_acquire);
-        return cached >= 0 ? cached : runtimeFindAllMembersPublic();
-    }
-
-    //! determines the result of runtimeAllMembersPublic() and caches it if the class can get no more members
-    DLLLOCAL bool runtimeFindAllMembersPublic() const;
 
     DLLLOCAL void parseImportMembers(qore_class_private& qc, ClassAccess access);
 
@@ -5385,6 +5385,31 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
 
+    //! calls the method of the name of an object for builtin code called by code of a class (call_object_method())
+    /** As evalMethod() without a class context, except that when that finds no method of the name, a public method
+        that the class context of the caller reaches through a \c private:internal parent class of its own, which
+        only the code of the class context can follow, is called as a call of it in the caller's code calls it
+        (qore#6859), without a class context, so only its public variants can be called.  A method that is not
+        public is not called through it, nor a method reached through a \c private (hierarchy) edge, which raises
+        \c BASE-CLASS-IS-PRIVATE as before: that edge is also visible to the code of the base classes of the object's
+        class, whose dispatchers can take a method name from their input
+
+        @param caller_ctx the class context of the caller, which may access the private declarations of this class
+    */
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodFromCallerImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(QoreObject* self, const char* nme, const QoreListNode* args,
+            const qore_class_private* caller_ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
     //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
     //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
     //! (issue #5882)
@@ -5849,16 +5874,42 @@ public:
         another class with the same name and signature must not get.  For the calls of a method named with its class
         (a call reference of a method of the object, a qualified call of a method of a base class, a background call)
 
+        A class that the object's class reaches only through a \c private:internal parent class of a class of its
+        hierarchy is the method's class for the code of that class (\a class_ctx), which calls the methods of its
+        \c private:internal parent classes on the objects of its subclasses directly (qore#6859); see
+        getContextBoundMethodClass()
+
         @param obj_cls the class of the object
         @param mcls the class of the method
         @param priv set to true if the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method, if any
     */
-    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv) {
+    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv,
+            const qore_class_private* class_ctx = nullptr) {
         ClassAccess access = Public;
         const QoreClass* rv = obj_cls.priv->getAccessClassIntern(*mcls.priv, access, true);
+        if (!rv && class_ctx) {
+            return getContextBoundMethodClass(obj_cls, mcls, priv, *class_ctx);
+        }
         priv = access > Public;
         return rv;
     }
+
+    //! returns the class of a method that the code of the class context binds to an object through a
+    //! \c private:internal parent class of the class context, or nullptr if there is none (qore#6859)
+    /** The class context must be the object's class or a class of its hierarchy, by identity (getAccessClassIntern();
+        qore#7036), and the method's class a class of the hierarchy of the class context, which reaches its own
+        \c private:internal parent classes, as the run-time method lookups follow the \c private:internal edges of
+        the class context only (InternalEdgeCutForContext).  Not inlined: called only when the method's class is not
+        a class of the object's hierarchy otherwise
+
+        @param obj_cls the class of the object
+        @param mcls the class of the method
+        @param priv set to true: the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method
+    */
+    DLLLOCAL static QORE_INTERN_NOINLINE const QoreClass* getContextBoundMethodClass(const QoreClass& obj_cls,
+            const QoreClass& mcls, bool& priv, const qore_class_private& class_ctx);
 
 #ifdef DEBUG_SKIP
     DLLLOCAL void parseShowHash() const {
