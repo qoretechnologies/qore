@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! a module for caller-restriction-grants.qtest that the host loads by its path (not library code), so that its own
+#! options are the host's
+
+%modern
+
+module GrantPath {
+    version = "1.0";
+    desc = "test module loaded by its path";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace GrantPath {
+    public bool sub probe() {
+        return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+    }
+
+    #! returns an object created by the module's code
+    public Obj sub make() {
+        return new Obj();
+    }
+
+    public class Obj {
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+        }
+
+        #! declares the domain: refused for a restricted caller
+        public string host() [dom=EXTERNAL_INFO] {
+            return "HOST";
+        }
+
+        public string viaHost() {
+            return host();
+        }
+    }
+}

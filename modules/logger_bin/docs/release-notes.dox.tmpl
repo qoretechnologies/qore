@@ -40,4 +40,9 @@
     \c private:internal: a subclass uses @ref Qore::Logger::LoggerAppenderFile::getFile() "getFile()",
     @ref Qore::Logger::LoggerAppenderFile::getFileName() "getFileName()" and
     @ref Qore::Logger::LoggerAppenderFile::setFileName() "setFileName()" instead of the members (qore#6839).
+
+    The builtin level objects (the \c Level* constants of @ref Qore::Logger::LoggerLevel "LoggerLevel", which
+    @ref Qore::Logger::LoggerLevel::getLevel() "LoggerLevel::getLevel()" and the other static methods of the class
+    return) are shared by the whole process: adding a member to one raises \c SYSTEM-OBJECT-ERROR, so that no data
+    passes through them from one caller to another, also between sandboxed tenants (qore#6749).
 */

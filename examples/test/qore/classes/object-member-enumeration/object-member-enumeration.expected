@@ -1,0 +1,52 @@
+outside on Child: keys(): ["pub_base", "pub_child"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["pub_base", "pub_child"] same: True
+Base method: keys(): ["pub_base", "priv_base", "pub_child", "int_base"] size(): 4 empty(): False val(): True elements: 4 keys operator: ["pub_base", "priv_base", "pub_child", "int_base"] same: True
+Child method: keys(): ["pub_base", "priv_base", "pub_child", "priv_child"] size(): 4 empty(): False val(): True elements: 4 keys operator: ["pub_base", "priv_base", "pub_child", "priv_child"] same: True
+Unrelated method on Child: keys(): ["pub_base", "pub_child"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["pub_base", "pub_child"] same: True
+outside on OnlyPrivate: keys(): [] size(): 0 empty(): True val(): True elements: 0 keys operator: [] same: True
+OnlyPrivate method: keys(): ["p"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["p"] same: True
+Unrelated method on OnlyPrivate: keys(): [] size(): 0 empty(): True val(): True elements: 0 keys operator: [] same: True
+outside on Base: keys(): ["pub_base"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["pub_base"] same: True
+Base method: keys(): ["pub_base", "priv_base", "int_base"] size(): 3 empty(): False val(): True elements: 3 keys operator: ["pub_base", "priv_base", "int_base"] same: True
+outside on PrivateChild: keys(): ["pub_pchild"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["pub_pchild"] same: True
+PrivateChild method: keys(): ["pub_base", "priv_base", "pub_pchild"] size(): 3 empty(): False val(): True elements: 3 keys operator: ["pub_base", "priv_base", "pub_pchild"] same: True
+Unrelated method on PrivateChild: keys(): ["pub_pchild"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["pub_pchild"] same: True
+outside on AllPublic: keys(): ["x", "y"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["x", "y"] same: True
+outside on Dynamic with a member added at run time: keys(): ["z"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["z"] same: True
+outside on EnumPublicChild: keys(): ["c1", "c2"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["c1", "c2"] same: True
+EnumParent method on EnumPublicChild: keys(): ["c1", "c2"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["c1", "c2"] same: True
+outside on CollideChild: keys(): ["y", "x"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["y", "x"] same: True
+CollideParent method on CollideChild: keys(): ["y", "x"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["y", "x"] same: True
+CollideChild method: keys(): ["y", "x"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["y", "x"] same: True
+outside on InternalChild: keys(): ["pub_ichild"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["pub_ichild"] same: True
+InternalChild method: keys(): ["pub_base", "priv_base", "pub_ichild"] size(): 3 empty(): False val(): True elements: 3 keys operator: ["pub_base", "priv_base", "pub_ichild"] same: True
+outside on Diamond: keys(): ["root_pub", "left_pub", "bottom_pub"] size(): 3 empty(): False val(): True elements: 3 keys operator: ["root_pub", "left_pub", "bottom_pub"] same: True
+DiamondRoot method on Diamond: keys(): ["root_pub", "root_priv", "left_pub", "bottom_pub"] size(): 4 empty(): False val(): True elements: 4 keys operator: ["root_pub", "root_priv", "left_pub", "bottom_pub"] same: True
+Unrelated method on Diamond: keys(): ["root_pub", "left_pub", "bottom_pub"] size(): 3 empty(): False val(): True elements: 3 keys operator: ["root_pub", "left_pub", "bottom_pub"] same: True
+outside on FunctionFromMethod through a function called from its method: keys(): ["shown"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shown"] same: True
+closure created in a method: keys(): ["shown", "hidden"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["shown", "hidden"] same: True
+Unrelated method on FunctionFromMethod: keys(): ["shown"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shown"] same: True
+outside on FunctionFromMethod through a closure created outside and called in its method: keys(): ["shown"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shown"] same: True
+outside on PublicOfInternal: keys(): ["shown"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shown"] same: True
+InternalOnlyParent method on PublicOfInternal: keys(): ["shown", "hidden"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["shown", "hidden"] same: True
+outside on OnlyInternal: keys(): [] size(): 0 empty(): True val(): False elements: 0 keys operator: [] same: True
+OnlyInternal method: keys(): ["a", "b"] size(): 2 empty(): False val(): False elements: 2 keys operator: ["a", "b"] same: True
+outside on OnlyPrivate with a member added at run time: keys(): ["added"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["added"] same: True
+OnlyPrivate method: keys(): ["p", "added"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["p", "added"] same: True
+outside on an object of another Program: keys(): ["shared_pub"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shared_pub"] same: True
+Unrelated method on an object of another Program: keys(): ["shared_pub"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["shared_pub"] same: True
+deleted object: keys: OBJECT-ALREADY-DELETED
+deleted object: size: OBJECT-ALREADY-DELETED
+deleted object: empty: OBJECT-ALREADY-DELETED
+deleted object: val: OBJECT-ALREADY-DELETED
+deleted object: firstKey: OBJECT-ALREADY-DELETED
+deleted object: lastKey: OBJECT-ALREADY-DELETED
+child method on a parent object with its internal member: keys(): ["a", "x"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["a", "x"] same: True
+outside on a parent object with a child's internal member: keys(): ["a"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["a"] same: True
+Unrelated method on a parent object with a child's internal member: keys(): ["a"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["a"] same: True
+PublicParent method on a parent object with a child's internal member: keys(): ["a"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["a"] same: True
+sibling class method on a parent object with a child's internal member: keys(): ["a"] size(): 1 empty(): False val(): True elements: 1 keys operator: ["a"] same: True
+child method after removing its internal member: keys(): ["a", "x"] size(): 2 empty(): False val(): True elements: 2 keys operator: ["a", "x"] same: True
+deleted object with internal data: OBJECT-ALREADY-DELETED
+deleted object with internal data: elements: 0
+child method on an empty parent object with its internal member: keys(): ["x"] size(): 1 empty(): False val(): False elements: 1 keys operator: ["x"] same: True
+outside on an empty parent object with a child's internal member: keys(): [] size(): 0 empty(): True val(): False elements: 0 keys operator: [] same: True

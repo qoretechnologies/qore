@@ -245,7 +245,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         effective_encoding = suppress_ds_v1_content_encoding
             ? NOTHING : cx.encoding;
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::constructor() "
                     "encoding=%y effective_encoding=%y connect_mode=%y "
                     "suppress_ds_v1_content_encoding=%y\n",
@@ -416,7 +416,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     nothing recvImpl(hash v) {
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
             }
         }
@@ -475,7 +475,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     auto sendImpl() {
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::sendImpl()\n");
             }
         }

@@ -1,20 +1,9 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
-# test-platform: macos - debugger attach, and AOT code generation and linking of the debug IR of handlers
-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../TestInterpreter.qm
-%requires ../../ExecModeHarness.qm
-
-%exec-class InlineHandlerFlowLoopTest
+# The cases of the InlineHandlerFlowLoop-<n>.qtest tests (see addPartCase()): the execution modes, and qcc executables
+# compiled with -O0 and with -O3; together they run about 1,000 child processes one after another, which took more
+# than the time limit of run_tests.sh under the load of a parallel run in one test (qore#7254)
 
 #! a handler declared in the body of a handler that runs inline at an exit of a loop compiles with qcc (qore#6905)
 /** The debug IR of a qcc executable has the paths of a debugger's break, continue and return requests at the step
@@ -30,9 +19,10 @@
     handler of a handler's body (qore#6949).  The paths after a block do not run the handlers of the block and of the
     blocks in it again, which have run (qore#6955).  A break or a continue request in a handler of a block of the body
     of a handler that is not the last one of its exit ends that handler, whose request the next handler's normal end
-    replaces (qore#7040).
+    replaces (qore#7040).  A return request in a handler that is not the last one runs the next handlers and ends the
+    function (qore#6999).
 */
-class InlineHandlerFlowLoopTest inherits QUnit::Test {
+class InlineHandlerFlowLoopBase inherits QUnit::Test {
     public {
         #! the functions of handler-flow.q
         const Functions = ("loopThrow", "loopReturn", "switchBreak", "nestedLoops", "noLoop", "deepReturn", "nestIf",
@@ -40,7 +30,10 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             "tryExitContinue", "tryCutReturn", "loopHandlerTop", "scopeMidHandler", "scopeMid", "scopeMidLoop",
             "tryHandlerTry", "tryNestedHandlers", "nonLast", "nonLastLoop", "nonLastSwitch", "nonLastInnerLoop",
             "nonLastDeep", "nonLastInner", "nonLastTry", "nonLastSuccess", "retNonLast", "retLast", "retLastLoop",
-            "retNonLastLoop", "retDeep", "retDeepLast");
+            "retNonLastLoop", "retDeep", "retDeepLast",
+            "twoHandlersLoop", "twoHandlers", "twoHandlersInner", "twoHandlersInnerReturn", "twoHandlersMid",
+            "twoHandlersTry", "twoHandlersLaterReturn", "threeHandlers", "mixedHandlers",
+            "mixedHandlersLoop", "mixedInHandler");
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
         #! request, tag and hit
@@ -160,10 +153,58 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             ("retDeep", "continue", "ret_deep", 1),
             ("retDeepLast", "break", "ret_deep_last", 1),
             ("retDeepLast", "continue", "ret_deep_last", 1),
+            # a handler that is not the last of its exit: the next handlers run, and keep a return request and replace
+            # a break or a continue request (qore#6999)
+            ("twoHandlersLoop", "return", "two_handlers_loop_a", 1),
+            ("twoHandlersLoop", "break", "two_handlers_loop_a", 1),
+            ("twoHandlersLoop", "continue", "two_handlers_loop_a", 1),
+            ("twoHandlers", "return", "two_handlers_a", 1),
+            ("twoHandlers", "break", "two_handlers_a", 1),
+            ("twoHandlers", "continue", "two_handlers_a", 1),
+            ("twoHandlersInner", "return", "two_handlers_inner_a", 1),
+            ("twoHandlersInner", "break", "two_handlers_inner_a", 1),
+            ("twoHandlersInner", "continue", "two_handlers_inner_a", 1),
+            ("twoHandlersInnerReturn", "return", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "break", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "continue", "two_handlers_inner_return_a", 1),
+            ("twoHandlersInnerReturn", "return", "two_handlers_inner_return_b", 1),
+            ("twoHandlersInnerReturn", "break", "two_handlers_inner_return_b", 1),
+            ("twoHandlersInnerReturn", "continue", "two_handlers_inner_return_b", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_a", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_b", 1),
+            ("twoHandlersMid", "return", "two_handlers_mid_c", 1),
+            ("twoHandlersMid", "break", "two_handlers_mid_c", 1),
+            ("twoHandlersMid", "continue", "two_handlers_mid_c", 1),
+            ("twoHandlersTry", "return", "two_handlers_try_a", 1),
+            ("twoHandlersTry", "break", "two_handlers_try_a", 1),
+            ("twoHandlersTry", "continue", "two_handlers_try_a", 1),
+            ("twoHandlersLaterReturn", "return", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "break", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "continue", "two_handlers_later_return_a", 1),
+            ("twoHandlersLaterReturn", "return", "two_handlers_later_return_b", 1),
+            ("twoHandlersLaterReturn", "break", "two_handlers_later_return_b", 1),
+            ("twoHandlersLaterReturn", "continue", "two_handlers_later_return_b", 1),
+            ("threeHandlers", "return", "three_handlers_a", 1),
+            ("threeHandlers", "break", "three_handlers_a", 1),
+            ("threeHandlers", "continue", "three_handlers_a", 1),
+            ("mixedHandlers", "return", "mixed_handlers", 1),
+            ("mixedHandlers", "break", "mixed_handlers", 1),
+            ("mixedHandlers", "continue", "mixed_handlers", 1),
+            ("mixedHandlersLoop", "return", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "return", "mixed_handlers_loop_b", 2),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_b", 2),
+            ("mixedHandlersLoop", "continue", "mixed_handlers_loop_b", 1),
+            ("mixedHandlersLoop", "continue", "mixed_handlers_loop_b", 2),
+            ("mixedInHandler", "return", "mixed_in_handler", 1),
+            ("mixedInHandler", "break", "mixed_in_handler", 1),
+            ("mixedInHandler", "continue", "mixed_in_handler", 1),
+            ("mixedHandlersLoop", "break", "mixed_handlers_loop_x", 1, "return", "mixed_handlers_loop_b", 1),
         );
-
-        #! the qcc optimization levels
-        const OptLevels = (0, 3);
     }
 
     private {
@@ -175,7 +216,13 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
         hash<string, int> tags = {};
     }
 
-    constructor() : QUnit::Test("InlineHandlerFlowLoopTest", "1.0", \ARGV) {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
@@ -187,9 +234,18 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
                 tags{tag[0]} = i + 1;
             }
         }
-        addTestCase("the handlers run alike in every execution mode", \testModes());
-        addTestCase("qcc compiles the handlers, which run as with the AST interpreter", \testQcc());
+        # each part runs about a third of the child processes, which run one after another (qore#7254)
+        addPartCase(1, "the handlers run alike in every execution mode", \testModes());
+        addPartCase(2, "qcc -O0 compiles the handlers, which run as with the AST interpreter", \testQcc(), 0);
+        addPartCase(3, "qcc -O3 compiles the handlers, which run as with the AST interpreter", \testQcc(), 3);
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     testModes() {
@@ -210,17 +266,17 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
         }
     }
 
-    testQcc() {
+    testQcc(int opt) {
         TmpDir dir("qore-inline-handler-flow-loop-");
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
-        foreach int opt in (OptLevels) {
+        {
             string exe = join_paths(dir.path, sprintf("handler-flow-O%d", opt));
             int rc;
             string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
             # the compile aborted on an assertion (qore#6905)
             assertEq(0, rc, sprintf("qcc -O%d: exit status (output: %s)", opt, out.substr(-2000)));
             if (!is_file(exe)) {
-                continue;
+                return;
             }
             # without a debugger
             foreach string f in (Functions) {

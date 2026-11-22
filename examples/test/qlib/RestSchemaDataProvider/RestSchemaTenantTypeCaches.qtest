@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RestSchemaTenantTypeCaches.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7104: the request, response and record types of the request data providers of the REST-family modules
+    (OpenApi3, Swagger, RestSchema, AsyncApi) are cached in the provider instance.  When one instance is shared
+    between tenants, a type that a sandboxed tenant built as the first caller was kept in the instance, and every
+    other caller (the platform's trusted code and the other tenants) was given the tenant's object.  A type that a
+    sandboxed caller builds is now private to that caller: the instance keeps only the types that unsandboxed code
+    builds.  Each case makes a sandboxed Program the first caller of each accessor on a fresh instance, and checks
+    that the trusted callers get types of their own, which the instance then keeps, and that a sandboxed caller
+    after them gets the kept types.  The request and response types are covered; the record types of these
+    providers (and of RestSchemaTableDataProvider) are gated the same way, but no fixture of the tests gives an
+    operation of a provider that is created by sandboxed code a record type that this test could compare.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
+%requires Util
+%requires Mime
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires DataProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires ConnectionProvider
+%requires RestClient
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestSchemaDataProvider
+%requires OpenApi3DataProvider
+%requires SwaggerDataProvider
+%requires AsyncApiDataProvider
+
+%exec-class RestSchemaTenantTypeCachesTest
+
+class RestSchemaTenantTypeCachesTest inherits QUnit::Test {
+    public {
+        const OpenApi3Spec = get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml";
+        const SwaggerSpec = get_script_dir() + "/../Swagger/PetStore.swagger.yaml";
+        const AsyncApiSpec = get_script_dir() + "/../AsyncApi/ChatApi.asyncapi.yaml";
+    }
+
+    private {
+        Program tenant;
+    }
+
+    constructor() : Test("RestSchemaTenantTypeCachesTest", "1.0") {
+        # the sandboxed Program is a tenant: it may not read files
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        tenant = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        tenant.parse("auto sub call_accessor(object o, string m) { return call_object_method(o, m); }\n",
+            "tenant");
+        tenant.setSandboxManager(sm);
+
+        addTestCase("OpenApi3 request provider", \openApi3Test());
+        addTestCase("Swagger request provider", \swaggerTest());
+        addTestCase("RestSchema request provider (Swagger and OpenAPI 3 schemas)", \restSchemaTest());
+        addTestCase("AsyncApi operation provider", \asyncApiTest());
+        set_return_value(main());
+    }
+
+    #! Calls an accessor as the tenant
+    private auto asTenant(AbstractDataProvider prov, string accessor) {
+        return tenant.callFunction("call_accessor", cast<object>(prov), accessor);
+    }
+
+    #! Returns an object to compare by identity: a type, or the first field of a record type
+    private auto identity(auto t) {
+        if (t.typeCode() == NT_HASH) {
+            return t.firstValue();
+        }
+        return t;
+    }
+
+    #! Checks a provider instance that is shared by a sandboxed tenant and trusted code
+    /** @param what the description of the case
+        @param make creates a fresh provider instance of the same operation
+        @param accessors the accessors to check: the operation has each of these types
+    */
+    private checkShared(string what, code<AbstractDataProvider()> make, list<string> accessors) {
+        # the operation has each of the types
+        AbstractDataProvider probe = make();
+        foreach string accessor in (accessors) {
+            assertTrue(exists call_object_method(cast<object>(probe), accessor),
+                sprintf("%s: the operation has %s", what, accessor));
+        }
+        # the tenant is the first caller of each accessor
+        AbstractDataProvider prov = make();
+        hash<string, auto> tenant_types;
+        foreach string accessor in (accessors) {
+            tenant_types{accessor} = asTenant(prov, accessor);
+            assertTrue(exists tenant_types{accessor}, sprintf("%s: the tenant gets %s", what, accessor));
+        }
+        foreach string accessor in (accessors) {
+            auto trusted = call_object_method(cast<object>(prov), accessor);
+            assertTrue(exists trusted, sprintf("%s: trusted code gets %s", what, accessor));
+            assertTrue(identity(trusted) !== identity(tenant_types{accessor}),
+                sprintf("%s: %s: trusted code does not get the type that the tenant built", what, accessor));
+            # the instance keeps the type that trusted code built
+            assertTrue(identity(call_object_method(cast<object>(prov), accessor)) === identity(trusted),
+                sprintf("%s: %s: the instance keeps the type of trusted code", what, accessor));
+            # and a tenant after it gets that type
+            assertTrue(identity(asTenant(prov, accessor)) === identity(trusted),
+                sprintf("%s: %s: a tenant gets the kept type", what, accessor));
+        }
+
+        # a second tenant that is first also gets a type of its own, not the first tenant's
+        AbstractDataProvider prov2 = make();
+        foreach string accessor in (accessors) {
+            auto first = asTenant(prov2, accessor);
+            auto second = asTenant(prov2, accessor);
+            assertTrue(identity(first) !== identity(second),
+                sprintf("%s: %s: a tenant's type is not kept for the next tenant", what, accessor));
+        }
+    }
+
+    openApi3Test() {
+        checkShared("OpenApi3 GET /pets",
+            AbstractDataProvider sub () {
+                OpenApi3DataProvider::OpenApi3DataProvider prov({"schema": OpenApi3Spec});
+                return prov.getChildProviderPath("pets/GET");
+            # the provider builds its record type when a trusted caller creates it, so that no caller can be first
+            }, ("getRequestType", "getResponseType"));
+    }
+
+    swaggerTest() {
+        checkShared("Swagger GET pet/findByStatus",
+            AbstractDataProvider sub () {
+                SwaggerDataProvider::SwaggerDataProvider prov({"schema": SwaggerSpec});
+                return prov.getChildProviderPath("pet/findByStatus/GET");
+            }, ("getRequestType", "getResponseType"));
+    }
+
+    restSchemaTest() {
+        checkShared("RestSchema (Swagger schema) GET pet/findByStatus",
+            AbstractDataProvider sub () {
+                RestSchemaDataProvider::RestSchemaDataProvider prov({"schema": SwaggerSpec});
+                return prov.getChildProviderPath("pet/findByStatus/GET");
+            }, ("getRequestType", "getResponseType"));
+        checkShared("RestSchema (OpenAPI 3 schema) GET pets",
+            AbstractDataProvider sub () {
+                RestSchemaDataProvider::RestSchemaDataProvider prov({"schema": OpenApi3Spec});
+                return prov.getChildProviderPath("pets/GET");
+            }, ("getRequestType", "getResponseType"));
+    }
+
+    asyncApiTest() {
+        # only the operations that send have a request type
+        checkShared("AsyncApi sendChatMessage",
+            AbstractDataProvider sub () {
+                AsyncApiDataProvider::AsyncApiDataProvider prov({"schema": AsyncApiSpec});
+                return prov.getChildProviderPath("userChat/sendChatMessage");
+            }, ("getRequestType",));
+    }
+}

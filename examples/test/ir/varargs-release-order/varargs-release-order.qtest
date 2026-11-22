@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the release order of call arguments in JIT code and the native code of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class VarargsReleaseOrderTest
+
+#! The extra arguments, the return value and the parameters of a call are released in one order in every form and mode
+/** When an exception raised after the return statement of a function with extra arguments ($argv) leaves it, the
+    extra arguments are released first as its frame unwinds, then the return value, then the parameters with the
+    argument list, as the AST interpreter releases them for a direct call; call_function() and call_function_args()
+    (with a list that nothing else holds) give the call their arguments, so that it moves the extra ones into $argv
+    as a direct call does (qore#6052).  The calls of calls.q log the order; it must be the direct-call order in every
+    call form, in the ast, ir, jit and tiered modes, on the IR tier of the tiered mode, and in executables made by qcc
+    at -O0 and -O3.
+*/
+class VarargsReleaseOrderTest inherits QUnit::Test {
+    public {
+        #! the execution modes
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+
+        #! the environment of a run in which every function is compiled at its first call
+        const CompileEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1";
+
+        #! the call forms of calls.q that raise
+        const RaisingForms = ("direct", "static method", "method", "call_function", "call_function_args",
+            "call_function by name", "call_function_args by name", "call reference", "closure");
+
+        #! the call forms of calls.q that do not raise
+        const Forms = ("no exception, direct", "no exception, call_function", "no exception, call reference");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+        #! the expected output
+        string expected;
+    }
+
+    constructor() : QUnit::Test("VarargsReleaseOrderTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        list<string> lines = ();
+        for (int i = 0; i < 2; ++i) {
+            lines += map sprintf("%s: [\"~x\", \"~t\", \"~p\", \"c\"]", $1), RaisingForms;
+            lines += map sprintf("%s: [\"~x\", \"~p\", \"~t\"]", $1), Forms;
+        }
+        expected = lines.join("\n") + "\n";
+        addTestCase("the arguments and the return value are released in the direct-call order", \orderTest());
+        set_return_value(main());
+    }
+
+    orderTest() {
+        TmpDir dir("qore-varargs-release-order-");
+        string src = join_paths(dir.path, "calls.q");
+        copy_file(get_script_dir() + "/calls.q", src);
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b --enable-debug "
+                "--exec-mode=%s %s", lib_env, CompileEnv, qore_bin, mode, src));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(expected, r.stdout, mode);
+        }
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered %s",
+            lib_env, qore_bin, src)), "IR tier");
+        foreach string opt in (OptLevels) {
+            string exe = join_paths(dir.path, "calls" + opt);
+            int rc;
+            string output = backquote(sprintf("%s %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt, exe, src), \rc);
+            assertEq(0, rc, sprintf("qcc %s: exit status (output: %s)", opt, output.substr(-2000)));
+            # -b must be the first argument of a compiled program
+            string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+            assertEq(0, rc, sprintf("qcc %s executable: exit status (output: %y)", opt, out));
+            assertEq(expected, out, "qcc " + opt);
+        }
+    }
+}

@@ -131,7 +131,13 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         if (!record_type) {
-            record_type = getRecordTypeIntern();
+            *hash<string, AbstractDataField> rt = getRecordTypeIntern();
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            if (!DataProvider::mayRegisterShared()) {
+                return rt;
+            }
+            record_type = rt;
         }
         return record_type;
     }
@@ -184,7 +190,10 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
             }
             rv.addField(new QoreDataField("formData", "REST request form data", formData));
         }
-        return request_type = required ? rv : rv.getOrNothingType();
+        AbstractDataProviderType rt = required ? rv : rv.getOrNothingType();
+        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+        # that caller and is not kept in the instance for the others (qore#7104)
+        return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
     }
 
     #! Returns the description of a successful response message, if any
@@ -195,7 +204,10 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
         *ResponseObject response = getSuccessResponse();
         if (response) {
-            return response_type = getResponseTypeIntern(response, "success");
+            AbstractDataProviderType rt = getResponseTypeIntern(response, "success");
+            # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+            # that caller and is not kept in the instance for the others (qore#7104)
+            return DataProvider::mayRegisterShared() ? (response_type = rt) : rt;
         }
     }
 

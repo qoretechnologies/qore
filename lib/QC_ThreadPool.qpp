@@ -89,6 +89,8 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // which takes the pool's lock, and the pool's lock must not be requested while this one is held (see below);
         // the task stays assigned to this busy thread until then, so the pool does not hand it another one
         task->del(xsink);
+        // the exceptions of the destructors that the release ran (qore#7139)
+        xsink->handleExceptions();
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) only after task cleanup/derefs complete so destructors still
         // have access to thread-local state if needed, while preventing leakage
@@ -569,8 +571,18 @@ tp.submit(task: sub () { call_function(arg); });
     @throw THREAD-CREATION-FAILURE the pool was created by a Program with a sandbox, the pool has no worker, and the
     thread limit of the sandbox is reached (see @ref sandbox_resources)
     @throw THREADPOOL-ERROR the pool is being destroyed
+    @throw PERMISSION-DENIED \a task or \a cancel_callback was authored by code that may not use the thread classes
+    (@ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES"), also through other code (see
+    @ref sandbox_thread_callables; since %Qore 3.0)
  */
 ThreadPool::submit(code task, *code cancel_callback) [flags=NAMED_ARGS] {
+    // the tasks run on the pool's threads: code that may not control threads cannot have its code run there, also
+    // through a pool that its host lends it or module code that it gives the code to (qore#7056)
+    if (qore_check_thread_callable(task, QDOM_THREAD_CLASS, "ThreadPool::submit()", xsink)
+            || qore_check_thread_callable(cancel_callback, QDOM_THREAD_CLASS, "ThreadPool::submit()",
+                xsink)) {
+        return QoreValue();
+    }
     tp->submit(task->refRefSelf(), cancel_callback ? cancel_callback->refRefSelf() : 0, xsink);
 }
 

@@ -1,0 +1,10 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a destructor that the module cleanup runs starts a polling connection monitor; the cleanup cancels its ping timer
+# when it waits for its work, and the monitor's stopClear() then returns: the timer's cancel callback balanced the
+# monitor's count of scheduled pings (qore#7116)
+
+%requires AbMonitor
+
+printf("started\n");
+flush();

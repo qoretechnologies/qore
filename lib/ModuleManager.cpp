@@ -3760,6 +3760,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
             ++e.waiters;
             ++module_load_waiting;
+#ifdef DEBUG
+            dbg_load_waiter_cond.broadcast();
+#endif
             int wait_rc = module_load_cond.waitWithInterrupt(mutex, &xsink);
             --module_load_waiting;
             // NOTE: the entry may have been erased while we were unlocked; re-find below.  Decrement
@@ -3780,11 +3783,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             // binary init in every waiter (thundering herd)
             std::string err = e.err.empty() ? std::string("LOAD-MODULE-ERROR") : e.err;
             std::string desc = e.desc;
+            const bool err_sandboxed = e.err_sandboxed;
+            const qore_program_id_t err_pgm_id = e.err_pgm_id;
             if (e.waiters == 0) {
                 module_load_map.erase(i);       // last observer GCs the terminal entry
             }
             xsink.raiseException(err.c_str(), "module '%s' failed to load in another thread%s%s",
                 name, desc.empty() ? "" : ": ", desc.c_str());
+            // the text that sandboxed code chose is reported marked in every waiting thread (qore#7232)
+            if (err_sandboxed) {
+                qore_mark_last_exception_sandboxed(xsink, err_pgm_id);
+            }
             return nullptr;
         }
         // MLS_LOADED: the module is registered; GC the terminal entry if we are the last observer and
@@ -8203,6 +8212,7 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
         if (edesc) {
             i->second.desc = edesc.c_str();
         }
+        i->second.err_sandboxed = qore_exception_sandboxed_origin(xsink, i->second.err_pgm_id);
     } else {
         i->second.state = QoreModuleManager::MLS_LOADED;
     }
@@ -8218,3 +8228,18 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
         QMM.module_load_map.erase(i);
     }
 }
+
+#ifdef DEBUG
+bool QoreModuleManager::dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms) {
+    AutoLocker al(mutex);
+    while (true) {
+        module_load_map_t::iterator i = module_load_map.find(name);
+        if (i != module_load_map.end() && i->second.waiters >= count) {
+            return true;
+        }
+        if (dbg_load_waiter_cond.wait(mutex, timeout_ms)) {
+            return false;
+        }
+    }
+}
+#endif

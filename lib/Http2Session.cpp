@@ -906,10 +906,29 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h2_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 template<typename HeaderRange>
 int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         const HeaderRange& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -978,6 +997,9 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -2833,6 +2855,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->close_frame_streams.erase(stream_id);
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
+    h2->stream_taken_total.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2918,12 +2941,20 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     }
 
     BodyData& bd = it->second;
+#ifdef DEBUG
+    // tests hold the buffered data back, as a peer that grants no flow-control credit does: it stays buffered, and
+    // the next send on the stream resumes the stream once the hold is released
+    if (qore_dbg_h2_stream_data_held(stream_id)) {
+        return NGHTTP2_ERR_DEFERRED;
+    }
+#endif
     size_t remaining = bd.data.size() - bd.offset;
     size_t to_copy = std::min(remaining, length);
 
     if (to_copy > 0) {
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
+        h2->stream_taken_total[stream_id] += to_copy;
     }
 
     // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
@@ -3564,6 +3595,9 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
@@ -3698,6 +3732,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
         return (!pending || pending + refused <= lit->second) ? 0 : 1;
     }
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int64_t Http2Session::streamTakenBytes(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return -1;
+    }
+    auto it = stream_taken_total.find(stream_id);
+    int64_t taken = it == stream_taken_total.end() ? 0 : static_cast<int64_t>(it->second);
+#ifdef DEBUG
+    // tests simulate a peer that takes the data of a stream a little at a time
+    taken += qore_dbg_quic_simulated_stream_progress(stream_id);
+#endif
+    return taken;
 }
 
 int Http2Session::streamSendFlushed(int32_t stream_id) {

@@ -2525,6 +2525,23 @@ Socket::constructor() {
     self->setPrivate(CID_SOCKET, new QoreSocketObject);
 }
 
+//! Creates a socket with client credentials for its first HTTP client poll operation
+/** @internal HTTP transport API used by the HttpClientIo module. The operation takes the references on
+    construction. Raw socket TLS methods never use them.
+    @param certificate the client certificate for the target TLS handshake
+    @param private_key the client private key for the target TLS handshake
+
+    @since %Qore 3.0
+*/
+static Socket Socket::forHttpClientHandshake(*SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, xsink);
+    my_socket_priv* priv = my_socket_priv::getPriv(**sock);
+    priv->http_handshake_cert = certificate.release();
+    priv->http_handshake_key = private_key.release();
+    return new QoreObject(QC_SOCKET, getProgram(), sock.release());
+}
+
 //! Creates a new Socket object, not based on the source being copied
 /** @par Example:
     @code{.py} Socket newsock = sock.copy(); @endcode
@@ -7382,6 +7399,30 @@ nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYS
     s->setSslCaLocations(ca_file ? ca_file->c_str() : nullptr, ca_path ? ca_path->c_str() : nullptr, xsink);
 }
 
+//! Sets or clears the in-memory trust store that peer certificates are verified against
+/** A trust store takes precedence over the CA locations set with
+    @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()": its certificates were read when it was
+    created, so no file is read and the environment is not consulted when a certificate is verified
+    (qoretechnologies/qore#7248)
+
+    @param store the trust store; @ref nothing to clear it
+
+    @par Example:
+    @code{.py}
+sock.setSslTrustStore(SSLTrustStore::getDefault());
+    @endcode
+
+    @note the verification mode is not changed: certificates are verified only with a verification mode set with
+    @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()", and not with
+    @ref Qore::Socket::acceptAllCertificates() "Socket::acceptAllCertificates()"
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSslTrustStore(*SSLTrustStore[QoreSSLTrustStore] store) {
+    // the socket takes a reference of its own; the holder releases the one from the argument
+    qore_socket_object_private(s).setSslTrustStore(store ? *store : nullptr, xsink);
+}
+
 //! Sets the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 /** @par Example:
     @code{.py}
@@ -7472,7 +7513,7 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 */
 Socket::setMaxHeaderSize(int max_header_size) [flags=NAMED_ARGS] {
     if (max_header_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (" QLLD ")",
             max_header_size);
     }
     s->setMaxHeaderSize(static_cast<size_t>(max_header_size));
@@ -7503,7 +7544,7 @@ int Socket::getMaxHeaderSize() [flags=CONSTANT] {
 */
 Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
     if (max_line_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (" QLLD ")",
             max_line_size);
     }
     s->setMaxLineSize(static_cast<size_t>(max_line_size));
@@ -7874,7 +7915,8 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     sendPendingData() calls.
 
     @param stream_id the HTTP/2 stream ID from the request
-    @param status_code the HTTP status code to send
+    @param status_code the HTTP status code to send; must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
     @param body the response body (optional)
 
@@ -7940,7 +7982,8 @@ nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
     thread and CONNECT responses are submitted from handler threads.
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @throw HTTP2-ERROR no HTTP/2 session active or submission failed
@@ -7979,7 +8022,8 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
     @endcode
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for sending the response
@@ -8096,7 +8140,8 @@ int Socket::waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) [f
     flush call is needed from the handler.
 
     @param stream_id the HTTP/2 stream ID
-    @param status_code HTTP status code (e.g., 200)
+    @param status_code HTTP status code (e.g., 200); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers response headers
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
@@ -8959,6 +9004,37 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Returns the number of bytes of an HTTP/2 stream's buffered data that the connection has taken so far
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForHttp2StreamDrain()) can tell from it whether the connection still takes the data (the peer grants
+    flow-control credit): a wait during which the count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int taken = sock.getHttp2StreamTakenBytes(stream_id);
+    @endcode
+
+    @param stream_id the stream ID
+
+    @return the byte count, or -1 if the session is closed or has no such stream
+
+    @throw HTTP2-ERROR no HTTP/2 session is active
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getHttp2StreamTakenBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getHttp2StreamTakenBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_h2_stream_taken(s, stream_id, xsink);
+}
+
 //! Returns the number of bytes of a client-side HTTP/3 stream's data that the peer has acknowledged
 /** The count never decreases; a sender that waits for a full send buffer to drain (see
     @ref waitForQuicClientStreamDrain()) can tell from it whether the peer still takes the data: a wait during which
@@ -9112,7 +9188,8 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
     @param body optional response body
 
@@ -9432,7 +9509,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
@@ -9688,6 +9766,42 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Returns the number of bytes of an HTTP/3 stream's data that the peer has acknowledged
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForQuicStreamDrain()) can tell from it whether the peer still takes the data: a wait during which the
+    count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int acked = sock.getQuicStreamAckedBytes(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return the acknowledged byte count, or -1 if the stream has no data record or there is no such QUIC session
+
+    @throw QUIC-ERROR the session or stream ID is invalid
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getQuicStreamAckedBytes(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicStreamAckedBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_quic_stream_acked(s, session_id, stream_id, xsink);
+}
+
 //! Flushes pending HTTP/3 write data through the async I/O controller
 /** Runs one QUIC timer/write cycle for the given session on the async I/O
     controller thread and sends any generated packets on the UDP socket.
@@ -9726,7 +9840,8 @@ nothing Socket::flushQuicPendingData(int session_id) [flags=NAMED_ARGS] {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active

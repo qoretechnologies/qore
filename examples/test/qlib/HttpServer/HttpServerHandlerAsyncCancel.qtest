@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) connections and listeners of a server with a sandboxed handler
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHandlerAsyncCancelTest
+
+#! A trusted handler that answers with the key of the connection of the request
+class KeyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse({"x-key": cx.sock_key}, 200, "other");
+    }
+}
+
+#! a sandboxed handler cannot cancel the asynchronous I/O operations of its connection or of the server's listeners
+#! through the process-wide asynchronous I/O controller (qore#7010)
+/** The operations of the server's connections and listeners are the server's: a sandboxed handler's cancels by key
+    or owner cancel none of them, and the controller gives it no keys of operations.
+*/
+class HttpServerHandlerAsyncCancelTest inherits QUnit::Test {
+    public {
+        #! a tenant's handler that cancels the operations of its connection and of the listeners by key and owner
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+class CancelProbe inherits AbstractHttpRequestHandler {
+    public {
+        list<string> target_keys = ();
+        list<string> target_owners = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        list<string> r = ();
+        # its own connection: the key of its socket is the owner of the connection's operations
+        list<string> own = (cx.sock_key,);
+        # for HTTP/3, the key of the QUIC listener is the prefix of the connection's key
+        *string quic = (cx.sock_key =~ x/^(.+):quic:/)[0];
+        if (quic) {
+            push own, quic;
+        }
+        foreach string k in (own) {
+            push r, sprintf(\"own owner %s: %d\", k, AsyncIoController::cancelByOwner(k));
+            push r, sprintf(\"own key %s: %y\", k, AsyncIoController::cancelByKey(k));
+        }
+        # the keys and owners of the listeners' accept operations
+        foreach string k in (target_keys) {
+            push r, sprintf(\"listener key %s: %y\", k, AsyncIoController::cancelByKey(k));
+        }
+        foreach string k in (target_owners) {
+            push r, sprintf(\"listener owner %s: %d\", k, AsyncIoController::cancelByOwner(k));
+        }
+        # the keys of the controller's operations
+        hash<auto> info = AsyncIoController::getInfo();
+        push r, sprintf(\"info keys: %y\", sort(keys info));
+        return makeResponse({\"x-key\": cx.sock_key}, 200, r.join(\"\\n\"));
+    }
+
+    setTargets(list<string> k, list<string> o) {
+        target_keys = k;
+        target_owners = o;
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new CancelProbe();
+}
+";
+    }
+
+    constructor() : QUnit::Test("HttpServerHandlerAsyncCancel", "1.0", \ARGV) {
+        addTestCase("HTTP/2: a sandboxed handler cannot cancel its connection or the listeners", \cancelTest(),
+            "2.0");
+        addTestCase("HTTP/3: a sandboxed handler cannot cancel its connection or the listeners", \cancelTest(),
+            "3.0");
+        set_return_value(main());
+    }
+
+    cancelTest(string http_version) {
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        tenant.setSandboxManager(sm);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("probe", "^probe", NOTHING, probe);
+        server.setHandler("other", "^other", NOTHING, new KeyHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        # the accept operations of the server's listeners, which the host sees
+        list<string> accept_keys = select AsyncIoController::getInfo().cache_keys, $1 =~ /^(quic-)?accept:/;
+        assertGt(0, accept_keys.size(), "the host sees the listeners' accept operations");
+        list<string> accept_owners = map (($1 =~ x/^(?:quic-)?accept:(.+):[0-9]+$/)[0]), accept_keys;
+        probe.setTargets(accept_keys, accept_owners);
+
+        HTTPClient hc = getClient(port, http_version);
+        on_exit hc.disconnect();
+        # a request of another handler opens the connection
+        hash<auto> first = hc.send(NOTHING, "GET", "/other/first");
+        string key = first."x-key";
+
+        # the tenant's handler, on the same connection
+        hash<auto> res = hc.send(NOTHING, "GET", "/probe/kill");
+        assertEq(key, res."x-key", "the tenant's request is on the same connection");
+        foreach string line in (res.body.split("\n")) {
+            if (line =~ /^info keys: /) {
+                assertEq("info keys: [\"autostop\", \"io_threads\", \"running\", \"shutting_down\"]", line,
+                    "the tenant gets the settings of the controller only");
+            } else if (line =~ /owner/) {
+                assertRegex(": 0$", line, "nothing is canceled: " + line);
+            } else {
+                assertRegex(": False$", line, "nothing is canceled: " + line);
+            }
+        }
+
+        # the next request on the same connection reaches its handler on that connection
+        hash<auto> next;
+        try {
+            next = hc.send(NOTHING, "GET", "/other/next");
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("the connection was ended: %s: %s", ex.err, ex.desc));
+        }
+        assertEq("other", next.body);
+        assertEq(key, next."x-key", "the connection was not ended (the client did not reconnect)");
+
+        # the listeners still accept: the TCP listener's accept operation is still there (its key's counter changes as it
+        # accepts), and a new connection of the protocol (TCP for HTTP/2, QUIC for HTTP/3) is accepted
+        code tcp_owners = list<string> sub (list<string> l) {
+            return sort(map ($1 =~ x/^accept:(.+):[0-9]+$/)[0], l, $1 =~ /^accept:/);
+        };
+        assertEq(tcp_owners(accept_keys), tcp_owners(AsyncIoController::getInfo().cache_keys),
+            "the TCP listener's accept operation is still there");
+        HTTPClient hc2 = getClient(port, http_version);
+        on_exit hc2.disconnect();
+        string body;
+        try {
+            body = hc2.get("/other/new");
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("a new connection was not accepted: %s: %s", ex.err, ex.desc));
+        }
+        assertEq("other", body, "a new connection is accepted");
+    }
+
+    private HTTPClient getClient(int port, string http_version) {
+        return new HTTPClient({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+    }
+}

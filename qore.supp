@@ -496,6 +496,31 @@
 }
 
 # ============================================================================
+# Cyrus SASL GS2 client plugin (mongodb module) -- qore#7137
+# ============================================================================
+# mongoc_init() (from mongodb_module_init()) runs sasl_client_init() once per
+# process, which loads the SASL plugins.  The GS2 plugin's gs2_client_plug_init()
+# allocates its table of client plugins (plugins/gs2.c, gs2_common_plug_init())
+# into a static, once, and its mech_free never frees it in Cyrus SASL 2.1.28;
+# upstream fixed this in cyrus-sasl PR #968 ("fix-init-leaks", 2026-11-17).  The
+# plugin is unloaded before the leak report, so its two frames have no object
+# name.  One block (192 bytes direct, 20 indirect with its mechanism names) per
+# process; remove this entry when the distributions ship the fix.
+
+{
+   cyrus_sasl_gs2_client_plugin_table_leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   obj:*
+   obj:*
+   fun:sasl_client_add_plugin
+   obj:*libsasl2.so*
+   fun:sasl_client_init
+   obj:*libmongoc*
+}
+
+# ============================================================================
 # PCRE2 JIT-generated code: not suppressed; run with QORE_PCRE2_NO_JIT=1
 # ============================================================================
 # Regular expressions are compiled with the PCRE2 just-in-time compiler (see

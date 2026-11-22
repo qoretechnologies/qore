@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires Util
+%requires reflection
+
+%exec-class ReflectionModuleInitBarrierOomTest
+
+#! The barrier of a library module's initialization that cannot be recorded for lack of memory fails closed
+/** A debug hook (dbg_fail_next_module_init_barrier_records()) makes the record of the barrier fail as an allocation
+    failure would.  The load of the library module then fails (the process ends with "OUT OF MEMORY" and status 1,
+    as for any failed allocation that a loader reports) before any of the module's code runs, whether trusted code or
+    a sandboxed Program loads it.  As no code runs in a module load once the record failed, the code that runs while
+    the barrier is active is called through a debug builtin that sets the barrier as a loader does
+    (dbg_module_init_barrier_call()): library module code finds no application Program then, so it cannot read a
+    sandboxed Program's own typed hash member defaults for it, as with a recorded barrier; after the barrier, the count
+    of unrecorded barriers is zero again and the same code works.  The script runs in every execution mode and as a
+    qcc-compiled executable.
+*/
+class ReflectionModuleInitBarrierOomTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the output of a failed load; the module's code does not run, and the process ends with status 1 (the
+        #! message of the out-of-memory exit is removed: it is lost in the stdio buffer when the output is a pipe)
+        const ExpectedLoad = "before load
+exit: 1
+";
+
+        const ExpectedReflect = "before: ok: \"d\"
+recorded barrier: failed: False, unrecorded during: 0, result: REFLECTION-ACCESS-ERROR
+unrecorded barrier: failed: True, unrecorded during: 1, result: REFLECTION-ACCESS-ERROR
+after: unrecorded: 0, ok: \"d\"
+sandbox recorded barrier: failed: False, unrecorded during: 0, result: REFLECTION-ACCESS-ERROR
+sandbox unrecorded barrier: failed: True, unrecorded during: 1, result: REFLECTION-ACCESS-ERROR
+sandbox after: unrecorded: 0, ok: \"d\"
+load after: unrecorded: 0, init ran: True
+exit: 0
+";
+
+        const Cases = {
+            "load-trusted": ExpectedLoad,
+            "load-sandbox": ExpectedLoad,
+            "reflect": ExpectedReflect,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script = get_script_dir() + "/reflection-module-init-barrier-oom/barrier-oom.q";
+    }
+
+    constructor() : QUnit::Test("reflection module init barrier oom test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("an unrecorded module initialization barrier fails closed in every execution mode and in AOT",
+            \testBarrierOom());
+        set_return_value(main());
+    }
+
+    testBarrierOom() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_fail_next_module_init_barrier_records())");
+        }
+        # the test's modules are library modules in the child processes (found in the module path)
+        string dir = normalize_dir(get_script_dir());
+        string module_path = dirname(get_module_hash().reflection.filename) + ":" + dir + "/../../../../qlib:" + dir
+            + "/reflection-module-init-barrier-oom";
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s%s QORE_JIT_SYNC_COMPILE=1",
+            libqore_dir, libqore_dir, module_path, ENV.QORE_MODULE_DIR.val() ? ":" + ENV.QORE_MODULE_DIR : "");
+        foreach string mode in (ExecModes) {
+            foreach hash<auto> i in (Cases.pairIterator()) {
+                assertEq(i.value, run(sprintf("%s %s --exec-mode=%s %s %s", env, qore_bin, mode, script, i.key)),
+                    mode + " " + i.key);
+            }
+        }
+        TmpDir tmp("qore-reflection-module-init-barrier-oom-");
+        string exe = tmp.path + DirSep + "script";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        foreach hash<auto> i in (Cases.pairIterator()) {
+            assertEq(i.value, run(sprintf("%s %s %s", env, exe, i.key)), "executable " + i.key);
+        }
+    }
+
+    #! runs the command; returns its output and its exit status, without the message of an out-of-memory exit
+    private string run(string cmd) {
+        return replace(backquote(cmd + " 2>&1; echo \"exit: $?\""), "OUT OF MEMORY: aborting\n", "");
+    }
+}

@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires reflection
+%requires QUnit
+%requires DataProvider
+%exec-class TypedHashMemberFieldsTest
+
+hashdecl TypedHashMemberFieldsDecl {
+    string str_val = "abc";
+    int int_val = 42;
+    *date date_val = 2026-01-02T03:04:05Z;
+    list<int> list_val = (1, 2, 3);
+    hash<auto> hash_val = {"a": 1, "b": "two"};
+    string plain_str;
+    *int plain_int;
+}
+
+# fields made from hashdecl members with a default value (#7162)
+class TypedHashMemberFieldsTest inherits QUnit::Test {
+    public {
+        const Defaults = {
+            "str_val": "abc",
+            "int_val": 42,
+            "date_val": 2026-01-02T03:04:05Z,
+            "list_val": (1, 2, 3),
+            "hash_val": {"a": 1, "b": "two"},
+        };
+
+        const Types = {
+            "str_val": "string",
+            "int_val": "int",
+            "date_val": "*date",
+            "list_val": "list<int>",
+            "hash_val": "hash<auto>",
+            "plain_str": "string",
+            "plain_int": "*int",
+        };
+
+        const DisplayNames = {
+            "str_val": "Str Val",
+            "int_val": "Int Val",
+            "date_val": "Date Val",
+            "list_val": "List Val",
+            "hash_val": "Hash Val",
+            "plain_str": "Plain Str",
+            "plain_int": "Plain Int",
+        };
+    }
+
+    constructor() : QUnit::Test("TypedHashMember data fields", "1.0", \ARGV) {
+        addTestCase("addField() takes members with and without defaults", \addFieldTest());
+        addTestCase("a HashDataType made from a TypedHash takes members with defaults", \typedHashTest());
+        addTestCase("QoreDataField made from a member", \fieldTest());
+        set_return_value(main());
+    }
+
+    addFieldTest() {
+        TypedHash th("TypedHashMemberFieldsDecl");
+        HashDataType type("TypedHashMemberFieldsDecl");
+        foreach string name in (Types.keyIterator()) {
+            type.addField(th.getMember(name));
+        }
+        checkFields(type);
+    }
+
+    typedHashTest() {
+        checkFields(new HashDataType(new TypedHash("TypedHashMemberFieldsDecl")));
+    }
+
+    fieldTest() {
+        TypedHash th("TypedHashMemberFieldsDecl");
+        QoreDataField field(th.getMember("int_val"));
+        assertEq("int_val", field.getName());
+        assertEq(42, field.getDefaultValue());
+        assertEq("int", field.getType().getName());
+    }
+
+    private checkFields(HashDataType type) {
+        hash<string, AbstractDataField> fields = type.getFields();
+        assertEq(sort(Types.keys()), sort(fields.keys()));
+        foreach hash<auto> i in (Types.pairIterator()) {
+            AbstractDataField field = fields{i.key};
+            assertEq(i.key, field.getName(), i.key + " name");
+            assertEq(DisplayNames{i.key}, field.getDisplayName(), i.key + " display name");
+            assertEq(i.value, field.getType().getName(), i.key + " type");
+            if (Defaults.hasKey(i.key)) {
+                assertEq(Defaults{i.key}, field.getDefaultValue(), i.key + " default");
+                # the default value is accepted by the field's type
+                assertEq(Defaults{i.key}, field.getType().acceptsValue(Defaults{i.key}), i.key + " accepted");
+            } else {
+                assertNothing(field.getDefaultValue(), i.key + " default");
+            }
+        }
+        # the defaults are applied to a record that leaves the defaulted members out
+        hash<auto> rec = type.acceptsValue({"plain_str": "x"});
+        assertEq("abc", rec.str_val);
+        assertEq(42, rec.int_val);
+        assertEq((1, 2, 3), rec.list_val);
+        assertEq({"a": 1, "b": "two"}, rec.hash_val);
+        assertEq("x", rec.plain_str);
+    }
+}

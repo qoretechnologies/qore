@@ -2261,6 +2261,10 @@ auto result = p.callStaticMethod("Namespace::Class::method", arg1, arg2);
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 
     @note a Program object is a capability: the code runs with the freedom of this %Program and its own
     @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
@@ -2310,6 +2314,10 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 
     @note a Program object is a capability: the code runs with the freedom of this %Program and its own
     @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy

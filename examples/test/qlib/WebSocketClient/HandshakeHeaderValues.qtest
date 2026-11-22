@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket opening handshakes over loopback TLS and QUIC sockets
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires WebSocketClient
+%requires WebSocketHandler
+%requires ../../TestCertificates.qm
+
+%exec-class HandshakeHeaderValuesTest
+
+class HeaderConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+    gotMessage(string msg) {
+    }
+    gotMessage(binary msg) {
+    }
+}
+
+class HeaderReceiver inherits WebSocketHandler {
+    public { Queue headers(); }
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        headers.push(hdr);
+        return new HeaderConnection(self);
+    }
+}
+
+class HandshakeHeaderValuesTest inherits QUnit::Test {
+    constructor() : Test("WebSocket request header values", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1", sub () { check("1.1"); });
+        addTestCase("HTTP/2", sub () { check("2.0"); });
+        addTestCase("HTTP/3", sub () { check("3.0"); });
+        set_return_value(main());
+    }
+
+    private check(string version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        HeaderReceiver receiver();
+        server.setDefaultHandler("headers", receiver);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+        WebSocketClient client(sub (*data msg) {}, {
+            "url": sprintf("wss://127.0.0.1:%d", port), "ssl_verify_cert": False, "http_version": version,
+        });
+        client.connect({"hdr": {"X-Count": 2, "X-Ratio": 1.25, "X-Enabled": True,
+            "X-Values": ("first", 3, False)}});
+        on_exit client.disconnect();
+        assertEq(version, client.isHttp3() ? "3.0" : (client.isHttp2() ? "2.0" : "1.1"));
+        hash<auto> hdr = receiver.headers.get(30s);
+        assertEq("2", hdr."x-count");
+        assertEq(version == "1.1" ? "1.25" : "1.250000", hdr."x-ratio");
+        assertEq("1", hdr."x-enabled");
+        # The H3 server combines repeated fields. H1 and H2 expose each field separately.
+        assertEq(version == "3.0" ? "first, 3, 0" : ("first", "3", "0"), hdr."x-values");
+    }
+}

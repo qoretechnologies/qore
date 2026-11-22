@@ -59,6 +59,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param offer_http11 if @ref True, TLS ALPN offers \c http/1.1 after \c h2 (for an automatic protocol
         selection that falls back to HTTP/1.1)
         @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
@@ -70,6 +72,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store,
             bool offer_http11 = False)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     max_streams, proxy_info) {
@@ -83,6 +86,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         HttpClientCallerExemption exemption();
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path,
+            ssl_trust_store,
             offer_http11);
     }
 
@@ -160,8 +164,11 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param end_stream if True, signals end of stream
         @param drain_timeout the time to wait for the stream's send buffer to drain when it is full (the peer has not
         granted enough flow-control credit for the data buffered): the data is sent once there is room; with a
-        timeout of zero or less, a full buffer raises \c HTTP2-FLOW-CONTROL at once.  A send that raises took none of
-        the data, so it can be made again
+        timeout of zero or less, a full buffer raises \c HTTP2-FLOW-CONTROL at once.  The timeout bounds the time the
+        buffer makes no progress, not the total wait: the wait goes on after a period of the timeout in which the
+        connection took more of the stream's buffered data (see
+        @ref Qore::Socket::getHttp2StreamTakenBytes()), so that a large send that a slow or loaded peer takes does not
+        fail while it is taken.  A send that raises took none of the data, so it can be made again
 
         @throw HTTP2-ERROR if the stream ID is not found
         @throw HTTP2-FLOW-CONTROL if the stream's send buffer did not drain within \a drain_timeout; nothing was sent
@@ -188,23 +195,19 @@ public class Http2ClientConnection inherits HttpClientConnection {
         # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, as on HTTP/3;
         # the wait is woken by the I/O thread when it hands the stream's data to the transport, and when the stream
         # closes or is reset, so a cancel or a reset ends it at once (issue #5879)
-        # on the monotonic clock, in microseconds
-        *int deadline;
+        # the wait is bounded by drain_timeout of STALLED time, not of total time: a large request that the peer takes
+        # slowly (a loaded host) makes progress all the while, and a wait of drain_timeout in which the connection
+        # took no more of the stream's buffered data raises (issue #6968, as on HTTP/3)
         while (True) {
+            # the progress of the wait: the bytes taken at its start, and at its end if it timed out
+            int taken_before = -1;
+            int taken_after = -1;
             try {
                 poll_op.sendStreamData(stream_id, data, end_stream);
                 break;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "HTTP2-FLOW-CONTROL" || drain_timeout <= 0) {
                     rethrow;
-                }
-                if (!deadline) {
-                    deadline = clock_get_monotonic_us() + drain_timeout * 1000;
-                }
-                int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
-                if (remaining <= 0) {
-                    throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
-                        "data was not sent", stream_id, drain_timeout);
                 }
                 # the buffered data is sent by the I/O thread
                 if (ctl) {
@@ -213,7 +216,10 @@ public class Http2ClientConnection inherits HttpClientConnection {
                 # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send
                 # is made again in each case, and reports a closed or reset stream
                 try {
-                    getSocket().waitForHttp2StreamDrain(stream_id, remaining);
+                    taken_before = getSocket().getHttp2StreamTakenBytes(stream_id);
+                    if (getSocket().waitForHttp2StreamDrain(stream_id, drain_timeout) == 1) {
+                        taken_after = getSocket().getHttp2StreamTakenBytes(stream_id);
+                    }
                 } catch (hash<ExceptionInfo> wait_ex) {
                     # the wait failed (for example, the session is gone, or the wait was made on the I/O thread):
                     # the send is made once more, so that it reports the stream's state, or the data is sent; if
@@ -229,6 +235,11 @@ public class Http2ClientConnection inherits HttpClientConnection {
                         rethrow;
                     }
                 }
+            }
+            # no drain in drain_timeout: a stall only if the connection took nothing meanwhile
+            if (taken_after >= 0 && taken_after <= taken_before) {
+                throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms and the "
+                    "peer granted no credit meanwhile; the data was not sent", stream_id, drain_timeout);
             }
         }
 

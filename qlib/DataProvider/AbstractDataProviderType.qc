@@ -1193,17 +1193,20 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         @throw TYPE-OPTION-ERROR invalid option or invalid option type
     */
     setOption(string opt, auto value) {
-        if (!(*hash<string, hash<DataProviderTypeOptionInfo>> options = getSupportedOptions()){opt}) {
+        # declared outside the condition: a variable declared in it is not in scope after the statement, where
+        # "options" is the member that holds the values of the options set
+        *hash<string, hash<DataProviderTypeOptionInfo>> supported = getSupportedOptions();
+        if (!supported{opt}) {
             throw "TYPE-OPTION-ERROR", sprintf("option %y is not supported by type %y; supported options: %y",
-                opt, getName(), keys options);
+                opt, getName(), keys supported);
         }
         string value_type = value.type();
         if (value_type == "object") {
             value_type = value.fullType();
         }
-        if (options{opt}.type != value_type) {
+        if (supported{opt}.type != value_type) {
             throw "TYPE-OPTION-ERROR", sprintf("type %y expects type %y for option %y; got type %y instead "
-                "(value: %y)", getName(), options{opt}.type, opt, value.type(), value);
+                "(value: %y)", getName(), supported{opt}.type, opt, value.type(), value);
         }
 
         setOptionIntern(opt, value);

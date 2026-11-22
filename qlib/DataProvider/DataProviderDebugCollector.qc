@@ -302,6 +302,11 @@ public class ConsoleDebugInfoCollector inherits AbstractDebugInfoCollector {
 
     #! Collects and immediately outputs debug info
     collect(hash<DataProviderDebugInfo> info) {
+        # nothing is written to the terminal for code that is restricted from terminal I/O, or that library code
+        # serves for it (qore#7140)
+        if ((output == stdout || output == stderr) && !SandboxManager::isTerminalIoAllowed()) {
+            return;
+        }
         string msg = formatDebugInfo(info);
         output.print(msg);
         output.sync();

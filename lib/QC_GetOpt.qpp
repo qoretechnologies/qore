@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_GetOpt.h"
+#include "qore/intern/qore_thread_intern.h"
+#include <qore/QoreSandboxManager.h>
 
 #include <cstring>
 
@@ -139,6 +141,14 @@ static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv,
     const QoreListNode* l = rv->getKeyValue("_ERRORS_").get<const QoreListNode>();
     if (!l)
         return rv.release();
+
+    // the message is written to the terminal: for code that is restricted from terminal I/O, also when library code
+    // parses for it, the error is raised as by parse2() instead (qore#7140)
+    if (qore_caller_restricts_terminal_io()
+            || (runtime_get_parse_options().getLo() & PO_NO_TERMINAL_IO)) {
+        QoreStringNodeValueHelper err(l->retrieveEntry(0));
+        return xsink->raiseException("GETOPT-ERROR", err.getReferencedValue());
+    }
 
     const QoreStringNode* sn = getProgram()->getScriptName();
     if (sn)
@@ -417,6 +427,9 @@ hash<auto> GetOpt::parse2(softlist<auto> arguments) {
 hash<auto> o = getopt.parse3(\ARGV);
     @endcode
 
+    @throw GETOPT-ERROR an error, for code that is restricted from terminal I/O (also when library code parses for
+    it), instead of the message and the exit (since %Qore 3.0, see @ref sandbox_terminal_io)
+
     @see
     - GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned
     - GetOpt::parse2() for a similar method that throws exceptions instead of exiting the program
@@ -448,6 +461,9 @@ hash<auto> o = getopt.parse3(ARGV);
     @endcode
 
     @throw GETOPT-ERROR error parsing arguments
+
+    @throw GETOPT-ERROR an error, for code that is restricted from terminal I/O (also when library code parses for
+    it), instead of the message and the exit (since %Qore 3.0, see @ref sandbox_terminal_io)
 
     @see
     - GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned
@@ -630,6 +646,9 @@ hash<auto> o = GetOpt::parseExit(Opts, \ARGV);
     are any errors.
 
     All arguments parsed will be removed from \a arguments, leaving only unparsed arguments (for example, file names).
+
+    @throw GETOPT-ERROR an error, for code that is restricted from terminal I/O (also when library code parses for
+    it), instead of the message and the exit (since %Qore 3.0, see @ref sandbox_terminal_io)
 
     @see
     - @ref Qore::GetOpt::parse() "GetOpt::parse(hash<auto>, reference<list<string>>)"

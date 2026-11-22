@@ -152,6 +152,11 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client streaming response: an event with the response headers was taken (QuicSession::takeCompletedStream())
+    /** The headers of a streaming response are delivered when they arrive, also when no body data comes with them
+        (qore#7285); after that, a queued entry of the stream that has no new data and no end is not delivered
+    */
+    bool headers_delivered = false;
     //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
     bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)

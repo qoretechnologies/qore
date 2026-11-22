@@ -62,6 +62,12 @@ struct QoreExceptionBase {
     int32_t diagnostic_index = -1;
     //! the generation of the diagnostics of that Program that the index refers to (issue #6555)
     uint32_t diagnostic_gen = 0;
+    //! the ID of the sandboxed Program whose code raised the exception or for which it was raised (see
+    //! qore_caller_is_sandboxed()), or 0 if it is not known (see \a sandboxed)
+    qore_program_id_t sandboxed_pgm_id = 0;
+    //! true if code that is sandboxed or acts for sandboxed code raised the exception; copies (rethrows) keep it, and
+    //! every report of the exception is then marked and has the text of the code's choosing escaped (qore#7139)
+    bool sandboxed = false;
 
     DLLLOCAL QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg = QoreValue(),
         qore_call_t n_type = CT_BUILTIN);
@@ -70,7 +76,13 @@ struct QoreExceptionBase {
         type(old.type), callStack(old.callStack->copy()),
         err(old.err.refSelf()), desc(old.desc.refSelf()),
         arg(old.arg.refSelf()), debug_id(old.debug_id), diagnostic_pgm_id(old.diagnostic_pgm_id),
-        diagnostic_index(old.diagnostic_index), diagnostic_gen(old.diagnostic_gen) {
+        diagnostic_index(old.diagnostic_index), diagnostic_gen(old.diagnostic_gen),
+        sandboxed_pgm_id(old.sandboxed_pgm_id), sandboxed(old.sandboxed) {
+    }
+
+    //! returns true if code that is sandboxed or acts for sandboxed code raised the exception (qore#7139)
+    DLLLOCAL bool isSandboxed() const {
+        return sandboxed;
     }
 
     DLLLOCAL ~QoreExceptionBase() {

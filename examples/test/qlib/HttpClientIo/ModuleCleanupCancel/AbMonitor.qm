@@ -1,0 +1,44 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes first (the cleanup deletes the data of the user modules in the order
+# of their names, so before that of the library modules that it uses): its destructor starts a polling connection
+# monitor, whose ping timer the cleanup cancels when it waits for its work; the monitor is stopped with stopClear()
+# by AcMonitorStop, whose data the cleanup deletes next (qore#7116); see monitor-client.qr
+
+%modern
+
+%requires ConnectionProvider
+%requires AcMonitorStop
+
+module AbMonitor {
+    version = "1.0";
+    desc = "starts a polling connection monitor in the module cleanup";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbMonitor {
+#! starts the monitor when the cleanup deletes it
+class Starter {
+    destructor() {
+        PollingConnectionMonitor monitor();
+        monitor.start();
+        # the first ping of the connection is scheduled for the next cycle: its timer is pending when the cleanup
+        # cancels the timers of its work
+        monitor.add(new HttpConnection("ab-monitor", "test", "http://127.0.0.1:1"), NOTHING, True);
+        Stopper::monitor = monitor;
+        printf("monitor started\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class Holder {
+    public {
+        static Starter starter();
+    }
+}
+}

@@ -350,18 +350,18 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
         # the completion of the lingering close and the destruction of this server's controller, in the order they
         # happen; the hooks are called for every controller in the process
         Queue events();
-        # the unique hash of the controller of the server (not a reference: the test must not hold the controller)
-        *string ctrl;
+        # the controller of the server, as a weak reference: the test must not hold the controller
+        *object ctrl;
         # the setters exist only in a debug build of the library
         call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetLingeringCloseHook",
             sub (object c, string uh) {
-                if (c.uniqueHash() == ctrl) {
+                if (c == ctrl) {
                     events.push("lingering close completed");
                 }
             });
         call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetDestructorHook",
             sub (object c) {
-                if (c.uniqueHash() == ctrl) {
+                if (c == ctrl) {
                     events.push("controller destroyed");
                 }
             });
@@ -381,7 +381,7 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
                 "lingering_close_timeout": HangTimeout * 2,
             });
             int port = startInline(server, handler, listener_stopped);
-            ctrl = server.getHttpAsyncIo().uniqueHash();
+            ctrl := server.getHttpAsyncIo();
             on_exit if (handler.release.getCount()) {
                 handler.release.dec();
             }

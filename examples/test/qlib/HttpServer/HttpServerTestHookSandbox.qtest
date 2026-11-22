@@ -115,7 +115,15 @@ auto sub get(HttpListener l) {
 
     #! the subclass's access does not reach the listener's options (a private:internal member of HttpListener)
     optsTest() {
-        Program tenant = getTenant(OptsReaderSource);
+        *Program tenant;
+        try {
+            tenant = getTenant(OptsReaderSource);
+        } catch (hash<ExceptionInfo> ex) {
+            # refused when the subclass is parsed (qore#7258): the member is private:internal, which a subclass cannot
+            # use through a variable of the base class's type either
+            assertEq("PARSE-EXCEPTION", ex.err);
+            return;
+        }
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit delete server;
         HttpListener l(server, sub () {}, 0, new Sequence(), <HttpListenerOptionInfo>{

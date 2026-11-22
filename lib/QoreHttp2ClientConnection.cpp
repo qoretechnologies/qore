@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
@@ -62,6 +63,10 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
       max_concurrent_streams_(max_concurrent_streams),
       ssl_config_(ssl_config) {
+    // a reference of its own on the trust store: the connection can outlive its manager
+    if (ssl_config_.trust_store) {
+        ssl_config_.trust_store->ref();
+    }
     if (mgr) {
         setManager(mgr);
     }
@@ -92,6 +97,9 @@ Http2ClientConnection::Http2ClientConnection(QoreObject* adopted_sock_obj,
 Http2ClientConnection::~Http2ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
+    if (ssl_config_.trust_store) {
+        ssl_config_.trust_store->deref();
+    }
     if (poll_op_obj) {
         poll_op_obj->deref(&xsink);
         poll_op_obj = nullptr;
@@ -141,6 +149,13 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     if (ssl_config_.key) {
         ssl_config_.key->ref();
         sock_priv_raw->setPrivateKey(ssl_config_.key);
+    }
+    if (ssl_config_.trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_config_.trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
     }
     if (!ssl_config_.ca_file.empty() || !ssl_config_.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
