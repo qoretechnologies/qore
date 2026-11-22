@@ -112,6 +112,18 @@ string sub try_change(code c) {
 hash<string, code> sub changes() {
     return {
         \"a method that updates in a scope\": sub (SharedCache t) { t.fill(); },
+        \"a method that updates in a scope twice\": sub (SharedCache t) {
+            t.fill();
+            t.fill();
+        },
+        \"a closure of the class that a trusted helper forwards\": sub (SharedCache t) {
+            t.forward(t.getUpdate());
+        },
+        \"a closure of the class that a trusted helper forwards twice\": sub (SharedCache t) {
+            code c = t.getUpdate();
+            t.forward(c);
+            t.forward(c);
+        },
         \"a method that changes without a scope\": sub (SharedCache t) { t.fillUnscoped(); },
         \"a scope that the tenant opens with its own closure\": sub (SharedCache t) {
             SandboxManager::updateSharedObject(t, sub () { t.cached = \"tenant\"; });
@@ -224,6 +236,7 @@ printf("trusted code updates an object that is not shared: %s\n", (string sub ()
 })());
 printf("trusted code updates a shared object: %s\n", (string sub () {
     SharedCache t = shared_cache();
+    t.fill();
     t.fill();
     t.fillUnscoped();
     t.runLocked(sub () { t.count = 2; });

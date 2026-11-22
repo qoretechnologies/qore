@@ -956,6 +956,12 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
+    // a closure runs in an update scope once only: code that obtains it cannot run the update again
+    if (!closure->takeSharedUpdate()) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "the update closure of an object of class '%s' has already been "
+            "run; an update closure runs once only", theclass->getName());
+        return QoreValue();
+    }
     SharedUpdateScopeHelper scope(this, run_pgm);
     return update->execValue(nullptr, xsink);
 }

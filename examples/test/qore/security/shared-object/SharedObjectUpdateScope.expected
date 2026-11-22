@@ -1,4 +1,7 @@
 a method that updates in a scope: shared: changed, cached: "filled 1" count: 1; not shared: SHARED-OBJECT-ERROR
+a method that updates in a scope twice: shared: changed, cached: "filled 1" count: 1; not shared: SHARED-OBJECT-ERROR
+a closure of the class that a trusted helper forwards: shared: changed, cached: "handed out" count: 1; not shared: SHARED-OBJECT-ERROR
+a closure of the class that a trusted helper forwards twice: shared: SHARED-OBJECT-ERROR, cached: "handed out" count: 1; not shared: SHARED-OBJECT-ERROR
 a method that changes without a scope: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: changed
 a scope that the tenant opens with its own closure: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
 a scope that the tenant opens with a closure of the class: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR

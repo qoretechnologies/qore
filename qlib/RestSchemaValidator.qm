@@ -1752,7 +1752,14 @@ public namespace RestSchemaValidator {
             }
             if (schema && schema.isTypeBuildActive()) {
                 *AbstractDataProviderType prev = replacedDataType;
+                # an undo runs once only, in the build that recorded it (qore#6843)
+                int undo_build = schema.getTypeBuildId();
+                bool undone;
                 schema.recordTypeBuildWrite(sub () {
+                    if (undone || schema.getTypeBuildId() != undo_build) {
+                        return;
+                    }
+                    undone = True;
                     replacedDataType = prev;
                 });
             }
@@ -1786,7 +1793,14 @@ public namespace RestSchemaValidator {
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
                 *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
+                # an undo runs once only, in the build that recorded it (qore#6843)
+                int undo_build = schema.getTypeBuildId();
+                bool undone;
                 schema.recordTypeBuildWrite(sub () {
+                    if (undone || schema.getTypeBuildId() != undo_build) {
+                        return;
+                    }
+                    undone = True;
                     # the schema can have stopped opaque type caches since the write
                     bool opaque_undo = holdCacheEntryOpaquely(schema);
                     update_shared_cache(self, sub () {
@@ -1892,7 +1906,14 @@ public namespace RestSchemaValidator {
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
                 *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
+                # an undo runs once only, in the build that recorded it (qore#6843)
+                int undo_build = schema.getTypeBuildId();
+                bool undone;
                 schema.recordTypeBuildWrite(sub () {
+                    if (undone || schema.getTypeBuildId() != undo_build) {
+                        return;
+                    }
+                    undone = True;
                     # the schema can have stopped opaque type caches since the write
                     bool opaque_undo = prev && holdCacheEntryOpaquely(schema);
                     update_shared_cache(self, sub () {
@@ -2315,8 +2336,18 @@ public namespace RestSchemaValidator {
             # the field registered below is handed to anything that re-enters this schema while its type
             # is being built, so it must not be copied until that build has finished; the other variant of the
             # name can be built inside this build, so only this variant is marked and unmarked here
-            update_shared_cache(self, sub () { building{name}{rstr} = True; });
+            # the mark and the unmark are made only in the type build in progress, if there is a schema (qore#6843)
+            *AbstractRestSchemaValidator build_schema = getTypeBuildSchema();
+            int mark_build = build_schema ? build_schema.getTypeBuildId() : 0;
+            update_shared_cache(self, sub () {
+                if (!build_schema || build_schema.getTypeBuildId() == mark_build) {
+                    building{name}{rstr} = True;
+                }
+            });
             on_exit update_shared_cache(self, sub () {
+                if (build_schema && build_schema.getTypeBuildId() != mark_build) {
+                    return;
+                }
                 remove building{name}{rstr};
                 if (!building{name}) {
                     remove building{name};
@@ -2730,6 +2761,9 @@ public namespace RestSchemaValidator {
 
             #! Whether the opaque type caches are to be released once the type build in progress has finished
             transient bool release_opaque_type_caches;
+
+            #! The number of the type build in progress, or of the last one; see getTypeBuildId()
+            transient int type_build_id = 0;
         }
 
         #! Creates the object without a logger
@@ -2795,6 +2829,7 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             on_exit type_build_lock.unlock();
             # the state of the build in progress is a cache of the schema
             return update_shared_cache(self, auto sub () {
+                ++type_build_id;
                 on_exit type_build_undo = ();
                 # run first, while the lock is held; see stopOpaqueTypeCaches()
                 on_exit if (release_opaque_type_caches) {
@@ -2812,6 +2847,18 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
                     rethrow;
                 }
             });
+        }
+
+        #! Returns the number of the type build that the calling thread is running, or 0 if it runs none
+        /** Each type build of the schema has a number of its own; a write that a build records (see
+            recordTypeBuildWrite()) is undone only in the same build, and once only (qore#6843)
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        int getTypeBuildId() {
+            return type_build_lock.lockOwner() ? type_build_id : 0;
         }
 
         #! Returns @ref True if the calling thread is building types of this schema

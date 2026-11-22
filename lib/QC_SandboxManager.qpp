@@ -1710,7 +1710,11 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
     on first use, also in a call for sandboxed code, makes each such change with updateSharedObject(); a method that
     runs code that its caller gives while it holds the object's state checks the code with
     checkSharedObjectCallback().  A closure that a class creates and gives to other code changes the object only in
-    an update scope that it opens itself.
+    an update scope that it opens itself; a closure that a class creates for an update scope runs in one scope only,
+    so that code that obtains it and passes it to a method of the class that opens a scope with the code that it is
+    given can run its update once, if it has not run yet, but never again: such a closure must therefore compute the
+    new state from the object itself (idempotently), never from data that its caller gives, and a record that undoes
+    a change (such as the undo records of a type build) must refuse to run outside the operation that recorded it.
 
     The mark cannot be removed, and any code can set it: an object that sandboxed code marks cannot be changed by
     sandboxed code or code that acts for it afterwards, also when that code is trusted code of another class.
@@ -1767,7 +1771,7 @@ static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
 
     The update must compute the new state from the object itself, never from data that the caller gives; the
     scope ends when the closure returns or raises an exception, and a thread that the closure starts does not inherit
-    it.
+    it.  A closure runs in one update scope only: a second call with the same closure is refused.
 
     @param obj the shared object to update
     @param update a closure that a method of a class of \a obj creates, in the code that calls this method; a closure
@@ -1776,7 +1780,8 @@ static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
     @return the value that \a update returns
 
     @throw SHARED-OBJECT-ERROR \a obj is not shared; the calling code is sandboxed; \a update is not a closure that a
-    method of a class of \a obj created in the code of the calling %Program
+    method of a class of \a obj created in the code of the calling %Program, or it has already run in an update
+    scope
 
     @par Example:
     @code{.py}

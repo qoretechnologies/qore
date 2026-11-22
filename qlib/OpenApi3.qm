@@ -1969,7 +1969,14 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     private setCachedType(string id, string key, AbstractDataProviderType t) {
         if (isTypeBuildActive()) {
             *AbstractDataProviderType prev = typemap{id}{key};
+            # an undo runs once only, in the build that recorded it (qore#6843)
+            int undo_build = getTypeBuildId();
+            bool undone;
             recordTypeBuildWrite(sub () {
+                if (undone || getTypeBuildId() != undo_build) {
+                    return;
+                }
+                undone = True;
                 update_shared_cache(self, sub () {
                     if (prev) {
                         typemap{id}{key} = prev;
@@ -6485,7 +6492,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             bool opaque;
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
+                # an undo runs once only, in the build that recorded it (qore#6843)
+                int undo_build = schema.getTypeBuildId();
+                bool undone;
                 schema.recordTypeBuildWrite(sub () {
+                    if (undone || schema.getTypeBuildId() != undo_build) {
+                        return;
+                    }
+                    undone = True;
                     update_shared_cache(self, sub () { remove alternativeDataType; });
                 });
             }

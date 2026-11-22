@@ -85,7 +85,7 @@ const CacheMembers = {
     "holds_opaque_type_caches": True, "pattern_cache": True, "typemap": True, "response_types": True,
     "alternativeDataType": True, "type_build_undo": True, "type_build_lock": True, "opaque_type_caches": True,
     "opaque_type_cache_holders": True, "release_opaque_type_caches": True, "template_res": True,
-    "shared_object": True,
+    "shared_object": True, "type_build_id": True,
 };
 
 #! a hash argument: a description with content that a method could add to a schema

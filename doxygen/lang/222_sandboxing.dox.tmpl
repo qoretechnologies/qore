@@ -588,7 +588,12 @@ authenticate();
     sandboxed code (@ref Qore::SandboxManager::checkSharedObjectCallback() "SandboxManager::checkSharedObjectCallback()"),
     and a method that changes the object on behalf of its caller can name the change it refuses with
     @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()".  A closure that a
-    class creates and gives to other code changes the object only in an update scope that it opens itself.
+    class creates and gives to other code changes the object only in an update scope that it opens itself; a closure
+    runs in one update scope only, so that code that obtains a closure that a class creates for an update scope, and
+    passes it to a method of the class that opens a scope with the code that it is given, can run its update once, if
+    it has not run yet, but never again: such a closure computes the new state from the object itself, never from data
+    that its caller gives, and a record that undoes a change (such as the undo records of the type build of a REST
+    schema) refuses to run outside the operation that recorded it, and more than once.
 
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" accepts any object, also from sandboxed
     code: an object that sandboxed code marks cannot be changed by sandboxed code, or code that acts for it, from then
