@@ -737,7 +737,8 @@ object sub lookalike() {
         string other_url = sprintf("http://127.0.0.1:%d/", other.getSocketInfo().port);
         HttpConnection h("h", "h", own_url, {"monitor": False});
         assertEq("CONNECTED", p.callFunction("sync_get", h), "the lent connection's own target, " + mode);
-        assertTrue(own.isDataAvailable(0), "the own target's listener sees the connection, " + mode);
+        # the connection was made when get() returned; the listener accepts it (the kernel queues it asynchronously)
+        assertTrue(exists own.accept(5s), "the own target's listener sees the connection, " + mode);
         HttpConnection r("r", "r", own_url, {"monitor": False});
         assertRegex(LentTargetDenied, p.callFunction("sync_get", r, other_url), "a retargeted connection, " + mode);
         HttpConnection x("x", "x", own_url, {"monitor": False});
@@ -749,7 +750,7 @@ object sub lookalike() {
         u.url = other_url;
         u.real_url = other_url;
         u.get(True);
-        assertTrue(other.isDataAvailable(0), "trusted code connects to the target that it set");
+        assertTrue(exists other.accept(5s), "trusted code connects to the target that it set");
     }
 
     #! a lent REST connection gives restricted code no synchronous client (whose requests are made by its Qore code
