@@ -591,8 +591,8 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
             assertEq("OAUTH2-ERROR", result.ex.err);
             assertRegex("not yet authorized", result.ex.desc);
         }
-        assertFalse(mconn.up);
-        assertRegex(err_regex, mconn.status);
+        # the failed polling ping is a check: last_check is set
+        assertDown(mconn, err_regex, "polling ping");
         assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
 
         # once authorized, the connection pings normally: the auth flow's option update creates it again with the
