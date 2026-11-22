@@ -133,7 +133,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
             A connection object restored by deserialization or copied keeps the state of the object it was made from,
             except that a connection serialized with the status \c "not checked" is restored as not up (one
-            serialized before %ConnectionProvider 3.1 has \c up @ref True "True" with that status).  The state is
+            serialized before %ConnectionProvider 3.1 has \c up @ref True "True" with that status).  A connection
+            serialized before %ConnectionProvider 3.1 that was never pinged but whose connection failed with
+            @ref get() has \c up @ref True "True" with the error as its status, which cannot be told apart from a
+            connection that was up, and it is restored as up.  The state is
             changed and read under a lock, so @ref up and @ref status are consistent in @ref getInfo().
 
             @since %ConnectionProvider 3.1 a connection that was never checked is not up (it was up before)
