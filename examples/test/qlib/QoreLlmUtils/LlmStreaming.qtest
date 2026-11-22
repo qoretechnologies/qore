@@ -773,60 +773,101 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     providerStreamDeadlineTest() {
         foreach string mode in (("http", "gemini")) {
-            # the client's own deadline is longer than any test run, so only a call's deadline can end the call
-            LlmBackend llm(<LlmBackendConfig>{"mode": mode,
-                "url": "http://localhost:" + port, "protocol": "h1",
-                "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
-                "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
             foreach string stage in (("headers", "comments", "events")) {
-                bool held_headers = stage == "headers";
-                bool event_stage = stage == "events";
-                # Comments are valid SSE traffic but must not reset a call's deadline.
-                string frame = stage == "comments" ? ": keepalive\n\n"
-                    : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
-                        : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
-                # The server sends nothing at all, or sends comments or events until the client closes the
-                # connection, so the call can only end on its deadline: a deadline reset by each frame would keep
-                # the call reading for ever.  The first event is sent with the response headers as soon as the
-                # request has been read; the deadline of the events stage leaves time to read it.
-                int call_timeout_ms = event_stage ? 2000 : 50;
-                server.script(held_headers
-                    ? <FakeReply>{"hold_headers": True}
-                    : <FakeReply>{"chunk_delay_ms": event_stage ? 20 : 25,
-                        "chunks": (frame,),
-                        "repeat_until_close": True,
-                        "first_chunk_with_head": event_stage,
-                        "report_stream": True});
-                *hash<ExceptionInfo> error;
-                int observed = 0;
-                try {
-                    llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
-                        ++observed;
-                    }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
-                } catch (hash<ExceptionInfo> ex) { error = ex; }
-                string label = mode + " " + stage;
-                assertTrue(hasTransportTimeout(error), label + ": the call ends on its deadline");
-                if (!callRequestRead(label)) {
+                if (stage != "events") {
+                    streamDeadlineCall(mode, stage, 50);
                     continue;
                 }
-                if (held_headers) {
-                    # the deadline expired before the headers arrived: no event of the stream is read
-                    assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
-                    assertEq(0, observed, label + ": no event is read after the deadline");
-                } else {
-                    # the server sends until the client closes the connection
-                    hash<FakeStreamResult> stream = server.stream_results.get(60s);
-                    assertFalse(stream.completed, label + ": the client closed the connection");
-                    if (event_stage) {
-                        assertGt(0, observed, label + ": events were read before the deadline");
-                        assertLe(stream.sent, observed, label + ": only events that the server sent were read");
-                    } else {
-                        assertEq(0, observed, label + ": comments are not events");
+                # The first event is sent with the response headers, but a slow run (valgrind) can spend the
+                # whole deadline before it reads it.  The deadline is doubled until an event has been read, so the
+                # case does not depend on the speed of the run; every call must still end on its deadline.
+                int observed;
+                for (int call_timeout_ms = 2000; ; call_timeout_ms *= 2) {
+                    observed = streamDeadlineCall(mode, stage, call_timeout_ms);
+                    if (observed || call_timeout_ms >= 128000) {
+                        break;
                     }
                 }
-                assertEq(1, server.requests.size());
+                assertGt(0, observed, mode + " events: events were read before the deadline");
             }
         }
+    }
+
+    #! Makes a streamed call whose server never ends the response, and checks that the call ends on its deadline
+    /** The server sends nothing at all (\a stage \c "headers"), or sends comments or events back to back, without a
+        delay, until the client closes the connection: the call can then only end on its deadline, as a deadline
+        reset by each frame would keep the call reading for ever.  No frame waits for a time, so the result does
+        not depend on the speed of the run.
+
+        Each call has a client of its own: when a deadline expires while the client is still connecting, the
+        connection can be completed after the call has ended and kept in the client's pool, where the server,
+        which never receives a request on it, closes it.  A later call of the same client could take that
+        connection and fail with \c HTTP1-CONNECTION-CLOSED instead of ending on its deadline (seen in slow runs,
+        e.g. under valgrind).
+
+        @return the number of events read before the deadline
+    */
+    private int streamDeadlineCall(string mode, string stage, int call_timeout_ms) {
+        # the client's own deadline is longer than any test run, so only a call's deadline can end the call
+        LlmBackend llm(<LlmBackendConfig>{"mode": mode,
+            "url": "http://localhost:" + port, "protocol": "h1",
+            "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
+            "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
+        bool held_headers = stage == "headers";
+        bool event_stage = stage == "events";
+        # Comments are valid SSE traffic but must not reset a call's deadline.
+        string frame = stage == "comments" ? ": keepalive\n\n"
+            : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
+                : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
+        server.script(held_headers
+            ? <FakeReply>{"hold_headers": True}
+            : <FakeReply>{"chunks": (frame,),
+                "repeat_until_close": True,
+                "first_chunk_with_head": event_stage,
+                "report_stream": True});
+        *hash<ExceptionInfo> error;
+        int observed = 0;
+        try {
+            llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
+                ++observed;
+            }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
+        } catch (hash<ExceptionInfo> ex) { error = ex; }
+        string label = sprintf("%s %s (%d ms)", mode, stage, call_timeout_ms);
+        assertTrue(hasTransportTimeout(error), sprintf("%s: the call ends on its deadline; it ended with: %s",
+            label, describeError(error)));
+        if (!callRequestRead(label)) {
+            return observed;
+        }
+        if (held_headers) {
+            # the deadline expired before the headers arrived: no event of the stream is read
+            assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
+            assertEq(0, observed, label + ": no event is read after the deadline");
+        } else {
+            # the server sends until the client closes the connection
+            hash<FakeStreamResult> stream = server.stream_results.get(60s);
+            assertFalse(stream.completed, label + ": the client closed the connection");
+            if (event_stage) {
+                assertLe(stream.sent, observed, label + ": only events that the server sent were read");
+            } else {
+                assertEq(0, observed, label + ": comments are not events");
+            }
+        }
+        assertEq(1, server.requests.size(), label);
+        return observed;
+    }
+
+    #! Describes an exception and the exceptions in its argument chain, for an assertion message
+    private static string describeError(*hash<ExceptionInfo> error) {
+        if (!error) {
+            return "no exception";
+        }
+        list<string> parts = ();
+        auto e = error;
+        for (int i = 0; i < 8 && e.typeCode() == NT_HASH && e.err; ++i) {
+            parts += sprintf("%s: %s", e.err, e.desc ?? "");
+            e = e.arg;
+        }
+        return parts.join(" <- ");
     }
 
     #! Returns True if the server has read the request of the last call
