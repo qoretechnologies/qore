@@ -11319,7 +11319,21 @@ private:
     }
 };
 
-static ExternalThreadReaper external_thread_reaper;
+// allocated, and destroyed at static destruction by the object below unless the module cleanup stopped waiting for
+// work that it handed over to other threads (qore#7239): those threads can still run then (qore_cleanup() left the
+// library as it is), and the reaper, whose destruction stops it and expects no active native thread, is left as it is
+// with them, so that its condition is not destroyed while it waits on it
+static ExternalThreadReaper* external_thread_reaper_ptr = new ExternalThreadReaper;
+static ExternalThreadReaper& external_thread_reaper = *external_thread_reaper_ptr;
+namespace {
+struct ExternalThreadReaperDestroyer {
+    ~ExternalThreadReaperDestroyer() {
+        if (!qore_module_cleanup_abandoned()) {
+            delete external_thread_reaper_ptr;
+        }
+    }
+} external_thread_reaper_destroyer;
+}
 
 void qore_stop_external_thread_reaper() {
     external_thread_reaper.stop();
