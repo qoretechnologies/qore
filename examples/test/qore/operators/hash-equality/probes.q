@@ -11,6 +11,9 @@ hashdecl HashEqualityPair {
     int b;
 }
 
+enum HashEqualityInt { A = 1, B = 2 }
+enum HashEqualityFloat { F = 1.5, G = 2.5 }
+
 const NaN = @nan@;
 
 #! the results of ==, !=, === and !== of two untyped values
@@ -250,6 +253,53 @@ string sub probes() {
     # comparisons that raise exceptions
     out += "invalid date: " + cmp_ex({"a": 1, "b": 2026-01-01}, {"a": 1, "b": 1e300});
     out += "invalid date reverse order: " + cmp_ex({"b": 2026-01-01, "a": 1}, {"a": 1, "b": 1e300});
+
+    # the order of the comparisons: a member that is not equal before one whose comparison raises an exception (a
+    # string that cannot be converted to the encoding of the other)
+    {
+        auto bad = convert_encoding("ä", "ISO-8859-1");
+        string euro = "€";
+        out += "exception: " + cmp_ex({"a": 1, "b": bad}, {"a": 1, "b": euro});
+        out += "exception, reverse order: " + cmp_ex({"b": bad, "a": 1}, {"a": 1, "b": euro});
+        out += "order: " + cmp_ex({"b": bad, "a": 1}, {"a": 2, "b": euro});
+        out += "order 2: " + cmp_ex({"a": 2, "b": bad}, {"b": euro, "a": 1});
+        out += "order, same keys: " + cmp_ex({"a": 2, "b": bad}, {"a": 1, "b": euro});
+        out += "order, same keys 2: " + cmp_ex({"b": bad, "a": 2}, {"b": euro, "a": 1});
+        out += "order after a key mismatch: " + cmp_ex({"x": 1, "b": bad, "a": 2}, {"x": 1, "a": 1, "b": euro});
+        out += "order after a key mismatch 2: " + cmp_ex({"x": 1, "a": 2, "b": bad}, {"x": 1, "b": euro, "a": 1});
+        # a list is compared with the elements of the right list on the left
+        out += "order in lists: " + cmp_ex({"l": (euro, 1)}, {"l": (bad, 2)}) + " "
+            + cmp_ex({"l": (1, euro)}, {"l": (2, bad)});
+        out += "hard comparison with an exception: " + (({"a": bad} === {"a": euro}) ? "T" : "F");
+    }
+
+    # enum values
+    out += "enum and int: " + cmp({"a": HashEqualityInt::A}, {"a": 1});
+    out += "enum and float: " + cmp({"a": HashEqualityInt::A}, {"a": 1.0});
+    out += "enums: " + cmp({"a": HashEqualityInt::A, "b": HashEqualityFloat::F},
+        {"a": HashEqualityInt::A, "b": HashEqualityFloat::F});
+    out += "enums differ: " + cmp({"a": HashEqualityInt::A}, {"a": HashEqualityInt::B});
+    out += "float enum and float: " + cmp({"a": HashEqualityFloat::F}, {"a": 1.5});
+    out += "float enum and string: " + cmp({"a": HashEqualityFloat::F}, {"a": "1.5"});
+    out += "enums in lists: " + cmp({"l": (HashEqualityInt::A, HashEqualityFloat::G)}, {"l": (1, 2.5)});
+
+    # char values
+    {
+        string s = "abca";
+        auto ca = s[0];
+        auto cb = s[1];
+        out += "chars: " + cmp({"a": ca}, {"a": s[3]});
+        out += "chars differ: " + cmp({"a": ca}, {"a": cb});
+        out += "char and string: " + cmp({"a": ca}, {"a": "a"});
+        out += "char and int: " + cmp({"a": ca}, {"a": 97});
+        out += "chars in lists: " + cmp({"l": (ca, cb)}, {"l": ("a", s[1])});
+    }
+
+    # soft conversions after the walk breaks at a key mismatch
+    out += "soft after a key mismatch: " + cmp({"a": 1, "b": 2, "c": 3}, {"a": 1.0, "c": "3", "b": 2});
+    out += "soft nested after a key mismatch: " + cmp({"n": {"a": 1, "b": 2, "c": 3}},
+        {"n": {"a": 1.0, "c": "3", "b": 2n}});
+    out += "big int and float in lists: " + cmp({"l": (1 << 50, 1)}, {"l": (float(1 << 50), 1.0)});
 
     # the other comparisons of hashes
     out += "inlist: " + (inlist({"a": 1, "b": 2}, ({"b": 2.0, "a": 1},)) ? "T" : "F")

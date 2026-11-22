@@ -468,6 +468,8 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const QoreListNode* ll = l.get<const QoreListNode>();
         const QoreListNode* rl = r.get<const QoreListNode>();
         if (ll->size() != rl->size() || (xsink && q_check_stack(xsink))) return false;
+        // an exception raised before makes the first element unequal, also when the inline comparison compares it
+        if (xsink && ll->size() && *xsink) return false;
         for (size_t i = 0; i < ll->size(); ++i) {
             // Keep the public list comparison's operand order.
             const QoreValue lv = rl->retrieveEntry(i);
@@ -488,9 +490,12 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const QoreHashNode* lh = l.get<const QoreHashNode>();
         const QoreHashNode* rh = r.get<const QoreHashNode>();
         if (lh->size() != rh->size() || (xsink && q_check_stack(xsink))) return false;
+        // an exception raised before makes the first member unequal, also when the inline comparison compares it
+        const qore_hash_private* left_hash = qore_hash_private::get(*lh);
+        if (xsink && !left_hash->empty() && *xsink) return false;
         // the members are compared in the order of the left hash, as a lookup of each of its keys in the right hash
         // does (qore#7266)
-        return qore_hash_private::get(*lh)->membersEqual(*qore_hash_private::get(*rh),
+        return left_hash->membersEqual(*qore_hash_private::get(*rh),
             [xsink, &policy](const QoreValue& lv, const QoreValue& rv) -> bool {
                 bool rc;
                 if (soft_equal_same_scalar(lv, rv, rc)) {

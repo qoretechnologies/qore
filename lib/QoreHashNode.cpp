@@ -1011,6 +1011,10 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
         return 1;
     }
 
+    // an exception raised before makes the first member unequal, also when the inline comparison compares it
+    if (xsink && !priv->empty() && *xsink) {
+        return 1;
+    }
     // the members are compared in the order of this hash, as a lookup of each of its keys in the other hash does
     // (qore#7266)
     return !priv->membersEqual(*h->priv, [xsink](const QoreValue& lv, const QoreValue& rv) -> bool {

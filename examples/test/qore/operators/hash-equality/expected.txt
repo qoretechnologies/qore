@@ -116,5 +116,30 @@ weak reference member: TFFT reversed: FTFT typed: TFFT
 weak reference member differs: FTFT
 invalid date: F
 invalid date reverse order: F
+exception: ENCODING-CONVERSION-ERROR
+exception, reverse order: ENCODING-CONVERSION-ERROR
+order: ENCODING-CONVERSION-ERROR
+order 2: F
+order, same keys: F
+order, same keys 2: ENCODING-CONVERSION-ERROR
+order after a key mismatch: ENCODING-CONVERSION-ERROR
+order after a key mismatch 2: F
+order in lists: ENCODING-CONVERSION-ERROR F
+hard comparison with an exception: F
+enum and int: TFFT
+enum and float: TFFT
+enums: TFTF
+enums differ: FTFT
+float enum and float: TFFT
+float enum and string: TFFT
+enums in lists: TFFT
+chars: TFTF
+chars differ: FTFT
+char and string: TFFT
+char and int: TFFT
+chars in lists: TFFT
+soft after a key mismatch: TFFT
+soft nested after a key mismatch: TFFT
+big int and float in lists: TFFT
 inlist: TF
 list equality: TFFT
