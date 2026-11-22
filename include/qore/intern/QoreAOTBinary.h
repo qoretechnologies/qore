@@ -655,6 +655,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v52 (the reader refuses v51 and older images, including images embedded in executables):
 //!      - wildcard bounds in type paths record the declaring type parameter owner and index recursively;
 //!        older readers cannot safely restore these bounds (qore#7184)
+//!      - METHODS records carry the position of each method in the declaration order of the user methods of its map
+//!        (instance or static) after the static flag, as a u32; the records keep the order of the method maps, so
+//!        the loader builds the maps as the parser did, and restores the declaration order that reflection
+//!        enumerates (qore#7169)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).

@@ -7327,6 +7327,8 @@ struct AOTSerializeState {
         const QoreMethod* method;
         uint32_t class_idx;
         bool is_static;
+        //! the position of the method in the declaration order of the user methods of its map (issue #7169)
+        uint32_t decl_index;
     };
     std::vector<MethodInfo> methods;
 
@@ -7600,23 +7602,26 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 uint32_t class_idx = static_cast<uint32_t>(state.classes.size());
                 state.classes.push_back({cls, priv, ns_idx});
 
-                // Collect user methods for this class
-                // in the order in which they were declared: the loader creates the methods of a class in the order
-                // of the binary, and the enumeration of a class's methods follows that order (issue #7169)
-                for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
-                    if (cancelled()) {
-                        return false;
+                // Collect user methods for this class in the order of the method maps, which is the order in
+                // which the loader creates them, so that the loader builds the maps as the parser did; each record
+                // carries the position of its method in the declaration order of the user methods of its map, which
+                // the loader restores for the enumeration of the methods (issue #7169)
+                for (int st = 0; st < 2; ++st) {
+                    const hm_method_t& mmap = st ? priv->shm : priv->hm;
+                    std::unordered_map<const QoreMethod*, uint32_t> decl_index;
+                    for (QoreMethod* m : qore_methods_in_declaration_order(mmap)) {
+                        if (m->isUser()) {
+                            decl_index.emplace(m, static_cast<uint32_t>(decl_index.size()));
+                        }
                     }
-                    if (m->isUser()) {
-                        state.methods.push_back({m, class_idx, false});
-                    }
-                }
-                for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
-                    if (cancelled()) {
-                        return false;
-                    }
-                    if (m->isUser()) {
-                        state.methods.push_back({m, class_idx, true});
+                    for (auto& mi : mmap) {
+                        if (cancelled()) {
+                            return false;
+                        }
+                        if (mi.second->isUser()) {
+                            assert(decl_index.find(mi.second) != decl_index.end());
+                            state.methods.push_back({mi.second, class_idx, st != 0, decl_index[mi.second]});
+                        }
                     }
                 }
             }
@@ -12501,6 +12506,8 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeU32(mi.class_idx);
         writer.writeStringRef(method->getName());
         writer.writeU8(mi.is_static ? 1 : 0);
+        // the position of the method in the declaration order of the user methods of its map (format v52, #7169)
+        writer.writeU32(mi.decl_index);
 
         // get the method's underlying function
         const qore_method_private* mp = qore_method_private::get(*method);
@@ -21066,11 +21073,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    // a method has at least its class index, name, static flag and variant count
+    // a method has at least its class index, name, static flag, declaration index and variant count
     if (qore_aot_section_overrun(bounds, "METHODS", error)
-            || qore_aot_count_exceeds(bounds, count, 13, ptr, "METHODS", error)) {
+            || qore_aot_count_exceeds(bounds, count, 17, ptr, "METHODS", error)) {
         return false;
     }
+    // the methods created here get the sequence numbers of their declaration order from a block of their own, so that
+    // the methods created after them, as a method for an inherited concrete variant of an abstract method when the
+    // class is committed, follow them (issue #7169)
+    const uint64_t decl_seq_base = qore_method_private::reserveDeclSeq(count);
 
     // Fine-grained sub-timing for the per-variant inner loop.
     // Gated by QORE_AOT_PHASE_TIMING; totals across all sessions
@@ -21090,6 +21101,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
         const char* method_name = reader.readStringRef(ptr);
         uint8_t is_static = QoreAOTBinaryReader::readU8(ptr);
+        uint32_t decl_index = QoreAOTBinaryReader::readU32(ptr);
         uint32_t num_variants = QoreAOTBinaryReader::readU32(ptr);
         // a variant has at least its access, flags, return type and parameter count
         if (qore_aot_section_overrun(bounds, "METHODS", error)
@@ -21099,6 +21111,13 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         // a reference into the string pool can give an empty string (qore#6265)
         if (!method_name || !*method_name) {
             error = "invalid METHODS section: method " + std::to_string(i) + " has no name";
+            return false;
+        }
+        // the position of a method in the declaration order of the user methods of its map is less than the number
+        // of methods (issue #7169)
+        if (decl_index >= count) {
+            error = "invalid METHODS section: method " + std::to_string(i) + " has declaration index "
+                + std::to_string(decl_index) + " of " + std::to_string(count) + " methods";
             return false;
         }
 
@@ -21358,7 +21377,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             // Add method to class
             uint64_t t_add0 = time_on ? now_us() : 0;
-            if (qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0)) {
+            if (qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0,
+                    static_cast<int64_t>(decl_seq_base + decl_index))) {
                 error = "cannot add AOT method '";
                 error += qc->getName();
                 error += "::";
