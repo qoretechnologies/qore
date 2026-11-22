@@ -99,6 +99,7 @@ class DefaultCharsetTest inherits QUnit::Test {
         foreach list<string> c in (cases) {
             string cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
                 "%s -b %s -e 'printf(\"%%s %%s %%s %%s %%y\", ARGV[0].encoding(), QORE_ARGV.last().encoding(), "
+                # live-provider-optin: the child prints the encoding of HOME's value; it reads no file
                 "ENV.HOME.encoding(), binary(ARGV[0]).toHex(), ARGV[0].isEncodingValid());' \"$(printf '\\351')\" "
                 "2>&1", c[1], libqore_dir, libqore_dir, qore_bin, c[2]);
             string out = backquote(cmd);
