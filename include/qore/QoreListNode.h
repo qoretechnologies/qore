@@ -413,12 +413,17 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! Increments the weak reference count for this object
-    /** @since %Qore 2.0
+    /** The caller must hold a reference to the list (strong or weak); if the list was freed and its weak holders
+        released their references, the weak holders take a strong reference to it again, which the last weakDeref()
+        releases
+
+        @since %Qore 2.0
     */
     DLLEXPORT void weakRef();
 
     //! Decrements the weak reference count for this object
-    /** @return if \c true then the object was deleted
+    /** @return if \c true then this was the last weak reference; the list is deleted unless a strong reference to it
+        is held
 
         @since %Qore 2.0
     */

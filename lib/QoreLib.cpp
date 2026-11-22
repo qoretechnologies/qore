@@ -1167,6 +1167,49 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
     return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
 }
 
+thread_local QoreFormatBoundsHelper* QoreFormatBoundsHelper::graph = nullptr;
+
+QoreFormatBoundsHelper::~QoreFormatBoundsHelper() {
+    if (entered) {
+        ctx->exitContainer();
+    }
+    if (output) {
+        graph = previous;
+        if (objects) {
+            for (const auto& entry : *objects) {
+                const_cast<QoreObject*>(entry.first)->tDeref();
+            }
+        }
+    }
+}
+
+bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObject& obj, int foff) {
+    if (ctx) {
+        return false; // explicitly bounded formatting uses its own anchors and aliases
+    }
+    assert(graph && graph->output == &str);
+    auto& objects = graph->objects;
+    if (!objects) {
+        objects.reset(new ObjectIds);
+    }
+    auto entry = objects->emplace(&obj, objects->size() + 1);
+    if (entry.second) {
+        // Keep the address valid if another thread changes the graph. Existence references allow
+        // the Qore destructor to run normally, and their release does not execute user code.
+        obj.tRef();
+        return false;
+    }
+    if (foff < FMT_YAML_LONG) {
+        str.addch(' ', FMT_YAML_LONG - foff);
+    }
+    if (q_yaml_format(foff)) {
+        str.sprintf("\"{reference to %s object #%zu}\"", obj.getClassName(), entry.first->second);
+    } else {
+        str.sprintf("{reference to %s object #%zu}", obj.getClassName(), entry.first->second);
+    }
+    return true;
+}
+
 // applies the format bounds while the standard formatter expands the value, so that the bounds work with every
 // value format specification ("%n", "%N", "%y", and "%Y") and their output formats are preserved
 void QoreFormatBoundsContext::scan(const QoreValue val) {
@@ -2025,6 +2068,10 @@ char* make_class_name(const char* str) {
 
 void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink) {
     printd(5, "print_node() node: %s\n", qv.getTypeName());
+    // print(), printf() and vprintf() for code that library code serves (qore#7140)
+    if (qore_check_caller_terminal_io("print(), printf() and vprintf()", xsink)) {
+        return;
+    }
     QoreStringValueHelper str(qv);
     // the text is written up to its first NUL character, as fputs(3) wrote it before; write errors are ignored as
     // they were then
@@ -2040,6 +2087,22 @@ void qore_setup_argv(int pos, int argc, char* argv[]) {
         if (i < end)
             ARGV->push(new QoreStringNode(argv[i + pos]), nullptr);
         QORE_ARGV->push(new QoreStringNode(argv[i]), nullptr);
+    }
+}
+
+void qore_tag_argv_encoding() {
+    for (QoreListNode* l : {ARGV, QORE_ARGV}) {
+        if (!l) {
+            continue;
+        }
+        ConstListIterator li(l);
+        while (li.next()) {
+            const QoreValue v = li.getValue();
+            if (v.getType() == NT_STRING) {
+                // the strings are not shared yet: no Program has copied the lists
+                const_cast<QoreStringNode*>(v.get<const QoreStringNode>())->setEncoding(QCS_DEFAULT);
+            }
+        }
     }
 }
 

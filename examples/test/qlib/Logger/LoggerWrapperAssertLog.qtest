@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# LoggerWrapper::assertLog() logs the message at the ERROR level when the assertion is False and nothing when it is
+# True, as Logger::assertLog() does (qore#7190: it called a method that does not exist); traceVar() and debugVar() log
+# through the wrapper's logger
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerWrapperAssertLogTest
+
+class LoggerWrapperAssertLogTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LoggerWrapperAssertLogTest", "1.0") {
+        addTestCase("assertLog", \assertLogTest());
+        addTestCase("traceVar and debugVar", \varTest());
+        addTestCase("no logger", \noLoggerTest());
+        set_return_value(main());
+    }
+
+    #! a wrapper with a logger at \a level whose appender writes "<level>: <message>" lines to \a out
+    private static LoggerWrapper make(StringOutputStream out, LoggerLevel level) {
+        Logger logger("wrapper", level);
+        LoggerAppenderStream appender("out", new LoggerLayoutPattern("%p: %m%n"), new StreamWriter(out));
+        appender.open();
+        logger.addAppender(appender);
+        LoggerWrapper w();
+        w.setLogger(logger);
+        return w;
+    }
+
+    assertLogTest() {
+        StringOutputStream out();
+        LoggerWrapper w = make(out, LoggerLevel::getLevelInfo());
+        w.assertLog(False, "assertion %s failed", "x");
+        w.assertLog(True, "assertion %s held", "y");
+        assertEq("ERROR: assertion x failed\n", out.getData());
+    }
+
+    varTest() {
+        StringOutputStream out();
+        LoggerWrapper w = make(out, LoggerLevel::getLevelAll());
+        w.traceVar("a", 1);
+        w.debugVar("b", "two");
+        assertEq("TRACE: a: 1\nDEBUG: b: \"two\"\n", out.getData());
+    }
+
+    noLoggerTest() {
+        # without a logger, a failed assertion is not logged and raises nothing
+        LoggerWrapper w();
+        w.assertLog(False, "no logger");
+        StringOutputStream out();
+        w = make(out, LoggerLevel::getLevelInfo());
+        w.setLogger();
+        w.assertLog(False, "logger removed");
+        assertEq("", out.getData());
+    }
+}

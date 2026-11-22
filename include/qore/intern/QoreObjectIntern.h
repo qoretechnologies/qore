@@ -912,6 +912,35 @@ public:
     */
     DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
 
+    //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
+    /** raises an exception and returns nullptr if the object has been deleted
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return the names of the members, caller owns the reference returned
+    */
+    DLLLOCAL QoreListNode* getRuntimeMemberList(ExceptionSink* xsink) const;
+
+    //! returns the number of the members that the calling code can see, as the size of getRuntimeMemberHash() (#7048)
+    /** returns 0 if the object has been deleted
+
+        @return the number of the members
+    */
+    DLLLOCAL int64 getRuntimeMemberCount() const;
+
+    //! getRuntimeMemberList() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE QoreListNode* getRuntimeMemberListSlow(ExceptionSink* xsink) const;
+
+    //! getRuntimeMemberCount() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE int64 getRuntimeMemberCountSlow() const;
+
+    //! returns @ref true if the calling code can see a member of the object; stops at the first one (#7048)
+    DLLLOCAL bool hasRuntimeMembers() const;
+
+    //! returns the first name of getRuntimeMemberList() for the class context; the object's lock must be held
+    /** the name is valid while the lock is held
+    */
+    DLLLOCAL const char* getFirstRuntimeMemberKeyIntern(const qore_class_private* class_ctx) const;
+
     DLLLOCAL void incScanCount(int dt) {
         assert(dt);
 #ifdef QORE_DEBUG_OBJ_REFS

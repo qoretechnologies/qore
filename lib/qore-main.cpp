@@ -356,6 +356,8 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 
     // initialize charset encoding support
     qore_encoding_manager_ops(QEM).init(def_charset);
+    // ARGV and QORE_ARGV are made before the default encoding is set (qore#7045)
+    qore_tag_argv_encoding();
 
     // init character maps
     init_charmaps();
@@ -415,6 +417,9 @@ void qore_cleanup() {
     // would otherwise run forever, run first, unless they have run already (see ~QoreProgramHelper())
     qore_run_exit_hooks(nullptr);
     qore_counter_ops(thread_counter).waitForZero();
+
+    // the process-end callbacks of the modules run before anything is torn down (qore#7191)
+    qore_run_process_end_callbacks(QPE_CLEANUP);
 
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);

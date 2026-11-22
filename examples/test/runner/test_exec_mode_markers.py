@@ -337,6 +337,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - QdpNoTty (#7125): its checks run qdp in child processes in a new session, without a controlling terminal
         # - QdpAppActionOptions (#7126): its checks run qdp in child processes of its own binary
+        # - QdpListenNoTty (#7130): its checks run qdp in child processes in a new session, with stdin not a terminal
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
@@ -350,6 +351,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   child processes that set their own --exec-mode and as qcc executables
         # - reflection-typed-hash-module-caller (#7154): its script runs in child processes that set their own
         #   execution modes and as a qcc executable, as a module is initialized once in a process
+        # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
+        #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -368,6 +371,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
                                  "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
@@ -420,6 +424,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest",
+                                 "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/classes/member-access-private-internal.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
@@ -444,6 +449,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/DataProvider/TabularProfilerEncoding.qtest",
                                  "examples/test/qlib/DataProvider/QdpNoTty.qtest",
                                  "examples/test/qlib/DataProvider/QdpAppActionOptions.qtest",
+                                 "examples/test/qlib/DataProvider/QdpListenNoTty.qtest",
                                  "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",

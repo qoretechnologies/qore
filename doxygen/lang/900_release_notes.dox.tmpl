@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
+    The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
+    also in library code, and the standard modules (also a host's logger, for the lines that library code writes for
+    such a caller) leave their terminal output out for it; see @ref sandbox_terminal_io
+    (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
+
     @par Code of a Program That May Not Control Threads Is Not Run in Other Threads
     The APIs that run code in another thread refuse a closure, call reference or object authored by code that may not
     control threads with \c PERMISSION-DENIED, whichever code passes it on; such code that a \c background expression
@@ -1521,6 +1527,12 @@
     process that exits during a background JIT compile no longer leaks their values; see "Releasing Module State at
     Shutdown" in the module development guide of the C++ API documentation.
 
+    @par Process-End Callbacks for Binary Modules
+    A binary module can register a callback that runs once when the process ends, also when \c exit() ends it with
+    \c _Exit() (on the signal handler thread or while other threads run) and at the start of qore_cleanup(), before
+    anything is torn down (\c qore_register_process_end_callback(), \c QORE_HAS_PROCESS_END_CALLBACKS; issue #7191);
+    see "Cleanup When the Process Ends" in the module development guide of the C++ API documentation.
+
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see
@@ -1725,7 +1737,9 @@
     \c qore_caller_restricts_domain() (\c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) tell module code whether the code that
     calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
     that it performs for a restricted caller; see @ref sandbox_caller_domains
-    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
+    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>);
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()" tells it whether it may use
+    the terminal for its caller (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
 
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
@@ -1950,9 +1964,9 @@
       - a module can register actions to be built on first use, and the provider modules generating actions
         from REST API descriptions do, so loading them no longer builds their actions (see
         @ref dataprovider_lazy_actions)
-      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); errors
-        written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no terminal I/O
-        instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - can be loaded first by code without terminal I/O; its last-resort errors are left out for code without it
+        (@ref sandbox_terminal_io; <a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
       - the @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo" option of the data providers that
         read text (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - optional processing-locality and billing-model metadata on apps and actions
@@ -2017,9 +2031,9 @@
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2 and HTTP/3)
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
-      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-        terminal I/O instead of raising an exception
-        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - last-resort errors on @ref Qore::stderr "stderr" are left out for code without terminal I/O
+        (@ref sandbox_terminal_io; <a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
       - text reads check the text in its encoding, with the \c encoding_errors read option (see
         @ref filelocationhandler_encoding_errors)
         (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
@@ -2218,9 +2232,9 @@
       - see @ref reflection_3_0 for all changes
 
     - @ref providerindexutilintro "ProviderIndexUtil" module
-      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-        terminal I/O instead of raising an exception
-        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - last-resort errors on @ref Qore::stderr "stderr" are left out for code without terminal I/O
+        (@ref sandbox_terminal_io; <a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
 
     - @ref restclientintro "RestClient" module
       - data providers make API calls with an asynchronous @ref restclientiointro "RestClientIo" client
@@ -2272,9 +2286,9 @@
         (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
       - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
         @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
-      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-        terminal I/O instead of raising an exception
-        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - last-resort errors on @ref Qore::stderr "stderr" are left out for code without terminal I/O
+        (@ref sandbox_terminal_io; <a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
@@ -2343,9 +2357,9 @@
         (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
       - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
         @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
-      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-        terminal I/O instead of raising an exception
-        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - last-resort errors on @ref Qore::stderr "stderr" are left out for code without terminal I/O
+        (@ref sandbox_terminal_io; <a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+        <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module
@@ -2699,10 +2713,19 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
+      object, so a shared object is expanded once per conversion (issue #7166).
     - a temporary value given to the @ref weak_assignment_operator "weak assignment operator" (ex:
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
+    - the strings of \c ARGV and \c QORE_ARGV are tagged with the
+      @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
+      default encoding (see @ref command_line_processing; issue #7045)
+    - fixed a crash when a @ref weak_assignment_operator "weak reference" to a list or hash whose last strong
+      reference was released was copied, returned or passed to a call; changing such a list or hash through new
+      references to it now raises \c LIST-ERROR or \c HASH-ERROR also when more than one is held
+      (<a href="https://github.com/qoretechnologies/qore/issues/7163">issue 7163</a>)
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -2754,6 +2777,9 @@
       declared them; they were evaluated in the class context of the caller with its private access, which a default
       value that uses the private declarations of the caller's class no longer has (see
       @ref function_param_default_values; <a href="https://github.com/qoretechnologies/qore/issues/7066">issue 7066</a>)
+    - @ref rethrow "Rethrowing an exception" preserves the full exception chain and releases its payloads when
+      another exception is raised during cleanup (issue #7091).
+
     - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
       a class with only the same name and declarations as another class had the other class's private and
       \c private:internal access to its objects (see @ref private_access_class_identity;
@@ -2783,6 +2809,9 @@
       or with an unknown connection; these are usage errors that name the options, and the connection can also be
       given with \c qorus_app_connection, the name of the option in Qorus
       (<a href="https://github.com/qoretechnologies/qore/issues/7126">issue 7126</a>)
+    - fixed \c qdp \c listen ending with an unhandled \c TERMIOS-GET-ERROR exception when stdin was not a terminal; it
+      then stops on its timeout or a signal instead of a keystroke, and the interactive mode ends with a usage error
+      (<a href="https://github.com/qoretechnologies/qore/issues/7130">issue 7130</a>)
     - a data provider instance or action set that callers with different restrictions share no longer keeps a type
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;
@@ -2792,11 +2821,21 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/7135">issue 7135</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/7144">issue 7144</a>)
 
+    - @ref <object>::keys(), @ref <object>::size(), @ref <object>::empty() and the @ref elements "elements operator"
+      report the same members as the @ref keys "keys operator", where they gave private members to code outside the
+      class hierarchy
+      (<a href="https://github.com/qoretechnologies/qore/issues/7048">issue 7048</a>)
     - the methods of a class are enumerated by the \c reflection module (@ref Qore::Reflection::Class::getNormalMethods()
       "Class::getNormalMethods()", @ref Qore::Reflection::Class::getStaticMethods() "Class::getStaticMethods()",
       @ref Qore::Reflection::AbstractClass::getMethods() "AbstractClass::getMethods()") in the order in which they were
       declared; before, the order depended on how often the class had been copied, so a program compiled with \c qcc
       returned another one than the interpreter (<a href="https://github.com/qoretechnologies/qore/issues/7169">issue 7169</a>)
+    - @ref Logger::LoggerWrapper::assertLog() "LoggerWrapper::assertLog()" of the @ref loggerintro "Logger" module logs
+      a failed assertion at the \c ERROR level instead of raising \c METHOD-DOES-NOT-EXIST
+      (<a href="https://github.com/qoretechnologies/qore/issues/7190">issue 7190</a>)
+    - the default @ref Qore::Logger::LoggerInterface::detail() "LoggerInterface::detail()" passes its format arguments
+      to \c logArgs() as one list, so it no longer raises \c RUNTIME-OVERLOAD-ERROR with more than one
+      (<a href="https://github.com/qoretechnologies/qore/issues/7197">issue 7197</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

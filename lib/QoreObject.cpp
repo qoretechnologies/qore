@@ -1033,6 +1033,192 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
     return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy);
 }
 
+//! returns the class context of the calling code if it can see the non-public members of objects of the class, as
+//! getRuntimeMemberHash() determines it, or nullptr
+static const qore_class_private* qore_object_runtime_member_class_context(const QoreClass& cls) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(cls, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    return class_ctx;
+}
+
+//! returns true if the member is visible to the class context in getRuntimeMemberHash(): every member for the object's
+//! class, otherwise those that the class context can use on the object
+static bool qore_object_runtime_member_visible(const qore_class_private* theclass_priv,
+        const qore_class_private* class_ctx, const char* key) {
+    if (class_ctx == theclass_priv) {
+        return true;
+    }
+    const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(key, class_ctx);
+    return !info || theclass_priv->runtimeCheckMemberAccess(info, class_ctx);
+}
+
+QoreListNode* qore_object_private::getRuntimeMemberList(ExceptionSink* xsink) const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    // any code sees all members of a class without non-public ones, so the caller's context is not needed, unless the
+    // object holds internal data: a child class's method can store its private:internal members on a parent's object
+    if (theclass_priv->runtimeAllMembersPublic()) {
+        QoreSafeVarRWReadLocker sl(rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
+        if (!cdmap) {
+            return data->getKeys();
+        }
+    }
+    return getRuntimeMemberListSlow(xsink);
+}
+
+// out of line, with the lock of its own: the common path above keeps the lock's code inline
+QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink) const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+
+    QoreSafeVarRWReadLocker sl(rml);
+    if (status == OS_DELETED) {
+        makeAccessDeletedObjectException(xsink, theclass->getName());
+        return nullptr;
+    }
+
+    if (!class_ctx) {
+        // code outside the class's hierarchy sees the public members only
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+        ConstHashIterator hi(data);
+        while (hi.next()) {
+            if (!theclass->isPrivateMember(hi.getKey())) {
+                l->push(new QoreStringNode(hi.getKey()), xsink);
+            }
+        }
+        return l.release();
+    }
+
+    // the keys of getRuntimeMemberHash(), in its order, without copying the values: the visible members, then the
+    // class context's internal data, whose keys replace visible members of the same name in place
+    const QoreHashNode* odata = getInternalData(class_ctx);
+    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+        return data->getKeys();
+    }
+    ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+    ConstHashIterator hi(data);
+    while (hi.next()) {
+        if (qore_object_runtime_member_visible(theclass_priv, class_ctx, hi.getKey())) {
+            l->push(new QoreStringNode(hi.getKey()), xsink);
+        }
+    }
+    if (odata) {
+        ConstHashIterator ohi(odata);
+        while (ohi.next()) {
+            const char* key = ohi.getKey();
+            if (!data->existsKey(key) || !qore_object_runtime_member_visible(theclass_priv, class_ctx, key)) {
+                l->push(new QoreStringNode(key), xsink);
+            }
+        }
+    }
+    return l.release();
+}
+
+int64 qore_object_private::getRuntimeMemberCount() const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    // see getRuntimeMemberList()
+    if (theclass_priv->runtimeAllMembersPublic()) {
+        QoreSafeVarRWReadLocker sl(rml);
+        if (status == OS_DELETED) {
+            return 0;
+        }
+        if (!cdmap) {
+            return data->size();
+        }
+    }
+    return getRuntimeMemberCountSlow();
+}
+
+// out of line, with the lock of its own: the common path above keeps the lock's code inline
+int64 qore_object_private::getRuntimeMemberCountSlow() const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+
+    QoreSafeVarRWReadLocker sl(rml);
+    if (status == OS_DELETED) {
+        return 0;
+    }
+
+    if (!class_ctx) {
+        // code outside the class's hierarchy sees the public members only
+        int64 rc = 0;
+        ConstHashIterator hi(data);
+        while (hi.next()) {
+            if (!theclass->isPrivateMember(hi.getKey())) {
+                ++rc;
+            }
+        }
+        return rc;
+    }
+
+    // the size of getRuntimeMemberHash() without copying the values
+    const QoreHashNode* odata = getInternalData(class_ctx);
+    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+        return data->size();
+    }
+    int64 rc = 0;
+    ConstHashIterator hi(data);
+    while (hi.next()) {
+        if (qore_object_runtime_member_visible(theclass_priv, class_ctx, hi.getKey())) {
+            ++rc;
+        }
+    }
+    if (odata) {
+        ConstHashIterator ohi(odata);
+        while (ohi.next()) {
+            const char* key = ohi.getKey();
+            if (!data->existsKey(key) || !qore_object_runtime_member_visible(theclass_priv, class_ctx, key)) {
+                ++rc;
+            }
+        }
+    }
+    return rc;
+}
+
+// the first name of getRuntimeMemberList(), in its order: the visible members, then the class context's internal data
+const char* qore_object_private::getFirstRuntimeMemberKeyIntern(const qore_class_private* class_ctx) const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    ConstHashIterator hi(data);
+    if (!class_ctx) {
+        while (hi.next()) {
+            if (!theclass->isPrivateMember(hi.getKey())) {
+                return hi.getKey();
+            }
+        }
+        return nullptr;
+    }
+    while (hi.next()) {
+        if (qore_object_runtime_member_visible(theclass_priv, class_ctx, hi.getKey())) {
+            return hi.getKey();
+        }
+    }
+    // no visible member: every name of the internal data is listed
+    const QoreHashNode* odata = getInternalData(class_ctx);
+    return odata ? odata->getFirstKey() : nullptr;
+}
+
+bool qore_object_private::hasRuntimeMembers() const {
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    // see getRuntimeMemberList()
+    if (theclass_priv->runtimeAllMembersPublic()) {
+        QoreSafeVarRWReadLocker sl(rml);
+        if (status == OS_DELETED) {
+            return false;
+        }
+        if (!cdmap) {
+            return !data->empty();
+        }
+    }
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+    QoreSafeVarRWReadLocker sl(rml);
+    return status != OS_DELETED && getFirstRuntimeMemberKeyIntern(class_ctx);
+}
+
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
@@ -3248,6 +3434,13 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     QoreContainerHelper cch(this);
     if (!cch) {
         str.sprintf("{ERROR: recursive reference to object %p (class %s)}", this, getClassName());
+        return 0;
+    }
+
+    if (priv->status == OS_DELETED) {
+        return Nothing.getAsString(str, foff, xsink);
+    }
+    if (fbh.renderSharedObject(str, *this, foff)) {
         return 0;
     }
 

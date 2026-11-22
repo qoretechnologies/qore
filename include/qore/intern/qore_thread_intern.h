@@ -629,6 +629,11 @@ DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
 DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id);
+//! Debug-only: makes the next \a count barriers of library code (QoreModuleInitSandboxBarrierHelper(true)) on the
+//! current thread fail to be recorded as if no memory could be allocated; 0 disarms it
+DLLLOCAL void qore_dbg_fail_next_module_init_barrier_records(int count);
+//! Debug-only: returns the number of active barriers of library code on the current thread that could not be recorded
+DLLLOCAL unsigned qore_dbg_module_init_barrier_unrecorded();
 #endif
 
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
@@ -703,6 +708,11 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
       pass on to the module code it calls, also through module code whose own options have them already
 */
 DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
+
+//! Runs the process-end callbacks of the modules once (see qore_register_process_end_callback(), qore#7191)
+/** Called by qore_cleanup() (#QPE_CLEANUP) and qore_exit_process() (#QPE_EXIT, #QPE_QUICK_EXIT)
+*/
+DLLLOCAL void qore_run_process_end_callbacks(qore_process_end_e reason);
 
 //! returns the data of the current thread, for the functions that take it to look it up only once
 DLLLOCAL ThreadData* qore_get_thread_data();
@@ -2139,6 +2149,14 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
+/** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
+    stack that is not a module's is trusted host code (a Program that is not sandboxed and whose options allow terminal
+    I/O), the provenance of objects and callbacks that restricted code created does not apply, so that the output
+    that the host chose (its loggers, its own code called from such an object) is written
+*/
+DLLLOCAL bool qore_caller_restricts_terminal_io();
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)

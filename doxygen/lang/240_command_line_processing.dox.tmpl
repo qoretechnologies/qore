@@ -6,6 +6,10 @@
 
     %Qore will scan the command-line for the options in the following table. Arguments after the script name will be passed to the script in the global <tt>ARGV</tt> variable as a list of options. <tt>ARGV[0]</tt> will be the first option and will not be the script name. If no script name is given and the <tt>--exec</tt> option is not used, then %Qore code is read from standard input.  The <tt>QORE_ARGV</tt> variable will have the original %Qore command-line in it, however
 
+    The strings of <tt>ARGV</tt> and <tt>QORE_ARGV</tt> are tagged with the
+    @ref default_encoding "default character encoding" of the process (as the strings of <tt>ENV</tt> are), whether it
+    is given with \c --charset, \c QORE_CHARSET or \c LANG: the bytes of the command line are taken to be in it.
+
     Usage: <tt>qore [</tt><em>options</em><tt>] [</tt><em>script_file_name</em><tt>]</tt>
 
     @note When no script file is given and the \c --exec option is not used, %Qore will automatically enter
