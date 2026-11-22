@@ -164,6 +164,129 @@ class B66 inherits P6 {
 }
 class X6 inherits A6, B66 {}
 
+# a public method reached through private inheritance in the earlier branch counts as a private method: code of B1
+# calls its own method, as a caller outside the class hierarchy does
+class P1 {
+    string m() { return "P1::m"; }
+}
+class A1 inherits private P1 {}
+class B1 inherits P1 {
+    string m() { return "B1::m"; }
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+    string bTyped(X1 o) { return o.m(); }
+}
+class X1 inherits A1, B1 {}
+# the public method is reached through a public path before B1 as well: it is called
+class C1 inherits P1 {}
+class X1c inherits A1, C1, B1 {}
+
+# B inherits P privately, A publicly
+class PB { private string m() { return "PB::m"; } private static string sm() { return "PB::sm"; } }
+class AB inherits PB {}
+class BB inherits private PB {
+    string m() { return "BB::m"; }
+    static string sm() { return "BB::sm"; }
+    string bSelf() { return self.m(); }
+    string bStatic() { return sm(); }
+    code bClosure() { return string sub () { return self.m(); }; }
+    code bRef() { return \self.m(); }
+}
+class XB inherits AB, BB {}
+# the object's class inherits B privately
+class XBp inherits AB, private BB { string xc() { return bSelf(); } }
+# the object's class inherits B with private:internal: the code of B keeps the documented order
+class XBi inherits AB, private:internal BB { string xc() { return bSelf(); } }
+
+# overloads: B's own method has only m(int); P's private method has m()
+class PV { private string m() { return "PV::m()"; } }
+class AV inherits PV {}
+class BV inherits PV {
+    string m(int i) { return "BV::m(int)"; }
+    string c0() { return self.m(); }
+    string c1() { return self.m(1); }
+    string u0(auto o) { return o.m(); }
+}
+class XV inherits AV, BV {}
+# overloads reversed: B's own method has m(); P's private method has m(int)
+class PW { private string m(int i) { return "PW::m(int)"; } }
+class AW inherits PW {}
+class BW inherits PW {
+    string m() { return "BW::m()"; }
+    string c0() { return self.m(); }
+    string c1() { return self.m(1); }
+}
+class XW inherits AW, BW {}
+
+# P reached through two branches before B; P's parent has a public method reached through another branch
+class PP5d { string m() { return "PP5d::m"; } }
+class P5d inherits PP5d { private string m() { return "P5d::m"; } }
+class A5d inherits P5d {}
+class C5d inherits P5d {}
+class D5d inherits PP5d {}
+class B5d inherits P5d {
+    string m() { return "B5d::m"; }
+    string bSelf() { return self.m(); }
+}
+class X5d inherits A5d, C5d, B5d {}
+class X5db inherits A5d, D5d, B5d {}
+
+# multi-level diamond: P reached deeper in both branches, the object inherits a subclass of B
+class P6d { private string m() { return "P6d::m"; } }
+class Q6d inherits P6d {}
+class A6d inherits Q6d {}
+class R6d inherits P6d {}
+class B6d inherits R6d {
+    string m() { return "B6d::m"; }
+    string bSelf() { return self.m(); }
+}
+class C6d inherits B6d {}
+class X6d inherits A6d, C6d {}
+
+# B's own hierarchy gives a private method of its other parent class, QQ, listed before P
+class PQ { private string m() { return "PQ::m"; } }
+class AQ inherits PQ {}
+class QQ { private string m() { return "QQ::m"; } }
+class BQ inherits QQ, PQ {
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+    string bViaA(AQ o) { return o.m(); }
+}
+class CQ { string m() { return "CQ::m"; } }
+class XQ inherits AQ, BQ {}
+class XQ3 inherits AQ, BQ, CQ {}
+
+# an abstract method of B does not override P's private method; the subclass implements it
+class PA { private string m() { return "PA::m"; } }
+class AA inherits PA {}
+class BA inherits PA {
+    abstract string m();
+    string bSelf() { return self.m(); }
+}
+class XA inherits AA, BA {
+    string m() { return "XA::m"; }
+}
+
+# classes inherited by the classes of a child Program
+public class PC { private string m() { return "PC::m"; } }
+public class AC inherits PC {}
+public class QC { private string m() { return "QC::m"; } }
+public class BQC inherits QC, PC {
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+}
+public class BC inherits PC {
+    string m() { return "BC::m"; }
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+}
+public class PPub { string m() { return "PPub::m"; } }
+public class APub inherits private PPub {}
+public class BPub inherits PPub {
+    string m() { return "BPub::m"; }
+    string bSelf() { return self.m(); }
+}
+
 # the policy-base example of the documentation (multiple_inheritance_order): unchanged
 class Base {
     private string hook() { return "a"; }
@@ -247,6 +370,53 @@ X6 x6();
 check("X6 B66 self.m()", \x6.bSelf());
 check("X6 B66 m()", \x6.bCall());
 
+X1 x1();
+check("X1 B1 self.m() (public P1::m through private A1)", \x1.bSelf());
+check("X1 B1 untyped", any sub () { return x1.bUntyped(x1); });
+check("X1 B1 typed X1", any sub () { return x1.bTyped(x1); });
+check("X1 outside m()", any sub () { return x1.m(); });
+X1c x1c();
+check("X1c B1 self.m() (P1 public through C1 too)", \x1c.bSelf());
+check("X1c outside m()", any sub () { return x1c.m(); });
+
+XB xb();
+check("XB BB self.m() (BB inherits PB privately)", \xb.bSelf());
+check("XB BB sm()", \xb.bStatic());
+check("XB BB closure called outside", xb.bClosure());
+check("XB BB \\self.m() called outside", xb.bRef());
+XBp xbp();
+check("XBp (private BB) BB self.m()", \xbp.xc());
+check("XBp outside m()", any sub () { return xbp.m(); });
+XBi xbi();
+check("XBi (private:internal BB) BB self.m()", \xbi.xc());
+
+XV xv();
+check("XV BV self.m()", \xv.c0());
+check("XV BV self.m(1)", \xv.c1());
+check("XV BV untyped m()", any sub () { return xv.u0(xv); });
+XW xw();
+check("XW BW self.m()", \xw.c0());
+check("XW BW self.m(1)", \xw.c1());
+
+X5d x5d();
+check("X5d B5d self.m() (P5d through two branches)", \x5d.bSelf());
+X5db x5db();
+check("X5db B5d self.m() (PP5d through D5d)", \x5db.bSelf());
+check("X5db outside m()", any sub () { return x5db.m(); });
+
+X6d x6d();
+check("X6d B6d self.m() (multi-level)", \x6d.bSelf());
+
+XQ xq();
+check("XQ BQ self.m() (QQ first in BQ)", \xq.bSelf());
+check("XQ BQ untyped", any sub () { return xq.bUntyped(xq); });
+check("XQ BQ typed AQ", any sub () { return xq.bViaA(xq); });
+XQ3 xq3();
+check("XQ3 BQ self.m()", \xq3.bSelf());
+
+XA xa();
+check("XA BA self.m() (abstract in BA)", \xa.bSelf());
+
 check("doc A doIt()", any sub () { return (new DocA()).doIt(); });
 check("doc B doIt()", any sub () { return (new DocB()).doIt(); });
 
@@ -275,3 +445,15 @@ class B inherits P {
 class X inherits A, B {}
 string sub typed() { X x(); return x.typed(x); }
 ", ("typed",));
+
+# classes of this Program inherited by classes of a child Program
+parse_check("child inherits", "
+class CQ inherits AC, BQC {}
+class CB inherits AC, BC {}
+class CPub inherits APub, BPub {}
+string sub cq() { CQ o(); return o.bSelf(); }
+string sub cqu() { CQ o(); return o.bUntyped(o); }
+string sub cb() { CB o(); return o.bSelf(); }
+string sub cbu() { CB o(); return o.bUntyped(o); }
+string sub cpub() { CPub o(); return o.bSelf(); }
+", ("cq", "cqu", "cb", "cbu", "cpub"));

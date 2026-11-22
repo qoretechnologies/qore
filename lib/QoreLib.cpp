@@ -1704,6 +1704,9 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
     if (access > Public) {
         // the method that a call of the name makes from here, if the caller cannot call the method found first
         meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, ctx);
+    } else {
+        // a public method found through private inheritance that the context's own hierarchy overrides (qore#6798)
+        meth = pcls->runtimeCheckPublicContextOverride(name, meth, access, ctx);
     }
     // a method found with a class context does not have the access of the method of the class itself that the
     // context may access (see qore_class_private::runtimeFindCommittedMethodForEval()), so the method is checked
