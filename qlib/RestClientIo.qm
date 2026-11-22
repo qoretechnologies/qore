@@ -6632,8 +6632,18 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "has_on_complete": True,
             });
         } catch (hash<ExceptionInfo> ex) {
+            bool cancelled;
+            {
+                AutoLock al(m);
+                cancelled = done;
+            }
             cancelPendingStream();
             fail(ex);
+            # a startup cancelled while it started (its request then fails with HTTPCLIENT-CANCELLED) ends quietly,
+            # as one cancelled later does
+            if (cancelled) {
+                return;
+            }
             rethrow;
         }
     }
@@ -6784,7 +6794,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
         if (isRedirected()) {
             # the request was prepared for the original request; it is sent as changed by the redirects
-            pending_stream = mgr.acquireStream(rf.getOrigin());
+            setPendingStream(mgr.acquireStream(rf.getOrigin()));
             pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
                 rcio.addClientCookies(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
                 stream_notifier, True);
@@ -6796,7 +6806,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         if (!prepared_attempt) {
             prepareAttempt();
         }
-        pending_stream = mgr.acquireStream(rcio.getUrl());
+        setPendingStream(mgr.acquireStream(rcio.getUrl()));
         # sse_install_eligible=True: this flow always completes with installSseState()
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
@@ -6895,7 +6905,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                     \negotiate_context)) {
             negotiate_retried = True;
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             doStartConnecting();
             return;
         }
@@ -6913,7 +6923,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             # the body of the redirect response is discarded, and the next request goes to the origin of the
             # redirect target
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             remove response;
             connector = new RestClientIoAsyncConnector(rcio, rf.getOrigin());
             waiting_for_connection = False;
@@ -6955,7 +6965,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         pending_stream.installSseState(sse_queue, stream_notifier,
             initial_body);
         HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
-        remove pending_stream;
+        clearPendingStream();
         goal_reached = True;
         state = SPS_COMPLETE;
         observable.activateStartedStream(started_stream, sse_queue,
@@ -7032,10 +7042,40 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         observable.startupFailed(ex);
     }
 
+    #! Records the stream of the request about to be submitted
+    /** @ref cancel() runs in another thread and cancels the stream it finds recorded, so the stream is recorded under
+        the lock that @ref cancel() takes; a stream acquired after the startup was cancelled is not used.
+
+        @throw HTTPCLIENT-CANCELLED the startup was cancelled; the stream is released
+    */
+    private setPendingStream(HttpClientIo::HttpClientStreamHandle stream) {
+        {
+            AutoLock al(m);
+            if (!done) {
+                pending_stream = stream;
+                return;
+            }
+        }
+        # the stream has no request; cancelling it releases its reservation
+        stream.cancel();
+        throw "HTTPCLIENT-CANCELLED", "SSE observable startup was canceled";
+    }
+
+    #! Forgets the stream of the request, under the lock that @ref cancel() takes
+    private clearPendingStream() {
+        AutoLock al(m);
+        remove pending_stream;
+    }
+
     private cancelPendingStream() {
-        if (pending_stream) {
+        *HttpClientIo::HttpClientStreamHandle stream;
+        {
+            AutoLock al(m);
+            stream = pending_stream;
+        }
+        if (stream) {
             try {
-                pending_stream.cancel();
+                stream.cancel();
             } catch () {
             }
         }

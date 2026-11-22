@@ -73,6 +73,19 @@
 //! driver option: if True, its value is the identifier of the connection, which is unique in the process and in its
 //! children; otherwise it has no value, so that the configuration of a datasource does not depend on its connection
 #define DBITEST_OPT_SESSION "session"
+//! driver option declared sensitive (QDBI_OPT_SENSITIVE): a string kept on the connection, as a credential would be
+#define DBITEST_OPT_SECRET "secret"
+//! driver option registered with option flags and declared not sensitive, whose name can name a credential: its value
+//! is masked by name in the masked forms of a datasource (qore#7070)
+#define DBITEST_OPT_API_TOKEN "api_token"
+//! driver option registered with option flags and declared not sensitive, whose name has "dsn": masked by name in
+//! the masked forms of a datasource (qore#7070)
+#define DBITEST_OPT_DSN_NAME "dsn_name"
+//! driver option registered with an option flag that the Qore library does not know: counted as sensitive, so its
+//! value is masked in the masked forms of a datasource (qore#7070)
+#define DBITEST_OPT_FUTURE_FLAG "future-flag"
+//! the option flag of DBITEST_OPT_FUTURE_FLAG: a bit that no Qore library defines
+#define DBITEST_OPT_FLAG_UNKNOWN (1 << 30)
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -185,6 +198,14 @@ public:
 
     //! the currently armed faults, separated by commas; sticky until changed with the "fault" option
     std::string fault;
+    //! the value of the sensitive "secret" option; see DBITEST_OPT_SECRET
+    std::string secret;
+    //! the value of the "api_token" option; see DBITEST_OPT_API_TOKEN
+    std::string api_token;
+    //! the value of the "dsn_name" option; see DBITEST_OPT_DSN_NAME
+    std::string dsn_name;
+    //! the value of the "future-flag" option; see DBITEST_OPT_FUTURE_FLAG
+    std::string future_flag;
     //! rows reported as affected by exec operations
     int64 rows = 1;
     //! chunk size for the simulated bounded stream
@@ -673,6 +694,26 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->rows = val.getAsBigInt();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_SECRET)) {
+        QoreStringNodeValueHelper str(val);
+        conn->secret = str->c_str();
+        return 0;
+    }
+    if (!strcmp(opt, DBITEST_OPT_API_TOKEN)) {
+        QoreStringNodeValueHelper str(val);
+        conn->api_token = str->c_str();
+        return 0;
+    }
+    if (!strcmp(opt, DBITEST_OPT_DSN_NAME)) {
+        QoreStringNodeValueHelper str(val);
+        conn->dsn_name = str->c_str();
+        return 0;
+    }
+    if (!strcmp(opt, DBITEST_OPT_FUTURE_FLAG)) {
+        QoreStringNodeValueHelper str(val);
+        conn->future_flag = str->c_str();
+        return 0;
+    }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         conn->report_session = val.getAsBool();
         return 0;
@@ -713,6 +754,18 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     }
     if (!strcmp(opt, DBITEST_OPT_FAULT)) {
         return new QoreStringNode(conn->fault);
+    }
+    if (!strcmp(opt, DBITEST_OPT_SECRET)) {
+        return new QoreStringNode(conn->secret);
+    }
+    if (!strcmp(opt, DBITEST_OPT_API_TOKEN)) {
+        return new QoreStringNode(conn->api_token);
+    }
+    if (!strcmp(opt, DBITEST_OPT_DSN_NAME)) {
+        return new QoreStringNode(conn->dsn_name);
+    }
+    if (!strcmp(opt, DBITEST_OPT_FUTURE_FLAG)) {
+        return new QoreStringNode(conn->future_flag);
     }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         return conn->report_session ? QoreValue(conn->id) : QoreValue();
@@ -932,9 +985,20 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
     methods.registerOption(DBITEST_OPT_FAULT, "the faults to inject, separated by commas: \"select\", \"exec\", "
         "\"commit\", \"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
         "\"bulk-unavailable\", \"bulk-rows\", \"close\" (closing the connection reports an error), or \"stmt-close\" "
-        "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo);
+        "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo, 0);
+    methods.registerOption(DBITEST_OPT_SECRET, "a string kept on the connection, declared sensitive as a credential "
+        "would be", stringTypeInfo, QDBI_OPT_SENSITIVE);
+    methods.registerOption(DBITEST_OPT_API_TOKEN, "a string kept on the connection, declared not sensitive although "
+        "its name names a credential", stringTypeInfo, 0);
+    methods.registerOption(DBITEST_OPT_DSN_NAME, "a string kept on the connection, declared not sensitive although "
+        "its name names a connection string", stringTypeInfo, 0);
+    methods.registerOption(DBITEST_OPT_FUTURE_FLAG, "a string kept on the connection, registered with an option flag "
+        "that the Qore library does not know", stringTypeInfo, DBITEST_OPT_FLAG_UNKNOWN);
+    // "fault" and "rows" are registered with option flags (not sensitive), so their values can be shown in the
+    // masked forms of a datasource; the other options are registered without flags, which makes no decision about
+    // their sensitivity, and their values are masked (qore#7070)
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
-        bigIntTypeInfo);
+        bigIntTypeInfo, 0);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_BULK_LOAD_STATS, "native bulk-load protocol statistics");
