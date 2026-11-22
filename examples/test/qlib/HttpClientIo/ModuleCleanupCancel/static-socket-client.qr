@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module cleanup destroys a module's static Socket at the end of the process, whose destructor creates the
+# asynchronous I/O controller: the process ends (qore#7178)
+
+%requires CleanupStaticSocket
+
+printf("started\n");
