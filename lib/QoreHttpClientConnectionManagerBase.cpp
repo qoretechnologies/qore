@@ -37,6 +37,7 @@
 #include <qore/QoreSSLCertificate.h>
 #include <qore/QoreSSLPrivateKey.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
@@ -86,6 +87,9 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
     }
     if (opts_.client_key) {
         opts_.client_key->ref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->ref();
     }
     // Validate options
     if (opts_.max_connections_per_host < 0) {
@@ -174,6 +178,9 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
     }
     if (opts_.client_key) {
         opts_.client_key->deref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->deref();
     }
     // a connection whose back-pointer is still set can call onConnectionClosed() on this manager after it has been
     // destroyed: every connection that the manager releases has its back-pointer cleared first
@@ -752,6 +759,7 @@ static Http1SslConfig get_ssl_config(const HttpClientConnectionManagerBase::Opti
     ssl_cfg.key = opts.client_key;
     ssl_cfg.ca_file = opts.ssl_ca_file;
     ssl_cfg.ca_path = opts.ssl_ca_path;
+    ssl_cfg.trust_store = opts.ssl_trust_store;
     return ssl_cfg;
 }
 
@@ -859,7 +867,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this,
                 opts_.ssl_verify_mode, opts_.accept_all_certs,
-                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path);
+                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path, opts_.ssl_trust_store);
             break;
         case HttpClientProtocol::NEGOTIATE:
         negotiate_case: {

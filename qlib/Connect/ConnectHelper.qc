@@ -123,6 +123,12 @@ public const ConnectCapsuleProtocolHeader = "capsule-protocol";
 */
 public const CONNECT_DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
 
+#! Default time that a server send on an HTTP/3 stream may make no progress: 30 seconds
+/** A send waits while the stream's send buffer is full; it fails when the peer acknowledges no data of the stream
+    for this time (see ConnectHelper::sendQuicStreamData(), qoretechnologies/qore#7282)
+*/
+public const CONNECT_DEFAULT_SEND_TIMEOUT = 30s;
+
 #! Connect protocol framing and header utility class
 /** Provides static methods for Connect message framing, header construction,
     and EndStreamResponse serialization.
@@ -237,6 +243,84 @@ public class ConnectHelper {
             return -1;
         }
         return total;
+    }
+
+    #! Sends data on a server's HTTP/3 stream, waiting while the stream's send buffer is full
+    /** @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" refuses data while the stream's send buffer
+        is full; the send then waits for the buffer to drain and tries again.  The wait is bounded by the time without
+        progress: it starts again whenever the peer has acknowledged more of the stream's data (see
+        @ref Qore::Socket::getQuicStreamAckedBytes() "getQuicStreamAckedBytes()"), so that a peer that takes a large
+        response slowly is not cut off, while a peer that takes nothing cannot hold the sending thread for as long as
+        its connection lasts (qoretechnologies/qore#7282).  A stream that has ended with the send still refused (for
+        example on a closed session) ends the wait at once, instead of retrying without end.
+
+        When the send fails, the stream is cancelled, so that the client sees the stream end with an error.
+
+        @param s the socket of the request (the handler socket)
+        @param session_id the HTTP/3 session ID
+        @param stream_id the HTTP/3 stream ID
+        @param data the data to send
+        @param end_stream if @ref True, the stream is ended after the data
+        @param send_timeout the maximum time that the peer may acknowledge no data of the stream; a value less than or
+        equal to zero waits without a limit
+        @param io_wake an optional closure that wakes the async I/O controller, so that the data already queued is
+        sent
+
+        @throw STREAM-SEND-TIMEOUT the peer acknowledged no data for \a send_timeout, or the stream ended with its send
+        buffer full; the data was not sent, and the stream was cancelled
+
+        @since Connect 1.3
+    */
+    static sendQuicStreamData(Socket s, int session_id, int stream_id, binary data, bool end_stream,
+            timeout send_timeout = CONNECT_DEFAULT_SEND_TIMEOUT, *code<nothing()> io_wake) {
+        # the deadline moves only when the acknowledged count grows, so an unknown count (-1: the stream or the
+        # session is gone) never extends it (as qore#7252 does for the stream contexts)
+        *int stall_deadline;
+        int last_acked = -1;
+        # the waits in a row that found the stream ended, with the send still refused
+        int ended_waits = 0;
+        while (s.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
+            # the data already queued must be sent before the stream can drain
+            if (io_wake) {
+                io_wake();
+            }
+            int wait_ms = -1;
+            if (send_timeout > 0) {
+                int now = clock_get_monotonic_us() / 1000;
+                int acked = s.getQuicStreamAckedBytes(session_id, stream_id);
+                if (!stall_deadline || acked > last_acked) {
+                    last_acked = acked;
+                    stall_deadline = now + send_timeout;
+                }
+                wait_ms = stall_deadline - now;
+                if (wait_ms <= 0) {
+                    ConnectHelper::cancelQuicStream(s, session_id, stream_id);
+                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
+                        "ms and the peer acknowledged no data meanwhile; %d bytes were not sent", stream_id,
+                        send_timeout, data.size());
+                }
+            }
+            # HOOK (qoretechnologies/qore#7280): the minimum send rate is checked here, before the wait, with the
+            # progress count of the stream (getQuicStreamAckedBytes(), read above when there is a send timeout); the
+            # wait is then capped at the rate check's interval
+            # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is made
+            # again in each case; a stream that has ended and still refuses it will never take it
+            if (s.waitForQuicStreamDrain(session_id, stream_id, wait_ms) >= 0) {
+                ended_waits = 0;
+            } else if (++ended_waits > 1) {
+                ConnectHelper::cancelQuicStream(s, session_id, stream_id);
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the stream ended with its send buffer full; "
+                    "%d bytes were not sent", stream_id, data.size());
+            }
+        }
+    }
+
+    #! Cancels a server's HTTP/3 stream after a failed send; an error (the stream or the session is gone) is ignored
+    private static cancelQuicStream(Socket s, int session_id, int stream_id) {
+        try {
+            s.cancelQuicStream(session_id, stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+        }
     }
 
     #! Frame an EndStreamResponse message

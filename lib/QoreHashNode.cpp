@@ -97,7 +97,7 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
-    hm_hm_t::iterator i = hm.find(key);
+    hm_hm_t::iterator i = findIter(key);
 
     if (i == hm.end()) {
         return QoreValue();
@@ -127,7 +127,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
     assert(o);
     assert(is_obj);
 
-    hm_hm_t::iterator i = hm.find(key);
+    hm_hm_t::iterator i = findIter(key);
     if (i == hm.end()) {
         exists = false;
         return QoreValue();
@@ -247,7 +247,7 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
         memTypeInfo = QoreTypeInfo::getUniqueReturnComplexHash(complexTypeInfo);
     }
 
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
     HashMember* m;
     if (i == hm.end()) {
         if (for_remove) {
@@ -569,7 +569,7 @@ QoreValue qore_hash_private::getKeyValueExistence(const char* key, bool& exists,
 }
 
 QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& exists) const {
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
 
     if (i != hm.end()) {
         exists = true;
@@ -581,7 +581,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 }
 
 QoreValue qore_hash_private::getKeyValueIntern(const char* key) const {
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
     return i != hm.end() ? (*i->second)->val : QoreValue();
 }
 
@@ -601,12 +601,7 @@ QoreValue qore_hash_private::getKeyValueExistencePrehashed(const char* key, size
 
 QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key, size_t hash,
         bool& exists) const {
-#ifdef HAVE_QORE_HASH_MAP
-    hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-    (void)hash;
-    hm_hm_t::const_iterator i = hm.find(key);
-#endif
+    hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
     if (i != hm.end()) {
         exists = true;
         return (*i->second)->val;
@@ -1018,7 +1013,7 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
 
     ConstHashIterator hi(this);
     while (hi.next()) {
-        hm_hm_t::const_iterator j = h->priv->hm.find(hi.getKey());
+        hm_hm_t::const_iterator j = h->priv->findIter(hi.getKey());
         if (j == h->priv->hm.end())
             return 1;
 
@@ -1334,7 +1329,7 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find((*ni)->key.c_str());
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);
@@ -1368,7 +1363,7 @@ QoreValue HashIterator::removeKeyValue() {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find((*ni)->key.c_str());
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);

@@ -42,6 +42,7 @@
 #include "qore/QoreThreadLock.h"
 
 #include "qore/intern/SSLSocketHelper.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
@@ -181,6 +182,12 @@ DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t
     exception was raised
 */
 DLLLOCAL int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id,
+        ExceptionSink* xsink);
+
+//! Returns the bytes of a server-side HTTP/3 stream's data that the peer has acknowledged (never decreases)
+/** @return the byte count, -1 if the stream has no data record or the session is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink);
 
 DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
@@ -2125,6 +2132,21 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::string ssl_ca_file;
     //! A directory with hashed CA certificates that server certificates are verified against, if set
     std::string ssl_ca_path;
+    //! An in-memory trust store that peer certificates are verified against, if set (qoretechnologies/qore#7248)
+    /** Takes precedence over @ref ssl_ca_file and @ref ssl_ca_path; holds a reference
+    */
+    QoreSSLTrustStore* ssl_trust_store = nullptr;
+
+    //! Sets the in-memory trust store; takes a reference to the new one and releases the old one
+    DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts) {
+        if (ts) {
+            ts->ref();
+        }
+        if (ssl_trust_store) {
+            ssl_trust_store->deref();
+        }
+        ssl_trust_store = ts;
+    }
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
     //! protects event queue pointer, callback argument, and data flag lifetime
@@ -2632,6 +2654,8 @@ public:
         // Free the shared server SSL_CTX after all sessions are destroyed
         // (sessions hold their own SSL_CTX_up_ref'd references via SSL_new)
         freeQuicServerSslCtx();
+
+        setSslTrustStore(nullptr);
 
         // must be dereferenced and removed before deleting
         assert(!event_queue);

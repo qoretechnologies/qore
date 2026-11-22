@@ -162,6 +162,28 @@ DLLLOCAL bool qore_module_state_write_restricted(const QoreProgram* writer);
 DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
         const char* module_name);
 
+//! Assigns a key of the hash or an element of the list that a local holds through a weak reference, as the AST
+//! interpreter assigns it (qore#7299)
+/** A write through a weak reference changes the container that the weak reference designates, which another owner
+    holds and which is never copied for the write; the container is held by the lvalue while it is changed, as for
+    every change through a weak reference (qore#7198).  The container stores of the IR interpreter and of native code,
+    which read the container of a local and copy it if it is shared, call this when the container is shared, so that
+    their own reference to the container of a weak reference, which they read with one (qore#7198), does not make
+    them copy it and replace the weak reference with the copy.
+
+    @param lv a local on the runtime stack (not a closure-bound one)
+    @param container the list or hash read from the local
+    @param key the key assigned, or nullptr to assign the element at \a index of a list
+    @param index the index of the element of a list (negative indexes count from the end with
+    \c PO_NEGATIVE_OFFSETS), if \a key is nullptr
+    @param val the value assigned, borrowed: the assignment takes a reference of its own
+
+    @return true if the local holds a weak reference to \a container, in which case the assignment was made or raised
+    an exception in \a xsink; false if it does not, in which case nothing was done
+*/
+DLLLOCAL bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
+        int64 index, const QoreValue& val, ExceptionSink* xsink);
+
 // structure for global variables
 class Var : protected QoreReferenceCounter {
 private:
@@ -832,6 +854,9 @@ protected:
     }
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
+    //! for the source of a weak assignment (see weak_source_resolution)
+    DLLLOCAL int raiseNegativeIndex(const QoreSquareBracketsOperatorNode* op, int64 ind);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
@@ -1114,6 +1139,10 @@ private:
     //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
     //! object, are resolved without being changed (qore#6435)
     bool read_value_only = false;
+    //! set when the source of a weak assignment is resolved to make its container unique (WeakSourceAccess,
+    //! setWeakSourceResolution()): an element that does not exist (also an index beyond the start of a list) is no
+    //! lvalue, without an exception, as an rvalue read of it gives no value (qore#7242)
+    bool weak_source_resolution = false;
     //! the declared types of the references resolved on a path resolved for delete or remove that name the current
     //! value: the one deciding whether the value can be a list<*T> (ref_list_type) and the one deciding whether it
     //! can be a container with a widened element or value type (ref_decl_type); set up by startRemovalPath(), set by
@@ -1185,6 +1214,21 @@ public:
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
+
+    //! tag for the constructor that resolves the source of a weak assignment
+    struct WeakSourceAccess {};
+
+    //! Resolves the source of a weak assignment, whose container the assignment makes unique (qore#7242)
+    /** The path is resolved without creating a missing element, as for remove (for_remove), and an element that does
+        not exist, also one at an index beyond the start of a list, leaves the helper without an lvalue and without an
+        exception, as an rvalue read of the path gives no value; see setWeakSourceResolution()
+    */
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess);
+
+    //! Resolves the path that navigatePath() is given as the source of a weak assignment (see WeakSourceAccess)
+    DLLLOCAL void setWeakSourceResolution() {
+        weak_source_resolution = true;
+    }
 
     //! Finishes the parent lvalue before a callback that can replace or remove it
     /** The caller must first retain the target object. Completes counts, locks, reference Program entries,

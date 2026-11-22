@@ -57,12 +57,24 @@ class PrivateOnly {
 */
 class DeleteMemberValueApiTest inherits QUnit::Test {
     constructor() : QUnit::Test("QoreObject::deleteMemberValue()", "1.0", \ARGV) {
+%ifndef QoreDebug
+        addTestCase("the C++ API through its debug hook", \requiresDebugBuild());
+%else
         addTestCase("undeclared members", \undeclaredTest());
         addTestCase("declared members", \declaredTest());
         addTestCase("members that hold objects", \objectValueTest());
         addTestCase("access checks", \accessTest());
+%endif
         set_return_value(main());
     }
+
+%ifndef QoreDebug
+    #! the cases call QoreObject::deleteMemberValue() through dbg_object_delete_member_value(), which only a library
+    #! debug build has
+    requiresDebugBuild() {
+        testSkip("dbg_object_delete_member_value() is only registered in a library debug build");
+    }
+%else
 
     undeclaredTest() {
         object o = new Undeclared();
@@ -128,4 +140,5 @@ class DeleteMemberValueApiTest inherits QUnit::Test {
         assertThrows("INVALID-MEMBER", \dbg_object_delete_member_value(), (d, "undeclared"),
             "a class with public members has no undeclared members");
     }
+%endif
 }
