@@ -2317,23 +2317,6 @@ void qore_class_private::parseCheckNameKindClashes(QoreProgram* pgm) {
     }
 }
 
-//! hides the type parameters of the code being parsed while a class is initialized (qore#7136)
-/** A class can be initialized on demand while other code is parsed, for example when a generic function accesses a
-    member of an object of the class; the types in the class's declarations (its members, method signatures and base
-    classes) must name only its own type parameters, not those of the generic function, closure or hashdecl parsed
-    around it, or a member declared as \c *T would have the type of the function's type parameter \c T, which the
-    receiver of the class does not substitute
-*/
-class QoreClassTypeParamScopeHelper {
-public:
-    DLLLOCAL QoreClassTypeParamScopeHelper() : signature_context(nullptr), hashdecl_context(nullptr) {
-    }
-
-private:
-    UserSignatureTypeParamContextHelper signature_context;
-    HashDeclTypeParamContextHelper hashdecl_context;
-};
-
 int qore_class_private::initializeIntern() {
     //printd(5, "qore_class_private::initializeIntern() this: %p %s class: %p scl: %p initialized: %d\n", this, name.c_str(), cls, scl, initialized);
     if (initialized) {
@@ -2343,7 +2326,7 @@ int qore_class_private::initializeIntern() {
     initialized = true;
 
     // the class names only its own type parameters (qore#7136)
-    QoreClassTypeParamScopeHelper type_param_scope;
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     assert(!name.empty());
     //printd(5, "qore_class_private::initializeIntern() %s class: %p scl: %p\n", name.c_str(), cls, scl);
@@ -8782,7 +8765,7 @@ int qore_class_private::parseInitPartial() {
     }
 
     // the class names only its own type parameters (qore#7136)
-    QoreClassTypeParamScopeHelper type_param_scope;
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     int err = parseResolveHierarchy();
 
@@ -8890,7 +8873,7 @@ int qore_class_private::parseInit() {
     }
 
     // the class names only its own type parameters (qore#7136)
-    QoreClassTypeParamScopeHelper type_param_scope;
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     // make sure initialize() is called first
     int err = initialize();
@@ -9592,6 +9575,10 @@ int qore_class_private::parseResolveHierarchy() {
         if (!scl) {
             return 0;
         }
+
+        // the base classes are named in the class's own type parameters, also when the hierarchy is resolved on
+        // demand while generic code is parsed (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
 
         qcp_set_t qcp_set = {this};
         // issue #2657: initialize class hierarchy first before initializing code and members
@@ -12546,6 +12533,10 @@ int QoreVarInfo::parseInit(const char* name) {
         return 0;
     }
     QoreMemberInfoBaseAccess::init = true;
+
+    // the static variable names only its class's type parameters, also when it is first used in generic code
+    // (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     int err = 0;
     if (!typeInfo) {

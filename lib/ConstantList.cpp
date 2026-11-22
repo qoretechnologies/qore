@@ -42,6 +42,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 #include <algorithm>
 #include <atomic>
@@ -527,6 +528,10 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     if (!builtin) {
         QoreParseContext parse_context;
         parse_context.setFlags(PF_CONST_EXPRESSION);
+
+        // the constant names only the type parameters of its class, if any, also when it is first used in generic
+        // code (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
 
         // push parse class context
         qore_class_private* p = ptr.getClass();

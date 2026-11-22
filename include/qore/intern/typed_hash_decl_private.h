@@ -58,6 +58,23 @@ private:
     const typed_hash_decl_private* old_context;
 };
 
+//! hides the type parameters of the code being parsed while a declaration is initialized on demand (qore#7136)
+/** A class, a hashdecl, a constant or a static class variable can be initialized when parsed code first uses it, for
+    example when a generic function accesses a member of an object of a class, or the value of a constant; the types
+    in the declaration must name only the type parameters of the declaration itself (set by its own initialization),
+    not those of the generic function, closure or hashdecl parsed around it, or a type declared as \c *T would name the
+    function's type parameter \c T, which no receiver of the declaration substitutes
+*/
+class DeclarationTypeParamScopeHelper {
+public:
+    DLLLOCAL DeclarationTypeParamScopeHelper() : signature_context(nullptr), hashdecl_context(nullptr) {
+    }
+
+private:
+    UserSignatureTypeParamContextHelper signature_context;
+    HashDeclTypeParamContextHelper hashdecl_context;
+};
+
 class HashDeclMemberInfo : public QoreMemberInfoBase {
 public:
     DLLLOCAL HashDeclMemberInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeInfo = nullptr,

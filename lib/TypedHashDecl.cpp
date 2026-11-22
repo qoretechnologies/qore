@@ -266,6 +266,11 @@ int typed_hash_decl_private::parseInit() {
     }
     parse_init_done = true;
 
+    // the hashdecl names only its own type parameters (set below), also when it is first used in generic code: a
+    // non-generic hashdecl's member declared as *T named the type parameter T of a generic function that used it
+    // first (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
+
     int err = 0;
 
     // Resolve parent hashdecl if specified
