@@ -73,6 +73,19 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
             checkEscaped("module-load", "TENANT-ERR: module 'ReportLoadFail' failed to load in another thread: tenant "
                 "line\\nforged line", True);
         });
+        addTestCase("the completion of an operation of the sandboxed code on the I/O thread", sub () {
+            # the operation is a test hook of debug builds
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkEscaped("completion", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("the completion of a worker step of an operation of the sandboxed code", sub () {
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkEscaped("completion-worker", "TENANT-ERR: tenant line\\nforged line");
+        });
         addTestCase("a YAML output stream of the sandboxed code", sub () {
             checkEscaped("yaml-write", "TENANT-ERR: tenant line\\nforged line");
         });
@@ -91,6 +104,12 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
         addTestCase("the host's background thread", sub () { checkHost("host-background"); });
         addTestCase("the host's pipeline on the I/O thread", sub () { checkHost("host-pipeline"); });
         addTestCase("the host's JSON stream", sub () { checkHost("host-json-stream"); });
+        addTestCase("the completion of the host's operation", sub () {
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkHost("host-completion");
+        });
         set_return_value(main());
     }
 

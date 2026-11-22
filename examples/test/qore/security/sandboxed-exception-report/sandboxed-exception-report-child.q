@@ -249,6 +249,40 @@ sub main() {
             }();
             break;
         }
+        case "completion":
+        case "completion-worker":
+        case "host-completion": {
+            # the sandboxed code submits an operation whose step fails on the I/O thread, and whose completion rejects
+            # the host's promise with the step's error on the I/O thread (qore#7286); the host gets the result of the
+            # future in a thread of its own
+            Socket listener();
+            listener.bindINET("127.0.0.1", "0", True);
+            listener.listen();
+            Socket client();
+            client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+            Socket server = listener.accept();
+            Promise pr();
+            Future f = pr.getFuture();
+            bool host = mode == "host-completion";
+            object op = dbg_completion_reject_op(server, pr, host ? "HOST-ERR" : "TENANT-ERR",
+                host ? "host line" : "tenant line" + chr(10) + "forged line", mode == "completion-worker");
+            if (host) {
+                # the host's own operation: its completion's rejection is not marked
+                AsyncIoController::submit(<SocketPollOperationInfo>{"sock": server, "spop": op, "to": -1s,
+                    "owner": "host-op"});
+            } else {
+                p.callFunction("submit_op", server, op);
+            }
+            # the socket becomes readable: the operation's second step raises its error on the I/O thread
+            client.send(<41>);
+            Counter cnt(1);
+            background sub () {
+                on_exit cnt.dec();
+                f.get();
+            }();
+            cnt.waitForZero();
+            break;
+        }
         # the host's own code: reported as before, without a mark
         case "host-timer-logger":
             set_async_io_logger(stdout_logger());

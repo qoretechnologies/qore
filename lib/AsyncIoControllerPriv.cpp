@@ -3199,6 +3199,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 || async_item.sandbox_ctx->isolation)) {
             sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
         }
+        // the item runs for code that is sandboxed or acts for sandboxed code also where its context has no sandbox
+        // to apply (module code acting for sandboxed code): its exceptions are raised for that code (qore#7286)
+        QoreExceptionOriginScope origin_scope(async_item.sandbox_ctx && async_item.sandbox_ctx->origin_sandboxed,
+            async_item.sandbox_ctx ? async_item.sandbox_ctx->origin_pgm_id : 0);
         // the item's code runs for the application of its operation (or timer): an operation that it submits belongs
         // to that application, also when no Program of the application is on this thread's stack (qore#7010)
         std::unique_ptr<AioCallbackAppScope> app_scope;
@@ -8294,6 +8298,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // an abort() dispatched to a worker is dispatched below, with the delivery of the result,
                     // which must follow it (see AbortThenDeliverTask)
                     bool async_abort = false;
+                    // the abort(), the completion and the result of the operation are raised for its submitter, as its
+                    // steps are (qore#7286)
+                    const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+                    QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+                        origin_ctx ? origin_ctx->origin_pgm_id : 0);
                     if (result.timed_out) {
                         bool worker_abort = pinfo.has_qore_abort
                             || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
@@ -10252,6 +10261,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // it is processed in place below, without registrations (see retireOp())
                             unregisterOp(t, pinfo.op_id, xsink);
 
+                            // the completion and the result of the operation are raised for its submitter (qore#7286)
+                            const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+                            QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+                                origin_ctx ? origin_ctx->origin_pgm_id : 0);
                             bool handled = pinfo.spop_base
                                 ? pinfo.spop_base->handleCompletion(false, cmd.continue_poll_ex, xsink)
                                 : false;
@@ -10695,6 +10708,10 @@ void AsyncIoControllerPriv::dispatchStreamNotifications(SocketPollOperationBase*
 }
 
 void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex) {
+    // the abort(), the completion and the result of the canceled operation are raised for its submitter (qore#7286)
+    const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+    QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+        origin_ctx ? origin_ctx->origin_pgm_id : 0);
     // an operation that the module cleanup cancels (directly, or with a command that it created: see
     // Command::module_cleanup_delegate) is canceled for the cleanup: its abort(), its onComplete() and the release of
     // its references are work that the cleanup hands over, which can enter the Programs of the modules after the

@@ -809,9 +809,10 @@ authenticate();
     a @ref Qore::Thread::Future "Future" that such code rejects (with @ref Qore::Thread::Promise::setError()
     "Promise::setError()", or by raising in @ref Qore::call_async() "call_async()"), whichever code then gets its
     result.  The library also does work for such code where no sandbox context is applied, and keeps the origin
-    there (qore#7232): the exceptions and errors of the steps of an asynchronous I/O operation that such code
-    submitted, which run on the controller's I/O thread (such as the error of a @ref Qore::PollPipeline "PollPipeline"
-    that rejects its result @ref Qore::Thread::Promise "Promise"), the failure of a module load of such code that
+    there (qore#7232, qore#7286): the exceptions and errors of an asynchronous I/O operation that such code submitted
+    (its steps on the controller's I/O thread, such as the error of a @ref Qore::PollPipeline "PollPipeline" that
+    rejects its result @ref Qore::Thread::Promise "Promise"; its completion, also when it is canceled; and the work
+    that its callback workers run for it), the failure of a module load of such code that
     another thread waits for, and the exception of a stream of such code that the \c json and \c yaml modules read
     or write.  Wherever and in
     whichever thread the library reports it (the unhandled exception report on @ref Qore::stderr "stderr" of a

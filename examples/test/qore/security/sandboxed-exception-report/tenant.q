@@ -165,3 +165,8 @@ OutputStream sub bad_output() {
 sub load_path(string path) {
     load_module(path);
 }
+
+#! submits an operation on the socket (qore#7286)
+sub submit_op(Socket server, object op) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{"sock": server, "spop": op, "to": -1s, "owner": "tenant-op"});
+}
