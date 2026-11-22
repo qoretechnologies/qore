@@ -4498,7 +4498,7 @@ void LValueRemoveHelper::deleteLValue() {
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
                     continue;
                 }
-                o->doDelete(xsink);
+                qore_operator_delete_object(o, xsink);
             }
         }
 
@@ -4513,7 +4513,7 @@ void LValueRemoveHelper::deleteLValue() {
         return;
     }
 
-    o->doDelete(xsink);
+    qore_operator_delete_object(o, xsink);
 }
 
 void LValueRemoveHelper::doRemove(QoreValue lvalue) {

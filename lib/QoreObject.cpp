@@ -224,6 +224,33 @@ void qore_object_private::setCreatorOwnership() {
     sandbox_owner.store(sandbox_provenance, std::memory_order_relaxed);
 }
 
+// returns -1 and raises an exception if the current code is sandboxed code that cannot delete the object: its sandbox
+// does not own it (qore#6842)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(const QoreObject& obj,
+        ExceptionSink* xsink) {
+    // the code that runs the delete operator: trusted code, also library code that serves sandboxed code, deletes
+    // objects through its own logic
+    const QoreProgram* pgm = getProgram();
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (!(pgm && qore_program_is_sandboxed(pgm)) && !(class_ctx && class_ctx->isSandboxedCode())) {
+        return 0;
+    }
+    const QoreSandboxContext* owner = qore_object_private::get(obj)->getSandboxOwner();
+    if (qore_sandbox_current_code_created(owner, owner)) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "sandboxed code cannot delete an object of class '%s' that "
+        "its sandbox did not create", obj.getClassName());
+    return -1;
+}
+
+void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink) {
+    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, xsink)) {
+        return;
+    }
+    o->doDelete(xsink);
+}
+
 // returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842): sandboxed code
 // (the code of a sandboxed Program), or trusted class code executing directly in a non-static method of an object that
 // a sandbox owns, if the code on the call stack is that sandbox's (it owns the object), whose ownership and provenance

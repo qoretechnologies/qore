@@ -222,6 +222,13 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Deletes an object for the delete operator: refused for sandboxed code if its sandbox does not own it (qore#6842)
+/** Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) can delete only an
+    object that its sandbox owns (qore_sandbox_current_code_created()); otherwise raises
+    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is.  The caller has checked for a system object
+*/
+DLLLOCAL void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink);
+
 //! Returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842)
 /** @param owner_provenance set to the provenance of the object in whose method trusted class code creates the object
     (which the new object takes), if that object decides; not changed for sandboxed code

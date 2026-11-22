@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Sandboxed code at the enforcement level of tenant isolation can delete only an object that its sandbox owns (issue
+# #6842): the delete operator, in each of its forms, refuses an object that the host or another tenant created, and so
+# does a call of a destructor with the reflection API; the object stays as it is.  A value that goes out of scope is
+# released as before, and code that only a sandbox at the enforcement level of code safety governs deletes as trusted
+# code does.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxObjectDeleteTest
+
+#! an object of the host
+public class HostItem {
+    public {
+        int v = 1;
+    }
+
+    #! a destructor for the reflection API to call
+    destructor() {
+    }
+}
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires reflection
+
+#! an object of the tenant that holds another object in a member
+class Holder {
+    public {
+        object o;
+    }
+}
+
+#! deletes the object with the given form of the delete operator; returns \"ok\" or the exception code
+string sub del(string form, object o) {
+    try {
+        switch (form) {
+            case \"var\": {
+                object v = o;
+                delete v;
+                break;
+            }
+            case \"hash\": {
+                hash<auto> h = {\"k\": o};
+                delete h.k;
+                break;
+            }
+            case \"list\": {
+                list<auto> l = (o,);
+                delete l[0];
+                break;
+            }
+            case \"slice\": {
+                list<auto> l = (o, 1);
+                delete l[0..0];
+                break;
+            }
+            case \"member\": {
+                Holder x();
+                x.o = o;
+                delete x.o;
+                break;
+            }
+            case \"reflection\": {
+                Reflection::Class cls = Reflection::Class::forName(\"HostItem\");
+                Reflection::DestructorMethod m = cls.getDestructorMethod();
+                m.call(o);
+                break;
+            }
+            case \"reflection-variant\": {
+                Reflection::Class cls = Reflection::Class::forName(\"HostItem\");
+                Reflection::DestructorMethodVariant v = cls.getDestructorVariant();
+                v.call(o);
+                break;
+            }
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes an object of the tenant's own
+HostItem sub make() {
+    return new HostItem();
+}
+
+#! deletes an object of the tenant's own
+string sub del_own(string form) {
+    return del(form, new HostItem());
+}
+
+#! an object of the host goes out of scope in the tenant's code
+string sub release(object o) {
+    {
+        object v = o;
+    }
+    return \"ok\";
+}
+";
+
+class SandboxObjectDeleteTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the forms of an explicit deletion
+        const Forms = ("var", "hash", "list", "slice", "member");
+
+        #! the calls of a destructor with the reflection API
+        const ReflectionForms = ("reflection", "reflection-variant");
+
+        #! the exception of a refused deletion
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+    }
+
+    constructor() : QUnit::Test("sandbox object delete", "1.0", \ARGV) {
+        foreach string mode in (keys ExecModes) {
+            addTestCase("delete in " + mode, getTest(mode));
+        }
+        set_return_value(main());
+    }
+
+    private code getTest(string mode) {
+        return sub () { deleteTest(mode); };
+    }
+
+    #! creates a tenant
+    private static Program tenant(string mode, int level = QSEL_TENANT_ISOLATION) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        SandboxManager sm();
+        sm.setEnforcementLevel(level);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! returns True if the object is not deleted
+    private static bool alive(HostItem o) {
+        try {
+            return o.v == 1;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    deleteTest(string mode) {
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+        Program c = tenant(mode, QSEL_CODE_SAFETY);
+
+        hash<auto> results;
+        hash<auto> expected;
+        foreach string form in (Forms) {
+            # an object of the host
+            HostItem host_obj();
+            results{form}."A deletes the host's object" = a.callFunction("del", form, host_obj);
+            results{form}."the host's object is alive" = alive(host_obj);
+
+            # an object of another tenant
+            HostItem b_obj = b.callFunction("make");
+            results{form}."A deletes B's object" = a.callFunction("del", form, b_obj);
+            results{form}."B's object is alive" = alive(b_obj);
+            results{form}."B deletes its own object" = alive(b_obj) ? b.callFunction("del", form, b_obj) : "deleted";
+            results{form}."B's object is alive after B" = alive(b_obj);
+
+            # an object of the tenant's own
+            results{form}."A deletes its own object" = a.callFunction("del_own", form);
+
+            # code safety: as trusted code
+            HostItem c_obj();
+            results{form}."a code-safety Program deletes the host's object" = c.callFunction("del", form, c_obj);
+            results{form}."the host's object is alive after it" = alive(c_obj);
+
+            expected{form} = {
+                "A deletes the host's object": Err,
+                "the host's object is alive": True,
+                "A deletes B's object": Err,
+                "B's object is alive": True,
+                "B deletes its own object": "ok",
+                "B's object is alive after B": False,
+                "A deletes its own object": "ok",
+                "a code-safety Program deletes the host's object": "ok",
+                "the host's object is alive after it": False,
+            };
+        }
+        assertEq(expected, results, mode + ": explicit deletions");
+
+        # a destructor called with the reflection API: refused for the objects of another sandbox and of the host
+        foreach string form in (ReflectionForms) {
+            HostItem host_obj();
+            HostItem b_obj = b.callFunction("make");
+            assertNeq("ok", a.callFunction("del", form, host_obj), mode + " " + form + ": A on the host's object");
+            assertTrue(alive(host_obj), mode + " " + form + ": the host's object is not deleted");
+            assertNeq("ok", a.callFunction("del", form, b_obj), mode + " " + form + ": A on B's object");
+            assertTrue(alive(b_obj), mode + " " + form + ": B's object is not deleted");
+        }
+
+        # an object of the host that goes out of scope in a tenant's code is released, not deleted
+        HostItem host_obj();
+        assertEq("ok", a.callFunction("release", host_obj), mode + ": release");
+        assertTrue(alive(host_obj), mode + ": the released object is not deleted");
+    }
+}

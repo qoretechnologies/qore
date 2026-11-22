@@ -18365,7 +18365,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 "cannot delete a system constant object (class '%s')", o->getClassName());
             return;
         }
-        o->doDelete(xsink);
+        qore_operator_delete_object(o, xsink);
     };
     // direct_list: the removed value is the synthetic list of elements a list index or range slice took
     // out of the container rather than a value stored in it, so "delete" applies to each element.  This
@@ -18619,7 +18619,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
                         o->getClassName());
                 } else {
-                    o->doDelete(xsink);
+                    qore_operator_delete_object(o, xsink);
                 }
             }
             // a borrowed reference (self) is not released: the caller's reference keeps the object until the

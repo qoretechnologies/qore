@@ -590,6 +590,13 @@ authenticate();
     - code that only sandboxes at the enforcement level of code safety (@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY")
       govern: the owner rules apply only to the code of a tenant (see @ref sandbox_enforcement_level)
 
+    Sandboxed code (the code of a sandboxed %Program or of a class that sandboxed code declared) cannot delete an object
+    that its sandbox did not create either: the \c delete operator, in each of its forms, raises
+    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is, in every execution mode, and so does a call of a
+    destructor with the reflection API by code that is sandboxed or acts for sandboxed code.  A value that goes out of
+    scope or that the code removes (\c remove) is released as before, and code that only sandboxes at the enforcement
+    level of code safety govern deletes objects as trusted code does.
+
     The code of such a class cannot read a non-public member of such an object either, with the same exemptions: a
     direct read (also a dynamic one, \c obj.(name), and a call through a member that holds code) is refused with
     \c SANDBOX-OBJECT-ACCESS-ERROR, and a read of the whole object (the member hash and its keys, iterators, slices, the
