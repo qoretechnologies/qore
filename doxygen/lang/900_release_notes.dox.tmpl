@@ -1321,6 +1321,11 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Classes Declared by Sandboxed Code
+    @ref Qore::SandboxManager::isSandboxDeclared() "SandboxManager::isSandboxDeclared()" tells library code whether
+    the class of an object was declared by sandboxed code, so that it can withhold objects of the server or of the
+    process from it (issue #6843).
+
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
