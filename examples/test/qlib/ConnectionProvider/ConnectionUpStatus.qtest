@@ -373,8 +373,9 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         conn.fail = True;
         assertThrows("TEST-CONNECT-ERROR", "cannot connect", \conn.ping(), True);
         assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "ping(True)");
+        # after a failed ping, a ping brings it up again (see transitionTest())
         conn.fail = False;
-        conn.get();
+        assertTrue(conn.ping().ok);
         assertTrue(conn.up);
         conn.fail = True;
         assertThrows("TEST-CONNECT-ERROR", "cannot connect", \conn.ping(), PF_THROW_EXCEPTION);
