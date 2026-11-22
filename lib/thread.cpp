@@ -7577,6 +7577,10 @@ static QoreParseOptions qore_get_calling_code_restrictions_intern(ThreadData* td
     // the restrictions of a sandboxed caller that the module code runs with (see
     // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls; under a
     // host grant, only if they were set inside it
+    // restrictions of a sandboxed caller always have a generation of their own: the generation 0 of the default and
+    // the cleared state (see RuntimeParseOptionsOverrideHelper::setCleared()) never goes with restrictions, so that a
+    // grant established in such a state counts the restrictions set inside it
+    assert(td->runtime_po_state.caller_restrictions_gen || !td->runtime_po_state.caller_restrictions);
     if (runtime && !mib
             && (!grant || td->runtime_po_state.caller_restrictions_gen != grant->caller_restrictions_gen)) {
         rv |= td->runtime_po_state.caller_restrictions;
@@ -9660,11 +9664,12 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
-    ThreadData* td = thread_data.get();
     *state = QoreRuntimePoState();
     state->po = po;
-    // a new generation, as for any setting of the restrictions (see GrantSnapshot)
-    state->caller_restrictions_gen = ++td->restriction_gen;
+    // the cleared state records no restrictions of a sandboxed caller, so it needs no generation of its own: a host
+    // grant (see GrantSnapshot) that counts them, or does not, finds none, and a later setting of restrictions inside
+    // it differs from the empty ones and takes a new generation (see set()); this is the path of every call of user
+    // code that is not module code, which costs no more than it did before qore#6844
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
