@@ -29335,6 +29335,43 @@ static QoreValue f_dbg_native_load_init_revocation(const QoreListNode* params, R
     return result.release();
 }
 
+//! Makes the next count barriers of library code on the current thread fail to be recorded for lack of memory
+/** Tests the fail-closed path of an unrecorded barrier: the module load fails, and no application Program is found
+    for module code while the barrier is active (see QoreModuleInitSandboxBarrierHelper)
+*/
+static QoreValue f_dbg_fail_next_module_init_barrier_records(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_module_init_barrier_records(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
+//! Returns the number of active barriers of library code on the current thread that could not be recorded
+static QoreValue f_dbg_module_init_barrier_unrecorded(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_dbg_module_init_barrier_unrecorded());
+}
+
+//! Calls \a call under the barrier of a library module's initialization, as a module loader sets it
+/** @return a hash with \c failed: the value of QoreModuleInitSandboxBarrierHelper::failed(), \c unrecorded: the
+    number of unrecorded barriers while the call runs, and \c result: the value that the call returns
+*/
+static QoreValue f_dbg_module_init_barrier_call(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* call = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        QoreModuleInitSandboxBarrierHelper barrier(true);
+        result->setKeyValue("failed", barrier.failed(), xsink);
+        result->setKeyValue("unrecorded", static_cast<int64>(qore_dbg_module_init_barrier_unrecorded()), xsink);
+        ValueHolder rv(call->invoke(nullptr, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        result->setKeyValue("result", rv.release(), xsink);
+    }
+    return result.release();
+}
+
 //! Returns the number of call budget frames of the current thread
 static QoreValue f_dbg_sandbox_budget_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_budget_frames();
@@ -29505,6 +29542,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_next_module_init_barrier_records", f_dbg_fail_next_module_init_barrier_records,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_module_init_barrier_unrecorded", f_dbg_module_init_barrier_unrecorded, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_module_init_barrier_call", f_dbg_module_init_barrier_call, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, autoHashTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_native_load_init_revocation", f_dbg_native_load_init_revocation, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_nested_native_load_policy", f_dbg_nested_native_load_policy, QCF_NO_FLAGS,
