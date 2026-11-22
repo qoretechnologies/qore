@@ -2306,6 +2306,15 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
 
+//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
+/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
+    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
+    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
+    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
+    qore_caller_restricts_domain(); it never answers less restricted than that
+*/
+DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
+
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
 /** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if

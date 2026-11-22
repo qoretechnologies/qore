@@ -1869,6 +1869,43 @@ static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_
     return qore_caller_restricts_domain(domain);
 }
 
+//! Returns @ref True if the code that a lent object was lent to is restricted from any of the given functional domains
+/** As isCallerRestricted(), except that a method of an object that the host lent (see @ref sandbox_lent_objects)
+    lends nothing here: inside such a method the code that the object was lent to (the borrower) counts, while the
+    host's policy barriers (callWithSystemPolicy()) and system-policy capabilities (createSystemPolicyCall()) still lend
+    what they lend.  Without a lent object's method on the stack it answers as isCallerRestricted(), and it never
+    answers less restricted than isCallerRestricted().
+
+    Library code that a lent object's methods run, and that binds what it does to what the object's creator chose, uses
+    it to recognize a restricted borrower: the object can still do what its methods do for the borrower (the lent
+    domains), but only with the target that the creator gave (for example the creator proof of
+    @ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof", which binds a lent HTTP client to its creator's
+    target, proxy and CA locations).
+
+    It reveals only whether the code is restricted, so it is not restricted itself.
+
+    @param domain the @ref functional_domain_constants "functional domains" to check, as a bitmask of \c DOM_*
+    constants; only the domains that a parse option restricts are answered
+
+    @return @ref True if the code that a lent object's method was lent to, or the calling code, is restricted from any
+    of the domains in \a domain; @ref False if not
+
+    @par Example:
+    @code{.py}
+# a client that a lent connection creates is bound to the creator's target for a restricted borrower
+if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
+    checkTargetOfCreator(url);
+}
+    @endcode
+
+    @see isCallerRestricted()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isLentToRestricted(softint domain) [flags=RET_VALUE_ONLY] {
+    return qore_caller_lent_to_restricts_domain(domain);
+}
+
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions
 /** Uses the caller check for a function or method declared with \c [dom=...]. A library module's own initialization
     is checked independently of the Program that loaded it. On an ordinary call, the caller's restrictions apply.

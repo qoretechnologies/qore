@@ -7922,6 +7922,36 @@ bool qore_caller_restricts_domain(int64 domain) {
     return qore_get_calling_code_restrictions(td).hasAny(dom);
 }
 
+//! returns the restrictions of the calling code as qore_get_calling_code_restrictions() does, except that a capability
+//! frame (a method of a lent object, qore#7052) lends nothing: the code that the object was lent to counts
+/** Fails closed: without the capability frame's boundary, the walk counts every Program and provenance frame down to
+    the host's innermost policy barrier (or to the module initialization barrier), which include the borrower's, so the
+    result is never less restricted than qore_get_calling_code_restrictions() (qore#7262)
+*/
+static QoreParseOptions qore_get_lent_to_restrictions(ThreadData* td) {
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    if (td->sandbox_policy_barrier_ctx.empty()) {
+        return qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true);
+    }
+    // the host's policy barrier (also of a system-policy capability) lends what it lends, as for the calling code
+    const QoreParseOptions lent = QoreParseOptions(QORE_GRANT_LENT_DOMAINS);
+    return (qore_get_calling_code_restrictions_intern(td, mib, &td->sandbox_policy_barrier_snapshots.back(),
+            td->sandbox_policy_barrier_ctx.back(), true) & lent)
+        | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) & ~lent);
+}
+
+bool qore_caller_lent_to_restricts_domain(int64 domain) {
+    const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!dom || !td) {
+        return false;
+    }
+    // the calling code's own restrictions count in any case, so the answer is never less restricted than theirs
+    return qore_get_calling_code_restrictions(td).hasAny(dom) || qore_get_lent_to_restrictions(td).hasAny(dom);
+}
+
 //! returns the nearest Program on the call stack that is not a module's, as qore_get_caller_domain_restrictions()
 //! walks to it, or nullptr if there is none (only module code is on the stack, or the walk stops at the barrier of
 //! the initialization of library code, or of a trusted build)
