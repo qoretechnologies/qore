@@ -5,7 +5,8 @@
 #
 # HTTPClient::getURL(), getProxyURL() and getSafeProxyURL() give an IPv6 host in brackets (RFC 3986 section 3.2.2), so
 # that the URL is not ambiguous: without them, "http://::1:8080/" could be the host "::1:8080" with the default port or
-# the host "::1" with port 8080 (issue #7236)
+# the host "::1" with port 8080; and they give the path of a UNIX domain socket with every reserved character encoded,
+# so that a path with "@", "%", ":", "#" or "?" is not read as another host, path or port (issue #7236)
 
 %modern
 
@@ -19,6 +20,7 @@ class HttpClientIpv6UrlTest inherits QUnit::Test {
         addTestCase("target URLs", \targetTest());
         addTestCase("proxy URLs", \proxyTest());
         addTestCase("hosts that are not IPv6 addresses", \otherHostTest());
+        addTestCase("UNIX domain socket paths", \socketTest());
         set_return_value(main());
     }
 
@@ -68,6 +70,40 @@ class HttpClientIpv6UrlTest inherits QUnit::Test {
         hc.setURL("https://example.com/y");
         assertEq("https://example.com/y", hc.getURL());
         hc.setURL("http://socket=%2Ftmp%2Fa.sock/z");
-        assertEq("http://socket=%2ftmp%2fa.sock/z", hc.getURL());
+        assertEq("http://socket=%2Ftmp%2Fa.sock/z", hc.getURL());
+    }
+
+    #! the path of a UNIX domain socket is given encoded, so that the URL gives exactly that path (issue #7236)
+    socketTest() {
+        list<string> paths = (
+            "/tmp/a.sock",
+            "/tmp/x-a@127.0.0.1:8080",
+            "/tmp/c%2fs",
+            "/tmp/p:1.sock",
+            "/tmp/h#x.sock",
+            "/tmp/q?x.sock",
+            "/tmp/b[1].sock",
+            "/tmp/s p+&=;$,!*'().sock",
+            "/tmp/ué.sock",
+        );
+        foreach string path in (paths) {
+            string url = "http://socket=" + encode_url(path, True);
+            HTTPClient hc({"url": url + "/r"});
+            hash<UrlInfo> u = parse_url(hc.getURL());
+            assertEq(path, u.host, "target " + path);
+            assertNothing(u.port, "target " + path);
+            assertNothing(u.username, "target " + path);
+            assertEq("/r", u.path, "target " + path);
+            # the URL of the client is a URL of the same client
+            HTTPClient again({"url": hc.getURL()});
+            assertEq(hc.getURL(), again.getURL(), "target " + path);
+
+            hc.setProxyURL(url);
+            u = parse_url(hc.getProxyURL());
+            assertEq(path, u.host, "proxy " + path);
+            assertNothing(u.port, "proxy " + path);
+            assertNothing(u.username, "proxy " + path);
+            assertEq(path, parse_url(hc.getSafeProxyURL()).host, "safe proxy " + path);
+        }
     }
 }
