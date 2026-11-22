@@ -35,6 +35,210 @@
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreObjectIntern.h"
 
+#include <deque>
+#include <map>
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace {
+// the largest number of values that one owner keeps in the cache of one Program; see setProgramCacheValue()
+constexpr int64 QORE_PROGRAM_CACHE_MAX_VALUES = 1024;
+
+// the owner name of the per-Program cache in the external data of a Program
+const char QORE_PROGRAM_CACHE_OWNER[] = "qore-program-cache";
+
+// serializes the creation of the cache of a Program
+std::mutex qore_program_cache_create_lock;
+
+// returns 0 if the code that calls the builtin may use the values of the owner in the per-Program cache: code that no
+// sandbox governs, of the Program of a class of the owner (the source Program of the owner's class or of one of its
+// base classes), or raises PROGRAM-CACHE-ERROR and returns -1
+int qore_program_cache_check_caller(const QoreObject* owner, const char* what, ExceptionSink* xsink) {
+    QoreProgram* pgm = qore_builtin_caller_program();
+    if (pgm && !qore_builtin_caller_is_sandboxed()) {
+        const qore_class_private* cls = qore_class_private::get(*owner->getClass());
+        if (cls->spgm.load() == pgm) {
+            return 0;
+        }
+        if (const BCSMList* sml = cls->getBCSMList()) {
+            for (auto& i : *sml) {
+                if (qore_class_private::get(*i.first)->spgm.load() == pgm) {
+                    return 0;
+                }
+            }
+        }
+    }
+    xsink->raiseException("PROGRAM-CACHE-ERROR", "only code that no sandbox governs, of a class of an object of class "
+        "'%s', can %s the values that the object keeps in the per-Program cache", owner->getClassName(), what);
+    return -1;
+}
+
+// The per-Program cache of library classes: values that an owner object keeps for the code of one Program
+/* Each owner has its own values, which no other owner can read; the owner object is held with a weak reference, so
+    that its address is not reused while the cache refers to it, and its values are released when it is deleted (at
+    the next change of the cache) or with the Program.  A child Program does not inherit the cache.
+*/
+class QoreProgramObjectCache : public AbstractQoreProgramExternalDataEx {
+public:
+    using AbstractQoreProgramExternalDataEx::copy;
+    using AbstractQoreProgramExternalDataEx::doDeref;
+
+    AbstractQoreProgramExternalData* copy(QoreProgram* pgm, ExceptionSink* xsink) const override {
+        return nullptr;
+    }
+
+    void doDeref(ExceptionSink* xsink) override {
+        owner_map_t owners_released;
+        {
+            std::lock_guard<std::mutex> lck(m);
+            owners_released.swap(owners);
+        }
+        for (auto& i : owners_released) {
+            release(i.second, xsink);
+        }
+        delete this;
+    }
+
+    // Returns the value of \a key that \a owner keeps, with a reference, or no value
+    QoreValue get(const QoreObject* owner, const std::string& key) {
+        std::lock_guard<std::mutex> lck(m);
+        owner_map_t::iterator i = owners.find(owner);
+        if (i == owners.end()) {
+            return QoreValue();
+        }
+        value_map_t::iterator vi = i->second.values.find(key);
+        return vi == i->second.values.end() ? QoreValue() : vi->second.refSelf();
+    }
+
+    // Sets the value of \a key for \a owner, taking the reference of \a value; keeps at most \a max values
+    /* @throw std::bad_alloc the cache is not changed, and \a value is released
+    */
+    void set(QoreObject* owner, const std::string& key, QoreValue value, int64 max, ExceptionSink* xsink) {
+        assert(max > 0);
+        // the value, released here unless it is stored
+        ValueHolder value_holder(value, xsink);
+        // the values replaced, evicted or of owners that were deleted, released without the lock, as releasing
+        // them can run code that uses the cache
+        std::vector<QoreValue> released;
+        std::vector<OwnerValues> released_owners;
+        // releases what was taken from the cache on every path out of this function, also on an exception
+        ON_BLOCK_EXIT([&released, &released_owners, xsink]() {
+            for (QoreValue& v : released) {
+                v.discard(xsink);
+            }
+            for (OwnerValues& ov : released_owners) {
+                release(ov, xsink);
+            }
+        });
+        std::lock_guard<std::mutex> lck(m);
+        // the owners that were deleted: room is made first, so that taking them cannot fail
+        size_t dead = 0;
+        for (auto& i : owners) {
+            if (i.first != owner && !i.first->isValid()) {
+                ++dead;
+            }
+        }
+        released_owners.reserve(dead);
+        for (owner_map_t::iterator i = owners.begin(); i != owners.end();) {
+            if (i->first != owner && !i->first->isValid()) {
+                released_owners.push_back(std::move(i->second));
+                i = owners.erase(i);
+            } else {
+                ++i;
+            }
+        }
+        owner_map_t::iterator i = owners.find(owner);
+        if (i == owners.end()) {
+            i = owners.emplace(owner, OwnerValues(owner)).first;
+        }
+        OwnerValues& ov = i->second;
+        value_map_t::iterator vi = ov.values.find(key);
+        // room for every value that can be released below
+        released.reserve(ov.values.size() + 1);
+        if (vi != ov.values.end()) {
+            released.push_back(vi->second);
+            vi->second = value_holder.release();
+        } else {
+            // the key is added to the order first, and removed again if the value cannot be stored
+            ov.order.push_back(key);
+            try {
+                ov.values.emplace(key, value);
+            } catch (...) {
+                ov.order.pop_back();
+                throw;
+            }
+            value_holder.release();
+        }
+        while (static_cast<int64>(ov.values.size()) > max) {
+            value_map_t::iterator ei = ov.values.find(ov.order.front());
+            ov.order.pop_front();
+            if (ei != ov.values.end()) {
+                released.push_back(ei->second);
+                ov.values.erase(ei);
+            }
+        }
+    }
+
+    // Returns the cache of \a pgm, creating it if \a create is true; nullptr if it has none
+    static QoreProgramObjectCache* getCache(QoreProgram* pgm, bool create) {
+        std::lock_guard<std::mutex> lck(qore_program_cache_create_lock);
+        QoreProgramObjectCache* cache = static_cast<QoreProgramObjectCache*>(
+            pgm->getExternalData(QORE_PROGRAM_CACHE_OWNER));
+        if (!cache && create) {
+            cache = new QoreProgramObjectCache;
+            pgm->setExternalData(QORE_PROGRAM_CACHE_OWNER, cache);
+        }
+        return cache;
+    }
+
+private:
+    typedef std::map<std::string, QoreValue> value_map_t;
+
+    // the values of an owner, and their keys in the order in which they were set
+    struct OwnerValues {
+        // the owner, held with a weak reference
+        QoreObject* owner;
+        value_map_t values;
+        std::deque<std::string> order;
+
+        OwnerValues(QoreObject* owner) : owner(owner) {
+            qore_object_private::get(*owner)->tRef();
+        }
+
+        OwnerValues(OwnerValues&& old) : owner(old.owner), values(std::move(old.values)),
+                order(std::move(old.order)) {
+            old.owner = nullptr;
+        }
+
+        OwnerValues(const OwnerValues&) = delete;
+        OwnerValues& operator=(const OwnerValues&) = delete;
+        OwnerValues& operator=(OwnerValues&&) = delete;
+
+        ~OwnerValues() {
+            // the values were released by release()
+            assert(values.empty());
+            if (owner) {
+                qore_object_private::get(*owner)->tDeref();
+            }
+        }
+    };
+
+    typedef std::map<const QoreObject*, OwnerValues> owner_map_t;
+
+    // Releases the values of an owner
+    static void release(OwnerValues& ov, ExceptionSink* xsink) {
+        for (auto& i : ov.values) {
+            i.second.discard(xsink);
+        }
+        ov.values.clear();
+    }
+
+    std::mutex m;
+    owner_map_t owners;
+};
+}
+
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
 static void qore_sandbox_check_network_connect(const char* host, int64 port, ExceptionSink* xsink) {
@@ -1716,14 +1920,18 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
     new state from the object itself (idempotently), never from data that its caller gives, and a record that undoes
     a change (such as the undo records of a type build) must refuse to run outside the operation that recorded it.
 
-    The mark cannot be removed, and any code can set it: an object that sandboxed code marks cannot be changed by
-    sandboxed code or code that acts for it afterwards, also when that code is trusted code of another class.
+    The mark cannot be removed, and only code that may share objects (see canShareObjects()) can set it: code that no
+    sandbox governs, and the code of a class of a shared object in an update scope for it, as long as it does not run
+    for sandboxed code that the scope's code called; so a shared object is always one that trusted code created or
+    built.
 
     An object held in a member of a shared object is a separate object: it is shared only if it is marked itself.  A
     copy of a shared object is not shared unless it is marked; an object that \c Serializable::deserialize() creates
     runs no constructor, so it is not marked by one.
 
     @param obj the object to mark as shared
+
+    @throw SHARED-OBJECT-ERROR the calling code cannot share objects (see canShareObjects())
 
     @par Example:
     @code{.py}
@@ -1748,7 +1956,7 @@ class SharedSchema {
     @since %Qore 3.0
 */
 static nothing SandboxManager::shareObject(object obj) {
-    qore_object_private::get(*const_cast<QoreObject*>(obj))->setShared();
+    qore_object_private::get(*const_cast<QoreObject*>(obj))->shareChecked(xsink);
 }
 
 //! Returns @ref True if the object is marked as shared by every %Program of the process
@@ -1760,6 +1968,155 @@ static nothing SandboxManager::shareObject(object obj) {
 */
 static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
     return qore_object_private::get(*obj)->isShared();
+}
+
+//! Returns @ref True if the calling code may mark objects as shared with shareObject()
+/** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it (see
+    updateSharedObject()), as long as it does not run for sandboxed code that the scope's code called.  An object
+    that such an update scope creates and caches in the shared object, such as a data type that a shared schema
+    builds for sandboxed code, is thereby shared as well.
+
+    @return @ref True if the calling code may mark objects as shared with shareObject()
+
+    @see shareObject()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::canShareObjects() {
+    return qore_caller_may_share_objects();
+}
+
+//! Returns @ref True if the code that called the calling method or function is sandboxed
+/** A method of a library class whose objects are shared by every %Program (see shareObject()) tells with it whether
+    the data that it is given comes from sandboxed code, which must not decide what the shared object keeps (such as
+    the keys of a cache), or from trusted code, including the library's own code that builds what the object keeps
+    for a sandboxed caller.  It is called directly in the method, as the method's own code: the decision is made from
+    the %Program of the code that called the method (its own sandbox manager, or the flag of a %Program that sandboxed
+    code created), not from sandboxed callers further up the call stack, so trusted code that passes on data that
+    sandboxed code gave it is responsible for it.  Code that sandboxed code created (a closure or call reference, or
+    a method of an object that sandboxed code created) runs with the provenance of its sandbox also when trusted code
+    calls it; while such code runs, the method's caller counts as sandboxed.
+
+    @return @ref True if the code that called the calling method or function is sandboxed; also @ref True if it is
+    not called directly by the code of a method or function (it fails closed)
+
+    @par Example:
+    @code{.py}
+AbstractDataProviderType getType(string spec) {
+    # a type built for a sandboxed caller from its own specification is kept for its Program only
+    if (SandboxManager::isSharedObject(self) && SandboxManager::isCalledBySandboxedCode()) {
+        return getCallerType(spec);
+    }
+    return getCachedType(spec);
+}
+    @endcode
+
+    @see isSharedObject()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCalledBySandboxedCode() {
+    return qore_method_caller_is_sandboxed();
+}
+
+//! Returns a value that the given object keeps in the per-%Program cache of the calling code, or @ref nothing
+/** see setProgramCacheValue()
+
+    @param owner the object that keeps the value; the calling code must be code that no sandbox governs, of the
+    %Program of a class of the object (of its class or of one of its base classes)
+    @param key the key of the value
+
+    @return the value set for \a key by \a owner in the cache of the calling code's %Program, or @ref nothing if
+    there is none
+
+    @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::getProgramCacheValue(object owner, string key) {
+    if (qore_program_cache_check_caller(owner, "read", xsink)) {
+        return QoreValue();
+    }
+    QoreProgram* pgm = qore_caller_cache_program();
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreProgramObjectCache* cache = QoreProgramObjectCache::getCache(pgm, false);
+    if (!cache) {
+        return QoreValue();
+    }
+    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return cache->get(owner, std::string(str->c_str(), str->size()));
+}
+
+//! Sets a value that the given object keeps in the per-%Program cache of the calling code
+/** A library class whose objects are shared by every %Program (see shareObject()) keeps what it derives from the
+    data of its caller, such as a variant of a type with the default values that a caller's REST client gives, in the
+    cache of the calling code's %Program instead of in the shared object, so that it never reaches another %Program:
+    - for sandboxed code, the cache of the innermost sandboxed %Program on the thread's call stack; for trusted code,
+      the cache of the outermost %Program of the call stack (the %Program whose code made the call); nothing is cached
+      for sandboxed code whose sandboxed %Program is not on the call stack (a sandbox inherited by a thread)
+    - each object has values of its own, which only code that no sandbox governs, of the %Program of a class of the
+      object (the %Program of its class or of one of its base classes), can read or set: the object is held with
+      a weak reference, and its values are released when it is deleted (at the next change of the cache of the
+      %Program) or when the %Program is deleted; an exception that releasing a value raises is reported to the code
+      that changes the cache or deletes the %Program
+    - an object keeps at most \a max values in the cache of a %Program (and never more than 1024): when a new value
+      exceeds it, the value that was set first is released
+    - a child %Program does not inherit the cache
+
+    The cache is thread-safe.
+
+    @param owner the object that keeps the value; the calling code must be code that no sandbox governs, of the
+    %Program of a class of the object (of its class or of one of its base classes)
+    @param key the key of the value
+    @param value the value to keep; @ref nothing removes nothing, but is kept as a value
+    @param max the largest number of values that \a owner keeps in the cache of the %Program; at most 1024
+
+    @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner, or
+    \a max is less than 1
+
+    @par Example:
+    @code{.py}
+AbstractDataProviderType getRequestType(*hash<auto> defaults) {
+    string key = "request-" + (defaults ? sprintf("%y", defaults) : "");
+    *AbstractDataProviderType t = SandboxManager::getProgramCacheValue(self, key);
+    if (!t) {
+        t = buildRequestType(defaults);
+        SandboxManager::setProgramCacheValue(self, key, t, 64);
+    }
+    return t;
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::setProgramCacheValue(object owner, string key, auto value, int max = 64) {
+    if (qore_program_cache_check_caller(owner, "set", xsink)) {
+        return QoreValue();
+    }
+    if (max < 1) {
+        xsink->raiseException("PROGRAM-CACHE-ERROR", "the largest number of values of an object in the per-Program "
+            "cache must be at least 1 (got " QLLD ")", max);
+        return QoreValue();
+    }
+    if (max > QORE_PROGRAM_CACHE_MAX_VALUES) {
+        max = QORE_PROGRAM_CACHE_MAX_VALUES;
+    }
+    QoreProgram* pgm = qore_caller_cache_program();
+    if (!pgm) {
+        return QoreValue();
+    }
+    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreProgramObjectCache::getCache(pgm, true)->set(const_cast<QoreObject*>(owner),
+        std::string(str->c_str(), str->size()), value.refSelf(), max, xsink);
+    return QoreValue();
 }
 
 //! Runs a closure that updates the state of a shared object, such as a cache that the object builds on first use

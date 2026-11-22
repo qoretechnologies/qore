@@ -1,0 +1,27 @@
+a tenant callback in a scope calls a method that changes the object: SHARED-OBJECT-ERROR, cached: "orig"
+a tenant callback in a scope calls a method that opens a scope: SHARED-OBJECT-ERROR, cached: "orig"
+a tenant callback in a scope shares an object: can share: False, SHARED-OBJECT-ERROR
+the scope changes the object after a tenant callback returns: changed, cached: "orig after the callback"
+a tenant destructor in a scope: ["the destructor in the scope: SHARED-OBJECT-ERROR"], cached: "orig"
+a tenant shares its own object: SHARED-OBJECT-ERROR, can share: False, shared: False
+trusted code: can share: True
+the caller of a method, from the tenant: a direct call: sandboxed
+the caller of a method, from the tenant: a trusted helper: trusted
+the caller of a method, from the tenant: Reflection: REFLECTION-ACCESS-ERROR
+the caller of a method, from the tenant: call_object_method(): sandboxed
+the caller of a method, from the tenant: a tenant callback that trusted code runs: sandboxed
+the caller of a method, from trusted code: trusted
+a tenant sets a value: changed
+the tenant reads it: "tenant 1"; another tenant: null; trusted code: null; another owner: null
+trusted code sets a value: trusted code reads "trusted", the tenant reads "tenant 1"
+the tenant reads or sets the values directly: ["PROGRAM-CACHE-ERROR", "PROGRAM-CACHE-ERROR", "PROGRAM-CACHE-ERROR", "PROGRAM-CACHE-ERROR"]
+trusted code of another Program reads them directly: PROGRAM-CACHE-ERROR
+trusted code of the Program of the class reads them directly: read
+5 values with a bound of 3: [null, null, 2, 3, 4]
+a bound of 0: PROGRAM-CACHE-ERROR
+1030 values with a bound of 5000: first null, 6th null, 7th 6, last 1029
+a replaced value is released: "replaced"
+a value of a deleted owner before the next change: 0
+after the next change: "of a deleted owner"
+8 threads set and read values: errors: 0
+deleting the Program releases ["released with an error", "released with the Program"], exception: "TRACKER-ERROR"

@@ -606,6 +606,24 @@ DLLLOCAL bool qore_scope_creator_is_sandboxed();
 */
 DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
+//! Returns true if the code that called the method or function calling this builtin is sandboxed
+/** For a builtin that Qore code calls directly: the frame of the calling method or function records the Program of
+    the code that called it, which is judged by its own sandbox (a sandbox manager or the flag of a Program that
+    sandboxed code created), not by sandboxed callers further up the stack, or by the provenance of code that sandboxed
+    code created and that runs on the thread; see SandboxManager::isCalledBySandboxedCode().
+    Fails closed: true if the frames are not those of a direct call; for a method called from native code (with no
+    frame of its caller), the code that runs on the thread decides (qore_caller_is_sandboxed())
+*/
+DLLLOCAL bool qore_method_caller_is_sandboxed();
+
+//! Returns true if the code that calls this builtin is sandboxed: the Program that its frame records, or the Program
+//! running on the thread; fails closed: true if the builtin's frame is not the innermost one
+DLLLOCAL bool qore_builtin_caller_is_sandboxed();
+
+//! Returns the Program of the code that calls this builtin, which its frame records, or nullptr if the builtin's frame
+//! is not the innermost one
+DLLLOCAL QoreProgram* qore_builtin_caller_program();
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
@@ -1999,6 +2017,37 @@ DLLLOCAL int qore_caller_sandbox_state();
 DLLLOCAL inline bool qore_caller_creates_shared_objects() {
     return qore_caller_sandbox_state() != 1;
 }
+
+class QoreCallerSandboxHelper;
+
+//! The point of a thread's Program context stack where code opened an update scope of a shared object
+/** see qore_thread_program_marker() and qore_thread_sandboxed_entered_since()
+*/
+struct QoreThreadProgramMarker {
+    //! the innermost Program context of the thread when the marker was taken
+    const ProgramThreadCountContextHelper* ctx = nullptr;
+    //! the sandboxed caller that a parse or module load hid when the marker was taken
+    const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
+};
+
+//! Returns the current point of the calling thread's Program context stack
+DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
+
+//! Returns true if the calling thread has entered the code of a sandboxed Program since \a marker was taken and not
+//! left it yet: the thread runs code that sandboxed code supplied (a callback, a method of a class of a sandboxed
+//! Program, a destructor), or code that such code called
+/** Fails closed: true if \a marker is not on the thread's Program context stack
+*/
+DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
+
+//! Returns the Program of the calling code whose per-Program cache a library class uses (see
+//! SandboxManager::setProgramCacheValue())
+/** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
+    outermost Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code
+    is sandboxed but no sandboxed Program is on the stack (a sandbox inherited by the thread), so that nothing is
+    cached for it
+*/
+DLLLOCAL QoreProgram* qore_caller_cache_program();
 
 #ifdef DEBUG
 //! Makes the next \a count resolutions of the sandbox that governs the thread in qore_caller_sandbox_state() fail as

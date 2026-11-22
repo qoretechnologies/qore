@@ -6928,6 +6928,65 @@ const char* thread_capability_call_refusal(const char* call_name) {
     return nullptr;
 }
 
+bool qore_builtin_caller_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the innermost frame is the builtin's own frame, whose Program is that of the code that calls it; fails closed
+    // without it
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return true;
+    }
+    return qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm);
+}
+
+QoreProgram* qore_builtin_caller_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return nullptr;
+    }
+    return own->getProgram();
+}
+
+bool qore_method_caller_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the innermost frame is the builtin's own frame, whose Program is that of the method or function that calls it;
+    // fails closed without it
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return true;
+    }
+    // the frame of that method or function, which records the Program of the code that called it (a call from native
+    // code has none: the code that runs on the thread decides)
+    const QoreStackLocation* method = own->getNext();
+    if (!method) {
+        return qore_caller_is_sandboxed();
+    }
+    if (method->getCallType() != CT_USER) {
+        return true;
+    }
+    if (qore_program_private::isSandboxed(method->getProgram())) {
+        return true;
+    }
+    // code that sandboxed code created (a closure or call reference of a sandboxed Program, a method of an object
+    // that sandboxed code created) can run in the Program of the trusted code that calls it, whose frames then record
+    // that Program: such code runs with the provenance of its sandbox (see visit_thread_provenance()), and then the
+    // method's caller can be such code, so it fails closed
+    auto any = [](QoreSandboxManager*) -> bool {
+        return false;
+    };
+    return !visit_thread_provenance(td, false, false, any);
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
@@ -7082,6 +7141,68 @@ int qore_caller_sandbox_state() {
 bool qore_caller_is_sandboxed() {
     // fails closed: code whose governing sandbox cannot be resolved is not trusted
     return qore_caller_sandbox_state() != 0;
+}
+
+QoreThreadProgramMarker qore_thread_program_marker() {
+    QoreThreadProgramMarker marker;
+    ThreadData* td = thread_data.get();
+    if (td) {
+        marker.ctx = td->current_pgm_ctx;
+        marker.sandboxed_caller = td->sandboxed_caller;
+    }
+    return marker;
+}
+
+bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // a sandboxed caller that a parse or module load started since hides from the walk below
+    if (td->sandboxed_caller && td->sandboxed_caller != marker.sandboxed_caller) {
+        return true;
+    }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return true;
+    }
+    // each Program context entered since the marker: the Program of each but the innermost is the Program that the
+    // next one left, and the Program of the innermost is the current Program, checked above
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch != marker.ctx; ch = ch->getOldContext()) {
+        // fails closed: the marker is not on the stack
+        if (!ch) {
+            return true;
+        }
+        if (ch->getOldContext() != marker.ctx && qore_program_is_sandboxed(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QoreProgram* qore_caller_cache_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return td->current_pgm;
+    }
+    QoreProgram* outer = td->current_pgm;
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        QoreProgram* pgm = ch->getOldProgram();
+        if (!pgm) {
+            continue;
+        }
+        if (qore_program_is_sandboxed(pgm)) {
+            return pgm;
+        }
+        outer = pgm;
+    }
+    // fails closed: sandboxed code whose sandboxed Program is not on the stack has no cache
+    if (qore_caller_is_sandboxed()) {
+        return nullptr;
+    }
+    return outer;
 }
 
 bool qore_thread_in_trusted_build() {

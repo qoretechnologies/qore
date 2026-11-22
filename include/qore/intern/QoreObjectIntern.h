@@ -219,6 +219,13 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Returns true if the calling code may mark objects as shared by every Program of the process
+/** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it
+    (see SandboxManager::updateSharedObject()) as long as it does not run for sandboxed code that the scope's code
+    called; fails closed as qore_caller_is_sandboxed()
+*/
+DLLLOCAL bool qore_caller_may_share_objects();
+
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
@@ -352,6 +359,11 @@ public:
         @param xsink for the exception
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
+    /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
+    */
+    DLLLOCAL int shareChecked(ExceptionSink* xsink);
 
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data,
             const QoreTypeInfo* n_instantiated_type = nullptr);

@@ -853,10 +853,12 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
 }
 
 namespace {
-//! An update scope of a shared object: the object, and the Program whose code opened it
+//! An update scope of a shared object: the object, the Program whose code changes it, and the point of the thread's
+//! Program context stack where the scope was opened
 struct SharedUpdateScope {
     const qore_object_private* obj;
     const QoreProgram* pgm;
+    QoreThreadProgramMarker marker;
 };
 
 //! The update scopes of the thread, innermost last (see SandboxManager::updateSharedObject())
@@ -867,11 +869,12 @@ thread_local std::vector<SharedUpdateScope> qore_shared_update_scopes;
 //! Ends an update scope on every path out of it
 class SharedUpdateScopeHelper {
 public:
-    DLLLOCAL SharedUpdateScopeHelper(const qore_object_private* obj, const QoreProgram* pgm) {
-        qore_shared_update_scopes.push_back({obj, pgm});
+    SharedUpdateScopeHelper(const qore_object_private* obj, const QoreProgram* pgm,
+            const QoreThreadProgramMarker& marker) {
+        qore_shared_update_scopes.push_back({obj, pgm, marker});
     }
 
-    DLLLOCAL ~SharedUpdateScopeHelper() {
+    ~SharedUpdateScopeHelper() {
         qore_shared_update_scopes.pop_back();
     }
 
@@ -893,11 +896,13 @@ int qore_object_private::checkSharedChangeIntern(const char* mem, ExceptionSink*
         return 0;
     }
     // a change in an update scope for the object, by the code of the Program that opened it: not by code that the
-    // scope's code calls in another Program, such as a callback of the caller
+    // scope's code calls in another Program, such as a callback of the caller, nor by code of the scope's Program
+    // that sandboxed code called in the scope (a callback or a destructor of sandboxed code that calls a method of
+    // the object's class)
     if (!qore_shared_update_scopes.empty()) {
         const QoreProgram* pgm = getProgram();
         for (const SharedUpdateScope& scope : qore_shared_update_scopes) {
-            if (scope.obj == this && scope.pgm == pgm) {
+            if (scope.obj == this && scope.pgm == pgm && !qore_thread_sandboxed_entered_since(scope.marker)) {
                 return 0;
             }
         }
@@ -956,13 +961,20 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
+    // a scope is not opened in code that sandboxed code called in an open scope: such code acts for sandboxed code
+    if (!qore_shared_update_scopes.empty()
+        && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
+            "for an object of class '%s'", theclass->getName());
+        return QoreValue();
+    }
     // a closure runs in an update scope once only: code that obtains it cannot run the update again
     if (!closure->takeSharedUpdate()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update closure of an object of class '%s' has already been "
             "run; an update closure runs once only", theclass->getName());
         return QoreValue();
     }
-    SharedUpdateScopeHelper scope(this, run_pgm);
+    SharedUpdateScopeHelper scope(this, run_pgm, qore_thread_program_marker());
     return update->execValue(nullptr, xsink);
 }
 
@@ -985,6 +997,28 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
         "object of class '%s' with code that is not a closure of a trusted class: the object is shared by every "
         "Program of the process", what, theclass->getName());
     return -1;
+}
+
+bool qore_caller_may_share_objects() {
+    if (!qore_caller_is_sandboxed()) {
+        return true;
+    }
+    return !qore_shared_update_scopes.empty()
+        && !qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker);
+}
+
+int qore_object_private::shareChecked(ExceptionSink* xsink) {
+    if (!qore_caller_may_share_objects()) {
+        if (qore_shared_object_trace()) {
+            fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: share an object of class '%s'\n",
+                theclass->getName());
+        }
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot mark "
+            "an object of class '%s' as shared by every Program of the process", theclass->getName());
+        return -1;
+    }
+    setShared();
+    return 0;
 }
 
 int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink* xsink) const {
