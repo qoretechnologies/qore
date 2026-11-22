@@ -233,18 +233,32 @@ public final class HttpClientCreatorProof {
 
         @return True if the origin of \a url is one that the proof allows and \a proxy_url is its proxy (or both have
         none)
+
+        A URL (\a url and \a proxy_url alike) allows nothing unless its authority is unambiguous, so that every
+        reading of it gives the same target (see unambiguousUrl()); any error in checking it allows nothing.
+
+        @since HttpClientIo 1.0 (qore#7262); qore#7236 refuses ambiguous URLs
     */
     bool allowsUrl(string url, *string proxy_url) {
-        *string key = HttpClientCreatorProof::getOrigins(url).firstKey();
-        if (!key || !origins{key}) {
+        try {
+            if (!HttpClientCreatorProof::unambiguousUrl(url)
+                    || (proxy_url.val() && !HttpClientCreatorProof::unambiguousUrl(proxy_url))) {
+                return False;
+            }
+            *string key = HttpClientCreatorProof::getOrigins(url).firstKey();
+            if (!key || !origins{key}) {
+                return False;
+            }
+            if (proxy_url.val()) {
+                # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
+                *string key = HttpClientCreatorProof::getProxyKey(proxy_url);
+                return exists proxy && key.val() && proxy == key;
+            }
+            return !exists proxy;
+        } catch (hash<ExceptionInfo> ex) {
+            # a URL that cannot be checked (one that is not valid in its encoding, for example) allows nothing
             return False;
         }
-        if (proxy_url.val()) {
-            # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
-            *string key = HttpClientCreatorProof::getProxyKey(proxy_url);
-            return exists proxy && key.val() && proxy == key;
-        }
-        return !exists proxy;
     }
 
     #! Returns True if the proof allows the given CA certificate locations
@@ -328,6 +342,71 @@ public final class HttpClientCreatorProof {
             return {};
         }
         return {HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80)): True};
+    }
+
+    #! Returns True if a URL's authority gives one target in every reading (qore#7236)
+    /** The URL that allowsUrl() checks can be the configured URL of a connection, with any credentials, or the URL
+        that a client renders from its members, which the code that was lent the connection can set (its host, port,
+        socket path, user name and password).  The text of such a URL can be read in more than one way, so the target
+        that the check derives from it must be the one that every reader (the client, parse_url(), a client that
+        splits the user information at the first or at the last \c "@") derives:
+        - the URL has a scheme and an authority (\c "scheme://authority", the authority ending at the first \c "/",
+          \c "?" or \c "#")
+        - it has one \c "@" at most, and only in the authority: then the user information before it is ignored (the
+          credentials of a configured URL are legitimate, and with a single \c "@" every reader splits the authority
+          at the same place); a second \c "@", or one after the authority (a password with \c "@host:port/" in a
+          rendered URL), makes the URL ambiguous
+        - the host and port after the user information are canonical, rebuilt from what parse_url() gives: a host
+          name or IPv4 address without a colon, an IPv6 address in brackets, and a port of digits; a UNIX domain socket
+          is \c "socket=" followed by its path with every reserved character encoded (as @ref encode_url() "encode_url(path, True)"
+          gives it), with no port; any character that the rebuilt form does not have (an unbracketed IPv6 address, an
+          encoded path that decodes to another path, a socket path with a raw \c "@" or \c "%") makes the URL
+          ambiguous
+        - a URL whose authority is not a socket authority is not parsed as a socket path
+
+        @param url the URL
+
+        @return True if the URL is unambiguous
+    */
+    private:internal static bool unambiguousUrl(string url) {
+        try {
+            *list<*string> m = url =~ x/^[A-Za-z][-A-Za-z0-9+.]*:\/\/([^\/?#]*)(.*)$/s;
+            if (!m) {
+                return False;
+            }
+            string authority = m[0] ?? "";
+            string rest = m[1] ?? "";
+            if (!authority.val() || rest =~ /@/) {
+                return False;
+            }
+            string hostport = authority;
+            int at = authority.find("@");
+            if (at >= 0) {
+                if (authority.find("@", at + 1) >= 0) {
+                    return False;
+                }
+                hostport = authority.substr(at + 1);
+            }
+            hash<auto> u = parse_url(url);
+            *string host = u.host;
+            if (!host.val()) {
+                return False;
+            }
+            bool socket_authority = hostport.lwr().equalPartial("socket=");
+            if (socket_authority) {
+                return host =~ /^\// && !u.port && hostport == "socket=" + encode_url(host, True);
+            }
+            if (host =~ /^\//) {
+                return False;
+            }
+            string expected = host =~ /:/ ? "[" + host + "]" : host;
+            if (exists u.port) {
+                expected += ":" + u.port;
+            }
+            return hostport.lwr() == expected.lwr();
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! Returns True if the host of a URL is an IPv6 address without brackets

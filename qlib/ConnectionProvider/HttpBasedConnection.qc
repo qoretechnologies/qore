@@ -663,8 +663,11 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
             # the synchronous client connects outside get() and getAsync(): code restricted from NETWORK may connect
             # only to the target of a connection that was lent to it (qore#7262), checked before connecting
             if (client.hasCallableMethod("getURL")) {
-                checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
-                    ? client.getProxyURL() : NOTHING);
+                # the target only (scheme, host and port) of a builtin client: its credentials and path, which the
+                # calling code can set, are not given to the check (qore#7236)
+                checkLentNetworkTarget(client instanceof Qore::HTTPClient
+                    ? cast<Qore::HTTPClient>(client).getURL(UC_TARGET)
+                    : client.getURL(), client.hasCallableMethod("getProxyURL") ? client.getProxyURL() : NOTHING);
             } else if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
                 throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                     "functional domain, and the target of the connection's client cannot be checked", name);
