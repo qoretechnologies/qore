@@ -557,3 +557,20 @@
    obj:*
    ...
 }
+
+# ============================================================================
+# QoreEventLoop::addAlwaysReadyEvents(): fstat() of a closed regular file
+# ============================================================================
+# The event loop deliberately fstat()s each registered regular file (an "always
+# ready" registration) to detect a file that was closed, or whose number was
+# given to another file, while it was registered; it then reports the
+# registration with an error, as poll(2) reports POLLNVAL.  The unit test
+# ut_event_loop_always_ready closes such a file on purpose, and
+# valgrind --track-fds reports the fstat() of the closed number.
+
+{
+   event_loop_always_ready_fstat_of_closed_file
+   CoreError:FdBadUse
+   fun:fstat*
+   fun:*QoreEventLoop*addAlwaysReadyEvents*
+}

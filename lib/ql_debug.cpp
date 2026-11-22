@@ -2410,6 +2410,20 @@ static void ut_dgc_scan_wait_cycle(UnitTestCounters& c) {
         "a scan does not wait for a scan that waits for it through another scan");
 }
 
+//! Returns 0 and the status of the file that a descriptor number refers to, or -1 if the number is not open
+/** The tests check numbers that may have been closed; on Linux the file is read through /proc/self/fd, so that the
+    check makes no system call on the number itself (valgrind --track-fds reports one on a closed number as an error)
+*/
+static int ut_fd_stat(int fd, struct stat* st) {
+#ifdef __linux__
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+    return ::stat(path, st);
+#else
+    return ::fstat(fd, st);
+#endif
+}
+
 //! Unregistering a file descriptor that has been closed - however it has been recycled since
 /** The async I/O controller unregisters an fd it may no longer own: a socket can be closed by
     another thread between the registration and the release, which is why remove() treats EBADF (the
@@ -5184,7 +5198,7 @@ public:
         UT_ASSERT(c, qore_owned_descriptor_hold(fd) == nullptr,
             "c-ares sockets: no new hold can be taken of a socket that c-ares closed");
         hold.reset();
-        UT_ASSERT(c, fstat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
+        UT_ASSERT(c, ut_fd_stat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
             "c-ares sockets: the socket is closed with the last hold");
 
         fd = QoreCaresSockets::asocket(AF_INET, SOCK_DGRAM, 0, &cs);
@@ -5192,7 +5206,7 @@ public:
         if (fd != ARES_SOCKET_BAD) {
             fstat(fd, &st0);
             QoreCaresSockets::aclose(fd, &cs);
-            UT_ASSERT(c, fstat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
+            UT_ASSERT(c, ut_fd_stat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
                 "c-ares sockets: a socket that is not held is closed at once");
         }
 
@@ -8419,7 +8433,7 @@ public:
                 }
             } else {
                 struct stat st;
-                if (!fstat(fd, &st)) {
+                if (!ut_fd_stat(fd, &st)) {
                     reserved.push_back(fd);
                     reserved_st.push_back(st);
                 }
@@ -8441,7 +8455,7 @@ public:
         for (size_t i = 0; i < reserved.size(); ++i) {
             // the number may have been given to another descriptor of the process since: it is not the same file
             struct stat st;
-            UT_ASSERT(c, fstat(reserved[i], &st) || st.st_ino != reserved_st[i].st_ino
+            UT_ASSERT(c, ut_fd_stat(reserved[i], &st) || st.st_ino != reserved_st[i].st_ino
                 || st.st_dev != reserved_st[i].st_dev,
                 ("a number that the operation reserved is closed when it is destroyed" + when).c_str());
         }
@@ -9151,9 +9165,9 @@ public:
                 return;
             }
             struct stat st;
-            bool open = !fstat(fd, &st) && st.st_ino == ino && st.st_dev == dev;
+            bool open = !ut_fd_stat(fd, &st) && st.st_ino == ino && st.st_dev == dev;
             // a free number goes to the next descriptor made: the I/O thread then removes that one's number
-            if (!open && fstat(fd, &st) && ::dup2(fds.probe, fd) == fd) {
+            if (!open && ut_fd_stat(fd, &st) && ::dup2(fds.probe, fd) == fd) {
                 fds.reused = true;
             }
             std::lock_guard<std::mutex> g(rlog.l);
@@ -9199,7 +9213,7 @@ public:
         ctrl->cancelByOwner(*owner, &xsink);
         xsink.clear();
         struct stat st;
-        UT_ASSERT(c, fstat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
+        UT_ASSERT(c, ut_fd_stat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
             "the owned extra fd is closed once the I/O thread has removed it");
         if (fds.reused) {
             ::close(x);
@@ -9351,7 +9365,7 @@ public:
                 }
                 UT_ASSERT(c, stepped, (std::string(v) + ": the operation runs again for the notifier").c_str());
                 struct stat st;
-                UT_ASSERT(c, fstat(owned_fd, &st) || st.st_ino != ost.st_ino || st.st_dev != ost.st_dev,
+                UT_ASSERT(c, ut_fd_stat(owned_fd, &st) || st.st_ino != ost.st_ino || st.st_dev != ost.st_dev,
                     (std::string(v) + ": the refused descriptor is closed when its owner gives it up").c_str());
             }
             SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("refused-extra-fd-unit-test"));
@@ -9424,7 +9438,7 @@ public:
                 struct stat st;
                 std::lock_guard<std::mutex> g(rlog.l);
                 rlog.removed = true;
-                rlog.open = !fstat(fd, &st) && st.st_ino == ino && st.st_dev == dev;
+                rlog.open = !ut_fd_stat(fd, &st) && st.st_ino == ino && st.st_dev == dev;
             });
             ctrl->start(&xsink);
             bool ready = !xsink && ctrl->waitReady(5000, &xsink);
@@ -9492,7 +9506,7 @@ public:
                 UT_ASSERT(c, rlog.open, (v + ": the descriptor is still open when it is removed").c_str());
             }
             struct stat st;
-            UT_ASSERT(c, fstat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
+            UT_ASSERT(c, ut_fd_stat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
                 (v + ": the descriptor is closed once the registration's hold and its owner have gone").c_str());
             if (how == ExtraFdRetire::Replace) {
                 SimpleRefHolder<QoreStringNode> owner(new QoreStringNode(owner_name));
@@ -9917,7 +9931,7 @@ public:
                 // released: the descriptor is closed now or by the last hold, not again by its destructor
                 desc.x = -1;
                 struct stat st;
-                UT_ASSERT(c, !removed || fstat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
+                UT_ASSERT(c, !removed || ut_fd_stat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
                     (v + ": the removal releases the hold, so the owner's release closes the descriptor").c_str());
             }
         }
@@ -10657,7 +10671,7 @@ private:
         // true if the descriptor number refers to the socket's own connection
         auto is_socket_descriptor = [&]() -> bool {
             struct stat st;
-            return !fstat(fd, &st) && st.st_dev == orig.st_dev && st.st_ino == orig.st_ino;
+            return !ut_fd_stat(fd, &st) && st.st_dev == orig.st_dev && st.st_ino == orig.st_ino;
         };
 
         const uint64_t op_id = 1;
