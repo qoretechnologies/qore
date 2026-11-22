@@ -3685,8 +3685,11 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
             parse_context.oflag = qore_class_private::getSelfId(*sclass);
             if (m) {
                 // the class's own call of the constructor of its base class can select a private constructor of a
-                // class that trusted code declared also in a class that sandboxed code declared (qore#6843)
-                QoreSandboxSuperCallHelper super_call(m);
+                // class that trusted code declared also in a class that sandboxed code declared: only the variant
+                // search of the call itself, not the parse of its arguments (qore#6843)
+                QoreSandboxSuperCall sc;
+                sc.constructor = m;
+                QoreSandboxSuperCallParseHelper super_call(static_cast<FunctionCallBase*>(this), sc);
                 err = parseArgsVariant(loc, parse_context, qore_method_private::get(*m)->getFunction(), nullptr);
             } else {
                 if (parse_args) {
@@ -8924,53 +8927,55 @@ int qore_class_private::parseCheckSandboxMethodAccess(const QoreProgramLocation*
     if (ma != Private || qore_method_private::get(*m)->isAbstract()) {
         return 0;
     }
-    // an override calls the version of a base class: it is called on the object of the override
-    if (base_call && parseIsSandboxSuperCall(m, class_ctx)) {
+    // an override calls the version of a base class: it is called on the object of the override, and only the variant
+    // that the override overrides can be selected (see parseGetSandboxSuperVariant())
+    if (base_call && parseGetSandboxSuperVariant(m, class_ctx)) {
         return 0;
     }
     return parseCheckSandboxPrivateAccess(loc, get(*m->getClass()), class_ctx, "method", m->getName());
 }
 
-bool qore_class_private::parseIsSandboxSuperCall(const QoreMethod* m, const qore_class_private* class_ctx) {
-    if (!m || !class_ctx || m->isStatic() || get(*m->getClass())->isClassContext(class_ctx)) {
+//! returns true if the parameter types of the two signatures are the same
+static bool sandbox_same_param_types(const AbstractFunctionSignature* a, const AbstractFunctionSignature* b) {
+    if (a->numParams() != b->numParams()) {
         return false;
     }
-    // only in the method of the class context that overrides the method: the method whose code is parsed
-    const char* code = get_parse_code();
-    if (!code || strcmp(code, m->getName())) {
-        return false;
-    }
-    const QoreMethod* lm = const_cast<qore_class_private*>(class_ctx)->parseFindLocalMethod(m->getName());
-    if (!lm || lm == m) {
-        return false;
-    }
-    // that really overrides it: one of its variants has the parameter types of a variant of the method
-    QoreFunction* lf = qore_method_private::get(*lm)->getFunction();
-    QoreFunction* bf = qore_method_private::get(*m)->getFunction();
-    lf->resolvePendingSignatures();
-    bf->resolvePendingSignatures();
-    QoreFunctionIterator li(*lf);
-    while (li.next()) {
-        const AbstractFunctionSignature* ls = li.getVariant()->getSignature();
-        QoreFunctionIterator bi(*bf);
-        while (bi.next()) {
-            const AbstractFunctionSignature* bs = bi.getVariant()->getSignature();
-            if (ls->numParams() != bs->numParams()) {
-                continue;
-            }
-            bool same = true;
-            for (unsigned i = 0; i < ls->numParams(); ++i) {
-                if (!QoreTypeInfo::equal(ls->getParamTypeInfo(i), bs->getParamTypeInfo(i))) {
-                    same = false;
-                    break;
-                }
-            }
-            if (same) {
-                return true;
-            }
+    for (unsigned i = 0; i < a->numParams(); ++i) {
+        if (!QoreTypeInfo::equal(a->getParamTypeInfo(i), b->getParamTypeInfo(i))) {
+            return false;
         }
     }
-    return false;
+    return true;
+}
+
+const AbstractQoreFunctionVariant* qore_class_private::parseGetSandboxSuperVariant(const QoreMethod* m,
+        const qore_class_private* class_ctx) {
+    if (!m || !class_ctx || m->isStatic() || get(*m->getClass())->isClassContext(class_ctx)) {
+        return nullptr;
+    }
+    // only in the code of a variant of the method of the class context that overrides the method: the code of a
+    // closure, of another method or of a constructor has no parse code variant, or the variant of another method
+    const AbstractQoreFunctionVariant* cv = get_parse_code_variant();
+    if (!cv) {
+        return nullptr;
+    }
+    assert(dynamic_cast<const MethodVariantBase*>(cv));
+    const MethodVariantBase* cmv = reinterpret_cast<const MethodVariantBase*>(cv);
+    if (!cmv->getClassPriv()->isClassContext(class_ctx) || strcmp(cmv->method()->getName(), m->getName())) {
+        return nullptr;
+    }
+    // the variant of the method with the parameter types of the variant that is parsed: the variant it overrides
+    QoreFunction* bf = qore_method_private::get(*m)->getFunction();
+    bf->resolvePendingSignatures();
+    const AbstractFunctionSignature* cs = cv->getSignature();
+    QoreFunctionIterator bi(*bf);
+    while (bi.next()) {
+        const MethodVariantBase* bv = reinterpret_cast<const MethodVariantBase*>(bi.getVariant());
+        if (sandbox_same_param_types(cs, bv->getSignature())) {
+            return bv;
+        }
+    }
+    return nullptr;
 }
 
 int qore_class_private::sandboxPathAccess(const qore_class_private& target, bool restricted) const {
@@ -8998,29 +9003,52 @@ int qore_class_private::sandboxPathAccess(const qore_class_private& target, bool
 }
 
 namespace {
-//! the method whose private variants the call parsed now may use: an override's call of its base class's version
-//! (see QoreSandboxSuperCallHelper)
-thread_local const QoreMethod* sandbox_super_call = nullptr;
+//! the private variants that the variant search made now in this thread may select (see QoreSandboxSuperCall)
+thread_local QoreSandboxSuperCall sandbox_super_call;
+//! the private variants that the variant search of the call being parsed may select
+thread_local QoreSandboxSuperCallPending sandbox_super_call_pending;
 }
 
-const QoreMethod* qore_class_private::getSandboxSuperCall() {
-    return sandbox_super_call;
-}
-
-bool qore_class_private::isSandboxSuperCall(const QoreMethod* m) {
-    const QoreMethod* sc = sandbox_super_call;
-    if (!sc || !m) {
+bool qore_class_private::isSandboxSuperCallVariant(const AbstractQoreFunctionVariant* v) {
+    const QoreSandboxSuperCall& sc = sandbox_super_call;
+    if (v == sc.variant && v) {
+        return true;
+    }
+    if (!sc.constructor) {
         return false;
     }
-    // the same method also of another copy of the declaration of its class (a class imported into the Program)
-    return m == sc || (!strcmp(m->getName(), sc->getName())
-        && get(*m->getClass())->isClassContext(get(*sc->getClass())));
+    // a constructor of the base class, also of another copy of the declaration of the class (a class imported into
+    // the Program)
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
+    return mvb->method() == sc.constructor || (!strcmp(mvb->method()->getName(), "constructor")
+        && mvb->getClassPriv()->isClassContext(get(*sc.constructor->getClass())));
 }
 
-const QoreMethod* qore_class_private::setSandboxSuperCall(const QoreMethod* m) {
-    const QoreMethod* old = sandbox_super_call;
-    sandbox_super_call = m;
+bool qore_class_private::runtimeTakeSandboxSuperCall(const AbstractQoreFunctionVariant* v, const QoreObject* self) {
+    QoreSandboxSuperCall& sc = sandbox_super_call;
+    if (!v || v != sc.variant || !self || self != sc.self) {
+        return false;
+    }
+    // used up: no other call in the scope of the setting can use it
+    sc.variant = nullptr;
+    return true;
+}
+
+QoreSandboxSuperCall qore_class_private::setSandboxSuperCall(const QoreSandboxSuperCall& sc) {
+    QoreSandboxSuperCall old = sandbox_super_call;
+    sandbox_super_call = sc;
     return old;
+}
+
+QoreSandboxSuperCallPending qore_class_private::setSandboxSuperCallPending(const QoreSandboxSuperCallPending& p) {
+    QoreSandboxSuperCallPending old = sandbox_super_call_pending;
+    sandbox_super_call_pending = p;
+    return old;
+}
+
+QoreSandboxSuperCall qore_class_private::getSandboxSuperCallPending(const void* node) {
+    const QoreSandboxSuperCallPending& p = sandbox_super_call_pending;
+    return node && p.node == node ? p.sc : QoreSandboxSuperCall();
 }
 
 void qore_class_private::initSandboxAccess() {

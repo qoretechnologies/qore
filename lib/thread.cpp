@@ -786,6 +786,8 @@ public:
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
+    // the variant whose code is being parsed when it is a method variant, otherwise nullptr (qore#6843)
+    const AbstractQoreFunctionVariant* parse_code_variant = nullptr;
     const char* parse_file = nullptr; // the current file or label being parsed
     const char* parse_source = nullptr; // the current source being parsed
     int parse_offset = 0; // the current offset in the source being parsed
@@ -4671,19 +4673,28 @@ const char* get_parse_code() {
     return (thread_data.get())->parse_code;
 }
 
-void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo, const char*& old_code,
-        const QoreTypeInfo*& old_returnTypeInfo) {
+void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
+        const AbstractQoreFunctionVariant* variant, const char*& old_code, const QoreTypeInfo*& old_returnTypeInfo,
+        const AbstractQoreFunctionVariant*& old_variant) {
     ThreadData* td = thread_data.get();
     old_code = td->parse_code;
     old_returnTypeInfo = td->parse_return_type_info;
+    old_variant = td->parse_code_variant;
     td->parse_code = parse_code;
     td->parse_return_type_info = returnTypeInfo;
+    td->parse_code_variant = variant;
 }
 
-void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo) {
+const AbstractQoreFunctionVariant* get_parse_code_variant() {
+    return (thread_data.get())->parse_code_variant;
+}
+
+void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
+        const AbstractQoreFunctionVariant* variant) {
     ThreadData* td = thread_data.get();
     td->parse_code = parse_code;
     td->parse_return_type_info = returnTypeInfo;
+    td->parse_code_variant = variant;
 }
 
 const QoreTypeInfo* parse_get_return_type_info() {

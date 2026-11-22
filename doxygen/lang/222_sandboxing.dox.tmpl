@@ -342,8 +342,9 @@ authenticate();
     nor call their private methods (see @ref sandboxed_class_private_access).  The rule covers the private variants of
     methods, the private constructors (no object of the trusted class can be created with one) and what the trusted
     class inherits privately.  The subclass can still override and implement the private methods of the trusted
-    class, call the base class's version of a method in its own override of the method, and call a private
-    constructor of its base class in its own base-class constructor call.
+    class, call the base class's version of a method in its own override of the method (only the variant that it
+    overrides, on its own object), and call a private constructor of its base class in its own base-class constructor
+    call.
 
     The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
     sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager

@@ -47,7 +47,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "jit", "tiered");
         const Programs = ("probe", "lookalike", "lookalike-internal", "library-hooks", "public-hooks", "stream-request",
-            "final-hooks", "variants-ctors", "super-call", "private-inheritance");
+            "final-hooks", "variants-ctors", "super-call", "super-call-variant", "private-inheritance");
     }
 
     constructor() : QUnit::Test("SandboxTrustedPrivateAccessTest", "1.0", \ARGV) {

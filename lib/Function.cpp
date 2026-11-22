@@ -1960,7 +1960,8 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     // receiver that is current; the parameter types of the candidates are substituted with the callee's receiver,
     // which the search takes as an argument (qore#5892)
     bool runtime_resolved = !variant;
-    if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy)) {
+    if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy,
+            self)) {
         return;
     }
     if (receiver_type_info) {
@@ -2096,9 +2097,9 @@ struct CallerReceiverScope {
 template <bool LexicalInvocation>
 __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantRetry(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-        LexicalSemanticPolicy invocation_policy, bool explicit_type_args) {
+        LexicalSemanticPolicy invocation_policy, bool explicit_type_args, const QoreObject* self) {
     CallerReceiverScope caller_receiver(explicit_type_args && restore_receiver_type_info, old_receiver_type_info);
-    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy);
+    return findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy, self);
 }
 
 CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArguments(const QoreFunction* func,
@@ -2156,7 +2157,7 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
                 explicit_type_param_instantiation = runtime_get_type_param_instantiation();
             }
             int find_rc = findVariantRetry<LexicalInvocation>(func, variant, cctx, invocation_policy,
-                old_explicit_inst);
+                old_explicit_inst, self);
             if (closure_type_args) {
                 explicit_type_param_instantiation = old_explicit_inst;
             }
@@ -2258,7 +2259,7 @@ __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const
 template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-        LexicalSemanticPolicy invocation_policy) {
+        LexicalSemanticPolicy invocation_policy, const QoreObject* self) {
     // the class context given for the call, which is none for qore_no_class_ctx() (a call reference created with no
     // class context), otherwise the class context of the code that makes the call
     const qore_class_private* class_ctx = qc ? (cctx ? qore_given_class_ctx(cctx) : runtime_get_class()) : nullptr;
@@ -2301,7 +2302,7 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
             && !qore_class_private::get(*mv->getClass())->sameClass(*qc))
             || (va == Private && qore_class_private::sandboxDeniesPrivateAccess(
                 qore_class_private::get(*mv->getClass()), class_ctx)
-                && !qore_class_private::isSandboxSuperCall(mv->method()))) {
+                && !qore_class_private::runtimeTakeSandboxSuperCall(variant, self))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
                 mv->className(), func->getName(), mv->getSignature()->getSignatureText());
             return -1;
@@ -2319,7 +2320,7 @@ const AbstractQoreFunctionVariant* CodeEvaluationHelper::findFilteredVariant(con
 
 int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx) {
-    return findVariantImpl<false>(func, variant, cctx, {});
+    return findVariantImpl<false>(func, variant, cctx, {}, nullptr);
 }
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
@@ -3375,7 +3376,7 @@ static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore
     return ((!class_ctx && va > Public) || (va == Internal && !internal_access)
         || (va == Private && class_ctx
             && qore_class_private::sandboxDeniesPrivateAccess(mvb->getClassPriv(), class_ctx)
-            && !qore_class_private::isSandboxSuperCall(mvb->method())));
+            && !qore_class_private::isSandboxSuperCallVariant(v)));
 }
 
 static const QoreParameterizedClassTypeInfo* get_receiver_owner_type_info(const QoreTypeInfo* receiver_type_info,

@@ -966,7 +966,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             }
         }
 
-        // find variant
+        // find variant: the private variants that a class that sandboxed code declared may select in the variant
+        // search of this call only, which the call set before its arguments were parsed (qore#6843)
+        QoreSandboxSuperCallHelper super_call(qore_class_private::getSandboxSuperCallPending(this));
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
         // the return type of a call whose variant is resolved at run time only because another variant could match
@@ -1202,9 +1204,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
 
-    // an override's call of the version of its base class selects the private variants also in a class that
-    // sandboxed code declared (qore#6843); out of line, as only such a call needs it
-    if (sandbox_super_call) {
+    // an override's call of the version of its base class can select the variant that it overrides also if it is
+    // private for a class that sandboxed code declared (qore#6843); out of line, as only such a call needs it
+    if (sandbox_super_variant) {
         return evalSandboxSuperCall<Lexical>(policy, self, rc, xsink);
     }
 
@@ -1228,7 +1230,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
 template <bool Lexical>
 QoreValue SelfFunctionCallNode::evalSandboxSuperCall(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc,
         ExceptionSink* xsink) const {
-    QoreSandboxSuperCallHelper super_call(method);
+    // only the call of this variant on the object of the override, once (see QoreSandboxSuperCall)
+    QoreSandboxSuperCall sc;
+    sc.variant = sandbox_super_variant;
+    sc.self = self;
+    QoreSandboxSuperCallHelper super_call(sc);
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (runtime_arg_names) {
         return execNamed(policy, self, method, method->getName(), nullptr, rc, xsink);
@@ -1459,9 +1465,12 @@ int SelfFunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     // by here, if there are no errors, the class has been initialized; an override's call of the version of a base
-    // class can select its private variants (qore#6843)
-    sandbox_super_call = method && qore_class_private::parseIsSandboxSuperCall(method, class_ctx);
-    QoreSandboxSuperCallHelper super_call(sandbox_super_call ? method : nullptr);
+    // class can select the variant that it overrides also if it is private, in the variant search of this call only
+    // (qore#6843)
+    sandbox_super_variant = method ? qore_class_private::parseGetSandboxSuperVariant(method, class_ctx) : nullptr;
+    QoreSandboxSuperCall sc;
+    sc.variant = sandbox_super_variant;
+    QoreSandboxSuperCallParseHelper super_call(static_cast<FunctionCallBase*>(this), sc);
     if (parseInitCall(val, parse_context) && !err) {
         err = -1;
     }

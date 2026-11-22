@@ -1541,6 +1541,8 @@ DLLLOCAL void qore_pop_sandbox_policy_barrier();
 
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
 DLLLOCAL const char* get_parse_code();
+//! the method variant whose code is being parsed, or nullptr when the code being parsed is not a method's (qore#6843)
+DLLLOCAL const AbstractQoreFunctionVariant* get_parse_code_variant();
 
 DLLLOCAL const AbstractStatement* get_runtime_statement();
 
@@ -2718,8 +2720,11 @@ DLLLOCAL void remove_constant(ConstantEntry* ce);
 DLLLOCAL QoreAbstractModule* set_reexport(QoreAbstractModule* m, bool current_reexport, bool& old_reexport);
 DLLLOCAL void set_reexport(QoreAbstractModule* m, bool reexport);
 
-DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo, const char*& old_code, const QoreTypeInfo*& old_returnTypeInfo);
-DLLLOCAL void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo);
+DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
+        const AbstractQoreFunctionVariant* variant, const char*& old_code, const QoreTypeInfo*& old_returnTypeInfo,
+        const AbstractQoreFunctionVariant*& old_variant);
+DLLLOCAL void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo,
+        const AbstractQoreFunctionVariant* variant);
 // sets the new type and returns the old
 DLLLOCAL const QoreTypeInfo* saveReturnTypeInfo(const QoreTypeInfo* returnTypeInfo);
 DLLLOCAL const QoreTypeInfo* getReturnTypeInfo();
@@ -4534,18 +4539,21 @@ DLLLOCAL void q_set_destructor_floor_depth(unsigned depth);
 DLLLOCAL void q_destructor_stack_floor_leave();
 //@}
 
+//! sets the code being parsed: its name, its return type and, for the code of a method variant, the variant
 class ParseCodeInfoHelper {
 private:
     const char* parse_code;
     const QoreTypeInfo* returnTypeInfo;
+    const AbstractQoreFunctionVariant* variant;
 
 public:
-    DLLLOCAL ParseCodeInfoHelper(const char* n_parse_code, const QoreTypeInfo* n_returnTypeInfo) {
-        parseSetCodeInfo(n_parse_code, n_returnTypeInfo, parse_code, returnTypeInfo);
+    DLLLOCAL ParseCodeInfoHelper(const char* n_parse_code, const QoreTypeInfo* n_returnTypeInfo,
+            const AbstractQoreFunctionVariant* n_variant = nullptr) {
+        parseSetCodeInfo(n_parse_code, n_returnTypeInfo, n_variant, parse_code, returnTypeInfo, variant);
     }
 
     DLLLOCAL ~ParseCodeInfoHelper() {
-        parseRestoreCodeInfo(parse_code, returnTypeInfo);
+        parseRestoreCodeInfo(parse_code, returnTypeInfo, variant);
     }
 };
 

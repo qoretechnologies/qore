@@ -1,0 +1,15 @@
+other-variant-of-private-override: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::hook(int)' can be found; the following variants were tested:
+   Trusted::hook()
+private-variant-from-public-override: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op(string s)
+private-variant-in-arguments: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op(string s)
+dynamic-private-variant-in-arguments: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
+   ::Trusted::op(string s)
+overridden-variant-on-other-object: METHOD-IS-PRIVATE: Trusted::hook() is private and cannot be accessed externally
+private-variant-in-constructor-arguments: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op(string s)
+overridden-private-variant: OK "tenant+hook()"
+overridden-public-variant: OK "tenant+op(string) x"
+nested-overridden-variant: OK "op(string) op(string) x"
+private-constructor-in-initializer: OK "private constructor: initializer"

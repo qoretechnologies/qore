@@ -1299,9 +1299,10 @@ protected:
             const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx,
             LexicalSemanticPolicy invocation_policy);
 
+    //! \a self is the object of the call, if any (see qore_class_private::runtimeTakeSandboxSuperCall())
     template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL int findVariantImpl(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
-            const qore_class_private* cctx, LexicalSemanticPolicy invocation_policy);
+            const qore_class_private* cctx, LexicalSemanticPolicy invocation_policy, const QoreObject* self);
 
     DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
@@ -1311,7 +1312,7 @@ protected:
     template <bool LexicalInvocation>
     DLLLOCAL QORE_INTERN_NOINLINE int findVariantRetry(const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
-            LexicalSemanticPolicy invocation_policy, bool explicit_type_args);
+            LexicalSemanticPolicy invocation_policy, bool explicit_type_args, const QoreObject* self);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 

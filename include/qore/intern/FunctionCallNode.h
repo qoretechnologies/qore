@@ -999,7 +999,7 @@ public:
 
     DLLLOCAL SelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args)
             : AbstractMethodCallNode(old, n_args), ns(old.ns), class_ctx(old.class_ctx),
-              is_copy(old.is_copy), is_abstract(old.is_abstract), sandbox_super_call(old.sandbox_super_call) {
+              is_copy(old.is_copy), is_abstract(old.is_abstract), sandbox_super_variant(old.sandbox_super_variant) {
     }
 
     DLLLOCAL int parseInitCall(QoreValue& val, QoreParseContext& parse_context);
@@ -1091,9 +1091,9 @@ protected:
     const qore_class_private* class_ctx = nullptr;
     bool is_copy;
     bool is_abstract = false;
-    //! an override's call of the version of its base class of a private method of a class that trusted code declared, in
-    //! a class that sandboxed code declared: its private variants can be selected (qore#6843)
-    bool sandbox_super_call = false;
+    //! an override's call of the version of its base class in a class that sandboxed code declared: the variant that
+    //! the override overrides, which the call can select also if it is private (qore#6843)
+    const AbstractQoreFunctionVariant* sandbox_super_variant = nullptr;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
