@@ -74,6 +74,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         bool m_debug = False;
         #! Maximum message size in bytes (0 = no limit)
         int m_max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE;
+        #! The time that an HTTP/3 send may make no progress (see ConnectHelper::sendQuicStreamData())
+        timeout m_send_timeout = CONNECT_DEFAULT_SEND_TIMEOUT;
     }
 
     #! Create a Connect handler
@@ -413,6 +415,27 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         return m_max_message_size;
     }
 
+    #! Sets the maximum time that a send on an HTTP/3 stream may wait with the client acknowledging no data
+    /** A response whose send makes no progress for this time fails with \c STREAM-SEND-TIMEOUT, and its stream is
+        cancelled, so that a client that takes no data cannot hold the handler's thread (see
+        ConnectHelper::sendQuicStreamData(), qoretechnologies/qore#7282)
+
+        @param send_timeout the time; a value less than or equal to zero waits without a limit; the default is
+        @ref CONNECT_DEFAULT_SEND_TIMEOUT
+
+        @since Connect 1.3
+    */
+    setSendTimeout(timeout send_timeout) {
+        m_send_timeout = send_timeout;
+    }
+
+    #! Returns the maximum time that a send on an HTTP/3 stream may wait with the client acknowledging no data
+    /** @since Connect 1.3
+    */
+    timeout getSendTimeout() {
+        return m_send_timeout;
+    }
+
     #! HttpServer handler entry point
     /** Routes the request based on URL path and Content-Type, then dispatches
         to the appropriate registered handler.
@@ -654,7 +677,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # can use the *Async Socket methods without a handler-thread flush.
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, (),
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -685,9 +708,8 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
         if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            }
+            # bounded by the time without progress (qoretechnologies/qore#7282)
+            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
         } else {
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
@@ -728,7 +750,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # Create server stream with pre-parsed messages
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         auto response;
         *hash<ConnectErrorInfo> error;
@@ -760,9 +782,8 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             binary encoded = codec.serialize(response);
             binary framed = ConnectHelper::frameMessage(encoded);
             if (http3) {
-                while (s.submitQuicStreamData(session_id, stream_id, framed, False) == 1) {
-                    s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-                }
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, framed, False, m_send_timeout, io_wake);
             } else {
                 s.sendHttp2StreamData(stream_id, framed, False);
             }
@@ -773,9 +794,8 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
         if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            }
+            # bounded by the time without progress (qoretechnologies/qore#7282)
+            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
         } else {
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
@@ -816,7 +836,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # Create server stream with pre-parsed messages
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -847,9 +867,8 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
         if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            }
+            # bounded by the time without progress (qoretechnologies/qore#7282)
+            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
         } else {
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.

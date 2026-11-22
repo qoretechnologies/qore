@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A Connect server's send on an HTTP/3 stream whose send buffer is full is bounded: a client that takes no data
+# makes the send fail with STREAM-SEND-TIMEOUT after the handler's send timeout without progress, and a send on a
+# stream whose connection is gone ends at once instead of retrying without end (qoretechnologies/qore#7282)
+# test-platform: macos - HTTP/3 (QUIC) server streams over TLS whose staged data is held, and their sends' waits
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires yaml
+%requires Connect
+%requires ../../TestCertificates.qm
+
+%exec-class ConnectSendStallTest
+
+class ConnectSendStallTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        Connect::ConnectHandler handler;
+        Connect::YamlConnectCodec codec();
+        string url;
+        bool h3;
+
+        #! the outcome of each response: the exception that ended its writes, and the time it took
+        Queue outcomes();
+        #! a message is pushed when the handler has started writing
+        Queue started();
+
+        #! the send timeout of the first case
+        const SendTimeout = 1s;
+        #! a message larger than a stream's send buffer takes in one submission is not needed: many fill it
+        const Message = {"data": strmul("x", 65536)};
+        #! the writes that a response makes at most; the stream's send buffer is full long before
+        const MaxWrites = 4096;
+    }
+
+    constructor() : QUnit::Test("ConnectSendStall", "1.0") {
+        addTestCase("a response that the client takes no data of fails after the send timeout", \stalledTest());
+        addTestCase("a send on a stream whose connection is gone ends at once", \closedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
+        handler = new Connect::ConnectHandler(NOTHING, codec);
+        # the response's stream is held, so that its send buffer fills; each write is timed and its end recorded
+        handler.registerServerStream("Test", "Stall",
+            sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
+                call_function("dbg_quic_hold_stream_data", stream.getSessionId(), stream.getStreamId());
+                started.push(True);
+                int start = clock_get_monotonic_us() / 1000;
+                try {
+                    for (int i = 0; i < MaxWrites; ++i) {
+                        stream.write(Message);
+                    }
+                    outcomes.push({"err": "COMPLETED", "ms": clock_get_monotonic_us() / 1000 - start});
+                } catch (hash<ExceptionInfo> ex) {
+                    outcomes.push({"err": ex.err, "desc": ex.desc, "ms": clock_get_monotonic_us() / 1000 - start});
+                    rethrow;
+                }
+            });
+        server.setHandler("connect", "", NOTHING, handler);
+        server.setDefaultHandler("connect", handler);
+        server.waitForAsyncIo();
+        try {
+            int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+                "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+            url = "https://127.0.0.1:" + port;
+            h3 = True;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        call_function("dbg_quic_release_stream_data");
+        delete server;
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the stream's data is held with a test hook of a debug build");
+        }
+        if (!h3) {
+            testSkip("HTTP/3 is not available");
+        }
+    }
+
+    tearDown() {
+        # a held stream is released, so that a send that still waits ends
+        call_function("dbg_quic_release_stream_data");
+    }
+
+    private HttpClientConnectionManager manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": 15s,
+            "request_timeout": 60s,
+        });
+    }
+
+    #! starts the request of the stalled response
+    private auto startRequest(HttpClientConnectionManager mgr) {
+        return mgr.requestAsync(url, "POST", "/Test/Stall", Connect::ConnectHelper::buildStreamRequestHeaders("yaml"),
+            Connect::ConnectHelper::frameMessage(codec.serialize({})));
+    }
+
+    stalledTest() {
+        handler.setSendTimeout(SendTimeout);
+        HttpClientConnectionManager mgr = manager();
+        on_exit delete mgr;
+        auto resp = startRequest(mgr);
+        assertTrue(started.get(30s), "the handler starts writing");
+        # the bound only guards against a send that never ends, the bug
+        *hash<auto> outcome = getOutcome(30s);
+        assertEq("STREAM-SEND-TIMEOUT", outcome.err, "the send fails after the send timeout: " + outcome.desc);
+        assertGe(SendTimeout.durationMilliseconds(), outcome.ms, "the send waited for the send timeout");
+        # the stream was cancelled: the client's request ends with an error, not after its own timeout
+        try {
+            resp.get(30s);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    closedTest() {
+        # the send timeout is long: only the end of the stream can end the send in time
+        handler.setSendTimeout(1h);
+        HttpClientConnectionManager mgr = manager();
+        auto resp = startRequest(mgr);
+        assertTrue(started.get(30s), "the handler starts writing");
+        # the connection is closed while the response's send waits for its full buffer
+        mgr.closeAll();
+        delete mgr;
+        *hash<auto> outcome = getOutcome(30s);
+        assertNeq("COMPLETED", outcome.err, "the response does not complete");
+        assertTrue(exists outcome.err, "the send ends with an error");
+    }
+
+    #! returns the outcome of the response, or @ref nothing if it does not end in time
+    private *hash<auto> getOutcome(timeout timeout_ms) {
+        try {
+            return outcomes.get(timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                return;
+            }
+            rethrow;
+        }
+    }
+}
