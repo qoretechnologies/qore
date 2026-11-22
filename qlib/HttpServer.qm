@@ -9656,7 +9656,9 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
     session (and stream) that they act on.  The code of a request's handler gets this object wherever it gets the
     socket of its request (the \c s argument of the handler's methods and \c cx."header-info".sock): a socket of its
     own that is not connected, whose QUIC methods that take a session act on the listener's socket for the handler's
-    own session only, and raise an exception for another session.  Its other methods are those of its own, unconnected
+    own session only, and raise an exception for another session; those that also take a stream act on the
+    handler's own stream only, and raise an exception for another stream, which can be a request of the same client to
+    another handler.  Its other methods are those of its own, unconnected
     socket, except these, which give what concerns the handler's own request: getQuicSessionId(), getSSLCipherName()
     and getSSLCipherVersion() (those of its session), and isQuic(), isSecure(), isOpen(), getSocketInfo() and
     getEncoding() (those of the listener's socket).  shutdown() and close() end the handler's own stream, never its
@@ -9753,25 +9755,26 @@ class Http3HandlerSocket inherits Qore::Socket {
         return real.getEncoding();
     }
 
-    # the QUIC methods that take a session act on the listener's socket for the handler's own session only
+    # the QUIC methods that take a session act on the listener's socket for the handler's own session only, and those
+    # that take a stream for the handler's own stream only
     AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, *data body) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.startPollQuicSendResponse(session_id, stream_id, status_code, headers, body);
     }
 
     nothing cancelQuicStream(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.cancelQuicStream(session_id, stream_id);
     }
 
     nothing cancelQuicStreamRead(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.cancelQuicStreamRead(session_id, stream_id);
     }
 
     nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.submitQuicResponse(session_id, stream_id, status_code, headers, body);
     }
 
@@ -9812,38 +9815,38 @@ class Http3HandlerSocket inherits Qore::Socket {
 
     AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, InputStream body, *int chunk_size) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.startPollQuicSendStreamingResponse(session_id, stream_id, status_code, headers, body, chunk_size);
     }
 
     nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.submitQuicResponseStreaming(session_id, stream_id, status_code, headers);
     }
 
     int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.submitQuicStreamWebSocketClose(session_id, stream_id, frame, end_stream);
     }
 
     *WebSocketCloseRecord getQuicStreamWebSocketCloseRecord(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
     }
 
     int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.submitQuicStreamData(session_id, stream_id, body, end_stream);
     }
 
     int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
             InputStream body) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
     }
 
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.waitForQuicStreamDrain(session_id, stream_id, timeout_ms);
     }
 
@@ -9853,87 +9856,87 @@ class Http3HandlerSocket inherits Qore::Socket {
     }
 
     nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.submitQuicConnectResponse(session_id, stream_id, status_code, headers);
     }
 
     *binary readQuicConnectStreamData(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.readQuicConnectStreamData(session_id, stream_id);
     }
 
     *binary readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout_ms = 30s) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.readQuicStreamDataBlock(session_id, stream_id, timeout_ms);
     }
 
     bool isQuicStreamComplete(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.isQuicStreamComplete(session_id, stream_id);
     }
 
     *hash<auto> getQuicStreamTrailers(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.getQuicStreamTrailers(session_id, stream_id);
     }
 
     nothing cleanupQuicStream(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.cleanupQuicStream(session_id, stream_id);
     }
 
     nothing registerQuicConnectStreamQueue(int session_id, int stream_id, Queue queue) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.registerQuicConnectStreamQueue(session_id, stream_id, queue);
     }
 
     nothing deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.deregisterQuicConnectStreamQueue(session_id, stream_id);
     }
 
     nothing registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue queue) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.registerQuicConnectStreamFrameState(session_id, stream_id, queue);
     }
 
     nothing deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.deregisterQuicConnectStreamFrameState(session_id, stream_id);
     }
 
     nothing resetQuicStream(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.resetQuicStream(session_id, stream_id);
     }
 
     nothing setQuicStreamSendLimit(int session_id, int stream_id, int limit) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.setQuicStreamSendLimit(session_id, stream_id, limit);
     }
 
     nothing submitQuicDatagram(int session_id, int stream_id, binary data) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.submitQuicDatagram(session_id, stream_id, data);
     }
 
     *binary readQuicDatagram(int session_id, int stream_id, timeout timeout_ms = 30s) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.readQuicDatagram(session_id, stream_id, timeout_ms);
     }
 
     nothing registerQuicDatagramQueue(int session_id, int stream_id, Queue queue) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.registerQuicDatagramQueue(session_id, stream_id, queue);
     }
 
     nothing unregisterQuicDatagramQueue(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         real.unregisterQuicDatagramQueue(session_id, stream_id);
     }
 
     int getQuicMaxDatagramSize(int session_id, int stream_id) {
-        checkSession(session_id);
+        checkStream(session_id, stream_id);
         return real.getQuicMaxDatagramSize(session_id, stream_id);
     }
 
@@ -9995,6 +9998,18 @@ class Http3HandlerSocket inherits Qore::Socket {
         }
         ended = False;
         return False;
+    }
+
+    #! Raises an exception unless the session and the stream are the handler's own and its stream is not closed
+    /** Another stream of the session, which can be a request of the same client to another handler, is refused as
+        any stream that is not the handler's own, whether it exists or not
+    */
+    private:internal checkStream(int session_id, int stream_id) {
+        checkSession(session_id);
+        if (stream_id != self.stream_id) {
+            throw "HTTP3-HANDLER-SOCKET-ERROR", sprintf("stream %d is not the stream of this HTTP/3 request",
+                stream_id);
+        }
     }
 
     #! Raises an exception unless the session is the handler's own and its stream is not closed

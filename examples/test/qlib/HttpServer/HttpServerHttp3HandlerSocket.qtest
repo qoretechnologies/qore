@@ -93,6 +93,7 @@ class TenantH3Handler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         int own = cx.\"header-info\".session_id;
+        int own_stream = cx.\"header-info\".stream_id;
         if (hdr.path =~ /close$/) {
             # a stream without a streaming response cannot be ended gracefully: shutdown() fails, and close() then
             # cancels it; the response is not sent
@@ -117,6 +118,13 @@ class TenantH3Handler inherits AbstractHttpRequestHandler {
             \"shutdown_notice\": try_it(sub () { s.submitQuicShutdownNotice(victim); }),
             \"shutdown_session\": try_it(sub () { s.submitQuicShutdown(victim); }),
             \"is_quic\": s.isQuic() ? \"yes\" : \"no\",
+            # the methods that take a stream act on the request's own stream only
+            \"own_stream\": try_it(sub () { s.isQuicStreamComplete(own, own_stream); }),
+            \"other_stream\": try_it(sub () { s.isQuicStreamComplete(own, own_stream + 4); }),
+            \"other_stream_cancel\": try_it(sub () { s.cancelQuicStream(own, own_stream + 4); }),
+            \"other_stream_response\": try_it(sub () {
+                s.submitQuicResponse(own, own_stream + 4, 200, NOTHING, \"x\");
+            }),
             # a live session of another client and a session that does not exist give the same error
             \"live_desc\": try_desc(sub () { s.getQuicSSLCipherName(victim); }),
             \"missing_desc\": try_desc(sub () { s.getQuicSSLCipherName(victim + 1000000); }),
@@ -401,6 +409,10 @@ list<string> sub run_race() {
             "shutdown_notice": "QUIC-SESSION-ERROR",
             "shutdown_session": "QUIC-SESSION-ERROR",
             "is_quic": "yes",
+            "own_stream": "ok",
+            "other_stream": "HTTP3-HANDLER-SOCKET-ERROR",
+            "other_stream_cancel": "HTTP3-HANDLER-SOCKET-ERROR",
+            "other_stream_response": "HTTP3-HANDLER-SOCKET-ERROR",
             # the same error for a live session of another client as for one that does not exist: no oracle
             "live_desc": "QUIC-SESSION-ERROR: session N not found",
             "missing_desc": "QUIC-SESSION-ERROR: session N not found",
