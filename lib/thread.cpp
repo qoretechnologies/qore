@@ -6054,6 +6054,9 @@ int64 qore_module_cleanup_hold_work(const std::string& where) {
         int64 id = ++work.last_handle;
         work.handles.emplace(id, where);
         ++work.count;
+        // a cleanup that waits without a time limit for the other work waits for the handles until the end of the
+        // grace period from now on
+        work.cond.broadcast();
         return id;
     } catch (std::bad_alloc&) {
         // without memory, the work is not handed over: the cleanup does not wait for it, as before

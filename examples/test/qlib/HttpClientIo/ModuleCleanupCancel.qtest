@@ -227,6 +227,15 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 "modules", mode), sub () { runDeadlineModulesCase(m); });
         }
         addTestCase("the deadline of the module cleanup is validated", \runDeadlineValidationCase());
+        addTestCase("the grace period of the work that the module cleanup hands over is validated",
+            \runHandoverGraceValidationCase());
+        foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: a handle of work of the module cleanup is released once, and is 0 outside of "
+                "such work", mode), sub () { runHandoverCase(m, "twice"); });
+            addTestCase(sprintf("%s: a handle of work of the module cleanup that is never released is waited for "
+                "until the grace period after the deadline", mode), sub () { runHandoverCase(m, "never"); });
+        }
         foreach string mode in (ExecModes) {
             string m = mode;
             addTestCase(sprintf("%s: a WebSocket client connected after the deadline of the module cleanup stops its "
@@ -470,6 +479,61 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
 
     #! a deadline that is not a non-negative integer number of milliseconds is refused with an error: the option
     #! stops the process, while the environment variable is ignored
+    #! the onComplete() of an operation that the module cleanup counts takes a handle of its work
+    #! (AsyncIoController::holdModuleCleanupWork()): outside of such work a handle is 0; a handle is released once
+    #! ("twice"); a handle that is never released ("never") is waited for until the grace period after the deadline,
+    #! after which a warning names it and the process ends with the modules left as they are (qore#7239)
+    private runHandoverCase(string mode, string handover) {
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_CLEANUP_HANDOVER_GRACE=300 "
+            "QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode,
+            shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep + "handover-client.qr"), handover),
+            \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)outside: handle 0, release: False\n", out, "outside of work of the cleanup: " + out);
+        assertRegex("(^|\n)handle taken: True\n", out, "in work of the cleanup: " + out);
+        if (handover == "twice") {
+            assertRegex("(^|\n)first release: True\nsecond release: False\n", out, "released once: " + out);
+            assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
+        } else {
+            assertRegex("(^|\n)warning: the module cleanup at the end of the process waited 300 ms after its deadline "
+                "\\(QORE_MODULE_CLEANUP_HANDOVER_GRACE\\) for 1 piece of work handed over to other threads, which did "
+                "not end; the modules are left as they are: owner 'module-cleanup-handover-never' at [^\n]*"
+                "AaHandover\\.qm:[0-9]+\n", out, "the handle is reported and no longer waited for: " + out);
+        }
+        assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
+    }
+
+    private runHandoverGraceValidationCase() {
+        foreach string value in ("abc", "-5", "1.5", "10ms", "", " 5") {
+            int status;
+            string out = backquote(sprintf("QORE_MODULE_CLEANUP_HANDOVER_GRACE=%s %s -e 'printf(\"ran\\n\");' 2>&1",
+                shellQuote(value), shellQuote(qore_bin)), \status);
+            assertEq(0, status, out);
+            assertRegex("(^|\n)error: QORE_MODULE_CLEANUP_HANDOVER_GRACE=" + reQuote("'" + value + "'") + " is not "
+                "valid: expecting a non-negative integer number of milliseconds; the default is used\n", out, value);
+            assertRegex("(^|\n)ran\n", out, value);
+
+            if (value == "") {
+                # an empty value of the option takes the next argument as its value
+                continue;
+            }
+            out = backquote(sprintf("%s --module-cleanup-handover-grace=%s -e 'printf(\"ran\\n\");' 2>&1",
+                shellQuote(qore_bin), shellQuote(value)), \status);
+            assertNeq(0, status, out);
+            assertRegex("error: invalid --module-cleanup-handover-grace value " + reQuote("'" + value + "'"), out,
+                value);
+            assertNRegex("(^|\n)ran\n", out, value);
+        }
+        foreach string value in ("0", "250", "600000") {
+            int status;
+            string out = backquote(sprintf("QORE_MODULE_CLEANUP_HANDOVER_GRACE=%s %s --module-cleanup-handover-grace=%s "
+                "-e 'printf(\"ran\\n\");' 2>&1", value, shellQuote(qore_bin), value), \status);
+            assertEq(0, status, out);
+            assertEq("ran\n", out, value);
+        }
+    }
+
     private runDeadlineValidationCase() {
         foreach string value in ("abc", "-5", "1.5", "10ms", "", " 5") {
             int status;

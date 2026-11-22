@@ -1,0 +1,99 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor submits an operation whose onComplete(), work of the module cleanup that the cleanup
+# counts, takes a handle of its work (AsyncIoController::holdModuleCleanupWork()) and releases it twice, or never;
+# see ModuleCleanupCancel.qtest (qore#7239)
+
+%modern
+
+module AaHandover {
+    version = "1.0";
+    desc = "work of the module cleanup that hands itself over with a handle";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AaHandover {
+#! an operation that reaches its goal in its first step; its onComplete() uses a handle as the mode says
+class HandoverOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool reached = False;
+        string mode;
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return reached ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        reached = True;
+        return NOTHING;
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        printf("handle taken: %y\n", handle != 0);
+        switch (mode) {
+            case "twice":
+                printf("first release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                printf("second release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                break;
+            case "never":
+                # the handle is never released: the cleanup waits for it until the grace period after its deadline
+                break;
+        }
+        flush();
+    }
+}
+
+#! submits the operation when the module cleanup deletes the module's data
+class Submitter {
+    private {
+        EventNotifier notifier();
+        string mode;
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
+    destructor() {
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new HandoverOperation(mode),
+            "owner": "module-cleanup-handover-" + mode,
+            "to": 10s,
+        });
+    }
+}
+
+#! the data of this module
+public class Holder {
+    public {
+        static *Submitter submitter;
+    }
+
+    #! outside of work of the module cleanup, a handle is 0 and has no effect
+    static start(string mode) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        printf("outside: handle %d, release: %y\n", handle, AsyncIoController::releaseModuleCleanupWork(handle));
+        flush();
+        submitter = new Submitter(mode);
+    }
+}
+}

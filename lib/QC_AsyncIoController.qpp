@@ -1343,13 +1343,16 @@ static int AsyncIoController::holdModuleCleanupWork() [flags=CONSTANT] {
         } else {
             where = "a task";
         }
-        const QoreProgramLocation& loc = get_runtime_location_safe();
-        const char* file = loc.getFile();
-        char buf[32];
-        snprintf(buf, sizeof buf, ":%d", loc.start_line);
+        // the location of the code that called this method
+        ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(0), xsink);
+        QoreStringDataHelper file(loc ? loc->getKeyValue("file") : QoreValue());
         where += " at ";
-        where += file ? file : "<unknown>";
-        where += buf;
+        where += file ? file.c_str() : "<unknown>";
+        if (loc) {
+            char buf[32];
+            snprintf(buf, sizeof buf, ":" QLLD, loc->getKeyValue("line").getAsBigInt());
+            where += buf;
+        }
     } catch (std::bad_alloc&) {
         // the handle is taken without its description
     }
