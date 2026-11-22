@@ -265,9 +265,62 @@ sub no_value_paths() {
     }
 }
 
+#! list elements at constant and variable indexes, in and out of range, from the start and from the end: an element
+#! that does not exist gives NOTHING, as an rvalue read of it does
+sub indexes() {
+    list<auto> l = ((1,), (2,), (3,));
+    auto w;
+    foreach int i in ((0, 2, 3, 7, -1, -3, -4, -9)) {
+        auto v = (w := l[i]);
+        printf("index %d: %y\n", i, v);
+    }
+    printf("constant -1: %y\n", (w := l[-1]));
+    printf("constant -5: %y\n", (w := l[-5]));
+    printf("constant 5: %y\n", (w := l[5]));
+    list<auto> e = ();
+    printf("empty list -1: %y\n", (w := e[-1]));
+    printf("empty list 0: %y\n", (w := e[0]));
+    int k = -1;
+    printf("empty list variable -1: %y\n", (w := e[k]));
+    printf("list after: %y empty list after: %y\n", l, e);
+
+    # an element made unique through a variable index: a write through the weak reference does not change the literal
+    list<auto> lit_holder = (lit(),);
+    int z = 0;
+    list<auto> wl;
+    wl := lit_holder[z];
+    wl[0].x = 12;
+    printf("variable index: %y literal %y\n", lit_holder[z], lit());
+}
+
+#! remove and delete at an index beyond the start of a list behave as before
+sub remove_delete() {
+    list<auto> l = (1, 2);
+    try {
+        auto v = remove l[-5];
+        printf("remove -5: %y l %y\n", v, l);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("remove -5: %s\n", ex.err);
+    }
+    try {
+        delete l[-5];
+        printf("delete -5: l %y\n", l);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("delete -5: %s\n", ex.err);
+    }
+    try {
+        auto v = remove l[-1];
+        printf("remove -1: %y l %y\n", v, l);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("remove -1: %s\n", ex.err);
+    }
+}
+
 literals();
 shared();
 unshared();
 edges();
 not_paths();
 no_value_paths();
+indexes();
+remove_delete();

@@ -1002,7 +1002,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     bool source_read = false;
     if (mode == AssignmentMode::Weak) {
         if (weakSourceMadeUnique()) {
-            LValueHelper source(right, xsink, true);
+            LValueHelper source(right, xsink, LValueHelper::WeakSourceAccess());
             if (*xsink) {
                 return QoreValue();
             }

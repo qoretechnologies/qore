@@ -2552,11 +2552,11 @@ if (x || y)
     type when the code is parsed: a key of a hash, an element of a list (of a value whose type cannot be a string, a
     binary or a buffer), or a public member declared in the class of the object, which has no
     @ref memberGate_methods "memberGate()" method: the member, the key or the element first gets a copy of its own.
-    Such a path is evaluated once; one that leads to no value (a missing key, an index beyond the end of a list) gives
-    @ref nothing, and a member of an object that has been deleted, or a step through a hash or a list that a weak
-    reference designates and that no longer exists, raises an exception (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR,
-    \c LIST-ERROR), as an assignment to it does.  A slice and any other path (ex: a step of a value of no type, as in <tt>w := a.k</tt> with
-    <tt>auto a</tt>) are read as before.\n<br>
+    Such a path is evaluated once; one that leads to no value (a missing key, an index beyond the end or before the
+    start of a list) gives @ref nothing, as when it is read, and a member of an object that has been deleted, or a step
+    through a hash or a list that a weak reference designates and that no longer exists, raises an exception
+    (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR, \c LIST-ERROR), as an assignment to it does.  A slice and any other
+    path (ex: a step of a value of no type, as in <tt>w := a.k</tt> with <tt>auto a</tt>) are read as before.\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
     <tt>w := new C()</tt>, and a copy that the type of the lvalue makes of a container (ex: a

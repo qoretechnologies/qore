@@ -831,6 +831,20 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
     }
 }
 
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess)
+        : vl(xsink), weak_source_resolution(true) {
+    startRemovalPath();
+    if (!exp.isNothing() && exp.hasNode()) {
+        try {
+            doLValue(exp, true);
+        } catch (...) {
+            // the lvalue can be reached through references, whose Programs the destructor leaves; it does not run
+            ref_pgms.release(nullptr);
+            throw;
+        }
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, int (*hook)(void*),
         void* hook_arg)
         : vl(xsink), root_hook(hook), root_hook_arg(hook_arg) {
@@ -890,6 +904,7 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
         read_only_resolution(o.read_only_resolution), read_value_only(o.read_value_only),
+        weak_source_resolution(o.weak_source_resolution),
         ref_list_type(o.ref_list_type), ref_decl_type(o.ref_decl_type),
 #ifdef DEBUG
         removal_path(o.removal_path),
@@ -1667,6 +1682,15 @@ static int raise_negative_list_or_buffer_index(const QoreSquareBracketsOperatorN
     return -1;
 }
 
+int LValueHelper::raiseNegativeIndex(const QoreSquareBracketsOperatorNode* op, int64 ind) {
+    // the source of a weak assignment is read as an rvalue reads it: an index beyond the start is no element, as one
+    // beyond the end is (qore#7242)
+    if (weak_source_resolution) {
+        return -1;
+    }
+    return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
+}
+
 const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cache, const QoreValue& n) {
     int8_t state = cache.state.load(std::memory_order_acquire);
     if (state >= 0) {
@@ -1852,7 +1876,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             ind += static_cast<int64>(l->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
@@ -1863,11 +1887,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             ind += static_cast<int64>(l->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
     } else if (getType() == NT_HASH) {
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
@@ -1880,7 +1904,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         ensureUnique();
         // held by the helper while the change through the weak reference is made (qore#7198)
@@ -1905,7 +1929,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             ind += static_cast<int64>(b->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
@@ -1913,7 +1937,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             return -1;
 
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
 
         // if the lvalue is not already a list, then make it one
@@ -2012,7 +2036,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             ind += static_cast<int64>(l->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
@@ -2023,11 +2047,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             ind += static_cast<int64>(l->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
     } else if (getType() == NT_HASH) {
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
@@ -2040,7 +2064,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         return qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         ensureUnique();
         // held by the helper while the change through the weak reference is made (qore#7198)
@@ -2062,7 +2086,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             ind += static_cast<int64>(b->size());
         }
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
         return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
@@ -2070,7 +2094,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             return -1;
 
         if (ind < 0) {
-            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+            return raiseNegativeIndex(op, original_ind);
         }
 
         // if the lvalue is not already a list, then make it one
@@ -3011,6 +3035,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 // a hash, also through a weak reference, takes the index as a key, as doListLValue() does
                 if (t == NT_HASH || t == NT_WEAKREF_HASH) {
                     if (idx < 0) {
+                        // the source of a weak assignment reads an index beyond the start as no element (qore#7242)
+                        if (weak_source_resolution) {
+                            return -1;
+                        }
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
@@ -3054,6 +3082,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         idx += static_cast<int64_t>(l->size());
                     }
                     if (idx < 0) {
+                        // the source of a weak assignment reads an index beyond the start as no element (qore#7242)
+                        if (weak_source_resolution) {
+                            return -1;
+                        }
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
@@ -3063,6 +3095,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         return -1;
                     }
                     if (idx < 0) {
+                        // the source of a weak assignment reads an index beyond the start as no element (qore#7242)
+                        if (weak_source_resolution) {
+                            return -1;
+                        }
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
