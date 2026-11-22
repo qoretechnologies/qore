@@ -78,6 +78,11 @@
 //! driver option registered with option flags and declared not sensitive, whose name can name a credential: its value
 //! is masked by name in the masked forms of a datasource (qore#7070)
 #define DBITEST_OPT_API_TOKEN "api_token"
+//! driver option registered with an option flag that the Qore library does not know: counted as sensitive, so its
+//! value is masked in the masked forms of a datasource (qore#7070)
+#define DBITEST_OPT_FUTURE_FLAG "future-flag"
+//! the option flag of DBITEST_OPT_FUTURE_FLAG: a bit that no Qore library defines
+#define DBITEST_OPT_FLAG_UNKNOWN (1 << 30)
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -194,6 +199,8 @@ public:
     std::string secret;
     //! the value of the "api_token" option; see DBITEST_OPT_API_TOKEN
     std::string api_token;
+    //! the value of the "future-flag" option; see DBITEST_OPT_FUTURE_FLAG
+    std::string future_flag;
     //! rows reported as affected by exec operations
     int64 rows = 1;
     //! chunk size for the simulated bounded stream
@@ -692,6 +699,11 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->api_token = str->c_str();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_FUTURE_FLAG)) {
+        QoreStringNodeValueHelper str(val);
+        conn->future_flag = str->c_str();
+        return 0;
+    }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         conn->report_session = val.getAsBool();
         return 0;
@@ -738,6 +750,9 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     }
     if (!strcmp(opt, DBITEST_OPT_API_TOKEN)) {
         return new QoreStringNode(conn->api_token);
+    }
+    if (!strcmp(opt, DBITEST_OPT_FUTURE_FLAG)) {
+        return new QoreStringNode(conn->future_flag);
     }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         return conn->report_session ? QoreValue(conn->id) : QoreValue();
@@ -962,6 +977,8 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
         "would be", stringTypeInfo, QDBI_OPT_SENSITIVE);
     methods.registerOption(DBITEST_OPT_API_TOKEN, "a string kept on the connection, declared not sensitive although "
         "its name names a credential", stringTypeInfo, 0);
+    methods.registerOption(DBITEST_OPT_FUTURE_FLAG, "a string kept on the connection, registered with an option flag "
+        "that the Qore library does not know", stringTypeInfo, DBITEST_OPT_FLAG_UNKNOWN);
     // "fault" and "rows" are registered with option flags (not sensitive), so their values can be shown in the
     // masked forms of a datasource; the other options are registered without flags, which makes no decision about
     // their sensitivity, and their values are masked (qore#7070)

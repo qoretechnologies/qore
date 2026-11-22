@@ -688,8 +688,8 @@ public:
         @param desc the description of the option
         @param type the type of the option's value, or nullptr for any type
         @param flags the option flags: @ref QDBI_OPT_SENSITIVE for an option whose value can hold a credential (a
-        password, a key or a token) or a connection string or URL that can embed one; flags unknown to the library are
-        ignored
+        password, a key or a token) or a connection string or URL that can embed one; an option registered with a flag
+        that the library does not know counts as sensitive (fail-closed)
 
         This variant is a decision about the sensitivity of the option: an option registered with it without
         @ref QDBI_OPT_SENSITIVE is the only kind whose value %Qore shows in the masked forms of a datasource, and only

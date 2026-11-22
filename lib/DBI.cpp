@@ -95,7 +95,11 @@ struct qore_dbi_mlist_private {
     DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags,
             bool declared) {
         assert(omap.find(name) == omap.end());
-        // only the flags known to this library are kept
+        // fail-closed: a flag that this library does not know (of a driver built for a later library) can mean that
+        // the value must not be shown, so the option counts as sensitive (qore#7070)
+        if (flags & ~QDBI_OPT_SENSITIVE) {
+            flags = QDBI_OPT_SENSITIVE;
+        }
         omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE, declared);
     }
 

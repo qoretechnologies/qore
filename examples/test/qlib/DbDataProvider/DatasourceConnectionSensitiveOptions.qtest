@@ -34,6 +34,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("connection strings and URLs in non-sensitive options", \credentialStrings());
         addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
         addTestCase("option names that can name a credential", \credentialNames());
+        addTestCase("option flags that the library does not know", \unknownFlags());
         set_return_value(main());
     }
 
@@ -169,5 +170,16 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("5", info.opts.rows);
         assertEq("****", c.ping().opts.api_token);
         assertFalse(sprintf("%y", info).find("abc") >= 0, sprintf("%y", info));
+    }
+
+    unknownFlags() {
+        # "future-flag" is registered with an option flag that the library does not know: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{future-flag=x,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options{"future-flag"});
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options{"future-flag"});
+        assertEq("****", info.opts{"future-flag"});
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts{"future-flag"});
     }
 }

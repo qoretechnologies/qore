@@ -21,6 +21,7 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("mask_datasource_options() values that cannot be shown", \maskOptionValues());
         addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
         addTestCase("option names that can name a credential", \credentialNames());
+        addTestCase("option flags that the library does not know", \unknownFlags());
         set_return_value(main());
     }
 
@@ -35,9 +36,11 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
     driverOptions() {
         hash<auto> h = dbi_get_driver_options("dbitest");
         assertTrue(h.secret.sensitive, "the secret option is sensitive");
+        # an option registered with a flag that the library does not know counts as sensitive
+        assertTrue(h{"future-flag"}.sensitive, "the future-flag option is sensitive");
         foreach hash<auto> i in (h.pairIterator()) {
             assertEq(Type::Boolean, i.value.sensitive.type(), i.key + ": the key is a bool");
-            if (i.key != "secret") {
+            if (i.key != "secret" && i.key != "future-flag") {
                 assertFalse(i.value.sensitive, i.key + ": not sensitive");
             }
         }
@@ -133,5 +136,17 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         assertEq("dbitest:****/****@db{api_token=****,rows=5}", mask_datasource(h, {"show_db": True,
             "show_options": True}));
         assertEq({"api_token": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
+    }
+
+    unknownFlags() {
+        # "future-flag" is registered with an option flag that the library does not know: fail-closed, the option
+        # counts as sensitive, and its value is masked in every form
+        assertTrue(dbi_get_driver_options("dbitest"){"future-flag"}.sensitive);
+        assertEq({"future-flag": "****", "rows": "5"}, mask_datasource_options("dbitest", {"future-flag": "x",
+            "rows": 5}));
+        hash<auto> h = {"type": "dbitest", "db": "db", "options": {"future-flag": "x", "rows": 5}};
+        assertEq("dbitest:****/****@db{future-flag=****,rows=5}", mask_datasource(h, {"show_db": True,
+            "show_options": True}));
+        assertEq({"future-flag": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
     }
 }
