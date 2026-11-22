@@ -1808,7 +1808,7 @@ public:
 
     //! restores the override that was in effect when the override was set, if it was set
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~RuntimeParseOptionsOverrideHelper() {
-        if (active) {
+        if (state) {
             restore();
         }
     }
@@ -1833,31 +1833,32 @@ public:
 
     //! returns true if the override has been set
     DLLLOCAL bool isSet() const {
-        return active;
+        return state;
     }
 
     //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
     //! without one, so that it can be set again
     DLLLOCAL void reset() {
-        if (active) {
+        if (state) {
             restore();
-            active = false;
+            state = nullptr;
         }
     }
 
 private:
-    //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
-    //! every call of a user variant
-    bool active = false;
-    //! the state of the thread (ThreadData::runtime_po_state)
-    QoreRuntimePoState* state;
+    //! the state of the thread (ThreadData::runtime_po_state) if the override has been set, or nullptr
+    /** The state saved below is valid only if this is set (it is written by set() and read by restore() only), so it
+        takes no initialization beyond that of its parse options: the helper is created on every call of a user
+        variant, and is in the frame of each level of a recursion of user code (CodeEvaluationHelper), so the pointer
+        is also the flag that tells whether the override has been set (tools/stack-usage-budgets.txt)
+    */
+    QoreRuntimePoState* state = nullptr;
     //! the state that set() replaced
     QoreRuntimePoState old;
 
     //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
-        assert(active);
+        assert(state);
         *state = old;
     }
 };
