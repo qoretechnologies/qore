@@ -201,11 +201,15 @@ public class SqlTestBase inherits QUnit::Test {
 
         hash<SerializationInfo> h = table.serializeToData();
 
-        # the serialized data keeps no credentials of the datasource (qore#7016): no password
+        # the serialized data keeps no credentials of the datasource (qore#7016): not its user name and password as a
+        # datasource string has them ("user/pass@"); the password alone is not searched for, as a short password can
+        # also be the name of the database or of a schema object that the serialized data names
         AbstractDatasource ds = table.getDatasource();
         *string pass = ds.getPassword();
+        *string user = ds.getUserName();
         if (pass) {
-            assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
+            assertEq(-1, sprintf("%y", h).find((user ?? "") + "/" + pass + "@"),
+                "the serialized data has no credentials of the datasource");
         }
 
         # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
