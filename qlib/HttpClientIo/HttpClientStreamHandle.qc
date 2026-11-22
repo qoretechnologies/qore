@@ -1423,6 +1423,10 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
     /** Returns the next chunk of data from the stream. The return value depends on the stream
         state:
         - \c binary or \c string: actual body data
+        - \c hash with \c "status_code" and \c "headers": the response headers; with HTTP/2 and HTTP/3 they are
+          delivered when they arrive, before any body data, also while the server sends no data and keeps the stream
+          open (ex: a server that answers an interactive stream with its status and waits for the client); see also
+          @ref getResponse()
         - \c hash with \c "end_stream": \c True: signals that the stream is complete
         - \c hash with \c "error": stream error information
         - \c NOTHING: timeout (no data within \c timeout_ms)

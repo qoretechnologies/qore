@@ -4266,6 +4266,15 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
             // a streaming response whose body is complete gets no more DATA: it is erased below, as a long-lived
             // session must not keep an entry for every streaming request it served
             if (it->second->connect_tunnel_active || (it->second->streaming && !it->second->body_complete)) {
+                // a streaming response whose headers were delivered and that has received nothing since has nothing
+                // to deliver: the stream was queued more than once (when its headers arrived, then for data that an
+                // earlier entry delivered); an event without data would look like the response headers again
+                // (qore#7285)
+                if (!it->second->connect_tunnel_active && !is_server_ && it->second->headers_delivered
+                        && it->second->body.empty() && it->second->error_message.empty()) {
+                    continue;
+                }
+                it->second->headers_delivered = true;
                 // CONNECT tunnel streams and streaming response streams must stay
                 // in streams_ for continued DATA accumulation.  Clone essential
                 // fields for the caller; move body and clear the original so the
@@ -4367,8 +4376,9 @@ void QuicSession::setStreamStreaming(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end()) {
         it->second->streaming = true;
-        if (!is_server_ && it->second->headers_complete
-                && (!it->second->body.empty() || it->second->body_complete)) {
+        // the response headers are delivered when they arrive (see h3EndHeadersCallback()); if they arrived before
+        // the stream was marked, they are delivered now, with any data received (qore#7285)
+        if (!is_server_ && it->second->headers_complete) {
             completed_streams_.push(stream_id);
             has_completed_streams_.store(true, std::memory_order_release);
         }
@@ -6181,6 +6191,18 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                     " client CONNECT headers ready (body_complete=false, tunnel open)\n",
                     (int64)stream_id);
             }
+            return 0;
+        }
+
+        // a client's streaming response delivers its headers when they arrive, also when no data comes with them
+        // (ex: a server that answers an interactive stream with its status and waits for the client), as HTTP/2 does
+        // (Http2Session::takeStreamingHeadersReadyCopy()); data that arrives before the event is taken goes with it,
+        // and the end of the stream is queued by markStreamComplete() (qore#7285)
+        if (!session->is_server_ && !fin && stream->streaming) {
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
+            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " client streaming response headers "
+                "ready\n", (int64)stream_id);
             return 0;
         }
 
