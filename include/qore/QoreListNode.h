@@ -149,6 +149,10 @@ public:
         return "list";
     }
 
+    //! Returns a mutable slot, growing the list if necessary.
+    /** For replacements that add or remove a value requiring a recursive-reference scan (such as an object,
+        closure, or container holding one), use setEntry() so the list tracks the change.
+    */
     DLLEXPORT QoreValue& getEntryReference(size_t index);
 
     //! returns the element at "index" (first element is index 0)

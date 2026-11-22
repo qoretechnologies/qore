@@ -1704,7 +1704,8 @@ public:
             return;
         }
         for (auto i = args->rbegin(), e = args->rend(); i != e; ++i) {
-            QoreValue& p = tmp.getEntryReference(i->first);
+            auto edit = tmp.editEntry(i->first);
+            QoreValue& p = edit.get();
             p.discard(xsink);
             p = i->second;
         }
@@ -2537,7 +2538,8 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
         }
         if (use_default_arg) {
             if constexpr (ArgType & ARG_DEF) {
-                QoreValue& p = tmp.getEntryReference(i);
+                auto edit = tmp.editEntry(i);
+                QoreValue& p = edit.get();
 
                 const QoreValue& exp = defaultArgList[i];
                 // a default value that is an expression is code of the callee, and is evaluated in the context of the
@@ -2628,7 +2630,8 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
                     continue;
                 }
                 // test for change or incompatibility
-                QoreValue& p = tmp.getEntryReference(i);
+                auto edit = tmp.editEntry(i);
+                QoreValue& p = edit.get();
                 if (saved) {
                     if (!*saved) {
                         saved->reset(new arg_restore_vec_t);
@@ -3952,7 +3955,7 @@ static int qore_bind_runtime_named_args(const AbstractFunctionSignature* sig, co
         }
         supplied[target] = true;
         source_to_param[i] = target;
-        bound_args->getEntryReference(target) = args->retrieveEntry(i).refSelf();
+        qore_list_private::get(**bound_args)->initEntry(target, args->retrieveEntry(i).refSelf());
     }
     return 0;
 }

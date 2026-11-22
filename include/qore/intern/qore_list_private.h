@@ -463,11 +463,18 @@ struct qore_list_private {
         return rv.release();
     }
 
-    DLLLOCAL void pushIntern(QoreValue val) {
-        getEntryReference(length) = val;
+    //! Initialize a new slot, possibly out of order when binding named arguments.
+    DLLLOCAL void initEntry(size_t index, QoreValue val) {
+        QoreValue& slot = getEntryReference(index);
+        assert(slot.isNothing());
+        slot = val;
         if (needs_scan(val)) {
             incScanCount(1);
         }
+    }
+
+    DLLLOCAL void pushIntern(QoreValue val) {
+        initEntry(length, val);
     }
 
     DLLLOCAL size_t checkOffset(ptrdiff_t offset) {
@@ -589,8 +596,7 @@ struct qore_list_private {
                 if (check(eh)) {
                     return nullptr;
                 }
-                tmp->priv->entry[i] = eh.release();
-                ++tmp->priv->length;
+                tmp->priv->pushIntern(eh.release());
             }
         } else {
             holder = l.refSelf();
@@ -636,18 +642,18 @@ struct qore_list_private {
         // add in new entries
         if (l.getType() != NT_LIST) {
             entry[offset] = holder.release();
-            if (needs_scan(l))
+            if (needs_scan(entry[offset]))
                 incScanCount(1);
         }
         else {
             qore_list_private* lst = holder->get<const QoreListNode>()->priv;
+            // Transfer the references and their scan count together.
             for (size_t i = 0; i < n; ++i) {
-                QoreValue v = lst->entry[i];
-                lst->entry[i] = QoreValue();
-                if (needs_scan(v))
-                    incScanCount(1);
-                entry[offset + i] = v;
+                entry[offset + i] = lst->entry[i];
+                lst->entry[i].clear();
             }
+            obj_count += lst->obj_count;
+            lst->obj_count = 0;
             lst->length = 0;
         }
 
@@ -683,16 +689,6 @@ struct qore_list_private {
         return l->priv->copy(true);
     }
 
-    DLLLOCAL QoreValue swapIntern(qore_offset_t offset, QoreValue val) {
-        assert(offset >= 0);
-        QoreValue& p = getEntryReference((size_t)offset);
-
-        QoreValue rv = p;
-        p = val;
-
-        return rv;
-    }
-
     DLLLOCAL QoreValue swap(qore_offset_t offset, QoreValue val) {
         QoreValue& p = getEntryReference((size_t)offset);
 
@@ -722,7 +718,7 @@ struct qore_list_private {
         entry[offset].clear();
 
         if (needs_scan(rv)) {
-            --obj_count;
+            incScanCount(-1);
         }
 
         return rv;
@@ -888,6 +884,7 @@ public:
     DLLLOCAL static void finishFree(QoreListNode& l) {
         qore_list_private* p = l.priv;
         p->length = 0;
+        p->obj_count = 0;
         if (!p->weak_hold) {
             // no weak holder can take a reference to the list (see QoreContainerWeakRefs)
             delete &l;
@@ -1004,6 +1001,31 @@ public:
     DLLLOCAL static void incScanCount(const QoreListNode& l, int dt) {
         l.priv->incScanCount(dt);
     }
+};
+
+//! Tracks a conversion that updates an entry through a reference, including its exceptional exits.
+class QoreListEntryEdit {
+public:
+    DLLLOCAL QoreListEntryEdit(qore_list_private& list, size_t index)
+            : list(list), value(list.getEntryReference(index)), scanned(needs_scan(value)) {
+    }
+
+    DLLLOCAL ~QoreListEntryEdit() {
+        bool now = needs_scan(value);
+        if (now != scanned) {
+            list.incScanCount(now ? 1 : -1);
+        }
+    }
+
+    QoreListEntryEdit(const QoreListEntryEdit&) = delete;
+    QoreListEntryEdit& operator=(const QoreListEntryEdit&) = delete;
+
+    DLLLOCAL QoreValue& get() { return value; }
+
+private:
+    qore_list_private& list;
+    QoreValue& value;
+    bool scanned;
 };
 
 #endif
