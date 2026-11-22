@@ -1334,11 +1334,11 @@
     and database name masked as \c "****", for exception messages and logs (issue #6988).
 
     @par Sensitive DBI Driver Options
-    A DBI driver declares the options whose values can hold credentials (\c QDBI_OPT_SENSITIVE in the C++ API), given
-    as the \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()", and
-    @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" masks their values where options are shown;
-    the masked forms that identify a connection show the values of the options that a loaded driver declares not
-    sensitive (see @ref datasource_mask_options; issue #7070).
+    A DBI driver registers its options with option flags (\c QDBI_OPT_SENSITIVE in the C++ API, given as the
+    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
+    that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
+    the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
+    (see @ref datasource_mask_options; issue #7070).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and

@@ -80,8 +80,12 @@
     whose value can hold a credential (a password, a key, a passphrase or a token) or a connection string or URL that
     can embed one.  The \c "sensitive" key of the option information (DBIDriver::getOptionHash()) gives the flag to
     %Qore code, and the value of a sensitive option is masked where %Qore shows the options of a datasource.  An
-    option that a driver does not declare (such as an option of a driver with @ref DBI_CAP_OPTION_PASSTHRU) is treated
-    as sensitive there.
+    option that a driver does not declare (such as an option of a driver with @ref DBI_CAP_OPTION_PASSTHRU), and an
+    option registered with qore_dbi_method_list::registerOption(const char*, const char*, const QoreTypeInfo*) without
+    option flags, which makes no decision about its sensitivity, are treated as sensitive there.  Registering an option
+    with option flags and without this flag is how a driver lets the value of the option be shown; the value of an
+    option whose name has \c "pass", \c "pwd", \c "secret", \c "token", \c "key", \c "cred", \c "conn", \c "url",
+    \c "dsn" or \c "auth" in it, without case, is masked whatever the flags.
 
     @since %Qore 3.0 (qore#7070)
 */
@@ -93,8 +97,11 @@
     @code
 #ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
     methods.registerOption("conn", "the connection string", stringTypeInfo, QDBI_OPT_SENSITIVE);
+    // not sensitive: its value can be shown
+    methods.registerOption("timezone", "the server time zone", stringTypeInfo, 0);
 #else
     methods.registerOption("conn", "the connection string", stringTypeInfo);
+    methods.registerOption("timezone", "the server time zone", stringTypeInfo);
 #endif
     @endcode
 
@@ -668,7 +675,12 @@ public:
     // covers get option
     DLLEXPORT void add(int code, q_dbi_option_get_t method);
 
-    // for registering valid options
+    //! registers a valid option without option flags
+    /** This variant makes no decision about the sensitivity of the option: the value of the option is masked where
+        %Qore shows the options of a datasource (as the value of an option that the driver does not declare); a driver
+        registers an option whose value can be shown with
+        registerOption(const char*, const char*, const QoreTypeInfo*, int) and without @ref QDBI_OPT_SENSITIVE
+    */
     DLLEXPORT void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0);
 
     //! registers a valid option with option flags
@@ -678,6 +690,12 @@ public:
         @param flags the option flags: @ref QDBI_OPT_SENSITIVE for an option whose value can hold a credential (a
         password, a key or a token) or a connection string or URL that can embed one; flags unknown to the library are
         ignored
+
+        This variant is a decision about the sensitivity of the option: an option registered with it without
+        @ref QDBI_OPT_SENSITIVE is the only kind whose value %Qore shows in the masked forms of a datasource, and only
+        as a string that a datasource string can show; the value of an option whose name has \c "pass", \c "pwd",
+        \c "secret", \c "token", \c "key", \c "cred", \c "conn", \c "url", \c "dsn" or \c "auth" in it, without
+        case, is masked whatever the flags.
 
         A driver that can be built with an older %Qore library uses this variant only if
         @ref QORE_HAVE_DBI_SENSITIVE_OPTIONS is defined.

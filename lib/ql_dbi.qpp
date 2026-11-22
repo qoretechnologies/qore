@@ -178,7 +178,8 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
     - the masked description of a datasource shows none of its options; where a datasource's options are shown,
       such as in the safe URL and the information of a \c db:// connection
-      (\c DbDataProvider::DatasourceConnection), the value of each option that its driver
+      (\c DbDataProvider::DatasourceConnection), the value of an option is shown only under the rule of
+      @ref datasource_mask_options, and every other value, such as the value of each option that its driver
       declares sensitive (the \c "sensitive" key of
       @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), that its driver does not declare, or of a
       driver that is not loaded, is shown as \c "****";
@@ -201,8 +202,7 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
         name can be a connection string of its own with credentials (a PostgreSQL conninfo string or URI, an ODBC \
         string); a database name that is shown is given in UTF-8
     |\c show_options|\c bool|the character encoding and the names of the options are shown; the value of an \
-        option is shown only if the driver is already loaded and declares the option without declaring it \
-        sensitive, and if the value can be shown (see below); every other option value is masked as \c "****"
+        option is shown only under the rule below; every other option value is masked as \c "****"
 
     The two rules side by side:
     |!Part|!Messages (the default)|!Forms that identify a connection (\c show_db, \c show_options)
@@ -212,17 +212,27 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
     |database name|\c "****"|shown
     |character encoding|not shown|shown
     |option names|not shown|shown
-    |option values|not shown|\c "****", except the values of options that the loaded driver declares not sensitive
+    |option values|not shown|\c "****", except the values of options that the loaded driver declares not \
+        sensitive (see below)
 
-    A driver option can hold a credential, such as a full connection string, so an option value is shown only if the
-    driver of the datasource is already loaded and declares the option without declaring it sensitive (the
-    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"; since %Qore 3.0,
-    issue #7070), and if the value is a string, a number or a boolean whose string form has only printable ASCII
-    characters and none of \c "@", \c "%", \c "{", \c "}", \c "(", \c ")", \c ",", \c "=", \c ";" or
-    \c "://"; the value is then given as a string.  Masking is fail-closed: every option value of a driver that is
-    not loaded, an option that the driver does not declare (such as an option of a driver that passes its options
-    through) and a sensitive option are masked, and the driver is never loaded to mask a datasource.  As the result
-    depends on the drivers that are loaded, these functions are not evaluated when the code is parsed.
+    A driver option can hold a credential, such as a full connection string, so an option value is shown only if all
+    of these hold (since %Qore 3.0, issue #7070):
+    - the driver of the datasource is already loaded (the driver is never loaded to mask a datasource)
+    - the driver registers the option with option flags, which is its decision about the sensitivity of the option,
+      and does not declare it sensitive (the \c "sensitive" key of
+      @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"); an option that a driver registers without
+      option flags (as drivers built before %Qore 3.0 do) counts as undeclared, as an option that the driver does not
+      declare (such as an option of a driver that passes its options through)
+    - the name of the option has none of \c "pass", \c "pwd", \c "secret", \c "token", \c "key", \c "cred",
+      \c "conn", \c "url", \c "dsn" or \c "auth" in it, without case, whatever the driver declares
+    - the value is a string, a number or a boolean whose string form has only printable ASCII characters and none of
+      \c "@", \c "%", \c "{", \c "}", \c "(", \c ")", \c ",", \c "=", \c ";" or \c "://", so that a URL or a
+      connection string with credentials is not shown; the value is then given as a string
+
+    Masking is fail-closed: every other option value is masked.  The same rule applies to every form: the masked
+    string and hash, the safe URL and the information and ping results of a \c db:// connection, and
+    @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()".  As the result depends on the drivers that
+    are loaded, these functions are not evaluated when the code is parsed.
 
     (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@orders%dbhost:5432{min=****}</tt> if the \c pgsql driver is not
     loaded)
@@ -527,15 +537,17 @@ string mask_datasource(hash<auto> config, *hash<auto> opts) [flags=RET_VALUE_ONL
 }
 
 //! Returns the options of a datasource for display, with the value of each sensitive option masked
-/** The value of an option is shown only if the DBI driver \a driver is already loaded and declares the option without
-    declaring it sensitive (see the \c "sensitive" key of
-    @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and only as a string, if it is a string, a
-    number or a boolean whose string form can be shown in a datasource string (only printable ASCII characters and
-    none of \c "@", \c "%", \c "{", \c "}", \c "(", \c ")", \c ",", \c "=", \c ";" or \c "://", as in the masked
-    forms of a datasource; see @ref datasource_mask_options); every other value is replaced with \c "****": the value
-    of a sensitive option (a credential, or a connection string or URL that can embed one), a value that cannot be
-    shown (such as a URL or a connection string, a hash or a list), the value of an option that the driver does not
-    declare and of every option of a driver that is not loaded.  The driver is never loaded by this function.
+/** The value of an option is shown only under the rule of the masked forms of a datasource (see
+    @ref datasource_mask_options): if the DBI driver \a driver is already loaded and registers the option with option
+    flags without declaring it sensitive (see the \c "sensitive" key of
+    @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), if the name of the option names no
+    credential, and only as a string, if it is a string, a number or a boolean whose string form can be shown in a
+    datasource string; every other value is replaced with \c "****": the value of a sensitive option (a credential,
+    or a connection string or URL that can embed one), of an option whose name has \c "pass", \c "pwd",
+    \c "secret", \c "token", \c "key", \c "cred", \c "conn", \c "url", \c "dsn" or \c "auth" in it, a value that
+    cannot be shown (such as a URL or a connection string, a hash or a list), the value of an option that the driver
+    registers without option flags or does not declare, and of every option of a driver that is not loaded.  The
+    driver is never loaded by this function.
 
     @param driver the name of the DBI driver of the datasource
     @param options the options of the datasource (as in the \c "options" key of a
