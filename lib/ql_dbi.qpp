@@ -183,6 +183,11 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), that its driver does not declare, or of a
       driver that is not loaded, is shown as \c "****";
       @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" gives these options to Qore code
+    - where the database name of a datasource is shown, such as in the safe URL and the information of a \c db://
+      connection, it is shown as \c "****" if its driver declares that its database name can hold credentials
+      (@ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME"; for example a driver whose database name
+      is a connection URL) or if its driver is not loaded (fail-closed: the capabilities of a driver are known only
+      once it is loaded); @ref Qore::SQL::mask_datasource_dbname() "mask_datasource_dbname()" gives it to Qore code
     - the debug output of URL parsing shows no URL or password
 
     A datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the text
@@ -504,6 +509,44 @@ hash<auto> h = mask_datasource_options("odbc", {"conn": "DSN=x;PWD=secret", "tim
 hash<auto> mask_datasource_options(string driver, *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // a driver name with a NUL character is not a driver name: every value is masked
     return q_dbi_mask_options(strlen(driver->c_str()) == driver->size() ? driver->c_str() : nullptr, options);
+}
+
+//! Returns the database name of a datasource for display, masked if it can hold credentials
+/** The database name is kept only if the DBI driver \a driver is already loaded and does not declare that its
+    database name can hold credentials (@ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME"); otherwise
+    it is replaced with \c "****": the database name of a driver with this capability (such as a driver whose database
+    name is a connection URL) and of a driver that is not loaded (fail-closed).  The driver is never loaded by this
+    function.
+
+    @param driver the name of the DBI driver of the datasource
+    @param db the database name of the datasource (as in the \c "db" key of a
+    @ref datasource_hash "datasource hash")
+
+    @return \a db, or \c "****" if it cannot be shown; no value or an empty string is returned as given
+
+    @par Example:
+    @code{.py}
+# "****": the jdbc driver declares DBI_CAP_SENSITIVE_DBNAME (and the database name is masked if it is not loaded)
+*string db = mask_datasource_dbname("jdbc", "firebird://localhost/db?password=secret");
+    @endcode
+
+    @note this function never throws an exception
+
+    @see
+    - @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"
+    - @ref datasource_secrets
+
+    @since %Qore 3.0
+*/
+*string mask_datasource_dbname(string driver, *string db) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!db || db->empty()) {
+        return db ? db->stringRefSelf() : QoreValue();
+    }
+    // a driver name with a NUL character is not a driver name: the database name is masked
+    if (strlen(driver->c_str()) == driver->size() && q_dbi_dbname_showable(driver->c_str())) {
+        return db->stringRefSelf();
+    }
+    return new QoreStringNode(QORE_DS_MASK);
 }
 ///@}
 

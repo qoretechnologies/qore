@@ -79,6 +79,7 @@
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
 static DBIDriver* DBID_DBITEST_LEGACY_CLOSE = nullptr;
+static DBIDriver* DBID_DBITEST_SENSITIVE_DB = nullptr;
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -1055,6 +1056,18 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     DBID_DBITEST_LEGACY_CLOSE = DBI.registerDriver("dbitestlegacyclose", legacy_close_methods,
         DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE | DBI_CAP_HAS_EXECRAW
         | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
+
+    // A fourth name declares that its database name can hold credentials, as a driver whose database name can be a
+    // connection string or URL does, so that the masking of the database name is tested (qore#7275).
+    qore_dbi_method_list sensitive_db_methods;
+    dbitest_add_methods(sensitive_db_methods, true, true);
+    DBID_DBITEST_SENSITIVE_DB = DBI.registerDriver("dbitestsensitivedb", sensitive_db_methods,
+        DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE | DBI_CAP_HAS_EXECRAW
+        | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE
+#ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+        | DBI_CAP_SENSITIVE_DBNAME
+#endif
+        );
 }
 
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

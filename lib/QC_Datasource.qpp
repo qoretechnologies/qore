@@ -332,6 +332,16 @@ const DBI_CAP_HAS_BULK_LOAD = DBI_CAP_HAS_BULK_LOAD;
     @since %Qore 3.0
 */
 const DBI_CAP_LOCAL_ONLY = DBI_CAP_LOCAL_ONLY;
+
+//! DBI capability constant: the database name of the driver can hold credentials
+/** The database name of a driver with this capability (a connection string or URL that can hold a password, a key or
+    a token) is masked where %Qore shows the connection values of a datasource without its password, as in the safe
+    URL and the information of a \c db:// connection; see
+    @ref Qore::SQL::mask_datasource_dbname() "mask_datasource_dbname()" and @ref datasource_secrets
+
+    @since %Qore 3.0
+*/
+const DBI_CAP_SENSITIVE_DBNAME = DBI_CAP_SENSITIVE_DBNAME;
 ///@}
 
 /** @defgroup sql_mutation_effects SQL Mutation Declared Effect Constants

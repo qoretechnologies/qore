@@ -74,6 +74,33 @@
     @since %Qore 3.0
 */
 #define DBI_CAP_LOCAL_ONLY               (1 << 22)
+//! the database name of the driver can hold credentials
+/** A driver whose database name can be a connection string or URL that can hold credentials (a password, a key or a
+    token) declares this capability; the database name of its datasources is then masked where %Qore shows the
+    connection values of a datasource without its password, as in the safe URL and the information of a \c db://
+    connection (see mask_datasource_dbname() in %Qore code).  The database name of a driver that is not loaded is
+    masked there as well (fail-closed).
+
+    A driver that can be built with an older %Qore library declares it only if
+    @ref QORE_HAVE_DBI_SENSITIVE_DBNAME is defined, for example:
+    @code
+static constexpr int my_caps = DBI_CAP_TRANSACTION_MANAGEMENT
+#ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+    | DBI_CAP_SENSITIVE_DBNAME
+#endif
+    ;
+    @endcode
+
+    @since %Qore 3.0 (qore#7275)
+*/
+#define DBI_CAP_SENSITIVE_DBNAME         (1 << 23)
+
+//! defined when DBI drivers can declare a database name that can hold credentials with @ref DBI_CAP_SENSITIVE_DBNAME
+/** %Qore code tests the parse define of the same name.
+
+    @since %Qore 3.0 (qore#7275)
+*/
+#define QORE_HAVE_DBI_SENSITIVE_DBNAME 1
 
 //! DBI option flag: the value of the option is sensitive
 /** Given in qore_dbi_method_list::registerOption(const char*, const char*, const QoreTypeInfo*, int) for an option

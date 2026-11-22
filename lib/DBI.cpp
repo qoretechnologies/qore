@@ -82,6 +82,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
   { DBI_CAP_HAS_BULK_LOAD,          "HasBulkLoad" },
   { DBI_CAP_LOCAL_ONLY,             "LocalOnly" },
+  { DBI_CAP_SENSITIVE_DBNAME,       "SensitiveDbName" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -958,6 +959,16 @@ QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
         }
     }
     return rv.release();
+}
+
+bool q_dbi_dbname_showable(const char* driver) {
+    // the driver is looked up among the drivers already loaded only: masking never loads a module, which could fail
+    // or be refused; fail-closed, the database name is masked when the driver is not loaded (qore#7275)
+    if (!q_dbi_valid_driver_name(driver)) {
+        return false;
+    }
+    DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(driver);
+    return d && !(qore_dbi_private::get(*d)->getCaps() & DBI_CAP_SENSITIVE_DBNAME);
 }
 
 void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {

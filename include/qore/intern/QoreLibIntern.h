@@ -1955,6 +1955,15 @@ DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& 
 */
 DLLLOCAL QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts);
 
+//! returns true if the database name of a datasource of the driver can be shown (qore#7275)
+/** Only the database name of a driver already loaded that does not declare \ref DBI_CAP_SENSITIVE_DBNAME can be
+    shown (fail-closed: the database name of a driver that is not loaded, or of an invalid driver name, is masked); no
+    module is loaded; never raises an exception
+
+    @param driver the driver name, if any
+*/
+DLLLOCAL bool q_dbi_dbname_showable(const char* driver);
+
 //! appends the masked description of a datasource hash for a message (qore#6988)
 /** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
     \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
