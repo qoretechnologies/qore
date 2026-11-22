@@ -960,13 +960,16 @@ bool sub direct_key(string key) {
         assertFalse(a.callFunction("cancel_timer_bg", id), "the tenant's cancel through another thread of the module");
         assertTrue(AsyncIoController::cancelTimer(id), "the host's cancel");
 
-        # a thread that module code starts in another tenant's call after the thread that added a timer has ended (and
-        # that can have its TID) does not cancel it
+        # a thread that module code starts in another tenant's call after the thread that added a timer has ended (the
+        # module joins its threads, so the later thread can have its TID) does not cancel it
         hash<auto> added = a.callFunction("add_timer_bg_tid");
         on_exit AsyncIoController::cancelTimer(added.id);
+        assertTrue(thread_join(added.tid, -1), "the thread that added the timer has ended");
         hash<auto> c = b.callFunction("cancel_timer_bg_tid", added.id);
         assertFalse(c.result, sprintf("another tenant's later thread of the module (TID %d, the adder's %d)", c.tid,
             added.tid));
+        # (Qore gives a background thread a TID that no thread had before until its TIDs wrap, so the later thread has
+        # the adder's TID only after a wrap; the check does not depend on it)
         assertTrue(AsyncIoController::cancelTimer(added.id), "the host's cancel");
     }
 

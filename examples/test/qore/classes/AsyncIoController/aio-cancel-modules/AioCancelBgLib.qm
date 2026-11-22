@@ -138,10 +138,13 @@ public class Lib {
         });
     }
 
-    #! runs the code in a thread that the module starts and returns its result, or the error that it raised
+    #! runs the code in a thread that the module starts and returns its result, or the error that it raised, once the
+    #! thread has ended
+    /** The thread has ended when this returns: its TID can then be given to the next thread that the module starts
+    */
     private:internal static auto inThread(code c) {
         Queue q();
-        background sub () {
+        int tid = background sub () {
             try {
                 q.push({"result": c()});
             } catch (hash<ExceptionInfo> ex) {
@@ -149,6 +152,9 @@ public class Lib {
             }
         }();
         hash<auto> h = q.get(60s);
+        if (!thread_join(tid, 60s)) {
+            throw "THREAD-ERROR", sprintf("thread %d did not end", tid);
+        }
         return h.hasKey("error") ? h.error : h.result;
     }
 
