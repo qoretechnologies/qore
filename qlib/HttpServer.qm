@@ -9658,8 +9658,10 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
         }
         return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id);
     }
-    # an HTTP/2 connection's requests share its socket (qore#7214)
-    if (s.isHttp2()) {
+    # an HTTP/2 connection's requests share its socket (qore#7214); decided by the server's own header information of
+    # the request, made by the connection's HTTP/2 transport: Socket::isHttp2() queries the connection's TLS state,
+    # which costs more than the rest of the request's dispatch
+    if (header_info.http2) {
         if (!exists header_info.stream_id) {
             throw "HTTP2-HANDLER-SOCKET-ERROR", "the socket of an HTTP/2 request is given to its handler only for "
                 "its own stream";

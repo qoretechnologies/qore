@@ -42,6 +42,30 @@ class ConnectionIdHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Reports the transport of its request, as the server's header information gives it, and what its socket is
+class ProtoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string sock;
+        try {
+            s.getHttp2StreamTakenBytes(cx."header-info".stream_id ?? 1);
+            # the request's own stream, through the handler's socket of an HTTP/2 request
+            sock = "own stream";
+        } catch (hash<ExceptionInfo> ex) {
+            sock = ex.err;
+        }
+        string other;
+        try {
+            s.getHttp2StreamTakenBytes((cx."header-info".stream_id ?? 1) + 2);
+            other = "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            other = ex.err;
+        }
+        return makeResponse(200, sprintf("http2=%y http3=%y own=%s other=%s", cx."header-info".http2 ?? False,
+            cx."header-info".http3 ?? False, sock, other));
+    }
+}
+
 #! The handlers of HTTP/2 requests act on their own stream only (qore#7214)
 /** The streams of an HTTP/2 connection share its socket; a sandboxed handler gets a socket of its own that acts on
     the request's own stream only, however it calls its methods; its close() and shutdown() end its own stream, and
@@ -144,6 +168,7 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         addTestCase("a sandboxed HTTP/2 handler acts on its own stream only", \attackTest());
         addTestCase("close() and shutdown() end the handler's own stream only", \closeTest());
         addTestCase("an SSE connection over HTTP/2 gets its own socket", \sseTest());
+        addTestCase("client headers do not make a request look like one of another protocol", \headerTest());
         set_return_value(main());
     }
 
@@ -237,6 +262,41 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         assertEq("HTTP2-HANDLER-SOCKET-ERROR", to_host.get(HangGuard), "the setup's socket acts on its own stream");
         hold.release.push(True);
         assertEq("held", victim_result.get(HangGuard), "the other request of the connection completes");
+    }
+
+    #! The transport of a request is the server's, which client headers cannot change: an HTTP/1.1 request with
+    #! headers of HTTP/2 or named like the server's flags is an HTTP/1.1 one, with the connection's own socket, and an
+    #! HTTP/2 request with headers named like the flags is an HTTP/2 one, with a socket of its own stream
+    headerTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("proto", "^proto", NOTHING, new ProtoHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+
+        hash<auto> h1_headers = {
+            "http2": "true",
+            "http3": "true",
+            "HTTP2-Settings": "AAMAAABkAARAAAAAAAIAAAAA",
+            "Upgrade": "h2c",
+            "Connection": "Upgrade, HTTP2-Settings",
+        };
+        HTTPClient h1({"url": "https://localhost:" + port, "http_version": "1.1", "ssl_verify_cert": False,
+            "timeout": HangGuard});
+        on_exit h1.disconnect();
+        string r1 = h1.get("/proto", h1_headers);
+        assertRegex("^http2=False http3=False own=(?!own stream)", r1, "an HTTP/1.1 request stays one");
+
+        HTTPClient h2({"url": "https://localhost:" + port, "http_version": "2.0", "ssl_verify_cert": False,
+            "timeout": HangGuard});
+        on_exit h2.disconnect();
+        assertEq("http2=True http3=False own=own stream other=HTTP2-HANDLER-SOCKET-ERROR",
+            h2.get("/proto", {"http2": "false", "http3": "true"}), "an HTTP/2 request stays one");
     }
 
     #! Starts a server with an HTTP/2 listener, the tenant's probe, the connection id handler and optionally a hold
