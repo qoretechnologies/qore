@@ -206,6 +206,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         @return a safe URL string with the @c "db://" prefix and no password; the value of each driver option is
         masked as \c "****" unless the driver is loaded and declares the option without declaring it sensitive (see
         @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"; since DbDataProvider 2.5)
+
+        @note the safe URL is made when the connection is created: if the driver is not loaded then, the value of each
+        driver option stays masked in it, also after the driver has been loaded
     */
     private string getSafeUrl(hash<auto> urlh) {
         # the values of the driver options that can hold a credential are masked (qore#7070)
