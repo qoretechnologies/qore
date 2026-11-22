@@ -76,10 +76,11 @@
 #define DBI_CAP_LOCAL_ONLY               (1 << 22)
 //! the database name of the driver can hold credentials
 /** A driver whose database name can be a connection string or URL that can hold credentials (a password, a key or a
-    token) declares this capability; the database name of its datasources is then masked where %Qore shows the
-    connection values of a datasource without its password, as in the safe URL and the information of a \c db://
-    connection (see mask_datasource_dbname() in %Qore code).  The database name of a driver that is not loaded is
-    masked there as well (fail-closed).
+    token) declares this capability; once the driver is loaded, the database name of its datasources is always masked
+    in the masked forms of a datasource that show a database name (\c show_db in %Qore code), such as the safe URL and
+    the information of a \c db:// connection, whatever its characters.  The capability of a driver that is not loaded
+    is not known: the database name of such a driver is masked only by the character rule of these forms, which masks
+    a database name with \c "=", \c ";", \c "://" or a separator of a datasource string.
 
     A driver that can be built with an older %Qore library declares it only if
     @ref QORE_HAVE_DBI_SENSITIVE_DBNAME is defined, for example:

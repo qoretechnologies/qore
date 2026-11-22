@@ -8,18 +8,24 @@
 %exec-class DatasourceSensitiveDbNameTest
 
 #! A DBI driver declares that its database name can hold credentials (qore#7275)
-/** The "dbitestsensitivedb" mock driver declares DBI_CAP_SENSITIVE_DBNAME; the "dbitest" mock driver does not.
+/** The "dbitestsensitivedb" mock driver declares DBI_CAP_SENSITIVE_DBNAME; the "dbitest" mock driver does not.  The
+    masked forms that show a database name (show_db) always mask the database name of a loaded driver that declares the
+    capability; otherwise the character rule of these forms decides.
 */
 class DatasourceSensitiveDbNameTest inherits QUnit::Test {
     public {
-        const Db = "jdbc:x://h/d?user=u&password=s3cr3t-7275";
+        const Plain = "plaindb7275";
+        const Separated = "srv;password=s3cr3t-7275";
+        const Show = {"show_db": True, "show_options": True};
     }
 
     constructor() : Test("DBI sensitive database names", "1.0", \ARGV) {
         addTestCase("the parse define", \parseDefine());
         addTestCase("the driver capabilities", \driverCapabilities());
         addTestCase("the capabilities of a Datasource and a DatasourcePool", \datasourceCapabilities());
-        addTestCase("mask_datasource_dbname()", \maskDbName());
+        addTestCase("masked hash forms", \maskedHash());
+        addTestCase("masked string forms", \maskedString());
+        addTestCase("a driver that is not loaded", \driverNotLoaded());
         set_return_value(main());
     }
 
@@ -42,40 +48,46 @@ class DatasourceSensitiveDbNameTest inherits QUnit::Test {
     }
 
     datasourceCapabilities() {
-        Datasource ds({"type": "dbitestsensitivedb", "db": Db});
+        Datasource ds({"type": "dbitestsensitivedb", "db": Plain});
         assertTrue(inlist("SensitiveDbName", ds.getCapabilityList()));
-        DatasourcePool pool({"type": "dbitestsensitivedb", "db": Db, "options": {"min": 1, "max": 1}});
+        DatasourcePool pool({"type": "dbitestsensitivedb", "db": Plain, "options": {"min": 1, "max": 1}});
         assertTrue(inlist("SensitiveDbName", pool.getCapabilityList()));
-        Datasource ds2({"type": "dbitest", "db": "test"});
+        Datasource ds2({"type": "dbitest", "db": Plain});
         assertFalse(inlist("SensitiveDbName", ds2.getCapabilityList()));
     }
 
-    maskDbName() {
-%ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
-        # the database name of a driver that declares the capability is masked
-        assertEq("****", mask_datasource_dbname("dbitestsensitivedb", Db));
-        # the database name of a driver that does not declare it is shown
-        assertEq(Db, mask_datasource_dbname("dbitest", Db));
-        assertEq("test", mask_datasource_dbname("dbitest", "test"));
+    maskedHash() {
+        # a driver that declares the capability: even a plain database name is masked
+        hash<auto> h = {"type": "dbitestsensitivedb", "user": "u", "pass": "p", "db": Plain, "host": "dbhost"};
+        assertEq("****", mask_datasource_hash(h, Show).db);
+        assertEq("dbhost", mask_datasource_hash(h, Show).host);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost", mask_datasource(h, Show));
         # driver names are matched without case, as the DBI layer matches them
-        assertEq("****", mask_datasource_dbname("DBITESTSENSITIVEDB", Db));
-        # a driver that is not loaded is not loaded by the function: the database name is masked (fail-closed)
-        assertEq("****", mask_datasource_dbname("qore-7275-no-such-driver", "test"));
-        assertFalse(inlist("qore-7275-no-such-driver", dbi_get_driver_list() ?? ()));
-        # a driver module that is installed but not loaded is not loaded either
-        if (!inlist("sqlite3", dbi_get_driver_list() ?? ())) {
-            assertEq("****", mask_datasource_dbname("sqlite3", "/tmp/x.db"));
-            assertFalse(inlist("sqlite3", dbi_get_driver_list() ?? ()));
-        }
-        # neither is a name that is not a driver name, or a name with a NUL character
-        assertEq("****", mask_datasource_dbname("dbitest:u/p@db", "test"));
-        assertEq("****", mask_datasource_dbname("dbitest\0x", "test"));
-        # no database name, or an empty one, has nothing to mask
-        assertEq(NOTHING, mask_datasource_dbname("dbitestsensitivedb", NOTHING));
-        assertEq(NOTHING, mask_datasource_dbname("qore-7275-no-such-driver"));
-        assertEq("", mask_datasource_dbname("dbitestsensitivedb", ""));
-%else
-        fail("QORE_HAVE_DBI_SENSITIVE_DBNAME is not defined");
-%endif
+        assertEq("****", mask_datasource_hash(h + {"type": "DBITESTSENSITIVEDB"}, Show).db);
+        # a driver that does not declare it: a plain database name is shown
+        h.type = "dbitest";
+        assertEq(Plain, mask_datasource_hash(h, Show).db);
+        assertEq("dbitest:****/****@" + Plain + "%dbhost", mask_datasource(h, Show));
+        # the character rule still applies
+        assertEq("****", mask_datasource_hash(h + {"db": Separated}, Show).db);
+        # without show_db, no database name is shown
+        assertEq("****", mask_datasource_hash(h).db);
+        assertEq("****", mask_datasource_hash(h + {"type": "dbitestsensitivedb"}).db);
+    }
+
+    maskedString() {
+        assertEq("****", mask_datasource_hash("dbitestsensitivedb:u/p@" + Plain + "%dbhost", Show).db);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost",
+            mask_datasource("dbitestsensitivedb:u/p@" + Plain + "%dbhost", Show));
+        assertEq(Plain, mask_datasource_hash("dbitest:u/p@" + Plain + "%dbhost", Show).db);
+        assertEq("dbitest:****/****@****%dbhost", mask_datasource("dbitest:u/p@" + Plain + "%dbhost"));
+    }
+
+    driverNotLoaded() {
+        # the capability of a driver that is not loaded is not known and the driver is not loaded to mask it: the
+        # character rule alone decides
+        assertEq(Plain, mask_datasource_hash({"type": "qore7275nodriver", "db": Plain}, Show).db);
+        assertEq("****", mask_datasource_hash({"type": "qore7275nodriver", "db": Separated}, Show).db);
+        assertFalse(inlist("qore7275nodriver", dbi_get_driver_list() ?? ()));
     }
 }

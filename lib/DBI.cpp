@@ -1216,8 +1216,22 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
     rv->setKeyValue("type", new QoreStringNode(type && q_dbi_valid_driver_name(type.c_str()) ? type.c_str()
         : QORE_DS_MASK), nullptr);
     rv->setKeyValue("user", new QoreStringNode(QORE_DS_MASK), nullptr);
+    // the driver is looked up among the drivers already loaded only, and only for the forms that show more than the
+    // masked description: masking never loads a module
+    const qore_dbi_private* dd = nullptr;
+    if ((flags & (QDS_MASK_SHOW_DB | QDS_MASK_SHOW_OPTIONS)) && type && q_dbi_valid_driver_name(type.c_str())) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(type.c_str());
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
     {
-        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
+        // the database name of a loaded driver that declares that its database name can hold credentials
+        // (DBI_CAP_SENSITIVE_DBNAME) is always masked; otherwise it is shown only under the rule of
+        // q_ds_valid_db_name() (qore#7275); the capability of a driver that is not loaded is not known, so the rule
+        // alone decides then
+        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h && !(dd && (dd->getCaps() & DBI_CAP_SENSITIVE_DBNAME))
+            ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
         rv->setKeyValue("db", db ? db : new QoreStringNode(QORE_DS_MASK), nullptr);
     }
     if (!h) {
@@ -1247,13 +1261,6 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
             // every other value is masked: an option of a driver that is not loaded, that the driver does not declare
             // (such as an option of a driver with DBI_CAP_OPTION_PASSTHRU) or that it declares sensitive (qore#7070);
             // the driver is never loaded here
-            const qore_dbi_private* dd = nullptr;
-            if (type && q_dbi_valid_driver_name(type.c_str())) {
-                DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(type.c_str());
-                if (d) {
-                    dd = qore_dbi_private::get(*d);
-                }
-            }
             ReferenceHolder<QoreHashNode> oh(new QoreHashNode(autoTypeInfo), nullptr);
             bool valid = true;
             ConstHashIterator i(opts.get<const QoreHashNode>());

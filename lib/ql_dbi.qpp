@@ -184,11 +184,6 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), that its driver does not declare, or of a
       driver that is not loaded, is shown as \c "****";
       @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" gives these options to Qore code
-    - where the database name of a datasource is shown, such as in the safe URL and the information of a \c db://
-      connection, it is shown as \c "****" if its driver declares that its database name can hold credentials
-      (@ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME"; for example a driver whose database name
-      is a connection URL) or if its driver is not loaded (fail-closed: the capabilities of a driver are known only
-      once it is loaded); @ref Qore::SQL::mask_datasource_dbname() "mask_datasource_dbname()" gives it to Qore code
     - the debug output of URL parsing shows no URL or password
 
     A datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the text
@@ -205,7 +200,10 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
         valid in its encoding, or has a control or bidirectional formatting character, a separator of a datasource \
         string (\c "@", \c "%", \c "{", \c "}", \c "(", \c ")"), or \c "=", \c ";" or \c "://", as a database \
         name can be a connection string of its own with credentials (a PostgreSQL conninfo string or URI, an ODBC \
-        string); a database name that is shown is given in UTF-8
+        string); the database name of a loaded driver that declares \
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (its database name can hold \
+        credentials) is always masked (the capability of a driver that is not loaded is not known, and the driver is \
+        never loaded to mask a datasource); a database name that is shown is given in UTF-8
     |\c show_options|\c bool|the character encoding and the names of the options are shown; the value of an \
         option is shown only under the rule below; every other option value is masked as \c "****"
 

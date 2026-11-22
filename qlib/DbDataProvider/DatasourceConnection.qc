@@ -148,7 +148,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         password is removed, the user name is masked as @c "****", and the value of each driver option is masked as
         @c "****" unless all of the conditions of @ref datasource_mask_options hold: the driver is loaded, registers
         the option with option flags without declaring it sensitive, the option name names no credential, and the
-        value is a plain string, number or boolean that a datasource string can show (qore#7017, qore#7070)
+        value is a plain string, number or boolean that a datasource string can show (qore#7017, qore#7070); the
+        database name is shown under the rule of @ref datasource_mask_options, which masks the database name of a
+        loaded driver that declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (qore#7275)
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = AbstractConnectionWithInfo::getInfo(opts);
@@ -237,7 +239,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         @return a safe URL string with the @c "db://" prefix and no credentials
 
         @note the safe URL is made when the connection is created: if the driver is not loaded then, the value of each
-        driver option stays masked in it, also after the driver has been loaded
+        driver option stays masked in it, also after the driver has been loaded, and its database name is shown or
+        masked by the character rule of @ref datasource_mask_options alone, as the driver's
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" is not known then (qore#7275)
     */
     private string getSafeUrl(hash<auto> urlh) {
         return "db://" + mask_datasource(urlh, {"show_db": True, "show_options": True});
