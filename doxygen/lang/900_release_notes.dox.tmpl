@@ -2747,6 +2747,10 @@
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
       (<a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>)
+    - a @ref call_reference "call reference" to a method made by code of a class without private access to the object's
+      class refers to the method that a call from that code calls: it was called with that class context and could
+      call a method of a privately inherited class (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7220">issue 7220</a>)
     - the C++ API \c QoreObject::deleteMemberValue() removes a member as the @ref delete "delete" operator does (see
       @ref remove_object_members); it removed the key of a declared member, and a member that held an object failed an
       assertion in debug builds and left the object's reference scan count wrong
