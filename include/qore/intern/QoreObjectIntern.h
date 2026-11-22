@@ -474,68 +474,14 @@ public:
     DLLLOCAL int checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
             const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
-    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-            class_ctx = nullptr;
-
-        QoreAutoVarRWReadLocker al(rml);
-
-        if (status == OS_DELETED) {
-            makeAccessDeletedObjectException(xsink, theclass->getName());
-            return nullptr;
-        }
-
-        // all the members only in the object's class: another class context sees the members that it can use (issue
-        // #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
-            const char* str = data->getFirstKey();
-            //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
-            return !str ? nullptr : new QoreStringNode(str);
-        }
-
-        // get first accessible non-internal member
-        ConstHashIterator hi(data);
-        while (hi.next()) {
-            //printd(5, "qore_object_private::firstKey() checking '%s'\n", hi.getKey());
-            const qore_class_private* member_class_ctx = nullptr;
-            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
-                return new QoreStringNode(hi.getKey());
-            //printd(5, "qore_object_private::firstKey() skipping '%s' (private)\n", hi.getKey());
-        }
-
-        return nullptr;
+    //! returns the first name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
+    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) const {
+        return getRuntimeEdgeMemberKey(false, xsink);
     }
 
-    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-            class_ctx = nullptr;
-
-        QoreAutoVarRWReadLocker al(rml);
-
-        if (status == OS_DELETED) {
-            makeAccessDeletedObjectException(xsink, theclass->getName());
-            return nullptr;
-        }
-
-        // all the members only in the object's class (issue #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
-            const char* str = data->getLastKey();
-            return !str ? nullptr : new QoreStringNode(str);
-        }
-
-        // get last accessible non-internal member
-        ReverseConstHashIterator hi(data);
-        while (hi.next()) {
-            const qore_class_private* member_class_ctx = nullptr;
-            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
-                return new QoreStringNode(hi.getKey());
-        }
-
-        return nullptr;
+    //! returns the last name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
+    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) const {
+        return getRuntimeEdgeMemberKey(true, xsink);
     }
 
     DLLLOCAL QoreHashNode* getSlice(const QoreListNode* l, ExceptionSink* xsink) const;
@@ -911,6 +857,41 @@ public:
         @return member data of the object
     */
     DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
+
+    //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
+    /** raises an exception and returns nullptr if the object has been deleted
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return the names of the members, caller owns the reference returned
+    */
+    DLLLOCAL QoreListNode* getRuntimeMemberList(ExceptionSink* xsink) const;
+
+    //! returns the number of the members that the calling code can see, as the size of getRuntimeMemberHash() (#7048)
+    /** returns 0 if the object has been deleted
+
+        @return the number of the members
+    */
+    DLLLOCAL int64 getRuntimeMemberCount() const;
+
+    //! getRuntimeMemberList() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE QoreListNode* getRuntimeMemberListSlow(ExceptionSink* xsink) const;
+
+    //! getRuntimeMemberCount() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE int64 getRuntimeMemberCountSlow() const;
+
+    //! returns @ref true if the calling code can see a member of the object; stops at the first one (#7048)
+    DLLLOCAL bool hasRuntimeMembers() const;
+
+    //! returns the first or last name of getRuntimeMemberList() as a new string, or nullptr if there is none
+    /** @param last @ref true for the last name
+        @param xsink raises an exception if the object has been deleted
+    */
+    DLLLOCAL QoreStringNode* getRuntimeEdgeMemberKey(bool last, ExceptionSink* xsink) const;
+
+    //! returns the first or last name of getRuntimeMemberList() for the class context; the object's lock must be held
+    /** the name is valid while the lock is held
+    */
+    DLLLOCAL const char* getRuntimeEdgeMemberKeyIntern(const qore_class_private* class_ctx, bool last) const;
 
     DLLLOCAL void incScanCount(int dt) {
         assert(dt);

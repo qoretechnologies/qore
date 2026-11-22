@@ -7704,6 +7704,46 @@ const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const cha
     return nullptr;
 }
 
+bool qore_class_private::runtimeFindAllMembersPublic() const {
+    // the members of a class that is not initialized or frozen are not known yet: they are checked one by one
+    if (!initialized || !members.isFrozen()) {
+        return false;
+    }
+    bool all_public = !members.hasInternalEntries();
+    // the members declared in the class and in the classes that it inherits, checked as code outside the class's
+    // hierarchy sees them
+    std::vector<const qore_class_private*> stack{this};
+    std::unordered_set<const qore_class_private*> seen;
+    // a class that can still get members can change the result
+    bool cacheable = true;
+    while (all_public && !stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (!seen.insert(c).second) {
+            continue;
+        }
+        cacheable = cacheable && c->isReachable();
+        for (const auto& i : c->members.getList()) {
+            if (runtimeIsPrivateMemberIntern(i.first, true)) {
+                all_public = false;
+                break;
+            }
+        }
+        if (c->scl) {
+            for (const BCNode* n : *c->scl) {
+                if (n->sclass) {
+                    stack.push_back(n->sclass->priv);
+                }
+            }
+        }
+    }
+    // cached only once no member can be added any more to a class that was checked (see addMemberApi())
+    if (cacheable) {
+        runtime_all_members_public.store(all_public ? 1 : 0, std::memory_order_release);
+    }
+    return all_public;
+}
+
 bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const {
     if (!initialized) {
         return false;
