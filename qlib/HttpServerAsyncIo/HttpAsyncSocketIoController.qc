@@ -4211,15 +4211,19 @@ public class HttpAsyncSocketIoController {
         # the data before the handler can process it.
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
+        # A body larger than DefaultBodyStreamThreshold is not pre-read either: the request is dispatched on its
+        # headers, and the body is read on the handler thread, as a stream in parts by a stream handler that wants
+        # it, whole otherwise, so that the memory that a stream handler needs for a large body is bounded
+        # (qore#7308); a small body is pre-read so that it does not hold a handler thread while it arrives.
         if (!output.info.http2 && !output.info.http3) {
             # the length is parsed as the server does (digits only): a value read differently here would pre-read a
             # body that the handler does not expect, or none that it waits for; an invalid length is left to the
             # handler, which refuses the request
             *int content_length = HttpServer::http_parse_content_length(http_get_field(output.hdr, "content-length"));
             bool has_expect = (http_get_field(output.hdr, "expect") =~ /100-continue/i);
-            bool has_body = (content_length > 0);
+            bool pre_read_body = (content_length > 0 && content_length <= HttpServer::DefaultBodyStreamThreshold);
 
-            if (has_body && !has_expect) {
+            if (pre_read_body && !has_expect) {
                 try {
                     softint cl = content_length;
                     bool conn_close = (http_get_field(output.hdr, "connection") =~ /close/i);
