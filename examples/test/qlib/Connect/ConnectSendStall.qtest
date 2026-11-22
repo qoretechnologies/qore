@@ -22,10 +22,27 @@
 
 %exec-class ConnectSendStallTest
 
+#! records the result of each request, which the server acts on
+class RecordingConnectHandler inherits Connect::ConnectHandler {
+    public {
+        Queue results();
+    }
+
+    constructor(Connect::AbstractConnectCodec codec) : Connect::ConnectHandler(NOTHING, codec) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        hash<HttpResponseInfo> rv = Connect::ConnectHandler::handleRequest(listener, s, cx, hdr, body);
+        results.push(rv);
+        return rv;
+    }
+}
+
 class ConnectSendStallTest inherits QUnit::Test {
     private {
         HttpServer server;
-        Connect::ConnectHandler handler;
+        RecordingConnectHandler handler;
         Connect::YamlConnectCodec codec();
         string url;
         bool h3;
@@ -51,7 +68,7 @@ class ConnectSendStallTest inherits QUnit::Test {
 
     globalSetUp() {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
-        handler = new Connect::ConnectHandler(NOTHING, codec);
+        handler = new RecordingConnectHandler(codec);
         # the response's stream is held, so that its send buffer fills; each write is timed and its end recorded
         handler.registerServerStream("Test", "Stall",
             sub (auto request, Connect::ConnectServerStream stream, hash<auto> metadata) {
@@ -125,6 +142,7 @@ class ConnectSendStallTest inherits QUnit::Test {
         *hash<auto> outcome = getOutcome(30s);
         assertEq("STREAM-SEND-TIMEOUT", outcome.err, "the send fails after the send timeout: " + outcome.desc);
         assertGe(SendTimeout.durationMilliseconds(), outcome.ms, "the send waited for the send timeout");
+        checkResult("stalled");
         # the stream was cancelled: the client's request ends with an error, not after its own timeout
         try {
             resp.get(30s);
@@ -142,8 +160,22 @@ class ConnectSendStallTest inherits QUnit::Test {
         mgr.closeAll();
         delete mgr;
         *hash<auto> outcome = getOutcome(30s);
-        assertNeq("COMPLETED", outcome.err, "the response does not complete");
-        assertTrue(exists outcome.err, "the send ends with an error");
+        assertEq("STREAM-SEND-TIMEOUT", outcome.err, "the send ends with an error: " + outcome.desc);
+        # at once: the send timeout is an hour, and the connection was closed when the send started waiting
+        assertLt(5000, outcome.ms, "the send ends at once");
+        checkResult("closed");
+    }
+
+    #! checks the result of the request: the stream failed, so no error response is sent on it after the response
+    #! that was started
+    private checkResult(string what) {
+        *hash<auto> rv;
+        try {
+            rv = handler.results.get(30s);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertTrue(rv.reply_sent ?? False, what + ": the handler reports the response as sent");
+        assertNothing(rv.code, what + ": no error response is sent on the failed stream");
     }
 
     #! returns the outcome of the response, or @ref nothing if it does not end in time

@@ -680,12 +680,15 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             method_info.handler(request, stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -700,30 +703,50 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure response headers are sent
-        stream.ensureHeadersSent();
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure response headers are sent
+            stream.ensureHeadersSent();
 
-        # Send EndStreamResponse frame
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            # bounded by the time without progress (qoretechnologies/qore#7282)
-            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
+            # Send EndStreamResponse frame
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
+            if (http3) {
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
+            } else {
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
             }
         }
-
-        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,
         };
+    }
+
+    #! Returns @ref True "True" if the exception means that the stream of the response failed, so that nothing more can
+    #! be sent on it (qoretechnologies/qore#7282)
+    private static bool isStreamFailure(hash<ExceptionInfo> ex) {
+        return ex.err == "STREAM-SEND-TIMEOUT" || ex.err == "QUIC-STREAM-CLOSED" || ex.err == "QUIC-STREAM-RESET";
     }
 
     #! Handle a client-streaming RPC request
@@ -754,12 +777,15 @@ handler.registerDatagramBidi("Sensor", "Exchange",
 
         auto response;
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             response = method_info.handler(stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -774,38 +800,52 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure headers sent
-        stream.ensureHeadersSent();
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure headers sent
+            stream.ensureHeadersSent();
 
-        if (!error && exists response) {
-            # Send the response as a framed message
-            binary encoded = codec.serialize(response);
-            binary framed = ConnectHelper::frameMessage(encoded);
+            if (!error && exists response) {
+                # Send the response as a framed message
+                binary encoded = codec.serialize(response);
+                binary framed = ConnectHelper::frameMessage(encoded);
+                if (http3) {
+                    # bounded by the time without progress (qoretechnologies/qore#7282)
+                    ConnectHelper::sendQuicStreamData(s, session_id, stream_id, framed, False, m_send_timeout, io_wake);
+                } else {
+                    s.sendHttp2StreamData(stream_id, framed, False);
+                }
+            }
+
+            # Send EndStreamResponse
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
             if (http3) {
                 # bounded by the time without progress (qoretechnologies/qore#7282)
-                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, framed, False, m_send_timeout, io_wake);
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
             } else {
-                s.sendHttp2StreamData(stream_id, framed, False);
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
             }
         }
-
-        # Send EndStreamResponse
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            # bounded by the time without progress (qoretechnologies/qore#7282)
-            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
-            }
-        }
-
-        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,
@@ -839,12 +879,15 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             method_info.handler(stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -859,26 +902,40 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure headers sent
-        stream.ensureHeadersSent();
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure headers sent
+            stream.ensureHeadersSent();
 
-        # Send EndStreamResponse
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            # bounded by the time without progress (qoretechnologies/qore#7282)
-            ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
+            # Send EndStreamResponse
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
+            if (http3) {
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
+            } else {
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
             }
         }
-
-        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,

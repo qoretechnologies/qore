@@ -245,16 +245,6 @@ public class ConnectHelper {
         return total;
     }
 
-    #! Frame an EndStreamResponse message
-    /** The EndStreamResponse is always JSON per the Connect spec, regardless of
-        the codec used for messages. It is sent as the final frame in a streaming
-        response with the \c CONNECT_FLAG_END_STREAM flag set.
-
-        @param metadata optional trailing metadata
-        @param error optional error info
-
-        @return the framed EndStreamResponse (5-byte header + JSON payload)
-    */
     #! Sends data on a server's HTTP/3 stream, waiting while the stream's send buffer is full
     /** @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" refuses data while the stream's send buffer
         is full; the send then waits for the buffer to drain and tries again.  The wait is bounded by the time without
@@ -294,10 +284,10 @@ public class ConnectHelper {
             if (io_wake) {
                 io_wake();
             }
-            int now = clock_get_monotonic_us() / 1000;
-            int acked = s.getQuicStreamAckedBytes(session_id, stream_id);
             int wait_ms = -1;
             if (send_timeout > 0) {
+                int now = clock_get_monotonic_us() / 1000;
+                int acked = s.getQuicStreamAckedBytes(session_id, stream_id);
                 if (!stall_deadline || acked > last_acked) {
                     last_acked = acked;
                     stall_deadline = now + send_timeout;
@@ -310,9 +300,9 @@ public class ConnectHelper {
                         send_timeout, data.size());
                 }
             }
-            # HOOK (qoretechnologies/qore#7280): the minimum send rate is checked here, where the progress count of
-            # the stream (acked) is known and the send is about to wait; the wait is then capped at the rate check's
-            # interval
+            # HOOK (qoretechnologies/qore#7280): the minimum send rate is checked here, before the wait, with the
+            # progress count of the stream (getQuicStreamAckedBytes(), read above when there is a send timeout); the
+            # wait is then capped at the rate check's interval
             # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is made
             # again in each case; a stream that has ended and still refuses it will never take it
             if (s.waitForQuicStreamDrain(session_id, stream_id, wait_ms) >= 0) {
@@ -333,6 +323,16 @@ public class ConnectHelper {
         }
     }
 
+    #! Frame an EndStreamResponse message
+    /** The EndStreamResponse is always JSON per the Connect spec, regardless of
+        the codec used for messages. It is sent as the final frame in a streaming
+        response with the \c CONNECT_FLAG_END_STREAM flag set.
+
+        @param metadata optional trailing metadata
+        @param error optional error info
+
+        @return the framed EndStreamResponse (5-byte header + JSON payload)
+    */
     static binary frameEndStream(*hash<auto> metadata, *hash<ConnectErrorInfo> error) {
         hash<auto> obj();
         if (metadata) {
