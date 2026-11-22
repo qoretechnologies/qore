@@ -705,6 +705,9 @@ public:
         return ha.swap(val);
     }
 
+    //! Removes the key and returns its value, if the key exists; \a o is the object whose members this hash holds
+    DLLLOCAL QoreValue takeKeyValueIfExists(const char* key, qore_object_private* o, bool& exists);
+
     DLLLOCAL QoreValue swapKeyValue(const char* key, QoreValue val, qore_object_private* o) {
         //printd(0, "qore_hash_private::swapKeyValue() this: %p key: %s val: %p (%s) deprecated API called\n", this, key, val, get_node_type(val));
         //assert(false);

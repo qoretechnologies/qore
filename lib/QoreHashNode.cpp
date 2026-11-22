@@ -121,6 +121,30 @@ QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_pri
     return rv;
 }
 
+QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_private* o, bool& exists) {
+    assert(key);
+    assert(o);
+    assert(is_obj);
+
+    hm_hm_t::iterator i = hm.find(key);
+    if (i == hm.end()) {
+        exists = false;
+        return QoreValue();
+    }
+    exists = true;
+
+    qhlist_t::iterator li = i->second;
+    hm.erase(i);
+
+    QoreValue rv = (*li)->val;
+    internDeleteKey(li);
+
+    if (needs_scan(rv)) {
+        o->incScanCount(-1);
+    }
+    return rv;
+}
+
 QoreListNode* qore_hash_private::getKeys() const {
     QoreListNode* list = new QoreListNode(stringTypeInfo);
     qore_list_private::get(*list)->reserve(member_list.size());

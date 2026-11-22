@@ -613,12 +613,18 @@ public:
         return -1;
     }
 
+    /** @param declared if not null, set to true if the member is declared by the class, false if not (a member that
+        can be added to and removed from the object)
+    */
     DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
-            const QoreTypeInfo*& typeInfo) const {
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
         assert(!member_class_ctx);
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
+        if (declared) {
+            *declared = mi != nullptr;
+        }
         if (mi) {
             if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
@@ -642,6 +648,12 @@ public:
 
     DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
         bool for_delete = false, bool* exists = nullptr);
+
+    //! Takes the value of a member out of the object's member hash \a odata, which must be locked for writing
+    /** A declared member keeps its slot, with no value; the key of a member that the class does not declare is removed,
+        as from a hash, so that the object's keys no longer report it (qore#7179).  A missing member is not created.
+    */
+    DLLLOCAL QoreValue takeMemberValue(QoreHashNode* odata, const char* key, bool declared, bool& exists);
 
     //! Removes a mixed native/ordinary member slice after detaching its parent lvalue
     DLLLOCAL __attribute__((noinline)) void takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
