@@ -988,6 +988,26 @@ extern "C" DLLEXPORT const char* qore_aot_runtime_identity;
 */
 DLLLOCAL std::string qore_aot_get_compile_runtime_identity();
 
+//! The builtin API identity of this libqore build (qore#7183)
+/** A digest of the API metadata of libqore's qpp files: the names, parents, functional domains, code flags and
+    signatures of its builtin classes, methods and functions, and its builtin constants, hashdecls and enums, without
+    their documentation; generated at build time by cmake/QoreWriteBuiltinApiIdentity.cmake and defined in
+    lib/qore_aot_runtime_identity.cpp.  qcc records it in the module metadata record of every AOT module it compiles
+    (QoreAOTModuleFileInfo::builtin_api_identity), as the module's code can have such metadata built in, and the
+    module loader takes a module that records a different identity for out of date: it loads the module's source
+    instead, or refuses the module.  Unlike the AOT runtime identity, a change to the code of libqore does not change
+    it, so the AOT modules are rebuilt only when the builtin API that they were compiled against changes.
+
+    @see design/aot-object-files-and-module-artifacts.md "AOT Module Builtin API Identity"
+*/
+extern "C" DLLEXPORT const char* qore_builtin_api_identity;
+
+//! Returns the builtin API identity that qcc records in the modules it compiles
+/** This is \c qore_builtin_api_identity unless the \c QORE_AOT_TEST_BUILTIN_API_IDENTITY environment variable is set,
+    which only tests use to compile a module against different builtin API metadata (qore#7183).
+*/
+DLLLOCAL std::string qore_aot_get_compile_builtin_api_identity();
+
 //! C ABI helper recording the AOT runtime identity that an AOT module was compiled for
 /** Called by the generated module descriptor function after qore_aot_fill_module_desc() in every AOT module with
     descriptor revision 2 or later (see QORE_AOT_MODULE_ABI_VERSION).

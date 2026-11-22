@@ -3578,7 +3578,19 @@ struct QoreAOTModuleFileInfo {
     /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
     */
     int64 restricted_domains = 0;
+    //! the builtin API identity of the libqore that compiled the module (version 5; qore#7183)
+    /** The digest of the API metadata of libqore's builtin classes, functions and constants (qore_builtin_api_identity,
+        64 lowercase hexadecimal digits): the module's code can have such metadata built in (the functional domains
+        that a class inherits from a builtin base class, those that the module's code uses, calls of builtin functions
+        folded because they are pure, ...), so the module loader takes a module that records another identity than
+        its own for out of date, as one whose sources have changed: it loads the module's source instead, or refuses
+        the module (AOT-MODULE-STALE)
+    */
+    std::string builtin_api_identity;
 };
+
+//! The length of a builtin API identity: a SHA-256 digest in lowercase hexadecimal digits (qore#7183)
+static constexpr size_t QORE_BUILTIN_API_IDENTITY_LEN = 64;
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
@@ -3588,10 +3600,10 @@ static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
     (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
     functional domains that the module declares in its header, the dependencies it requires only after its header and
     the functional domains its own code restricts (qore#6351), from AOT format version 45
-    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
-    rebuilt.
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION); version 5 the builtin API identity of the libqore that compiled the module
+    (qore#7183).  A record of another version is refused, asking for the module to be rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 5u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata
@@ -3621,6 +3633,10 @@ struct QoreAOTModuleInfoLocation {
     //! the size of the record in bytes
     uint64_t size = 0;
 };
+
+//! Returns true if the string is a builtin API identity: QORE_BUILTIN_API_IDENTITY_LEN lowercase hexadecimal digits
+//! (qore#7183)
+bool qoreAOTIsBuiltinApiIdentity(const std::string& identity);
 
 //! Encodes AOT module metadata as a record
 /** @param info the metadata

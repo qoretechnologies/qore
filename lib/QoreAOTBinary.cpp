@@ -702,6 +702,18 @@ int hasLegacyModuleInfoTrailer(AOTModuleFileReader& f) {
 }
 } // anonymous namespace
 
+bool qoreAOTIsBuiltinApiIdentity(const std::string& identity) {
+    if (identity.size() != QORE_BUILTIN_API_IDENTITY_LEN) {
+        return false;
+    }
+    for (char c : identity) {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint8_t>& record, std::string& error) {
     record.clear();
     std::vector<uint8_t> payload;
@@ -800,6 +812,15 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
     }
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains)));
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains) >> 32));
+    // the builtin API identity (version 5, qore#7183)
+    if (!qoreAOTIsBuiltinApiIdentity(info.builtin_api_identity)) {
+        error = "the builtin API identity '" + info.builtin_api_identity + "' is not "
+            + std::to_string(QORE_BUILTIN_API_IDENTITY_LEN) + " lowercase hexadecimal digits";
+        return false;
+    }
+    if (!put_string(info.builtin_api_identity, "builtin API identity")) {
+        return false;
+    }
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -961,6 +982,10 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
         if (info.restricted_domains & ~static_cast<int64>(QDOM_ALL)) {
             return fail(moduleInfoDamaged("the record restricts unknown functional domain bits"));
         }
+    }
+    // the builtin API identity (version 5, qore#7183)
+    if (!get_string(info.builtin_api_identity) || !qoreAOTIsBuiltinApiIdentity(info.builtin_api_identity)) {
+        return fail(moduleInfoDamaged("the record has no valid builtin API identity"));
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "

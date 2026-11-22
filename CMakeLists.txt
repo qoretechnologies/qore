@@ -1687,10 +1687,13 @@ if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
 endif ()
 
-qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
-qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
+qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${LIBQORE_QPP_SRC})
+qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${PSEUDO_QPP_SRC})
 
-add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
+# the API metadata files too, which qore-builtin-api-identity reads after this target (qore#7183)
+add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC} ${QPP_API_SRC})
 
 # install qpp metadata files into per-module subdirectory
 install(FILES ${QPP_META_SRC}
@@ -3463,8 +3466,44 @@ qore_aot_runtime_identity_targets(
     INPUT_LABELS ${_qcc_format_sources_labels}
     HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 add_dependencies(qcc qcc-format-version)
+
+# The builtin API identity of libqore: a digest of the API metadata of its qpp files (qpp --api-metadata: the
+# metadata of its builtin classes, functions, constants, hashdecls and enums without documentation), which qcc records
+# in every AOT module it compiles; the module loader takes a module recorded with another identity for out of date
+# and loads its source instead, or refuses it, as its code can have builtin metadata built in, such as the functional
+# domains that a class inherits from a builtin base class (see cmake/QoreWriteBuiltinApiIdentity.cmake and
+# design/aot-object-files-and-module-artifacts.md "AOT Module Builtin API Identity", qore#7183).  As for the AOT
+# runtime identity, the header is only rewritten when the identity changes, by a target that runs in every build;
+# only a change to the API metadata changes it, so every qmod, which depends on the header, is rebuilt only then.
+set(QORE_BUILTIN_API_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_builtin_api_identity.h)
+set(_qore_builtin_api_files ${CMAKE_BINARY_DIR}/qore-builtin-api-files.txt)
+string(REPLACE ";" "\n" _qore_builtin_api_files_content "${QPP_API_SRC}")
+string(APPEND _qore_builtin_api_files_content "\n")
+if (EXISTS "${_qore_builtin_api_files}")
+    file(READ "${_qore_builtin_api_files}" _qore_builtin_api_files_old)
+else()
+    set(_qore_builtin_api_files_old "")
+endif()
+if (NOT _qore_builtin_api_files_old STREQUAL _qore_builtin_api_files_content)
+    file(WRITE "${_qore_builtin_api_files}" "${_qore_builtin_api_files_content}")
+endif()
+add_custom_target(qore-builtin-api-identity
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT_LIST=${_qore_builtin_api_files}
+        -DOUTPUT=${QORE_BUILTIN_API_IDENTITY_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteBuiltinApiIdentity.cmake
+    BYPRODUCTS ${QORE_BUILTIN_API_IDENTITY_HEADER}
+    COMMENT "Checking the builtin API identity"
+    VERBATIM
+)
+# the API metadata files are written by the qpp commands of QPP_GENERATED_FILES; the target names none of them in its
+# DEPENDS, as the Makefile generators would give it its own copy of the qpp rules, which could run at the same time as
+# those of QPP_GENERATED_FILES or before qpp is built
+add_dependencies(qore-builtin-api-identity QPP_GENERATED_FILES)
+add_dependencies(qore-aot-runtime-identity qore-builtin-api-identity)
+add_dependencies(qcc qore-builtin-api-identity)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
-    PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    PROPERTIES OBJECT_DEPENDS "${QORE_AOT_RUNTIME_IDENTITY_HEADER};${QORE_BUILTIN_API_IDENTITY_HEADER}")
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(

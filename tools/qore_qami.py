@@ -16,7 +16,9 @@ that many strings.  The payload of each version:
 - version 4: as version 3, then the functional domains that the module declares in its header (a u64 as two u32, low
   word first), the dependencies that it requires only after its header (a list) and the functional domains that its
   own code restricts (a u64 as two u32, low word first) (qore#6351); either domain value with a bit outside
-  ALL_DOMAINS makes the record invalid.
+  ALL_DOMAINS makes the record invalid;
+- version 5: as version 4, then the builtin API identity of the libqore that compiled the module (a string of
+  BUILTIN_API_IDENTITY_LEN lowercase hexadecimal digits; any other string makes the record invalid) (qore#7183).
 """
 
 import struct
@@ -24,9 +26,13 @@ import struct
 #: the record magic
 MAGIC = b"QAMI"
 #: the record version that qcc writes (QORE_AOT_MODULE_INFO_VERSION)
-CURRENT_VERSION = 4
+CURRENT_VERSION = 5
 #: the versions that parse() reads
-VERSIONS = (1, 2, 3, 4)
+VERSIONS = (1, 2, 3, 4, 5)
+#: the length of a builtin API identity (QORE_BUILTIN_API_IDENTITY_LEN): a SHA-256 digest in lowercase hexadecimal
+BUILTIN_API_IDENTITY_LEN = 64
+#: the builtin API identity that encode() writes by default (for tests)
+TEST_BUILTIN_API_IDENTITY = "0" * BUILTIN_API_IDENTITY_LEN
 #: the size of the record header
 HEADER_SIZE = 12
 #: the largest payload accepted (QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE)
@@ -64,10 +70,13 @@ class ModuleInfo:
     - post_header_dependencies: the dependencies that the module requires only after its header (version 4 and
       later; else empty)
     - restricted_domains: the functional domains that the module's own code restricts (version 4 and later; else 0)
+    - builtin_api_identity: the builtin API identity of the libqore that compiled the module (version 5 and later;
+      else None)
     """
 
     def __init__(self, version, name, dependencies, optional, compiled_with=(), prepend_paths=(), append_paths=(),
-                 dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0):
+                 dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0,
+                 builtin_api_identity=None):
         self.version = version
         self.name = name
         self.dependencies = list(dependencies)
@@ -79,6 +88,7 @@ class ModuleInfo:
         self.declared_domains = declared_domains
         self.post_header_dependencies = list(post_header_dependencies)
         self.restricted_domains = restricted_domains
+        self.builtin_api_identity = builtin_api_identity
 
 
 def header(data, offset=0):
@@ -149,6 +159,7 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
         optional, cur = read_list(cur)
         compiled_with, prepend, append, restrictions = [], [], [], []
         declared_domains, post_header, restricted_domains = 0, [], 0
+        builtin_api_identity = None
         if version >= 2:
             compiled_with, cur = read_list(cur)
             prepend, cur = read_list(cur)
@@ -174,12 +185,22 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
             restricted_domains, cur = read_u64(cur)
             if restricted_domains & ~ALL_DOMAINS:
                 raise ValueError
+        if version >= 5:
+            builtin_api_identity, cur = read_str(cur)
+            if not is_builtin_api_identity(builtin_api_identity):
+                raise ValueError
     except (ValueError, UnicodeDecodeError):
         return None
     if cur != end:
         return None
     return ModuleInfo(version, name, deps, optional, compiled_with, prepend, append, restrictions, declared_domains,
-                      post_header, restricted_domains)
+                      post_header, restricted_domains, builtin_api_identity)
+
+
+def is_builtin_api_identity(identity):
+    """Returns True if @p identity is a builtin API identity: BUILTIN_API_IDENTITY_LEN lowercase hexadecimal digits
+    (qoreAOTIsBuiltinApiIdentity())"""
+    return len(identity) == BUILTIN_API_IDENTITY_LEN and all(c in "0123456789abcdef" for c in identity)
 
 
 def find(data, name=None, versions=VERSIONS):
@@ -195,7 +216,8 @@ def find(data, name=None, versions=VERSIONS):
 
 
 def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepend_paths=(), append_paths=(),
-           dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0):
+           dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0,
+           builtin_api_identity=TEST_BUILTIN_API_IDENTITY):
     """Encodes a record of @p version (for tests)"""
     def enc_str(s):
         b = s.encode("utf-8")
@@ -217,4 +239,6 @@ def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepen
         payload += struct.pack("<II", declared_domains & 0xffffffff, declared_domains >> 32)
         payload += enc_list(list(post_header_dependencies))
         payload += struct.pack("<II", restricted_domains & 0xffffffff, restricted_domains >> 32)
+    if version >= 5:
+        payload += enc_str(builtin_api_identity)
     return MAGIC + struct.pack("<II", version, len(payload)) + payload

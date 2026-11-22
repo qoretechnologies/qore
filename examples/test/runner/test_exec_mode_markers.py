@@ -348,10 +348,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
         #   child processes that set their own --exec-mode and as qcc executables
+        # - AOTModuleBuiltinApiIdentity (#7183): its checks compile modules and load them in child processes of its own
+        #   binary started without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
                                  "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
