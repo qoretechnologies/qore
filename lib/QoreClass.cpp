@@ -7409,6 +7409,31 @@ const QoreClass* qore_class_private::parseGetClass(const qore_class_private& qc,
     return scl ? scl->parseGetClass(qc, n_access, true) : nullptr;
 }
 
+const QoreMethod* qore_class_private::runtimeFindCallableStaticMethod(const char* nme,
+        const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+    if (!initialized) {
+        return nullptr;
+    }
+    const QoreMethod* w;
+    ClassAccess access;
+    {
+        qore_root_ns_private::RuntimeNamespaceReadLocker rnl(ns ? ns->getRoot() : nullptr);
+        w = runtimeFindCommittedStaticMethod(nme, access, class_ctx);
+        if (!w) {
+            return nullptr;
+        }
+        // the access of the method found includes its own, as in getMethodForEval(); one test in the common case
+        assert(class_ctx || access > Public || !w->isPrivate());
+        if (access > Public) {
+            w = runtimeFindCallableCommittedMethod(nme, w, access, class_ctx, QCCM_STATIC);
+        }
+    }
+    if (!class_ctx && access > Public) {
+        return raiseInaccessibleMethodError(nme, w, xsink);
+    }
+    return w;
+}
+
 bool qore_class_private::runtimeHasCallableMethod(const char* m, int mask) const {
     if (!initialized) {
         return false;

@@ -5656,6 +5656,19 @@ public:
 
     DLLLOCAL bool runtimeHasCallableMethod(const char* m, int mask) const;
 
+    //! returns the static method of the name that code of the class context \a class_ctx calls, as a static method
+    //! call in that code finds it (qore#7207)
+    /** A caller without a class context (\a class_ctx is nullptr: code outside the class hierarchy) calls the first
+        public static method of the name reached through public edges, so that an inaccessible private method of a
+        parent class is skipped for the method of a later parent class (qore#6704); if it cannot call any, an exception
+        is raised.  Code of a class context calls the method that it can call (qore#6759), or else the method found
+        first, whose call then raises the error of the variants.
+
+        @return the method, or nullptr if the class has no static method of the name or if an exception was raised
+    */
+    DLLLOCAL const QoreMethod* runtimeFindCallableStaticMethod(const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL void execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL void execBaseClassDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;

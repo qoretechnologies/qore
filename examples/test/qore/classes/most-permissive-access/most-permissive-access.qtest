@@ -22,7 +22,9 @@
       variants) through a class reached first through a private path and then through a public path, the reverse
       order and a private:internal path first (hierarchies with a diamond: the walk of the lookups), and the same
       lookups through a single public and a single private path (hierarchies without a diamond: the recursion),
-      which must give the same results as before; a call from outside the hierarchy (also through a call reference
+      which must give the same results as before, except that call_static_method() refuses a static method of a
+      privately inherited class to a caller outside the class, as a static method call there does (qore#7207); a
+      call from outside the hierarchy (also through a call reference
       made in another class) uses the first method through the public paths, a call from inside it the first method
       through all its paths; inherited variants through private paths only stay private, and those of a method are
       those of the hierarchy of its class
@@ -43,7 +45,8 @@ class MostPermissiveAccessTest inherits QUnit::Test {
             "D3: " + PublicResults,
             "P: " + PublicResults,
             "Q: {method: \"BASE-CLASS-IS-PRIVATE\", call_object_method: \"BASE-CLASS-IS-PRIVATE\", "
-                "hasCallableMethod: False, call_static_method: \"As\", call reference: \"ILLEGAL-CALL-REFERENCE\", "
+                "hasCallableMethod: False, call_static_method: \"BASE-CLASS-IS-PRIVATE\", "
+                "call reference: \"ILLEGAL-CALL-REFERENCE\", "
                 "member: \"PRIVATE-MEMBER\", instanceof: False, cast: \"RUNTIME-CAST-ERROR\", "
                 "parameter: \"RUNTIME-OVERLOAD-ERROR\", inherited variant: \"RUNTIME-OVERLOAD-ERROR\"}",
             "inside D1: [\"A\", \"A\", True, \"A\", True, \"A\"]",
