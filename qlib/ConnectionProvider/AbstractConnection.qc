@@ -129,7 +129,11 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
               comes up with a successful ping, whose transition a monitor handles
 
             What a ping checks depends on the connection class (its \c pingImpl() method): by default it makes a connection
-            with @ref get(), and connection classes check more, such as a request to the server.
+            with @ref get(), and connection classes check more, such as a request to the server.  A REST connection
+            without the \c ping_method option, for example, checks its configuration (a connection that is not yet
+            authorized fails) and that the server can be reached (TCP and TLS), but not its credentials or its
+            authorization against the server, which only a ping with \c ping_method or a request checks; up then
+            means reachable and configured, not authenticated.
 
             A connection object restored by deserialization or copied keeps the state of the object it was made from,
             except that a connection serialized with the status \c "not checked" is restored as not up (one

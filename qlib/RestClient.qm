@@ -178,7 +178,8 @@ printf("%Y\n", ans.body);
 
     @section restclientv2_7 RestClient v2.7
     - a ping of a @ref RestClient::RestConnection "RestConnection" without the \c ping_method option connects to the
-      server, as its polling ping does, instead of succeeding without a check
+      server, as its polling ping does, instead of succeeding without a check, and every ping, also a polling ping,
+      of a connection whose configuration cannot work (not yet authorized, for example) fails with its error
       (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - a client with invalid OAuth2 options raises \c OAUTH2-ERROR when it is created also with \c do_not_connect, as
       @ref restclientiointro "RestClientIo" does, instead of being created with a grant type that cannot acquire a
@@ -5641,6 +5642,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @see supportsPollingApi()
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        # issue #7236: as for a synchronous ping, a connection whose configuration cannot work fails the ping with the
+        # configuration's error (a monitor handles it as a ping that could not be started, which marks it down)
+        checkConfiguration();
+
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
             return HttpBasedConnection::startPollConnect(logger);
@@ -6176,47 +6181,62 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     */
     private checkCanConnect() {
         try {
-            # a connection authenticated by another credential does not use the grant type, which is usually a
-            # default value (qore#6901)
-            if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
-                # the options are checked as the clients check them: an empty value is missing, and an empty
-                # redirect URL takes the default (qore#6906)
-                *list<string> missing = RestClient::getMissingOAuth2GrantOptions(opts.oauth2_grant_type,
-                    opts + {"oauth2_redirect_url": opts.oauth2_redirect_url ?: RestClient::DefaultOAuth2RedirectUrl});
-                # the username and password of the "password" grant are checked below
-                if (missing = (map $1, missing, $1 != "username" && $1 != "password")) {
-                    throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires the following options to be "
-                        "set: %y; the following are not set or are empty on this connection: %y",
-                        opts.oauth2_grant_type, RestClient::OAuth2GrantOptions{opts.oauth2_grant_type}, missing);
-                }
-
-                switch (opts.oauth2_grant_type) {
-                    case "authorization_code":
-                    case "implicit": {
-                        if (!opts.token && (!opts.oauth2_refresh_token || !opts.oauth2_auto_refresh)) {
-                            throw "OAUTH2-ERROR", sprintf("connection %y uses OAuth2 grant type %y but is not yet "
-                                "authorized to communicate with the server", name, opts.oauth2_grant_type);
-                        }
-                        break;
-                    }
-
-                    case "password": {
-                        if (!opts.username.val() && !urlh.username.val()) {
-                            throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
-                                "password; no username is set for the current connection";
-                        }
-                        if (!opts.password.val() && !urlh.password.val()) {
-                            throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
-                                "password; no password is set for the current connection";
-                        }
-                        break;
-                    }
-                }
-            }
+            checkConfiguration();
         } catch (hash<ExceptionInfo> ex) {
             info("connection %y cannot connect: %s: %s", name, ex.err, ex.desc);
             up = False;
             status = ex.desc;
+        }
+    }
+
+    #! Checks if the connection's configuration can work; throws the error if not
+    /** Called by @ref checkCanConnect() when the connection is created, and by every ping, also by the polling ping
+        (@ref startPollConnect()), before it checks the server, so that a ping of a connection whose configuration
+        cannot work fails with the configuration's error, and one that was authorized since it was created pings
+        normally (issue #7236)
+
+        @throw OAUTH2-ERROR the OAuth2 options are incomplete, or the connection uses an OAuth2 grant type with an
+        authorization step and is not yet authorized
+
+        @since %RestClient 2.7
+    */
+    private checkConfiguration() {
+        # a connection authenticated by another credential does not use the grant type, which is usually a
+        # default value (qore#6901)
+        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
+            # the options are checked as the clients check them: an empty value is missing, and an empty
+            # redirect URL takes the default (qore#6906)
+            *list<string> missing = RestClient::getMissingOAuth2GrantOptions(opts.oauth2_grant_type,
+                opts + {"oauth2_redirect_url": opts.oauth2_redirect_url ?: RestClient::DefaultOAuth2RedirectUrl});
+            # the username and password of the "password" grant are checked below
+            if (missing = (map $1, missing, $1 != "username" && $1 != "password")) {
+                throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires the following options to be "
+                    "set: %y; the following are not set or are empty on this connection: %y",
+                    opts.oauth2_grant_type, RestClient::OAuth2GrantOptions{opts.oauth2_grant_type}, missing);
+            }
+
+            switch (opts.oauth2_grant_type) {
+                case "authorization_code":
+                case "implicit": {
+                    if (!opts.token && (!opts.oauth2_refresh_token || !opts.oauth2_auto_refresh)) {
+                        throw "OAUTH2-ERROR", sprintf("connection %y uses OAuth2 grant type %y but is not yet "
+                            "authorized to communicate with the server", name, opts.oauth2_grant_type);
+                    }
+                    break;
+                }
+
+                case "password": {
+                    if (!opts.username.val() && !urlh.username.val()) {
+                        throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
+                            "password; no username is set for the current connection";
+                    }
+                    if (!opts.password.val() && !urlh.password.val()) {
+                        throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
+                            "password; no password is set for the current connection";
+                    }
+                    break;
+                }
+            }
         }
     }
 
@@ -6460,14 +6480,24 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     #! performs the internal ping
-    /** Uses the ping options to make a request to the server; if \c ping_method is not set, the ping connects to the
-        server (and makes the TLS handshake for an HTTPS URL) without logging in or sending a request, as the polling
-        ping (@ref startPollConnect()) does; if \c ping_method is set but the connection gives no ping path, the
-        ping connects to the server in the same way after its client is created
+    /** First checks the connection's configuration (@ref checkConfiguration()): a connection whose configuration
+        cannot work (incomplete OAuth2 options, or an OAuth2 grant with an authorization step that is not yet
+        authorized) fails the ping with that error.  Then it uses the ping options to make a request to the server;
+        if \c ping_method is not set, the ping connects to the server (and makes the TLS handshake for an HTTPS URL)
+        without logging in or sending a request, as the polling ping (@ref startPollConnect()) does; if
+        \c ping_method is set but the connection gives no ping path, the ping connects to the server in the same way
+        after its client is created.
+
+        Without \c ping_method, a ping therefore verifies that the server can be reached and the configuration
+        checks, but not the credentials or the authorization against the server: a wrong client secret, for example,
+        is detected only by a ping with \c ping_method or by the first request
 
         @since %RestClient 2.7 a ping without \c ping_method connects to the server; it made no check and succeeded
     */
     private pingImpl() {
+        # issue #7236: a connection whose configuration cannot work fails the ping with the configuration's error
+        checkConfiguration();
+
         # issue #7236: without a ping request, the ping only connects to the server, before any client that would log
         # in is created
         if (!opts.ping_method) {
