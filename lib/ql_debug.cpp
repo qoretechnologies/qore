@@ -28568,8 +28568,15 @@ static QoreValue f_dbg_register_process_end_probe(const QoreListNode* params, Ru
         ExceptionSink* xsink) {
     // the probe is used until the process ends, so it is never freed
     QoreDbgProcessEndProbe* p = new QoreDbgProcessEndProbe;
-    p->path = get_param_value(params, 0).get<const QoreStringNode>()->c_str();
-    p->label = get_param_value(params, 1).get<const QoreStringNode>()->c_str();
+    // the strings are copied: they are used until the process ends, and a short string has no node to keep
+    {
+        QoreStringDataHelper path(get_param_value(params, 0));
+        p->path.assign(path.c_str(), path.size());
+    }
+    {
+        QoreStringDataHelper label(get_param_value(params, 1));
+        p->label.assign(label.c_str(), label.size());
+    }
     p->behavior = get_param_value(params, 2).getAsBigInt();
     p->id = qore_register_process_end_callback(QoreDbgProcessEndProbe::callback, p);
     return p->id;

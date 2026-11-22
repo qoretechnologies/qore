@@ -28,6 +28,7 @@ class ProcessEndCallbacksTest inherits QUnit::Test {
         addTestCase("exit() on the signal handler thread runs them before _Exit()", \signalTest());
         addTestCase("exit() while another thread runs runs them before _Exit()", \threadsTest());
         addTestCase("they run once, in the reverse order of their registration", \orderTest());
+        addTestCase("a probe takes its strings by value, also short strings", \shortStringTest());
         addTestCase("a deregistered callback does not run", \deregisterTest());
         addTestCase("a callback deregisters itself and cannot register another", \insideTest());
         addTestCase("a callback that calls exit() ends the process", \reentrantTest());
@@ -95,6 +96,16 @@ exit(0);
         assertEq(0, r.rc, r.output);
         assertEq(("c exit shutdown=0 exit-hooks=0", "b exit shutdown=0 exit-hooks=0", "a exit shutdown=0 exit-hooks=0"),
             r.lines);
+    }
+
+    shortStringTest() {
+        skipRelease();
+        # a short string made at runtime (which can be held inline in a value) as the label
+        hash<auto> r = runChild("string label = \"xs\".substr(1);
+dbg_register_process_end_probe(ENV.PE_FILE, label, 0);
+");
+        assertEq(0, r.rc, r.output);
+        assertEq(("s cleanup shutdown=0 exit-hooks=1",), r.lines);
     }
 
     deregisterTest() {
