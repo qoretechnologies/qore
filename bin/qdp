@@ -1081,6 +1081,8 @@ class QdpCmd {
                     color.dim("SIGTERM"));
             }
         }
+        # set if listening stopped on its timeout
+        bool timed_out;
         {
             Term t();
 
@@ -1089,6 +1091,7 @@ class QdpCmd {
                 # Check timeout
                 if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
                     printf("\n%s listen timed out after %d seconds\n", color.warning("TIMEOUT:"), opts.timeout);
+                    timed_out = True;
                     break;
                 }
                 if (read_keys) {
@@ -1106,6 +1109,8 @@ class QdpCmd {
         delete provider;
         if (shutdown_requested) {
             printf("listening stopped due to signal\n");
+        } else if (timed_out) {
+            printf("listening stopped on its timeout\n");
         } else if (active) {
             printf("listening stopped on user request\n");
         } else {
