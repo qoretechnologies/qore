@@ -561,6 +561,46 @@ public class HttpClientStreamHandle {
         return connection_reused;
     }
 
+    #! Records the stream ID of a request just submitted on this stream
+    /** @ref cancel() can run in another thread while the request is submitted; it finds no stream ID then, so it
+        only marks the stream cancelled and leaves the request to the submitting thread.  The stream ID is therefore
+        recorded under the lock that @ref cancel() takes, and if the stream was cancelled in the meantime, the
+        submitting thread cancels the request with @ref cancelSubmittedRequest().
+
+        @param sid the stream ID of the submitted request
+
+        @return @ref True if the stream was cancelled while its request was submitted
+    */
+    private bool recordSubmittedStream(int sid) {
+        AutoLock al(lock);
+        stream_id = sid;
+        return state == HttpClientStreamState::Cancelled;
+    }
+
+    #! Cancels a request whose stream was cancelled while the request was submitted
+    /** @see recordSubmittedStream()
+    */
+    private cancelSubmittedRequest() {
+        log(LoggerLevel::DEBUG, "cancelling stream %d, which was cancelled while its request was submitted",
+            stream_id);
+        try {
+            conn.cancelRequest(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+            # a cancel that does not reach the peer leaves it streaming into a stream nobody is reading
+            log(LoggerLevel::WARN, "cancel stream %d failed: %s: %s", stream_id, ex.err, ex.desc);
+        }
+    }
+
+    #! Raises \c HTTPCLIENT-CANCELLED for a streaming request whose stream was cancelled while it was submitted
+    /** The request is cancelled first; see @ref recordSubmittedStream().
+
+        @throw HTTPCLIENT-CANCELLED always
+    */
+    private throwCancelledOnSubmission() {
+        cancelSubmittedRequest();
+        throw "HTTPCLIENT-CANCELLED", "stream was cancelled while its request was submitted";
+    }
+
     #! Releases the stream reservation if one is held
     /** Centralizes reservation cleanup for all pre-submit failure paths
         (timeout, cancel, error) so \c pending_stream_count is freed promptly
@@ -771,15 +811,34 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("cannot submit request in state: %y", state);
             }
+            # the request is being submitted: a cancel from now on leaves the reservation and the request to this
+            # thread (see cancel())
+            state = HttpClientStreamState::Open;
         }
 
         # Submit request — returns {stream_id, future}
         # The Future is resolved by C++ PromiseAction on the I/O thread
         # (pure C++, no user code on I/O thread)
-        hash<auto> submit_result = conn.submitRequest(method, path, headers, body);
-        stream_id = submit_result.stream_id;
+        hash<auto> submit_result;
+        try {
+            submit_result = conn.submitRequest(method, path, headers, body);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                # a stream cancelled meanwhile stays cancelled
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            rethrow;
+        }
+        bool cancelled = recordSubmittedStream(submit_result.stream_id);
         Future f = submit_result.future;
         reservation_held = False;
+        if (cancelled) {
+            # the Future is rejected with a cancellation error, which is raised below
+            cancelSubmittedRequest();
+        }
 
         try {
             auto rv = waitForResponse(f, end_time, wait_timeout, clock_get_monotonic_us(), deadline_bound);
@@ -877,9 +936,10 @@ public class HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
 
         hash<auto> result;
+        bool cancelled;
         try {
             result = submitAsyncImpl(method, path, headers, body);
-            stream_id = result.stream_id;
+            cancelled = recordSubmittedStream(result.stream_id);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -893,6 +953,10 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
+        if (cancelled) {
+            # the Future is rejected with a cancellation error
+            cancelSubmittedRequest();
+        }
         return decodeResultFuture(result);
     }
 
@@ -955,9 +1019,10 @@ public class HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "submitting async request with notifier: %s %s", method, path);
 
         hash<auto> result;
+        bool cancelled;
         try {
             result = submitAsyncWithNotifierImpl(method, path, headers, body, notifier);
-            stream_id = result.stream_id;
+            cancelled = recordSubmittedStream(result.stream_id);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -972,6 +1037,10 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
+        if (cancelled) {
+            # the Future is rejected with a cancellation error
+            cancelSubmittedRequest();
+        }
         return decodeResultFuture(result);
     }
 
@@ -1008,9 +1077,10 @@ public class HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request (non-blocking): %s %s", method, path);
         hash<auto> result;
+        bool cancelled;
         try {
             result = submitAsyncImpl(method, path, headers, body);
-            stream_id = result.stream_id;
+            cancelled = recordSubmittedStream(result.stream_id);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -1022,6 +1092,10 @@ public class HttpClientStreamHandle {
             }
             releaseReservationIfHeld();
             rethrow;
+        }
+        if (cancelled) {
+            # the Future is rejected with a cancellation error
+            cancelSubmittedRequest();
         }
         return decodeResultFuture(result);
     }
@@ -1090,9 +1164,10 @@ public class HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "submitting async request with datagram: %s %s", method, path);
 
         hash<auto> result;
+        bool cancelled;
         try {
             result = submitAsyncWithDatagramImpl(method, path, headers, body, datagram);
-            stream_id = result.stream_id;
+            cancelled = recordSubmittedStream(result.stream_id);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -1106,6 +1181,10 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
+        if (cancelled) {
+            # the Future is rejected with a cancellation error
+            cancelSubmittedRequest();
+        }
         return decodeResultFuture(result);
     }
 
@@ -1138,6 +1217,7 @@ public class HttpClientStreamHandle {
     */
     cancel() {
         *int sid;
+        bool submitting;
         {
             AutoLock al(lock);
             if (state == HttpClientStreamState::Complete
@@ -1145,10 +1225,17 @@ public class HttpClientStreamHandle {
                     || state == HttpClientStreamState::Error) {
                 return;
             }
+            # an open stream without a stream ID is being submitted in another thread
+            submitting = state == HttpClientStreamState::Open && !exists stream_id;
             state = HttpClientStreamState::Cancelled;
             sid = stream_id;
         }
 
+        if (submitting) {
+            # the submitting thread finds the stream cancelled: it releases the reservation if it has not sent the
+            # request yet, and otherwise cancels the request once it has its stream ID (see recordSubmittedStream())
+            return;
+        }
         # Release reservation if the stream was never submitted
         if (!exists sid) {
             releaseReservationIfHeld();

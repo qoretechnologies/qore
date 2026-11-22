@@ -1,0 +1,393 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpClientStreamCancelSubmit.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%exec-class HttpClientStreamCancelSubmitTest
+
+#! A logger that runs a hook once, when a message matching a pattern is logged
+/** HttpClientStreamHandle logs "submitting async request" and "starting [SSE ]streaming request" after its last
+    check of the stream's state and before it submits the request, so the hook runs in the thread that submits the
+    request, at the point where a cancel from another thread used to find no stream ID.
+*/
+class HookLogger inherits LoggerWrapper {
+    private {
+        Mutex m();
+        *string pattern;
+        *code<nothing()> hook;
+    }
+
+    #! Arms the hook: it runs once, for the next message matching @p pattern
+    arm(string pattern, code<nothing()> hook) {
+        AutoLock al(m);
+        self.pattern = pattern;
+        self.hook = hook;
+    }
+
+    #! The streams log through this method
+    log(int level, string message, ...) {
+        *code<nothing()> run;
+        {
+            AutoLock al(m);
+            if (hook && regex(message, pattern)) {
+                run = hook;
+                remove hook;
+            }
+        }
+        if (run) {
+            run();
+        }
+    }
+}
+
+#! A connection manager that runs a hook once, just after acquireStream() has returned a stream
+class AcquireHookManager inherits HttpClientConnectionManager {
+    public {
+        #! The stream acquired when the hook ran
+        *HttpClientStreamHandle hooked_stream;
+    }
+
+    private {
+        *code<nothing()> after_acquire;
+    }
+
+    constructor(*hash<HttpClientConnectionManagerOptions> opts) : HttpClientConnectionManager(opts) {
+    }
+
+    arm(code<nothing()> hook) {
+        after_acquire = hook;
+    }
+
+    HttpClientStreamHandle acquireStream(string url, *bool non_blocking, *timeout timeout_ms) {
+        HttpClientStreamHandle rv = HttpClientConnectionManager::acquireStream(url, non_blocking, timeout_ms);
+        if (after_acquire) {
+            code<nothing()> hook = after_acquire;
+            remove after_acquire;
+            hooked_stream = rv;
+            hook();
+        }
+        return rv;
+    }
+}
+
+#! Records the events an observable delivers
+class EventRecorder inherits DataProvider::Observer {
+    private {
+        Mutex m();
+        list<string> events();
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, event_id;
+    }
+
+    list<string> get() {
+        AutoLock al(m);
+        return events;
+    }
+}
+
+#! A server that serves the connections of one client and reports the requests it reads and how they end
+/** Each connection is served in a thread of its own and numbered from 1 in the order it is accepted.  The requests
+    in @ref Answered are answered with 204 No Content, and the connection stays open for the next request; any other
+    request is never answered: the server then waits for the client to close the connection and reports it.
+*/
+class ProbeServer {
+    public {
+        int port;
+        #! Receives {"conn": <connection>, "path": <path>} for each request read
+        Queue requests();
+        #! Receives {"conn": <connection>, "closed": True} when the client closes the connection of an unanswered
+        #! request, else {"conn": <connection>, "closed": False} and the error that ended the wait
+        Queue closed();
+    }
+
+    private {
+        Socket listener();
+        Counter running();
+        Mutex m();
+        bool stopping;
+        int conns;
+    }
+
+    #! The requests that are answered
+    const Answered = {"/after": True, "/warm-up": True};
+
+    #! The time the server waits for a request and then for the client to close the connection
+    const Wait = 30s;
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    #! Ends the accept loop and waits until the connections, which the client must have closed, have been served
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+        }
+        # the accept loop ends with the next connection
+        try {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (True) {
+            Socket conn;
+            try {
+                conn = listener.accept(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            int id;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    conn.close();
+                    return;
+                }
+                id = ++conns;
+            }
+            running.inc();
+            background serve(conn, id);
+        }
+    }
+
+    private serve(Socket conn, int id) {
+        on_exit {
+            conn.close();
+            running.dec();
+        }
+        while (True) {
+            string path;
+            try {
+                hash<auto> hdr = conn.readHTTPHeader(Wait);
+                if (hdr."content-length") {
+                    conn.recv(hdr."content-length".toInt(), Wait);
+                }
+                path = hdr.path;
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the idle connection
+                return;
+            }
+            requests.push({"conn": id, "path": path});
+            if (Answered{path}) {
+                conn.send("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
+            # nothing is sent, so the read ends only when the client closes the connection (or resets it)
+            hash<auto> result;
+            try {
+                conn.recv(1, Wait);
+                result = {"closed": False, "error": "the client sent more data"};
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || (ex.err == "SOCKET-RECV-ERROR" && ex.arg == ECONNRESET)) {
+                    result = {"closed": True};
+                } else {
+                    result = {"closed": False, "error": ex.err + ": " + ex.desc};
+                }
+            }
+            closed.push({"conn": id} + result);
+            return;
+        }
+    }
+}
+
+class HttpClientStreamCancelSubmitTest inherits QUnit::Test {
+    constructor() : Test("HttpClientStreamHandle cancellation during request submission", "1.0", \ARGV) {
+        addTestCase("a stream cancelled while submitAsync() submits its request ends the request",
+            \testSubmitAsync());
+        addTestCase("a stream cancelled while submitAsyncWithNotifier() submits its request ends the request",
+            \testSubmitAsyncWithNotifier());
+        addTestCase("a stream cancelled while startStreaming() submits its request ends the request",
+            \testStartStreaming());
+        addTestCase("a stream cancelled while startSseStreaming() submits its request ends the request",
+            \testStartSseStreaming());
+        addTestCase("an SSE observable stopped before its stream is recorded sends no request",
+            \testObservableStoppedAfterAcquire());
+        addTestCase("an SSE observable stopped while its request is submitted ends the request",
+            \testObservableStoppedDuringSubmission());
+        set_return_value(main());
+    }
+
+    #! Creates a connection manager whose requests do not end on their own while a test runs
+    private static HttpClientConnectionManager getManager(*HookLogger logger) {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "request_timeout": 3600s,
+            "idle_timeout": 3600s,
+        });
+        if (logger) {
+            mgr.setLogger(logger);
+        }
+        return mgr;
+    }
+
+    #! Checks that a request cancelled while it was submitted does not hold its connection
+    /** The cancel reaches the request either while it is still queued on its connection, which drops it and stays
+        usable, or after it has been written, which closes the connection.  A request sent afterwards then uses the
+        connection again or a new one; either way, a cancelled request that the server read must have had its
+        connection closed: a request left running holds its connection until the test ends.
+
+        @param held_path the path of the cancelled request
+    */
+    private checkRequestEnded(ProbeServer server, HttpClientConnectionManager mgr, string held_path) {
+        assertEq(204, mgr.acquireStream("http://127.0.0.1:" + server.port).request("GET", "/after").status_code,
+            "a request sent after the cancellation is answered");
+        list<string> paths = ();
+        *int held_conn;
+        while (True) {
+            hash<auto> r = server.requests.get(60s);
+            if (r.path == "/after") {
+                break;
+            }
+            push paths, r.path;
+            if (r.path == held_path) {
+                held_conn = r.conn;
+            }
+        }
+        if (exists held_conn) {
+            assertEq((held_path,), paths, "the cancelled request was sent once");
+            assertEq({"conn": held_conn, "closed": True}, server.closed.get(60s),
+                "the connection of the cancelled request that was sent is closed");
+        } else {
+            assertEq((), paths, "the cancelled request was not sent");
+        }
+    }
+
+    #! The Future of a cancelled request is rejected with the cancellation error of the connection's protocol
+    private assertFutureCancelled(Future future) {
+        *string err;
+        try {
+            future.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertRegex("^HTTP(CLIENT|1|2|3)-CANCELLED$", err ?? "", "the request's Future is rejected as cancelled");
+    }
+
+    testSubmitAsync() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        logger.arm("submitting async request:", sub () { stream.cancel(); });
+        hash<auto> result = stream.submitAsync("POST", "/held", {"Content-Type": "text/plain"}, "body");
+        assertFutureCancelled(result.future);
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    testSubmitAsyncWithNotifier() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        # the notifier variant needs a ready connection
+        assertTrue(stream.getConnection().waitForReady(60s));
+        EventNotifier notifier();
+        logger.arm("submitting async request with notifier:", sub () { stream.cancel(); });
+        hash<auto> result = stream.submitAsyncWithNotifier("POST", "/held", {"Content-Type": "text/plain"}, "body",
+            notifier);
+        assertFutureCancelled(result.future);
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    testStartStreaming() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        logger.arm("starting streaming request:", sub () { stream.cancel(); });
+        assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+            \stream.startStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, False, "body"));
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    testStartSseStreaming() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        logger.arm("starting SSE streaming request:", sub () { stream.cancel(); });
+        assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+            \stream.startSseStreaming(), ("GET", "/held", {"Accept": "text/event-stream"}));
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    #! Stops an observable just after its stream has been acquired, before the observable records it
+    /** The connection is made ready by a warm-up request first, so the stream is acquired on a ready connection, and
+        no request may then be sent.
+    */
+    testObservableStoppedAfterAcquire() {
+        ProbeServer server();
+        on_exit server.stop();
+        AcquireHookManager mgr(<HttpClientConnectionManagerOptions>{
+            "request_timeout": 3600s,
+            "idle_timeout": 3600s,
+        });
+        on_exit mgr.closeAll();
+
+        string url = "http://127.0.0.1:" + server.port;
+        assertEq(204, mgr.acquireStream(url).request("GET", "/warm-up").status_code);
+        assertEq({"conn": 1, "path": "/warm-up"}, server.requests.get(60s));
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/held");
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        mgr.arm(sub () { obs.stopEvents(); });
+        obs.observersReady();
+
+        assertFalse(mgr.hooked_stream.isSubmitted(), "the stream of a stopped observable is not submitted");
+        assertEq((HttpClientStreamingIo::EVENT_SSE_CLOSED,), recorder.get(),
+            "a stopped observable reports only that it closed");
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    #! Stops an observable while its request is submitted
+    testObservableStoppedDuringSubmission() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, "http://127.0.0.1:" + server.port, "GET", "/held");
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        logger.arm("starting SSE streaming request:", sub () { obs.stopEvents(); });
+        obs.observersReady();
+
+        assertEq((HttpClientStreamingIo::EVENT_SSE_CLOSED,), recorder.get(),
+            "a stopped observable reports only that it closed");
+        checkRequestEnded(server, mgr, "/held");
+    }
+}

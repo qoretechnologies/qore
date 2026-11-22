@@ -6632,8 +6632,18 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "has_on_complete": True,
             });
         } catch (hash<ExceptionInfo> ex) {
+            bool cancelled;
+            {
+                AutoLock al(m);
+                cancelled = done;
+            }
             cancelPendingStream();
             fail(ex);
+            # a startup cancelled while it started (its request then fails with HTTPCLIENT-CANCELLED) ends quietly,
+            # as one cancelled later does
+            if (cancelled) {
+                return;
+            }
             rethrow;
         }
     }

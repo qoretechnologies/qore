@@ -152,7 +152,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             if (notifier) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                 }
                 releaseReservationIfHeld();
                 streaming = False;
@@ -165,7 +168,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                 }
                 streaming = False;
                 request_body_streaming = False;
@@ -190,9 +196,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s (body_streaming=%y)",
             method, path, body_streaming);
 
+        bool cancelled;
         try {
-            stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
-                data_channel, True, body_streaming, notifier, sse_install_eligible);
+            cancelled = recordSubmittedStream(h1conn.submitRequestStreaming(method, path, headers, body,
+                data_channel, True, body_streaming, notifier, sse_install_eligible));
             @assert(stream_id >= 0);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
@@ -210,6 +217,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                 checkSubmissionRefused(ex);
             }
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return stream_id;
@@ -240,7 +250,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                 }
                 streaming = False;
                 # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
@@ -260,8 +273,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
 
+        bool cancelled;
         try {
-            stream_id = h1conn.submitRequestSse(method, path, headers, body, queue, notifier);
+            cancelled = recordSubmittedStream(h1conn.submitRequestSse(method, path, headers, body, queue, notifier));
             @assert(stream_id >= 0);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
@@ -274,6 +288,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             releaseReservationIfHeld();
             streaming = False;
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return queue;

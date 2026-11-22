@@ -1,0 +1,396 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RestClientIoSseStartCancel.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClientIo
+%requires HttpClientStreamingIo
+%exec-class RestClientIoSseStartCancelTest
+
+#! An observable that runs a hook once, when the startup operation checks it after submitting the request
+/** RestClientIoSseObservableStartOperation checks isStopped() after each step; the hook runs at the first check
+    made in the "stream-waiting" state, which is just after the request has been submitted and before the operation
+    waits for the response.
+*/
+class StartHookObservable inherits HttpClientStreamingIo::SseObservable {
+    public {
+        *RestClientIoSseObservableStartOperation op;
+        *code<nothing()> after_submit;
+    }
+
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, string url)
+            : HttpClientStreamingIo::SseObservable(mgr, url, "GET", "/events") {
+    }
+
+    bool isStopped() {
+        if (after_submit && op && op.getState() == RestClientIoSseObservableStartOperation::SPS_STREAM_WAITING) {
+            code<nothing()> hook = after_submit;
+            remove after_submit;
+            hook();
+        }
+        return HttpClientStreamingIo::SseObservable::isStopped();
+    }
+}
+
+#! A startup operation that reports when the async I/O controller has completed it
+class SignalingStartOperation inherits RestClientIoSseObservableStartOperation {
+    public {
+        #! Reaches zero when the operation has been completed
+        Counter completed(1);
+    }
+
+    constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable)
+            : RestClientIoSseObservableStartOperation(rcio, observable, "GET", "/events", NOTHING,
+                {"Accept": "text/event-stream"}, NOTHING) {
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        on_exit completed.dec();
+        RestClientIoSseObservableStartOperation::onComplete(result);
+    }
+}
+
+#! A logger that runs a hook once, when a message matching a pattern is logged
+/** HttpClientStreamHandle logs "starting streaming request" after its last check of the stream's state and before
+    it submits the request, so the hook runs in the thread that submits the request, at the point where a cancel from
+    another thread used to find no stream ID.
+*/
+class HookLogger inherits LoggerWrapper {
+    private {
+        Mutex m();
+        *string pattern;
+        *code<nothing()> hook;
+    }
+
+    #! Arms the hook: it runs once, for the next message matching @p pattern
+    arm(string pattern, code<nothing()> hook) {
+        AutoLock al(m);
+        self.pattern = pattern;
+        self.hook = hook;
+    }
+
+    #! The streams log through this method
+    log(int level, string message, ...) {
+        *code<nothing()> run;
+        {
+            AutoLock al(m);
+            if (hook && regex(message, pattern)) {
+                run = hook;
+                remove hook;
+            }
+        }
+        if (run) {
+            run();
+        }
+    }
+}
+
+#! Records the events an observable delivers
+class EventRecorder inherits DataProvider::Observer {
+    private {
+        Mutex m();
+        list<string> events();
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, event_id;
+    }
+
+    list<string> get() {
+        AutoLock al(m);
+        return events;
+    }
+}
+
+#! A server that serves the connections of one client and reports the requests it reads and how they end
+/** Each connection is served in a thread of its own and numbered from 1 in the order it is accepted.  The requests
+    in @ref Answered are answered with 204 No Content, and the connection stays open for the next request; any other
+    request is answered with an event stream and one event if the server was created to respond, else not at all:
+    the server then waits for the client to close the connection and reports it.
+*/
+class ProbeServer {
+    public {
+        int port;
+        #! Receives {"conn": <connection>, "path": <path>} for each request read
+        Queue requests();
+        #! Receives {"conn": <connection>, "closed": True} when the client closes the connection of an event stream
+        #! request, else {"conn": <connection>, "closed": False} and the error that ended the wait
+        Queue closed();
+    }
+
+    private {
+        Socket listener();
+        Counter running();
+        Mutex m();
+        bool respond;
+        bool stopping;
+        int conns;
+    }
+
+    #! The requests that are answered with 204 No Content
+    const Answered = {"/after": True, "/warm-up": True};
+
+    #! The time the server waits for a request and then for the client to close the connection
+    const Wait = 30s;
+
+    constructor(bool respond = False) {
+        self.respond = respond;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    #! Ends the accept loop and waits until the connections, which the client must have closed, have been served
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+        }
+        # the accept loop ends with the next connection
+        try {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (True) {
+            Socket conn;
+            try {
+                conn = listener.accept(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            int id;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    conn.close();
+                    return;
+                }
+                id = ++conns;
+            }
+            running.inc();
+            background serve(conn, id);
+        }
+    }
+
+    private serve(Socket conn, int id) {
+        on_exit {
+            conn.close();
+            running.dec();
+        }
+        while (True) {
+            string path;
+            try {
+                hash<auto> hdr = conn.readHTTPHeader(Wait);
+                if (hdr."content-length") {
+                    conn.recv(hdr."content-length".toInt(), Wait);
+                }
+                path = hdr.path;
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the idle connection
+                return;
+            }
+            requests.push({"conn": id, "path": path});
+            if (Answered{path}) {
+                conn.send("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n");
+                continue;
+            }
+            if (respond) {
+                # the client may already have closed the connection
+                try {
+                    conn.send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\r\n"
+                        "data: one\n\n");
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            }
+            # nothing more is sent, so the read ends only when the client closes the connection (or resets it)
+            hash<auto> result;
+            try {
+                conn.recv(1, Wait);
+                result = {"closed": False, "error": "the client sent more data"};
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || (ex.err == "SOCKET-RECV-ERROR" && ex.arg == ECONNRESET)) {
+                    result = {"closed": True};
+                } else {
+                    result = {"closed": False, "error": ex.err + ": " + ex.desc};
+                }
+            }
+            closed.push({"conn": id} + result);
+            return;
+        }
+    }
+}
+
+class RestClientIoSseStartCancelTest inherits QUnit::Test {
+    constructor() : Test("RestClientIo SSE observable startup cancellation around request submission", "1.0",
+            \ARGV) {
+        addTestCase("an SSE startup stopped after the server has read the request closes the connection and "
+            "delivers no event", \testStopAfterSubmit());
+        addTestCase("an SSE startup stopped while its request is submitted ends the request",
+            \testStopDuringSubmission());
+        addTestCase("an SSE startup stopped while start() submits its request on a ready connection ends the request, "
+            "and start() returns", \testStopDuringSynchronousSubmission());
+        set_return_value(main());
+    }
+
+    #! Stops the observable as SseObservable::stopEvents() does: the observable is stopped, then the operation
+    #! is cancelled
+    private static stop(StartHookObservable obs, RestClientIoSseObservableStartOperation op) {
+        obs.stopEvents();
+        op.cancel();
+    }
+
+    #! Waits until a startup operation has handled the result of its submission
+    /** The startup submits its request in start() when its connection is ready at once, and start() then returns
+        when the operation has ended; otherwise the request is submitted in the thread of the async I/O controller,
+        which completes the operation when it has ended.
+
+        @param tid the ID of the thread that called start()
+        @param hook_tid the ID of the thread that ran the test's hook, if it has run
+    */
+    private waitForStartup(SignalingStartOperation op, int tid, *int hook_tid) {
+        if (hook_tid != tid) {
+            assertEq(0, op.completed.waitForZero(60s), "the startup operation is completed");
+        }
+    }
+
+    #! Checks that a startup request stopped while it was submitted does not hold its connection
+    /** The cancel reaches the request either while it is still queued on its connection, which drops it and stays
+        usable, or after it has been written, which closes the connection.  A request sent afterwards then uses the
+        connection again or a new one; either way, a stopped request that the server read must have had its
+        connection closed: a request left running holds its connection until the test ends.
+    */
+    private checkRequestEnded(ProbeServer server, RestClientIo client) {
+        assertEq(204, client.getConnectionManager().acquireStream("http://127.0.0.1:" + server.port)
+            .request("GET", "/after").status_code, "a request sent after the stop is answered");
+        list<string> paths = ();
+        *int held_conn;
+        while (True) {
+            hash<auto> r = server.requests.get(60s);
+            if (r.path == "/after") {
+                break;
+            }
+            if (r.path == "/warm-up") {
+                continue;
+            }
+            push paths, r.path;
+            held_conn = r.conn;
+        }
+        if (exists held_conn) {
+            assertEq(("/events",), paths, "the stopped request was sent once");
+            assertEq({"conn": held_conn, "closed": True}, server.closed.get(60s),
+                "the connection of the stopped request that was sent is closed");
+        } else {
+            assertEq((), paths, "the stopped request was not sent");
+        }
+    }
+
+    #! Stops the startup after the server has read the request, before the operation waits for the response
+    /** The server answers with an event stream and one event once it has read the request; the hook waits until the
+        server has read it, so the stop always lands after submission and before the operation reads the response.
+        The request's own timeout is an hour, so only the cancellation can close its connection.
+    */
+    testStopAfterSubmit() {
+        ProbeServer server(True);
+        on_exit server.stop();
+
+        RestClientIo client({"url": "http://127.0.0.1:" + server.port, "timeout": 3600000});
+        on_exit client.close();
+
+        StartHookObservable obs(client.getConnectionManager(), "http://127.0.0.1:" + server.port);
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        SignalingStartOperation op(client, obs);
+        obs.op = op;
+        # the hook can run in the thread of the async I/O controller, where no assertion can be made
+        list<auto> hook_results = ();
+        int tid = gettid();
+        *int hook_tid;
+        obs.after_submit = sub () {
+            hook_tid = gettid();
+            push hook_results, server.requests.get(60s).path;
+            stop(obs, op);
+            push hook_results, True;
+        };
+        op.start();
+        waitForStartup(op, tid, hook_tid);
+
+        assertEq({"conn": 1, "closed": True}, server.closed.get(60s),
+            "stopping the startup closes the request's connection");
+        assertEq(("/events", True), hook_results, "the request is read by the server, then the startup is stopped");
+        assertEq((), recorder.get(), "a startup stopped before the response delivers no event");
+    }
+
+    #! Stops the startup while its request is submitted in the thread of the async I/O controller
+    /** The hook runs when the stream logs that it starts the request, after its last check of the stream's state
+        and before it submits the request, which is where a cancel from another thread finds no stream ID.
+    */
+    testStopDuringSubmission() {
+        ProbeServer server();
+        on_exit server.stop();
+
+        HookLogger logger();
+        RestClientIo client({"url": "http://127.0.0.1:" + server.port, "timeout": 3600000, "logger": logger});
+        on_exit client.close();
+
+        StartHookObservable obs(client.getConnectionManager(), "http://127.0.0.1:" + server.port);
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        SignalingStartOperation op(client, obs);
+        int tid = gettid();
+        *int hook_tid;
+        logger.arm("starting streaming request:", sub () {
+            hook_tid = gettid();
+            stop(obs, op);
+        });
+        op.start();
+        waitForStartup(op, tid, hook_tid);
+
+        checkRequestEnded(server, client);
+        assertEq((), recorder.get(), "a startup stopped before the response delivers no event");
+    }
+
+    #! Stops the startup while start() itself submits its request, on a connection made ready by a warm-up request
+    /** The request then fails with \c HTTPCLIENT-CANCELLED in start(), which returns, as for a startup stopped later.
+    */
+    testStopDuringSynchronousSubmission() {
+        ProbeServer server();
+        on_exit server.stop();
+
+        HookLogger logger();
+        string url = "http://127.0.0.1:" + server.port;
+        RestClientIo client({"url": url, "timeout": 3600000, "logger": logger});
+        on_exit client.close();
+        assertEq(204, client.getConnectionManager().acquireStream(url).request("GET", "/warm-up").status_code);
+
+        StartHookObservable obs(client.getConnectionManager(), url);
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        SignalingStartOperation op(client, obs);
+        int tid = gettid();
+        *int hook_tid;
+        logger.arm("starting streaming request:", sub () {
+            hook_tid = gettid();
+            stop(obs, op);
+        });
+        op.start();
+
+        assertEq(tid, hook_tid, "the request is submitted in start()");
+        checkRequestEnded(server, client);
+        assertEq((), recorder.get(), "a startup stopped before the response delivers no event");
+    }
+}

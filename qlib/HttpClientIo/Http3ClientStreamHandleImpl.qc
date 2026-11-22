@@ -248,7 +248,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (notifier) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                     request_body_streaming = False;
                     delete data_channel;
@@ -261,7 +264,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                     request_body_streaming = False;
                     delete data_channel;
@@ -286,19 +292,23 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
+        bool cancelled;
         try {
             # Submit the streaming request — register the data_channel as the
             # completion action so each response chunk is pushed to it via
             # ChannelAction::trySend (pure C++ on I/O thread)
-            stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
-                body, data_channel, body_streaming, notifier, sse_install_eligible);
+            cancelled = recordSubmittedStream(h3conn.submitRequestStreamingWithChannel(method, path, headers,
+                body, data_channel, body_streaming, notifier, sse_install_eligible));
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                state = HttpClientStreamState::Pending;
+                # a stream cancelled meanwhile stays cancelled
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
                 streaming = False;
                 request_body_streaming = False;
                 delete data_channel;
@@ -308,6 +318,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 checkSubmissionRefused(ex);
             }
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return stream_id;
@@ -338,7 +351,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                 }
                 # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
@@ -359,18 +375,25 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
 
+        bool cancelled;
         try {
-            stream_id = h3conn.submitRequestSse(method, path, headers, body, queue, notifier);
+            cancelled = recordSubmittedStream(h3conn.submitRequestSse(method, path, headers, body, queue, notifier));
             @assert(stream_id >= 0);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                state = HttpClientStreamState::Pending;
+                # a stream cancelled meanwhile stays cancelled
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
                 streaming = False;
             }
             releaseReservationIfHeld();
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return queue;

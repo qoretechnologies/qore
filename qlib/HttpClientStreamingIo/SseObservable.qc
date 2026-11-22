@@ -413,15 +413,55 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             return;
         }
 
-        stream = mgr.acquireStream(url);
+        # stopEvents() can run in another thread at any time: it cancels the stream it finds recorded, so the stream
+        # is recorded under the lock it takes, and it is not started if the observable was stopped first
+        HttpClientIo::HttpClientStreamHandle new_stream = mgr.acquireStream(url);
+        bool stopped;
+        {
+            AutoLock al(m);
+            stopped = stop;
+            if (!stopped) {
+                stream = new_stream;
+            }
+        }
+        if (stopped) {
+            new_stream.cancel();
+            notifyClosed();
+            return;
+        }
 
         hash<auto> req_headers = {
             "Accept": "text/event-stream",
         } + (headers ?? {});
 
-        hash<auto> sse_info = stream.startSseStreamingWithNotifier(method, path, req_headers, body);
-        sse_queue = sse_info.queue;
-        notifier = sse_info.notifier;
+        hash<auto> sse_info;
+        try {
+            sse_info = new_stream.startSseStreamingWithNotifier(method, path, req_headers, body);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(m);
+                stopped = stop;
+            }
+            if (!stopped) {
+                rethrow;
+            }
+            # the stream was cancelled by stopEvents() while it was started
+            notifyClosed();
+            return;
+        }
+        {
+            AutoLock al(m);
+            stopped = stop;
+            if (!stopped) {
+                sse_queue = sse_info.queue;
+                notifier = sse_info.notifier;
+            }
+        }
+        if (stopped) {
+            # stopEvents() cancelled the stream, which it found recorded, while it was started
+            notifyClosed();
+            return;
+        }
 
         startNotifierPoll();
     }
