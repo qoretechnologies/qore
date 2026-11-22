@@ -7420,7 +7420,7 @@ sock.setSslTrustStore(SSLTrustStore::getDefault());
 */
 nothing Socket::setSslTrustStore(*SSLTrustStore[QoreSSLTrustStore] store) {
     // the socket takes a reference of its own; the holder releases the one from the argument
-    s->setSslTrustStore(store ? *store : nullptr, xsink);
+    qore_socket_object_private(s).setSslTrustStore(store ? *store : nullptr, xsink);
 }
 
 //! Sets the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed

@@ -5675,13 +5675,13 @@ void QoreSocketObject::setSslCaLocations(const char* ca_file, const char* ca_pat
         -1, "setSslCaLocations", "tls-state", xsink), xsink);
 }
 
-void QoreSocketObject::setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
     if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
-        qore_socket_object_private(this).setSslTrustStoreForAsyncPoll(ts, xsink);
+        setSslTrustStoreForAsyncPoll(ts, xsink);
         return;
     }
 
-    ValueHolder rv(qore_socket_object_exec_poll_output(this, new QoreSocketObjectTlsStatePollOperation(this, ts),
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts),
         -1, "setSslTrustStore", "tls-state", xsink), xsink);
 }
 
