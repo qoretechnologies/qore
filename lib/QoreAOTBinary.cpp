@@ -21657,6 +21657,15 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
+        // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent
+        // class resolved them here (the classes are resolved in topological order, parent classes first) are not
+        // pending in this class, as in qore_class_private::parseResolveAbstract(); otherwise they would be
+        // implemented again here, with the first concrete variant of the whole hierarchy (qore#7219, qore#7206)
+        priv->ahm.parseDropResolvedInParents(*priv, *priv->scl);
+        if (priv->ahm.empty()) {
+            priv->parse_resolve_abstract = true;
+            continue;
+        }
         // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
         // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
         priv->ahm.parseInit(*priv, priv->scl);
