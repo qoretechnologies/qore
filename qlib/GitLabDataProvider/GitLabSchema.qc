@@ -118,12 +118,6 @@ public class GitLabSchema {
     }
 
     private {
-        #! The ID of the lazy value of getSchema() (qore#6843)
-        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \GitLabSchema::buildSchemaValue());
-        #! The ID of the lazy value of getActionSet() (qore#6843)
-        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \GitLabSchema::buildActionSetValue());
         #! The parsed schema
         static *OpenApi3Schema schema;
 
@@ -132,6 +126,12 @@ public class GitLabSchema {
     }
 
     private:internal {
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GitLabSchema::buildActionSetValue());
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GitLabSchema::buildSchemaValue());
         #! Serializes construction of the schema and the action set
         static Mutex lck();
     }

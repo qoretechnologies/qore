@@ -18,13 +18,13 @@ public namespace AzureDocumentIntelligenceDataProvider {
 */
 public class AzureDocumentIntelligenceSchema {
     private {
-        #! The ID of the lazy value of getActionSets() (qore#6843)
-        static int action_sets_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \AzureDocumentIntelligenceSchema::buildActionSetsValue());
         static list<RestSchemaActionSet> sets = ();
     }
 
     private:internal {
+        #! The ID of the lazy value of getActionSets() (qore#6843)
+        static int action_sets_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \AzureDocumentIntelligenceSchema::buildActionSetsValue());
         static Mutex lck();
     }
 

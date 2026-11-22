@@ -163,6 +163,23 @@ public class PineconeSchema {
     }
 
     private {
+        #! The parsed schemas, keyed by file name
+        static hash<string, OpenApi3::OpenApi3Schema> schemas = {};
+
+        #! The action set built from the control-plane description and its manifest
+        static *RestSchemaActions::RestSchemaActionSet control_set;
+
+        #! Separate Admin action set, using service-account authentication
+        static *RestSchemaActions::RestSchemaActionSet admin_set;
+
+        #! The action set built from the data-plane description and its manifest
+        static *RestSchemaActions::RestSchemaActionSet data_set;
+
+        #! The action set built from the inference description and its manifest
+        static *RestSchemaActions::RestSchemaActionSet inference_set;
+    }
+
+    private:internal {
         #! The ID of the lazy value of getControlSchema() (qore#6843)
         static int control_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
             \PineconeSchema::buildControlSchemaValue());
@@ -187,23 +204,6 @@ public class PineconeSchema {
         #! The ID of the lazy value of getDataActionSet() (qore#6843)
         static int data_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
             \PineconeSchema::buildDataActionSetValue());
-        #! The parsed schemas, keyed by file name
-        static hash<string, OpenApi3::OpenApi3Schema> schemas = {};
-
-        #! The action set built from the control-plane description and its manifest
-        static *RestSchemaActions::RestSchemaActionSet control_set;
-
-        #! Separate Admin action set, using service-account authentication
-        static *RestSchemaActions::RestSchemaActionSet admin_set;
-
-        #! The action set built from the data-plane description and its manifest
-        static *RestSchemaActions::RestSchemaActionSet data_set;
-
-        #! The action set built from the inference description and its manifest
-        static *RestSchemaActions::RestSchemaActionSet inference_set;
-    }
-
-    private:internal {
         #! Serializes construction of the schemas and the action sets
         static Mutex lck();
     }
