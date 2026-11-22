@@ -5073,9 +5073,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # or doResponse() because those capture to async_response_out, which would
                     # replace the eventual main response and never reach the client.
                     if (resp."code" == 100) {
-                        if (cx."header-info".http2) {
-                            # HTTP/2: no 100-continue mechanism; the body is already being sent
-                            # by the client on the stream — nothing to do
+                        # the server's header information of the request: the handler's code got a copy of the
+                        # request context
+                        if (cx."header-info".http2 || cx."header-info".http3) {
+                            # HTTP/2 and HTTP/3: no HTTP/1.1 100-continue; the body is already being sent by the
+                            # client on the stream, and the connection's socket is shared — nothing to do
+                            # (qore#7221)
                         } else {
                             # HTTP/1.x: handler thread owns socket exclusively (removed
                             # from I/O controller at header dispatch). sendIntern handles
