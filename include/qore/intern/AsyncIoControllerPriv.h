@@ -864,6 +864,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
+    friend class AsyncIoPreservedSubmitTest;
     friend class AsyncIoFrameSendTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
@@ -2036,6 +2037,15 @@ private:
         }
 
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
+        //! The submissions (SubmitOp commands) for this thread while it reads no commands (guarded by the lock)
+        /** A stopping thread keeps the submissions that it finds in its last command drain here, and a submission
+            routed to the thread after that drain or while it is stopped is kept here too; they are moved to the
+            command queue when the thread is started again (startIntern()).  Unlike the command queue, the controller
+            can see them: cancelByProgram() takes the submissions of its Program and cancels them while the Program is
+            still valid, as an operation of the Program must not be admitted after its cancellation (qore#7225), and
+            stop() releases them.
+        */
+        std::vector<Command> preserved_submits;
         std::atomic<bool> running{false};  //!< True when this thread accepts commands
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
@@ -2052,6 +2062,11 @@ private:
         */
         bool commands_closed = false;
 #ifdef DEBUG
+        //! Test hook: when set, the stopping thread waits on \c dbg_cond before its last command drain until it is
+        //! cleared, so that a command queued meanwhile is found by that drain
+        bool dbg_hold_before_drain = false;
+        //! Test hook: true while the thread waits before its last command drain
+        bool dbg_held_before_drain = false;
         //! Test hook: when set, the thread waits on \c dbg_cond after its last command drain until it is cleared
         bool dbg_hold_after_drain = false;
         //! Test hook: true while the thread waits after its last command drain
@@ -2753,6 +2768,19 @@ private:
         @param xsink for exceptions
     */
     DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
+
+    //! Returns the operation of a SubmitOp command as it is described when it is admitted; the payload of \a cmd
+    //! passes to the returned entry, whose cleanup() releases it
+    DLLLOCAL PollInfo takeSubmitPollInfo(Command& cmd);
+
+    //! Takes the preserved submissions of the given Program from a thread that reads no commands (qore#7225)
+    /** The caller holds the lock; the operations are appended to \a out, to be canceled by the caller
+
+        @param tp the thread
+        @param pgm the Program whose submissions are taken
+        @param out the operations taken
+    */
+    DLLLOCAL void takeProgramSubmitsLocked(IoThreadContext& tp, QoreProgram* pgm, std::vector<PollInfo>& out);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     /** @param pinfo the operation

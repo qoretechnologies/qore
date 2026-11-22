@@ -4849,7 +4849,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             // tombstone (SubmitOp accept gate).
             ++submit_seq;
             cmd.seq_at_push = ++target->submit_seq;
-            target->cmdq.push(std::move(cmd));
+            if (readsCommands(*target)) {
+                target->cmdq.push(std::move(cmd));
+            } else {
+                // a thread past its last command drain, or stopped, processes the submission when it is started
+                // again (below); it is kept where cancelByProgram() can see it until then (qore#7225)
+                target->preserved_submits.push_back(std::move(cmd));
+            }
             socket_async_io_guard.release();
         }
         if (thread_idx) {
@@ -6274,6 +6280,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                                 cancel_pinfos.push_back(tp.takeUnregisteredOp(it));
                             }
                         }
+                        // and the submissions that it keeps until it is started again (qore#7225)
+                        takeProgramSubmitsLocked(tp, pgm, cancel_pinfos);
                     }
                 }
                 if (!live_remote.empty()) {
@@ -6389,6 +6397,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                                 cancel_pinfos.push_back(tp->takeUnregisteredOp(it));
                             }
                         }
+                        // and the submissions that it keeps until it is started again (qore#7225)
+                        takeProgramSubmitsLocked(*tp, pgm, cancel_pinfos);
                     }
                 }
                 if (!live_targets.empty()) {
@@ -6425,6 +6435,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                             cancel_pinfos.push_back(tp->takeUnregisteredOp(it));
                         }
                     }
+                    // and the submissions that it keeps until it is started again (qore#7225)
+                    takeProgramSubmitsLocked(*tp, pgm, cancel_pinfos);
                 }
             }
         }
@@ -6772,6 +6784,24 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
     }
 
     waitStop(xsink);
+
+    // the submissions kept for a thread that was not started again are released (qore#7225); the cleanup takes the
+    // lock itself where it needs it (see cleanupAbandonedCommand())
+    {
+        std::vector<Command> abandoned;
+        {
+            AutoLocker al(m);
+            for (auto& tp : io_threads) {
+                for (auto& pcmd : tp->preserved_submits) {
+                    abandoned.push_back(std::move(pcmd));
+                }
+                tp->preserved_submits.clear();
+            }
+        }
+        for (auto& cmd : abandoned) {
+            cleanupAbandonedCommand(cmd, xsink);
+        }
+    }
 
     // Stop and destroy call dispatcher so async callbacks complete before shutdown.
     // A fresh dispatcher will be lazily created on next submit() if needed.
@@ -7530,6 +7560,12 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         }
         // a thread that has stopped processes commands again once started
         t.commands_closed = false;
+        // with the submissions kept for it, in their order (qore#7225); the thread is not running, and no command
+        // was queued to it after them
+        for (auto& pcmd : t.preserved_submits) {
+            t.cmdq.push(std::move(pcmd));
+        }
+        t.preserved_submits.clear();
 
         if (!t.loop || !t.loop->isValid()) {
             xsink->raiseException("ASYNC-IO-ERROR", "event loop %d is not valid", i);
@@ -9143,6 +9179,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     bool restart_after_exit = false;
     {
         AutoLocker al(m);
+#ifdef DEBUG
+        // test hook: holds the stopping thread before its last command drain, which finds the commands queued
+        // meanwhile
+        if (t.dbg_hold_before_drain) {
+            t.dbg_held_before_drain = true;
+            t.dbg_cond.broadcast();
+            while (t.dbg_hold_before_drain) {
+                t.dbg_cond.wait(m);
+            }
+            t.dbg_held_before_drain = false;
+        }
+#endif
 
         // Remove notifier from event loop
         t.loop->remove(t.notifier->fd(), xsink);
@@ -9274,8 +9322,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         abandoned_cmds.push_back(std::move(pending_cmd));
                         continue;
                     }
-                    // Re-queue for the next I/O thread to process
-                    t.cmdq.push(std::move(pending_cmd));
+                    // kept for the next I/O thread to process, where cancelByProgram() can see it (qore#7225): this
+                    // thread processes no more commands, and a command queued to it would not be seen by a
+                    // cancellation until the thread is started again
+                    t.preserved_submits.push_back(std::move(pending_cmd));
                     restart_after_exit = true;
                     continue;
                 }
@@ -9329,6 +9379,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         pending_cmd.continue_poll_ex->deref(xsink);
                     }
                 }
+            }
+
+            // the submissions preserved for this thread are released when the controller is shutting down, as no
+            // thread is started again
+            if (final_shutdown) {
+                for (auto& pcmd : t.preserved_submits) {
+                    abandoned_cmds.push_back(std::move(pcmd));
+                }
+                t.preserved_submits.clear();
             }
 
             // Signal any remaining cancel waiters whose Cancel commands
@@ -9410,7 +9469,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.autostop_idle_since = 0;
 
         bool restart_preserved_commands = false;
-        if (restart_after_exit && !shutting_down) {
+        // also for a submission routed to this thread after its last command drain (qore#7225)
+        if ((restart_after_exit || !t.preserved_submits.empty()) && !shutting_down) {
             // SubmitOp commands can arrive after the autostop idle check but
             // before running=false is visible to the submitting worker. They
             // were re-queued above; restart now so waitForProcessing() does not
@@ -10569,6 +10629,31 @@ void AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline(IoThreadCon
 }
 
 void AsyncIoControllerPriv::refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink) {
+    PollInfo pinfo = takeSubmitPollInfo(cmd);
+    doCancelIntern(pinfo, xsink, cancel_ex);
+    pinfo.cleanup(xsink);
+}
+
+void AsyncIoControllerPriv::takeProgramSubmitsLocked(IoThreadContext& tp, QoreProgram* pgm, std::vector<PollInfo>& out) {
+    if (tp.preserved_submits.empty()) {
+        return;
+    }
+    // the submissions of other Programs keep their order
+    std::vector<Command> keep;
+    keep.reserve(tp.preserved_submits.size());
+    for (auto& cmd : tp.preserved_submits) {
+        if (cmd.submit_spop_obj && cmd.submit_spop_obj->getProgram() == pgm) {
+            ASYNC_IO_TRACE("preserved submit CANCEL_BY_PROGRAM key='%s' owner='%s'\n", cmd.key.c_str(),
+                cmd.owner.c_str());
+            out.push_back(takeSubmitPollInfo(cmd));
+        } else {
+            keep.push_back(std::move(cmd));
+        }
+    }
+    tp.preserved_submits.swap(keep);
+}
+
+AsyncIoControllerPriv::PollInfo AsyncIoControllerPriv::takeSubmitPollInfo(Command& cmd) {
     // the operation is described as it is when it is admitted (processCommands(), SubmitOp), so that its abort() and
     // onComplete() run, and its result is delivered, as for an admitted operation that is canceled: with the
     // sandbox context of the code that submitted it (and its module cleanup state), the owner that it inherited, and
@@ -10618,8 +10703,7 @@ void AsyncIoControllerPriv::refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, 
     cmd.submit_socket_async_io = false;
     cmd.submit_route_sock_hash.clear();
     cmd.submit_route_thread_idx = -1;
-    doCancelIntern(pinfo, xsink, cancel_ex);
-    pinfo.cleanup(xsink);
+    return pinfo;
 }
 
 void AsyncIoControllerPriv::dispatchStreamNotifications(SocketPollOperationBase* spop_base, QoreObject* spop_obj,
