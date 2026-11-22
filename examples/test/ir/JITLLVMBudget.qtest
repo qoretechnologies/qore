@@ -43,7 +43,8 @@ class JITLLVMBudgetTest inherits QUnit::Test {
     }
 
     testDefault() {
-        string code = getCode(200, False);
+        # 300 statements lower to about 210000 LLVM instructions
+        string code = getCode(300, False);
         hash<auto> r = run(code, "");
         assertTrue(overBudget(r), "skipped: " + r.trace.join("\n"));
         assertEq(getAstOutput(code), r.stdout, "results");
