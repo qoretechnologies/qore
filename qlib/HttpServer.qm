@@ -6001,17 +6001,28 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private code<nothing()> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
             *Socket s, softstring sock_id, *string handler_name, HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
         # the controller and the handler keep this code for the life of the connection, so its references to the
-        # controller and to the listener (which references the server) are weak, as the context's own reference to
-        # the controller is (see the 101 path); the connection's context still references the listener, so the
-        # Program is kept running while the connection is open (see Priv::ExternalConnectionKeeper)
+        # controller and to the listener are opaque (@=: strong references that the scan for reference cycles does
+        # not follow), as the context's own reference to the controller is (see the 101 path); the listener refers to
+        # the server weakly, and the connection's context still references the listener, so the Program is kept
+        # running while the connection is open (see Priv::ExternalConnectionKeeper)
         hash<auto> refs;
         refs.ctrl @= asyncIo;
         refs.listener @= listener;
+        # a weak reference (:=, not @=): the connection's context, which keeps this code, must not keep the server
+        # alive
+        refs.server := self;
         return sub () {
             # runs once
             if (!holder.claim()) {
                 return;
             }
+            # the server, held while the end runs and released last (the on_exit blocks run in reverse order): when
+            # the last other reference to the server is released while the end runs (by the module cleanup in another
+            # thread, for example, while the end uses the server through the listener's weak reference to it), the
+            # server is destroyed only once the connection is no longer counted, as its destructor's stop of the
+            # listener waits for the listener's connections, and so for this one until holder.release() has run
+            *HttpServer server = refs.server;
+            on_exit remove server;
             # the end is reported to the request's target once the server's end of the connection is complete
             on_exit pend.setEnded();
             # the listener counts the connection until its end is complete
@@ -6043,7 +6054,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         thread of its own, or, if no thread can be started, in the calling thread.
     */
     private code<nothing(code<nothing()>)> getHandlerPoolSubmitter() {
-        # held in the connection's context, so the references to the controller and the target are weak
+        # held in the connection's context, so the references to the controller and the target are opaque (@=: not
+        # followed by the scan for reference cycles); neither references the server
         hash<auto> refs;
         refs.ctrl @= asyncIo;
         refs.target @= asyncTarget;
