@@ -9676,7 +9676,8 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
     own that is not connected, whose QUIC methods that take a session act on the listener's socket for the handler's
     own session only, and raise an exception for another session; those that also take a stream act on the
     handler's own stream only, and raise an exception for another stream, which can be a request of the same client to
-    another handler.  Its other methods are those of its own, unconnected
+    another handler; submitQuicShutdownNotice() and submitQuicShutdown(), which end the whole session, raise an
+    exception (qore#7215).  Its other methods are those of its own, unconnected
     socket, except these, which give what concerns the handler's own request: getQuicSessionId(), getSSLCipherName()
     and getSSLCipherVersion() (those of its session), and isQuic(), isSecure(), isOpen(), getSocketInfo() and
     getEncoding() (those of the listener's socket).  shutdown() and close() end the handler's own stream, never its
@@ -9796,14 +9797,16 @@ class Http3HandlerSocket inherits Qore::Socket {
         real.submitQuicResponse(session_id, stream_id, status_code, headers, body);
     }
 
+    # the methods that end the whole session are refused also for the handler's own session, which can carry
+    # requests of the same client to other handlers (qore#7215)
     nothing submitQuicShutdownNotice(int session_id) {
         checkSession(session_id);
-        real.submitQuicShutdownNotice(session_id);
+        refuseSessionEnd("submitQuicShutdownNotice");
     }
 
     nothing submitQuicShutdown(int session_id) {
         checkSession(session_id);
-        real.submitQuicShutdown(session_id);
+        refuseSessionEnd("submitQuicShutdown");
     }
 
     hash<QuicGoawayStateInfo> getQuicSessionGoawayState(int session_id) {
@@ -10016,6 +10019,12 @@ class Http3HandlerSocket inherits Qore::Socket {
         }
         ended = False;
         return False;
+    }
+
+    #! Raises an exception for a method that ends the whole session of the handler's request (qore#7215)
+    private:internal static refuseSessionEnd(string method) {
+        throw "HTTP3-HANDLER-SOCKET-ERROR", sprintf("%s() ends the whole QUIC session, which can carry requests to "
+            "other handlers; a handler ends its own stream with shutdown() or close()", method);
     }
 
     #! Raises an exception unless the session and the stream are the handler's own and its stream is not closed
