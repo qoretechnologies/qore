@@ -210,8 +210,8 @@ public class SqlTestBase inherits QUnit::Test {
         if (pass) {
             assertEq(-1, sprintf("%y", h).find((user ?? "") + "/" + pass + "@"),
                 "the serialized data has no credentials of the datasource");
-            # no password key holds the password, and no datasource or connection field has it anywhere in its value;
-            # only a database or object name elsewhere in the data can be the same text as a short password
+            # no password key holds the password, and no datasource or connection field has it as its password; a
+            # short password can also be the name of the database or of a schema object, or part of one
             list<string> leaks = SqlTestBase::findCredentialLeaks(h, pass);
             assertEq((), leaks, "no password or datasource field of the serialized data has the password");
         }
@@ -266,12 +266,36 @@ public class SqlTestBase inherits QUnit::Test {
                 break;
             }
             case NT_STRING:
-                if (in_ds && v.find(pass) != -1) {
+                if (in_ds && SqlTestBase::hasCredentialPassword(v, pass)) {
                     rv += path;
                 }
                 break;
         }
         return rv;
+    }
+
+    #! returns True if the datasource or connection string \a v has \a pass as its password
+    /** The password is looked for only where a connection string has it: as the password of a datasource string
+        ("user/pass@db"), of a URL ("user:pass@host") or of a password option ("pass=...", "password=..."); a short
+        password can also be the name of the database, of a host or of a user, or part of one (qore#7016)
+    */
+    static bool hasCredentialPassword(string v, string pass) {
+        try {
+            if (parse_datasource(v).pass == pass) {
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # not a datasource string
+        }
+        if (v.find("/" + pass + "@") != -1 || v.find(":" + pass + "@") != -1) {
+            return True;
+        }
+        foreach string opt in (v =~ x/(?:^|[{,;&?\s])(?:pass|password|pwd)\s*=\s*([^,;&}\s]*)/gi) {
+            if (opt == pass) {
+                return True;
+            }
+        }
+        return False;
     }
 
     deferrableForeignConstraintsTest() {
