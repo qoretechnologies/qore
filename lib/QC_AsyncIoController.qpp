@@ -1159,6 +1159,9 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     dispatches the callback to a worker thread in the async-I/O controller's dispatcher
     pool — it is @b not invoked on the I/O thread.
 
+    The callback runs with the options of the code that set it and in the context of the host, also for a timer that
+    sandboxed code added: not in the sandbox of the code that added the timer, whose data it receives.
+
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 

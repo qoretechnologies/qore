@@ -9124,8 +9124,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // a code reference is tagged with the timer's owner (if any); see above
             // the timer's own code runs with the options of the code that added the timer, the timer callback with
             // those of the code that set it (qore#6208)
+            // the timer's own code runs in the sandbox of the code that added the timer, and continues its work (its
+            // generation); the timer callback is the host's code (sandboxed code cannot set it), which runs in the
+            // host's context, as work of its own, also for the timer of sandboxed code (qore#7010); except for a timer
+            // of work that the module cleanup handed over, whose context makes the callback part of the cleanup (see
+            // QoreModuleCleanupDelegateHelper), as it can enter the Programs of the modules that the cleanup closed
+            AsyncIoSandboxContext item_ctx;
+            if (is_code || async_io_module_cleanup_delegate(te.sandbox_ctx)) {
+                item_ctx = std::move(te.sandbox_ctx);
+            }
             call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref.release(), args.release(),
-                is_code ? te.owner : std::string(), std::move(te.sandbox_ctx),
+                is_code ? te.owner : std::string(), std::move(item_ctx),
                 is_code ? std::move(te.runtime_po) : cb_snapshot_po, is_code ? te.cb_app_id : 0);
 #ifdef DEBUG
             if (dbg_pause) {
