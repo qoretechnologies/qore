@@ -1874,6 +1874,10 @@ private:
         qore_program_id_t cb_app_id = 0;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
+        //! The generation of the thread that added the timer (runtime_get_thread_generation(), which unlike its TID is
+        //! never reused): module code that runs for no application (the code of a thread that module code started)
+        //! cancels only the timers for no application that its own thread added (qore#7010)
+        uint64_t adder_gen = 0;
         //! The ID of the application Program that module code added the timer for, if for_app is set
         /** Module code running for an application with restrictions can cancel only the timers added for the same
             application; see runtime_get_module_caller_app()
@@ -2388,9 +2392,6 @@ private:
         replaces only the operations of its own application, as keys and owners can be guessed
     */
     DLLLOCAL static qore_program_id_t callerAppId();
-
-    //! the capture of the application of a thread that module code starts (see callerAppId())
-    friend qore_program_id_t qore_async_io_thread_start_app_id();
 
     //! Returns the operations that the calling code may cancel or flush by key or owner
     /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no

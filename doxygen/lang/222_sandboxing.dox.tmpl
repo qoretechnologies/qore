@@ -560,6 +560,17 @@ authenticate();
       @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
     - module options: @ref Qore::set_module_option() "set_module_option()"
 
+    The operations and timers of the process-wide async I/O controller belong to the application that submits or adds
+    them: code that is sandboxed cancels, flushes and replaces only those of its own application, by key, owner or ID
+    (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()",
+    @ref Qore::AsyncIoController::cancelByKey() "cancelByKey()",
+    @ref Qore::AsyncIoController::cancelByOwner() "cancelByOwner()" and
+    @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()").
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
     the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
     callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider

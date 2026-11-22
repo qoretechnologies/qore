@@ -386,6 +386,26 @@ auto sub cancel_owner_bg(string owner) {
     return AioCancelBgLib::Lib::cancelOwnerBg(owner);
 }
 
+hash<auto> sub add_timer_bg_tid() {
+    return AioCancelBgLib::Lib::addTimerBgTid();
+}
+
+hash<auto> sub cancel_timer_bg_tid(int id) {
+    return AioCancelBgLib::Lib::cancelTimerBgTid(id);
+}
+
+sub start_service() {
+    AioCancelBgLib::Lib::startService();
+}
+
+bool sub cancel_timer_call(int id) {
+    return AioCancelBgLib::Lib::cancelTimerCall(id);
+}
+
+bool sub direct_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
 auto sub add_timer_bg() {
     return AioCancelBgLib::Lib::addTimerBg();
 }
@@ -450,6 +470,7 @@ bool sub direct_key(string key) {
         addTestCase("the threads that a module starts for tenants act for those tenants", \moduleThreadTest());
         addTestCase("a tenant does not cancel the operation of a listener of the host by its key or owner",
             \listenerOperationTest());
+        addTestCase("the work of a module's service thread belongs to no tenant", \serviceThreadTest());
         addTestCase("the timers of the threads that a module starts for tenants are those tenants'",
             \moduleThreadTimerTest());
         addTestCase("the host's code in the callback of a tenant's operation acts for the tenant",
@@ -809,8 +830,12 @@ bool sub direct_key(string key) {
         assertEq(NT_OBJECT, b_rq.typeCode(), "another tenant's replacement");
         assertTrue(b_rq.get(HangGuard).canceled, "another tenant's replacement is refused");
         assertEq(0, a_rq.size(), "the tenant's operation was not canceled or replaced");
-        # the tenant cancels its own operation through the module's thread
-        assertTrue(a.callFunction("cancel_bg", key + "-a"), "the tenant's cancel");
+        # the code of a thread that module code starts runs for no application (it can serve every caller of the
+        # module): the tenant does not cancel its own operation through the module's thread either (giving the
+        # application of a call to the thread that serves it is qore#6245); the host cancels it
+        assertFalse(a.callFunction("cancel_bg", key + "-a"), "the tenant's cancel through the module's thread");
+        assertEq(0, a_rq.size(), "the tenant's operation is still there");
+        assertTrue(AsyncIoController::cancelByKey(key + "-a"), "the host's cancel");
         assertTrue(a_rq.get(HangGuard).canceled);
     }
 
@@ -837,6 +862,27 @@ bool sub direct_key(string key) {
         assertTrue(rq.get(HangGuard).canceled);
     }
 
+    #! a module's service thread, started during tenant a's call, serves every caller of the module: its timers and
+    #! operations belong to no application, so a does not cancel them and the host does (qore#6208)
+    serviceThreadTest() {
+        # tenants with a restriction that the module does not have, for which module code tags its timers
+        Program a = getTenantBg(PO_NO_LOCALE_CONTROL);
+        a.callFunction("start_service");
+        on_exit AioCancelBgLib::Lib::stopService();
+        string key = getName("service");
+        on_exit AsyncIoController::cancelByOwner(key);
+        int id = AioCancelBgLib::Lib::serviceAddTimer();
+        on_exit AsyncIoController::cancelTimer(id);
+        auto rq = AioCancelBgLib::Lib::serviceSubmit(key);
+        assertEq(NT_OBJECT, rq.typeCode(), "the service's operation");
+        assertFalse(a.callFunction("cancel_timer_call", id), "a does not cancel the service's timer");
+        assertFalse(a.callFunction("direct_key", key), "a does not cancel the service's operation");
+        assertEq(0, rq.size(), "the service's operation is still there");
+        assertTrue(AsyncIoController::cancelTimer(id), "the host cancels the service's timer");
+        assertTrue(AsyncIoController::cancelByKey(key), "the host cancels the service's operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
     #! a timer that the thread of a module adds for a tenant is that tenant's: another tenant's thread of the module
     #! does not cancel it (L2)
     moduleThreadTimerTest() {
@@ -846,7 +892,19 @@ bool sub direct_key(string key) {
         int id = a.callFunction("add_timer_bg");
         on_exit AsyncIoController::cancelTimer(id);
         assertFalse(b.callFunction("cancel_timer_bg", id), "another tenant does not cancel the timer");
-        assertTrue(a.callFunction("cancel_timer_bg", id), "the tenant cancels its timer");
+        # the timer belongs to no application (the module's thread can serve every caller of the module): the tenant
+        # does not cancel it through another thread of the module either (qore#6245); the host cancels it
+        assertFalse(a.callFunction("cancel_timer_bg", id), "the tenant's cancel through another thread of the module");
+        assertTrue(AsyncIoController::cancelTimer(id), "the host's cancel");
+
+        # a thread that module code starts in another tenant's call after the thread that added a timer has ended (and
+        # that can have its TID) does not cancel it
+        hash<auto> added = a.callFunction("add_timer_bg_tid");
+        on_exit AsyncIoController::cancelTimer(added.id);
+        hash<auto> c = b.callFunction("cancel_timer_bg_tid", added.id);
+        assertFalse(c.result, sprintf("another tenant's later thread of the module (TID %d, the adder's %d)", c.tid,
+            added.tid));
+        assertTrue(AsyncIoController::cancelTimer(added.id), "the host's cancel");
     }
 
     #! the host's code that runs in the callback of a tenant's operation (an object of the host's class that the
