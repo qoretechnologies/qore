@@ -25,8 +25,17 @@
     and locals that hold a value, of the types object, string, int, list and hash, in nested blocks, a recursion and a
     method; its output must be that of the AST interpreter in every execution mode, on the IR tier, with synchronous
     JIT compilation and as AOT executables.
+
+    on-exit-child-program.q (#7259) calls functions of a child Program with Program::callFunctionArgs(): wrappers that
+    save a global in a local, set it and restore it with on_exit when the function throws directly, through
+    call_function_args(), through a method and inside a try block, whether the saved value is a value or NOTHING.
 */
 class OnExitNothingLocalsTest inherits QUnit::Test {
+    public {
+        #! the scripts that the test runs
+        const Scripts = ("on-exit-nothing-locals", "on-exit-child-program");
+    }
+
     private {
         string qore_bin;
         string qcc_bin;
@@ -49,7 +58,7 @@ class OnExitNothingLocalsTest inherits QUnit::Test {
     #! checks that the AST interpreter's output has the lines that the handlers must produce, so that the comparison
     #! with the other modes compares the right thing
     astTest() {
-        string out = expected();
+        string out = expected("on-exit-nothing-locals");
         # a block left by an exception: the handler restores the local that holds NOTHING before the catch block runs
         assertTrue(out.find("exit object (fail=True): caught: NOTHING\n") >= 0, "exit object");
         assertTrue(out.find("exit string: caught: NOTHING\n") >= 0, "exit string");
@@ -59,20 +68,26 @@ class OnExitNothingLocalsTest inherits QUnit::Test {
         # and the one that holds a value
         assertTrue(out.find("exit object with a value (fail=True): caught: N(7)\n") >= 0, "a value");
         assertTrue(out.find("thread_exit: exit NOTHING\n") >= 0, "thread_exit");
+        # a function of a child Program restores the saved value, whatever the way it is left
+        string child = expected("on-exit-child-program");
+        assertTrue(child.find("  wrapArgs: threw X, then -1\n") >= 0, "call_function_args in a child Program");
+        assertTrue(child.find("  wrapDirect: threw X, then null\n") >= 0, "a saved NOTHING in a child Program");
     }
 
     #! runs the script in every execution mode, on the IR tier and with synchronous JIT compilation, and checks that it
     #! gives the output of the AST interpreter
     modesTest() {
-        string exp = expected();
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
-                mode);
+        foreach string script in (Scripts) {
+            string exp = expected(script);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                    scriptPath(script))), script + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                scriptPath(script))), script + ": " + ExecModeHarness::IRTierName);
+            assertEq(exp, ExecModeHarness::run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s", env,
+                qore_bin, scriptPath(script))), script + ": jit (synchronous)");
         }
-        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
-            scriptPath())), ExecModeHarness::IRTierName);
-        assertEq(exp, ExecModeHarness::run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s", env, qore_bin,
-            scriptPath())), "jit (synchronous)");
     }
 
     #! compiles the script with qcc and checks that the executables give the output of the AST interpreter
@@ -81,20 +96,24 @@ class OnExitNothingLocalsTest inherits QUnit::Test {
             testSkip("qcc is not available at " + qcc_bin);
         }
         TmpDir dir("on-exit-nothing-locals-aot-");
-        foreach int opt in (0, 3) {
-            string exe = sprintf("%s/on-exit-nothing-locals-O%d", dir.path, opt);
-            string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, scriptPath()));
-            assertTrue(is_file(exe), sprintf("qcc -O%d compiles the script: %s", opt, out));
-            assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), sprintf("qcc -O%d", opt));
+        foreach string script in (Scripts) {
+            foreach int opt in (0, 3) {
+                string exe = sprintf("%s/%s-O%d", dir.path, script, opt);
+                string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe,
+                    scriptPath(script)));
+                assertTrue(is_file(exe), sprintf("qcc -O%d compiles %s: %s", opt, script, out));
+                assertEq(expected(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)),
+                    sprintf("%s: qcc -O%d", script, opt));
+            }
         }
     }
 
-    private string scriptPath() {
-        return get_script_dir() + "/on-exit-nothing-locals.q";
+    private string scriptPath(string script) {
+        return get_script_dir() + "/" + script + ".q";
     }
 
     #! the output of the script with the AST interpreter
-    private string expected() {
-        return backquote(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    private string expected(string script) {
+        return backquote(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(script)));
     }
 }
