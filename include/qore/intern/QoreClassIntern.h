@@ -4247,9 +4247,13 @@ public:
         // (issue #6640)
         // a class on the private:internal path to the member has the storage of the member in the objects of this
         // class and uses it on them, as at run time (issue #6800)
+        // a private:internal member declared in this class is used only by the class itself and by the classes on the
+        // private:internal path that have its storage (getClassContext() above): a subclass that reads it through
+        // a variable of this class's type is refused as it is through a variable of its own type (issue #7258)
         if ((access > Public) && !parseHasMemberGate() && !omi->getClassContext(parse_get_class_priv())
                 && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access)
-                    || !parseCheckPrivateMemberAccess(qc, access))) {
+                    || !parseCheckPrivateMemberAccess(qc, access)
+                    || (access == Internal && omi->local() && qc == this))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
