@@ -483,9 +483,6 @@ if (accepted) {
     */
     DLLEXPORT void setSslCaLocations(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
 
-    //! Sets or clears the in-memory trust store that peer certificates are verified against (qoretechnologies/qore#7248)
-    DLLLOCAL void setSslTrustStore(class QoreSSLTrustStore* ts, ExceptionSink* xsink);
-
     //! Returns the negotiated ALPN protocol after a TLS connection is established
     /** @return The negotiated protocol string, or nullptr if no protocol was negotiated
 
