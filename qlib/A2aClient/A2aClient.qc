@@ -567,6 +567,15 @@ public const A2aLegacyCallbackNames = {
 };
 
 public class A2aClient {
+
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The constructor creates the first manager, and close() creates it again: the code that created the client
+            decides, so a client that the host creates and lends to restricted code keeps working for it, only for the
+            target that it had when it was created (the proof is bound to it) (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+    }
     public {
         #! Default connect timeout (30 seconds)
         const DefaultConnectTimeout = 30000;
@@ -642,6 +651,9 @@ public class A2aClient {
             - \c logger: a LoggerInterface object for logging
     */
     constructor(string url, *hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url);
         self.url = url;
         url_path = parse_url(url).path ?? "/";
         connect_timeout = opts.connect_timeout ?? DefaultConnectTimeout;
@@ -1279,12 +1291,17 @@ client.sendMessageStream(msg, sub (string kind, hash<auto> data) {});
 
     #! Creates a new connection manager with current settings
     private HttpClientIo::HttpClientConnectionManager createConnectionManager() {
-        return new HttpClientIo::HttpClientConnectionManager(
+        # the proof of the code that created the client decides, also for the managers that close() creates again
+        # (qore#7262)
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts =
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "connect_timeout": connect_timeout,
                 "request_timeout": timeout,
                 "protocol": protocol,
-            });
+            };
+        return creator_proof
+            ? new HttpClientIo::HttpClientConnectionManager(mgr_opts, creator_proof)
+            : new HttpClientIo::HttpClientConnectionManager(mgr_opts);
     }
 
     #! Logs a debug message

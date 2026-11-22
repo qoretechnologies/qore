@@ -439,6 +439,120 @@ static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeC
     return static_cast<int64>(freed + qore_type_retirement_free());
 }
 
+#ifdef DEBUG
+namespace {
+//! An operation whose second step (on the I/O thread, when its socket is readable, or on a callback worker with
+//! \a worker) raises the error given, and whose completion rejects the promise given with the error of the result
+//! (qore#7286); a canceled operation rejects it with DBG-CANCELED, so that a test does not wait for ever
+/** The completion turns the result's exception hash into the rejection on the I/O thread, as a completion that
+    rejects a promise of the host would
+*/
+class DbgCompletionRejectOp : public SocketPollOperationBase {
+public:
+    DLLLOCAL DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
+            bool worker) : sock_obj(sock_obj), promise(promise), err(std::move(err)), desc(std::move(desc)),
+            worker(worker) {
+    }
+
+    DLLLOCAL virtual bool needsWorkerDispatch() const override {
+        return worker;
+    }
+
+    DLLLOCAL ~DbgCompletionRejectOp() {
+        ExceptionSink xsink;
+        promise->deref(&xsink);
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return false;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (calls++) {
+            xsink->raiseException(err.c_str(), "%s", desc.c_str());
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", SOCK_POLLIN, xsink);
+        info->setKeyValue("socket", sock_obj->objectRefSelf(), xsink);
+        return *xsink ? nullptr : info.release();
+    }
+
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
+            override {
+        if (canceled) {
+            promise->setError("DBG-CANCELED", "the operation was canceled", QoreValue(), xsink);
+            return true;
+        }
+        if (!ex_hash) {
+            return false;
+        }
+        QoreStringValueHelper e(ex_hash->getKeyValue("err"));
+        QoreStringValueHelper d(ex_hash->getKeyValue("desc"));
+        promise->setError(e->c_str(), d->c_str(), QoreValue(), xsink);
+        return true;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return "waiting";
+    }
+
+private:
+    //! the socket, which the operation object's member references
+    QoreObject* sock_obj;
+    //! the promise (referenced)
+    QorePromise* promise;
+    std::string err;
+    std::string desc;
+    bool worker;
+    int calls = 0;
+};
+}
+#endif
+
+//! Returns an operation on the socket whose completion rejects the promise with the error that its second step raises
+//! on the I/O thread (qore#7286)
+static QoreValue f_dbg_completion_reject_op(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreObject* sock = const_cast<QoreObject*>(get_hard_value_param(params, 0).get<const QoreObject>());
+    const QoreObject* pobj = get_hard_value_param(params, 1).get<const QoreObject>();
+    QorePromise* promise = static_cast<QorePromise*>(pobj->getReferencedPrivateData(CID_PROMISE, xsink));
+    if (!promise) {
+        return QoreValue();
+    }
+    QoreStringValueHelper err(get_hard_value_param(params, 2));
+    QoreStringValueHelper desc(get_hard_value_param(params, 3));
+    bool worker = get_hard_value_param(params, 4).getAsBool();
+    DbgCompletionRejectOp* op = new DbgCompletionRejectOp(sock, promise, err->c_str(), desc->c_str(), worker);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
+    op->setSelf(*op_obj);
+    if (qore_poll_op_set_member(op_obj, "sock", sock->objectRefSelf(), xsink)) {
+        return QoreValue();
+    }
+    return op_obj.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_completion_reject_op() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
+//! Waits until threads wait for the load of a module that another thread runs (qore#7232); returns false on timeout
+static QoreValue f_dbg_module_load_waiters(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    // also a short string, which has no node
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    int64 count = HARD_QORE_VALUE_INT(params, 1);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
+    return QMM.dbgWaitLoadWaiters(name->c_str(), count > 0 ? static_cast<unsigned>(count) : 0u,
+        static_cast<int>(timeout_ms));
+#else
+    return false;
+#endif
+}
+
 //! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
 static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef DEBUG
@@ -17310,6 +17424,172 @@ static void ut_qorevalue_resolve_indirect_opaque(UnitTestCounters& c) {
     }
 }
 
+// QoreValue::resolveIndirectRef() resolves the target that resolveIndirect() resolves, with a reference of its own
+// (qore#7231): a binary module that walks the list or hash of a weak reference must hold it, as another thread can
+// free it while it is walked.  Once the free of the list or hash has started, the language reads it through a weak
+// reference as a new empty one that cannot be changed (qore#7198), and so does this call; the object of a weak
+// reference is returned only while it is referenced and has not been deleted.
+static void ut_qorevalue_resolve_indirect_ref(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // the list of a weak reference: a new reference while it is referenced, the freed stand-in once it is freed
+    {
+        QoreListNode* l = new QoreListNode(autoTypeInfo);
+        l->push(QoreValue(1), &xsink);
+        QoreValue w(new WeakListReferenceNode(l));
+        int refs = l->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_LIST, (int)r->getType(), "a weak list reference resolves to its list");
+            UT_ASSERT(c, r->get<const QoreListNode>() == l, "a weak list reference resolves to its own list");
+            UT_ASSERT_EQ(c, refs + 1, l->reference_count(), "the list is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, l->reference_count(), "the reference returned for the list is the caller's");
+        // the last reference is released: the list is freed, and the weak reference keeps its node allocated
+        l->deref(&xsink);
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_LIST, (int)r->getType(), "a freed weak list resolves to a list");
+            QoreListNode* sl = r->get<QoreListNode>();
+            UT_ASSERT(c, sl != l, "a freed weak list resolves to a stand-in, not to the freed list");
+            UT_ASSERT(c, sl->empty(), "the stand-in of a freed list is empty");
+            UT_ASSERT(c, sl->is_unique(), "the stand-in of a freed list has the caller's reference only");
+            UT_ASSERT(c, sl->getTypeInfo() == w.get<const WeakListReferenceNode>()->getTypeInfo(),
+                "the stand-in of a freed list has its type");
+            sl->push(QoreValue(2), &xsink);
+            UT_ASSERT(c, xsink.isException(), "the stand-in of a freed list cannot be changed");
+            xsink.clear();
+            UT_ASSERT(c, sl->empty(), "the stand-in of a freed list stays empty");
+        }
+        w.discard(&xsink);
+    }
+
+    // the hash of a weak reference, likewise
+    {
+        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+        h->setKeyValue("a", QoreValue(1), &xsink);
+        QoreValue w(new WeakHashReferenceNode(h));
+        int refs = h->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_HASH, (int)r->getType(), "a weak hash reference resolves to its hash");
+            UT_ASSERT(c, r->get<const QoreHashNode>() == h, "a weak hash reference resolves to its own hash");
+            UT_ASSERT_EQ(c, refs + 1, h->reference_count(), "the hash is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, h->reference_count(), "the reference returned for the hash is the caller's");
+        h->deref(&xsink);
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_HASH, (int)r->getType(), "a freed weak hash resolves to a hash");
+            QoreHashNode* sh = r->get<QoreHashNode>();
+            UT_ASSERT(c, sh != h, "a freed weak hash resolves to a stand-in, not to the freed hash");
+            UT_ASSERT(c, sh->empty(), "the stand-in of a freed hash is empty");
+            UT_ASSERT(c, sh->is_unique(), "the stand-in of a freed hash has the caller's reference only");
+            sh->setKeyValue("b", QoreValue(2), &xsink);
+            UT_ASSERT(c, xsink.isException(), "the stand-in of a freed hash cannot be changed");
+            xsink.clear();
+            UT_ASSERT(c, sh->empty(), "the stand-in of a freed hash stays empty");
+        }
+        w.discard(&xsink);
+    }
+
+    // the object of a weak reference: a new reference while it is valid, NOTHING once it is deleted
+    {
+        QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+        QoreValue w(new WeakReferenceNode(obj));
+        int refs = obj->reference_count();
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT_EQ(c, (int)NT_OBJECT, (int)r->getType(), "a weak object reference resolves to its object");
+            UT_ASSERT(c, r->get<const QoreObject>() == obj, "a weak object reference resolves to its own object");
+            UT_ASSERT_EQ(c, refs + 1, obj->reference_count(), "the object is returned with a reference of its own");
+        }
+        UT_ASSERT_EQ(c, refs, obj->reference_count(), "the reference returned for the object is the caller's");
+        // deleted, but still referenced
+        obj->doDelete(&xsink);
+        UT_ASSERT(c, !xsink, "the object is deleted");
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->isNothing(), "a weak reference to a deleted object resolves to NOTHING");
+        }
+        UT_ASSERT_EQ(c, refs, obj->reference_count(), "no reference is kept for a deleted object");
+        obj->deref(&xsink);
+        w.discard(&xsink);
+    }
+
+    // the object of a weak reference whose last reference was released
+    {
+        QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+        QoreValue w(new WeakReferenceNode(obj));
+        obj->deref(&xsink);
+        UT_ASSERT_EQ(c, 0, obj->reference_count(), "the last reference to the object was released");
+        {
+            ValueHolder r(w.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->isNothing(), "a weak reference to a released object resolves to NOTHING");
+        }
+        UT_ASSERT_EQ(c, 0, obj->reference_count(), "no reference is taken to a released object");
+        w.discard(&xsink);
+    }
+
+    // opaque references resolve to their targets as ordinary values, with references of their own
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        QoreValue op = QoreValue::makeOpaqueList(*l);
+        int refs = l->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from a list reference");
+            UT_ASSERT(c, r->get<const QoreListNode>() == *l, "an opaque list reference resolves to its list");
+            UT_ASSERT_EQ(c, refs + 1, l->reference_count(), "the opaque list is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+    {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        QoreValue op = QoreValue::makeOpaqueHash(*h);
+        int refs = h->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from a hash reference");
+            UT_ASSERT(c, r->get<const QoreHashNode>() == *h, "an opaque hash reference resolves to its hash");
+            UT_ASSERT_EQ(c, refs + 1, h->reference_count(), "the opaque hash is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+    {
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_COUNTER, getProgram(), new Counter(0)), &xsink);
+        QoreValue op = QoreValue::makeOpaqueObject(*obj);
+        int refs = obj->reference_count();
+        {
+            ValueHolder r(op.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, !r->isOpaque(), "resolveIndirectRef() strips the opaque tag from an object reference");
+            UT_ASSERT(c, r->get<const QoreObject>() == *obj, "an opaque object reference resolves to its object");
+            UT_ASSERT_EQ(c, refs + 1, obj->reference_count(), "the opaque object is returned with a reference");
+        }
+        op.discard(&xsink);
+    }
+
+    // any other value is returned with a new reference
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        QoreValue plain(*l);
+        {
+            ValueHolder r(plain.resolveIndirectRef(), &xsink);
+            UT_ASSERT(c, r->get<const QoreListNode>() == *l, "a plain value is returned unchanged");
+            UT_ASSERT_EQ(c, 2, l->reference_count(), "a plain value is returned with a new reference");
+        }
+        UT_ASSERT_EQ(c, 1, l->reference_count(), "the reference returned for a plain value is the caller's");
+        QoreValue i(static_cast<int64>(5));
+        ValueHolder r(i.resolveIndirectRef(), &xsink);
+        UT_ASSERT_EQ(c, (int64)5, r->getAsBigInt(), "an int is returned unchanged");
+    }
+
+    UT_ASSERT(c, !xsink, "resolveIndirectRef() raises no exception");
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -24201,6 +24481,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_adopt_socket_simple_request(c);
     ut_http2_adopt_socket_construct(c);
     ut_qorevalue_resolve_indirect_opaque(c);
+    ut_qorevalue_resolve_indirect_ref(c);
     ut_manager_negotiate_plaintext_uses_h1(c);
     ut_manager_negotiate_refused_port(c);
     ut_negotiate_close_cancels_after_closed_state(c);
@@ -25423,6 +25704,47 @@ static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, Runtime
     }
     QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
     return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
+//! Debug-only: compares two byte strings with the comparison of hash keys and member names (qore#7194)
+/** @param a the first string
+    @param b the second string
+
+    @return the result of qore_key_equal() for the two strings
+*/
+static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const BinaryNode* a = get_param_value(params, 0).get<const BinaryNode>();
+    const BinaryNode* b = get_param_value(params, 1).get<const BinaryNode>();
+    return qore_key_equal(static_cast<const char*>(a->getPtr()), a->size(), static_cast<const char*>(b->getPtr()),
+        b->size());
+}
+
+//! Debug-only: looks up a key of a hash with the hash value of another key, as a collision would (qore#7194)
+/** @param h the hash
+    @param key the key to look up
+    @param hash_key the key whose hash value the lookup uses
+
+    @return a hash with \c exists (if the lookup found a key) and \c value (the value found)
+*/
+static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreHashNode* h = get_param_value(params, 0).get<const QoreHashNode>();
+    DbgStringNodeHelper key_param(get_param_value(params, 1));
+    DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
+    const QoreStringNode* key = *key_param;
+    const QoreStringNode* hash_key = *hash_key_param;
+    if (strlen(key->c_str()) != key->size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the key has a NUL character");
+        return QoreValue();
+    }
+    qore_hash_lookup_key lookup(key->c_str(), key->size());
+    lookup.hash = qore_hash_lookup_key::hashBytes(hash_key->c_str(), hash_key->size());
+    bool exists;
+    ValueHolder value(qore_hash_private::get(*h)->getReferencedKeyValueIntern(lookup, exists), xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("exists", exists, xsink);
+    rv->setKeyValue("value", value.release(), xsink);
+    return rv.release();
 }
 
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -29853,6 +30175,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_completion_reject_op", f_dbg_completion_reject_op, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        objectTypeInfo, 5, objectTypeInfo, QORE_PARAM_NO_ARG, "sock", objectTypeInfo, QORE_PARAM_NO_ARG, "promise",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "err", stringTypeInfo, QORE_PARAM_NO_ARG, "desc", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "worker");
+    qns.addBuiltinVariant("dbg_module_load_waiters", f_dbg_module_load_waiters, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
@@ -30348,6 +30677,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
         QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
+    qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, hashTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

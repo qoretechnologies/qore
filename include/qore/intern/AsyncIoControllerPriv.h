@@ -2760,6 +2760,13 @@ private:
         @param cancel_ex if given, the exception that the canceled result carries (a refused submission, which is
         reported canceled with the reason; borrowed)
     */
+    //! Dispatches the notifications of the streams of an HTTP/2 or HTTP/3 operation: onStreamData() for the streams that
+    //! have data or ended, and the transmission results of watched responses
+    /** Called after a poll step and after the abort of a canceled operation (qoretechnologies/qore#7241)
+    */
+    DLLLOCAL void dispatchStreamNotifications(SocketPollOperationBase* spop_base, QoreObject* spop_obj,
+        const std::string& op_owner, const AsyncIoSandboxContext& op_sandbox_ctx, qore_program_id_t op_app_id);
+
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex = nullptr);
 
     //! Delivers a deferred result and releases the references of @a dd

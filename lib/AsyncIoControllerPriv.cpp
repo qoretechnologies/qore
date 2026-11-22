@@ -2242,10 +2242,14 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
+    // the exceptions of the operation's C++ steps on the async I/O thread are raised for a sandboxed submitter
+    // (qore#7232)
+    // (also an operation that such a step submits on the I/O thread, which inherits the step's origin)
+    ctx->origin_sandboxed = qore_code_origin_sandboxed(&ctx->origin_pgm_id);
     // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
     // capturing code alone, which the step runs with (qore#6844)
     if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
-            || ctx->caller_restrictions) {
+            || ctx->caller_restrictions || ctx->origin_sandboxed) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -3198,6 +3202,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 || async_item.sandbox_ctx->isolation)) {
             sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
         }
+        // the item runs for code that is sandboxed or acts for sandboxed code also where its context has no sandbox
+        // to apply (module code acting for sandboxed code): its exceptions are raised for that code (qore#7286)
+        QoreExceptionOriginScope origin_scope(async_item.sandbox_ctx && async_item.sandbox_ctx->origin_sandboxed,
+            async_item.sandbox_ctx ? async_item.sandbox_ctx->origin_pgm_id : 0);
         // the item's code runs for the application of its operation (or timer): an operation that it submits belongs
         // to that application, also when no Program of the application is on this thread's stack (qore#7010)
         std::unique_ptr<AioCallbackAppScope> app_scope;
@@ -8129,6 +8137,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // the result replaces the operation's poll info, so a previous hash that only the operation
                     // references is lent to the call for reuse (see SocketPollInfoLender)
                     SocketPollInfoLender lender(node->second.poll_info, xsink);
+                    // the exceptions and errors of the step are raised for the operation's submitter, which no sandbox
+                    // context on this thread records (qore#7232)
+                    const QoreSandboxContext* ctx = node->second.sandbox_ctx.get();
+                    QoreExceptionOriginScope origin(ctx && ctx->origin_sandboxed, ctx ? ctx->origin_pgm_id : 0);
                     new_info = op.spop_base->continuePoll(&poll_xsink);
                 }
                 // the step can have removed or replaced its own operation (a direct submit with its key), which may
@@ -8197,87 +8209,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     noteOperationState(node->second, node->second.spop_base->getStateImpl());
                 }
 
-                // Check for stream data notifications (HTTP/2 CONNECT streams)
-                // After the C++ drain pushes data to Queues, dispatch onStreamData()
-                // to the worker pool so the handler thread wakes up.
-                auto* h2_op = dynamic_cast<Http2PollOperationPriv*>(op.spop_base);
-                if (h2_op) {
-                    std::vector<int32_t> ready = h2_op->getAndClearDataReadyStreams();
-                    if (!ready.empty()) {
-                        ensureCallDispatcher();
-                        for (int32_t sid : ready) {
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
-                                op.spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                    // the transmission results of watched responses
-                    std::vector<std::pair<int32_t, bool>> sent = h2_op->getAndClearResponseSendResults();
-                    if (!sent.empty()) {
-                        ensureCallDispatcher();
-                        for (auto& r : sent) {
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
-                                op.spop_obj, std::to_string(r.first), r.second, op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                }
-
-                // Same for HTTP/2 client poll ops (WebSocket/SSE over H2 CONNECT)
-                auto* h2_client_op = dynamic_cast<Http2ClientPollOperationPriv*>(op.spop_base);
-                if (h2_client_op) {
-                    std::vector<int32_t> ready = h2_client_op->getAndClearDataReadyStreams();
-                    ASYNC_IO_TRACE("H2Client dispatch: key='%s' ready_streams=%d\n",
-                        node->first.c_str(), (int)ready.size());
-                    if (!ready.empty()) {
-                        ensureCallDispatcher();
-                        for (int32_t sid : ready) {
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
-                                op.spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                }
-
-                // Same for HTTP/3 client poll ops (WebSocket/SSE over H3 CONNECT)
-                auto* h3_client_op = dynamic_cast<Http3ClientPollOperationPriv*>(op.spop_base);
-                if (h3_client_op) {
-                    std::vector<int64_t> ready = h3_client_op->getAndClearDataReadyStreams();
-                    if (!ready.empty()) {
-                        ensureCallDispatcher();
-                        for (int64_t sid : ready) {
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
-                                op.spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                }
-
-                // Same for HTTP/3 server poll ops (WebSocket/SSE over H3 server CONNECT)
-                auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(op.spop_base);
-                if (h3_server_op) {
-                    // the transmission results of watched responses
-                    std::vector<std::pair<std::string, bool>> sent = h3_server_op->getAndClearResponseSendResults();
-                    if (!sent.empty()) {
-                        ensureCallDispatcher();
-                        for (auto& r : sent) {
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
-                                op.spop_obj, r.first, r.second, op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                    std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
-                    ASYNC_IO_TRACE("AsyncIo h3_server dispatch check ready=%zu\n", ready.size());
-                    if (!ready.empty()) {
-                        ensureCallDispatcher();
-                        for (auto& skey : ready) {
-                            ASYNC_IO_TRACE("AsyncIo h3_server dispatchStreamDataAsync skey='%s'\n", skey.c_str());
-                            op.spop_obj->ref();
-                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
-                                op.spop_obj, skey, op_owner, op_sandbox_ctx, op_app_id);
-                        }
-                    }
-                }
+                // the notifications of the streams of HTTP/2 and HTTP/3 operations (see dispatchStreamNotifications())
+                dispatchStreamNotifications(op.spop_base, op.spop_obj, op_owner, op_sandbox_ctx, op_app_id);
 
                 // Generic notification for any C++ op that pushed items to queues (WebSocket frame I/O, PollPipeline
                 // PUSH_QUEUE, etc.), if its class has an onPollComplete() method (qore#6804)
@@ -8375,6 +8308,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // an abort() dispatched to a worker is dispatched below, with the delivery of the result,
                     // which must follow it (see AbortThenDeliverTask)
                     bool async_abort = false;
+                    // the abort(), the completion and the result of the operation are raised for its submitter, as its
+                    // steps are (qore#7286)
+                    const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+                    QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+                        origin_ctx ? origin_ctx->origin_pgm_id : 0);
                     if (result.timed_out) {
                         bool worker_abort = pinfo.has_qore_abort
                             || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
@@ -10333,6 +10271,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // it is processed in place below, without registrations (see retireOp())
                             unregisterOp(t, pinfo.op_id, xsink);
 
+                            // the completion and the result of the operation are raised for its submitter (qore#7286)
+                            const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+                            QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+                                origin_ctx ? origin_ctx->origin_pgm_id : 0);
                             bool handled = pinfo.spop_base
                                 ? pinfo.spop_base->handleCompletion(false, cmd.continue_poll_ex, xsink)
                                 : false;
@@ -10690,7 +10632,96 @@ void AsyncIoControllerPriv::refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, 
     pinfo.cleanup(xsink);
 }
 
+void AsyncIoControllerPriv::dispatchStreamNotifications(SocketPollOperationBase* spop_base, QoreObject* spop_obj,
+        const std::string& op_owner, const AsyncIoSandboxContext& op_sandbox_ctx, qore_program_id_t op_app_id) {
+    // Check for stream data notifications (HTTP/2 CONNECT streams)
+    // After the C++ drain pushes data to Queues, dispatch onStreamData()
+    // to the worker pool so the handler thread wakes up.
+    auto* h2_op = dynamic_cast<Http2PollOperationPriv*>(spop_base);
+    if (h2_op) {
+        std::vector<int32_t> ready = h2_op->getAndClearDataReadyStreams();
+        if (!ready.empty()) {
+            ensureCallDispatcher();
+            for (int32_t sid : ready) {
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
+                    spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+        // the transmission results of watched responses
+        std::vector<std::pair<int32_t, bool>> sent = h2_op->getAndClearResponseSendResults();
+        if (!sent.empty()) {
+            ensureCallDispatcher();
+            for (auto& r : sent) {
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
+                    spop_obj, std::to_string(r.first), r.second, op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+    }
+
+    // Same for HTTP/2 client poll ops (WebSocket/SSE over H2 CONNECT)
+    auto* h2_client_op = dynamic_cast<Http2ClientPollOperationPriv*>(spop_base);
+    if (h2_client_op) {
+        std::vector<int32_t> ready = h2_client_op->getAndClearDataReadyStreams();
+        ASYNC_IO_TRACE("H2Client dispatch: key='%s' ready_streams=%d\n",
+            "-", (int)ready.size());
+        if (!ready.empty()) {
+            ensureCallDispatcher();
+            for (int32_t sid : ready) {
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
+                    spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+    }
+
+    // Same for HTTP/3 client poll ops (WebSocket/SSE over H3 CONNECT)
+    auto* h3_client_op = dynamic_cast<Http3ClientPollOperationPriv*>(spop_base);
+    if (h3_client_op) {
+        std::vector<int64_t> ready = h3_client_op->getAndClearDataReadyStreams();
+        if (!ready.empty()) {
+            ensureCallDispatcher();
+            for (int64_t sid : ready) {
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
+                    spop_obj, std::to_string(sid), op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+    }
+
+    // Same for HTTP/3 server poll ops (WebSocket/SSE over H3 server CONNECT)
+    auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(spop_base);
+    if (h3_server_op) {
+        // the transmission results of watched responses
+        std::vector<std::pair<std::string, bool>> sent = h3_server_op->getAndClearResponseSendResults();
+        if (!sent.empty()) {
+            ensureCallDispatcher();
+            for (auto& r : sent) {
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
+                    spop_obj, r.first, r.second, op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+        std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
+        ASYNC_IO_TRACE("AsyncIo h3_server dispatch check ready=%zu\n", ready.size());
+        if (!ready.empty()) {
+            ensureCallDispatcher();
+            for (auto& skey : ready) {
+                ASYNC_IO_TRACE("AsyncIo h3_server dispatchStreamDataAsync skey='%s'\n", skey.c_str());
+                spop_obj->ref();
+                call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(
+                    spop_obj, skey, op_owner, op_sandbox_ctx, op_app_id);
+            }
+        }
+    }
+}
+
 void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex) {
+    // the abort(), the completion and the result of the canceled operation are raised for its submitter (qore#7286)
+    const QoreSandboxContext* origin_ctx = pinfo.sandbox_ctx.get();
+    QoreExceptionOriginScope origin(origin_ctx && origin_ctx->origin_sandboxed,
+        origin_ctx ? origin_ctx->origin_pgm_id : 0);
     // an operation that the module cleanup cancels (directly, or with a command that it created: see
     // Command::module_cleanup_delegate) is canceled for the cleanup: its abort(), its onComplete() and the release of
     // its references are work that the cleanup hands over, which can enter the Programs of the modules after the
@@ -10709,6 +10740,13 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         // cleanup canceled cannot start new asynchronous work (see checkModuleCleanupNewWork(), qore#7027)
         ModuleCleanupAsyncCallbackHelper canceled_work(async_io_module_cleanup_canceled(pinfo.sandbox_ctx));
         callAbort(pinfo.spop_obj, xsink);
+        // the streams that the abort ended are told, as after a poll step: a listener of a stream (a WebSocket or
+        // server-sent events over HTTP/2 or HTTP/3) learns that its connection is gone at once, not at its next
+        // heartbeat; no further step runs for a canceled operation (qoretechnologies/qore#7241)
+        if (pinfo.spop_base && pinfo.spop_obj) {
+            dispatchStreamNotifications(pinfo.spop_base, pinfo.spop_obj, pinfo.owner, pinfo.sandbox_ctx,
+                pinfo.app_pgm_id);
+        }
     }
 
     bool handled = pinfo.spop_base ? pinfo.spop_base->handleCompletion(true, nullptr, xsink) : false;

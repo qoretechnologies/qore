@@ -1,0 +1,339 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# SSLTrustStore: an immutable set of trusted CA certificates in memory, shared per distinct certificate set, that
+# verifies servers on every connection path without reading a file (qoretechnologies/qore#7248)
+# test-platform: macos - TLS certificate verification on TCP (HTTP/1.1, HTTP/2) and QUIC (HTTP/3) connections
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../../TestCertificates.qm
+
+%exec-class SSLTrustStoreTest
+
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+class SSLTrustStoreTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+        string url;
+        SSLCertificate cert;
+        SSLCertificate other;
+        string other_file;
+    }
+
+    constructor() : QUnit::Test("SSLTrustStore", "1.0") {
+        addTestCase("creation and sharing", \creationTest());
+        addTestCase("the certificates cannot be read back", \opaqueTest());
+        addTestCase("invalid input is refused", \invalidTest());
+        addTestCase("sandboxed creation follows the filesystem policy", \sandboxCreationTest());
+        addTestCase("Socket", \socketTest());
+        addTestCase("HTTPClient HTTP/1.1, HTTP/2 and negotiation", \httpClientTest());
+        addTestCase("HTTPClient HTTP/3", \httpClient3Test());
+        addTestCase("HttpClientIo HTTP/1.1, HTTP/2 and HTTP/3", \httpClientIoTest());
+        addTestCase("RestClientIo", \restClientIoTest());
+        addTestCase("sandboxed code verifies with a trust store without file access", \sandboxedUseTest());
+        addTestCase("the files of a directory follow the filesystem policy", \dirPolicyTest());
+        addTestCase("a store depends only on its certificate set", \orderTest());
+        addTestCase("a trust store implies verification", \impliedVerifyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        cert = new SSLCertificate(CertPem);
+        other_file = get_script_dir() + "/other-ca.pem";
+        # absolute, for the symbolic link of dirPolicyTest()
+        if (!absolute_path(other_file)) {
+            other_file = getcwd() + DirSep + other_file;
+        }
+        other = new SSLCertificate(ReadOnlyFile::readTextFile(other_file));
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("ts", LoggerLevel::getLevelInfo())});
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+        server.waitForAsyncIo();
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": cert, "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        server.waitForAsyncIo();
+        url = sprintf("https://127.0.0.1:%d", port);
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    SSLTrustStore good() {
+        return new SSLTrustStore((cert,));
+    }
+
+    SSLTrustStore bad() {
+        return new SSLTrustStore((other,));
+    }
+
+    creationTest() {
+        int base = SSLTrustStore::getStoreCount();
+        {
+            SSLTrustStore a((cert,));
+            SSLTrustStore b(cert);
+            SSLTrustStore c((cert, cert));
+            assertEq(1, a.size());
+            assertEq(1, c.size(), "the distinct certificates");
+            assertEq(a.getId(), b.getId(), "the same certificate set");
+            assertEq(a.getId(), c.getId(), "a certificate given twice is the same set");
+            assertEq(base + 1, SSLTrustStore::getStoreCount(), "one store for the same set");
+            SSLTrustStore d = a.copy();
+            assertEq(a.getId(), d.getId(), "a copy shares the store");
+            SSLTrustStore e((cert, other));
+            assertEq(2, e.size());
+            assertTrue(e.getId() != a.getId());
+            assertEq(base + 2, SSLTrustStore::getStoreCount());
+            SSLTrustStore f = SSLTrustStore::fromFile(other_file);
+            assertEq(bad().getId(), f.getId(), "a file with the same certificate is the same set");
+            assertEq(base + 3, SSLTrustStore::getStoreCount());
+        }
+        assertEq(base, SSLTrustStore::getStoreCount(), "the stores are freed with their last users");
+
+        # the CA certificates that TLS connections trust by default
+        SSLTrustStore def1 = SSLTrustStore::getDefault();
+        SSLTrustStore def2 = SSLTrustStore::getDefault();
+        assertTrue(def1.size() > 0);
+        assertEq(def1.getId(), def2.getId());
+        assertEq(base + 1, SSLTrustStore::getStoreCount(), "the default certificates are one store");
+
+        # a directory
+        TmpDir dir("qore-test-7248-");
+        File out();
+        out.open2(dir.path + DirSep + "a.pem", O_CREAT | O_WRONLY);
+        out.write(CertPem);
+        out.close();
+        assertEq(good().getId(), SSLTrustStore::fromDirectory(dir.path).getId());
+    }
+
+    opaqueTest() {
+        SSLTrustStore ts = good();
+        string dump = sprintf("%N %y", ts, ts);
+        assertFalse(dump =~ /BEGIN CERTIFICATE/);
+        assertThrows("SERIALIZATION-ERROR", sub () { Serializable::serialize(ts); });
+        # a client that uses one is not serialized without it
+        HTTPClient hc({"url": url, "ssl_trust_store": ts});
+        assertThrows("SERIALIZATION-ERROR", sub () { Serializable::serialize(hc); });
+    }
+
+    invalidTest() {
+        assertThrows("SSLTRUSTSTORE-ERROR", sub () { new SSLTrustStore(()); });
+        assertThrows("SSLTRUSTSTORE-ERROR", sub () { new SSLTrustStore((1,)); });
+        assertThrows("SSLTRUSTSTORE-ERROR", sub () { new SSLTrustStore((new Mutex(),)); });
+        assertThrows("SSLTRUSTSTORE-ERROR", \SSLTrustStore::fromFile(), "/nonexistent-qore-test-7248.pem");
+        TmpDir dir("qore-test-7248-");
+        string f = dir.path + DirSep + "empty.pem";
+        File out();
+        out.open2(f, O_CREAT | O_WRONLY);
+        out.write("no certificate");
+        out.close();
+        assertThrows("SSLTRUSTSTORE-ERROR", \SSLTrustStore::fromFile(), f);
+        assertThrows("SSLTRUSTSTORE-ERROR", \SSLTrustStore::fromDirectory(), dir.path);
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", sub () { new HTTPClient({"url": url, "ssl_trust_store": "x"}); });
+    }
+
+    sandboxCreationTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("string sub t(string f) { try { SSLTrustStore::fromFile(f); return \"read\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("t", other_file));
+        Program p2(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        assertThrows("PARSE-EXCEPTION", \p2.parse(), ("sub t() { SSLTrustStore::fromFile(\"x\"); }", "t2"));
+        # from certificates in memory: no file access
+        Program p3(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p3.parse("string sub t(string pem) { return new SSLTrustStore(new SSLCertificate(pem)).getId(); }", "t3");
+        assertEq(good().getId(), p3.callFunction("t", CertPem));
+    }
+
+    #! returns "ok" or the error of a verified TLS connection with the given trust store
+    string sockConnect(SSLTrustStore ts, *string ca_file) {
+        Socket s();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        if (ca_file) {
+            s.setSslCaLocations(ca_file);
+        }
+        s.setSslTrustStore(ts);
+        try {
+            s.connect(sprintf("127.0.0.1:%d", port), 10s);
+            s.upgradeClientToSSL(10s);
+            s.close();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    socketTest() {
+        assertEq("ok", sockConnect(good()));
+        assertTrue(sockConnect(bad()) != "ok", "mismatch");
+        # the trust store takes precedence over the CA locations
+        assertEq("ok", sockConnect(good(), other_file));
+        # cleared, the default CA certificates (which do not trust the server) apply
+        Socket s();
+        s.setSslVerifyMode(SSL_VERIFY_PEER);
+        s.setSslTrustStore(good());
+        s.setSslTrustStore();
+        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        assertThrows("SOCKET-SSL-ERROR", \s.upgradeClientToSSL(), 10s);
+    }
+
+    #! returns "ok" or the error of a request with an HTTPClient with the given options
+    string hcRequest(hash<auto> opts) {
+        HTTPClient hc({"url": url, "ssl_verify_cert": True, "connect_timeout": 10s, "timeout": 10s} + opts);
+        try {
+            hash<auto> info;
+            string body = hc.get("/ok", NOTHING, \info);
+            return body == "ok" ? "ok" : body;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    httpClientTest() {
+        foreach hash<auto> mode in ({"http_version": "1.1"}, {"http_version": "2.0"}, {}) {
+            string m = sprintf("%y", mode);
+            assertEq("ok", hcRequest(mode + {"ssl_trust_store": good()}), m);
+            assertTrue(hcRequest(mode + {"ssl_trust_store": bad()}) != "ok", m + " mismatch");
+            # the store takes precedence over the CA file
+            assertEq("ok", hcRequest(mode + {"ssl_trust_store": good(), "ssl_ca_file": other_file}), m);
+        }
+    }
+
+    httpClient3Test() {
+        hash<auto> mode = {"http3_mode": "required"};
+        assertEq("ok", hcRequest(mode + {"ssl_trust_store": good()}), "HTTP/3");
+        assertTrue(hcRequest(mode + {"ssl_trust_store": bad()}) != "ok", "HTTP/3 mismatch");
+    }
+
+    #! returns "ok" or the error of a request with an HttpClientIo manager with the given protocol and store
+    string ioRequest(string protocol, SSLTrustStore ts) {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "ssl_verify_mode": SSL_VERIFY_PEER,
+            "ssl_trust_store": ts,
+            "connect_timeout": 10s,
+        });
+        try {
+            hash<auto> resp = mgr.request(url, "GET", "/ok");
+            return resp.status_code == 200 ? "ok" : resp.status_code.toString();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    httpClientIoTest() {
+        foreach string protocol in ("h1", "h2", "h3") {
+            assertEq("ok", ioRequest(protocol, good()), protocol);
+            assertTrue(ioRequest(protocol, bad()) != "ok", protocol + " mismatch");
+        }
+    }
+
+    restClientIoTest() {
+        RestClientIo rc({"url": url, "ssl_verify_cert": True, "ssl_trust_store": good(), "data": "text"});
+        assertEq(200, rc.restGetAsync("/ok").get().status_code);
+        RestClientIo rcbad({"url": url, "ssl_verify_cert": True, "ssl_trust_store": bad(), "data": "text"});
+        try {
+            rcbad.restGetAsync("/ok").get();
+            assertTrue(False, "mismatch fails");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err.val(), "mismatch: " + ex.err);
+        }
+        # a shared manager that does not use the store is refused, not ignored
+        HttpClientIo::HttpClientConnectionManager mgr();
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", sub () { new RestClientIo({"url": url,
+            "ssl_trust_store": good()}, mgr); });
+    }
+
+    dirPolicyTest() {
+        # a tenant allowed to read one directory only: a link in it to a file elsewhere is not read
+        TmpDir dir("qore-test-7248-");
+        string d = dir.path + DirSep + "allowed";
+        mkdir(d);
+        symlink(other_file, d + DirSep + "link.pem");
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("string sub t(string d) { try { return sprintf(\"%d\", SSLTrustStore::fromDirectory(d).size()); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "tenant");
+        SandboxManager sm();
+        sm.addFilesystemAllowedPath(d, QSEC_READ);
+        p.setSandboxManager(sm);
+        assertRegex("^FILESYSTEM-ACCESS-DENIED", p.callFunction("t", d));
+        # trusted code reads it
+        assertEq(1, SSLTrustStore::fromDirectory(d).size());
+    }
+
+    orderTest() {
+        # the store is built the same whatever order the first object gave the certificates in: the two certificates
+        # have the same subject, for which the order of a store matters to OpenSSL, so a connection verifies the same
+        # with both objects, whichever of them was created first
+        string r1;
+        string r2;
+        {
+            SSLTrustStore first((other, cert));
+            SSLTrustStore second((cert, other));
+            assertEq(first.getId(), second.getId());
+            assertEq(2, second.size());
+            r1 = sockConnect(first);
+            assertEq(r1, sockConnect(second));
+        }
+        {
+            SSLTrustStore first((cert, other));
+            SSLTrustStore second((other, cert));
+            r2 = sockConnect(first);
+            assertEq(r2, sockConnect(second));
+        }
+        assertEq(r1, r2, "the same whichever order created the store");
+    }
+
+    impliedVerifyTest() {
+        # without ssl_verify_cert, a store that does not trust the server fails the request
+        HTTPClient hc({"url": url, "ssl_trust_store": bad(), "connect_timeout": 10s, "timeout": 10s});
+        assertThrows("SOCKET-SSL-ERROR", \hc.get(), "/ok");
+        # unless verification is turned off explicitly
+        HTTPClient off({"url": url, "ssl_trust_store": bad(), "ssl_verify_cert": False, "connect_timeout": 10s,
+            "timeout": 10s});
+        assertEq("ok", off.get("/ok"));
+        # the HttpClientIo manager: no verification mode given
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "ssl_trust_store": bad(),
+            "connect_timeout": 10s,
+        });
+        try {
+            mgr.request(url, "GET", "/ok");
+            assertTrue(False, "the request failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err.val(), ex.err);
+        }
+    }
+
+    sandboxedUseTest() {
+        # a tenant whose sandbox allows the network but no file verifies the server with a trust store made from
+        # certificates in memory
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("string sub t(string url, string pem) { SSLTrustStore ts(new SSLCertificate(pem)); "
+            "HTTPClient hc({\"url\": url, \"ssl_verify_cert\": True, \"ssl_trust_store\": ts, "
+            "\"connect_timeout\": 10s, \"timeout\": 10s}); return hc.get(\"/ok\"); }", "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        assertEq("ok", p.callFunction("t", url, CertPem));
+    }
+}

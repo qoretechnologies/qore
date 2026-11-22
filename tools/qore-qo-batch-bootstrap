@@ -697,3 +697,12 @@ run_source_order --scc-publish-all "$context"
 # committed, so the date the freeze after this run reads is this one.
 date_generation_change
 commit_ordering_token
+
+# With Ninja, the bootstrap rule depends on the depfile that the batch wrote after
+# the ordering token was touched, so that a rewrite by the incremental plan makes
+# it run (qore#7189): dated back to the token, the batch of the rule's own run
+# does not make the next build run it again.  Nothing reads the depfile's time
+# otherwise; a failure leaves only that extra run.
+if [ "${QORE_QCC_DEPFILE_DATE_BACK:-}" = 1 ] && [ -f "$bootstrap_stamp.d" ]; then
+    touch -r "$bootstrap_stamp" "$bootstrap_stamp.d" 2>/dev/null || true
+fi

@@ -237,8 +237,9 @@ int QoreYamlSaxParser::parseStream(QoreObject* stream,
 
     bool result = processEvents(state);
 
-    // Check for read handler errors
-    if (read_handler.hasError() && !*xsink) {
+    // the error of the stream, which made libyaml's parse fail: it follows libyaml's error in the chain, if any, so
+    // that its cause and origin (a stream of sandboxed code) are kept (qore#7232)
+    if (read_handler.hasError()) {
         read_handler.raiseError(xsink, QY_SAX_STREAM_ERR);
         result = false;
     }

@@ -1288,6 +1288,14 @@ public:
         of different callers (qore#7010)
     */
     uint64_t work_gen = 0;
+    //! true if the code that captured the context is sandboxed or acts for sandboxed code (see
+    //! qore_caller_is_sandboxed()): the exceptions of the C++ steps that the context's operation runs on the async I/O
+    //! thread are raised for it (see QoreExceptionOriginScope; qore#7232)
+    /** Set by capture_async_io_sandbox_context() only
+    */
+    bool origin_sandboxed = false;
+    //! the ID of the sandboxed Program of that code, or 0 if it is not known
+    qore_program_id_t origin_pgm_id = 0;
     //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
     /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
         controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
@@ -1808,7 +1816,7 @@ public:
 
     //! restores the override that was in effect when the override was set, if it was set
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~RuntimeParseOptionsOverrideHelper() {
-        if (active) {
+        if (state) {
             restore();
         }
     }
@@ -1833,31 +1841,32 @@ public:
 
     //! returns true if the override has been set
     DLLLOCAL bool isSet() const {
-        return active;
+        return state;
     }
 
     //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
     //! without one, so that it can be set again
     DLLLOCAL void reset() {
-        if (active) {
+        if (state) {
             restore();
-            active = false;
+            state = nullptr;
         }
     }
 
 private:
-    //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
-    //! every call of a user variant
-    bool active = false;
-    //! the state of the thread (ThreadData::runtime_po_state)
-    QoreRuntimePoState* state;
+    //! the state of the thread (ThreadData::runtime_po_state) if the override has been set, or nullptr
+    /** The state saved below is valid only if this is set (it is written by set() and read by restore() only), so it
+        takes no initialization beyond that of its parse options: the helper is created on every call of a user
+        variant, and is in the frame of each level of a recursion of user code (CodeEvaluationHelper), so the pointer
+        is also the flag that tells whether the override has been set (tools/stack-usage-budgets.txt)
+    */
+    QoreRuntimePoState* state = nullptr;
     //! the state that set() replaced
     QoreRuntimePoState old;
 
     //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
-        assert(active);
+        assert(state);
         *state = old;
     }
 };
@@ -2218,6 +2227,35 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true and sets \a pgm_id if the code that raises an exception or sets an error now is sandboxed or acts for
+//! sandboxed code: the origin that a QoreExceptionOriginScope sets (work that the library does on the async I/O thread
+//! for a sandboxed submitter), else qore_caller_is_sandboxed() (qore#7139, qore#7232)
+DLLLOCAL bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id);
+
+//! Sets the origin of the exceptions that the current thread raises while it exists: work that the library does for a
+//! sandboxed submitter where no sandbox context is applied, such as a C++ step of an operation on the async I/O thread
+//! (qore#7232)
+/** Inactive if \a origin_sandboxed is false; costs a thread-local load and store when active, and a branch otherwise
+*/
+class QoreExceptionOriginScope {
+public:
+    DLLLOCAL QoreExceptionOriginScope(bool origin_sandboxed, qore_program_id_t origin_pgm_id);
+    DLLLOCAL ~QoreExceptionOriginScope();
+
+    DLLLOCAL QoreExceptionOriginScope(const QoreExceptionOriginScope&) = delete;
+    DLLLOCAL QoreExceptionOriginScope& operator=(const QoreExceptionOriginScope&) = delete;
+
+    //! the scope of the current thread, or nullptr
+    DLLLOCAL static const QoreExceptionOriginScope* current();
+
+    //! the ID of the sandboxed Program, or 0 if it is not known
+    qore_program_id_t pgm_id;
+
+private:
+    const QoreExceptionOriginScope* previous = nullptr;
+    bool active;
+};
 
 //! Returns true and sets \a mark if an exception in \a xsink was raised by code that is sandboxed or acts for
 //! sandboxed code (qore#7139)
