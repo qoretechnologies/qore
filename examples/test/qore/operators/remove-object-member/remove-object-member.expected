@@ -18,13 +18,13 @@ delete of an object member: [1, "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"
 remove of an object member: [1, "Counted", "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"]
 remove of a cycle: "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"
 declared remove never-set returns: null
-declared remove never-set: "keys=[\"m\", \"i\", \"h\"] elements=4 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=1\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 1, h: {x: 1}, p: \"p\"}}"
+declared remove never-set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=1\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 1, h: {x: 1}, p: \"p\"}}"
 declared remove set returns: 1
-declared remove set: "keys=[\"m\", \"i\", \"h\"] elements=4 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: {x: 1}, p: \"p\"}}"
-declared delete set: "keys=[\"m\", \"i\", \"h\"] elements=4 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
+declared remove set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: {x: 1}, p: \"p\"}}"
+declared delete set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
 declared slice returns: {m: null, i: null, h: null}
-declared slice: "keys=[\"m\", \"i\", \"h\"] elements=4 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
-declared set again: "keys=[\"m\", \"i\", \"h\"] elements=4 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=2\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 2, h: null, p: \"p\"}}"
+declared slice: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
+declared set again: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=2\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 2, h: null, p: \"p\"}}"
 private remove: ["p", null, ["m", "i", "h", "p"]]
 undeclared beside private: remove returns: 1
 undeclared beside private: ["p"]
