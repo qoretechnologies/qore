@@ -102,10 +102,10 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
-    A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element holding a container
-    shared with another owner first gives it a copy of its own, as from a variable, in every execution mode: a change
-    through the weak reference no longer changes the other owner or (in the AST interpreter) a literal of the program
-    (<a href="https://github.com/qoretechnologies/qore/issues/7242">issue 7242</a>).
+    A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
+    container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
+    one through a deleted object or a freed weak container raises an exception, as an assignment does, in every
+    execution mode (<a href="https://github.com/qoretechnologies/qore/issues/7242">issue 7242</a>).
 
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
