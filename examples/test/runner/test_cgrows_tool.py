@@ -228,6 +228,17 @@ class CgrowsToolTest(unittest.TestCase):
             self.assertIn("--exec-mode=jit", fields)
             self.assertIn("-b", fields)
 
+    def test_zero_values(self):
+        # a plain 0 is a valid value: N0=0 (N=00000 for the first run), no pads growth
+        log = self.tmp / "runs.log"
+        p = self.run_tool(["/no/build", BENCH / "bench-func.q", "fc", "ast"],
+                          self.counting_env("7 7", CGROW_LAYOUTS="2", CGROW_N0="0", CGROW_N1="10000",
+                                            CGROW_PAD_STEP="0", CGROW_ENV_PAD_STEP="0", CGROW_LOOP_PAD_STEP="0",
+                                            CGROW_TEST_LOG=str(log)))
+        self.assertEqual(0, p.returncode, p.stderr)
+        self.assertEqual("7\n", p.stdout)
+        self.assertEqual(["00000", "10000", "00000", "10000"], [line.split()[1] for line in log.read_text().splitlines()])
+
     def test_decimals_and_iterations(self):
         # (1000 + 3000 * 7) - (1000 + 1000 * 7) over 2000 iterations; the costs have no fraction, so check the format
         p = self.run_tool(["/no/build", BENCH / "bench-func.q", "fc", "ast"],
@@ -265,6 +276,12 @@ class CgrowsToolTest(unittest.TestCase):
             (["/no/build", script, "fs", "ast"], {"CGROW_PAD_STEP": "x"}, "non-negative integers"),
             (["/no/build", script, "fs", "ast"], {"CGROW_ENV_PAD_STEP": "-1"}, "non-negative integers"),
             (["/no/build", script, "fs", "ast"], {"CGROW_LOOP_PAD_STEP": "1.5"}, "non-negative integers"),
+            # a leading zero, which the shell would read as octal
+            (["/no/build", script, "fs", "ast"], {"CGROW_N0": "08"}, "without a leading zero"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_N0": "010"}, "without a leading zero"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_N1": "08"}, "without a leading zero"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_N1": "010"}, "without a leading zero"),
+            (["/no/build", script, "fs", "ast"], {"CGROW_PAD_STEP": "0816"}, "without a leading zero"),
         ]
         for args, env, message in cases:
             with self.subTest(message=message):

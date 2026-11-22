@@ -67,6 +67,9 @@ for v in "$LAYOUTS" "$STEP" "$ESTEP" "$LSTEP" "$N0" "$N1" "$DEC"; do
     case $v in
         ''|*[!0-9]*) echo "$0: CGROW_LAYOUTS, CGROW_PAD_STEP, CGROW_ENV_PAD_STEP, CGROW_LOOP_PAD_STEP," \
             "CGROW_N0, CGROW_N1 and CGROW_DECIMALS must be non-negative integers" >&2; exit 2 ;;
+        # the shell's arithmetic and printf read a number with a leading zero as octal (08 is invalid, 010 is 8)
+        0?*) echo "$0: '$v': CGROW_LAYOUTS, CGROW_PAD_STEP, CGROW_ENV_PAD_STEP, CGROW_LOOP_PAD_STEP, CGROW_N0," \
+            "CGROW_N1 and CGROW_DECIMALS must be decimal numbers without a leading zero" >&2; exit 2 ;;
     esac
 done
 if [ "$LAYOUTS" -lt 1 ] || [ "$N1" -le "$N0" ]; then
