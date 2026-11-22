@@ -6099,8 +6099,11 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             # to the target of a connection that was lent to it (qore#7262), checked before connecting
             object client = getPingClient();
             if (client.hasCallableMethod("startPollConnect") && client.hasCallableMethod("getURL")) {
-                checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
-                    ? client.getProxyURL() : NOTHING);
+                # the target only (scheme, host and port): the credentials and the path, which the calling code can
+                # set, are not given to the check (issue #7236)
+                checkLentNetworkTarget(client instanceof Qore::HTTPClient
+                    ? cast<Qore::HTTPClient>(client).getURL(UC_TARGET)
+                    : client.getURL(), client.hasCallableMethod("getProxyURL") ? client.getProxyURL() : NOTHING);
                 return client.startPollConnect();
             }
             return HttpBasedConnection::startPollConnect(logger);
@@ -6955,7 +6958,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         on_exit conn_client.disconnect();
         # the client is created outside get() and getAsync(): code restricted from NETWORK may connect only to the
         # target of a connection that was lent to it, as with their clients (qore#7262), checked before connecting
-        checkLentNetworkTarget(conn_client.getURL(), conn_client.getProxyURL());
+        # the target only (scheme, host and port): the credentials and the path, which the calling code can set, are not
+        # given to the check (issue #7236)
+        checkLentNetworkTarget(conn_client.getURL(UC_TARGET), conn_client.getProxyURL());
         conn_client.connect();
     }
 
