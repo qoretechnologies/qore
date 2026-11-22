@@ -2169,7 +2169,38 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
-DLLLOCAL bool qore_caller_is_sandboxed();
+DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true and sets \a mark if an exception in \a xsink was raised by code that is sandboxed or acts for
+//! sandboxed code (qore#7139)
+/** The mark is \c "[caller Program N] " (\c N the ID of the sandboxed Program of the first such exception, see
+    qore_caller_is_sandboxed()), or \c "[caller Program unknown] "; a report of the exceptions starts each line with it
+    and escapes the text of the code's choosing (see qore_append_escaped_report_text())
+*/
+DLLLOCAL bool qore_exception_sandboxed_mark(const ExceptionSink& xsink, QoreString& mark);
+
+//! Marks the last exception in \a xsink as raised for the sandboxed Program \a pgm_id (0 if not known): one whose
+//! text sandboxed code stored earlier, such as the error of a Queue (qore#7139)
+DLLLOCAL void qore_mark_last_exception_sandboxed(ExceptionSink& xsink, qore_program_id_t pgm_id);
+
+//! Returns true and sets \a pgm_id if an exception in \a xsink was raised by code that is sandboxed or acts for
+//! sandboxed code: the ID of the sandboxed Program of the first such exception, or 0 (qore#7139)
+DLLLOCAL bool qore_exception_sandboxed_origin(const ExceptionSink& xsink, qore_program_id_t& pgm_id);
+
+//! Sets the mark of the first exception in \a xsink if code that is sandboxed or acts for sandboxed code raised it
+//! (else \a mark stays empty), and appends its error and description escaped for a log line (qore#7139)
+DLLLOCAL void qore_log_exception_text(ExceptionSink& xsink, QoreString& mark, QoreString& err, QoreString& desc);
+
+//! Appends \a text to \a out, converted to UTF-8, with the characters that could end or rewrite the line of a report
+//! escaped (qore#7139)
+/** Backslash, the C0 and C1 control characters and DEL, the Unicode line and paragraph separators, and the bidirectional
+    formatting characters are escaped (\c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN, \c \\u{NNNN}),
+    as are the bytes of invalid UTF-8 and of text that cannot be converted to UTF-8 (\c \\xNN)
+*/
+DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const QoreString* text);
+
+//! Appends \a text (UTF-8, as the names of files and functions) to \a out escaped as by the variant above
+DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const char* text);
 
 //! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
 /** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
@@ -2228,6 +2259,11 @@ public:
         return barrier_depth;
     }
 
+    //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
+    DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
+        return sandboxed_pgm_id;
+    }
+
     DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
     DLLLOCAL QoreCallerSandboxHelper& operator=(const QoreCallerSandboxHelper&) = delete;
 
@@ -2236,6 +2272,8 @@ private:
     const QoreCallerSandboxHelper* previous = nullptr;
     const QoreCallerSandboxHelper* previous_native_load_restriction = nullptr;
     size_t barrier_depth = 0;
+    //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
+    qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
 };
 

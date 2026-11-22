@@ -1747,6 +1747,11 @@ struct ParallelExecState {
     int total;
     std::atomic<bool> has_error{false};
     QoreHashNode* error_info{nullptr};       // exception info from first failing worker
+    //! true if code that is sandboxed or acts for sandboxed code raised the exception of error_info: it is re-raised
+    //! marked (qore#7139)
+    bool error_sandboxed = false;
+    //! the ID of the sandboxed Program of that exception, or 0 if it is not known
+    qore_program_id_t error_pgm_id = 0;
     QoreCounter counter;
     bool collect_results;
 
@@ -1772,6 +1777,7 @@ static void parallel_capture_exception(ParallelExecState* state, ExceptionSink* 
     AutoLocker al(&state->lock);
     if (!state->has_error.load(std::memory_order_acquire)) {
         state->has_error.store(true, std::memory_order_release);
+        state->error_sandboxed = qore_exception_sandboxed_origin(*xsink, state->error_pgm_id);
         state->error_info = xsink->getExceptionInfo();
     } else {
         xsink->clear();
@@ -2009,6 +2015,10 @@ list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [
                 "%s",
                 desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
+            // the text that sandboxed code chose is reported marked in the calling thread (qore#7139)
+            if (state.error_sandboxed) {
+                qore_mark_last_exception_sandboxed(*xsink, state.error_pgm_id);
+            }
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
         }
@@ -2160,6 +2170,10 @@ nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) 
                 "%s",
                 desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
+            // the text that sandboxed code chose is reported marked in the calling thread (qore#7139)
+            if (state.error_sandboxed) {
+                qore_mark_last_exception_sandboxed(*xsink, state.error_pgm_id);
+            }
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
         }

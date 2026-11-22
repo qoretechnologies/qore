@@ -793,6 +793,42 @@ authenticate();
     that code.  The code of a %Program that has released its classes runs in its caller's %Program with the caller's
     options, so the code of a released restricted %Program that the host calls is the host's code for the terminal.
 
+    @subsection sandbox_exception_reports Exception Reports of Sandboxed Code
+
+    An exception that code that is sandboxed or acts for sandboxed code raises (the code of a sandboxed %Program, and
+    the code that runs for it, such as module code that it calls or code that runs under its sandbox) records it with
+    the ID of the sandboxed %Program, and keeps it when it is rethrown; so does an exception that such code rethrows
+    with values of its own, and the error of a @ref Qore::Thread::Queue "Queue" that such code sets with
+    @ref Qore::Thread::Queue::setError() "Queue::setError()", whichever code then reads from or writes to the queue, the
+    exception of such code that @ref Qore::parallel_map() "parallel_map()" or
+    @ref Qore::parallel_foreach() "parallel_foreach()" raises again in the calling thread, and the error of
+    a @ref Qore::Thread::Future "Future" that such code rejects (with @ref Qore::Thread::Promise::setError()
+    "Promise::setError()", or by raising in @ref Qore::call_async() "call_async()"), whichever code then gets its
+    result.  Wherever and in
+    whichever thread the library reports it (the unhandled exception report on @ref Qore::stderr "stderr" of a
+    background thread, a @ref Qore::Thread::ThreadPool "ThreadPool" task, an asynchronous I/O timer, callback or task,
+    the release of thread-local data or of thread resources, also when the host runs the code, and the error log lines
+    of the asynchronous I/O controller's logger or the one set with
+    @ref Qore::set_async_io_logger() "set_async_io_logger()", and the warnings of a parse that an embedding application
+    reports with the default warning handler), the report cannot pass for the host's own (qore#7139):
+    - each line starts with the mark \c "[caller Program N] " (\c N is the ID of the sandboxed %Program, or
+      \c unknown if it is not known); in a log line, the message starts with it; the report of a chain of exceptions
+      that has such an exception is marked whole, with the ID of the first one
+    - the text of the code's choosing (the error code, the description and the argument, the names of functions, files
+      and sources) is converted to UTF-8 and escaped, so that it stays on its marked line: line breaks, backslash, the
+      C0 and C1 control characters and DEL, the Unicode line and paragraph separators and the bidirectional formatting
+      characters (as \c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN and \c \\u{NNNN}), as are the bytes of
+      invalid UTF-8 (\c \\xNN); the asynchronous I/O controller's error log lines escape the text of every exception
+      and the names that the submitter chose (owner, key)
+
+    The marked report on @ref Qore::stderr "stderr" is a compact form of the report of other code: for each exception of
+    the chain, the location where it was raised, the error, description and argument, and the function, file and line
+    of each frame of the call stack (without the language and the code type of each frame); a log line names the first
+    exception of a chain, as for other code.  The exceptions
+    of the host's own code are reported as before.  The mark is a property of the report: Qore code that catches the
+    exception (such as a host that logs it with @ref Util::get_exception_string() "get_exception_string()") gets its
+    values as they are, and escapes them itself before it writes them where they could pass for its own.
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
