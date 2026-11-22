@@ -180,6 +180,17 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     is a server error, answered with \c 500.  A stream handler receives the chunks of an HTTP/1.1 chunked body as
     they are received, without a check (see @ref HttpServer::AbstractStreamRequest::recvImpl() "AbstractStreamRequest::recvImpl()").
 
+    @section httpserver_handler_socket The Socket of an HTTP/2 or HTTP/3 Request
+
+    The requests of an HTTP/2 connection share its socket, and the requests of all the HTTP/3 sessions of a listener
+    share its UDP socket.  The handler of an HTTP/2 or HTTP/3 request gets a socket of its own for its request (the
+    \c s argument of its methods and \c cx."header-info".sock): its HTTP/2 or QUIC methods act on the request's own
+    stream (and session) only, its \c shutdown() and \c close() end the request's own stream, never the connection
+    or the listener, and its other methods are those of a socket that is not connected.  So the peer's address and
+    certificate are not those of this socket's @ref Qore::Socket::getPeerInfo() "getPeerInfo()" and
+    @ref Qore::Socket::getRemoteCertificate() "getRemoteCertificate()": the request context gives them, in
+    \c cx."peer-info" and \c cx."client-cert" (see @ref httpserverutil_request_context).
+
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
     When a TLS listener is added with \c enable_h3 (or when
@@ -5804,6 +5815,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             # HTTP/2 multiplexed mode: submit CONNECT response directly
                             # to the nghttp2 session.  h2op on the I/O thread will flush it.
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, resp_hdr);
+                            # the handler's socket of the stream ends it gracefully from now on (qore#7214)
+                            Http2HandlerSocket::markResponseStarted(request_helper.handler_sock);
                             # Wake the I/O controller so h2op's continuePoll() flushes
                             # the pending CONNECT response
                             *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
@@ -6183,6 +6196,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 } else {
                     s.submitHttp2StreamingResponseHeaders(stream_id,
                         rv."code" ?? 200, resp_hdr);
+                    # the handler's socket of the stream ends it gracefully from now on (qore#7214)
+                    Http2HandlerSocket::markResponseStarted(request_helper.handler_sock);
                     if (wake_cb) {
                         wake_cb();
                     }
@@ -10070,7 +10085,10 @@ class Http3HandlerSocket inherits Qore::Socket {
     the same client to another handler.  Its other methods are those of its own, unconnected socket, except these,
     which give what concerns the handler's own request: isHttp2(), getHttp2MaxRequestBodySize(), isQuic(),
     isSecure(), isOpen(), getSocketInfo(), getEncoding(), getSSLCipherName() and getSSLCipherVersion() (those of the
-    connection's socket).  shutdown() and close() end the handler's own stream, never the connection.  The class is
+    connection's socket).  shutdown() and close() end the handler's own stream, never the connection.  Its
+    getPeerInfo() and getRemoteCertificate() are those of its own, unconnected socket: the request context gives the
+    peer's information (\c cx."peer-info") and its certificate (\c cx."client-cert"; see
+    @ref httpserver_handler_socket).  The class is
     not exported, so no code outside the module can name it.
 */
 class Http2HandlerSocket inherits Qore::Socket {
@@ -10096,7 +10114,8 @@ class Http2HandlerSocket inherits Qore::Socket {
     }
 
     #! Ends the handler's own stream gracefully, after its pending data; does nothing if it is already ended
-    /** A stream whose response the handler has not started through this object is reset.
+    /** A stream whose response has not started (through this object, or by the server: an SSE stream, the response
+        to an extended CONNECT) is reset.
 
         @return 0
 
@@ -10110,7 +10129,7 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     #! Ends the handler's own stream if it is not ended, and refuses any I/O on it after
     /** The stream is ended gracefully if it can be, otherwise it is reset; never the connection.  Calling it again
-        does nothing.
+        does nothing, and a stream or a connection that has already ended is not an error.
 
         @return 0
     */
@@ -10384,6 +10403,17 @@ class Http2HandlerSocket inherits Qore::Socket {
         return False;
     }
 
+    #! Records that the server started the response of the request's stream on the connection's socket (qore#7214)
+    /** Called by the server after it sent the response's headers on the connection's socket (an SSE stream, the
+        response to an extended CONNECT), so that shutdown() and close() then end the stream gracefully; the class is
+        not exported, so only the module's code can call it
+    */
+    static markResponseStarted(*Socket sock) {
+        if (sock instanceof Http2HandlerSocket) {
+            cast<Http2HandlerSocket>(sock).setResponseStarted();
+        }
+    }
+
     #! Records that the handler started the response of its stream
     private:internal synchronized setResponseStarted() {
         response_started = True;
@@ -10391,7 +10421,9 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     #! Records a stream that the handler promised
     private:internal synchronized addPromisedStream(int id) {
-        promised{id} = True;
+        if (id > 0) {
+            promised{id} = True;
+        }
     }
 
     #! Returns @ref True "True" if the handler promised the stream
@@ -10407,10 +10439,10 @@ class Http2HandlerSocket inherits Qore::Socket {
         if (!takeEnd()) {
             return;
         }
-        # a stream whose response the handler has not started is reset: an end of the stream (END_STREAM) before the
-        # response's headers is not a valid response
+        # a stream whose response has not started is reset: an end of the stream (END_STREAM) before the response's
+        # headers is not a valid response
         if (!response_started) {
-            real.resetHttp2Stream(stream_id);
+            resetStream(reset_if_needed);
             return;
         }
         # the end of the stream (END_STREAM) after its pending data
@@ -10421,11 +10453,27 @@ class Http2HandlerSocket inherits Qore::Socket {
                 # the stream is not ended: a later close() resets it, or, if close() was called while the graceful
                 # end was in progress (and found the end taken), the stream is reset here
                 if (releaseEnd()) {
-                    real.resetHttp2Stream(stream_id);
+                    resetStream(True);
                 }
                 rethrow;
             }
+            resetStream(True);
+        }
+    }
+
+    #! Resets the handler's stream
+    /** @param quiet for close(): a stream or a connection that has already ended is not an error, as the stream is
+        then gone anyway
+    */
+    private:internal resetStream(bool quiet) {
+        if (!quiet) {
             real.resetHttp2Stream(stream_id);
+            return;
+        }
+        try {
+            real.resetHttp2Stream(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream or the connection has already ended
         }
     }
 
