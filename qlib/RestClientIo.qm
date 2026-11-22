@@ -2547,6 +2547,54 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             });
         }
 
+        #! Starts an async request with explicit path semantics and signals a notifier when it ends
+        /** Prepares the request in the calling thread (including an OAuth2 token refresh, request signing and body
+            serialization) and submits it as @ref restDoRequestTargetWithTimeout() does, without waiting for the
+            response: \a notifier is signaled when the request ends, whether with a response, an error, a timeout or a
+            cancellation, so that a caller that watches the notifier with the async I/O controller holds no thread
+            while the response is awaited.  The response is then available at once from
+            @ref RestFuture::get() "RestFuture::get()", with the same response handling and errors as
+            @ref restDoRequestTargetWithTimeout().
+
+            @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param body request body, serialized by the client
+            @param hdr additional headers
+            @param timeout_ms the positive transport deadline of this request in milliseconds, replacing the client's
+            request timeout
+            @param notifier signaled once when the request has ended
+
+            @return a cancellable future containing the deserialized REST response
+
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+
+            @par Example
+            @code{.py}
+EventNotifier notifier();
+RestFuture future = rest.restDoRequestAsyncTargetWithNotifier("POST",
+    <RestRequestTarget>{"path": "messages"}, body, NOTHING, 30000, notifier);
+# ... the async I/O controller reports the notifier readable ...
+hash<RestResponseInfo> response = future.get();
+            @endcode
+
+            @since RestClientIo 1.0
+        */
+        RestFuture restDoRequestAsyncTargetWithNotifier(string method, hash<RestClient::RestRequestTarget> target,
+                auto body, *hash<auto> hdr, int timeout_ms, EventNotifier notifier) {
+            if (timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+            }
+            hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr,
+                False, False, notifier, NOTHING, NOTHING, timeout_ms, resolveRequestTarget(target, method));
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, hash<RestClient::RestResponseInfo> sub (hash<auto> response) {
+                return buildAsyncOperationResponse(response, op);
+            });
+        }
+
         #! Creates a caller-driven request with explicit path semantics
         /** @param method HTTP method
             @param target API-relative endpoint or origin-absolute target
@@ -4258,24 +4306,8 @@ rest.addSensitiveHeaders("Qorus-Token");
                 if (content_type.val() && !RestClientIo::isSseContentType(content_type)) {
                     *data body = drainSseErrorBody(stream, first_data,
                         response_timeout, deadline);
-                    throw "REST-RESPONSE-ERROR",
-                        sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
-                            "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
-                        <RestClient::RestResponseInfo>{
-                            "status_code": raw_response.status_code,
-                            "headers": raw_response.headers,
-                            "body": body,
-                            "content_type": content_type,
-                            "response_body_raw": body,
-                            "request_method": method,
-                            "request_path": path,
-                            "request_headers": RestClientIo::redactHeaders(request_headers, extra),
-                            "request_body": request_body,
-                            "protocol": raw_response.protocol,
-                            "status_message": raw_response.status_message,
-                            "effective_url": raw_response.effective_url,
-                            "redirects": raw_response.redirects,
-                        };
+                    throwNotEventStream(raw_response, content_type, body, method, path, request_headers,
+                        request_body, extra);
                 }
             }
 
@@ -4291,6 +4323,40 @@ rest.addSensitiveHeaders("Qorus-Token");
                 initial_data += first_data;
             }
             return initial_data;
+        }
+
+        #! Raises the error of a successful response to an SSE request that is not an event stream
+        /** @param raw_response the response, without its body
+            @param content_type the Content-Type of the response
+            @param body the body of the response, if any
+            @param method the HTTP method of the request
+            @param path the path of the request
+            @param request_headers the headers of the request
+            @param request_body the body of the request
+            @param extra the names of further sensitive headers
+
+            @throw REST-RESPONSE-ERROR always
+        */
+        private static throwNotEventStream(hash<auto> raw_response, string content_type, *data body, string method,
+                string path, *hash<auto> request_headers, *data request_body, *hash<string, bool> extra) {
+            throw "REST-RESPONSE-ERROR",
+                sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
+                    "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
+                <RestClient::RestResponseInfo>{
+                    "status_code": raw_response.status_code,
+                    "headers": raw_response.headers,
+                    "body": body,
+                    "content_type": content_type,
+                    "response_body_raw": body,
+                    "request_method": method,
+                    "request_path": path,
+                    "request_headers": RestClientIo::redactHeaders(request_headers, extra),
+                    "request_body": request_body,
+                    "protocol": raw_response.protocol,
+                    "status_message": raw_response.status_message,
+                    "effective_url": raw_response.effective_url,
+                    "redirects": raw_response.redirects,
+                };
         }
 
         #! Returns True if the given Content-Type value names an event stream
@@ -5506,6 +5572,10 @@ rest.addSensitiveHeaders("Qorus-Token");
             - \c serialization: "json" or "none" (default: inherits from data serialization)
             - \c timeout: I/O timeout for reading events (default: 30s)
 
+            @note A response that does not start an event stream (an error status, or a successful response whose
+            \c Content-Type is not \c text/event-stream) closes the observable with \c reason \c "startup-error" and the
+            error that @ref restSseReader() raises for the same response in \c error
+
             @return an SseObservable ready for observer registration; call
             \c observersReady() after registering observers to start the stream
 
@@ -5579,6 +5649,48 @@ obs.observersReady();
             return bool sub () {
                 return op.cancel();
             };
+        }
+
+        #! Returns True if a Content-Type value of a response to an SSE request is not an event stream
+        /** Used by event-driven SSE observable startup, which refuses such a response as @ref restSseReader() does.
+
+            @param content_type the Content-Type header value of the response, if any
+
+            @return True if \a content_type is set and is not \c text/event-stream
+        */
+        bool isNotEventStreamContentType(*string content_type) {
+            return content_type.val() && !RestClientIo::isSseContentType(content_type);
+        }
+
+        #! Raises the error of a successful response to an SSE request that is not an event stream
+        /** Used by event-driven SSE observable startup; the error is the one that @ref restSseReader() raises for the
+            same response.
+
+            @param raw the response, without its body
+            @param content_type the Content-Type of the response
+            @param body the body of the response, if any
+            @param method the HTTP method of the request
+            @param path the path of the request
+            @param request_headers the headers of the request
+            @param request_body the body of the request
+
+            @throw REST-RESPONSE-ERROR always
+        */
+        raiseSseObservableNotEventStream(hash<auto> raw, string content_type, *data body, string method, string path,
+                *hash<auto> request_headers, *data request_body) {
+            hash<string, bool> extra = getSensitiveHeaderSet();
+            # as for the response errors of restSseReader(), any credential of the request echoed in the error is
+            # redacted
+            on_error {
+                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers, extra);
+                rethrow safe.err, safe.desc, safe.arg;
+            }
+            hash<auto> raw_response;
+            raw_response += raw;
+            if (!raw_response.headers) {
+                raw_response.headers = {};
+            }
+            throwNotEventStream(raw_response, content_type, body, method, path, request_headers, request_body, extra);
         }
 
         #! Raises the REST response error used by event-driven SSE observable startup
@@ -6479,6 +6591,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         *hash<auto> response;
         string error_body = "";
         bool got_error_body = False;
+        #! The Content-Type of a successful response that is not an event stream, whose body is read before the
+        #! response is refused
+        *string not_event_stream_type;
 
         string state = SPS_CONNECTING;
         bool goal_reached = False;
@@ -6812,12 +6927,23 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             response.redirects = redirects;
         }
 
-        if (status_code >= 300) {
+        # a successful response that is not an event stream is refused, as restSseReader() refuses it, once its body
+        # has been read
+        if (status_code < 300) {
+            *string content_type = RestClient::getSingleHeaderValue(response_headers."content-type");
+            if (rcio.isNotEventStreamContentType(content_type)) {
+                not_event_stream_type = content_type;
+            }
+        }
+        if (status_code >= 300 || not_event_stream_type) {
             if (captureErrorBody(item)) {
                 raiseResponseError();
             }
             state = SPS_ERROR_DRAIN;
             waiting_for_stream = False;
+            # the error body, and its end, may have arrived with the response headers: the stream's notifier was
+            # signaled for all of them, so they are read now, not after a further signal that never comes
+            processErrorDrainItems();
             return;
         }
 
@@ -6883,6 +7009,10 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         raw += response;
         if (!raw.headers) {
             raw.headers = {};
+        }
+        if (not_event_stream_type) {
+            rcio.raiseSseObservableNotEventStream(raw, not_event_stream_type, got_error_body ? error_body : NOTHING,
+                method, path, hdr, request_body);
         }
         if (got_error_body) {
             raw.body = error_body;
