@@ -25407,6 +25407,47 @@ static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, Runtime
     return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
 }
 
+//! Debug-only: compares two byte strings with the comparison of hash keys and member names (qore#7194)
+/** @param a the first string
+    @param b the second string
+
+    @return the result of qore_key_equal() for the two strings
+*/
+static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const BinaryNode* a = get_param_value(params, 0).get<const BinaryNode>();
+    const BinaryNode* b = get_param_value(params, 1).get<const BinaryNode>();
+    return qore_key_equal(static_cast<const char*>(a->getPtr()), a->size(), static_cast<const char*>(b->getPtr()),
+        b->size());
+}
+
+//! Debug-only: looks up a key of a hash with the hash value of another key, as a collision would (qore#7194)
+/** @param h the hash
+    @param key the key to look up
+    @param hash_key the key whose hash value the lookup uses
+
+    @return a hash with \c exists (if the lookup found a key) and \c value (the value found)
+*/
+static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreHashNode* h = get_param_value(params, 0).get<const QoreHashNode>();
+    DbgStringNodeHelper key_param(get_param_value(params, 1));
+    DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
+    const QoreStringNode* key = *key_param;
+    const QoreStringNode* hash_key = *hash_key_param;
+    if (strlen(key->c_str()) != key->size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the key has a NUL character");
+        return QoreValue();
+    }
+    qore_hash_lookup_key lookup(key->c_str(), key->size());
+    lookup.hash = qore_hash_lookup_key::hashBytes(hash_key->c_str(), hash_key->size());
+    bool exists;
+    ValueHolder value(qore_hash_private::get(*h)->getReferencedKeyValueIntern(lookup, exists), xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("exists", exists, xsink);
+    rv->setKeyValue("value", value.release(), xsink);
+    return rv.release();
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -30323,6 +30364,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
         QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
+    qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, hashTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

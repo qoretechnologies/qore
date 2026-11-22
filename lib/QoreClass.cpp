@@ -13544,9 +13544,9 @@ std::string QoreMemberMap::dbgCheckIndex() const {
 }
 #endif
 
-QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name, size_t len) {
     QORE_CLASS_HIERARCHY_STEP();
-    MemberIndex::const_iterator i = idx.find(std::string_view(name));
+    MemberIndex::const_iterator i = idx.find(std::string_view(name, len));
     return i == idx.end() ? nullptr : i->second;
 }
 

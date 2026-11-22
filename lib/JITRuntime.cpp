@@ -23279,9 +23279,8 @@ qore_rt_get_aot_object_member_descriptor(
     }
     resolved->member_class_ctx =
         resolved->info->getClassContext(class_ctx);
-#ifdef HAVE_QORE_HASH_MAP
+    // the key map of a hash is always a hash table that uses the hash given with a key (qore#7194)
     resolved->key_hash = qore_hash_str()(member_name);
-#endif
     const QoreAOTObjectMemberDescriptor* expected = nullptr;
     if (target.object_member_descriptor.compare_exchange_strong(expected,
             resolved.get(), std::memory_order_release,
