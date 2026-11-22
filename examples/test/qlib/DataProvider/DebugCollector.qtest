@@ -67,6 +67,31 @@ class TestDebugDataProvider inherits AbstractDataProvider {
 
         collectDebugInfo(debug_info);
     }
+
+    #! Simulates an operation that is reported only if debug collection is enabled, as the REST and WebSocket data
+    #! providers do
+    simulateOperationIfEnabled(string operation) {
+        if (debugCollectionEnabled()) {
+            simulateOperation(operation);
+        }
+    }
+}
+
+#! A collector without members, as in the example in the module's documentation
+class MemberlessDebugCollector inherits AbstractDebugInfoCollector {
+    public {
+        static int collected = 0;
+    }
+
+    collect(hash<DataProviderDebugInfo> info) {
+        ++collected;
+    }
+
+    flush() {
+    }
+
+    clear() {
+    }
 }
 
 #! Custom collector for testing
@@ -99,6 +124,7 @@ public class DebugCollectorTest inherits QUnit::Test {
         addTestCase("ConsoleDebugInfoCollector test", \consoleCollectorTest());
         addTestCase("AbstractDataProvider debug methods test", \providerDebugMethodsTest());
         addTestCase("Debug collection integration test", \debugCollectionIntegrationTest());
+        addTestCase("A debug collector without members", \memberlessCollectorTest());
 
         set_return_value(main());
     }
@@ -445,6 +471,34 @@ public class DebugCollectorTest inherits QUnit::Test {
         provider.setDebugCollector();
         assertEq(NOTHING, provider.getDebugCollector());
         assertEq(False, provider.debugCollectionEnabled());
+    }
+
+    #! a registered collector enables debug collection, whether or not it has members (issue #7205)
+    memberlessCollectorTest() {
+        TestDebugDataProvider provider("memberless");
+        provider.simulateOperationIfEnabled("before");
+        assertEq(0, MemberlessDebugCollector::collected, "nothing is collected without a collector");
+
+        MemberlessDebugCollector collector();
+        assertFalse(collector.val(), "the collector has no members");
+        provider.setDebugCollector(collector);
+        assertTrue(provider.debugCollectionEnabled());
+        provider.simulateOperationIfEnabled("registered");
+        assertEq(1, MemberlessDebugCollector::collected);
+
+        provider.setDebugCollector();
+        assertFalse(provider.debugCollectionEnabled());
+        provider.simulateOperationIfEnabled("removed");
+        assertEq(1, MemberlessDebugCollector::collected);
+
+        # a deleted collector cannot collect, so debug collection is not enabled
+        MemberlessDebugCollector deleted_collector();
+        provider.setDebugCollector(deleted_collector);
+        assertTrue(provider.debugCollectionEnabled());
+        delete deleted_collector;
+        assertFalse(provider.debugCollectionEnabled());
+        provider.simulateOperationIfEnabled("deleted");
+        assertEq(1, MemberlessDebugCollector::collected);
     }
 
     #! Test debug collection integration
