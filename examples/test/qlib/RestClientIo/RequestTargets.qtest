@@ -323,9 +323,9 @@ class RequestTargetsTest inherits QUnit::Test {
     }
 
     private static auto drive(AbstractPollOperation op) {
-        date deadline = now_us() + 10s;
+        int deadline = clock_get_monotonic_us() + 10000000;
         while (!op.goalReached()) {
-            if (now_us() >= deadline) {
+            if (clock_get_monotonic_us() >= deadline) {
                 op.abort();
                 throw "TEST-TIMEOUT", "request poll did not finish";
             }

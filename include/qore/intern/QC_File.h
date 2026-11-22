@@ -47,6 +47,10 @@ DLLLOCAL inline int check_terminal_io(const QoreObject* self, const char* m, Exc
         xsink->raiseException("ILLEGAL-EXPRESSION", "%s() cannot be called with a system constant object when 'no-terminal-io' is set", m);
         return -1;
     }
+    // library code that serves code restricted from terminal I/O writes nothing to the terminal for it (qore#7140)
+    if (self->isSystemObject() && qore_check_caller_terminal_io(QoreStringMaker("%s()", m).c_str(), xsink)) {
+        return -1;
+    }
     return 0;
 }
 

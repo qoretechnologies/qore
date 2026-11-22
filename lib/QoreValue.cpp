@@ -398,10 +398,12 @@ QoreValue QoreValue::resolveIndirect() const {
             // a weak reference does not keep its target alive, so it can already be deleted
             return o->isValid() ? QoreValue(o) : QoreValue();
         }
+        // borrowed, as documented: the caller reads it while it knows that it is referenced (see
+        // WeakListReferenceNode::borrow())
         case NT_WEAKREF_HASH:
-            return QoreValue(get<const WeakHashReferenceNode>()->get());
+            return QoreValue(get<const WeakHashReferenceNode>()->borrow());
         case NT_WEAKREF_LIST:
-            return QoreValue(get<const WeakListReferenceNode>()->get());
+            return QoreValue(get<const WeakListReferenceNode>()->borrow());
         default:
             break;
     }
@@ -557,10 +559,11 @@ static bool qore_get_as_bool_lexical(const QoreValue& value) {
             const QoreObject* target = value.get<const WeakReferenceNode>()->get();
             return !Strict && target->isValid() && qore_object_ops(target).getAsBoolDefault();
         }
+        // the size of a list or hash, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
         case NT_WEAKREF_LIST:
-            return !Strict && !value.get<const WeakListReferenceNode>()->get()->empty();
+            return !Strict && !value.get<const WeakListReferenceNode>()->borrow()->empty();
         case NT_WEAKREF_HASH:
-            return !Strict && !value.get<const WeakHashReferenceNode>()->get()->empty();
+            return !Strict && !value.get<const WeakHashReferenceNode>()->borrow()->empty();
         case NT_FUNCREF:
         case NT_RUNTIME_CLOSURE:
             return !Strict;

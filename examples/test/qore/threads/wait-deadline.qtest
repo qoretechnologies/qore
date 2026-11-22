@@ -27,6 +27,8 @@ class WaitDeadlineTest inherits QUnit::Test {
 
         #! a wait that lasts longer than this did not end at its timeout
         const Limit = 20s;
+        #! a step forward of the system clock in microseconds (an hour)
+        const ClockStep = 3600 * 1000000;
     }
 
     constructor() : QUnit::Test("WaitDeadlineTest", "1.0", \ARGV) {
@@ -37,11 +39,16 @@ class WaitDeadlineTest inherits QUnit::Test {
         addTestCase("RWLock::writeLock()", \waitTest(), "write-lock");
         addTestCase("RWLock::readLock()", \waitTest(), "read-lock");
         addTestCase("Gate::enter()", \waitTest(), "gate");
+        # the same with the system clock stepped forward while the waits last: the waits and the test's own deadline
+        # loop are measured on the monotonic clock, so the step ends neither of them early (qore#6535)
+        foreach string kind in ("counter", "queue", "queue-push", "mutex", "write-lock", "read-lock", "gate") {
+            addTestCase(kind + " with the system clock stepped forward", \waitTest(), (kind, True));
+        }
 
         set_return_value(main());
     }
 
-    waitTest(string kind) {
+    waitTest(string kind, *bool step_clock) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("needs a debug build of the library");
         }
@@ -105,13 +112,21 @@ class WaitDeadlineTest inherits QUnit::Test {
             result.push({"rv": rv, "ms": (clock_get_monotonic_us() - start) / 1000});
         }();
 
+        # a step forward of the system clock while the wait lasts (when it is first blocked, below)
+        on_exit if (step_clock) {
+            call_function("dbg_set_realtime_offset", 0);
+        }
+
         # wakes the wait again each time it is blocked again, until it ends
         SandboxManager unrelated();
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         int wakes = 0;
-        while (!result.size() && (now_us() - start) < Limit) {
+        while (!result.size() && (microseconds(clock_get_monotonic_us() - start)) < Limit) {
             if (!call_function("dbg_wait_for_cancellable_wait", tid, 100)) {
                 continue;
+            }
+            if (step_clock && !wakes) {
+                call_function("dbg_set_realtime_offset", ClockStep);
             }
             unrelated.requestInterrupt();
             unrelated.clearInterrupt();
@@ -124,6 +139,8 @@ class WaitDeadlineTest inherits QUnit::Test {
 
         assertGt(0, wakes, "the wait was woken");
         assertLt(Limit.durationMilliseconds(), h.ms, sprintf("the wait ended at its timeout: %y", h));
+        # a step of the system clock does not end the wait before its timeout
+        assertGe(Timeout.durationMilliseconds(), h.ms, sprintf("the wait lasted its timeout: %y", h));
         switch (kind) {
             case "queue":
             case "queue-push":

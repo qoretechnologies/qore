@@ -2455,9 +2455,9 @@ sub connect(string target) {
     s.close();
 }
 auto sub drive(AbstractPollOperation op) {
-    date deadline = now_us() + 20s;
+    date deadline = microseconds(clock_get_monotonic_us()) + 20s;
     while (!op.goalReached()) {
-        if (now_us() > deadline) {
+        if (microseconds(clock_get_monotonic_us()) > deadline) {
             throw \"TEST-TIMEOUT\", sprintf(\"poll operation %y did not finish\", op.getState());
         }
         *hash<SocketPollInfo> info = op.continuePoll();
@@ -2799,8 +2799,8 @@ sub bind_unix(string path) {
         Program ap = sandboxedProgram(allow, NetworkPolicyCode, "datagram-allow");
         ap.callFunction("send_datagram", "127.0.0.1", port);
         AbstractPollOperation recv = receiver.startPollRecvFrom();
-        date deadline = now_us() + 20s;
-        while (!recv.goalReached() && now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + 20s;
+        while (!recv.goalReached() && microseconds(clock_get_monotonic_us()) < deadline) {
             *hash<SocketPollInfo> info = recv.continuePoll();
             if (info) {
                 Socket::poll((info,), 5s);

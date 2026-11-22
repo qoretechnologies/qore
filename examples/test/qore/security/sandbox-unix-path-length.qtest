@@ -19,7 +19,8 @@
 */
 class SandboxUnixPathLengthTest inherits QUnit::Test {
     private {
-        TmpDir tmp("sandbox-unix-path-length-");
+        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
+        TmpDir tmp("sandbox-unix-path-length-", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
         Socket listener();
         #! the socket file that the sandbox does not allow
         string socket_path;

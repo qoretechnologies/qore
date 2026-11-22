@@ -198,8 +198,8 @@ class WebSocketH2PerfTest inherits QUnit::Test {
     }
 
     #! Compute elapsed milliseconds from a start timestamp
-    private float elapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000.0;
+    private float elapsedMs(int start) {
+        return (clock_get_monotonic_us() - start) / 1000.0;
     }
 
     #! Print latency statistics if verbose
@@ -285,7 +285,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
         int msg_count = 200;
         Mutex m();
-        hash<string, date> send_times();
+        hash<string, int> send_times();
         list<float> latencies();
         int received = 0;
         Counter done(1);
@@ -295,7 +295,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             if (!exists msg) {
                 return;
             }
-            date recv_time = now_us();
+            int recv_time = clock_get_monotonic_us();
             string key;
             if (msg.typeCode() == NT_STRING) {
                 key = msg;
@@ -305,7 +305,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             m.lock();
             on_exit m.unlock();
             if (send_times.hasKey(key)) {
-                float lat = (recv_time - send_times{key}).durationMicroseconds() / 1000.0;
+                float lat = (recv_time - send_times{key}) / 1000.0;
                 latencies += lat;
             }
             ++received;
@@ -323,20 +323,20 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
         assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         for (int i = 0; i < msg_count; ++i) {
             string payload;
             if (i % 2 == 0) {
                 payload = sprintf("text-msg-%d", i);
                 m.lock();
                 on_exit m.unlock();
-                send_times{payload} = now_us();
+                send_times{payload} = clock_get_monotonic_us();
                 wsc.send(payload);
             } else {
                 payload = sprintf("bin-msg-%d", i);
                 m.lock();
                 on_exit m.unlock();
-                send_times{payload} = now_us();
+                send_times{payload} = clock_get_monotonic_us();
                 wsc.send(binary(payload));
             }
         }
@@ -420,7 +420,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             background sub() {
                 on_exit senders_done.dec();
                 try {
-                    date client_start = now_us();
+                    int client_start = clock_get_monotonic_us();
                     for (int i = 0; i < msgs_per_client; ++i) {
                         clients[client_id].send(sprintf("client-%d-msg-%d", client_id, i));
                     }
@@ -501,7 +501,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
             assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             wsc.send(sent_payload);
             done.waitForZero(30s);
             float ms = elapsedMs(start);
@@ -572,7 +572,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
         assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
-        date deadline = now_us() + seconds(duration_secs);
+        int deadline = clock_get_monotonic_us() + duration_secs * 1000000;
 
         # Launch sender threads with backpressure
         for (int t = 0; t < num_senders; ++t) {
@@ -580,9 +580,9 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             background sub() {
                 on_exit senders_done.dec();
                 int my_sent = 0;
-                while (now_us() < deadline) {
+                while (clock_get_monotonic_us() < deadline) {
                     # Backpressure: wait if too far ahead of receiver
-                    while (now_us() < deadline) {
+                    while (clock_get_monotonic_us() < deadline) {
                         stats_m.lock();
                         int outstanding = total_sent - total_received;
                         stats_m.unlock();
@@ -591,7 +591,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
                         }
                         sleep(5ms);
                     }
-                    if (now_us() >= deadline) {
+                    if (clock_get_monotonic_us() >= deadline) {
                         break;
                     }
                     try {
@@ -611,8 +611,8 @@ class WebSocketH2PerfTest inherits QUnit::Test {
         senders_done.waitForZero(seconds(duration_secs + 30));
 
         # Actively wait for echoes to arrive (up to 30s to handle valgrind/slow environments)
-        date echo_deadline = now_us() + 30s;
-        while (now_us() < echo_deadline) {
+        int echo_deadline = clock_get_monotonic_us() + 30000000;
+        while (clock_get_monotonic_us() < echo_deadline) {
             stats_m.lock();
             int rcvd = total_received;
             stats_m.unlock();
@@ -711,8 +711,8 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
             # Wait for the flood to complete (up to 10s), polling the receive
             # counter instead of a fixed sleep to finish faster in most cases
-            date deadline = now_us() + 10s;
-            while (now_us() < deadline) {
+            int deadline = clock_get_monotonic_us() + 10000000;
+            while (clock_get_monotonic_us() < deadline) {
                 m.lock();
                 int r = received;
                 m.unlock();

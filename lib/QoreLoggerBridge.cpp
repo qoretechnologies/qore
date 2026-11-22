@@ -104,7 +104,14 @@ void QoreLoggerBridge::logArgs(int level, const QoreStringNode* msg,
     }
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
     call_args->push(level, xsink);
-    if (msg) {
+    if (msg && !args) {
+        // a preformatted message, which can hold text that the code that submitted work chose (an owner, a key, the
+        // text of an exception): it is kept on its line, and the Qore logger, which renders the message as a format,
+        // prints it as it is (qore#7216)
+        QoreStringNode* safe = new QoreStringNode;
+        qore_append_line_safe_text(*safe, msg->c_str(), msg->size(), true);
+        call_args->push(safe, xsink);
+    } else if (msg) {
         call_args->push(msg->refSelf(), xsink);
     } else {
         call_args->push(QoreValue(), xsink);

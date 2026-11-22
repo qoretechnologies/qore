@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class TypeOptionAndQoreFieldsTest
+
+#! Regression test for qore#7150: AbstractDataProviderType::setOption() sets an option that is not set yet, and
+#! HashDataType::addQoreFields() accepts a field description that is a typed hash
+class TypeOptionAndQoreFieldsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("type option and Qore fields", "1.0", \ARGV) {
+        addTestCase("setOption() of an option not set", \setOptionNotSet());
+        addTestCase("setOption() with a value of the wrong type", \setOptionWrongType());
+        addTestCase("setOption() of an unsupported option", \setOptionUnsupported());
+        addTestCase("addQoreFields() with a typed description", \addQoreFieldsTyped());
+        addTestCase("addQoreFields() keeps a given name", \addQoreFieldsNamed());
+        set_return_value(main());
+    }
+
+    setOptionNotSet() {
+        QoreDataType t(StringType);
+        assertEq(NOTHING, t.getOptions());
+        t.setOption("qore.no_null", True);
+        assertEq({"qore.no_null": True}, t.getOptions());
+        # and again, now that it is set
+        t.setOption("qore.no_null", False);
+        assertEq({"qore.no_null": False}, t.getOptions());
+        # through a field
+        QoreDataField f("f", "f", new QoreDataType(StringType));
+        f.setOption("qore.no_null", True);
+        assertEq({"qore.no_null": True}, f.getOptions());
+    }
+
+    setOptionWrongType() {
+        QoreDataType t(StringType);
+        assertThrows("TYPE-OPTION-ERROR", "expects type \"bool\"", \t.setOption(), ("qore.no_null", "x"));
+        assertEq(NOTHING, t.getOptions());
+    }
+
+    setOptionUnsupported() {
+        QoreDataType t(StringType);
+        assertThrows("TYPE-OPTION-ERROR", "not supported", \t.setOption(), ("no.such.option", True));
+    }
+
+    addQoreFieldsTyped() {
+        HashDataType h("h");
+        # each description is inferred as a hash of types only
+        hash<string, hash<string, Type>> desc = {"a": {"type": StringOrNothingType}, "b": {"type": IntType}};
+        h.addQoreFields(desc);
+        assertEq(("a", "b"), keys h.getFields());
+        assertEq("a", h.getFields().a.getName());
+        assertEq("int", h.getFields().b.getType().getName());
+        # the caller's description is not changed
+        assertEq({"type": IntType}, desc.b);
+    }
+
+    addQoreFieldsNamed() {
+        HashDataType h("h");
+        h.addQoreFields({"key": {"name": "key", "type": StringType, "desc": "the key"}});
+        assertEq("the key", h.getFields().key.getDescription());
+    }
+}

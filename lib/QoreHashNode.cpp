@@ -34,6 +34,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
@@ -118,6 +119,30 @@ QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_pri
         }
     }
 
+    return rv;
+}
+
+QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_private* o, bool& exists) {
+    assert(key);
+    assert(o);
+    assert(is_obj);
+
+    hm_hm_t::iterator i = hm.find(key);
+    if (i == hm.end()) {
+        exists = false;
+        return QoreValue();
+    }
+    exists = true;
+
+    qhlist_t::iterator li = i->second;
+    hm.erase(i);
+
+    QoreValue rv = (*li)->val;
+    internDeleteKey(li);
+
+    if (needs_scan(rv)) {
+        o->incScanCount(-1);
+    }
     return rv;
 }
 
@@ -1011,14 +1036,28 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
     // a hash that was already freed was referenced again through a weak reference; see QoreListNode::derefImpl()
-    if (!priv->valid) {
+    if (priv->freed) {
         priv->derefImpl(xsink);
-        return false;
+        // the last reference of a freed hash: its weak holders released theirs (qore#7163; see QoreContainerWeakRefs)
+        assert(!priv->weakRefs.reference_count());
+        return true;
+    }
+    // taken before the members are freed, directly or by free_nested_containers(): a destructor of a member can take
+    // a reference to the hash through a weak holder (qore#7163; see QoreContainerWeakRefs)
+    if (priv->weakRefs.hasHolders()) [[unlikely]] {
+        priv->weak_hold = true;
+        ref();
+#ifdef DEBUG
+        // the free of a hash that has weak holders starts; see dbg_hold_container_free()
+        if (qore_dbg_container_free_hook_t hook = qore_dbg_container_free_hook.load()) {
+            hook("hash");
+        }
+#endif
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
-        priv->derefImpl(xsink);
-        weakDeref();
+        priv->freeMembers(xsink);
+        qore_hash_private::finishFreeMembers(*this);
     }
     return false;
 }
@@ -1194,13 +1233,29 @@ const QoreTypeInfo* QoreHashNode::getTypeInfo() const {
 }
 
 void QoreHashNode::weakRef() {
-    priv->weakRef();
+    if (priv->weakRefs.refFromZero()) [[unlikely]] {
+        // a freed hash whose weak holders released their reference, given a weak holder again by code that holds a
+        // reference to it: the holders take a reference again (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->freed && priv->weak_hold);
+        ref();
+    }
+}
+
+namespace {
+// releases the reference that the weak holders of a freed hash took (qore#7163; see QoreContainerWeakRefs)
+QORE_INTERN_NOINLINE void release_hash_weak_hold(QoreHashNode* h) {
+    ExceptionSink xsink;
+    h->deref(&xsink);
+}
 }
 
 bool QoreHashNode::weakDeref() {
     bool b = priv->weakDeref();
     if (b) {
-        delete this;
+        // the last weak reference, which a freed hash's weak holders release after the hash released its own: the
+        // node is deleted by the release of its last reference (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->weak_hold);
+        release_hash_weak_hold(this);
     }
     return b;
 }

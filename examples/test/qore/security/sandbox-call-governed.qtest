@@ -190,9 +190,14 @@ auto sub call(Program g) {
         # no sandbox or application of the call is left on the thread
         HostConn c(port);
         assertEq("CONNECTED", c.connect(), "an object created after the call");
-        # a timer added after the call belongs to no application: any code may cancel it
+        # a timer added after the call is the host's, not the governed Program's: the governed Program does not cancel
+        # it (sandboxed code cancels only the timers of its own application, issue #7010), the host does
         int host_timer = AsyncIoController::addTimerDelay(1h, sub () {});
-        assertTrue(other.callFunction("cancel", host_timer), "a timer added after the call is the host's");
+        on_exit AsyncIoController::cancelTimer(host_timer);
+        assertFalse(governed.callFunction("cancel", host_timer), "a timer added after the call is not the governed "
+            "Program's");
+        assertFalse(other.callFunction("cancel", host_timer), "nor another sandboxed Program's");
+        assertTrue(AsyncIoController::cancelTimer(host_timer), "a timer added after the call is the host's");
     }
 
     #! code that the governed Program gives the factory runs as its code

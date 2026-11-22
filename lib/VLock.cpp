@@ -186,10 +186,6 @@ void qore_auto_vlock_ops::setImpl(AutoVLock* b, QoreObject* n_o, QoreVarRWLock* 
     b->lock.set(n_rwl);
 }
 
-QoreVarRWLock* qore_auto_vlock_ops::getRWLImpl(AutoVLock* b) {
-    return b->lock.getRWL();
-}
-
 QoreObject* qore_auto_vlock_ops::getObjectImpl(AutoVLock* b) {
     return b->o;
 }

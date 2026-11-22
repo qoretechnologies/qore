@@ -85,6 +85,9 @@ module DiscordWebSocketClient {
     - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - a heartbeat is sent only on the connection whose HELLO started its heartbeat thread: a beat that was held across
+      a reconnect is dropped, not sent on the new connection, whose gateway session it does not belong to
+      (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
     - fixed a heartbeat that could stall when its next beat was due in less than a millisecond; a cancelled heartbeat
       thread reports its end, so a disconnect or the destructor does not wait for it forever
     - an automatic reconnect stops the heartbeat and switches to the resume gateway URL only if no connection was
@@ -1262,11 +1265,21 @@ hash<auto> h = ws.getInfo();
     }
 
     #! Sends a heartbeat message to the gateway with the last sequence number received
-    private sendHeartbeat() {
-        sendData({
+    /** @param cid the ID of the connection that the heartbeat belongs to (the connection whose HELLO started the
+        heartbeat thread that sends it), or -1 for a heartbeat that answers a request of the connection that the client
+        has: a heartbeat of a connection that was replaced while the beat was being sent is dropped, not sent on the
+        new connection, whose gateway session it does not belong to (qore#7106)
+    */
+    private sendHeartbeat(int cid = -1) {
+        hash<auto> msg = {
             "op": DOP_HEARTBEAT,
             "d": last_sequence,
-        });
+        };
+        if (cid < 0) {
+            sendData(msg);
+        } else if (!sendDataOnConnection(cid, msg)) {
+            logDebug("dropped a heartbeat of the connection %d: it is no longer the client's connection", cid);
+        }
     }
 
     #! Executes before a reconnect
@@ -1611,8 +1624,8 @@ hash<auto> h = ws.getInfo();
             return False;
         }
         try {
-            # send a heartbeat message
-            sendHeartbeat();
+            # send a heartbeat message on the connection that the heartbeat belongs to
+            sendHeartbeat(h.cid);
         } catch (hash<ExceptionInfo> ex) {
             logError("Heartbeat failed: %y", get_exception_string(ex));
         }

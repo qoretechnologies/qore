@@ -275,8 +275,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     #! reads one complete length-prefixed reply frame from the stream
     private hash<auto> readReply(HttpClientIo::HttpClientStreamHandle stream) {
         binary buf = binary();
-        date deadline = now_us() + 20s;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(20s);
+        while (clock_get_monotonic_us() < deadline) {
             auto data = stream.readData(5s);
             if (!exists data) {
                 continue;
@@ -338,8 +338,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         stream.writesDone();
 
         # drain to end_stream so the stream finalizes cleanly
-        date deadline = now_us() + 10s;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(10s);
+        while (clock_get_monotonic_us() < deadline) {
             auto data = stream.readData(2s);
             if (data.typeCode() == NT_HASH && data.end_stream) {
                 break;

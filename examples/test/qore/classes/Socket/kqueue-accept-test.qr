@@ -46,7 +46,7 @@ sub main() {
         client_started.waitForZero();
 
         # Poll for connection with a timeout
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         list<hash<SocketPollInfo>> poll_list = (
             <SocketPollInfo>{"socket": listener, "events": SOCK_POLLIN},
         );
@@ -54,7 +54,7 @@ sub main() {
         printf("Polling listener socket...\n");
         *list<hash<SocketPollInfo>> ready = Socket::poll(poll_list, 5s);
 
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
         printf("Poll returned after %y, ready=%d items\n", elapsed, ready ? ready.size() : 0);
 
         if (!ready) {

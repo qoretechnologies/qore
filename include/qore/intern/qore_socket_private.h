@@ -806,6 +806,15 @@ public:
     //! Makes the channel use these socket functions; returns an ARES_* status
     DLLLOCAL int install(ares_channel_t* channel);
 
+#ifdef DEBUG
+    //! Makes each UDP socket of the channel one end of a socketpair whose other end is given to @p peer (see
+    //! qore_dbg_cares_set_local_transport()); called before the channel makes a socket
+    DLLLOCAL void setDbgLocalTransport(void (*peer)(int fd, void* arg), void* arg) {
+        dbg_local_peer = peer;
+        dbg_local_peer_arg = arg;
+    }
+#endif
+
     QoreCaresSockets(const QoreCaresSockets&) = delete;
     QoreCaresSockets& operator=(const QoreCaresSockets&) = delete;
 
@@ -813,6 +822,19 @@ private:
     std::mutex lock;
     //! the open sockets of the channel, by descriptor
     std::unordered_map<int, std::shared_ptr<QoreSharedDescriptor>> fds;
+#ifdef DEBUG
+    //! called with the other end of each UDP socketpair (see setDbgLocalTransport())
+    void (*dbg_local_peer)(int fd, void* arg) = nullptr;
+    //! the argument of @ref dbg_local_peer
+    void* dbg_local_peer_arg = nullptr;
+    //! the address that c-ares connected each socketpair socket to, by descriptor (empty before it is connected)
+    std::unordered_map<int, std::pair<struct sockaddr_storage, socklen_t>> dbg_local_addrs;
+
+    //! Returns true and the address that a socketpair socket was connected to, or false if @p sock is not one
+    DLLLOCAL bool getDbgLocalAddr(int sock, struct sockaddr_storage& addr, socklen_t& len);
+    //! Forgets a socketpair socket that is closed before c-ares gets it
+    DLLLOCAL void dbgForgetLocal(int sock);
+#endif
 
     DLLLOCAL static ares_socket_t asocket(int domain, int type, int protocol, void* user_data);
     DLLLOCAL static int aclose(ares_socket_t sock, void* user_data);
@@ -2704,6 +2726,22 @@ public:
 
     DLLLOCAL int close() {
         return close_internal();
+    }
+
+    //! Ends a connection being made if the socket has no descriptor; returns false if the socket has one
+    /** A connection that is being made (ex: resolving its host) gives the socket no descriptor after this: the
+        socket's descriptor generation changes, which the connection checks with @ref close_m held before it gives the
+        socket a descriptor (qore#7003).  Nothing else of the socket is changed.
+
+        @return true if the socket had no descriptor, false if it has one, which the caller then closes
+    */
+    DLLLOCAL bool endConnectIfNoDescriptor() {
+        CloseLockHelper cl(*this);
+        if (sock != QORE_INVALID_SOCKET) {
+            return false;
+        }
+        ++fd_generation;
+        return true;
     }
 
     //! Shuts down the connection for sending and receiving; a TLS connection sends its close_notify alert first

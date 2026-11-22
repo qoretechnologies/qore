@@ -24,6 +24,30 @@ auto sub late<T>(auto input) {
     return value;
 }
 
+auto sub leading<T>(auto input) {
+    union<T, Box<int>> value = input;
+    return value;
+}
+
+auto sub simple<T>(auto input) {
+    union<T, int> value = input;
+    return value;
+}
+
+auto sub simpleLast<T>(auto input) {
+    union<int, T> value = input;
+    return value;
+}
+
+class UnionMembers<T> {
+    public {
+        union<Box<int>, T> classFirst;
+        union<T, Box<int>> classLast;
+        union<int, T> intFirst;
+        union<T, int> intLast;
+    }
+}
+
 auto sub optionalLate<T>(auto input) {
     *union<Box<int>, T> value = input;
     return value;
@@ -31,6 +55,11 @@ auto sub optionalLate<T>(auto input) {
 
 auto sub filtered<T>(auto input) {
     union<Box<T>, softint> value = input;
+    return value;
+}
+
+auto sub filteredHash<T>(auto input) {
+    *union<Box<T>, hash<string, softint>> value = input;
     return value;
 }
 
@@ -65,9 +94,30 @@ show("optional", auto sub() { return optional<int>(NOTHING); });
 show("optional member", auto sub() { return optional<int>("text"); });
 show("late parameter", auto sub() { return late<string>("text"); });
 show("late parameter rejects int", auto sub() { return late<string>(10); });
-show("late parameter rejects nothing", auto sub() { return late<string>(NOTHING); });
+show("late nullable parameter", auto sub() { return late<string>(NOTHING); });
+show("leading parameter", auto sub() { return leading<string>("text"); });
+show("leading parameter rejects int", auto sub() { return leading<string>(10); });
+show("leading nullable parameter", auto sub() { return leading<string>(NOTHING); });
+show("nullable scalar union", auto sub() { return simple<string>(NOTHING); });
+show("nullable scalar union reversed", auto sub() { return simpleLast<string>(NOTHING); });
+show("scalar string both orders", auto sub() { return (simple<string>("text"), simpleLast<string>("text")); });
+show("class alternative both orders", auto sub() {
+    Box<int> box(42);
+    return (leading<string>(box).value, late<string>(box).value);
+});
+show("integer alternative both orders", auto sub() { return (simple<string>(42), simpleLast<string>(42)); });
+UnionMembers<string> fields();
+foreach string field in ("classFirst", "classLast", "intFirst", "intLast") {
+    show(field + " string", auto sub() { fields.(field) = "text"; return fields.(field); });
+    show(field + " nothing", auto sub() { fields.(field) = NOTHING; return fields.(field); });
+    show(field + " rejects hash", auto sub() { fields.(field) = {}; return fields.(field); });
+}
 show("optional late parameter", auto sub() { return optionalLate<string>(NOTHING); });
 show("soft conversion", auto sub() { return filtered<int>("42"); });
+hash<string, string> source = {"key": "42"};
+auto converted = filteredHash<int>(source);
+printf("shared hash: %s %y %y\n", converted.fullType(), converted.key, source.key);
+show("shared hash enforces values", auto sub () { converted.key = {}; return converted.key; });
 show("callable", auto sub() { return callable<int>(int sub(int n) { return n + 1; }); });
 show("wrong signature", auto sub() { return callable<int>(string sub(string s) { return s; }); });
 show("symbolic hash element", auto sub() { return hashValue<string>("text"); });

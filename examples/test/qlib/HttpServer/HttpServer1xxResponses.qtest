@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, HTTP/2 over TLS and HTTP/3 (QUIC) responses
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServer1xxResponsesTest
+
+#! the timeout of the client's requests: a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! Answers with the status code of the request's path, or "ok"
+class CodeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        *string code = (hdr.path =~ x/code\/([0-9]+)/)[0];
+        if (exists code) {
+            return <HttpResponseInfo>{"code": code.toInt(), "body": "interim"};
+        }
+        return makeResponse(200, "ok");
+    }
+}
+
+#! A handler's informational (1xx) response other than 101 is refused (qore#7222)
+/** An informational status is never a final response: the server answers the request with an error instead, and
+    the connection and the listener go on
+*/
+class HttpServer1xxResponsesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("1xx responses", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1: a 1xx response is refused", \codeTest(), "1.1");
+        addTestCase("HTTP/2: a 1xx response is refused", \codeTest(), "2.0");
+        addTestCase("HTTP/3: a 1xx response is refused", \codeTest(), "3.0");
+        set_return_value(main());
+    }
+
+    codeTest(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("t", "^t", NOTHING, new CodeHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        hash<string, auto> codes;
+        foreach int code in ((100, 102, 103, 199)) {
+            HTTPClient hc = getClient(port, http_version);
+            on_exit hc.disconnect();
+            try {
+                hc.get("/t/code/" + code);
+                codes{code} = "sent";
+            } catch (hash<ExceptionInfo> ex) {
+                codes{code} = ex.arg.status_code ?? ex.err;
+            }
+            # the connection goes on
+            codes{code + ":next"} = getOrError(hc, "/t");
+        }
+        hash<string, auto> expected;
+        foreach int code in ((100, 102, 103, 199)) {
+            expected{code} = 500;
+            expected{code + ":next"} = "ok";
+        }
+        assertEq(expected, codes);
+    }
+
+    #! Returns the body of a GET request, or the error that it raised
+    private static string getOrError(HTTPClient hc, string path) {
+        try {
+            return hc.get(path);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns a client of the given HTTP version
+    private static HTTPClient getClient(int port, string http_version) {
+        return new HTTPClient({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+    }
+}

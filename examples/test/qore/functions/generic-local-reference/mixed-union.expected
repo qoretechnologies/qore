@@ -6,9 +6,31 @@ optional: null
 optional member: "text"
 late parameter: "text"
 late parameter rejects int: RUNTIME-TYPE-ERROR
-late parameter rejects nothing: RUNTIME-TYPE-ERROR
+late nullable parameter: null
+leading parameter: "text"
+leading parameter rejects int: RUNTIME-TYPE-ERROR
+leading nullable parameter: null
+nullable scalar union: null
+nullable scalar union reversed: null
+scalar string both orders: ["text", "text"]
+class alternative both orders: [42, 42]
+integer alternative both orders: [42, 42]
+classFirst string: "text"
+classFirst nothing: null
+classFirst rejects hash: RUNTIME-TYPE-ERROR
+classLast string: "text"
+classLast nothing: null
+classLast rejects hash: RUNTIME-TYPE-ERROR
+intFirst string: "text"
+intFirst nothing: null
+intFirst rejects hash: RUNTIME-TYPE-ERROR
+intLast string: "text"
+intLast nothing: null
+intLast rejects hash: RUNTIME-TYPE-ERROR
 optional late parameter: null
 soft conversion: 42
+shared hash: hash<string, softint> 42 "42"
+shared hash enforces values: RUNTIME-TYPE-ERROR
 callable: 11
 wrong signature: RUNTIME-TYPE-ERROR
 symbolic hash element: "text"

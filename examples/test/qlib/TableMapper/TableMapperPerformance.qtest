@@ -328,7 +328,7 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
 
         printf("starting test inserting %d rows in %s:%s (block size %d)\n", rows, table.getDatasource().getDriverName(), table.getSqlName(), block);
 
-        date now = now_us();
+        int now = clock_get_monotonic_us();
 
         {
             on_error {
@@ -343,7 +343,7 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
             mapper.queueData(h);
         }
 
-        date delta = now_us() - now;
+        date delta = microseconds(clock_get_monotonic_us() - now);
         float dt = delta.durationSecondsFloat();
         float rps = dt ? rows / dt : 0;
         printf("elapsed time: %y rows/s: %s\n", delta, rps);

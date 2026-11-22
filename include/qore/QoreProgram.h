@@ -1160,6 +1160,11 @@ private:
 
 //! safely manages QoreProgram objects; note the the destructor will block until all background threads in the qore library terminate and until the current QoreProgram terminates
 /** not useful in embedded code due to the fact that the destructor blocks until all background threads in the entire qore library terminate
+
+    The destructor waits for the threads of the library without a bound, and for the foreign threads (see
+    q_register_foreign_thread()) that run in the Program at most 10 seconds, as exit() waits for the threads that are
+    ending; a foreign thread that is still in the Program then is not interrupted, and the Program is left as it is to
+    it until the process ends (since %Qore 3.0: qore#6904)
  */
 class QoreProgramHelper {
 private:

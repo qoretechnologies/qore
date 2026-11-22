@@ -4738,6 +4738,10 @@ class HelloDiscord inherits DiscordWebSocketClient {
     sendData(auto value) {
     }
 
+    bool sendDataOnConnection(int cid, auto value) {
+        return True;
+    }
+
     private startHeartbeatThreadIntern() {
     }
 
@@ -4877,7 +4881,8 @@ class HbDiscord inherits DiscordWebSocketClient {
         map $1.getCount() ? $1.dec() : NOTHING, (release_hb, release_closing, release_zombie);
     }
 
-    sendData(auto v) {
+    #! runs the test's hooks for a message that is about to be sent; False if it is to be dropped
+    private bool hookSend(auto v) {
         if (handoff_in_beat && v.typeCode() == NT_HASH && v.op == 1) {
             handoff_in_beat = False;
             *DiscordHeartbeat h;
@@ -4896,10 +4901,20 @@ class HbDiscord inherits DiscordWebSocketClient {
             bool drop = drop_held_hb;
             release_hb.waitForZero(LifecycleWsClient::HandoffTimeout);
             if (drop) {
-                return;
+                return False;
             }
         }
-        DiscordWebSocketClient::sendData(v);
+        return True;
+    }
+
+    sendData(auto v) {
+        if (hookSend(v)) {
+            DiscordWebSocketClient::sendData(v);
+        }
+    }
+
+    bool sendDataOnConnection(int cid, auto v) {
+        return hookSend(v) ? DiscordWebSocketClient::sendDataOnConnection(cid, v) : False;
     }
 
     private closingConnection() {
@@ -5014,6 +5029,10 @@ class WdDiscord inherits DiscordWebSocketClient {
     }
 
     sendData(auto v) {
+    }
+
+    bool sendDataOnConnection(int cid, auto v) {
+        return True;
     }
 
     private hash<auto> connectUnlocked(*hash<auto> hdr0, *reference<hash<auto>> info, *bool reconnect) {

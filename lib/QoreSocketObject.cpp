@@ -4768,10 +4768,11 @@ void QoreSocketObject::deref() {
 void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
-    // the socket is closed also when it has no descriptor: a connection that is being made (ex: resolving its host)
-    // gives the socket no descriptor after the close, which changes the socket's descriptor generation (qore#7003)
-    qore_socket_private::get(*priv->socket)->shutdown_direct();
-    priv->socket->priv->close();
+    // a socket with no descriptor gets none from a connection being made (ex: resolving its host) (qore#7003)
+    if (!priv->socket->priv->endConnectIfNoDescriptor()) {
+        qore_socket_private::get(*priv->socket)->shutdown_direct();
+        priv->socket->priv->close();
+    }
 }
 
 bool QoreSocketObject::hasPendingData() const {
@@ -6486,17 +6487,21 @@ QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, int timeout_
 // c must be already referenced before this call
 void QoreSocketObject::setCertificate(QoreSSLCertificate* c) {
     AutoLocker al(priv->m);
-    if (priv->cert)
+    if (priv->cert) {
         priv->cert->deref();
+    }
     priv->cert = c;
+    priv->opaque_cert = false;
 }
 
 // p must be already referenced before this call
 void QoreSocketObject::setPrivateKey(QoreSSLPrivateKey* p) {
     AutoLocker al(priv->m);
-    if (priv->pk)
+    if (priv->pk) {
         priv->pk->deref();
+    }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSSLPrivateKey* p) {
@@ -6505,10 +6510,12 @@ void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSS
         priv->cert->deref();
     }
     priv->cert = c;
+    priv->opaque_cert = false;
     if (priv->pk) {
         priv->pk->deref();
     }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::freeQuicServerSslCtx() {

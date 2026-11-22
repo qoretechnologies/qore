@@ -477,11 +477,14 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
     int64_t handshake_timeout_ns,
-    int64_t not_before_ns_abs, bool bind_unbound, std::vector<int> avoid_families)
+    int64_t not_before_ns_abs, bool bind_unbound, std::vector<int> avoid_families, bool http_client)
     : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
       handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
       bind_unbound_(bind_unbound), avoid_families_(std::move(avoid_families)),
       not_before_ns_(not_before_ns_abs), sandbox_manager_(qore_socket_ref_policy_sandbox_manager()) {
+    if (http_client) {
+        sock->priv->takeHttpHandshakeCredentials(client_cert, client_pk);
+    }
     AutoLocker al(sock->priv->m);
 
     // Validate socket; an unbound socket is bound once the remote address is resolved (see initializeResolved())
@@ -645,13 +648,13 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     // Create QUIC session with actual socket addresses; pass through the
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
     // enable 0-RTT for reconnections with cached session tickets.
-    // Pass client cert/pk for mTLS if configured on the socket.
+    // A credential supplied for this handshake never becomes a credential on the reusable socket.
     setSession(QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
         sock->priv->socket->priv->ssl_verify_mode,
         /*enable_0rtt=*/true,
-        sock->priv->cert, sock->priv->pk));
+        client_cert ? *client_cert : sock->priv->cert, client_pk ? *client_pk : sock->priv->pk));
     if (*xsink || !quic_session) {
         sock->priv->clearNonBlock();
         set_non_block = false;

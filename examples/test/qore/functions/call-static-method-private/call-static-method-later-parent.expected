@@ -1,0 +1,10 @@
+outside: direct "P1::sm" by name "P1::sm"
+Cq context: direct "Cq::sm" by name "Cq::sm"
+X context: direct "Cq::sm" by name "Cq::sm"
+other subclass of Cq: direct "P1::sm" by name "P1::sm"
+unrelated class: direct "P1::sm" by name "P1::sm"
+call_static_method_args: "P1::sm"
+Program::callStaticMethod: "P1::sm"
+only private: METHOD-IS-PRIVATE
+private base: BASE-CLASS-IS-PRIVATE
+unknown: UNKNOWN-METHOD

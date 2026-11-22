@@ -100,7 +100,10 @@ DLLLOCAL bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, 
     make itself, and it runs under the caller's sandbox and restrictions.  Otherwise the caller needs access to the
     Program of the handle (QoreReflectionCaller::checkProgramAccess()), and a caller to which the language's access
     rules apply is refused: a typed hash that a user module does not export, or a parent's that a child Program does
-    not inherit, also through Type::getType(value).getTypedHash().
+    not inherit, also through Type::getType(value).getTypedHash().  Library module code may use a typed hash through a
+    handle of the application Program that it runs for (QoreReflectionCaller::getModuleCallerProgram(), from the
+    thread's call chain only) if that Program could name it, as DataProvider does for a sandboxed Program's own typed
+    hash (qore#7154); module code that runs for no application finds none.
 
     @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
 */

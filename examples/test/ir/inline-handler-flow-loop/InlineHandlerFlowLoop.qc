@@ -1,20 +1,9 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
-# test-platform: macos - debugger attach, and AOT code generation and linking of the debug IR of handlers
-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../TestInterpreter.qm
-%requires ../../ExecModeHarness.qm
-
-%exec-class InlineHandlerFlowLoopTest
+# The cases of the InlineHandlerFlowLoop-<n>.qtest tests (see addPartCase()): the execution modes, and qcc executables
+# compiled with -O0 and with -O3; together they run about 1,000 child processes one after another, which took more
+# than the time limit of run_tests.sh under the load of a parallel run in one test (qore#7254)
 
 #! a handler declared in the body of a handler that runs inline at an exit of a loop compiles with qcc (qore#6905)
 /** The debug IR of a qcc executable has the paths of a debugger's break, continue and return requests at the step
@@ -33,7 +22,7 @@
     replaces (qore#7040).  A return request in a handler that is not the last one runs the next handlers and ends the
     function (qore#6999).
 */
-class InlineHandlerFlowLoopTest inherits QUnit::Test {
+class InlineHandlerFlowLoopBase inherits QUnit::Test {
     public {
         #! the functions of handler-flow.q
         const Functions = ("loopThrow", "loopReturn", "switchBreak", "nestedLoops", "noLoop", "deepReturn", "nestIf",
@@ -216,9 +205,6 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
             ("mixedInHandler", "continue", "mixed_in_handler", 1),
             ("mixedHandlersLoop", "break", "mixed_handlers_loop_x", 1, "return", "mixed_handlers_loop_b", 1),
         );
-
-        #! the qcc optimization levels
-        const OptLevels = (0, 3);
     }
 
     private {
@@ -230,7 +216,13 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
         hash<string, int> tags = {};
     }
 
-    constructor() : QUnit::Test("InlineHandlerFlowLoopTest", "1.0", \ARGV) {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
@@ -242,9 +234,18 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
                 tags{tag[0]} = i + 1;
             }
         }
-        addTestCase("the handlers run alike in every execution mode", \testModes());
-        addTestCase("qcc compiles the handlers, which run as with the AST interpreter", \testQcc());
+        # each part runs about a third of the child processes, which run one after another (qore#7254)
+        addPartCase(1, "the handlers run alike in every execution mode", \testModes());
+        addPartCase(2, "qcc -O0 compiles the handlers, which run as with the AST interpreter", \testQcc(), 0);
+        addPartCase(3, "qcc -O3 compiles the handlers, which run as with the AST interpreter", \testQcc(), 3);
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     testModes() {
@@ -265,17 +266,17 @@ class InlineHandlerFlowLoopTest inherits QUnit::Test {
         }
     }
 
-    testQcc() {
+    testQcc(int opt) {
         TmpDir dir("qore-inline-handler-flow-loop-");
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
-        foreach int opt in (OptLevels) {
+        {
             string exe = join_paths(dir.path, sprintf("handler-flow-O%d", opt));
             int rc;
             string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
             # the compile aborted on an assertion (qore#6905)
             assertEq(0, rc, sprintf("qcc -O%d: exit status (output: %s)", opt, out.substr(-2000)));
             if (!is_file(exe)) {
-                continue;
+                return;
             }
             # without a debugger
             foreach string f in (Functions) {
