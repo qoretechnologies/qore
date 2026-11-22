@@ -2642,6 +2642,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref rethrow "Rethrowing an exception" preserves the full exception chain and releases its payloads when
+      another exception is raised during cleanup (issue #7091).
+
     - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
       a class with only the same name and declarations as another class had the other class's private and
       \c private:internal access to its objects (see @ref private_access_class_identity;
