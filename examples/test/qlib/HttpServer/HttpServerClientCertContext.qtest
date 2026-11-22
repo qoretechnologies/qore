@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS client certificates over HTTP/1.1, HTTP/2 and HTTP/3 (QUIC)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires FsUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerClientCertContextTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! Reports what the request context gives about the peer, and what the socket of its request gives
+class PeerHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        *SSLCertificate cert = cx."client-cert";
+        return makeResponse(200, sprintf("cert=%s peer=%s", cert ? cert.getSignature().toHex() : "none",
+            cx."peer-info".address ?? "none"));
+    }
+}
+
+#! The handlers of HTTP/1.1, HTTP/2 and HTTP/3 requests get the peer's address, and of HTTP/1.1 and HTTP/2 requests
+#! the client's certificate, in the request context (qore#7214; the certificate over HTTP/3: qore#7261)
+/** The socket of an HTTP/2 or HTTP/3 request is the handler's own, not connected: the request context gives the
+    peer's information (\c cx."peer-info") and its certificate (\c cx."client-cert"), for every protocol
+*/
+class HttpServerClientCertContextTest inherits QUnit::Test {
+    constructor() : QUnit::Test("client certificate in the request context", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1", \certTest(), "1.1");
+        addTestCase("HTTP/2", \certTest(), "2.0");
+        addTestCase("HTTP/3", \certTest(), "3.0");
+        set_return_value(main());
+    }
+
+    certTest(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("peer", "^peer", NOTHING, new PeerHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+            "get_remote_certs": True,
+        }).port;
+        server.waitForAsyncIo();
+
+        TmpDir tmp();
+        string path = tmp.path + "/client.pem";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(CertPem + "\n" + KeyPem + "\n");
+        f.close();
+
+        HTTPClient hc({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "ssl_cert_path": path,
+            "ssl_key_path": path,
+            "timeout": HangGuard,
+        });
+        on_exit hc.disconnect();
+        string expected = sprintf("cert=%s peer=", new SSLCertificate(CertPem).getSignature().toHex());
+        string r = hc.get("/peer");
+        # the QUIC listener does not request the client's certificate yet (qore#7261)
+        if (http_version != "3.0") {
+            assertEq(expected, r.substr(0, expected.size()), "the context gives the client's certificate");
+        }
+        assertRegex("peer=(127\\.0\\.0\\.1|::1)$", r, "the context gives the peer's address");
+    }
+}
