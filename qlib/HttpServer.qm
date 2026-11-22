@@ -5149,11 +5149,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 *hash<auto> tld_save = handler.saveThreadLocalData();
                 on_exit handler.restoreThreadLocalData(tld_save);
 
+                # the handler's preprocessRequest() and authenticateRequest() get the request context by reference:
+                # they get a copy of it, whose changes are taken over afterwards except for the keys that identify
+                # the connection, its transport and the request's stream, which keep the server's own values; the
+                # server's decisions after the handler's code (the transport of the response, the session and
+                # stream that it is sent on, the socket given to an SSE or WebSocket connection) depend only on the
+                # server's own values, also if the handler keeps the reference (qore#6953)
+                hash<auto> handler_cx = cx;
+
                 # preform any pre-processing on the request that can aid in authentication and has to be performed to
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(hview, \hdr, \cx);
+                    ah = handler.preprocessRequest(hview, \hdr, \handler_cx);
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5171,7 +5179,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(hview, hdr, \cx);
+                        ah = handler.authenticateRequest(hview, hdr, \handler_cx);
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5187,6 +5195,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         };
                     }
                 }
+
+                # the handler's changes, except for the server's own keys
+                cx = handler_cx + cx{ServerContextKeys};
 
                 # return an error if authentication failed
                 if (ah) {
@@ -6687,6 +6698,13 @@ class HttpHandlerThreadContexts {
         remove saved;
     }
 }
+
+#! The keys of a request context that the server sets and that keep its own values after the handler's code
+/** The connection, its transport and the request's stream (\c "header-info"), and the server's connection state;
+    see HttpServer::handleRequest() (qore#6953)
+*/
+const ServerContextKeys = ("header-info", "id", "async_ctrl", "listener", "listener-id", "sock_key", "socket",
+    "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {

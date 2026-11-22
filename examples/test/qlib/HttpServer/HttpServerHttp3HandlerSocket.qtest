@@ -28,6 +28,21 @@ class WhoamiHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Holds its request until the test releases it; tells the test the request's session and stream
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        entered.push(cx."header-info"{"session_id", "stream_id"});
+        release.get(HangGuard);
+        return makeResponse(200, "held");
+    }
+}
+
 #! A WebSocket handler: its HTTP/3 connections are dedicated connections, which end their own stream with the
 #! shutdown() and close() of the socket of their request when they end
 class EndingWsHandler inherits WebSocketHandler {
@@ -186,7 +201,7 @@ class TamperHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
-        int victim = cx.\"header-info\".session_id;
+        int victim = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
         string r;
         try {
             s.submitQuicShutdown(victim);
@@ -195,7 +210,10 @@ class TamperHandler inherits AbstractHttpRequestHandler {
             r = ex.err;
         }
         string own = s.getQuicSessionId() != victim ? \"yes\" : \"no\";
-        return makeResponse(200, sprintf(\"own=%s shutdown=%s quic=%y\", own, r, s.isQuic()));
+        # the request context has the server's own values again
+        string ctx = (cx.\"header-info\".session_id == s.getQuicSessionId() && cx.\"header-info\".http3)
+            ? \"own\" : \"changed\";
+        return makeResponse(200, sprintf(\"own=%s shutdown=%s quic=%y ctx=%s\", own, r, s.isQuic(), ctx));
     }
 }
 
@@ -221,6 +239,15 @@ string sub try_it(code c) {
     }
 }
 
+string sub try_desc(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+
 #! tries the socket on its own session and on the victim's
 string sub attack(Socket s, int own, int victim) {
     return sprintf(\"own=%s cipher=%s\",
@@ -236,27 +263,67 @@ int sub get_victim(hash<auto> hdr) {
     return (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
 }
 
+#! the SSE handler: its request's path tells it how to change the request context that it gets by reference
 class TenantSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
     private {
         Queue to_host;
+        # the request's own session and stream, as the handler got them
         int own;
+        int own_stream;
         int victim;
+        # the request context, kept by reference, and changed in handleRequest() if set
+        auto kept;
+        bool late;
     }
 
     constructor(Queue to_host) : ServerSentEventHandler::ServerSentEventHandler({}) {
         self.to_host = to_host;
     }
 
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        own = cx.\"header-info\".session_id;
+        own_stream = cx.\"header-info\".stream_id;
+        if (hdr.path =~ /flip/) {
+            # the request is reported as an HTTP/1.1 one
+            cx.\"header-info\".http3 = False;
+        } else if (hdr.path =~ /forge/) {
+            # the request is reported as that of another request's session and stream
+            cx.\"header-info\".session_id = (hdr.path =~ x/s=([0-9]+)/)[0].toInt();
+            cx.\"header-info\".stream_id = (hdr.path =~ x/t=([0-9]+)/)[0].toInt();
+        } else if (hdr.path =~ /late/) {
+            # the context is changed later, through the reference
+            kept = \\cx;
+            late = True;
+        }
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        if (late) {
+            late = False;
+            to_host.push(\"late: \" + try_desc(sub () {
+                kept.\"header-info\".http3 = False;
+            }));
+        }
+        return ServerSentEventHandler::ServerSentEventHandler::handleRequest(cx, hdr, b);
+    }
+
     ServerSentEventHandler::ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr,
             string cid) {
-        own = cx.\"header-info\".session_id;
         victim = get_victim(hdr);
-        to_host.push(\"setup: \" + attack(sock, own, victim));
+        string ids = (cx.\"header-info\".session_id == own && cx.\"header-info\".stream_id == own_stream)
+            ? \"own\" : \"other\";
+        to_host.push(\"setup: \" + attack(sock, own, victim) + \" ids=\" + ids);
         return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
     }
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
-        Socket s = cast<HttpServerAsyncIo::Http3SseStream>(conn.getAsyncSseConnection()).getSocket();
+        auto c = conn.getAsyncSseConnection();
+        if (!(c instanceof HttpServerAsyncIo::Http3SseStream)) {
+            to_host.push(\"stream: not an HTTP/3 stream\");
+            return;
+        }
+        Socket s = cast<HttpServerAsyncIo::Http3SseStream>(c).getSocket();
         to_host.push(\"stream: \" + attack(s, own, victim));
     }
 }
@@ -265,6 +332,11 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
     return new TenantSseHandler(to_host);
 }
 ";
+
+        #! the results of the SSE handler's attempts: its connection's setup and stream get the socket of its own
+        #! request, and the setup gets the request's own session and stream
+        const SseResults = ("setup: own=ok cipher=QUIC-SESSION-ERROR ids=own",
+            "stream: own=ok cipher=QUIC-SESSION-ERROR");
 
         #! the results of the attack with the handler's own socket: another session is reported as one that does not
         #! exist, so that the handler cannot tell
@@ -294,6 +366,9 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         addTestCase("a WebSocket connection over HTTP/3 ends its own stream only", \webSocketTest());
         addTestCase("a dedicated connection over HTTP/3 ends its own stream only", \dedicatedTest());
         addTestCase("an SSE connection over HTTP/3 gets its own socket", \sseTest());
+        addTestCase("a handler's changes to its request context do not change the transport of its SSE stream",
+            \sseContextTest());
+        addTestCase("a handler cannot send its SSE stream on another request's stream", \sseForgeTest());
         addTestCase("a listener class cannot drop the mark of a QUIC listener", \listenerMarkTest());
         addTestCase("a look-alike of the handler socket class cannot read the listener's socket", \lookAlikeTest());
         set_return_value(main());
@@ -340,7 +415,7 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         HTTPClient attacker = getClient(srv.port);
         on_exit attacker.disconnect();
         string r = attacker.get("/probe/tamper?victim=" + victim_session, {"http3": "false"});
-        assertEq("own=yes shutdown=QUIC-SESSION-ERROR quic=True", r);
+        assertEq("own=yes shutdown=QUIC-SESSION-ERROR quic=True ctx=own", r);
         assertEq(string(victim_session), getOrError(victim, "/whoami"), "the victim's session continues");
     }
 
@@ -460,9 +535,93 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         on_exit stream.cancel();
         # the socket given to the connection's setup, and the socket of its stream (Http3SseStream::getSocket()), in
         # one comparison, so that a failure shows both
-        assertEq(("setup: own=ok cipher=QUIC-SESSION-ERROR", "stream: own=ok cipher=QUIC-SESSION-ERROR"),
-            (to_host.get(HangGuard), to_host.get(HangGuard)));
+        assertEq(SseResults, (to_host.get(HangGuard), to_host.get(HangGuard)));
         assertEq(victim_session, getOrError(victim, "/whoami"), "the victim's session continues");
+    }
+
+    #! A handler that reports its request as an HTTP/1.1 one in preprocessRequest(), or later through the reference to
+    #! its request context, still gets an HTTP/3 SSE stream with the socket of its own request
+    sseContextTest() {
+        Program tenant = getTenantProgram(TenantSseSource);
+        Queue to_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_sse_handler", to_host);
+        hash<auto> srv = startSseServer(handler);
+        on_exit delete srv.server;
+
+        HTTPClient victim = getClient(srv.port);
+        on_exit victim.disconnect();
+        string victim_session = victim.get("/whoami");
+
+        HttpClientIo::HttpClientConnectionManager mgr = getStreamManager();
+        on_exit delete mgr;
+        foreach string how in ("flip", "late") {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+                sprintf("https://localhost:%d/", srv.port), "GET", sprintf("/sse/%s?victim=%s", how, victim_session),
+                {"Accept": MimeTypeSse});
+            on_exit stream.cancel();
+            if (how == "late") {
+                assertEq("late: ok", to_host.get(HangGuard), "the context is changed through the reference");
+            }
+            assertEq(SseResults, (to_host.get(HangGuard), to_host.get(HangGuard)), how);
+        }
+        assertEq(victim_session, getOrError(victim, "/whoami"), "the victim's session continues");
+    }
+
+    #! A handler that reports its request as that of another request's session and stream in preprocessRequest()
+    #! still gets its SSE stream on its own request's stream; the other request completes
+    sseForgeTest() {
+        Program tenant = getTenantProgram(TenantSseSource);
+        Queue to_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_sse_handler", to_host);
+        HoldHandler hold();
+        hash<auto> srv = startSseServer(handler, hold);
+        on_exit delete srv.server;
+        # a held request ends before the server is deleted, also when the test fails
+        on_exit hold.release.push(True);
+
+        # another client's request, in progress
+        HTTPClient victim = getClient(srv.port);
+        on_exit victim.disconnect();
+        Queue victim_result();
+        background sub () {
+            victim_result.push(getOrError(victim, "/hold"));
+        }();
+        hash<auto> ids = hold.entered.get(HangGuard);
+
+        HttpClientIo::HttpClientConnectionManager mgr = getStreamManager();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("https://localhost:%d/", srv.port), "GET",
+            sprintf("/sse/forge?s=%d&t=%d&victim=%d", ids.session_id, ids.stream_id, ids.session_id),
+            {"Accept": MimeTypeSse});
+        on_exit stream.cancel();
+        assertEq(SseResults, (to_host.get(HangGuard), to_host.get(HangGuard)));
+
+        hold.release.push(True);
+        assertEq("held", victim_result.get(HangGuard), "the other request completes");
+    }
+
+    #! Starts a server with an HTTP/3 listener, the SSE handler and the whoami handler, and optionally a hold handler
+    private hash<auto> startSseServer(AbstractHttpSocketHandler handler, *HoldHandler hold) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setHandler("sse", "^sse", NOTHING, handler);
+        server.setHandler("whoami", "^whoami", NOTHING, new WhoamiHandler());
+        if (hold) {
+            server.setHandler("hold", "^hold", NOTHING, hold);
+        }
+        int port = addTlsListener(server);
+        server.waitForAsyncIo();
+        return {"server": server, "port": port};
+    }
+
+    #! Returns an HTTP/3 client connection manager for streams
+    private static HttpClientIo::HttpClientConnectionManager getStreamManager() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": 10s,
+            "connect_timeout": 10s,
+        });
     }
 
     #! A subclass of HttpListener cannot override the method that marks a QUIC listener, whose handlers would then
