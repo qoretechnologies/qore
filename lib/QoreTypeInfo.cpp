@@ -2579,15 +2579,18 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         }
     }
 
-    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
-        if (is_nullable_parameterized_class(typeInfo)) {
-            return pti;
-        }
-    }
-
     {
         const QoreClass* qc = QoreTypeInfo::getReturnClass(typeInfo);
         if (qc) {
+            // the spec of a parameterized class type (*C<int>) also gives its base class (QoreTypeSpec::getClass()),
+            // whose type (object<C>) does not have the type arguments; tested in the class case, so that the value
+            // type of a plain class costs only the test of the type spec (qore#7136)
+            if (const QoreParameterizedClassTypeInfo* pti = typeInfo->return_vec[0].spec
+                    .getParameterizedClassTypeInfo()) {
+                if (is_nullable_parameterized_class(typeInfo)) {
+                    return pti;
+                }
+            }
             return qc->getTypeInfo();
         }
     }
@@ -2697,15 +2700,24 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
             return hd->getTypeInfo(true);
     }
 
-    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
-        return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
-    }
-
     {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
         if (qc) {
+            // the spec of a parameterized class type (C<int>) also gives its base class (QoreTypeSpec::getClass()),
+            // whose or-nothing type (*object<C>) does not have the type arguments and does not accept the objects of
+            // the specialized class (qore#7136); tested in the class case, so that the or-nothing type of a plain
+            // class, which list literals fold at run time, costs only the test of the type spec
+            const QoreTypeSpec& spec = typeInfo->return_vec[0].spec;
+            if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
+            }
             return qc->getOrNothingTypeInfo();
         }
+    }
+
+    // a type whose first return alternative is a parameterized class but that returns other types too
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
+        return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
     }
 
     {
