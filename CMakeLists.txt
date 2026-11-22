@@ -336,6 +336,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
+    lib/QC_SSLTrustStore.qpp
     lib/QC_ThreadPool.qpp
     lib/QC_StreamBase.qpp
     lib/QC_InputStream.qpp
@@ -2431,6 +2432,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_WaitGroup.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLCertificate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SSLTrustStore.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadCapabilityScope.cpp\"

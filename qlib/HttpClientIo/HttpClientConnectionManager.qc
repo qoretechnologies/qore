@@ -447,6 +447,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         HttpClientConnectionManager::checkCreator(opts);
         creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
+        # a trust store verifies server certificates: it implies verification unless a verification mode is given, so
+        # that it is not ignored (qoretechnologies/qore#7248)
+        if (self.opts.ssl_trust_store && !exists self.opts.ssl_verify_mode) {
+            self.opts.ssl_verify_mode = SSL_VERIFY_PEER;
+        }
         self.logger = self.opts.logger;
         origin_tls_credentials = remove self.opts.origin_tls_credentials;
         if (origin_tls_credentials) {
@@ -628,6 +633,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns the AsyncSocketIoController
     AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns the in-memory trust store that server certificates are verified against, if any
+    /** The object gives out no certificate; see @ref Qore::SSLTrustStore "SSLTrustStore"
+
+        @since %HttpClientIo 1.0 (qoretechnologies/qore#7248)
+    */
+    *SSLTrustStore getSslTrustStore() {
+        return opts.ssl_trust_store;
     }
 
     #! Returns the cookie jar (NOTHING if cookies are disabled)
@@ -2945,7 +2959,7 @@ printf("%d connection(s) migrated\n", migrated);
         HttpClientCallerExemption exemption = getExemption();
         return new Http1ClientConnection(target, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
             opts.accept_all_certs, proxy_info, origin_tls_credentials.cert ?? opts.client_cert,
-            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store);
     }
 
     #! Internal: creates an HTTP/2 connection with the exemption of the manager's own creations (qore#6981)
@@ -2958,7 +2972,7 @@ printf("%d connection(s) migrated\n", migrated);
         return new Http2ClientConnection(target, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
             origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
-            opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, offer_http11);
     }
 
     #! Internal: creates an HTTP/3 connection with the exemption of the manager's own creations (qore#6981)
@@ -2970,7 +2984,7 @@ printf("%d connection(s) migrated\n", migrated);
         return new Http3ClientConnection(target, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
-            opts.ssl_ca_file, opts.ssl_ca_path, NOTHING, avoid_families);
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, NOTHING, avoid_families);
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol

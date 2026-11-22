@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QC_HttpClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
@@ -67,6 +68,11 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     client_key = ssl_config.key;
     ssl_ca_file = ssl_config.ca_file;
     ssl_ca_path = ssl_config.ca_path;
+    ssl_trust_store = ssl_config.trust_store;
+    // a reference of its own: the connection can outlive its manager
+    if (ssl_trust_store) {
+        ssl_trust_store->ref();
+    }
     // Set the manager BEFORE submitting to the I/O controller so that
     // onClosedHook dispatches correctly even when the I/O thread
     // processes a connect failure before we return to the caller.
@@ -92,6 +98,11 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     client_key = ssl_config.key;
     ssl_ca_file = ssl_config.ca_file;
     ssl_ca_path = ssl_config.ca_path;
+    ssl_trust_store = ssl_config.trust_store;
+    // a reference of its own: the connection can outlive its manager
+    if (ssl_trust_store) {
+        ssl_trust_store->ref();
+    }
     negotiate_alpn = ssl_config.negotiate_alpn;
     if (mgr) {
         setManager(mgr);
@@ -157,6 +168,9 @@ void Http1ClientConnection::moveTransportToMembers(QoreObject* owner, ExceptionS
 Http1ClientConnection::~Http1ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
+    if (ssl_trust_store) {
+        ssl_trust_store->deref();
+    }
     if (poll_op_obj) {
         poll_op_obj->deref(&xsink);
     } else if (poll_op_priv) {
@@ -192,6 +206,13 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //     by configureSsl() called from the manager after construction.
     sock_priv_raw->setSslVerifyMode(ssl_verify_mode);
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
+    if (ssl_trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_ca_file.empty() || !ssl_ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),

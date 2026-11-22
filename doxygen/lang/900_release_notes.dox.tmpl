@@ -1321,6 +1321,12 @@
     tenant's code calls never runs another tenant's code or uses its %Program (see @ref sandbox_isolation_domains;
     <a href="https://github.com/qoretechnologies/qore/issues/6536">issue 6536</a>).
 
+    @par In-Memory TLS Trust Stores
+    An @ref Qore::SSLTrustStore "SSLTrustStore" holds CA certificates in memory that verify servers on every connection
+    path without reading a file (\c ssl_trust_store option, @ref Qore::Socket::setSslTrustStore() "setSslTrustStore()"),
+    and @ref Qore::get_default_ssl_ca_locations() "get_default_ssl_ca_locations()" returns the default CA locations
+    (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>).
+
     @par Masked Datasource Descriptions for Messages
     @ref Qore::SQL::mask_datasource(string) "mask_datasource()" (for a datasource string or a
     @ref datasource_hash "datasource hash") and
@@ -2268,6 +2274,9 @@
         asynchronous client of a connection that awaits authorization is created without logging in (see
         @ref restclientv2_7 for every change in behavior;
         <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
+      - OAuth2 client credentials that trusted code supplies can be sealed into a client: they are used for its token
+        requests but never given out (see @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials";
+        <a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules

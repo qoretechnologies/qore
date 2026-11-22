@@ -139,6 +139,9 @@ public:
     //! Sets the CA locations from the async I/O thread; see setSslCaLocations()
     DLLLOCAL void setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
 
+    //! Sets the in-memory trust store from the async I/O thread; see QoreSocketObject::setSslTrustStore()
+    DLLLOCAL void setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink);
+
     DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
 
     DLLLOCAL QoreStringNode* getAlpnProtocolForAsyncPoll() const;

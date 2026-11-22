@@ -1401,7 +1401,14 @@ static std::string quic_ticket_cache_key(const char* host, uint16_t port, int ss
     std::string key = std::string(host) + ":" + std::to_string(port) + "|v" + std::to_string(ssl_verify_mode);
     if (sock) {
         key += sock->ssl_accept_all_certs ? "|a1" : "|a0";
-        key += "|f" + sock->ssl_ca_file + "|p" + sock->ssl_ca_path;
+        // the fields that can hold any text are given with their lengths, so that no value can be taken for another
+        // field (qoretechnologies/qore#7248)
+        key += "|f" + std::to_string(sock->ssl_ca_file.size()) + ":" + sock->ssl_ca_file
+            + "|p" + std::to_string(sock->ssl_ca_path.size()) + ":" + sock->ssl_ca_path;
+        // a session resumed under other trust anchors would skip their verification (qoretechnologies/qore#7248)
+        if (sock->ssl_trust_store) {
+            key += "|t" + sock->ssl_trust_store->getId();
+        }
     }
     // the client identity is part of the session
     if (client_cert && client_cert->getData()) {
@@ -1433,7 +1440,11 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // the trust configuration of the socket, as with a TLS connection over TCP (see SSLSocketHelper::setVerifyMode())
     bool accept_all = sock_ && sock_->ssl_accept_all_certs;
-    if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
+    if (sock_ && sock_->ssl_trust_store) {
+        // an in-memory trust store: the session's own SSL_CTX takes a reference on the shared, immutable store; no
+        // file is read and the environment is not consulted (qoretechnologies/qore#7248)
+        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+    } else if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
         // the configured CA certificates are trusted instead of the default CAs
         if (!SSL_CTX_load_verify_locations(ssl_ctx_,
                 sock_->ssl_ca_file.empty() ? nullptr : sock_->ssl_ca_file.c_str(),
@@ -1621,10 +1632,16 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                     "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
             } else {
                 SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
-                // Load system default CA certificates for client cert validation; OpenSSL reads the
-                // SSL_CERT_FILE and SSL_CERT_DIR environment variables
-                QoreEnvironmentReadLock env_lock;
-                SSL_CTX_set_default_verify_paths(ssl_ctx_);
+                if (sock_ && sock_->ssl_trust_store) {
+                    // the in-memory trust store of the listener; the session's own SSL_CTX takes a reference on
+                    // the shared, immutable store (qoretechnologies/qore#7248)
+                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+                } else {
+                    // Load system default CA certificates for client cert validation; OpenSSL reads the
+                    // SSL_CERT_FILE and SSL_CERT_DIR environment variables
+                    QoreEnvironmentReadLock env_lock;
+                    SSL_CTX_set_default_verify_paths(ssl_ctx_);
+                }
                 printd(3, "QuicSession::setupServerSslCtx(): mTLS enabled "
                     "(verify_mode=0x%x, accept_all_certs=false)\n", ssl_verify_mode);
             }
