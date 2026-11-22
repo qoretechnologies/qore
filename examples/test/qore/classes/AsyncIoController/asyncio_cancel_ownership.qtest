@@ -330,6 +330,23 @@ printf(\"wrapper: %y\\n\", p.callFunction(\"wrapper\", k));
 printf(\"trusted: %y\\n\", AsyncIoController::cancelByKey(k));
 ";
 
+        #! the child of libraryInitTimerTest(): its tenant loads the library whose initialization adds a timer
+        const InitTimerChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelInitLib\\n\"
+    \"int sub timer() { return AioCancelInitLib::Lib::getTimerId(); }\\n\"
+    \"int sub own() { return AsyncIoController::addTimerDelay(1D, True); }\\n\", \"tenant\");
+int init_timer = p.callFunction(\"timer\");
+int own_timer = p.callFunction(\"own\");
+printf(\"init: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", init_timer));
+printf(\"own: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", own_timer) > 0);
+printf(\"canceled: %y\\n\", AsyncIoController::cancelTimer(init_timer) && AsyncIoController::cancelTimer(own_timer));
+";
+
         #! the child of callbackLibraryInitTest(): the callback of the tenant's operation loads the library whose
         #! initialization submits an operation
         const CallbackChildSource = "%modern
@@ -511,6 +528,8 @@ bool sub direct_key(string key) {
         addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
             \moduleWrapperTest());
         addTestCase("an operation of a library's initialization belongs to no tenant", \libraryInitTest());
+        addTestCase("a timer of a library's initialization has no generation that sandboxed code can match",
+            \libraryInitTimerTest());
         addTestCase("an operation submitted by a callback belongs to the callback's operation's application",
             \callbackTest());
         addTestCase("an operation of a library's initialization in a tenant's callback belongs to no tenant",
@@ -719,6 +738,19 @@ bool sub direct_key(string key) {
         assertRegex("^direct: False\\n", out, out);
         assertRegex("\nwrapper: False\n", out, out);
         assertRegex("\ntrusted: True\n", out, out);
+    }
+
+    #! the timer that a library module's initialization adds, also when a tenant loads the module first, has no
+    #! generation (0): it belongs to no application, and no sandboxed code can match the generation of its work, not
+    #! even later work of the tenant's thread that loaded the module (qore#7010); the tenant's own timer has one
+    libraryInitTimerTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the generation of a timer is read with a test hook of a debug build");
+        }
+        string out = runChild(InitTimerChildSource);
+        assertRegex("^init: 0\n", out, out);
+        assertRegex("\nown: True\n", out, out);
+        assertRegex("\ncanceled: True\n", out, out);
     }
 
     #! an operation that the completion of a tenant's operation submits (module code, with no Program of the tenant on

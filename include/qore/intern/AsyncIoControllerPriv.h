@@ -1092,6 +1092,10 @@ public:
     //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())
     DLLLOCAL bool dbgWaitOwnerFlushBlocked(int timeout_ms);
 
+    //! Debug-only: returns the generation of the work that added the timer (TimerInfo::adder_gen), or -1 if there is
+    //! no timer with the ID
+    DLLLOCAL int64 dbgTimerAdderGen(int64_t id);
+
     //! Debug-only: returns true if a submission takes the key of an operation that it may not replace (see
     //! submitTakesKeyOfOther())
     /** For the submission of sandboxed code that runs for no known application, which no Qore code reaches today

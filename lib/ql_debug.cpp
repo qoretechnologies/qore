@@ -19162,6 +19162,24 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: returns the generation of the work that added the timer of the global async I/O controller with the
+//! given ID (0 for a timer that no sandboxed code may cancel by its generation), or -1 if there is no such timer
+//! (qore#7010)
+static QoreValue f_dbg_async_io_timer_adder_gen(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgTimerAdderGen(id);
+}
+
 //! Debug-only: the number of operation objects that the async I/O controllers have registered (qore#6531)
 /** The registration of an operation without a C++ poll operation by its object ends with the operation; a test
     checks with it that a submission that is not started leaves none behind (qore#7167)
@@ -29691,6 +29709,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_timer_adder_gen", f_dbg_async_io_timer_adder_gen,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,

@@ -7199,6 +7199,11 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
     // the application that the timer's code runs for (qore#7010), computed before the controller's lock is taken
     qore_program_id_t cb_app_id = callerAppId();
+    // the generation of the work that adds the timer, for the timers that sandboxed code with no application may
+    // cancel (timerCancelAllowed()); none for a timer of the initialization of library code, which runs for no
+    // application on the thread of the code that loads the library (a tenant's thread, for example), so that no
+    // sandboxed code can cancel it, not even later work of that thread (qore#7010)
+    const uint64_t adder_gen = qore_runtime_under_library_init_barrier() ? 0 : runtime_get_thread_generation();
 
     {
         AutoLocker al(m);
@@ -7241,7 +7246,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.runtime_po = std::move(timer_po);
         tinfo.for_app = for_app;
         tinfo.cb_app_id = cb_app_id;
-        tinfo.adder_gen = runtime_get_thread_generation();
+        tinfo.adder_gen = adder_gen;
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
 
@@ -10849,6 +10854,12 @@ bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
         cd = call_dispatcher;
     }
     return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
+}
+
+int64 AsyncIoControllerPriv::dbgTimerAdderGen(int64_t id) {
+    AutoLocker al(m);
+    auto it = timer_info_map.find(id);
+    return it == timer_info_map.end() ? -1 : static_cast<int64>(it->second.adder_gen);
 }
 
 bool AsyncIoControllerPriv::dbgWaitOwnerFlushBlocked(int timeout_ms) {
