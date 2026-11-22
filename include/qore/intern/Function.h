@@ -3537,6 +3537,14 @@ public:
         return is_abstract;
     }
 
+    //! returns the abstract variants of the method that concrete variants of parent classes implement
+    /** they are no longer in the variant list (see replaceAbstractVariant()); the AOT image keeps them, so that its
+        loader resolves them again (qore#7277)
+    */
+    DLLLOCAL const VList& getReplacedAbstractVariants() const {
+        return pending_save;
+    }
+
     DLLLOCAL ClassAccess getAccess() const {
         return access;
     }

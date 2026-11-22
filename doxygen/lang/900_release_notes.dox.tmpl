@@ -2751,6 +2751,10 @@
       class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
       executables did, also through a call reference (see @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7206">issue 7206</a>)
+    - an abstract method that a method of a class inherited with \c private or \c private:internal access implements
+      can be called with the access of that method; such a call raised \c RUNTIME-OVERLOAD-ERROR (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7277">issue 7277</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it

@@ -1,0 +1,62 @@
+1 A1 outside: "P1::m"
+1 A1 outside untyped: "P1::m"
+1 A1 outside ref: "P1::m"
+1 A1 outside com: "P1::m"
+1 A1 P1 code: "P1::m"
+1 A1 P1 code ref: "P1::m"
+1 A1 A1 code: "P1::m"
+1 A1 A1 code ref: "P1::m"
+1 A1 A1 code typed: "P1::m"
+1 S1 outside: "P1::m"
+1 S1 outside untyped: "P1::m"
+1 S1 outside com: "P1::m"
+1 S1 P1 code: "P1::m"
+1 S1 A1 code: "P1::m"
+1 S1 A1 code typed: "P1::m"
+1 S1 S1 code: "P1::m"
+1 S1 S1 code ref: "P1::m"
+2 A2 outside: "P2::m"
+2 A2 outside untyped: "P2::m"
+2 A2 outside ref: "P2::m"
+2 A2 outside com: "P2::m"
+2 A2 P2 code: "P2::m"
+2 A2 A2 code: "P2::m"
+2 S2 outside untyped: "P2::m"
+2 S2 P2 code: "P2::m"
+2 S2 A2 code: "P2::m"
+2 S2 S2 code: "P2::m"
+3 A3 outside untyped: METHOD-IS-PRIVATE
+3 Q3 outside untyped: METHOD-IS-PRIVATE
+3 A3 outside com: METHOD-IS-PRIVATE
+3 Q3 outside com: METHOD-IS-PRIVATE
+3 A3 P3 code: "P3::m"
+3 Q3 P3 code: "P3::m"
+3 A3 own code: "P3::m"
+3 Q3 own code: "P3::m"
+3 S3 outside untyped: METHOD-IS-PRIVATE
+3 T3 outside untyped: METHOD-IS-PRIVATE
+3 S3 outside com: METHOD-IS-PRIVATE
+3 T3 outside com: METHOD-IS-PRIVATE
+3 S3 P3 code: METHOD-IS-PRIVATE
+3 T3 P3 code: METHOD-IS-PRIVATE
+3 S3 own code: "P3::m"
+3 T3 own code: "P3::m"
+3 S3 subclass code: "P3::m"
+3 T3 subclass code: "P3::m"
+4 A4 outside untyped: METHOD-IS-PRIVATE
+4 A4 outside com: METHOD-IS-PRIVATE
+4 A4 P4 code: "P4::m"
+4 A4 O4 code: "P4::m"
+4 A4 O4 code ref: "P4::m"
+4 A4 A4 code: "P4::m"
+5 A5 outside untyped: METHOD-DOES-NOT-EXIST
+5 A5 P5 code: "P5::m"
+5 A5 A5 code: RUNTIME-OVERLOAD-ERROR
+5 C5 outside untyped: METHOD-DOES-NOT-EXIST
+5 C5 P5 code: "P5::m"
+5 C5 A5 code: RUNTIME-OVERLOAD-ERROR
+5 C5 C5 code: METHOD-DOES-NOT-EXIST
+5 B5 outside untyped: RUNTIME-OVERLOAD-ERROR
+5 B5 P5 code: "P5::m"
+5 B5 I5 code: RUNTIME-OVERLOAD-ERROR
+5 B5 B5 code: METHOD-IS-PRIVATE

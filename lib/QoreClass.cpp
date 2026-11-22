@@ -11528,6 +11528,13 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
             pending_save.push_back(*i);
             vlist.erase(i);
             vlist.push_back(variant);
+            // the method has a concrete variant now that the code of other classes can call: a call does not skip it
+            // as an abstract method, also when the abstract variant that it replaces was its only variant; a
+            // private:internal variant of another class can only be called from that class, so a lookup still
+            // continues past the method, as before it was implemented (qore#7277)
+            if (is_abstract && variant->getAccess() != Internal) {
+                is_abstract = false;
+            }
             //printd(5, "MethodFunctionBase::replaceAbstractVariantIntern() this: %p replacing %p ::%s%s in vlist\n",
             //    this, variant, getName(), variant->getAbstractSignature());
             return;
