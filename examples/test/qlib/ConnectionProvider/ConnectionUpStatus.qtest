@@ -159,6 +159,32 @@ class OkHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! code restricted from the network that uses connections lent to it
+const RestrictedCode = "%modern
+string sub do_ping(object conn) {
+    try {
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"OK\" : \"FAILED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub do_poll(object conn) {
+    try {
+        object op = conn.startPollConnect();
+        return \"STARTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub retarget(object conn, string url) {
+    conn.url = url;
+    conn.real_url = url;
+    conn.real_opts.url = url;
+    return do_ping(conn);
+}
+";
+
 public class ConnectionUpStatusTest inherits QUnit::Test {
     private {
         HttpServer rest_server;
@@ -215,6 +241,7 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("restored and copied", \restoredTest());
         addTestCase("REST connection", \restTest());
         addTestCase("unauthorized REST connection", \unauthorizedRestTest());
+        addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
         addTestCase("HTTP connection", \httpTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
@@ -617,6 +644,56 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         }
         assertTrue(mconn.up);
         assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
+    }
+
+    #! code restricted from the network pings a lent REST connection without ping_method only at its own target
+    lentRestTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted");
+
+        # a lent connection: its target and up
+        RestConnection conn("lent", "test", "http://127.0.0.1:" + rest_port, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent connection pinged by restricted code");
+
+        # another target: refused before any connection is attempted
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        string other = "http://127.0.0.1:" + listener.getSocketInfo().port;
+        conn = new RestConnection("lent", "test", "http://127.0.0.1:" + rest_port, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, other));
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent connection pinged by restricted code");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another target");
+        assertNothing(listener.accept(0), "no connection to the other target was attempted");
+
+        # a connection with no proof that allows its target (its creator's proof has no HTTP origin for the URL)
+        conn = new RestConnection("lent", "test", "rest://127.0.0.1:" + listener.getSocketInfo().port,
+            {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("do_ping", conn));
+        assertNothing(listener.accept(0), "no connection without a proof was attempted");
+        # code restricted from the network cannot create a connection itself
+        Program own(PO_NEW_STYLE | PO_NO_NETWORK);
+        own.parse("%modern
+%requires RestClient
+string sub own_ping(string url) {
+    try {
+        RestConnection c(\"own\", \"own\", url, {\"monitor\": False});
+        return c.ping(True).ok ? \"OK\" : \"FAILED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}", "own");
+        assertEq("PERMISSION-DENIED", own.callFunction("own_ping", other));
+        assertNothing(listener.accept(0), "the restricted code's own connection attempted no connection");
+
+        # an unrestricted ping is not checked
+        conn = new RestConnection("lent", "test", "rest://127.0.0.1:" + rest_port, {"monitor": False});
+        start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "an unrestricted ping");
     }
 
     httpTest() {
