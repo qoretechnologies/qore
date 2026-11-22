@@ -1182,13 +1182,9 @@ public:
         */
         tlv_clearing : 1;
 
-    //! the generation of the thread: unique in the process, unlike its TID, which is reused (qore#7010)
-    const uint64_t thread_gen = next_thread_gen();
-
-    DLLLOCAL static uint64_t next_thread_gen() {
-        static std::atomic<uint64_t> gen{0};
-        return gen.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
+    //! the generation of the work that the thread runs: its own, unique in the process (unlike its TID, which is
+    //! reused), or that of the work item of other code that it runs (see runtime_get_thread_generation(), qore#7010)
+    uint64_t work_gen = qore_new_work_generation();
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
@@ -8391,6 +8387,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         in_build = td->sandbox_budgets.inBuild();
         // the work that continues on another thread runs for the capturing code (qore#6844)
         caller_restrictions = qore_get_calling_code_restrictions(td);
+        // and continues its work (qore#7010)
+        work_gen = td->work_gen;
     }
     manager = current.release();
     policy_manager = policy.release();
@@ -8421,6 +8419,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    work_gen = src->work_gen;
     isolation = src->isolation;
     if (isolation) {
         isolation->ref();
@@ -9482,9 +9481,31 @@ qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QorePr
     return runtime_get_module_call_app_id(caller_pgm);
 }
 
+uint64_t qore_new_work_generation() {
+    static std::atomic<uint64_t> gen{0};
+    return gen.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 uint64_t runtime_get_thread_generation() {
     ThreadData* td = thread_data.get();
-    return td ? td->thread_gen : 0;
+    return td ? td->work_gen : 0;
+}
+
+QoreWorkGenerationHelper::QoreWorkGenerationHelper(uint64_t gen) {
+    if (!gen) {
+        return;
+    }
+    td = thread_data.get();
+    if (td) {
+        old_gen = td->work_gen;
+        td->work_gen = gen;
+    }
+}
+
+QoreWorkGenerationHelper::~QoreWorkGenerationHelper() {
+    if (td) {
+        td->work_gen = old_gen;
+    }
 }
 
 qore_program_id_t runtime_get_sandboxed_module_call_app_id() {
@@ -9787,6 +9808,9 @@ void QoreThreadRuntimeParseOptions::derefPrograms() {
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
     QoreThreadRuntimeParseOptions rv = capture();
     rv.override.app_pgm_id = 0;
+    // the thread's work is its own (qore#7010)
+    rv.work_gen = 0;
+    rv.new_work = true;
     return rv;
 }
 
@@ -9827,6 +9851,8 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     // runs for that code (qore#6520); one that trusted code starts in a host grant does not run for the code that
     // established it in the lent domains
     rv.caller_domain_restrictions = qore_get_calling_code_restrictions(td, false);
+    // the work that runs with the options continues the work of the capturing code (qore#7010)
+    rv.work_gen = td->work_gen;
     rv.refPrograms();
     return rv;
 }
@@ -9848,12 +9874,20 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    // the generation of the work: that of the capturing code, a new one for work of its own (qore#7010)
+    old_work_gen = td->work_gen;
+    if (o->work_gen) {
+        td->work_gen = o->work_gen;
+    } else if (o->new_work) {
+        td->work_gen = qore_new_work_generation();
+    }
 }
 
 void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
+    td->work_gen = old_work_gen;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
