@@ -1479,7 +1479,21 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
         AutoLocker al(state.lock);
         // the tasks held: those that the cleanup counts when it waits for its work, all when the hold ends
         tasks = state.held_counted_tasks + (end_hold ? state.held_uncounted_tasks : 0);
+        if (end_hold && state.hold.load(std::memory_order_relaxed)) {
+            // the work that the cleanup hands over from now on is queued
+            state.hold.store(false, std::memory_order_release);
+            hold_ended = true;
+        }
+        // printed before the tasks are released, under the lock that they wait with: a task released prints its own
+        // output only after these lines, whose order a test checks
+        if (hold_ended) {
+            fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
+            fflush(stderr);
+        }
         if (tasks) {
+            fprintf(stderr, "held module cleanup work: %d task%s released (%s)\n", tasks, tasks == 1 ? "" : "s",
+                by);
+            fflush(stderr);
             ++state.counted_task_release_gen;
             state.held_counted_tasks = 0;
             if (end_hold) {
@@ -1487,11 +1501,6 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
                 state.held_uncounted_tasks = 0;
             }
             state.task_cond.broadcast();
-        }
-        if (end_hold && state.hold.load(std::memory_order_relaxed)) {
-            // the work that the cleanup hands over from now on is queued
-            state.hold.store(false, std::memory_order_release);
-            hold_ended = true;
         }
         if (end_hold) {
             held.swap(state.held);
@@ -1514,14 +1523,6 @@ void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
                 }
             }
         }
-    }
-    if (hold_ended) {
-        fprintf(stderr, "held module cleanup work: the hold ends (%s)\n", by);
-        fflush(stderr);
-    }
-    if (tasks) {
-        fprintf(stderr, "held module cleanup work: %d task%s released (%s)\n", tasks, tasks == 1 ? "" : "s", by);
-        fflush(stderr);
     }
     if (held.empty()) {
         return;
