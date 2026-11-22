@@ -1115,9 +1115,9 @@ public class HttpServerTest inherits QUnit::Test {
                 "connect_timeout": 5000,
                 "timeout": 5000,
             });
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             hc.connect();
-            int elapsed_us = (now_us() - start).durationMicroseconds();
+            int elapsed_us = clock_get_monotonic_us() - start;
             hc.disconnect();
             return elapsed_us;
         };
@@ -1182,9 +1182,9 @@ public class HttpServerTest inherits QUnit::Test {
                 "connect_timeout": 5000,
                 "timeout": 5000,
             });
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             h3.connect();
-            int elapsed_us = (now_us() - start).durationMicroseconds();
+            int elapsed_us = clock_get_monotonic_us() - start;
             on_exit h3.disconnect();
             if (!h3.isHttp3Active()) {
                 throw "H3-NOT-ACTIVE", "H3 not active after connect";
@@ -1291,7 +1291,8 @@ public class HttpServerTest inherits QUnit::Test {
 
     issue3116() {
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "501", \mClient.head(), "/test501/xyz");
-        assertNothing(mClient.get("/test102/xyz"));
+        # an informational status is not a final response: the server answers it with an error (qore#7222)
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "500", \mClient.get(), "/test102/xyz");
         assertNothing(mClient.get("/test204/xyz"));
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "304", \mClient.head(), "/test304/xyz");
         assertEq("GET, abc, /abc", mClient.get("/abc"));
@@ -3798,7 +3799,7 @@ public class HttpServerTest inherits QUnit::Test {
         # Create many concurrent connections that close at various stages
         Counter done(20);
         bool all_completed = True;
-        date start = now_us();
+        int start = clock_get_monotonic_us();
 
         for (int i = 0; i < 20; ++i) {
             background sub () {
@@ -3831,7 +3832,7 @@ public class HttpServerTest inherits QUnit::Test {
         done.waitForZero(10s);
         assertEq(0, done.getCount(), "all concurrent requests should complete");
 
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         if (m_options.verbose > 1) {
             printf("Elapsed time for 20 concurrent connections: %y\n", elapsed);
         }
@@ -3965,7 +3966,7 @@ public class HttpServerTest inherits QUnit::Test {
             usleep(200ms);
 
             # This request must detect the closed connection and reconnect
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             try {
                 rc.restGet("/health");
             } catch (hash<ExceptionInfo> ex) {
@@ -3973,7 +3974,7 @@ public class HttpServerTest inherits QUnit::Test {
                     "scenario2: post-close request must not timeout");
             }
             # Recovery should be fast — under 10s (stale detect timeout + reconnect)
-            date elapsed = now_us() - start;
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(elapsed < 10s,
                 sprintf("scenario2: recovery took %y, expected < 10s", elapsed));
         }
@@ -4046,7 +4047,7 @@ public class HttpServerTest inherits QUnit::Test {
 
             # Second request sent immediately — races with the delayed close.
             # Must succeed (reconnect if needed) within 3s, not the full timeout.
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             try {
                 rc.restGet("/health");
             } catch (hash<ExceptionInfo> ex) {
@@ -4056,7 +4057,7 @@ public class HttpServerTest inherits QUnit::Test {
                 assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
                     "scenario3: request during delayed close must not timeout");
             }
-            date elapsed = now_us() - start;
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(elapsed < 10s,
                 sprintf("scenario3: recovery took %y, expected < 10s", elapsed));
         }
@@ -4089,14 +4090,14 @@ public class HttpServerTest inherits QUnit::Test {
             # First request succeeds
             rc.restGet("/health");
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             *hash<ExceptionInfo> err;
             try {
                 rc.restGet("/health");
             } catch (hash<ExceptionInfo> ex) {
                 err = ex;
             }
-            date elapsed = now_us() - start;
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("scenario4: the request times out; got %s: %s",
                 err.err, err.desc));
             assertFalse(appender.hasMessageContaining("evicting stale connection and retrying"),
@@ -4238,7 +4239,7 @@ public class HttpServerTest inherits QUnit::Test {
 
             # Second request: server reads it then closes (FIN).  Pre-RECV
             # MSG_PEEK or the read EOF catches it; conn-mgr retries on conn 2.
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             bool recovered = False;
             try {
                 rc.restGet("/health");
@@ -4248,7 +4249,7 @@ public class HttpServerTest inherits QUnit::Test {
                     printf("scenario4b: %s: %s\n", ex.err, ex.desc);
                 }
             }
-            date elapsed = now_us() - start;
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(recovered,
                 "scenario4b: retry on fresh connection must succeed");
             # FIN-driven recovery should be near-instant; bound generously

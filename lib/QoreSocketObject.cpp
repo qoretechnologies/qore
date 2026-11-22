@@ -1101,6 +1101,7 @@ public:
         MaxDatagramSize,
         DatagramSupported,
         FirstSessionStreamAcked,
+        StreamAcked,
     };
 
     DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
@@ -1184,6 +1185,10 @@ public:
             case Action::FirstSessionStreamAcked:
                 setFirstSessionStreamAcked();
                 break;
+
+            case Action::StreamAcked:
+                setStreamAcked();
+                break;
         }
 
         if (*xsink) {
@@ -1235,6 +1240,11 @@ private:
 
     DLLLOCAL void setFirstSessionStreamAcked() {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(sock);
+        output = session ? session->streamAckedBytes(stream_id) : static_cast<int64_t>(-1);
+    }
+
+    DLLLOCAL void setStreamAcked() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
         output = session ? session->streamAckedBytes(stream_id) : static_cast<int64_t>(-1);
     }
 
@@ -1372,62 +1382,6 @@ static void qore_socket_object_wake_async_controller(QoreSocketObject* s, Except
         return;
     }
     ctl_priv->wakeSocketByObject(*sock_obj, xsink);
-}
-
-static int qore_socket_object_parse_http2_request_headers(const QoreHashNode* headers, std::string& method,
-        std::string& path, std::vector<std::pair<std::string, std::string>>& request_headers,
-        ExceptionSink* xsink) {
-    if (!headers) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-        return -1;
-    }
-
-    request_headers.reserve(headers->size() + 4);
-    auto append = [&](const std::string& key, const char* sval) {
-        if (key == ":method") {
-            if (sval && *sval) {
-                method = sval;
-            }
-        } else if (key == ":path") {
-            if (sval && *sval) {
-                path = sval;
-            }
-        }
-        request_headers.emplace_back(key, sval ? sval : "");
-    };
-
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        const char* key = hi.getKey();
-        QoreValue val = hi.get();
-        std::string skey(key);
-        // a NT_STRING value may be stored inline (SSO short string) with no QoreStringNode to
-        // dereference; QoreStringValueHelper yields the string buffer safely in either case
-        if (val.getType() == NT_STRING) {
-            QoreStringValueHelper str(val);
-            append(skey, str->c_str());
-        } else if (val.getType() == NT_LIST) {
-            const QoreListNode* l = val.get<const QoreListNode>();
-            for (size_t i = 0; i < l->size(); ++i) {
-                QoreValue elem = l->retrieveEntry(i);
-                if (elem.getType() == NT_STRING) {
-                    QoreStringValueHelper str(elem);
-                    append(skey, str->c_str());
-                }
-            }
-        }
-    }
-
-    if (method.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-        return -1;
-    }
-    if (path.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        return -1;
-    }
-
-    return 0;
 }
 
 static std::shared_ptr<QuicSession> qore_socket_object_get_quic_session(const QoreSocketObject* s,
@@ -1768,7 +1722,7 @@ public:
             const void* body_ptr, size_t body_len, bool streaming, bool wake_controller, ExceptionSink* xsink)
             : sock(sock), action(Action::Request), streaming(streaming), wake_controller(wake_controller) {
         sock->ref();
-        parseRequestHeaders(headers, xsink);
+        qore_get_http2_request_headers(headers, method, path, request_headers, xsink);
         if (body_ptr && body_len) {
             body = new BinaryNode;
             body->append(body_ptr, body_len);
@@ -1989,10 +1943,6 @@ public:
     }
 
 private:
-    DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
-        qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink);
-    }
-
     QoreSocketObject* sock;
     Action action;
     int32_t stream_id = 0;
@@ -2551,6 +2501,7 @@ public:
         IsSecure,
         SetAlpnProtocols,
         SetCaLocations,
+        SetTrustStore,
         GetAlpnProtocol,
         IsHttp2,
         VerifyPeerCertificate,
@@ -2573,11 +2524,23 @@ public:
         sock->ref();
     }
 
+    //! Sets or clears the in-memory trust store; takes a reference to it (qoretechnologies/qore#7248)
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, QoreSSLTrustStore* ts)
+            : sock(sock), action(Action::SetTrustStore), trust_store(ts) {
+        sock->ref();
+        if (ts) {
+            ts->ref();
+        }
+    }
+
     DLLLOCAL ~QoreSocketObjectTlsStatePollOperation() override {
         ExceptionSink xsink;
         output.discard(&xsink);
         if (xsink) {
             xsink.clear();
+        }
+        if (trust_store) {
+            trust_store->deref();
         }
         sock->deref(&xsink);
         if (xsink) {
@@ -2638,6 +2601,11 @@ public:
                 output = 0;
                 break;
 
+            case Action::SetTrustStore:
+                sp->setSslTrustStore(trust_store);
+                output = 0;
+                break;
+
             case Action::GetAlpnProtocol:
                 setAlpnValue(sp);
                 break;
@@ -2680,6 +2648,7 @@ private:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
             case Action::SetCaLocations:
+            case Action::SetTrustStore:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
             case Action::GetCipherVersion:
@@ -2714,6 +2683,8 @@ private:
     //! the CA locations for Action::SetCaLocations
     std::string ca_file;
     std::string ca_path;
+    //! the trust store for Action::SetTrustStore; a reference is held
+    QoreSSLTrustStore* trust_store = nullptr;
     bool done = false;
 };
 
@@ -4796,6 +4767,7 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     }
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
+    dst->setSslTrustStore(src->ssl_trust_store);
     dst->async_io_route_key = getIoIdentityHash();
     // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
     // reaches the connections that are already open
@@ -5713,6 +5685,24 @@ void QoreSocketObject::setSslCaLocations(const char* ca_file, const char* ca_pat
         -1, "setSslCaLocations", "tls-state", xsink), xsink);
 }
 
+void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        setSslTrustStoreForAsyncPoll(ts, xsink);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts),
+        -1, "setSslTrustStore", "tls-state", xsink), xsink);
+}
+
+void qore_socket_object_private::setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->checkValid(xsink)) {
+        return;
+    }
+    qore_socket_private::get(*priv->socket)->setSslTrustStore(ts);
+}
+
 void qore_socket_object_private::setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path,
         ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -5825,7 +5815,7 @@ static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, cons
         std::string method;
         std::string path;
         std::vector<std::pair<std::string, std::string>> request_headers;
-        if (qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink)) {
+        if (qore_get_http2_request_headers(headers, method, path, request_headers, xsink)) {
             return -1;
         }
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
@@ -6546,17 +6536,21 @@ QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, int timeout_
 // c must be already referenced before this call
 void QoreSocketObject::setCertificate(QoreSSLCertificate* c) {
     AutoLocker al(priv->m);
-    if (priv->cert)
+    if (priv->cert) {
         priv->cert->deref();
+    }
     priv->cert = c;
+    priv->opaque_cert = false;
 }
 
 // p must be already referenced before this call
 void QoreSocketObject::setPrivateKey(QoreSSLPrivateKey* p) {
     AutoLocker al(priv->m);
-    if (priv->pk)
+    if (priv->pk) {
         priv->pk->deref();
+    }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSSLPrivateKey* p) {
@@ -6565,10 +6559,12 @@ void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSS
         priv->cert->deref();
     }
     priv->cert = c;
+    priv->opaque_cert = false;
     if (priv->pk) {
         priv->pk->deref();
     }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::freeQuicServerSslCtx() {
@@ -7072,11 +7068,32 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         owner_name.c_str(), xsink);
 }
 
+int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    return h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+}
+
 int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
     ValueHolder rv(qore_socket_object_exec_quic_query(s,
         new QoreSocketObjectQuicQueryPollOperation(s,
             QoreSocketObjectQuicQueryPollOperation::Action::FirstSessionStreamAcked, 0, stream_id),
         "getQuicClientStreamAckedBytes", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->getAsBigInt();
+}
+
+int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_quic_query(s,
+        new QoreSocketObjectQuicQueryPollOperation(s,
+            QoreSocketObjectQuicQueryPollOperation::Action::StreamAcked, session_id, stream_id),
+        "getQuicStreamAckedBytes", xsink), xsink);
     if (*xsink) {
         return -1;
     }

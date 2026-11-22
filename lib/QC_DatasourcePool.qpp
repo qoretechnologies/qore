@@ -1114,6 +1114,43 @@ string DatasourcePool::getMaskedDescription() [flags=CONSTANT] {
     return rv.release();
 }
 
+//! Sets the name of the connection that the pool was created for, once
+/** The name identifies the pool in serialized data: serialized @ref sqlutilintro "SqlUtil" objects keep the name of
+    its connection instead of its configuration, which then has no credentials, and are restored by looking the
+    connection up by name (see @ref sqlutil_serialization).  A connection that creates a pool sets it (as
+    @ref DbDataProvider::DatasourceConnection "DatasourceConnection" does).
+
+    The name is set once: it cannot be changed once set, so that code that is given the pool cannot relabel it as
+    another connection; setting the same name again does nothing.  A copy of the pool has the same name.
+
+    @param name the name of the connection
+
+    @par Example:
+    @code{.py}
+pool.setConnectionName("orders");
+    @endcode
+
+    @throw DATASOURCE-CONNECTION-NAME-ERROR the name is empty, or the pool already has another connection name
+
+    @see getConnectionName()
+
+    @since %Qore 3.0
+*/
+nothing DatasourcePool::setConnectionName(string name) [dom=DATABASE;flags=NAMED_ARGS] {
+    ds->setConnectionName(*name, xsink);
+}
+
+//! Returns the name of the connection that the pool was created for, if set
+/** @return the name of the connection that the pool was created for, or @ref nothing if none is set
+
+    @see setConnectionName()
+
+    @since %Qore 3.0
+*/
+*string DatasourcePool::getConnectionName() [flags=CONSTANT] {
+    return ds->getConnectionName();
+}
+
 //! Returns the real DB driver name if supported by the driver, otherwise the %Qore driver name
 /** @return the real DB driver name if supported by the driver, otherwise the %Qore driver name
 
@@ -1236,6 +1273,10 @@ bool DatasourcePool::currentThreadInTransaction() [flags=CONSTANT] {
     - \c "sensitive": @ref True if the driver declares the value of the option sensitive (a credential, or a
       connection string or URL that can embed one); such a value is masked where %Qore shows the options of a
       datasource (since %Qore 3.0)
+    - \c "showable": @ref True if the value of the option can be shown where %Qore shows the options of a
+      datasource: the driver registers the option with option flags, not sensitive, and its name names no credential
+      (see @ref datasource_mask_options); \c "sensitive": @ref False alone does not mean that the value can be shown,
+      as an option registered without option flags is masked as undeclared (since %Qore 3.0)
     - \c "value": the current value of the option
 
     @since %Qore 0.8.6

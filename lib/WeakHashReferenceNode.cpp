@@ -37,3 +37,35 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 
 QoreString WeakHashReferenceNode::nstr("weak hash reference");
+
+QoreHashNode* WeakHashReferenceNode::lock() const {
+    return qore_hash_private::lockWeak(*h);
+}
+
+bool WeakHashReferenceNode::getAsBoolImpl() const {
+    // a destructor run by the release of the last reference raises its exceptions here
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> holder(lock(), &xsink);
+    return holder->getAsBoolImpl();
+}
+
+int WeakHashReferenceNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> holder(lock(), xsink);
+    return holder->getAsString(str, foff, xsink);
+}
+
+QoreString* WeakHashReferenceNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> holder(lock(), xsink);
+    // a string that is not new (del false) is a static one, not part of the target
+    return holder->getAsString(del, foff, xsink);
+}
+
+bool WeakHashReferenceNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> holder(lock(), xsink);
+    return holder->is_equal_soft(v, xsink);
+}
+
+bool WeakHashReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> holder(lock(), xsink);
+    return holder->is_equal_hard(v, xsink);
+}

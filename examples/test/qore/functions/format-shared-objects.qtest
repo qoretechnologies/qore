@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class SharedObjectFormatTest
+
+class DisplayNode {
+    public {
+        string label;
+        *DisplayNode left;
+        *DisplayNode right;
+    }
+
+    constructor(string label, *DisplayNode left, *DisplayNode right) {
+        self.label = label;
+        self.left = left;
+        self.right = right;
+    }
+}
+
+class SharedObjectFormatTest inherits QUnit::Test {
+    constructor() : QUnit::Test("shared object formatting", "1.0", \ARGV) {
+        addTestCase("one expansion per object in a diamond", \diamond());
+        addTestCase("deep graph and conversion scope", \deep());
+        addTestCase("cycles and independent objects", \identity());
+        set_return_value(main());
+    }
+
+    diamond() {
+        DisplayNode leaf("one-leaf");
+        DisplayNode root = leaf;
+        for (int i = 0; i < 8; ++i) {
+            root = new DisplayNode("branch", root, root);
+        }
+        foreach string spec in ("%n", "%N", "%y", "%Y") {
+            string text = sprintf(spec, root);
+            assertEq(1, text.split("one-leaf").size() - 1, spec);
+            assertEq(8, text.split("branch").size() - 1, spec);
+            # Leave room for class names, indentation and the reference markers.
+            assertTrue(text.size() < 8192, spec);
+        }
+    }
+
+    deep() {
+        DisplayNode leaf("one-leaf");
+        DisplayNode root = leaf;
+        for (int i = 0; i < 64; ++i) {
+            root = new DisplayNode("branch", root, leaf);
+        }
+        foreach string spec in ("%n", "%N", "%y", "%Y") {
+            string text = sprintf(spec, root);
+            assertEq(1, text.split("one-leaf").size() - 1, spec);
+            assertEq(64, text.split("branch").size() - 1, spec);
+            assertTrue(text.size() < 128 * 1024, spec);
+        }
+        # References through sibling hashes and lists use the enclosing conversion.
+        auto siblings = ({"item": leaf}, {"items": (leaf,)});
+        string text = sprintf("%y", siblings);
+        assertEq(1, text.split("one-leaf").size() - 1);
+        assertEq(text + "|" + text, sprintf("%y|%y", siblings, siblings));
+    }
+
+    identity() {
+        DisplayNode a("same");
+        DisplayNode b("same");
+        assertEq(2, sprintf("%y", (a, b)).split("same").size() - 1);
+        string large = "x";
+        for (int i = 0; i < 17; ++i) {
+            large += large;
+        }
+        foreach string spec in ("%n", "%N", "%y", "%Y") {
+            assertTrue(sprintf(spec, (a, b, b)).find("{reference to DisplayNode object #2}") >= 0, spec);
+            assertTrue(sprintf(spec, new DisplayNode(large)).find(large) >= 0, "a unique large leaf is complete");
+        }
+        assertTrue(sprintf("%Y", (a, a)).find("\n-\n  \"{reference to DisplayNode object #1}\"") >= 0);
+        DisplayNode deleted("deleted");
+        auto refs = (deleted, deleted);
+        delete deleted;
+        assertEq(sprintf("%y", (NOTHING, NOTHING)), sprintf("%y", refs));
+        a.left = a;
+        on_exit a.left = NOTHING;
+        assertRegex("recursive reference to object", sprintf("%y", a));
+    }
+}

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution mode, and in a qcc binary
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RemoveObjectMemberTest
+
+#! remove and delete of object members (qore#7179)
+/** remove and delete of a member that the class does not declare removed its value but kept its key, so that the
+    object's keys, elements, iterators and formatted value still reported it; a member that was never set is not
+    created.  The key of an undeclared member is now removed, as from a hash; a declared member keeps its slot, with
+    no value.  remove-object-member.q prints the members after each operation; every execution mode, the IR tier and
+    a qcc binary must print remove-object-member.expected.
+*/
+class RemoveObjectMemberTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("remove and delete of object members", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        script = get_script_dir() + "/remove-object-member.q";
+        expected = ReadOnlyFile::readTextFile(get_script_dir() + "/remove-object-member.expected");
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("IR tier", \irTierTest());
+        addTestCase("qcc", \aotTest());
+        set_return_value(main());
+    }
+
+    #! compares the output line by line, so that a failure names the first check that differs
+    private checkOutput(string label, string out) {
+        list<string> exp_lines = expected.split("\n");
+        list<string> out_lines = out.split("\n");
+        for (int i = 0; i < exp_lines.size(); ++i) {
+            if (out_lines[i] != exp_lines[i]) {
+                assertEq(exp_lines[i], out_lines[i], sprintf("%s: line %d", label, i + 1));
+                return;
+            }
+        }
+        assertEq(expected, out, label);
+    }
+
+    modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("%s %s --enable-debug --exec-mode=%s %s", env, qore_bin,
+                mode, script), NativeCheck::Jit));
+        }
+    }
+
+    irTierTest() {
+        checkOutput(ExecModeHarness::IRTierName, ExecModeHarness::run_ir_tier(sprintf("%s %s --enable-debug "
+            "--exec-mode=tiered %s", env, qore_bin, script)));
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("remove-object-member-aot-");
+        string exe = dir.path + "/remove-object-member";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s 2>&1", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        checkOutput("qcc", ExecModeHarness::run_any(sprintf("%s %s", env, exe)));
+    }
+}

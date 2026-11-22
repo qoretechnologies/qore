@@ -300,9 +300,20 @@ static type_typeinfo_map_t extern_type_info_map;
 typedef std::map<qore_type_t, const char* > type_str_map_t;
 static type_str_map_t type_str_map;
 
-// map from simple types to "or nothing" types
+// map from "or nothing" types to simple types
 typedef std::map<const QoreTypeInfo*, const QoreTypeInfo*> typeinfo_map_t;
-static typeinfo_map_t typeinfo_map, typeinfo_or_nothing_map;
+static typeinfo_map_t typeinfo_or_nothing_map;
+
+// the or-nothing types of the builtin types, found with QoreTypeInfo::getBuiltinOrNothingIndex() - 1; filled by
+// init_qore_types() before other threads run
+static std::vector<const QoreTypeInfo*> builtin_or_nothing_types;
+
+static void set_builtin_or_nothing_type(const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
+    builtin_or_nothing_types.push_back(orNothingTypeInfo);
+    // the index is stored as a 16-bit value; there are a few dozen builtin types
+    assert(builtin_or_nothing_types.size() < 0xffff);
+    typeInfo->setBuiltinOrNothingIndex(static_cast<uint16_t>(builtin_or_nothing_types.size()));
+}
 
 static QoreThreadLock ctl; // complex type lock
 // the type caches can be used in a child process created with fork() (see QoreForkHandlers.h)
@@ -669,13 +680,13 @@ static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInf
    type_typeinfo_map[t]                       = typeInfo;
    type_ornothingtypeinfo_map[t]              = orNothingTypeInfo;
    type_str_map[t]                            = name;
-   typeinfo_map[typeInfo]                     = orNothingTypeInfo;
    typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
+   set_builtin_or_nothing_type(typeInfo, orNothingTypeInfo);
 }
 
 static void do_maps(const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
-   typeinfo_map[typeInfo]                     = orNothingTypeInfo;
    typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
+   set_builtin_or_nothing_type(typeInfo, orNothingTypeInfo);
 }
 
 // at least the NullString must be created after the default character encoding is set
@@ -2521,12 +2532,43 @@ void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
    extern_type_info_map[t] = typeInfo;
 }
 
+// Given a parameterized class in the first return spec, distinguish *C<T> from a mixed union.
+// A symbolic type parameter can also have NT_NOTHING as its type code.
+static bool is_nullable_parameterized_class(const QoreTypeInfo* ti) {
+    return ti->return_vec.size() == 2 && ti->return_vec[1].spec.isRuntimeBaseType(NT_NOTHING);
+}
+
+// A symbolic member may accept NOTHING. Until substitution, conversion between the declared value
+// type and its or-nothing type must preserve the distinction between union<C<int>, T> and *union<C<int>, T>.
+static bool type_accepts_nothing_for_conversion(const QoreTypeInfo* ti) {
+    if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+        return false;
+    }
+    const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti);
+    return !uti || uti->isOrNothing();
+}
+
 static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
-    assert(QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
+    assert(type_accepts_nothing_for_conversion(typeInfo));
 
     typeinfo_map_t::iterator i = typeinfo_or_nothing_map.find(typeInfo);
     if (i != typeinfo_or_nothing_map.end()) {
         return i->second;
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(typeInfo)) {
+        type_vec_t members = uti->getMemberTypes();
+        members.erase(std::remove(members.begin(), members.end(), nothingTypeInfo), members.end());
+        for (const QoreTypeInfo*& member : members) {
+            if (qore_get_type_parameter_type_info(member)) {
+                member = member->return_vec.front().spec.getTypeParameterTypeInfo();
+            } else if (QoreTypeInfo::getUnionType(member)) {
+                member = get_value_type(member);
+            } else {
+                member = get_or_nothing_base_type(member);
+            }
+        }
+        return qore_get_union_type(members);
     }
 
     // see if we have a complex type
@@ -2540,14 +2582,16 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
     {
         const QoreClass* qc = QoreTypeInfo::getReturnClass(typeInfo);
         if (qc) {
+            // the spec of a parameterized class type (*C<int>) also gives its base class (QoreTypeSpec::getClass()),
+            // whose type (object<C>) does not have the type arguments; tested in the class case, so that the value
+            // type of a plain class costs only the test of the type spec (qore#7136)
+            if (const QoreParameterizedClassTypeInfo* pti = typeInfo->return_vec[0].spec
+                    .getParameterizedClassTypeInfo()) {
+                if (is_nullable_parameterized_class(typeInfo)) {
+                    return pti;
+                }
+            }
             return qc->getTypeInfo();
-        }
-    }
-
-    {
-        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
-        if (pti) {
-            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), false);
         }
     }
 
@@ -2589,16 +2633,20 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         }
     }
 
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(typeInfo)) {
+        return qore_get_complex_code_type(cti->getReturnType(), cti->getParamTypes(), cti->hasVarArgs());
+    }
+
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
     return autoTypeInfo;
 }
 
 const QoreTypeInfo* get_value_type(const QoreTypeInfo* typeInfo) {
-   return !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING) ? typeInfo : get_value_type_intern(typeInfo);
+   return !type_accepts_nothing_for_conversion(typeInfo) ? typeInfo : get_value_type_intern(typeInfo);
 }
 
 const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo) {
-    if (!QoreTypeInfo::hasType(typeInfo) || !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
+    if (!QoreTypeInfo::hasType(typeInfo) || !type_accepts_nothing_for_conversion(typeInfo)) {
         return typeInfo;
     }
     // get_value_type_intern() does not resolve enum types
@@ -2611,7 +2659,7 @@ const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo) {
     const QoreTypeInfo* vti = get_value_type_intern(typeInfo);
     // the type is *T only if T is a type without NOTHING whose or-nothing type is the type given; types such as
     // any, auto and nothing have no such T
-    if (!QoreTypeInfo::hasType(vti) || QoreTypeInfo::parseAcceptsReturns(vti, NT_NOTHING)
+    if (!QoreTypeInfo::hasType(vti) || type_accepts_nothing_for_conversion(vti)
         || get_or_nothing_type(vti) != typeInfo) {
         return typeInfo;
     }
@@ -2629,15 +2677,21 @@ const QoreTypeInfo* qore_get_or_nothing_type(const QoreTypeInfo* typeInfo) {
 }
 
 const QoreTypeInfo* get_or_nothing_type_check(const QoreTypeInfo* typeInfo) {
-   return QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING) ? typeInfo : get_or_nothing_type(typeInfo);
+   return type_accepts_nothing_for_conversion(typeInfo) ? typeInfo : get_or_nothing_type(typeInfo);
 }
 
 const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
-    assert(!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
+    assert(!type_accepts_nothing_for_conversion(typeInfo));
 
-    typeinfo_map_t::iterator i = typeinfo_map.find(typeInfo);
-    if (i != typeinfo_map.end())
-        return i->second;
+    // a builtin type holds its or-nothing type, which is read without a map lookup (issue #6126)
+    if (unsigned index = typeInfo ? typeInfo->getBuiltinOrNothingIndex() : 0) {
+        assert(index <= builtin_or_nothing_types.size());
+        return builtin_or_nothing_types[index - 1];
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(typeInfo)) {
+        return qore_get_union_or_nothing_type(uti->getMemberTypes());
+    }
 
     // see if we have a complex type
     {
@@ -2649,15 +2703,21 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
     {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
         if (qc) {
+            // the spec of a parameterized class type (C<int>) also gives its base class (QoreTypeSpec::getClass()),
+            // whose or-nothing type (*object<C>) does not have the type arguments and does not accept the objects of
+            // the specialized class (qore#7136); tested in the class case, so that the or-nothing type of a plain
+            // class, which list literals fold at run time, costs only the test of the type spec
+            const QoreTypeSpec& spec = typeInfo->return_vec[0].spec;
+            if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
+            }
             return qc->getOrNothingTypeInfo();
         }
     }
 
-    {
-        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
-        if (pti) {
-            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
-        }
+    // a type whose first return alternative is a parameterized class but that returns other types too
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo)) {
+        return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
     }
 
     {
@@ -2692,6 +2752,10 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexReference(typeInfo);
         if (ti)
             return qore_get_complex_reference_or_nothing_type(ti);
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(typeInfo)) {
+        return qore_get_complex_code_or_nothing_type(cti->getReturnType(), cti->getParamTypes(), cti->hasVarArgs());
     }
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -3156,6 +3220,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, siz
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner, size_t n_index,
@@ -3172,6 +3237,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner,
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner, size_t n_index,
@@ -3188,6 +3254,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner,
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
@@ -3347,10 +3414,6 @@ const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* 
     return ti;
 }
 
-const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
-    return dynamic_cast<const QoreTypeParameterTypeInfo*>(ti);
-}
-
 static const QoreTypeInfo* qore_get_wildcard_type_intern(QoreWildcardKind kind, const QoreTypeInfo* bound) {
     assert(kind == QoreWildcardKind::Unbounded || bound);
 
@@ -3426,6 +3489,17 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         return cached & 1;
     }
 
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        for (const QoreTypeInfo* member : orphanable_type_vec_view_t(uti->getOrphanableMemberTypes())) {
+            if (qore_type_contains_type_parameter(member)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
     if (qore_get_type_parameter_type_info(ti)) {
         ti->setContainsTypeParameterCache(true);
         return true;
@@ -3477,18 +3551,6 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
         return false;
     }
 
-    if (QoreTypeInfo::getUnionType(ti)) {
-        for (const QoreReturnSpec& rt : ti->return_vec) {
-            const QoreTypeInfo* member = rt.spec.getTypeInfo();
-            if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
-                ti->setContainsTypeParameterCache(true);
-                return true;
-            }
-        }
-        ti->setContainsTypeParameterCache(false);
-        return false;
-    }
-
     // a container of a type parameter, also an or-nothing one (*list<T>, *hash<string, T>, *reference<T>; qore#5849)
     const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (subtype && qore_type_contains_type_parameter(subtype)) {
@@ -3517,36 +3579,21 @@ public:
 
     //! References the declarations that \a ti and the types in it refer to; \a p is created with the first one
     /** A type is a finite tree of types: the declarations are not entered, so no type is visited twice on a path
+
+        @return true if the walk finds a declaration (also one that \a p references already), false if it finds none,
+        in which case the type at the root of the walk is marked with QoreTypeInfo::setNamesNoDeclarations() (issue
+        #6126)
     */
-    DLLLOCAL static void add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
-        if (!ti || depth > 64) {
-            return;
-        }
-        for (const QoreReturnSpec& rs : ti->return_vec) {
-            const QoreTypeSpec& spec = rs.spec;
-            if (const TypedHashDecl* hd = spec.getHashDecl()) {
-                get(p).addHashDecl(hd);
-            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
-                get(p).addClass(pti->getBaseClass());
-                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
-                    add(p, arg, depth + 1);
-                }
-            } else if (const QoreClass* qc = spec.getClass()) {
-                get(p).addClass(qc);
-            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
-                get(p).addEnum(ed);
-            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
-                add(p, wti->getBound(), depth + 1);
-            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
-                add(p, elem, depth + 1);
-            }
-        }
-        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
-            add(p, cti->getReturnType(), depth + 1);
-            for (const QoreTypeInfo* param : cti->getParamTypes()) {
-                add(p, param, depth + 1);
-            }
-        }
+    DLLLOCAL static bool add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
+        return walk<false>(&p, ti, depth);
+    }
+
+    //! Returns true if the walk of \a ti finds a declaration, ignoring the marks and without referencing anything
+    /** A debug build checks the marks that it relies on with it (see qore_type_names_no_declarations()); the caller
+        holds the type lock
+    */
+    DLLLOCAL static bool probe(const QoreTypeInfo* ti) {
+        return walk<true>(nullptr, ti, 0);
     }
 
     DLLLOCAL ~qore_type_decl_refs_private() {
@@ -3562,6 +3609,68 @@ public:
     }
 
 private:
+    //! The walk of add() (\a Probe false) and probe() (\a Probe true: no reference is taken, no mark is read or set)
+    template <bool Probe>
+    DLLLOCAL static bool walk(std::unique_ptr<qore_type_decl_refs_private>* p, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return false;
+        }
+        if (!Probe && ti->namesNoDeclarations()) {
+#ifdef DEBUG
+            // a wrong mark would drop references that the type needs: a debug build checks every mark it relies on
+            assert(!probe(ti));
+#endif
+            return false;
+        }
+        bool found = false;
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                if (!Probe) {
+                    get(*p).addHashDecl(hd);
+                }
+                found = true;
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                if (!Probe) {
+                    get(*p).addClass(pti->getBaseClass());
+                }
+                found = true;
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    walk<Probe>(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                if (!Probe) {
+                    get(*p).addClass(qc);
+                }
+                found = true;
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                if (!Probe) {
+                    get(*p).addEnum(ed);
+                }
+                found = true;
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                found |= walk<Probe>(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                found |= walk<Probe>(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            found |= walk<Probe>(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                found |= walk<Probe>(p, param, depth + 1);
+            }
+        }
+        // the walk of a type that finds no declaration never finds one (an orphaned pointer is repointed to a
+        // tombstone of the same kind only), so later references of it need neither the type lock nor this walk; only
+        // the root of the walk is marked, also when the walk stopped at the depth limit (a later walk from the root
+        // stops at the same types, so it finds none, as before): a type nested in it is walked with less depth left,
+        // so its walk can have been cut short where a later walk from it would not be
+        if (!Probe && !found && !depth) {
+            ti->setNamesNoDeclarations();
+        }
+        return found;
+    }
+
     DLLLOCAL static qore_type_decl_refs_private& get(std::unique_ptr<qore_type_decl_refs_private>& p) {
         if (!p) {
             p.reset(new qore_type_decl_refs_private);
@@ -3596,7 +3705,30 @@ private:
     }
 };
 
+//! Returns true if \a ti is null or marked as naming no declaration (QoreTypeInfo::namesNoDeclarations())
+/** A debug build checks the mark with a walk of the type under the type lock, so that a wrong mark fails a debug run
+    (issue #6126)
+*/
+static bool qore_type_names_no_declarations(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return true;
+    }
+    if (!ti->namesNoDeclarations()) {
+        return false;
+    }
+#ifdef DEBUG
+    AutoLocker al(ctl);
+    assert(!qore_type_decl_refs_private::probe(ti));
+#endif
+    return true;
+}
+
 QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
+    // a type known to name no declaration (ex: *int) has nothing to reference, so neither the lock nor the walk of
+    // the type is needed (issue #6126)
+    if (qore_type_names_no_declarations(ti)) {
+        return;
+    }
     // nothing is allocated for a type without declarations, such as a builtin type
     std::unique_ptr<qore_type_decl_refs_private> p;
     // the references are taken under the type lock: a declaration reached through a type can be a member of a group
@@ -3616,6 +3748,18 @@ QoreTypeDeclRefs::~QoreTypeDeclRefs() {
 }
 
 void QoreTypeDeclRefs::add(const type_vec_t& types) {
+    // the type arguments of generic code are mostly types that name no declaration (ex: int): then neither the lock
+    // nor a walk of the types is needed (issue #6126)
+    bool names = false;
+    for (const QoreTypeInfo* ti : types) {
+        if (!qore_type_names_no_declarations(ti)) {
+            names = true;
+            break;
+        }
+    }
+    if (!names) {
+        return;
+    }
     std::unique_ptr<qore_type_decl_refs_private> p(priv);
     priv = nullptr;
     {
@@ -3629,7 +3773,7 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
-    if (!ti) {
+    if (qore_type_names_no_declarations(ti)) {
         return;
     }
     std::unique_ptr<qore_type_decl_refs_private> p(priv);
@@ -3870,7 +4014,7 @@ static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_no
     std::vector<const QoreTypeSpec*> value_specs;
     for (const QoreTypeInfo* ti : key) {
         for (const auto& r : ti->return_vec) {
-            if (r.spec.getType() == NT_NOTHING) {
+            if (r.spec.isRuntimeBaseType(NT_NOTHING)) {
                 continue;
             }
             if (std::none_of(value_specs.begin(), value_specs.end(),
@@ -3938,7 +4082,12 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Check if any member already accepts NOTHING, if so, or_nothing is already covered
     bool has_nothing = false;
     for (const QoreTypeInfo* ti : key) {
-        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+        // A symbolic T might specialize to a type that accepts NOTHING. Only a definite NOTHING
+        // alternative makes the outer * redundant; otherwise the two declarations need distinct cache entries.
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                && (!qore_type_contains_type_parameter(ti)
+                    || std::any_of(ti->return_vec.begin(), ti->return_vec.end(),
+                        [](const QoreReturnSpec& rt) { return rt.spec.isRuntimeBaseType(NT_NOTHING); }))) {
             has_nothing = true;
             break;
         }
@@ -4742,6 +4891,27 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         return ti;
     }
 
+    // Return specs describe values after filtering. Substitute the declared union members so their
+    // conversions, signatures and priority survive specialization.
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        type_vec_t members = uti->getMemberTypes();
+        bool changed = false;
+        bool nullable = uti->isOrNothing();
+        for (const QoreTypeInfo*& member : members) {
+            // A bare T can accept and return NOTHING before binding. Preserve that property
+            // when specializing, regardless of T's position among the declared alternatives.
+            if (!nullable && member->isTypeParameter()) {
+                nullable = QoreTypeInfo::parseAcceptsReturns(member, NT_NOTHING);
+            }
+            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
+            if (subst != member) {
+                member = subst;
+                changed = true;
+            }
+        }
+        return changed ? qore_get_union_type(members, nullable) : ti;
+    }
+
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
         const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info, type_param_inst);
         return subst ? subst : ti;
@@ -4758,7 +4928,9 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
                 changed = true;
             }
         }
-        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args, pti->isOrNothing()) : ti;
+        // The class spec is the mandatory value type even for *C<T>. Read nullability from the full declaration.
+        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args,
+            is_nullable_parameterized_class(ti)) : ti;
     }
 
     if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
@@ -4797,23 +4969,6 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         return changed ? qore_get_complex_code_type(ret, params, cti->hasVarArgs(), cti->isOrNothing()) : ti;
     }
 
-    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
-        type_vec_t members;
-        bool changed = false;
-        for (const QoreReturnSpec& rt : ti->return_vec) {
-            const QoreTypeInfo* member = rt.spec.getTypeInfo();
-            if (member == nothingTypeInfo) {
-                continue;
-            }
-            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
-            members.push_back(subst);
-            if (subst != member) {
-                changed = true;
-            }
-        }
-        return changed ? qore_get_union_type(members, uti->isOrNothing()) : ti;
-    }
-
     // a container of a type parameter, also an or-nothing one (qore#5849)
     const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (subtype) {
@@ -4829,8 +4984,8 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
     if (subtype) {
         const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
-            bool is_soft = !strncmp(QoreTypeInfo::getName(ti), "softlist<", 9)
-                || !strncmp(QoreTypeInfo::getName(ti), "*softlist<", 10);
+            // a softlist is told by its spec, not by comparing its name (issue #6126)
+            bool is_soft = QoreTypeInfo::getReturnComplexSoftListOrNothing(ti) != nullptr;
             if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
                 return is_soft ? qore_get_complex_softlist_or_nothing_type(subst)
                     : qore_get_complex_list_or_nothing_type(subst);
@@ -4968,8 +5123,8 @@ const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
     if (!ti || !hasType(ti)) {
         return nullptr;
     }
-    // Check if the type is a QoreUnionTypeInfo by attempting a dynamic_cast
-    return dynamic_cast<const QoreUnionTypeInfo*>(ti);
+    // classified with the type's flag, not a dynamic_cast (issue #6126)
+    return ti->isUnion() ? static_cast<const QoreUnionTypeInfo*>(ti) : nullptr;
 }
 
 bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source) {
@@ -5062,11 +5217,11 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
         case NT_HASH:
             return static_cast<const QoreHashNode*>(n)->getTypeInfo();
         case NT_WEAKREF_HASH:
-            return static_cast<const WeakHashReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakHashReferenceNode*>(n)->getTypeInfo();
         case NT_LIST:
             return static_cast<const QoreListNode*>(n)->getTypeInfo();
         case NT_WEAKREF_LIST:
-            return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakListReferenceNode*>(n)->getTypeInfo();
         case NT_BUFFER:
             return static_cast<const QoreBufferNode*>(n)->getTypeInfo();
         case NT_PLUGIN_VALUE:
@@ -5633,8 +5788,10 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new hash
+    // The resulting hash carries the selected member type, including when the declaration is a union.
+    const QoreTypeInfo* complex_type = qore_get_complex_hash_type(uTi());
     if (!h->is_unique()) {
-        AbstractQoreNode* p = n.assign(h = qore_hash_private::get(*h)->copy(get_value_type(&typeInfo)));
+        AbstractQoreNode* p = n.assign(h = qore_hash_private::get(*h)->copy(complex_type));
         if (lvhelper) {
             lvhelper->saveTemp(p);
         } else {
@@ -5645,8 +5802,6 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
             }
         }
     } else {
-        // Use the base complex type, not the optional field type
-        const QoreTypeInfo* complex_type = qore_get_complex_hash_type(uTi());
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
     }
@@ -6007,7 +6162,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             if (t == NT_HASH) {
                 hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (t == NT_WEAKREF_HASH) {
-                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                // a hash keeps its hashdecl when it is freed
+                hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
             }
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
@@ -6046,9 +6202,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
-                QoreHashNode* h = n.get<WeakHashReferenceNode>()->get();
+                // checked with a reference of its own, or as a new empty hash if it was freed (qore#7198)
+                ReferenceHolder<QoreHashNode> h(n.get<WeakHashReferenceNode>()->lock(), xsink);
                 bool err = false;
-                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
+                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, *h,
                     err, policy);
                 if (err) {
                     return true;
@@ -6078,9 +6235,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
-                QoreListNode* l = n.get<WeakListReferenceNode>()->get();
+                // checked with a reference of its own, or as a new empty list if it was freed (qore#7198)
+                ReferenceHolder<QoreListNode> l(n.get<WeakListReferenceNode>()->lock(), xsink);
                 bool err = false;
-                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
+                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, *l,
                     err, policy);
                 if (err) {
                     return true;
@@ -6149,6 +6307,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
                 if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
+                    // a variable of the reference's type whose value the assignment below would leave as it is is
+                    // not read and assigned (qore#7264); -1: the exception that resolving the reference raises, as
+                    // for the error described below
+                    if (qore_reference_binding_keeps_value(r, uTi(), xsink)) {
+                        ok = true;
+                        break;
+                    }
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the
@@ -6450,7 +6615,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             if (ot == NT_HASH) {
                 hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (ot == NT_WEAKREF_HASH) {
-                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                // a hash keeps its hashdecl when it is freed
+                hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
             }
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
@@ -6483,7 +6649,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 h = n.get<const QoreHashNode>();
                 ti = h->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_HASH) {
-                h = n.get<const WeakHashReferenceNode>()->get();
+                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::borrow())
+                h = n.get<const WeakHashReferenceNode>()->borrow();
                 ti = h->getValueTypeInfo();
             }
             if (!h) {
@@ -6527,7 +6694,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 l = n.get<const QoreListNode>();
                 ti = l->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_LIST) {
-                l = n.get<const WeakListReferenceNode>()->get();
+                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
+                l = n.get<const WeakListReferenceNode>()->borrow();
                 ti = l->getValueTypeInfo();
             }
             if (l) {
@@ -6597,7 +6765,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (ot == NT_HASH) {
                     h = qore_hash_private::get(*n.get<const QoreHashNode>());
                 } else if (ot == NT_WEAKREF_HASH) {
-                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->get());
+                    // its type, which does not change when it is freed
+                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->borrow());
                 }
                 if (h) {
                     if (h->hashdecl || h->complexTypeInfo) {
@@ -6611,7 +6780,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (ot == NT_LIST) {
                     l = qore_list_private::get(*n.get<const QoreListNode>());
                 } else if (ot == NT_WEAKREF_LIST) {
-                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->get());
+                    // its type, which does not change when it is freed
+                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->borrow());
                 }
                 if (l) {
                     if (l->complexTypeInfo) {
@@ -6688,8 +6858,31 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreTypeInfo* ti, con
 // returns the list or hash that a call argument is or refers to, if any, and whether its element type is untyped,
 // as the element type of a container built at runtime without a declared element type is; a hashdecl hash is a
 // declared structure, not generic data, and is left to the hashdecl rules
+namespace {
+//! holds the list or hash of a weak reference with a reference of its own while a call argument is checked (qore#7198)
+/** The release, which can run destructors, is out of the path of the other values, as is the ExceptionSink that it
+    needs.
+*/
+struct QoreCallArgWeakTarget {
+    AbstractQoreNode* target = nullptr;
+
+    DLLLOCAL ~QoreCallArgWeakTarget() {
+        if (target) [[unlikely]] {
+            release(target);
+        }
+    }
+
+    DLLLOCAL static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
+        ExceptionSink xsink;
+        target->deref(&xsink);
+    }
+};
+}
+
+// the list or hash of a weak reference is held by \a weak_target with a reference of its own, or is a new empty one if
+// it was freed (qore#7198)
 static QORE_INTERN_ALWAYS_INLINE void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
-        bool& untyped) {
+        bool& untyped, QoreCallArgWeakTarget& weak_target) {
     l = nullptr;
     h = nullptr;
     untyped = false;
@@ -6697,15 +6890,25 @@ static QORE_INTERN_ALWAYS_INLINE void qore_get_call_arg_container(const QoreValu
         case NT_LIST:
             l = n.get<const QoreListNode>();
             break;
-        case NT_WEAKREF_LIST:
-            l = n.get<const WeakListReferenceNode>()->get();
+
+        case NT_WEAKREF_LIST: {
+            QoreListNode* target = n.get<const WeakListReferenceNode>()->lock();
+            weak_target.target = target;
+            l = target;
             break;
+        }
+
         case NT_HASH:
             h = n.get<const QoreHashNode>();
             break;
-        case NT_WEAKREF_HASH:
-            h = n.get<const WeakHashReferenceNode>()->get();
+
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* target = n.get<const WeakHashReferenceNode>()->lock();
+            weak_target.target = target;
+            h = target;
             break;
+        }
+
         default:
             return;
     }
@@ -6795,7 +6998,8 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArgImpl(const QoreTypeInfo* t
     const QoreListNode* l;
     const QoreHashNode* h;
     bool untyped;
-    qore_get_call_arg_container(n, l, h, untyped);
+    QoreCallArgWeakTarget weak_target;
+    qore_get_call_arg_container(n, l, h, untyped, weak_target);
     // empty untyped containers keep the rule of issue #2647, and empty typed containers have no elements to check
     if ((!l && !h) || (l ? l->empty() : h->empty()) || !hasType(ti)) {
         qore_type_result_e rv = policy.value(ti, n, true);

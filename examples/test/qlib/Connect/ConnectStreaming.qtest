@@ -1248,7 +1248,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         string label = sprintf("%s stress-server-stream(%d)", protocol.upr(), iterations);
 
         # Run a warmup request to measure throughput; skip if too slow (valgrind)
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         {
             HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
             on_exit delete mgr;
@@ -1258,7 +1258,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 testSkip(label + ": warmup failed with status " + resp.status_code);
             }
         }
-        int warmup_ms = (now_us() - start).durationMilliseconds();
+        int warmup_ms = (clock_get_monotonic_us() - start) / 1000;
         if (warmup_ms > 5000) {
             testSkip(label + ": too slow (valgrind?), warmup took " + warmup_ms + "ms");
         }

@@ -1607,6 +1607,14 @@ DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, i
 */
 DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 
+//! raises ILLEGAL-EXPRESSION and returns -1 if the calling code is restricted from terminal I/O (qore#7140)
+/** the check of the builtins that use the process's terminal (the standard output and error files, print(),
+    printf() and vprintf(), the standard output and error streams, TermIOS::getWindowSize()) for the code that library
+    code serves: a module is a capability, but the terminal is not lent to code that is restricted from it; see
+    SandboxManager::isTerminalIoAllowed()
+*/
+DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink);
+
 //! The most bytes read or written with one read(2) or write(2) call of a File, a file stream, or the standard streams
 /** macOS refuses a read or write of more than \c INT_MAX bytes with \c EINVAL, and Linux reads or writes at most
     about 2 GiB at once; a longer read or write is made in parts of this size
@@ -1695,6 +1703,11 @@ DLLLOCAL int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSi
 */
 DLLLOCAL int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation);
 DLLLOCAL void delete_global_variables();
+//! tags the strings of ARGV and QORE_ARGV with the default encoding once it is set (qore#7045)
+/** qore_setup_argv() makes them from the command line before the library is initialized, when the default encoding is
+    not set yet; the bytes of the command line are in the default encoding of the process
+*/
+DLLLOCAL void qore_tag_argv_encoding();
 //! releases ARGV and QORE_ARGV, which qore_setup_argv() makes before qore_init(), before a startup error ends the
 //! process with exit() (qore#7000)
 DLLLOCAL void qore_release_argv();
@@ -1943,9 +1956,11 @@ DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
 
 //! returns a copy of the options of a datasource with the value of each option that cannot be shown masked (qore#7070)
-/** The value of an option is kept only if \a driver is a driver already loaded that declares the option and does not
-    declare it sensitive (\ref QDBI_OPT_SENSITIVE); every other value is replaced with \ref QORE_DS_MASK (fail-closed:
-    an option of a driver that is not loaded or that the driver does not declare is masked); no module is loaded;
+/** The value of an option is shown only as in q_ds_masked_hash(): if \a driver is a driver already loaded that
+    registers the option with option flags without \ref QDBI_OPT_SENSITIVE, if its name names no credential, and only
+    as a string, if it can be shown in a datasource string; every other value is replaced with \ref QORE_DS_MASK
+    (fail-closed: an option of a driver that is not loaded, or that the driver registers without flags or does not
+    register, is masked); no module is loaded;
     never raises an exception
 
     @param driver the driver name, if any
@@ -1955,15 +1970,6 @@ DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& 
 */
 DLLLOCAL QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts);
 
-//! returns true if the database name of a datasource of the driver can be shown (qore#7275)
-/** Only the database name of a driver already loaded that does not declare \ref DBI_CAP_SENSITIVE_DBNAME can be
-    shown (fail-closed: the database name of a driver that is not loaded, or of an invalid driver name, is masked); no
-    module is loaded; never raises an exception
-
-    @param driver the driver name, if any
-*/
-DLLLOCAL bool q_dbi_dbname_showable(const char* driver);
-
 //! appends the masked description of a datasource hash for a message (qore#6988)
 /** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
     \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
@@ -1971,6 +1977,77 @@ DLLLOCAL bool q_dbi_dbname_showable(const char* driver);
     an integer; never raises an exception
 */
 DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
+
+//! the database name is shown in a masked datasource (see q_ds_masked_hash()); a db:// safe URL shows it (qore#7017)
+#define QDS_MASK_SHOW_DB (1 << 0)
+//! the character encoding and the option names are shown in a masked datasource, with the option values that can be shown
+/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017); only the
+    value of an option that the driver, already loaded, registers with option flags without declaring it sensitive,
+    and whose name names no credential, is shown (qore#7070)
+*/
+#define QDS_MASK_SHOW_OPTIONS (1 << 1)
+
+//! returns the masked form of a datasource hash as a hash (qore#7016, qore#7017)
+/** The hash has the keys of a datasource hash, with the masking of q_ds_append_masked_flags():
+    - \c "type": the driver name, or \ref QORE_DS_MASK if it is not a valid driver name
+    - \c "user": always \ref QORE_DS_MASK, whether a user is set or not
+    - \c "db": the database name in UTF-8 with \ref QDS_MASK_SHOW_DB if it can be only a database name (valid in its
+      encoding, with no control or bidirectional formatting character, no separator of a datasource string, and no
+      \c "=", \c ";" or \c "://", as a connection string with credentials has), otherwise always \ref QORE_DS_MASK
+    - \c "charset": the encoding, with \ref QDS_MASK_SHOW_OPTIONS only, if it is a valid encoding name
+    - \c "host" and \c "port": as in q_ds_append_masked()
+    - \c "options": with \ref QDS_MASK_SHOW_OPTIONS only: the option names, each with the value
+      \ref QORE_DS_MASK, except an option that the driver, if it is already loaded, registers with option flags
+      without \ref QDBI_OPT_SENSITIVE and whose name names no credential, whose value is shown as a string if it is a
+      string, a number or a boolean whose string form has only printable ASCII characters and no separator of a
+      datasource string or of its option block (q_dbi_shown_option(); qore#7070; fail-closed: every option of a driver
+      that is not loaded, an option registered without flags or not registered, an option whose name names a
+      credential and a sensitive option are masked, and the driver is never loaded); if a name is not a valid option
+      name, the value of \c "options" is \ref QORE_DS_MASK instead
+
+    The password is never in the hash.  Never raises an exception; values are read with QoreStringDataHelper, so
+    inline short strings are read as well.
+
+    @param h the datasource hash, if any
+    @param flags a combination of QDS_MASK_* flags
+*/
+DLLLOCAL QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags);
+
+//! appends the masked description of a datasource hash with the given flags (qore#7016, qore#7017)
+/** The description has the form
+    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=value,...}]</tt>, made from
+    q_ds_masked_hash(); with no flags, it is identical to the description of q_ds_append_masked_hash().  A separate
+    name, so that a call with flags never resolves to an overload of q_ds_append_masked().
+*/
+DLLLOCAL void q_ds_append_masked_flags(QoreString& str, const QoreHashNode* h, unsigned flags);
+
+//! appends the masked description of a datasource string with the given flags (qore#7016, qore#7017)
+/** As q_ds_append_masked_string_desc() with no flags: a string that cannot be parsed, or whose option block has an
+    \c '@', is described by its driver name only
+*/
+DLLLOCAL void q_ds_append_masked_string_flags(QoreString& str, const QoreString& ds, unsigned flags);
+
+//! returns the masked form of a datasource string as a hash (qore#7016, qore#7017)
+/** As q_ds_masked_hash(); a string that cannot be parsed, or whose option block has an \c '@', gives a hash with
+    only \c "type": the driver name, or \ref QORE_DS_MASK
+*/
+DLLLOCAL QoreHashNode* q_ds_masked_string_hash(const QoreString& ds, unsigned flags);
+
+//! sets the name of the connection that a datasource was created for, once (qore#7016)
+/** @return 0 for OK, -1 if \c DATASOURCE-CONNECTION-NAME-ERROR was raised (an empty name, or another name is set)
+*/
+DLLLOCAL int q_ds_set_connection_name(Datasource& ds, const QoreString& name, ExceptionSink* xsink);
+
+//! returns the name of the connection that a datasource was created for with a reference, or nullptr (qore#7016)
+DLLLOCAL QoreStringNode* q_ds_get_connection_name(const Datasource& ds);
+
+//! returns the QDS_MASK_* flags for the options of mask_datasource() and mask_datasource_hash()
+/** The options are \c "show_db" (\ref QDS_MASK_SHOW_DB) and \c "show_options" (\ref QDS_MASK_SHOW_OPTIONS), each
+    taken as a boolean value.
+
+    @return 0 for OK, -1 if \c DATASOURCE-MASK-ERROR was raised for an unknown option (whose name is not shown)
+*/
+DLLLOCAL int q_ds_mask_flags(const QoreHashNode* opts, unsigned& flags, ExceptionSink* xsink);
 
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the

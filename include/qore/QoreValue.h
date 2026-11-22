@@ -578,7 +578,7 @@ public:
     /** An opaque reference is a strong reference that the deterministic garbage collector does not
         follow; see @ref opaque_assignment_operator.  It is not a pointer value: isPointer() and
         getInternalNode() deliberately do not see through it, which is what keeps it out of the
-        collector's graph.  Use resolveIndirect() to obtain the referenced value.
+        collector's graph.  Use resolveIndirect() or resolveIndirectRef() to obtain the referenced value.
 
         @since %Qore 3.0
     */
@@ -864,8 +864,8 @@ public:
         the type gets a null pointer for it; this call returns the target as an ordinary value.
         Every other value is returned unchanged, so it is safe to call on anything.
 
-        Binary modules that iterate containers should call this on each value before dispatching on
-        its type:
+        Binary modules that iterate containers and read only the type of each value call this on each value before
+        dispatching on its type (those that walk or keep the target call resolveIndirectRef() instead):
 
         @code
         QoreValue v = i.get().resolveIndirect();
@@ -879,9 +879,56 @@ public:
 
         @note a weak reference whose target has already been deleted resolves to NOTHING
 
+        @note the list or hash of a weak reference is returned without a reference of its own: another thread can
+        free it at any time, as a weak reference does not keep the entries of its list or hash; code that walks the
+        entries of the target, or keeps the target or anything read from it, must use resolveIndirectRef() instead;
+        this call is for reads of the type of the value or the size of a list or hash, and of values that the caller
+        knows to be referenced (an opaque reference held by a container that the caller holds, for example)
+
+        @see resolveIndirectRef()
+
         @since %Qore 3.0
     */
     DLLEXPORT QoreValue resolveIndirect() const;
+
+    //! Returns the target of a weak or opaque reference, or any other value, with a reference of its own
+    /** Resolves the same target as resolveIndirect(), but the value returned always has a reference of its own,
+        which the caller must release, so it stays valid while another thread releases the last reference to the
+        target.  Binary modules that walk the entries of a list or hash that they reach through a container, or that
+        keep the target, call this on each value before dispatching on its type:
+
+        @code
+        ValueHolder v(i.get().resolveIndirectRef(), xsink);
+        switch (v->getType()) {
+            case NT_LIST: {
+                // the list is valid while v holds it
+                ConstListIterator li(v->get<const QoreListNode>());
+                ...
+            }
+        }
+        @endcode
+
+        A weak reference (\c :=) to a list or hash does not keep its entries: once the last reference to the list or
+        hash has been released, another thread can be freeing them, and resolveIndirect() returns the list or hash
+        as it is being freed.  This call reads it as the language reads a list or hash through a weak reference: as a
+        new reference to it, or, once its free has started, as a new empty list or hash of its type that cannot be
+        changed (a change raises \c LIST-ERROR or \c HASH-ERROR).
+
+        @return a new reference to:
+        - the list or hash of a weak reference, or a new empty one that cannot be changed if it was freed;
+        - the object of a weak reference, or NOTHING if the object has been deleted or its last reference has been
+          released;
+        - the object, hash or list of an opaque reference, as an ordinary value;
+        - the value itself for any other value
+
+        @note the caller must release the value returned, for example with a ValueHolder, which needs an
+        ExceptionSink: releasing the last reference to an object runs its destructor
+
+        @see resolveIndirect()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue resolveIndirectRef() const;
 
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {

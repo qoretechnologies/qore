@@ -127,6 +127,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         #! optional code for default post-processing of objects created by getImpl()
         /** must take the connection object and the object created as arguments
+
+            @deprecated use setPostProcessing(), whose code sandboxed code cannot read: any code can read this public
+            member, also the code of sandboxed tenants, which would get the host's code (qore#6749); code set with
+            setPostProcessing() is used instead of the code set here
         */
         static *code post_processing;
 
@@ -302,6 +306,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             getConnectionDomainsImpl())
         */
         transient int creator_restrictions = AbstractConnection::getCreatorRestrictions();
+
+        #! The proof that the code that created the connection may create an HTTP client connection manager (qore#7262)
+        /** Taken when the connection is created, also when it is deserialized, and bound to the connection's URL then;
+            get() and getAsync() grant it to the next HTTP client created in their thread (see
+            HttpClientIo::HttpClientCreatorProofGrant), so a connection that trusted code created and lent creates
+            clients for the code that uses it that are the trusted code's, which reach only the connection's target.
+            It is never handed to the connection's class
+        */
+        transient *HttpClientIo::HttpClientCreatorProof creator_proof;
     }
 
     #! creates the AbstractConnection object
@@ -488,6 +501,8 @@ conn.checkSandboxAccess(True);
     #! Returns a native file location handler object for this connection
     /** @return an object inheriting \c FileLocationHandler::AbstractFileLocationHandler
 
+        A connection that reads its configured TLS files remains subject to the active sandbox's filesystem policy.
+
         @throw FILE-LOCATION-UNSUPPORTED this connection does not provide a native file location handler
 
         @note The return type is declared as @ref object_type "object" rather than as the concrete handler class
@@ -511,6 +526,42 @@ conn.checkSandboxAccess(True);
             checkSandboxAccess(True);
         }
         return getFileLocationHandlerImpl();
+    }
+
+    #! Sets or clears the default post-processing code of the objects that every connection creates
+    /** The code is called with the connection object and the object created by getImpl() or getAsyncImpl() each time
+        get() or getAsync() of any connection returns an object, for every caller.
+
+        @param callback the code to call, or @ref nothing "NOTHING" to clear it; it takes the connection object
+        and the object created as arguments
+
+        @throw SANDBOX-REGISTRATION-ERROR the calling code is sandboxed or acts for sandboxed code: the code is
+        process-wide and runs for every caller
+
+        @note code set here is used instead of the code of the deprecated @ref post_processing member, which any code
+        can read
+
+        @since ConnectionProvider 3.1
+    */
+    static setPostProcessing(*code callback) [dom=PROCESS_CONTROL] {
+        # process-wide: it runs for every caller, of other tenants and of trusted code (qore#6749)
+        SandboxManager::checkProcessWideRegistration("set the default post-processing code of connections");
+        ConnectionPostProcessing::callback = callback;
+    }
+
+    #! Returns the default post-processing code of the objects that every connection creates
+    /** @return the code set with setPostProcessing(), else the code of the deprecated @ref post_processing member, or
+        @ref nothing "NOTHING" if neither is set or if the calling code is sandboxed or acts for sandboxed code, which
+        does not get the host's code (see @ref sandbox_process_wide_registries)
+
+        @since ConnectionProvider 3.1
+    */
+    static *code getPostProcessing() [dom=PROCESS_CONTROL] {
+        # the code is process-wide and configured by the host: not handed to sandboxed code (qore#6749)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return ConnectionPostProcessing::callback ?? post_processing;
     }
 
     #! Resolves a file location path against a connection base path, rejecting any result outside the base
@@ -691,6 +742,23 @@ conn.checkSandboxAccess(True);
         return h;
     }
 
+    #! Returns the options of the connection without the values of its sensitive options
+    /** Used for the information (getInfo() without the \c with_passwords option) and the ping results of the
+        connection: the base implementation removes the options that the connection scheme declares sensitive; a
+        connection whose options can hold credentials that its scheme does not declare reimplements it, and calls the
+        base implementation to remove the declared ones (qore#7017, qore#7070)
+
+        @param opts the options of the connection
+
+        @return the options to show
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<auto> getSafeOptions(*hash<auto> opts) {
+        map remove opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+        return opts;
+    }
+
     #! Returns a @ref ConnectionDataInfo hash of information about the connection
     /** @param opts connection information options; options are connection-specific; the only universal option is
         \c with_passwords: if @ref True, then passwords are returned in the info hash
@@ -828,11 +896,14 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
+        # the HTTP client that the connection creates for restricted code that was lent the connection is the
+        # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
+        # restricted code that runs while it calls (a callback, for example) can take the connection's
+        *HttpClientIo::HttpClientCreatorProofGrant grant =
+            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
         if (!connect) {
             object o = getImpl(False, rtopts);
-            if (post_processing) {
-                post_processing(self, o);
-            }
+            postProcess(o);
             return o;
         }
 
@@ -843,9 +914,7 @@ conn.checkSandboxAccess(True);
 
         try {
             object o = getImpl(True, rtopts);
-            if (post_processing) {
-                post_processing(self, o);
-            }
+            postProcess(o);
             return o;
         } catch (hash<ExceptionInfo> ex) {
             status = sprintf("%s: %s", ex.err, ex.desc);
@@ -879,11 +948,14 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
+        # the HTTP client that the connection creates for restricted code that was lent the connection is the
+        # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
+        # restricted code that runs while it calls (a callback, for example) can take the connection's
+        *HttpClientIo::HttpClientCreatorProofGrant grant =
+            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
-            if (post_processing) {
-                post_processing(self, o);
-            }
+            postProcess(o);
             return o;
         }
 
@@ -892,13 +964,20 @@ conn.checkSandboxAccess(True);
 
         try {
             object o = getAsyncImpl(True, rtopts);
-            if (post_processing) {
-                post_processing(self, o);
-            }
+            postProcess(o);
             return o;
         } catch (hash<ExceptionInfo> ex) {
             status = sprintf("%s: %s", ex.err, ex.desc);
             rethrow;
+        }
+    }
+
+    #! Calls the default post-processing code, if any, with the object created (see setPostProcessing())
+    private:internal postProcess(object o) {
+        # read here, as the code that the host set is used for every caller
+        *code pp = ConnectionPostProcessing::callback ?? post_processing;
+        if (pp) {
+            pp(self, o);
         }
     }
 
@@ -1233,23 +1312,6 @@ conn.checkSandboxAccess(True);
         return Qore::parse_url(url);
     }
 
-    #! Returns the options of the connection that can be shown, for the information and ping results of the connection
-    /** @param opts the options of the connection
-
-        @return the options without the sensitive ones; this base implementation removes the options that the
-        connection scheme declares \c sensitive
-
-        Called by getInfo() without \c with_passwords and by ping(); reimplement this method to also remove or mask
-        the options that the connection scheme does not declare, but that can hold a credential (the call of the base
-        implementation removes the declared ones)
-
-        @since %ConnectionProvider 3.1
-    */
-    private *hash<auto> getSafeOptions(*hash<auto> opts) {
-        map remove opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
-        return opts;
-    }
-
     #! creates a "safe" URL string with password information removed
     /** @param urlh a parsed hash (as returned from parseUrl()
         @return string with safe URL
@@ -1363,6 +1425,8 @@ scheme://user:pass@hostname:port/path
 
         opts = validateOptions(getHash(config, "opts") ?? {});
         orig_opts = opts;
+        # the proof of the code that creates the connection, bound to its URL and proxy (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(url, {"proxy": opts.proxy});
 
         if (opts.disable_automatic_pings) {
             disable_automatic_pings = True;
@@ -1485,13 +1549,14 @@ scheme://user:pass@hostname:port/path
         transient_info = {};
         sandbox_check = new DataProvider::DataProviderSandboxCheck();
         creator_restrictions = AbstractConnection::getCreatorRestrictions();
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(members.url, {"proxy": members.opts.proxy});
         checkCreation(members.name);
         # the transient and internal members are the deserializing process's own, never the serialized data's
         self += members - TransientMembers;
     }
 
     #! The members that deserializeMembers() assigns itself
-    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions");
+    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions", "creator_proof");
 
     #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
     const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);
@@ -1541,6 +1606,17 @@ scheme://user:pass@hostname:port/path
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         throw "CONNECTION-ASYNC-UNSUPPORTED",
             sprintf("connection type %y does not support async I/O", getType());
+    }
+}
+
+#! The default post-processing code of connections (not public: only the module's own code uses it)
+/** Set by trusted code with AbstractConnection::setPostProcessing(); AbstractConnection::getPostProcessing() does not
+    hand it to sandboxed code (qore#6749)
+*/
+class ConnectionPostProcessing {
+    public {
+        #! the code, if any
+        static *code callback;
     }
 }
 } # ConnectionProvider namespace

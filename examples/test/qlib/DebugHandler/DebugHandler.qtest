@@ -49,12 +49,12 @@ class WsEventCollector {
 
     #! Wait for at least n events with timeout (event-driven via Queue)
     bool waitForEvents(int n, timeout to) {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         while (True) {
             if (size() >= n) {
                 return True;
             }
-            if ((now_us() - start) > to) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > to) {
                 return False;
             }
             try {
@@ -69,7 +69,7 @@ class WsEventCollector {
 
     #! Wait for an event matching type/cmd/event_name after index 'after' (event-driven via Queue)
     *hash<auto> waitForEvent(string type, *string cmd, *string event_name, int after, timeout to) {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         while (True) {
             {
                 m.lock();
@@ -82,7 +82,7 @@ class WsEventCollector {
                     }
                 }
             }
-            if ((now_us() - start) > to) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > to) {
                 break;
             }
             try {
@@ -168,8 +168,8 @@ public class DebugHandlerTest inherits QUnit::Test {
         wsc.send(make_yaml(send_cmd));
 
         # wait for response with matching uid (event-driven via Queue)
-        date start = now_us();
-        while ((now_us() - start) < to) {
+        date start = microseconds(clock_get_monotonic_us());
+        while ((microseconds(clock_get_monotonic_us()) - start) < to) {
             list<auto> evts = collector.getEvents();
             for (int i = before; i < evts.size(); i++) {
                 if (evts[i].uid == uid) {

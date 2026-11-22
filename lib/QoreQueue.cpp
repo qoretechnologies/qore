@@ -190,7 +190,7 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
     // if there is no data, then wait for condition variable
     while (!head) {
         if (!err.empty()) {
-            xsink->raiseException(err.c_str(), desc->stringRefSelf());
+            raiseErrorIntern(xsink);
             return QW_ERROR;
         }
 
@@ -236,7 +236,7 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
     }
 
     if (!err.empty()) {
-        xsink->raiseException(err.c_str(), desc->stringRefSelf());
+        raiseErrorIntern(xsink);
         return QW_ERROR;
     }
 
@@ -249,7 +249,7 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
     // if the queue is full, then wait for condition variable
     while (max > 0 && getLenIntern() >= max) {
         if (!err.empty()) {
-            xsink->raiseException(err.c_str(), desc->stringRefSelf());
+            raiseErrorIntern(xsink);
             return QW_ERROR;
         }
 
@@ -291,7 +291,7 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
     }
 
     if (!err.empty()) {
-        xsink->raiseException(err.c_str(), desc->stringRefSelf());
+        raiseErrorIntern(xsink);
         return QW_ERROR;
     }
 
@@ -341,6 +341,14 @@ void qore_queue_private::insertIntern(QoreValue v) {
     }
 }
 
+void qore_queue_private::raiseErrorIntern(ExceptionSink* xsink) {
+    xsink->raiseException(err.c_str(), desc->stringRefSelf());
+    // the text that sandboxed code chose is reported marked, whoever reads from or writes to the queue (qore#7139)
+    if (err_sandboxed) {
+        qore_mark_last_exception_sandboxed(*xsink, err_pgm_id);
+    }
+}
+
 int qore_queue_private::checkWriteIntern(ExceptionSink* xsink, bool always_error) {
     if (getLenIntern() == Queue_Deleted) {
         if (always_error) {
@@ -349,7 +357,7 @@ int qore_queue_private::checkWriteIntern(ExceptionSink* xsink, bool always_error
         return -1;
     }
     if (!err.empty()) {
-        xsink->raiseException(err.c_str(), desc->stringRefSelf());
+        raiseErrorIntern(xsink);
         return -1;
     }
     return 0;
@@ -384,7 +392,7 @@ QoreQueue::TryPushResult qore_queue_private::tryPush(ExceptionSink* xsink, QoreV
         if (getLenIntern() == Queue_Deleted) {
             rv = QoreQueue::QTP_DELETED;
         } else if (!err.empty()) {
-            xsink->raiseException(err.c_str(), desc->stringRefSelf());
+            raiseErrorIntern(xsink);
             rv = QoreQueue::QTP_REFUSED;
         } else if (!ignore_max && max > 0 && getLenIntern() >= max) {
             // the caller keeps the value; the next value taken tells the room listeners
@@ -687,6 +695,9 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
 }
 
 void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_desc, QoreObject* self, ExceptionSink* xsink) {
+    // whether code that is sandboxed or acts for sandboxed code chooses the text (qore#7139); not under the lock
+    qore_program_id_t n_err_pgm_id = 0;
+    const bool n_err_sandboxed = qore_code_origin_sandboxed(&n_err_pgm_id);
     {
         // tells the room listeners that the queue no longer takes values, after the lock (issue #5859)
         QoreQueueRoomNotifier rn;
@@ -706,6 +717,8 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
             desc->deref();
         }
         desc = n_desc->stringRefSelf();
+        err_sandboxed = n_err_sandboxed;
+        err_pgm_id = n_err_pgm_id;
 
         // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
         // Queue object is uncounted too
@@ -737,6 +750,8 @@ void qore_queue_private::clearError() {
     }
 
     err.clear();
+    err_sandboxed = false;
+    err_pgm_id = 0;
     if (desc) {
         desc->deref();
         desc = nullptr;

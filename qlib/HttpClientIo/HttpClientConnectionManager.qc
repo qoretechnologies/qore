@@ -421,6 +421,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! Credentials for target TLS handshakes, omitted from the subclass-visible options
+        transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
+
+        #! Canonical origins fixed by the credential owner
+        hash<string, bool> client_credential_origins;
+
         #! Lock for manager id allocation.
         static Mutex manager_id_lock();
 
@@ -429,6 +435,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             creations (see HttpClientCallerExemption)
         */
         bool creator_checked;
+
+        #! The proof that the manager was created with for code that could not create one itself (qore#7262)
+        /** The manager then creates connections only to the origins that the proof allows: the target of the client
+            that its trusted creator gave
+        */
+        *HttpClientCreatorProof bound_proof;
     }
 
     #! Creates a new connection manager with the given options
@@ -439,9 +451,62 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         HttpClientConnectionManager::checkCreator(opts);
+        initManager(opts);
+    }
+
+    #! Creates a new connection manager for a client whose creator passed the caller check (qore#7262)
+    /** A client that creates its manager lazily (when it connects or reconnects, or again when it is closed) gives the
+        proof that it took with @ref HttpClientIo::HttpClientCreatorProof::get() "HttpClientCreatorProof::get()" when
+        it was created, so the code that created the client decides, not the code that uses it
+
+        @param opts configuration options including protocol selection
+        @param proof the proof of the code that created the client
+
+        @throw PERMISSION-DENIED the proof was not issued by @ref HttpClientIo::HttpClientCreatorProof
+        "HttpClientCreatorProof", or CA certificate locations are given and the code that took the proof was
+        restricted from the \c FILESYSTEM functional domain
+
+        @since HttpClientIo 1.0
+    */
+    constructor(*hash<HttpClientConnectionManagerOptions> opts, HttpClientCreatorProof proof) {
+        if (!HttpClientCreatorProof::genuine(proof)) {
+            throw "PERMISSION-DENIED", "the HTTP client creator proof given was not issued by HttpClientCreatorProof";
+        }
+        # code that could create a manager itself does not need the proof: the manager is the one that it would create
+        try {
+            HttpClientConnectionManager::checkCreator(opts);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PERMISSION-DENIED") {
+                rethrow;
+            }
+            if (!proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+                throw "PERMISSION-DENIED", "the code that created the HTTP client did not give these CA certificate "
+                    "locations, or could not give a connection manager any, as it was restricted from the FILESYSTEM "
+                    "functional domain";
+            }
+            # the manager creates connections only to the target that the proof is bound to
+            bound_proof = proof;
+        }
+        initManager(opts);
+    }
+
+    #! Initializes the manager once its creator was checked
+    private:internal initManager(*hash<HttpClientConnectionManagerOptions> opts) {
         creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
+        # a trust store verifies server certificates: it implies verification unless a verification mode is given, so
+        # that it is not ignored (qoretechnologies/qore#7248)
+        if (self.opts.ssl_trust_store && !exists self.opts.ssl_verify_mode) {
+            self.opts.ssl_verify_mode = SSL_VERIFY_PEER;
+        }
         self.logger = self.opts.logger;
+        origin_tls_credentials = remove self.opts.origin_tls_credentials;
+        if (origin_tls_credentials) {
+            foreach string url in ((origin_tls_credentials.url,) + (origin_tls_credentials.additional_origins ?? ())) {
+                hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(url);
+                client_credential_origins{tlsOriginKey(target)} = True;
+            }
+        }
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
             throw "HTTPCLIENT-OPTION-ERROR",
                 sprintf("invalid protocol %y: must be one of %y",
@@ -595,10 +660,25 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Grants the exemption of the manager's own creations, if its creator passed its caller check (qore#6981)
     /** @throw PERMISSION-DENIED the creator of the manager did not pass its caller check
     */
-    private:internal HttpClientCallerExemption getExemption() {
+    private:internal HttpClientCallerExemption getExemption(hash<auto> url_info, *hash<auto> proxy_info) {
         if (!creator_checked) {
             throw "PERMISSION-DENIED", "the HTTP client connection manager was not created by code that passed its "
                 "caller check, so it does not create connections";
+        }
+        # a manager created with a proof for restricted code creates connections only with what the proof is bound
+        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262)
+        if (bound_proof) {
+            checkBoundOrigin(url_info);
+            if (!bound_proof.allowsProxy(proxy_info)) {
+                throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
+                    "target was given by trusted code; it does not create connections through another proxy than "
+                    "the client's, or without the client's proxy";
+            }
+            if (!bound_proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+                throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
+                    "target was given by trusted code; it does not create connections with other CA certificate "
+                    "locations";
+            }
         }
         return new HttpClientCallerExemption();
     }
@@ -615,6 +695,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns the AsyncSocketIoController
     AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns the in-memory trust store that server certificates are verified against, if any
+    /** The object gives out no certificate; see @ref Qore::SSLTrustStore "SSLTrustStore"
+
+        @since %HttpClientIo 1.0 (qoretechnologies/qore#7248)
+    */
+    *SSLTrustStore getSslTrustStore() {
+        return opts.ssl_trust_store;
     }
 
     #! Returns the cookie jar (NOTHING if cookies are disabled)
@@ -2263,6 +2352,34 @@ printf("%d connection(s) migrated\n", migrated);
         return !url_info.port && url_info.host =~ /^\//;
     }
 
+    # Include the scheme for UNIX socket origins too.
+    private:internal static string tlsOriginKey(hash<UrlInfo> target) {
+        return target.protocol + "|" + HttpRedirectFollower::getOriginKey(target);
+    }
+
+    #! Reports whether another client using this transport must share its TLS origin policy
+    bool hasBoundTlsCredentials() {
+        return exists origin_tls_credentials;
+    }
+
+    #! Applies the connection's credential policy to a REST client copy sharing this transport
+    nothing checkTlsCredentialCopy(string url) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
+        }
+        HttpClientConnectionManager::checkTlsCredentialOrigin(url);
+    }
+
+    #! Checks that the URL can be used with this manager's connection-owned TLS credentials
+    nothing checkTlsCredentialOrigin(string url) {
+        if (origin_tls_credentials) {
+            hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(url);
+            if (!client_credential_origins.hasKey(tlsOriginKey(target))) {
+                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origins";
+            }
+        }
+    }
+
     #! Parses a request URL and applies the default scheme and port
     /** A UNIX domain socket target keeps port 0 and defaults to \c http; plain HTTP/1.1 is the only transport
         available for it.
@@ -2276,6 +2393,7 @@ printf("%d connection(s) migrated\n", migrated);
         @throw HTTPCLIENT-PROXY-ERROR a UNIX domain socket target was requested with a proxy configured
     */
     private hash<UrlInfo> parseRequestUrl(string url) {
+        HttpClientConnectionManager::checkTlsCredentialOrigin(url);
         hash<UrlInfo> url_info;
         try {
             url_info = parse_url(url);
@@ -2299,6 +2417,7 @@ printf("%d connection(s) migrated\n", migrated);
             }
             # connections take an integer port; 0 marks the UNIX domain socket target
             url_info.port = 0;
+            checkBoundOrigin(url_info);
             return url_info;
         }
         if (!url_info.protocol) {
@@ -2311,7 +2430,21 @@ printf("%d connection(s) migrated\n", migrated);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
+        checkBoundOrigin(url_info);
         return url_info;
+    }
+
+    #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
+    /** Checked for every request, also one that a pooled connection serves (the pool is keyed by host and port), and
+        again when a connection is created
+    */
+    private:internal checkBoundOrigin(hash<auto> url_info) {
+        if (bound_proof && !bound_proof.allowsOrigin(url_info.protocol == "https", url_info.host ?? "",
+                url_info.port ?? 0)) {
+            throw "PERMISSION-DENIED", sprintf("the HTTP client connection manager was created for a client whose "
+                "target was given by trusted code; it does not create connections to %s://%s:%d",
+                url_info.protocol ?? "", url_info.host ?? "", url_info.port ?? 0);
+        }
     }
 
 
@@ -2801,7 +2934,8 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        if (alt_svc_port_map.hasKey(key)) {
+        # (a manager bound to the target of a lent client keeps its port, see HttpClientCreatorProof)
+        if (!origin_tls_credentials && !bound_proof && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
@@ -2880,15 +3014,30 @@ printf("%d connection(s) migrated\n", migrated);
         h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
+    #! Marks the individual credentials that belong only to the target TLS handshake
+    private:internal hash<auto> getTlsTarget(hash<auto> url_info) {
+        if (!origin_tls_credentials) {
+            return url_info;
+        }
+        hash<UrlInfo> target = <UrlInfo>{"protocol": url_info.protocol, "host": url_info.host, "port": url_info.port};
+        if (!client_credential_origins.hasKey(tlsOriginKey(target))) {
+            throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origins";
+        }
+        return url_info + {"bound_tls_cert": exists origin_tls_credentials.cert,
+            "bound_tls_key": exists origin_tls_credentials.key};
+    }
+
     #! Internal: creates an HTTP/1.1 connection with the exemption of the manager's own creations (qore#6981)
     /** The caller evaluates everything that the connection is given (such as the proxy authorization, which can run
         code of the manager's creator), so no other code runs while the exemption is held; see
         HttpClientCallerExemption
     */
     private:internal Http1ClientConnection newHttp1Connection(hash<auto> url_info, *hash<auto> proxy_info) {
-        HttpClientCallerExemption exemption = getExemption();
-        return new Http1ClientConnection(url_info, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
-            opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+        hash<auto> target = getTlsTarget(url_info);
+        HttpClientCallerExemption exemption = getExemption(url_info, proxy_info);
+        return new Http1ClientConnection(target, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
+            opts.accept_all_certs, proxy_info, origin_tls_credentials.cert ?? opts.client_cert,
+            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store);
     }
 
     #! Internal: creates an HTTP/2 connection with the exemption of the manager's own creations (qore#6981)
@@ -2896,20 +3045,24 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private:internal Http2ClientConnection newHttp2Connection(hash<auto> url_info, *hash<auto> proxy_info,
             bool offer_http11) {
-        HttpClientCallerExemption exemption = getExemption();
-        return new Http2ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
-            opts.ssl_verify_mode, opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk,
-            opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
+        hash<auto> target = getTlsTarget(url_info);
+        HttpClientCallerExemption exemption = getExemption(url_info, proxy_info);
+        return new Http2ClientConnection(target, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
+            origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, offer_http11);
     }
 
     #! Internal: creates an HTTP/3 connection with the exemption of the manager's own creations (qore#6981)
     /** See newHttp1Connection()
     */
     private:internal Http3ClientConnection newHttp3Connection(hash<auto> url_info, *list<int> avoid_families) {
-        HttpClientCallerExemption exemption = getExemption();
-        return new Http3ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
-            opts.ssl_verify_mode, opts.accept_all_certs, opts.client_cert, opts.client_pk, opts.ssl_ca_file,
-            opts.ssl_ca_path, NOTHING, avoid_families);
+        hash<auto> target = getTlsTarget(url_info);
+        HttpClientCallerExemption exemption = getExemption(url_info);
+        return new Http3ClientConnection(target, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+            origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, NOTHING, avoid_families);
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol
@@ -3175,6 +3328,33 @@ printf("%d connection(s) migrated\n", migrated);
         return desc;
     }
 
+    #! Internal: returns the error of a race candidate, or a stand-in for a candidate that settled without one
+    /** A candidate that is no longer connecting has an error: when it has none, the connection left the connecting
+        state without recording why (issue #6970), which is a defect of the connection.  It is reported with the
+        reason "closed without an error", and in a debug build it is also an assertion failure
+        (\c ASSERTION-ERROR), so that the defect is not hidden; a test that makes a candidate report no error with
+        the debug hook dbg_http3_client_hide_error() is exempt.
+
+        @param conn the candidate
+        @param err the candidate's error, if it has one
+        @param what the name of the protocol, for the assertion
+        @param code the error code of the stand-in
+
+        @return the candidate's error, or the stand-in if it settled without one; NOTHING if it is still connecting
+    */
+    private static *hash<auto> heSettledLegError(HttpClientConnection conn, *hash<auto> err, string what,
+            string code) {
+        if (err || !heSettled(conn)) {
+            return err;
+        }
+        @debug {
+            if (!(what == "H3" && call_function("dbg_http3_client_error_hidden"))) {
+                @assert(False);
+            }
+        }
+        return {"err": code, "desc": "closed without an error"};
+    }
+
     #! Internal: builds and throws the happy-eyeballs connect error, closing every candidate
     /** Exact behavior of the synchronous race's terminal error path: collect the
         underlying poll-op errors of the candidates, close them, and throw a
@@ -3218,6 +3398,14 @@ printf("%d connection(s) migrated\n", migrated);
         *hash<auto> h3_err = h3conn.getPollOperation().getError();
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
         *hash<auto> h1_err = h1conn ? h1conn.getPollOperation().getError() : NOTHING;
+        # a leg that is no longer connecting has an error: one that settled without it (closed before it
+        # connected, for example) is reported as such, instead of being left out of the description as if it was
+        # still pending (issue #6970); read before the legs are closed, which settles them
+        h3_err = heSettledLegError(h3conn, h3_err, "H3", "HTTP3-CLOSED");
+        h2_err = heSettledLegError(h2conn, h2_err, "H2", "HTTP2-CLOSED");
+        if (h1conn) {
+            h1_err = heSettledLegError(h1conn, h1_err, "H1", "HTTP1-CLOSED");
+        }
         heCloseLegs(h3conn, h2conn, h1conn);
 
         # a sandbox denial or a refused certificate is never retried and never hidden behind another protocol's
@@ -3538,9 +3726,23 @@ printf("%d connection(s) migrated\n", migrated);
             "to": wait_ms,
             "has_on_complete": True,
         });
-        int timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
-            HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
-        }, owner_id);
+        int timer_id;
+        try {
+            timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
+                HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
+            }, owner_id);
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"); the watch operation submitted
+            # above is canceled then, and its onComplete() takes the step of the race, which the safety timer only
+            # backs up (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            log(LoggerLevel::DEBUG, "background race safety timer not armed at the end of the process: %s: %s",
+                ex.err, ex.desc);
+            return;
+        }
         bool stale;
         {
             AutoLock al(create_mutex);

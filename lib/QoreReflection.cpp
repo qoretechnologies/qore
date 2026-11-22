@@ -897,6 +897,10 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     return -1;
 }
 
+const QoreProgram* QoreReflectionCaller::getModuleCallerProgram(ExceptionSink* xsink) const {
+    return qore_reflection_get_module_application_program(pgm, xsink);
+}
+
 bool QoreReflectionCaller::appliesMemberAccess() const {
     return member_access;
 }

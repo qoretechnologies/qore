@@ -168,6 +168,9 @@ struct Http2StreamInfo {
     */
     bool rst_submitted = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
+    //! server: true once a response has been submitted on the stream; trailers are refused before it, as they would
+    //! be a header block without :status (qoretechnologies/qore#7212)
+    bool response_submitted = false;
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
     //! True if a fast route answered the request on the I/O thread (see Http2Session::serveFastRoute()): the stream is
@@ -1267,6 +1270,9 @@ private:
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
     std::unordered_map<int32_t, size_t> stream_refused_len;
+    //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
+    //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
@@ -1338,6 +1344,36 @@ private:
     DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data);
+
+    //! Provides the data of a stream's DATA frames; dataProviderReadCallback() applies the stream's body rule to it
+    DLLLOCAL static ssize_t dataProviderReadCallbackIntern(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data);
+
+    //! The body rule of a streamed server response (qore#7212; see QoreHttpResponseBodyRule)
+    struct StreamedResponseRule {
+        //! a response without content (to HEAD, or with status 204 or 304): its data is not sent
+        bool no_body = false;
+        //! the declared length of the content, -1 if not declared
+        int64_t content_length = -1;
+        //! the bytes of content provided so far
+        uint64_t provided = 0;
+    };
+    //! The body rules of the streamed responses, by stream; erased when the stream closes
+    std::unordered_map<int32_t, StreamedResponseRule> streamed_response_rules;
+
+    //! Checks a server response's header block against the body rules; returns -1 with an exception if it is refused
+    /** The caller holds the lock
+
+        @param stream_id the stream of the response
+        @param status_code the status of the response
+        @param nva the response's header block, with :status first
+        @param body_len the length of the complete body, or -1 for a body that is streamed
+        @param rule the rule, for the caller to apply
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkResponseLocked(int32_t stream_id, int status_code, const std::vector<nghttp2_nv>& nva,
+        int64 body_len, QoreHttpResponseBodyRule& rule, ExceptionSink* xsink);
 
     //! Info about an InputStream being streamed on an HTTP/2 response
     /** @since %Qore 3.0
@@ -1461,6 +1497,11 @@ public:
     //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
     //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
     DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
+    //! Returns the bytes of the stream's buffered data that nghttp2 has taken so far (never decreases)
+    /** @return the byte count, or -1 if the session is closed or nghttp2 no longer has the stream
+    */
+    DLLLOCAL int64_t streamTakenBytes(int32_t stream_id);
 
     //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,

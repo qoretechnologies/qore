@@ -73,6 +73,10 @@ static void LoggerLevel_deserializer(QoreObject& self, const QoreHashNode* sdata
 
 //! This is the base class for logger levels
 /** This class stores the integer and string log level values
+
+    @note the builtin level objects, which the \c Level* constants of the class hold and its static methods return,
+    are shared by the whole process: no code can add members to them (\c SYSTEM-OBJECT-ERROR), so that no data
+    passes through them from one caller to another (since logger_bin 3.0)
 */
 qclass LoggerLevel [ns=Qore::Logger; arg=QoreLoggerLevel* level; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(LoggerLevel_serializer); deserializer=LoggerLevel_deserializer];
 

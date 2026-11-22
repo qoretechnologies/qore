@@ -137,13 +137,13 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
 
     #! Returns the socket and stream ID of the next HTTP/2 SSE stream
     hash<auto> waitStream() {
-        date deadline = now_us() + HangGuard;
+        date deadline = microseconds(clock_get_monotonic_us()) + HangGuard;
         AutoLock al(rm);
         while (!last) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 throw "TEST-ERROR", "the HTTP/2 SSE stream was not set up";
             }
-            rc.wait(rm, deadline - now_us());
+            rc.wait(rm, deadline - microseconds(clock_get_monotonic_us()));
         }
         return remove last;
     }

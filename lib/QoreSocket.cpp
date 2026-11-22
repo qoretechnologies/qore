@@ -139,26 +139,71 @@ static bool qore_get_http_header_value(const QoreValue& v, std::string& out) {
     return true;
 }
 
-void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out) {
-    if (!headers) {
-        return;
-    }
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        const QoreValue v = hi.get();
-        std::string value;
-        if (v.getType() == NT_LIST) {
-            // a header with several values is one field per value; the values are never combined
-            ConstListIterator li(v.get<const QoreListNode>());
-            while (li.next()) {
-                if (qore_get_http_header_value(li.getValue(), value)) {
-                    out.emplace_back(hi.getKey(), std::move(value));
-                }
+static void qore_append_http_header(const char* key, QoreValue value, qore_http_header_pairs_t& out,
+        bool strings_only = false) {
+    auto append = [&](QoreValue v) {
+        if (strings_only) {
+            if (v.getType() == NT_STRING) {
+                // Protocol controls are passed to nghttp2 as C strings.
+                out.emplace_back(key, QoreStringDataHelper(v).c_str());
             }
-        } else if (qore_get_http_header_value(v, value)) {
-            out.emplace_back(hi.getKey(), std::move(value));
+            return;
+        }
+        std::string field;
+        if (qore_get_http_header_value(v, field)) {
+            out.emplace_back(key, std::move(field));
+        }
+    };
+    if (value.getType() == NT_LIST) {
+        ConstListIterator li(value.get<const QoreListNode>());
+        while (li.next()) {
+            append(li.getValue());
+        }
+    } else {
+        append(value);
+    }
+}
+
+void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out) {
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            qore_append_http_header(hi.getKey(), hi.get(), out);
         }
     }
+}
+
+int qore_get_http2_request_headers(const QoreHashNode* headers, std::string& method, std::string& path,
+        qore_http_header_pairs_t& out, ExceptionSink* xsink) {
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
+    }
+
+    out.reserve(headers->size() + 4);
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        // Pseudo-headers are protocol controls and retain their string-only semantics.
+        size_t first = out.size();
+        qore_append_http_header(key, hi.get(), out, key[0] == ':');
+        if (key[0] == ':') {
+            std::string* control = !strcmp(key, ":method") ? &method : (!strcmp(key, ":path") ? &path : nullptr);
+            if (control) {
+                for (size_t i = first; i < out.size(); ++i) {
+                    if (!out[i].second.empty()) {
+                        *control = out[i].second;
+                    }
+                }
+            }
+        }
+    }
+    if (method.empty() || path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request '%s' header is missing or empty",
+            method.empty() ? ":method" : ":path");
+        return -1;
+    }
+    return 0;
 }
 
 static bool qore_http_is_ows(char c) {
@@ -3334,7 +3379,7 @@ public:
     DLLLOCAL QoreSocketControllerHttp2EnqueuePollOperation(QoreSocket* sock, const QoreHashNode* headers,
             const void* body_ptr, size_t body_len, bool streaming, ExceptionSink* xsink)
             : sock(sock), action(Action::Request), streaming(streaming) {
-        parseRequestHeaders(headers, xsink);
+        qore_get_http2_request_headers(headers, method, path, request_headers, xsink);
         if (body_ptr && body_len) {
             body = new BinaryNode;
             body->append(body_ptr, body_len);
@@ -3446,55 +3491,6 @@ public:
 private:
     DLLLOCAL static void setHeaders(qore_http_header_pairs_t& out, const QoreHashNode* headers) {
         qore_get_http_header_pairs(headers, out);
-    }
-
-    DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
-        if (!headers) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-            return;
-        }
-
-        request_headers.reserve(headers->size() + 4);
-        auto append = [&](const std::string& key, const char* sval) {
-            if (key == ":method") {
-                if (sval && *sval) {
-                    method = sval;
-                }
-            } else if (key == ":path") {
-                if (sval && *sval) {
-                    path = sval;
-                }
-            }
-            request_headers.emplace_back(key, sval ? sval : "");
-        };
-
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            std::string skey(key);
-            // note: header values can be held in inline short string storage (ex: "GET"), which has
-            // no QoreStringNode, so the data helper must be used to read the bytes
-            if (val.getType() == NT_STRING) {
-                append(skey, QoreStringDataHelper(val).c_str());
-            } else if (val.getType() == NT_LIST) {
-                const QoreListNode* l = val.get<const QoreListNode>();
-                for (size_t i = 0; i < l->size(); ++i) {
-                    QoreValue elem = l->retrieveEntry(i);
-                    if (elem.getType() == NT_STRING) {
-                        append(skey, QoreStringDataHelper(elem).c_str());
-                    }
-                }
-            }
-        }
-
-        if (method.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-            return;
-        }
-        if (path.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        }
     }
 
     QoreSocket* sock;
@@ -4117,6 +4113,7 @@ QoreSocket* qore_socket_ops::createAcceptedSocketImpl(QoreSocket* b, int descrip
     }
     s->priv->ssl_ca_file = b->priv->ssl_ca_file;
     s->priv->ssl_ca_path = b->priv->ssl_ca_path;
+    s->priv->setSslTrustStore(b->priv->ssl_trust_store);
     // the placement of the fields of the HTTP messages read (qore#6761)
     s->priv->http_fields_at_top_level.store(b->priv->http_fields_at_top_level.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
@@ -6083,7 +6080,8 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // set verification mode
     if (qs.ssl_verify_mode != SSL_VERIFY_NONE
             && setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target)) {
-        sslError(xsink, mname, "SSL_CTX_load_verify_locations", true, SslCall::Setup);
+        sslError(xsink, mname, qs.ssl_trust_store ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
+            SslCall::Setup);
         assert(*xsink);
         return -1;
     }
@@ -6845,7 +6843,13 @@ int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::s
         (int)accept_all_certs, target.c_str());
     int rc = 0;
     if (!accept_all_certs) {
-        if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
+        if (qs.ssl_trust_store) {
+            // an in-memory trust store: the connection takes a reference of its own on the shared, immutable store;
+            // no file is read and the environment is not consulted (qoretechnologies/qore#7248)
+            if (qs.ssl_trust_store->applyTo(ssl)) {
+                rc = -1;
+            }
+        } else if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
             // the configured CA certificates are trusted instead of the default CAs
             if (!SSL_CTX_load_verify_locations(ctx, qs.ssl_ca_file.empty() ? nullptr : qs.ssl_ca_file.c_str(),
                     qs.ssl_ca_path.empty() ? nullptr : qs.ssl_ca_path.c_str())) {
@@ -6991,6 +6995,17 @@ QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQuer
     return prev;
 }
 
+//! the transport of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers(); under
+//! qore_dbg_cares_servers_lock
+static QoreDbgCaresLocalTransport qore_dbg_cares_local_transport;
+
+QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    QoreDbgCaresLocalTransport prev = qore_dbg_cares_local_transport;
+    qore_dbg_cares_local_transport = transport;
+    return prev;
+}
+
 //! guards @ref qore_dbg_cares_hosts_file
 static std::mutex qore_dbg_cares_hosts_file_lock;
 //! the hosts file of the name lookups started from now on; empty for the system's hosts file
@@ -7127,12 +7142,17 @@ static bool qore_hosts_file_has_address(const std::vector<QoreHostsFileAddress>&
 struct QoreCaresDebugOptionStorage {
     std::vector<std::string> domains;
     std::vector<char*> domain_ptrs;
+#ifdef DEBUG
+    //! the transport of the channel's UDP sockets (see qore_dbg_cares_set_local_transport())
+    QoreDbgCaresLocalTransport transport;
+#endif
 };
 
 //! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
 /** With servers set, the channel is also given the query options of dbg_cares_set_query_options(): by default a
     timeout of a second and three tries, so that a lookup that a test makes does not depend on the options of the
-    host's resolver configuration, and the search domains and \c ndots option if the test set them.
+    host's resolver configuration, and the search domains and \c ndots option if the test set them; the transport of
+    qore_dbg_cares_set_local_transport(), if any, is returned in \a storage for qore_cares_debug_transport().
 
     @param options the options of the channel to make
     @param optmask the mask of the options set in \a options
@@ -7147,11 +7167,20 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
         std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
         servers = qore_dbg_cares_servers;
         opts = qore_dbg_cares_query_options;
+        if (!servers.empty()) {
+            storage.transport = qore_dbg_cares_local_transport;
+        }
     }
     if (!servers.empty()) {
         options.timeout = opts.timeout_ms;
         options.tries = opts.tries;
         optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+#ifdef ARES_OPT_MAXTIMEOUTMS
+        // c-ares (1.32 and later) caps the timeout of a query with its maximum timeout, 5 s by default, which would
+        // cut a longer timeout that a test sets (qore#7119)
+        options.maxtimeout = opts.timeout_ms > 5000 ? opts.timeout_ms : 5000;
+        optmask |= ARES_OPT_MAXTIMEOUTMS;
+#endif
         if (opts.domains_set) {
             storage.domains = std::move(opts.domains);
             for (std::string& d : storage.domains) {
@@ -7176,6 +7205,17 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
     return std::string();
 #endif
 }
+
+#if ARES_VERSION >= 0x012200
+//! Gives the socket functions of a channel the transport that qore_cares_debug_servers() returned, if any
+static void qore_cares_debug_transport(QoreCaresSockets& sockets, const QoreCaresDebugOptionStorage& storage) {
+#ifdef DEBUG
+    if (storage.transport.peer) {
+        sockets.setDbgLocalTransport(storage.transport.peer, storage.transport.arg);
+    }
+#endif
+}
+#endif
 
 //! Creates a c-ares channel; returns an ARES_* status
 /** c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel, so the environment
@@ -7290,7 +7330,40 @@ int QoreCaresSockets::install(ares_channel_t* channel) {
 
 #ifndef _Q_WINDOWS
 ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void* user_data) {
-    int fd = ::socket(domain, type, protocol);
+    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+    int fd;
+#ifdef DEBUG
+    // a UDP socket of a test's channel is one end of a socketpair (see setDbgLocalTransport())
+    if (self->dbg_local_peer && type == SOCK_DGRAM) {
+        int sv[2];
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sv)) {
+            return ARES_SOCKET_BAD;
+        }
+        // the end of the test is closed on exec too; this end is set up below
+        if (fcntl(sv[1], F_SETFD, FD_CLOEXEC) < 0) {
+            int err = errno;
+            ::close(sv[0]);
+            ::close(sv[1]);
+            errno = err;
+            return ARES_SOCKET_BAD;
+        }
+        try {
+            std::lock_guard<std::mutex> lg(self->lock);
+            self->dbg_local_addrs[sv[0]] = {{}, 0};
+        } catch (...) {
+            ::close(sv[0]);
+            ::close(sv[1]);
+            errno = ENOMEM;
+            return ARES_SOCKET_BAD;
+        }
+        // the other end belongs to the test from now on
+        self->dbg_local_peer(sv[1], self->dbg_local_peer_arg);
+        fd = sv[0];
+    } else
+#endif
+    {
+        fd = ::socket(domain, type, protocol);
+    }
     if (fd < 0) {
         return ARES_SOCKET_BAD;
     }
@@ -7298,6 +7371,9 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
     int fl = fcntl(fd, F_GETFL, 0);
     if (fl < 0 || fcntl(fd, F_SETFL, fl | O_NONBLOCK) < 0 || fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
         int err = errno;
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         ::close(fd);
         errno = err;
         return ARES_SOCKET_BAD;
@@ -7316,12 +7392,14 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
             return ARES_SOCKET_BAD;
         }
     }
-    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
     // nothing may be thrown into c-ares
     std::shared_ptr<QoreSharedDescriptor> owned;
     try {
         owned = qore_owned_descriptor_create(fd);
     } catch (...) {
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         ::close(fd);
         errno = ENOMEM;
         return ARES_SOCKET_BAD;
@@ -7330,6 +7408,9 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
         std::lock_guard<std::mutex> lg(self->lock);
         self->fds[fd] = owned;
     } catch (...) {
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         qore_owned_descriptor_release(owned);
         errno = ENOMEM;
         return ARES_SOCKET_BAD;
@@ -7350,6 +7431,9 @@ int QoreCaresSockets::aclose(ares_socket_t sock, void* user_data) {
                 owned = std::move(it->second);
                 self->fds.erase(it);
             }
+#ifdef DEBUG
+            self->dbg_local_addrs.erase(sock);
+#endif
         }
         if (!owned) {
             return ::close(sock);
@@ -7402,6 +7486,23 @@ int QoreCaresSockets::asetsockopt(ares_socket_t sock, ares_socket_opt_t opt, con
 
 int QoreCaresSockets::aconnect(ares_socket_t sock, const struct sockaddr* address, ares_socklen_t address_len,
         unsigned int flags, void* user_data) {
+#ifdef DEBUG
+    {
+        // a socketpair socket is connected already; the address is its peer's for c-ares
+        QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+        std::lock_guard<std::mutex> lg(self->lock);
+        auto it = self->dbg_local_addrs.find(sock);
+        if (it != self->dbg_local_addrs.end()) {
+            if (address_len > sizeof(struct sockaddr_storage)) {
+                errno = EINVAL;
+                return -1;
+            }
+            memcpy(&it->second.first, address, address_len);
+            it->second.second = address_len;
+            return 0;
+        }
+    }
+#endif
 #ifdef __APPLE__
     // TCP Fast Open (see asetsockopt()): the connection is made with the first data that c-ares sends
     if (flags & ARES_SOCKET_CONN_TCP_FASTOPEN) {
@@ -7417,11 +7518,31 @@ int QoreCaresSockets::aconnect(ares_socket_t sock, const struct sockaddr* addres
 
 ares_ssize_t QoreCaresSockets::arecvfrom(ares_socket_t sock, void* buffer, size_t length, int flags,
         struct sockaddr* address, ares_socklen_t* address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        ares_ssize_t rc = ::recv(sock, buffer, length, flags);
+        if (rc >= 0 && address && address_len) {
+            memcpy(address, &peer, std::min<size_t>(peer_len, *address_len));
+            *address_len = peer_len;
+        }
+        return rc;
+    }
+#endif
     return ::recvfrom(sock, buffer, length, flags, address, address_len);
 }
 
 ares_ssize_t QoreCaresSockets::asendto(ares_socket_t sock, const void* buffer, size_t length, int flags,
         const struct sockaddr* address, ares_socklen_t address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // the socket is connected to its peer
+        return ::send(sock, buffer, length, flags);
+    }
+#endif
     if (address) {
         return ::sendto(sock, buffer, length, flags, address, address_len);
     }
@@ -7430,13 +7551,66 @@ ares_ssize_t QoreCaresSockets::asendto(ares_socket_t sock, const void* buffer, s
 
 int QoreCaresSockets::agetsockname(ares_socket_t sock, struct sockaddr* address, ares_socklen_t* address_len,
         void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // the loopback address of the peer's family, with no port
+        struct sockaddr_storage self = {};
+        socklen_t self_len;
+        if (peer.ss_family == AF_INET6) {
+            struct sockaddr_in6* a6 = reinterpret_cast<struct sockaddr_in6*>(&self);
+            a6->sin6_family = AF_INET6;
+            a6->sin6_addr = in6addr_loopback;
+            self_len = sizeof(struct sockaddr_in6);
+        } else {
+            struct sockaddr_in* a4 = reinterpret_cast<struct sockaddr_in*>(&self);
+            a4->sin_family = AF_INET;
+            a4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            self_len = sizeof(struct sockaddr_in);
+        }
+        if (!address || !address_len) {
+            errno = EINVAL;
+            return -1;
+        }
+        memcpy(address, &self, std::min<size_t>(self_len, *address_len));
+        *address_len = self_len;
+        return 0;
+    }
+#endif
     return ::getsockname(sock, address, address_len);
 }
 
 int QoreCaresSockets::abind(ares_socket_t sock, unsigned int flags, const struct sockaddr* address,
         socklen_t address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // a socketpair socket has no address of its own to bind
+        return 0;
+    }
+#endif
     return ::bind(sock, address, address_len);
 }
+
+#ifdef DEBUG
+bool QoreCaresSockets::getDbgLocalAddr(int sock, struct sockaddr_storage& addr, socklen_t& len) {
+    std::lock_guard<std::mutex> lg(lock);
+    auto it = dbg_local_addrs.find(sock);
+    if (it == dbg_local_addrs.end()) {
+        return false;
+    }
+    addr = it->second.first;
+    len = it->second.second;
+    return true;
+}
+
+void QoreCaresSockets::dbgForgetLocal(int sock) {
+    std::lock_guard<std::mutex> lg(lock);
+    dbg_local_addrs.erase(sock);
+}
+#endif
 
 unsigned int QoreCaresSockets::aif_nametoindex(const char* ifname, void* user_data) {
     return if_nametoindex(ifname);
@@ -7713,6 +7887,7 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     }
 #if ARES_VERSION >= 0x012200
     // the channel's sockets stay open while an async I/O thread has them registered
+    qore_cares_debug_transport(sockets, debug_storage);
     rc = sockets.install(channel);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
@@ -8604,6 +8779,7 @@ private:
         }
 #if ARES_VERSION >= 0x012200
         // the channel's sockets stay open while an async I/O thread has them registered
+        qore_cares_debug_transport(sockets, debug_storage);
         rc = sockets.install(channel);
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_set_socket_functions_ex() failed: %s",
@@ -9182,6 +9358,7 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     }
 #if ARES_VERSION >= 0x012200
     // the channel's sockets stay open while an async I/O thread has them registered
+    qore_cares_debug_transport(sockets, debug_storage);
     rc = sockets.install(channel);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
@@ -16340,21 +16517,21 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
         rv.discard(xsink);
         return nullptr;
     }
-    if (rv.getType() == NT_OBJECT) {
+    // an opaque reference to an object reports the type of an object, but get<QoreObject>() does not read it
+    if (!rv.isOpaque() && rv.getType() == NT_OBJECT) {
         // the reference of the read is the reference returned
         return rv.get<QoreObject>();
     }
-    // a weak reference, for example
+    // a weak or an opaque reference, for example: the object is read with a reference of its own, which is taken
+    // only while the object is referenced (qore#7231)
     ValueHolder holder(rv, xsink);
-    QoreValue v = holder->resolveIndirect();
-    if (v.getType() != NT_OBJECT) {
+    ValueHolder v(holder->resolveIndirectRef(), xsink);
+    if (v->getType() != NT_OBJECT) {
         xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",
-            v.getFullTypeName());
+            v->getFullTypeName());
         return nullptr;
     }
-    QoreObject* obj = v.get<QoreObject>();
-    obj->ref();
-    return obj;
+    return v.release().get<QoreObject>();
 }
 
 //! returns the members of the operation of the object that it keeps with the operation, or nullptr (qore#6839)
@@ -17317,6 +17494,52 @@ void SocketUpgradeClientSslPollOperation::init(ExceptionSink* xsink, bool defer_
     initLocked(xsink);
 }
 
+// Both raw sockets and HTTP operations use the same TLS state machine. An HTTP credential is passed directly
+// to that handshake so the Socket returned to the caller cannot use it for another connection.
+static AbstractPollState* qore_start_client_tls_locked(my_socket_priv& priv, ExceptionSink* xsink,
+        SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key) {
+    assert(priv.m.trylock());
+    switch (mode) {
+        case SslUpgradeMode::Normal:
+            return priv.socket->startSslConnect(xsink, certificate, private_key);
+        case SslUpgradeMode::Proxy:
+            return qore_socket_ops(priv.socket).startProxySslConnect(xsink);
+        case SslUpgradeMode::Layered:
+            return qore_socket_ops(priv.socket).startLayeredSslConnect(xsink, certificate, private_key);
+    }
+    assert(false);
+    return nullptr;
+}
+
+class HttpClientSslUpgradePollOperation final : public SocketUpgradeClientSslPollOperation {
+public:
+    HttpClientSslUpgradePollOperation(ExceptionSink* xsink, QoreSocketObject* socket, SslUpgradeMode mode,
+            QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key, int64 credential_connection_id)
+            : SocketUpgradeClientSslPollOperation(xsink, socket, true, mode) {
+        my_socket_priv& priv = *my_socket_priv::getPriv(*socket);
+        AutoLocker al(priv.m);
+        if (credential_connection_id != priv.socket->getConnectionId()) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "the connection selected for TLS was replaced");
+            return;
+        }
+        if (priv.checkOpen(xsink) || priv.setNonBlock(xsink)) {
+            return;
+        }
+        set_non_block = true;
+        poll_state.reset(qore_start_client_tls_locked(priv, xsink, mode,
+            certificate ? certificate : priv.cert, private_key ? private_key : priv.pk));
+    }
+};
+
+SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
+        QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
+        int64 credential_connection_id) {
+    if (credential_connection_id < 0) {
+        return new SocketUpgradeClientSslPollOperation(xsink, sock, false, mode);
+    }
+    return new HttpClientSslUpgradePollOperation(xsink, sock, mode, certificate, private_key, credential_connection_id);
+}
+
 void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     // socket lock must be held here
     assert(sock->priv->m.trylock());
@@ -17342,18 +17565,7 @@ void SocketUpgradeClientSslPollOperation::initLocked(ExceptionSink* xsink) {
     if (!rc) {
         set_non_block = true;
 
-        switch (mode) {
-            case SslUpgradeMode::Normal:
-                poll_state.reset(sock->priv->socket->startSslConnect(xsink, sock->priv->cert, sock->priv->pk));
-                break;
-            case SslUpgradeMode::Proxy:
-                poll_state.reset(qore_socket_ops(sock->priv->socket).startProxySslConnect(xsink));
-                break;
-            case SslUpgradeMode::Layered:
-                poll_state.reset(qore_socket_ops(sock->priv->socket).startLayeredSslConnect(xsink, sock->priv->cert,
-                    sock->priv->pk));
-                break;
-        }
+        poll_state.reset(qore_start_client_tls_locked(*sock->priv, xsink, mode, sock->priv->cert, sock->priv->pk));
         if (*xsink) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -17369,9 +17581,14 @@ QoreHashNode* SocketUpgradeClientSslPollOperation::continuePoll(ExceptionSink* x
     }
 
     if (!initialized) {
-        initLocked(xsink);
-        if (*xsink || done) {
-            return nullptr;
+        if (poll_state) {
+            // The HTTP handshake was initialized with its operation-owned credentials under the socket lock.
+            initialized = true;
+        } else {
+            initLocked(xsink);
+            if (*xsink || done) {
+                return nullptr;
+            }
         }
     }
 

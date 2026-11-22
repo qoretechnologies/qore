@@ -1,0 +1,40 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes first at the end of the process (the cleanup deletes the data of the
+# user modules in the order of their names, so before that of the library modules that AbWsClient uses): its
+# destructor submits an operation that does not end, which the cleanup waits for until its deadline (qore#7027);
+# see ws-heartbeat-client.qr
+
+%modern
+
+%requires FollowUpOps
+
+module AaDeadline {
+    version = "1.0";
+    desc = "submits an operation that does not end at the end of the process";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AaDeadline {
+#! submits the operation when the cleanup deletes it
+class Submitter {
+    private {
+        EventNotifier notifier();
+    }
+
+    destructor() {
+        submit_operation(notifier, "deadline-early", FollowUpGoal::Never, FollowUpAction::None);
+    }
+}
+
+#! the data of this module
+public class DataA {
+    public {
+        static Submitter submitter();
+    }
+}
+}

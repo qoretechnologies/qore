@@ -2144,6 +2144,43 @@ string Datasource::getMaskedDescription() [flags=CONSTANT] {
     return rv.release();
 }
 
+//! Sets the name of the connection that the datasource was created for, once
+/** The name identifies the datasource in serialized data: serialized @ref sqlutilintro "SqlUtil" objects keep the name of
+    its connection instead of its configuration, which then has no credentials, and are restored by looking the
+    connection up by name (see @ref sqlutil_serialization).  A connection that creates a datasource sets it (as
+    @ref DbDataProvider::DatasourceConnection "DatasourceConnection" does).
+
+    The name is set once: it cannot be changed once set, so that code that is given the datasource cannot relabel it as
+    another connection; setting the same name again does nothing.  A copy of the datasource has the same name.
+
+    @param name the name of the connection
+
+    @par Example:
+    @code{.py}
+db.setConnectionName("orders");
+    @endcode
+
+    @throw DATASOURCE-CONNECTION-NAME-ERROR the name is empty, or the datasource already has another connection name
+
+    @see getConnectionName()
+
+    @since %Qore 3.0
+*/
+nothing Datasource::setConnectionName(string name) [dom=DATABASE;flags=NAMED_ARGS] {
+    q_ds_set_connection_name(*ds, *name, xsink);
+}
+
+//! Returns the name of the connection that the datasource was created for, if set
+/** @return the name of the connection that the datasource was created for, or @ref nothing if none is set
+
+    @see setConnectionName()
+
+    @since %Qore 3.0
+*/
+*string Datasource::getConnectionName() [flags=CONSTANT] {
+    return q_ds_get_connection_name(*ds);
+}
+
 //! Returns the driver-specific server version data for the current connection
 /** @return the driver-specific server version data for the current connection; see the DBI driver documentation for the return data type and format
 
@@ -2250,6 +2287,10 @@ int Datasource::transactionTid() [flags=CONSTANT] {
     - \c "sensitive": @ref True if the driver declares the value of the option sensitive (a credential, or a
       connection string or URL that can embed one); such a value is masked where %Qore shows the options of a
       datasource (since %Qore 3.0)
+    - \c "showable": @ref True if the value of the option can be shown where %Qore shows the options of a
+      datasource: the driver registers the option with option flags, not sensitive, and its name names no credential
+      (see @ref datasource_mask_options); \c "sensitive": @ref False alone does not mean that the value can be shown,
+      as an option registered without option flags is masked as undeclared (since %Qore 3.0)
     - \c "value": the current value of the option
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread

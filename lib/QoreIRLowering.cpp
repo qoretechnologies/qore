@@ -5382,7 +5382,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                     may_return = qore_ir_block_may_return(block_handlers[hi].code);
                 }
             }
-            bool skip_inline = has_unconditional && has_error && !may_return;
+            // in the body of a handler lowered inline in code with a debugger's paths, the handlers are lowered inline
+            // as well: a request in them goes on in the handler around them (getInlineHandlerFlowEndAt()), which the
+            // paths of a ScopeExit do not do (setScopeExitFlowTargets(), qore#6999)
+            bool skip_inline = has_unconditional && has_error && !may_return
+                && !(inline_handler_body_depth && builder.getFunction()->hasDebugFlowPaths());
 
             if (!skip_inline) {
                 // Phase 1: Inline handlers at fall-through exit.  The
@@ -7471,6 +7475,13 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
     // the entry is read and written by its index: the lowering of the scope's paths below lowers handlers inline,
     // which pushes entries on inline_handler_flow_stack and can reallocate it
     if (!inline_handler_flow_stack[hf_index].last) {
+        // a return request is kept by the normal end of the next handlers (StatementBlock::execIntern()); in the
+        // cleanups of a return statement, the code after the handler goes on with that return and its value, unless
+        // the request is in a try statement of the body, which ends with its own value (qore#6999)
+        if (rc == RC_RETURN && inline_handler_flow_stack[hf_index].scope_entry != SIZE_MAX
+                && (in_try || !inline_handler_flow_stack[hf_index].return_walk)) {
+            return lowerNonLastHandlerReturnRequest(hf_index, in_try, error);
+        }
         // the exit goes on with the next handler: the code after the handler, which the lowering of the handler
         // continues in (lowerHandlerAtExit()); a block of the normal code
         QoreIRBasicBlock*& join = inline_handler_flow_stack[hf_index].join;
@@ -7575,6 +7586,78 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int
     builder.createBranch(scope_path, nullptr);
     builder.setBlock(saved_block);
     ends()[end_index] = end;
+    return end;
+}
+
+QoreIRBasicBlock* QoreIRLowering::lowerNonLastHandlerReturnRequest(size_t hf_index, bool in_try, std::string& error) {
+    assert(hf_index < inline_handler_flow_stack.size() && !inline_handler_flow_stack[hf_index].last);
+    {
+        const InlineHandlerFlow& hf = inline_handler_flow_stack[hf_index];
+        if (QoreIRBasicBlock* end = in_try ? hf.request_end_try[0] : hf.request_end[0]) {
+            return end;
+        }
+    }
+    // in a handler of the body of a handler in the cleanups of a return statement, the request goes on with that
+    // return and its value (see getInlineHandlerFlowEndAt()); the walk from this handler's body runs the handlers of
+    // its scope that have not run
+    if (!in_try) {
+        const size_t outer_index = inlineHandlerOuterBody(hf_index);
+        if (outer_index != SIZE_MAX
+                && inline_handler_flow_stack[outer_index].try_depth
+                    == inline_handler_flow_stack[hf_index].scope_try_depth
+                && inlineHandlerInReturnWalk(outer_index, true)) {
+            return lowerInlineHandlerOuterRequest(hf_index, outer_index, RC_RETURN, error);
+        }
+    }
+    const size_t cleanup_depth = inline_handler_flow_stack[hf_index].cleanup_depth;
+    assert(cleanup_depth <= cleanup_stack.size());
+    QoreIRFunction* func = builder.getFunction();
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    const size_t first_block = func->blocks.size();
+    QoreIRBasicBlock* end = createBlock("debug.flow.handler.return");
+    if (!end) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return nullptr;
+    }
+    {
+        // the return is lowered as one at the start of the handler's body, whose barrier protects the handler's scope
+        // and keeps the handlers that have not run: the blocks of the body have been left by the code of the request
+        struct BodyStateRestore {
+            QoreIRLowering& lowering;
+            size_t cleanup_depth;
+            std::vector<BlockCleanupEntry> saved_entries;
+            QoreIRBuilder::TempScopeState temp_state;
+            int saved_try_depth;
+            QoreIRBasicBlock* saved_block;
+            ~BodyStateRestore() {
+                if (lowering.cleanup_stack.size() > cleanup_depth) {
+                    lowering.cleanup_stack.erase(lowering.cleanup_stack.begin() + cleanup_depth,
+                        lowering.cleanup_stack.end());
+                }
+                // moved back into the capacity that they had, so nothing here allocates
+                lowering.cleanup_stack.insert(lowering.cleanup_stack.end(),
+                    std::make_move_iterator(saved_entries.begin()), std::make_move_iterator(saved_entries.end()));
+                lowering.builder.restoreTempScopeState(std::move(temp_state));
+                lowering.try_depth = saved_try_depth;
+                lowering.builder.setBlock(saved_block);
+            }
+        } restore{*this, cleanup_depth,
+            std::vector<BlockCleanupEntry>(cleanup_stack.begin() + cleanup_depth, cleanup_stack.end()),
+            builder.saveTempScopeState(), try_depth, saved_block};
+        cleanup_stack.resize(cleanup_depth);
+        builder.truncateTempScopes(inline_handler_flow_stack[hf_index].temp_depth);
+        try_depth = inline_handler_flow_stack[hf_index].try_depth;
+        DebugFlowPathLowering path_lowering(*this);
+        builder.setBlock(end);
+        if (!lowerReturnWithoutValue(error, true)) {
+            return nullptr;
+        }
+    }
+    for (size_t i = first_block; i < func->blocks.size(); ++i) {
+        func->blocks[i]->debug_flow = true;
+    }
+    InlineHandlerFlow& hf = inline_handler_flow_stack[hf_index];
+    (in_try ? hf.request_end_try[0] : hf.request_end[0]) = end;
     return end;
 }
 
@@ -15606,6 +15689,85 @@ bool QoreIRLowering::extractLValuePath(const QoreValue& expr, std::vector<LVPath
     return true;
 }
 
+int QoreIRLowering::backgroundHelperCallee(const QoreValue& expr, const std::vector<LocalVar*>& params,
+        const BackgroundHelperLowering& state) {
+    // QBH_CHECK_IN_THREAD and QBH_CALLEE_UNKNOWN of qore_thread_intern.h
+    static constexpr int in_thread = -2;
+    static constexpr int unknown = -1;
+    // the callee of a call of a closure or call reference, or the object of a call of a method, that is a value that
+    // the thread takes when it starts is checked then, as the AST interpreter checks it (do_op_background()); the code
+    // that any other expression calls (a call of a named function, a static method or a method of the object of the
+    // starting code, which can dispatch to an override, or a callable that the new thread computes) is checked when it
+    // is called in the new thread, as in the AST interpreter (qore_check_background_direct_entry()); a local variable
+    // or a value of the thread that is not found among the parameters is unknown, and every closure, call reference
+    // and object that the expression takes is checked when the thread starts (qore#7087)
+    QoreValue callee;
+    switch (expr.getType()) {
+        case NT_FUNCTION_CALL:
+        case NT_PROGRAM_FUNC_CALL:
+        case NT_STATIC_METHOD_CALL:
+        case NT_SELF_CALL:
+            return in_thread;
+        case NT_FUNCREFCALL:
+            callee = expr.get<const CallReferenceCallNode>()->getExp();
+            break;
+        case NT_OPERATOR: {
+            const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+            if (!call) {
+                return in_thread;
+            }
+            callee = call->getExpression();
+            break;
+        }
+        default:
+            return in_thread;
+    }
+    const AbstractQoreNode* node = callee.getInternalNode();
+    if (!node) {
+        return in_thread;
+    }
+    // a local variable of the starting code: one of the first parameters
+    if (const VarRefNode* var = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t vt = var->getType();
+        if (vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) {
+            for (size_t i = 0, e = params.size() - state.params.size(); i < e; ++i) {
+                if (params[i] == var->ref.id) {
+                    return static_cast<int>(i);
+                }
+            }
+            return unknown;
+        }
+    }
+    // a value that the thread takes when it starts (a member, an implicit argument, a thread-local variable, ...):
+    // the parameter that holds it, found by the key that lowerBackgroundLeaf() gave it, or by its node
+    size_t first_leaf = params.size() - state.params.size();
+    std::string key;
+    if (auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        key = "arg:" + std::to_string(impl_arg->getOffset());
+    } else if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        key = "element";
+    } else if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        key = std::string("member:") + self_ref->str;
+    } else if (auto* var = dynamic_cast<const VarRefNode*>(node);
+            var && (var->getType() == VT_THREAD_LOCAL || var->getType() == VT_IMMEDIATE)) {
+        key = "var:" + std::to_string(reinterpret_cast<uintptr_t>(var->ref.var));
+    }
+    if (!key.empty()) {
+        auto i = state.leaf_index.find(key);
+        if (i != state.leaf_index.end()) {
+            return static_cast<int>(first_leaf + i->second);
+        }
+        return unknown;
+    }
+    for (size_t i = 0, e = state.leaves.size(); i < e; ++i) {
+        if (state.leaves[i].getInternalNode() == node) {
+            return static_cast<int>(first_leaf + i);
+        }
+    }
+    // not a value that the thread takes when it starts: the thread computes it
+    return in_thread;
+}
+
 QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const QoreBackgroundOperatorNode* op,
         std::string& error) {
     QoreIRFunction* starting_func = builder.getFunction();
@@ -15701,6 +15863,7 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     }
 
     auto* inst = builder.createBackground(QoreIRBackgroundKind::Helper, std::string(), expr, operands, op->loc);
+    inst->helper_callee = backgroundHelperCallee(op->getExp(), params, state);
     inst->helper_ir = std::move(helper);
     inst->helper_params = std::move(params);
     inst->owned_params = std::move(state.params);

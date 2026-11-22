@@ -548,8 +548,8 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
 
     #! Reads until the first body chunk arrives, skipping the response-headers hash
     private binary readFirstChunk(HttpClientIo::Http2ClientStreamHandle sh, timeout total) {
-        date deadline = now_us() + total;
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + total;
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             auto rv = sh.readData(5s);
             if (!exists rv) {
                 continue;
@@ -571,8 +571,8 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
     #! Reads from the stream handle until END_STREAM, returning the concatenated body
     private binary drain(HttpClientIo::Http2ClientStreamHandle sh, timeout total) {
         binary out = binary();
-        date deadline = now_us() + total;
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + total;
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             auto rv = sh.readData(5s);
             if (!exists rv) {
                 continue;
@@ -694,9 +694,9 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
             cast<HttpClientIo::Http2ClientStreamHandle>(mgr.acquireStream(url));
         sh.startStreaming("POST", "/single", {"content-type": SingleChunkContentType}, True);
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         binary first = readFirstChunk(sh, 10s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
         assertEq(binary("first"), first, "the parked handler's chunk was delivered on its own");
         assertLt(2s, elapsed,
             sprintf("the chunk arrived without waiting for a later event (actual: %y)", elapsed));

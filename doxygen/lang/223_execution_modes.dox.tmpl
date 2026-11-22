@@ -211,6 +211,16 @@ QORE_JIT_MAX_IR_INSTRUCTIONS=50000 qore --exec-mode=jit script.qr
     @note Set \c QORE_JIT_TIMING to report each skipped native compilation along
     with the function's IR instruction count and the budget in effect.
 
+    The IR instruction count does not tell how large the native code of a function is: an instruction on an untyped
+    value (\c auto) lowers to about three times the LLVM code of one on a typed value, and LLVM's optimization and
+    code generation, which take nearly all the time of a native compilation, grow faster than the size of the
+    function.  The lowered LLVM code of a function or batch is therefore also checked before it is optimized: one
+    over 150000 LLVM instructions stays on the IR tier (the largest function of the standard modules' tests lowers to
+    about 66000).  The limit is set with the \c QORE_JIT_MAX_LLVM_INSTRUCTIONS environment variable; \c 0 means "no
+    limit", and when it is not set and \c QORE_JIT_MAX_IR_INSTRUCTIONS is \c 0, there is no limit either.  With
+    \c QORE_JIT_TIMING, a compilation skipped for it is reported with the lowered size (since %Qore 3.0;
+    <a href="https://github.com/qoretechnologies/qore/issues/7174">issue 7174</a>).
+
     The native code that runs the pending \c on_exit, \c on_success and \c on_error handlers of a function publishes
     the locals of the function to the runtime before they run and reloads them afterwards.  Written at each place
     that runs handlers, that code has a size in the product of the handlers and the locals, and a function with 200
@@ -338,6 +348,14 @@ int sub bump() {
     index, manifest, status, dependency, success-stamp, and content-stamp
     sidecars needed to seed later per-file incremental builds from the one
     shared parse.
+
+    @anchor qcc_link_unresolved_references
+    A name that code refers to as a global variable, a constant, a static class variable or an enum member and that
+    the objects preloaded with \c -L do not define is resolved when the objects are linked, so that it can be defined
+    by an object compiled later; the link of the objects into an executable fails with an
+    <tt>unresolved reference</tt> error that names it, the source file and the object that refers to it if no linked
+    object defines it, as a parse of the sources in one %Program refuses it (since %Qore 3.0; before, the reference
+    failed only when the code ran).\n\n
 
     For incremental per-file builds, use \c -L to preload sibling <tt>.qo</tt>
     declarations before parsing the changed source:

@@ -46,7 +46,11 @@ SECRET_NAMES = {"conn", "connection", "conn-str", "conn-string", "connection-str
 
 #: the options whose names look like secrets but that hold none: (path relative to the scanned directory, name);
 #: each entry says why
-ALLOWLIST = set()
+ALLOWLIST = {
+    # the test driver's options declared not sensitive on purpose, to test that Qore masks their values by their names
+    ("modules/dbi_test/src/dbi_test-module.cpp", "api_token"),
+    ("modules/dbi_test/src/dbi_test-module.cpp", "dsn_name"),
+}
 
 #: the options whose names cannot be read from the source, as they are given in a variable: (relative path,
 #: expression)

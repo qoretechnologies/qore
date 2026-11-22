@@ -30,6 +30,11 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("ping", \ping());
         addTestCase("options given as connection options", \connectionOptions());
         addTestCase("driver not loaded", \driverNotLoaded());
+        addTestCase("values of non-sensitive options that cannot be shown", \valuesNotShown());
+        addTestCase("connection strings and URLs in non-sensitive options", \credentialStrings());
+        addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
+        addTestCase("option names that can name a credential", \credentialNames());
+        addTestCase("option flags that the library does not know", \unknownFlags());
         set_return_value(main());
     }
 
@@ -42,8 +47,12 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("****", h.options.secret);
         assertEq("****", h.options.undeclared);
         assertEq("3", h.options.rows);
-        assertEq("1", h.options.min);
-        assertEq("2", h.options.max);
+        # the pool sizes in the URL are not options of the driver: masked in the safe URL (qore#7017), shown in the
+        # options of the connection
+        assertEq("****", h.options.min);
+        assertEq("****", h.options.max);
+        # the user name is masked (qore#7017)
+        assertEq("****", h.user);
     }
 
     connectionInfo() {
@@ -84,17 +93,101 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         hash<ConnectionInfo> info = conn.getInfo();
         assertFalse(sprintf("%y", info).find(Secret) >= 0);
         assertEq("****", info.opts.secret);
-        assertEq(4, info.opts.rows);
+        assertEq("4", info.opts.rows);
     }
 
     driverNotLoaded() {
-        # a driver that is not loaded: every driver option value is masked, and the pool options are shown
+        # a driver that is not loaded: every option value is masked in the safe URL, and the pool options are shown in
+        # the options of the connection
         DatasourceConnection conn("c7070", "test", "db://qore7070nodriver:user/pass@db{rows=3,min=1,max=2}");
         hash<auto> h = parse_datasource(conn.safe_url.substr(5));
         assertEq("****", h.options.rows);
-        assertEq("1", h.options.min);
+        assertEq("****", h.options.min);
         hash<ConnectionInfo> info = conn.getInfo();
         assertEq("****", info.opts.rows);
+        assertEq(1, info.opts.min);
         assertEq("****", info.url_hash.options.rows);
+    }
+
+    valuesNotShown() {
+        # "fault" and "rows" are declared not sensitive; a value that cannot be shown in a datasource string, such as a
+        # URL with credentials, or that is not a string, a number or a boolean, is masked in the information and the
+        # ping results, as in the safe URL
+        DatasourceConnection conn("c7070", "test", "db://dbitest:u/p@db{fault=https://usr:PW@h/x,rows=5}");
+        assertEq("****", conn.getInfo().opts.fault);
+        assertEq("5", conn.getInfo().opts.rows);
+        assertEq("****", conn.ping().opts.fault);
+        assertEq("****", conn.getInfo().url_hash.options.fault);
+        assertFalse(conn.safe_url.find("PW") >= 0, conn.safe_url);
+        foreach auto v in ("DSN=x;PWD=secret", "u@h", {"x": "user:pw"}, ("user", "pw")) {
+            DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db", {}, {"driver": {"fault": v, "rows": v}});
+            hash<ConnectionInfo> info = c.getInfo();
+            assertEq("****", info.opts.fault, sprintf("%y", v));
+            assertEq("****", info.opts.rows, sprintf("%y", v));
+            assertEq("****", c.ping().opts.fault, sprintf("%y", v));
+            assertFalse(sprintf("%y", info).find("pw") >= 0 || sprintf("%y", info).find("secret") >= 0
+                || sprintf("%y", info).find("u@h") >= 0, sprintf("%y", info));
+        }
+    }
+
+    credentialStrings() {
+        # an ODBC connection string and a JDBC URL with credentials in an option that the driver declares not
+        # sensitive are masked in every form: the safe URL, the url_hash and the options of the information, and the
+        # options of the ping results
+        foreach string v in ("DSN=x;PWD=y", "jdbc:postgresql://h/db?user=u&password=p") {
+            DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{fault=" + v + ",rows=5}");
+            assertFalse(c.safe_url.find("PWD") >= 0 || c.safe_url.find("password") >= 0, c.safe_url);
+            assertEq("****", parse_datasource(c.safe_url.substr(5)).options.fault, v);
+            hash<ConnectionInfo> info = c.getInfo();
+            assertEq("****", info.url_hash.options.fault, v);
+            assertEq("****", info.opts.fault, v);
+            assertEq("****", c.ping().opts.fault, v);
+            DatasourceConnection o("c7070", "test", "db://dbitest:u/p@db", {}, {"driver": {"fault": v}});
+            assertEq("****", o.getInfo().opts.fault, v);
+            assertEq("****", o.ping().opts.fault, v);
+        }
+    }
+
+    undeclaredOptions() {
+        # "stream-chunk" is registered without a sensitivity decision: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{stream-chunk=64,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options{"stream-chunk"});
+        assertEq("5", parse_datasource(c.safe_url.substr(5)).options.rows);
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options{"stream-chunk"});
+        assertEq("****", info.opts{"stream-chunk"});
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts{"stream-chunk"});
+    }
+
+    credentialNames() {
+        # "api_token" is declared not sensitive, but its name can name a credential: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{api_token=abc,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options.api_token);
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options.api_token);
+        assertEq("****", info.opts.api_token);
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts.api_token);
+        assertFalse(sprintf("%y", info).find("abc") >= 0, sprintf("%y", info));
+        # "dsn_name" too: its name has "dsn"
+        DatasourceConnection d("c7070", "test", "db://dbitest:u/p@db{dsn_name=xyz,rows=5}");
+        assertEq("****", parse_datasource(d.safe_url.substr(5)).options.dsn_name);
+        info = d.getInfo();
+        assertEq("****", info.url_hash.options.dsn_name);
+        assertEq("****", info.opts.dsn_name);
+        assertEq("****", d.ping().opts.dsn_name);
+        assertFalse(sprintf("%y", info).find("xyz") >= 0, sprintf("%y", info));
+    }
+
+    unknownFlags() {
+        # "future-flag" is registered with an option flag that the library does not know: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{future-flag=x,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options{"future-flag"});
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options{"future-flag"});
+        assertEq("****", info.opts{"future-flag"});
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts{"future-flag"});
     }
 }

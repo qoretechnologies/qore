@@ -330,6 +330,11 @@ public:
             FunctionCallBase(old, n_args), tmp_args(true) {
     }
 
+    //! marks the argument list as a temporary list of evaluated values that the call can take over (see tmp_args)
+    DLLLOCAL void setTmpArgs() {
+        tmp_args = true;
+    }
+
     //! marks a background copy that is evaluated more than once; see reusable_tmp_args
     DLLLOCAL void setReusableTmpArgs() {
         assert(tmp_args);

@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) server stream sends and their flow control
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The send timeout of a WebSocket handler on HTTP/2 and HTTP/3 bounds the time in which the peer takes none of the
+# stream's data, not the total time of the send (qore#7252): a client that was still taking a large message was
+# disconnected once the send timeout had passed, with the close code 1006.  These cases go through a real HttpServer,
+# so that the progress count is read through the socket that the server gives the handler.  The stream's data is held
+# back from the transport with a debug hook, as when the client takes nothing, and the progress of the peer is
+# simulated by the reads of the count, with no clock involved:
+# - with no progress, the client is disconnected after the send timeout
+# - with progress in the first period, the send goes on into a second period before the client is disconnected
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketStreamSendStallTest
+
+#! more than the 1 MiB limit of a stream's send buffer: the second message finds the buffer full
+const Payload = 3 * 1024 * 1024;
+
+#! the send timeout of the handler
+const SendTimeout = 1s;
+
+#! the send timeout in milliseconds
+const SendTimeoutMs = 1000;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Pushes the messages about a send that timed out to a Queue
+class SendLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("send", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG && params.toString() =~ /send timed out/) {
+            messages.push(params.toString());
+        }
+    }
+}
+
+#! Holds its stream's data and sends two large messages when the client asks for it
+class StallConnection inherits WebSocketConnection {
+    private {
+        StallHandler stall_handler;
+        *int session_id;
+        int stream_id;
+    }
+
+    constructor(StallHandler handler, *int session_id, int stream_id) : WebSocketConnection(handler) {
+        stall_handler = handler;
+        self.session_id = session_id;
+        self.stream_id = stream_id;
+    }
+
+    gotMessage(string msg) {
+        if (msg != "send") {
+            return;
+        }
+        if (session_id) {
+            call_function("dbg_quic_hold_stream_data", session_id, stream_id);
+        } else {
+            call_function("dbg_http2_hold_stream_data", stream_id);
+        }
+        if (stall_handler.progress_reads) {
+            call_function("dbg_quic_simulate_stream_progress", stream_id, stall_handler.progress_reads);
+        }
+        send(binary(strmul("a", Payload)));
+        int start = clock_get_monotonic_us();
+        # waits for the stream's send buffer, which never drains, and ends the connection
+        send(binary(strmul("b", Payload)));
+        stall_handler.elapsed.push((clock_get_monotonic_us() - start) / 1000);
+    }
+}
+
+class StallHandler inherits WebSocketHandler {
+    public {
+        #! the time of the send that found the buffer full, in milliseconds
+        Queue elapsed();
+        #! the reads of the progress count that see progress
+        int progress_reads = 0;
+    }
+
+    constructor(Logger logger) : WebSocketHandler(NOTHING, {"send_timeout": SendTimeout, "logger": logger}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new StallConnection(self, cx."header-info".session_id, cx."header-info".stream_id);
+    }
+}
+
+class WebSocketStreamSendStallTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StallHandler handler;
+        SendLogAppender appender();
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketStreamSendStall", "1.0") {
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a client that takes nothing is disconnected after the send timeout", ver),
+                \testStall(), ver);
+            addTestCase(sprintf("HTTP/%s: a client that is taking the data is not cut off by the send timeout", ver),
+                \testProgress(), ver);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        Logger logger("send", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        handler = new StallHandler(logger);
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        appender.messages.clear();
+        handler.elapsed.clear();
+    }
+
+    #! Makes the server send to a client that takes nothing; returns the time of the send and the log message
+    private hash<auto> runSend(string ver, int progress_reads) {
+        handler.progress_reads = progress_reads;
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        # runs before the disconnect above: the client's close is answered on the stream that is held
+        on_exit {
+            call_function("dbg_quic_simulate_stream_progress", 0, 0);
+            call_function("dbg_quic_release_stream_data");
+            call_function("dbg_http2_release_stream_data");
+        }
+        wsc.connect();
+        assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");
+        wsc.send("send");
+        string msg = appender.messages.get(HangGuard);
+        int elapsed = handler.elapsed.get(HangGuard);
+        return {"msg": msg, "elapsed": elapsed};
+    }
+
+    testStall(string ver) {
+        hash<auto> r = runSend(ver, 0);
+        assertRegex(sprintf("did not drain within %d ms", SendTimeoutMs), r.msg, "the send timed out");
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg, "for lack of progress");
+        assertGe(SendTimeoutMs - 50, r.elapsed, "the send waited for the send timeout");
+    }
+
+    #! the first read of the count starts the wait and the next one sees progress, at the end of the first period
+    testProgress(string ver) {
+        hash<auto> r = runSend(ver, 2);
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg, "it ended for lack of progress");
+        # a deadline on the total time ended the send at the end of the first period
+        assertGe(2 * SendTimeoutMs - 50, r.elapsed, "the send went on into a second period");
+    }
+}

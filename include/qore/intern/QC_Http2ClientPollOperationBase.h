@@ -555,6 +555,10 @@ private:
 
     //! The socket object (ref'd by us — separate from inner op's ref)
     QoreSocketObject* sock_obj;
+    // Credentials for the target TLS handshake belong to this operation, not to its publicly accessible socket.
+    SimpleRefHolder<QoreSSLCertificate> client_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> client_pk;
+    int64 credential_connection_id = -1;
 
     //! Connection state (atomic for lock-free reads from app threads)
     std::atomic<H2State> h2_state{H2State::CONNECTING};

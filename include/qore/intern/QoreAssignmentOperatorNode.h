@@ -48,6 +48,13 @@ protected:
     bool broken_int = false;
     // flag for identical match with assignment types (lvalue & rvalue)
     bool ident = false;
+    //! whether a weak assignment makes the container of its source unique (see
+    //! qore_weak_assignment_source_made_unique()), found when it is first evaluated: 0 not known yet, 1 no, 2 yes
+    //! (qore#7242); the source does not change after the parse
+    mutable std::atomic<signed char> weak_source_unique{0};
+
+    //! returns true if a weak assignment makes the container of its source unique (see weak_source_unique)
+    DLLLOCAL bool weakSourceMadeUnique() const;
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
@@ -55,10 +62,18 @@ protected:
 
     DLLLOCAL QoreValue evalLexical(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
-    template <bool Lexical>
+    //! evaluates the assignment; \a Weak is true for the weak assignment operator, whose entry points
+    //! (evalInternWeak(), evalLexicalWeak()) are their own, so that the other assignments keep their code (qore#7085)
+    template <bool Lexical, bool Weak>
     DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    //! evaluates a weak assignment
+    DLLLOCAL QoreValue evalInternWeak(ExceptionSink* xsink, bool& needs_deref) const;
+
+    //! evaluates a weak assignment with lexical semantics
+    DLLLOCAL QoreValue evalLexicalWeak(ExceptionSink* xsink, bool& needs_deref) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return parseInitMode(val, parse_context, AssignmentMode::Normal);
@@ -79,12 +94,14 @@ static inline bool qore_weak_source_type_may_hold_container(const QoreTypeInfo* 
         || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL;
 }
 
-//! returns true if the right side of a weak assignment is a variable whose container the assignment makes unique
+//! returns true if the right side of a weak assignment is a variable or an lvalue path whose container the assignment
+//! makes unique
 /** the right side must be a variable (a local, closure-bound, thread-safe, global or thread-local variable, or a class
-    static variable), whatever its declared type: a weak reference then always designates the variable's own
-    container, never one that the variable shares with a literal of the program or another variable.  A value that
-    is not a hash or a list (an object, a scalar, NOTHING) and a weak reference held by the variable are left as they
-    are (qore#5756, qore#5847)
+    static variable), whatever its declared type, or a path from one of them or from the object: a member of the
+    object, an object member, a hash key or a list element (qore#7242): a weak reference then always designates the
+    container of the variable or of the path, never one that it shares with a literal of the program or another
+    owner.  A value that is not a hash or a list (an object, a scalar, NOTHING) and a weak reference held by the
+    variable or the path are left as they are (qore#5756, qore#5847)
 */
 DLLLOCAL bool qore_weak_assignment_source_made_unique(const QoreValue& right);
 
@@ -105,7 +122,7 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(xsink, needs_deref, AssignmentMode::Weak);
+        return evalInternWeak(xsink, needs_deref);
     }
 };
 
@@ -173,7 +190,7 @@ public:
 
 protected:
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
-        return evalLexical(xsink, needs_deref, AssignmentMode::Weak);
+        return evalLexicalWeak(xsink, needs_deref);
     }
 };
 

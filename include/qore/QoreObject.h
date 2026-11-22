@@ -173,28 +173,40 @@ public:
     DLLEXPORT QoreListNode* getMemberList(ExceptionSink* xsink) const;
 
     //! removes a member from the object, if the member's value is an object it is deleted as well (destructor is called)
-    /**
+    /** The member is removed as by the Qore \c delete operator: the key of a member that the class does not declare
+        is removed, a declared member keeps its slot with no value, and a member that is not set is not created
+        (qore#7179, qore#7208)
+
         @param key the name of the member to delete
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void deleteMemberValue(const QoreString* key, ExceptionSink* xsink);
 
     //! removes a member from the object, if the member's value is an object it is deleted as well (destructor is called)
-    /**
+    /** The member is removed as by the Qore \c delete operator: the key of a member that the class does not declare
+        is removed, a declared member keeps its slot with no value, and a member that is not set is not created
+        (qore#7179, qore#7208)
+
         @param key the name of the member to delete, assumed to be in the default encoding (QCS_DEFAULT)
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void deleteMemberValue(const char* key, ExceptionSink* xsink);
 
     //! removes a member from the object without explicitly calling destructors; the value is only dereferenced
-    /** objects will be destructed if they go out of scope, however
+    /** objects will be destructed if they go out of scope, however; the member is removed as by the Qore \c remove
+        operator: the key of a member that the class does not declare is removed, a declared member keeps its slot
+        with no value, and a member that is not set is not created (qore#7179)
+
         @param key the name of the member to remove
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void removeMember(const QoreString* key, ExceptionSink* xsink);
 
     //! removes a member from the object without explicitly calling destructors; the value is only dereferenced
-    /** objects will be destructed if they go out of scope, however
+    /** objects will be destructed if they go out of scope, however; the member is removed as by the Qore \c remove
+        operator: the key of a member that the class does not declare is removed, a declared member keeps its slot
+        with no value, and a member that is not set is not created (qore#7179)
+
         @param key the name of the member to remove, assumed to be in the default encoding (QCS_DEFAULT)
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */

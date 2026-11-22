@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DeleteMemberValueApiTest
+
+#! the members that a test object is created with
+class Undeclared {
+}
+
+#! counts its destructions
+class Counted {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! declared members, which keep their slots
+class Declared {
+    public {
+        auto m;
+        auto o;
+        *int i = 1;
+    }
+
+    private {
+        auto p = 1;
+    }
+}
+
+#! a class with only private members, so that undeclared members can be added outside the class
+class PrivateOnly {
+    private {
+        auto p = 1;
+    }
+
+    list<string> ownKeys() {
+        return keys self;
+    }
+}
+
+#! the C++ API QoreObject::deleteMemberValue() removes members as the delete operator does (qore#7208)
+/** It removed the key of every member, also of a declared member, and removed the value of an undeclared member
+    without the object's scan count, so that a member that held an object hit an assertion in debug builds and left
+    the count wrong in release builds.  It now removes members as the delete operator does: the key of an undeclared
+    member is removed, a declared member keeps its slot with no value, a member that is not set is not created, and an
+    object that the member held is destroyed.  dbg_object_delete_member_value() calls it from C++, as a binary module
+    does.
+*/
+class DeleteMemberValueApiTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreObject::deleteMemberValue()", "1.0", \ARGV) {
+%ifndef QoreDebug
+        addTestCase("the C++ API through its debug hook", \requiresDebugBuild());
+%else
+        addTestCase("undeclared members", \undeclaredTest());
+        addTestCase("declared members", \declaredTest());
+        addTestCase("members that hold objects", \objectValueTest());
+        addTestCase("access checks", \accessTest());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef QoreDebug
+    #! the cases call QoreObject::deleteMemberValue() through dbg_object_delete_member_value(), which only a library
+    #! debug build has
+    requiresDebugBuild() {
+        testSkip("dbg_object_delete_member_value() is only registered in a library debug build");
+    }
+%else
+
+    undeclaredTest() {
+        object o = new Undeclared();
+        o.a = 1;
+        o.b = 2;
+        dbg_object_delete_member_value(o, "a");
+        assertEq(("b",), keys o, "the key of a deleted undeclared member is removed");
+        assertEq(1, elements o);
+        dbg_object_delete_member_value(o, "never_set");
+        assertEq(("b",), keys o, "a member that is not set is not created");
+        # a short key, which is stored in the string value itself
+        o.x = 3;
+        dbg_object_delete_member_value(o, "x");
+        assertEq(("b",), keys o, "a short key");
+        o.a = 4;
+        assertEq(("b", "a"), keys o, "a deleted member can be added again");
+
+        # undeclared members of a class with private members only
+        object p = new PrivateOnly();
+        p.u = 1;
+        dbg_object_delete_member_value(p, "u");
+        assertEq(("p",), cast<PrivateOnly>(p).ownKeys(), "undeclared beside private members");
+    }
+
+    declaredTest() {
+        object d = new Declared();
+        dbg_object_delete_member_value(d, "i");
+        assertEq(("m", "o", "i"), keys d, "a deleted declared member keeps its slot");
+        assertEq(NOTHING, d.i, "a deleted declared member has no value");
+        dbg_object_delete_member_value(d, "m");
+        assertEq(("m", "o", "i"), keys d, "a declared member that is not set keeps its slot");
+        d.i = 2;
+        assertEq(2, d.i, "a deleted declared member can be set again");
+    }
+
+    objectValueTest() {
+        int before = Counted::destroyed;
+        object o = new Undeclared();
+        o.c = new Counted();
+        dbg_object_delete_member_value(o, "c");
+        assertEq(before + 1, Counted::destroyed, "an object that an undeclared member held is destroyed");
+        assertEq((), keys o, "its key is removed");
+
+        Declared d();
+        d.o = new Counted();
+        dbg_object_delete_member_value(d, "o");
+        assertEq(before + 2, Counted::destroyed, "an object that a declared member held is destroyed");
+        assertEq(("m", "o", "i"), keys d, "the declared member keeps its slot");
+        assertEq(NOTHING, d.o);
+
+        # a member that holds a container with an object that refers back to the member's object: a cycle that the
+        # removal breaks
+        o.h = {"back": new Undeclared()};
+        o.h.back.owner = o;
+        dbg_object_delete_member_value(o, "h");
+        assertEq((), keys o, "a member that closes a cycle is removed");
+    }
+
+    accessTest() {
+        Declared d();
+        assertThrows("PRIVATE-MEMBER", \dbg_object_delete_member_value(), (d, "p"),
+            "a private member is not accessible outside the class");
+        assertThrows("INVALID-MEMBER", \dbg_object_delete_member_value(), (d, "undeclared"),
+            "a class with public members has no undeclared members");
+    }
+%endif
+}

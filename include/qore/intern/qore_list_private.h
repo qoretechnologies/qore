@@ -51,16 +51,22 @@ struct qore_list_private {
     size_t allocated = 0;
     unsigned obj_count = 0;
     const QoreTypeInfo* complexTypeInfo = nullptr;
-    QoreReferenceCounter weakRefs;
+    QoreContainerWeakRefs weakRefs;
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
     size_t eval_result_size = 0;
     //! the sandbox memory charge of entry (see design/sandbox-resource-limits.md); synced with allocated
     QoreSandboxChargeRecord sb;
     bool finalized : 1;
     bool vlist : 1;
+    //! false if the list cannot be changed: it was freed, or it is a copy of a freed list (see copyFreedState())
     bool valid : 1;
+    //! true once the list has been freed (see QoreListNode::derefImpl())
+    bool freed : 1;
+    //! true if the weak holders of the list hold one reference of their own since its free started (see
+    //! QoreContainerWeakRefs); not in the bit field, as lockWeak() reads it while the free writes the bit field
+    bool weak_hold = false;
 
-    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true) {
+    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true), freed(false) {
     }
 
     DLLLOCAL ~qore_list_private() {
@@ -127,7 +133,7 @@ struct qore_list_private {
     }
 
     DLLLOCAL QoreListNode* copyCheckNewElementType(const QoreTypeInfo* newElementType) const {
-        QoreListNode* rv = copy();
+        QoreListNode* rv = copyValue();
         rv->priv->setListTypeFromNewElementType(newElementType);
         return rv;
     }
@@ -169,7 +175,23 @@ struct qore_list_private {
         QoreListNode* l = new QoreListNode;
         l->priv->complexTypeInfo = newComplexTypeInfo;
         copyIntern(*l->priv);
+        copyFreedState(*l->priv);
         return l;
+    }
+
+    //! A copy of a freed list cannot be changed either (qore#7163)
+    /** A list freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
+        reference to it is never its only one, and changing the list through that reference copies it; the copy reads
+        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  The same
+        holds for its conversion to another list type, which is the list given to a typed variable or parameter.  A
+        value computed from it (sorted, or with an element added: see copyValue()) is a new list.
+
+        The copy is not freed: it is freed as any other list when its last reference is released.
+    */
+    DLLLOCAL void copyFreedState(qore_list_private& l) const {
+        if (!valid) {
+            l.valid = false;
+        }
     }
 
     // strip = copy without type information
@@ -178,6 +200,7 @@ struct qore_list_private {
         if (!strip || !complexTypeInfo) {
             QoreListNode* l = getCopy();
             copyIntern(*l->priv);
+            copyFreedState(*l->priv);
             return l;
         }
         QoreListNode* l = new QoreListNode;
@@ -185,6 +208,15 @@ struct qore_list_private {
         for (size_t i = 0; i < length; ++i) {
             l->priv->pushIntern(copy_strip_complex_types(entry[i]));
         }
+        copyFreedState(*l->priv);
+        return l;
+    }
+
+    //! Returns a copy of the list to compute a new value from (ex: to sort), which can be changed also when the list
+    //! was freed (see copyFreedState())
+    DLLLOCAL QoreListNode* copyValue() const {
+        QoreListNode* l = getCopy();
+        copyIntern(*l->priv);
         return l;
     }
 
@@ -431,11 +463,36 @@ struct qore_list_private {
         return rv.release();
     }
 
-    DLLLOCAL void pushIntern(QoreValue val) {
-        getEntryReference(length) = val;
+    //! When all or none of the occupied slots need scanning, the count already classifies this slot.
+    DLLLOCAL bool entryNeedsScan(const QoreValue& slot) const {
+        return obj_count && (obj_count == length || needs_scan(slot));
+    }
+
+    //! Move one reference between argument lists without classifying the same value twice.
+    DLLLOCAL void moveEntryTo(size_t index, qore_list_private& dest, size_t dest_index) {
+        assert(this != &dest && index < length);
+        QoreValue& target = dest.getEntryReference(dest_index);
+        assert(target.isNothing());
+        if (entryNeedsScan(entry[index])) {
+            incScanCount(-1);
+            dest.incScanCount(1);
+        }
+        target = entry[index];
+        entry[index].clear();
+    }
+
+    //! Initialize a new slot, possibly out of order when binding named arguments.
+    DLLLOCAL void initEntry(size_t index, QoreValue val) {
+        QoreValue& slot = getEntryReference(index);
+        assert(slot.isNothing());
+        slot = val;
         if (needs_scan(val)) {
             incScanCount(1);
         }
+    }
+
+    DLLLOCAL void pushIntern(QoreValue val) {
+        initEntry(length, val);
     }
 
     DLLLOCAL size_t checkOffset(ptrdiff_t offset) {
@@ -557,8 +614,7 @@ struct qore_list_private {
                 if (check(eh)) {
                     return nullptr;
                 }
-                tmp->priv->entry[i] = eh.release();
-                ++tmp->priv->length;
+                tmp->priv->pushIntern(eh.release());
             }
         } else {
             holder = l.refSelf();
@@ -604,18 +660,18 @@ struct qore_list_private {
         // add in new entries
         if (l.getType() != NT_LIST) {
             entry[offset] = holder.release();
-            if (needs_scan(l))
+            if (needs_scan(entry[offset]))
                 incScanCount(1);
         }
         else {
             qore_list_private* lst = holder->get<const QoreListNode>()->priv;
+            // Transfer the references and their scan count together.
             for (size_t i = 0; i < n; ++i) {
-                QoreValue v = lst->entry[i];
-                lst->entry[i] = QoreValue();
-                if (needs_scan(v))
-                    incScanCount(1);
-                entry[offset + i] = v;
+                entry[offset + i] = lst->entry[i];
+                lst->entry[i].clear();
             }
+            obj_count += lst->obj_count;
+            lst->obj_count = 0;
             lst->length = 0;
         }
 
@@ -651,16 +707,6 @@ struct qore_list_private {
         return l->priv->copy(true);
     }
 
-    DLLLOCAL QoreValue swapIntern(qore_offset_t offset, QoreValue val) {
-        assert(offset >= 0);
-        QoreValue& p = getEntryReference((size_t)offset);
-
-        QoreValue rv = p;
-        p = val;
-
-        return rv;
-    }
-
     DLLLOCAL QoreValue swap(qore_offset_t offset, QoreValue val) {
         QoreValue& p = getEntryReference((size_t)offset);
 
@@ -689,8 +735,11 @@ struct qore_list_private {
         // Transfer every owned representation, including inline enum references.
         entry[offset].clear();
 
-        if (needs_scan(rv)) {
-            --obj_count;
+        // no value of a list whose scan count is zero needs a scan (see QoreListNode::shift()); incScanCount()
+        // asserts the count of a value that does
+        assert(obj_count || !needs_scan(rv));
+        if (obj_count && needs_scan(rv)) {
+            incScanCount(-1);
         }
 
         return rv;
@@ -828,10 +877,6 @@ public:
         return eval_result_size;
     }
 
-    DLLLOCAL void weakRef() {
-        weakRefs.ROreference();
-    }
-
     DLLLOCAL bool weakDeref() {
         if (weakRefs.ROdereference()) {
             return true;
@@ -858,11 +903,59 @@ public:
 
     //! Finishes freeing a list after its entries have been freed
     DLLLOCAL static void finishFree(QoreListNode& l) {
-        // a weak reference (":=") keeps the node allocated after its entries were freed, and must read it as an empty
-        // list, not as the entries that no longer exist
-        l.priv->length = 0;
-        l.priv->valid = false;
+        qore_list_private* p = l.priv;
+        p->length = 0;
+        p->obj_count = 0;
+        if (!p->weak_hold) {
+            // no weak holder can take a reference to the list (see QoreContainerWeakRefs)
+            delete &l;
+            return;
+        }
+        // its weak holders keep the node allocated, and must read it as an empty list, not as the entries that no
+        // longer exist
+        p->valid = false;
+        p->freed = true;
         l.weakDeref();
+    }
+
+    //! Returns a new reference to a list that a weak reference holds, or a new empty list that cannot be changed if
+    //! its last reference was released (qore#7198; see WeakListReferenceNode::lock())
+    /** A reference is never taken to a list whose free has started: its count is zero then, or its weak holders hold
+        one reference of their own (\c weak_hold, see QoreContainerWeakRefs), which is taken after \c weak_hold is
+        set; a reference taken while the list is referenced keeps its free from starting.  So \c weak_hold is read
+        after the count was raised from a value that is not zero: either its value is that of the free, or no free can
+        set it meanwhile.
+    */
+    DLLLOCAL static QoreListNode* lockWeak(QoreListNode& l) {
+        // the reference is taken as QoreReferenceCounter::optRef() takes it, inline
+        int count = l.references.load();
+        while (count > 0) {
+            if (l.references.compare_exchange_weak(count, count + 1)) {
+                return !l.priv->weak_hold ? &l : lockWeakFreeing(l);
+            }
+        }
+        return getFreedStandIn(l);
+    }
+
+    //! Releases the reference that lockWeak() took to a list whose free has started, and returns a new empty list
+    /** The reference is not the list's last, as the caller holds a weak reference, and therefore its weak holders hold
+        theirs.
+    */
+    DLLLOCAL static __attribute__((noinline)) QoreListNode* lockWeakFreeing(QoreListNode& l) {
+#ifdef DEBUG
+        bool last =
+#endif
+        l.ROdereference();
+        assert(!last);
+        return getFreedStandIn(l);
+    }
+
+    //! Returns a new empty list with the type of a list whose last reference was released, which cannot be changed
+    //! (qore#7198; see lockWeak())
+    DLLLOCAL static __attribute__((noinline)) QoreListNode* getFreedStandIn(const QoreListNode& l) {
+        QoreListNode* rv = l.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
     }
 
     DLLLOCAL static void setNeedsEval(QoreListNode& l) {
@@ -969,6 +1062,31 @@ public:
     DLLLOCAL static void incScanCount(const QoreListNode& l, int dt) {
         l.priv->incScanCount(dt);
     }
+};
+
+//! Tracks a conversion that updates an entry through a reference, including its exceptional exits.
+class QoreListEntryEdit {
+public:
+    DLLLOCAL QoreListEntryEdit(qore_list_private& list, size_t index)
+            : list(list), value(list.getEntryReference(index)), scanned(list.entryNeedsScan(value)) {
+    }
+
+    DLLLOCAL ~QoreListEntryEdit() {
+        bool now = needs_scan(value);
+        if (now != scanned) {
+            list.incScanCount(now ? 1 : -1);
+        }
+    }
+
+    QoreListEntryEdit(const QoreListEntryEdit&) = delete;
+    QoreListEntryEdit& operator=(const QoreListEntryEdit&) = delete;
+
+    DLLLOCAL QoreValue& get() { return value; }
+
+private:
+    qore_list_private& list;
+    QoreValue& value;
+    bool scanned;
 };
 
 #endif

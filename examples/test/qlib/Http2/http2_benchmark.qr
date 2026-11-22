@@ -77,14 +77,14 @@ public class Http2Benchmark {
             h1.acceptAllCertificates(True);
 
             list<float> h1_latencies = ();
-            date total_start = now_us();
+            int total_start = clock_get_monotonic_us();
             for (int i = 0; i < iterations; ++i) {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 h1.send("", "GET", "/get", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h1_latencies += lat;
             }
-            float h1_total = (now_us() - total_start).durationMicroseconds() / 1000.0;
+            float h1_total = (clock_get_monotonic_us() - total_start) / 1000.0;
 
             printf("  HTTP/1.1:\n");
             printLatencyStats(h1_latencies);
@@ -103,14 +103,14 @@ public class Http2Benchmark {
             h2.acceptAllCertificates(True);
 
             list<float> h2_latencies = ();
-            date total_start = now_us();
+            int total_start = clock_get_monotonic_us();
             for (int i = 0; i < iterations; ++i) {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 h2.send("", "GET", "/get", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h2_latencies += lat;
             }
-            float h2_total = (now_us() - total_start).durationMicroseconds() / 1000.0;
+            float h2_total = (clock_get_monotonic_us() - total_start) / 1000.0;
 
             printf("  HTTP/2:\n");
             printLatencyStats(h2_latencies);
@@ -135,7 +135,7 @@ public class Http2Benchmark {
 
         # HTTP/1.1 - multiple connections needed
         try {
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -150,9 +150,9 @@ public class Http2Benchmark {
                             "timeout": 30s,
                         });
                         h1.acceptAllCertificates(True);
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h1.send("", "GET", "/get", NOTHING, True);
-                        float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                        float lat = (clock_get_monotonic_us() - req_start) / 1000.0;
                         m.lock();
                         on_exit m.unlock();
                         latencies += lat;
@@ -163,7 +163,7 @@ public class Http2Benchmark {
             }
 
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (clock_get_monotonic_us() - start) / 1000.0;
 
             printf("  HTTP/1.1 (multiple connections):\n");
             if (latencies.size() > 0) {
@@ -185,7 +185,7 @@ public class Http2Benchmark {
             });
             h2.acceptAllCertificates(True);
 
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -194,9 +194,9 @@ public class Http2Benchmark {
                 background sub() {
                     on_exit cnt.dec();
                     try {
-                        date req_start = now_us();
+                        int req_start = clock_get_monotonic_us();
                         h2.send("", "GET", "/get", NOTHING, True);
-                        float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                        float lat = (clock_get_monotonic_us() - req_start) / 1000.0;
                         m.lock();
                         on_exit m.unlock();
                         latencies += lat;
@@ -207,7 +207,7 @@ public class Http2Benchmark {
             }
 
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (clock_get_monotonic_us() - start) / 1000.0;
 
             printf("  HTTP/2 (single connection, multiplexed):\n");
             if (latencies.size() > 0) {
@@ -236,7 +236,7 @@ public class Http2Benchmark {
         list<float> h1_setup = ();
         for (int i = 0; i < setup_iterations; ++i) {
             try {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 HTTPClient h1({
                     "url": url,
                     "http_version": "1.1",
@@ -244,7 +244,7 @@ public class Http2Benchmark {
                 });
                 h1.acceptAllCertificates(True);
                 h1.send("", "GET", "/get", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h1_setup += lat;
             } catch (hash<ExceptionInfo> ex) {
                 # Skip failed connections
@@ -262,7 +262,7 @@ public class Http2Benchmark {
         list<float> h2_setup = ();
         for (int i = 0; i < setup_iterations; ++i) {
             try {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 HTTPClient h2({
                     "url": url,
                     "http_version": "2.0",
@@ -270,7 +270,7 @@ public class Http2Benchmark {
                 });
                 h2.acceptAllCertificates(True);
                 h2.send("", "GET", "/get", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h2_setup += lat;
             } catch (hash<ExceptionInfo> ex) {
                 # Skip failed connections
@@ -316,9 +316,9 @@ public class Http2Benchmark {
             list<float> h1_latencies = ();
             int download_iterations = min(iterations, 5);
             for (int i = 0; i < download_iterations; ++i) {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 hash<auto> resp = h1.send("", "GET", "/bytes/" + body_size, NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h1_latencies += lat;
 
                 # Calculate throughput
@@ -353,9 +353,9 @@ public class Http2Benchmark {
             list<float> h2_latencies = ();
             int download_iterations = min(iterations, 5);
             for (int i = 0; i < download_iterations; ++i) {
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 hash<auto> resp = h2.send("", "GET", "/bytes/" + body_size, NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (clock_get_monotonic_us() - start) / 1000.0;
                 h2_latencies += lat;
 
                 int received_size = 0;

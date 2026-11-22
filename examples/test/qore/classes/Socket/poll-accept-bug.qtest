@@ -61,9 +61,9 @@ class PollAcceptBugTest inherits QUnit::Test {
                     push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
                 }
 
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 list<auto> ready = Socket::poll(poll_list, PollTimeout);
-                date elapsed = now_us() - start;
+                date elapsed = microseconds(clock_get_monotonic_us()) - start;
 
                 if (!ready) {
                     # poll() returned empty - check if connection is actually pending
@@ -199,9 +199,9 @@ class PollAcceptBugTest inherits QUnit::Test {
                 push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
             }
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             list<auto> ready = Socket::poll(poll_list, 2000);  # 2 second timeout
-            date elapsed = now_us() - start;
+            date elapsed = microseconds(clock_get_monotonic_us()) - start;
 
             if (!ready) {
                 try {

@@ -808,7 +808,8 @@ public class WebSocketConnection {
         is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
         not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
         limit is set, @ref AsyncSocketIo::AbstractStreamContext::sendDataWithTimeout() "sendDataWithTimeout()" waits
-        for a full stream send buffer to drain for at most the send timeout, after which the connection is closed.
+        for a full stream send buffer to drain, and the connection is closed once the peer has taken none of the
+        stream's data for the send timeout.
 
         @since %WebSocketHandler 2.8
     */
@@ -826,8 +827,8 @@ public class WebSocketConnection {
                 return;
             }
         } else {
-            # a full stream send buffer is waited for, as on HTTP/1.1, for at most the send timeout; a client that
-            # does not read in that time is disconnected, so the peer never sees a gap in the message stream
+            # a full stream send buffer is waited for, as on HTTP/1.1; a client that takes none of the data for the
+            # send timeout is disconnected, so the peer never sees a gap in the message stream
             try {
                 stream_ctx.sendDataWithTimeout(encoded, get_duration_milliseconds(handler.getSendTimeout()));
             } catch (hash<ExceptionInfo> ex) {
@@ -1833,6 +1834,8 @@ class WebSocketStreamProcessor {
 
         #! Timer generation used to ignore stale callbacks after reschedule/cancel
         int heartbeat_generation = 0;
+        #! True once a refused re-arm of the heartbeat timer at the end of the process has been logged (qore#7027)
+        bool heartbeat_shutdown_logged = False;
 
         #! True when the stream has been closed
         /** Protected by @ref close_lock, not @ref process_mutex. */
@@ -1871,9 +1874,14 @@ class WebSocketStreamProcessor {
 
         @param cb the code to call
 
+        @throw PERMISSION-DENIED \a cb was created by code restricted from the \c THREAD_CONTROL domain, as it is
+        called in the thread that closes the stream (see @ref Qore::check_thread_callable() "check_thread_callable()")
+
         @since WebSocketHandler 2.8
     */
     setDoneCallback(code<nothing()> cb) {
+        # the code is called in another thread: an async I/O worker that closes the stream (qore#7056)
+        check_thread_callable(cb, "WebSocketStreamProcessor::setDoneCallback()");
         {
             AutoLock al(close_lock);
             if (!closed) {
@@ -1991,14 +1999,33 @@ class WebSocketStreamProcessor {
             markClosedOnce();
             return;
         }
-        AutoLock al(close_lock);
-        # the client's close frame may have arrived meanwhile
-        if (closed) {
-            return;
+        *hash<ExceptionInfo> refused;
+        {
+            AutoLock al(close_lock);
+            # the client's close frame may have arrived meanwhile
+            if (closed) {
+                return;
+            }
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
+                    sub () { self.handleCloseTimer(); });
+            } catch (hash<ExceptionInfo> ex) {
+                # at the end of the process, the work of the module cleanup cannot add timers after its deadline
+                # (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream is ended
+                # at once, as without a close timeout (qore#7027)
+                if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                    rethrow;
+                }
+                refused = ex;
+            }
         }
-        AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-        close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
-            sub () { self.handleCloseTimer(); });
+        if (refused) {
+            handler.logDebug("H2/H3 WebSocket close timer not armed at the end of the process: %s: %s", refused.err,
+                refused.desc);
+            endStream(ctx);
+            markClosedOnce();
+        }
     }
 
     #! Ends the stream when the client has not answered the server's close frame within the close timeout
@@ -2393,9 +2420,23 @@ class WebSocketStreamProcessor {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream goes on without its
+            # heartbeat and idle timeout (qore#7027); logged once, as every frame re-arms the timer
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            if (!heartbeat_shutdown_logged) {
+                heartbeat_shutdown_logged = True;
+                handler.logDebug("H2/H3 WebSocket heartbeat timer not re-armed at the end of the process: %s: %s",
+                    ex.err, ex.desc);
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {
@@ -3175,7 +3216,8 @@ handler.setCloseTimeout(2s);
         }
         # Debug helper for HTTP/2 WS frame headers
         # @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
-        *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
+        # the async I/O controller for the handler's code, as the handler's code would get it (qore#7213)
+        *AsyncSocketIo::AsyncSocketIoController async_ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
@@ -3317,12 +3359,10 @@ handler.setCloseTimeout(2s);
             # NOTE: the 101 response was already sent via execAsyncPollOperation
             # before startImpl() was called — this is required because
             # registered() may throw and the client needs the 101 regardless.
-            *auto ws_async_io = cx."header-info".async_io_controller;
-            *auto ws_async_target = cx."header-info".async_target;
-            if (ws_async_io) {
-                *HttpServer::HttpListenerInterface ws_listener = cx.listener;
-                ws_async_io.registerH1WebSocketConnection(sock, ws_poll_op,
-                    ws_async_target, ws_listener, cx);
+            # the server's code registers the connection with its async I/O (qore#7200)
+            *code<nothing()> ws_register = cx."header-info".ws_register;
+            if (ws_register) {
+                ws_register();
             }
             # enables direct sends and atomically drains any data queued before that point
             # (for example from getConnectionImpl() or registered()), so a frame sent from
@@ -3332,6 +3372,8 @@ handler.setCloseTimeout(2s);
             # the end of the connection: this handler's cleanup, then the server's (the code that the server gives
             # in the connection's header-info as ws_end), which ran when this method returned while it waited
             *code<nothing()> server_end = cx."header-info".ws_end;
+            # holds the server for the whole end of the connection (issue #7188)
+            *code<nothing()> server_hold = cx."header-info".ws_end_hold;
             *code<nothing()> accept_end = cx."header-info".ws_accept_end;
             if (!server_end || !accept_end) {
                 # a server that does not give its end of the connection ends the connection when this method
@@ -3361,7 +3403,7 @@ handler.setCloseTimeout(2s);
             *WebSocketConnection end_wsc = wsc;
             code<nothing()> end = sub () {
                 on_exit releaseEndedConnection(\end_wsc);
-                endAsyncConnection(end_op, end_wsc, cid, lid, server_end);
+                endAsyncConnection(end_op, end_wsc, cid, lid, server_end, server_hold);
             };
             # from here on the poll op ends the connection; called at once if it has ended already
             deferred = True;
@@ -3391,6 +3433,8 @@ handler.setCloseTimeout(2s);
         # the server's end of the stream, which this handler runs when the stream ends, and the code that runs it on a
         # thread of the server's handler pool: no thread then waits for the stream (qore#5752)
         *code<nothing()> server_end = cx."header-info".ws_end;
+        # holds the server for the whole end of the stream (issue #7188)
+        *code<nothing()> server_hold = cx."header-info".ws_end_hold;
         *code<nothing(code<nothing()>)> submit_end = cx."header-info".ws_submit;
         *code<nothing()> accept_end = cx."header-info".ws_accept_end;
         Counter stream_done(1);
@@ -3434,7 +3478,7 @@ handler.setCloseTimeout(2s);
             *WebSocketConnection end_wsc = wsc;
             code<nothing()> end = sub () {
                 on_exit releaseEndedConnection(\end_wsc);
-                endAsyncConnection(NOTHING, end_wsc, cid, lid, server_end);
+                endAsyncConnection(NOTHING, end_wsc, cid, lid, server_end, server_hold);
             };
             deferred = True;
             accept_end();
@@ -3482,9 +3526,21 @@ handler.setCloseTimeout(2s);
         @param cid the connection ID
         @param lid the listener ID
         @param server_end the server's end of the connection, if any
+        @param server_hold the server's code that holds it until its end of the connection has run (\c ws_end_hold in
+        the connection's header-info), so that it is not destroyed in this handler's part of the end, while it still
+        counts the connection (issue #7188)
     */
     private endAsyncConnection(*HttpWebSocketPollOperationBase ws_poll_op, WebSocketConnection wsc,
-            string cid, string lid, *code<nothing()> server_end) {
+            string cid, string lid, *code<nothing()> server_end, *code<nothing()> server_hold) {
+        # the server holds itself until its end of the connection (server_end) has run
+        if (server_hold) {
+            try {
+                server_hold();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception holding the server for the end of a WebSocket connection: %s",
+                    get_exception_string(ex));
+            }
+        }
         try {
             if (ws_poll_op) {
                 # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect

@@ -260,17 +260,39 @@ public class RestSchemaActionOperation {
         response; only possible if the output type was not built at construction
     */
     *AbstractDataProviderType getResponseType() {
+        return getResponseValues().type;
+    }
+
+    #! Returns the output type and the response conversions of the action, building them if they are not built yet
+    /** A set can be shared between callers with different restrictions, and so can the output type that it keeps:
+        what a sandboxed caller builds is private to that caller and is not kept in the operation for the others;
+        only an unsandboxed caller's build is kept (qore#7104).  A sandboxed caller therefore builds the type
+        again on each call, until an unsandboxed caller has built and kept it.
+
+        @return a hash with the keys \c type (the output type, if any) and \c conv (the response conversions, if any)
+
+        @throw REST-SCHEMA-ACTION-ERROR an unwrap path or a response overlay of the manifest does not apply to the
+        response; only possible if the output type was not built at construction
+    */
+    private hash<auto> getResponseValues() {
         if (response_pending) {
+            hash<auto> built;
             schema.runTypeBuild(sub () {
                 # another thread may have built it while this one waited for the build lock
                 if (response_pending) {
                     on_error rethrow $1.err, sprintf("%s (while building the output type of action %y from "
                         "\"%s %s\")", $1.desc, info.action, info.method.upr(), info.path);
-                    buildResponseType();
+                    built = buildResponseValues();
+                    if (DataProvider::mayRegisterShared()) {
+                        publishResponseValues(built);
+                    }
                 }
             });
+            if (built) {
+                return built;
+            }
         }
-        return response_type;
+        return {"type": response_type, "conv": response_conv};
     }
 
     #! Returns @ref True if the constructor left the output type to be built by getResponseType()
@@ -744,7 +766,7 @@ public class RestSchemaActionOperation {
     */
     auto processResponse(auto body) {
         # the response conversions are derived with the output type
-        getResponseType();
+        hash<auto> response_values = getResponseValues();
         foreach string name in (info.response_unwrap) {
             if (!exists body) {
                 break;
@@ -756,8 +778,8 @@ public class RestSchemaActionOperation {
             }
             body = body{name};
         }
-        if (response_conv && exists body) {
-            body = RestSchemaActionOperation::convertValue(body, response_conv, False);
+        if (response_values.conv && exists body) {
+            body = RestSchemaActionOperation::convertValue(body, response_values.conv, False);
         }
         return body;
     }
@@ -1385,6 +1407,18 @@ public class RestSchemaActionOperation {
         response
     */
     private buildResponseType() {
+        publishResponseValues(buildResponseValues());
+    }
+
+    #! Builds the action output type and the response conversions from the success response selected by selectResponse()
+    /** Nothing is set: the caller keeps the result with publishResponseValues() or uses it for itself.
+
+        @return a hash with the keys \c type (the output type) and \c conv (the response conversions, if any)
+
+        @throw REST-SCHEMA-ACTION-ERROR an unwrap path or a response overlay of the manifest does not apply to the
+        response
+    */
+    private hash<auto> buildResponseValues() {
         # the type of a response value has the read-only properties that request types have no field for, and has
         # no write-only property; a schema without such properties gives its shared cached type, as for Stripe's
         # large graph of expandable objects
@@ -1408,8 +1442,16 @@ public class RestSchemaActionOperation {
             type = applyTypeOverlay(type, info.response_fields, "response body", \node, "response");
             conv = node;
         }
-        response_type = info.response_envelope ? makeResponseEnvelopeType(type) : type;
-        response_conv = conv;
+        return {
+            "type": info.response_envelope ? makeResponseEnvelopeType(type) : type,
+            "conv": conv,
+        };
+    }
+
+    #! Keeps the output type and the response conversions that buildResponseValues() built
+    private publishResponseValues(hash<auto> values) {
+        response_type = values.type;
+        response_conv = values.conv;
         remove response_schema;
         response_pending = False;
     }

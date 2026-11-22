@@ -4312,6 +4312,10 @@ struct QOLinkInputInfo {
 
 struct QOLinkIssue {
     std::string consumer;
+    //! the source file of the code of the consumer that refers to the symbol, if known
+    std::string consumer_source;
+    //! the kind of the symbol that the consumer imports
+    QoreAOTSymbolKind kind = QoreAOTSymbolKind::NAMESPACE;
     std::string path;
     std::string dependency_class;
     std::string expected;
@@ -5015,6 +5019,8 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
 
             QOLinkIssue issue;
             issue.consumer = input.path;
+            issue.consumer_source = rec.consumer_source_file;
+            issue.kind = rec.kind;
             issue.path = rec.qore_path;
             issue.dependency_class = qoreAOTDependencyClassName(dep_class);
             if (dep_class == QoreAOTDependencyClass::QORE_API
@@ -9571,12 +9577,33 @@ static bool validate_script_object_body_contracts(
         }
         return false;
     }
+    // a name that code refers to as a global variable, a constant, a static class variable or an enum member that
+    // no linked object defines: a parse of the objects' sources in one Program refuses it ("cannot resolve
+    // bareword"), and an object compiled with -L defers it to run time, where its use fails (issue #6902)
+    std::vector<const QOLinkIssue*> unresolved_refs;
+    for (const QOLinkIssue& issue : plan.unresolved_imports) {
+        if (issue.dependency_class != "native_body"
+                && (issue.kind == QoreAOTSymbolKind::GLOBAL || issue.kind == QoreAOTSymbolKind::CONSTANT
+                    || issue.kind == QoreAOTSymbolKind::STATIC_VAR
+                    || issue.kind == QoreAOTSymbolKind::ENUM_MEMBER)) {
+            unresolved_refs.push_back(&issue);
+        }
+    }
     bool valid = unresolved.empty() && ambiguous.empty()
-        && mismatches.empty();
+        && mismatches.empty() && unresolved_refs.empty();
     if (!valid) {
         print_qo_link_issues("unresolved body contract", unresolved);
         print_qo_link_issues("ambiguous body contract", ambiguous);
         print_qo_link_issues("body contract hash mismatch", mismatches);
+        for (const QOLinkIssue* issue : unresolved_refs) {
+            fprintf(stderr, "error: unresolved reference to %s '%s' in %s (object %s): no linked object defines it\n",
+                issue->kind == QoreAOTSymbolKind::GLOBAL ? "global variable or constant"
+                    : issue->kind == QoreAOTSymbolKind::CONSTANT ? "constant"
+                    : issue->kind == QoreAOTSymbolKind::STATIC_VAR ? "static class variable or scoped constant"
+                    : "enum member",
+                issue->path.c_str(), issue->consumer_source.empty() ? "<unknown source>"
+                    : issue->consumer_source.c_str(), issue->consumer.c_str());
+        }
     }
     if (initialize_qore) {
         qore_cleanup();
