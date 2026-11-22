@@ -1475,7 +1475,9 @@ class SocketTest inherits QUnit::Test {
 
             assertTrue(s2.isOpen());
             assertTrue(s0.isOpen());
-            assertTrue(s0.isDataAvailable());
+            # the client's connect completes on the SYN-ACK; the listener sees the connection only when the client's
+            # ACK arrives, so the pending connection is waited for (macOS shows the gap, qore#6535)
+            assertTrue(s0.isDataAvailable(5s));
             assertTrue(s2.isWriteFinished(5s));
             assertFalse(s2.isDataAvailable());
 

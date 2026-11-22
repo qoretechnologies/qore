@@ -8755,6 +8755,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
+            // a hash that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : value_bits;
+            }
             // COW: transfer the unique copy's reference to the local — no
             // refSelf, so LValueHelper::assign()'s typed-lvalue paths (e.g.
             // the hash<auto!> no-narrow strip) retag it in place instead of
@@ -8821,6 +8826,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             // node the local actually stores (borrowed against its reference).
             LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
                 ? ctx->locals[local_slot] : nullptr;
+            // a hash that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : value_bits;
+            }
             QoreValue stored = qore_rt_assign_local_transfer(var,
                 QoreValue(h->copy()), xsink);
             if (*xsink || stored.getType() != NT_HASH) {
@@ -8909,6 +8919,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // Any ref beyond the lvalue's own runtime slot is real sharing and must
         // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
         if (l->reference_count() > 1) {
+            // a list that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : val_bits;
+            }
             // COW: transfer the unique copy's reference to the local — no
             // refSelf, so LValueHelper::assign()'s typed-lvalue paths (e.g.
             // the list<auto!> no-narrow strip) retag it in place instead of
@@ -9017,6 +9032,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             // node the local actually stores (borrowed against its reference).
             LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
                 ? ctx->locals[local_slot] : nullptr;
+            // a list that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : val_bits;
+            }
             QoreValue stored = qore_rt_assign_local_transfer(var,
                 QoreValue(l->copy()), xsink);
             if (*xsink || stored.getType() != NT_LIST) {
@@ -18872,6 +18892,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             || inst->unary_op == LVUnaryOp::Chomp
             || inst->unary_op == LVUnaryOp::EnsureUnique);
         LValueHelper lvh(xsink);
+        // the source of a weak assignment is read as an rvalue reads it (qore#7242)
+        if (inst->unary_op == LVUnaryOp::EnsureUnique) {
+            lvh.setWeakSourceResolution();
+        }
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
             return toBits(QoreValue());
         }
