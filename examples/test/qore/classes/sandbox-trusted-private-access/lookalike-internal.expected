@@ -1,0 +1,3 @@
+isecret: PRIVATE-MEMBER: 'isecret' is a private member of class 'Shape'
+ihelper: METHOD-DOES-NOT-EXIST: no method Shape::ihelper() has been defined and no pseudo-method <object>::ihelper() is available (class lang: Qore)
+keys: OK []

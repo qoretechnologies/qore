@@ -27,7 +27,7 @@
     class, which the trusted class calls, and call the base class's version of a method that it overrides; trusted
     code keeps its private access to the objects of the sandboxed class.  A class that sandboxed code declares with
     the name and the declarations of a trusted class has no private access to the trusted class's objects either
-    (lookalike.q; its private:internal declarations: lookalike-internal.q, which depends on qore#7036).  The uses of
+    (lookalike.q, and lookalike-internal.q for its private:internal declarations, qore#7036).  The uses of
     the private hooks of library classes that stay allowed (overrides, private and public, a recursive call of the own
     override, the implementation of private abstract hooks, the call of the library class's version of an overridden
     method) and the call of another private method of a library class, which is refused, are in library-hooks.q; the
@@ -42,18 +42,14 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
         string dir = get_script_dir() + "/sandbox-trusted-private-access";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe", "lookalike", "library-hooks", "public-hooks", "stream-request", "final-hooks");
-
-        #! the private:internal declarations of a look-alike class (lookalike-internal.q) are refused once qore#7036
-        #! is fixed: until then the program is not run
-        const InternalRequires7036 = True;
+        const Programs = ("probe", "lookalike", "lookalike-internal", "library-hooks", "public-hooks", "stream-request",
+            "final-hooks");
     }
 
     constructor() : QUnit::Test("SandboxTrustedPrivateAccessTest", "1.0", \ARGV) {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
-        addTestCase("the private:internal declarations of a look-alike class (qore#7036)", \testInternal());
         set_return_value(main());
     }
 
@@ -84,15 +80,6 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
             }
             # the IR tier of tiered execution runs the calls in the IR interpreter
             assertEq(expected(name), run(name, "tiered", True), name + " " + ExecModeHarness::IRTierName);
-        }
-    }
-
-    testInternal() {
-        if (InternalRequires7036) {
-            testSkip("the private:internal declarations of a look-alike class are refused once qore#7036 is fixed");
-        }
-        foreach string mode in (Modes) {
-            assertEq(expected("lookalike-internal"), run("lookalike-internal", mode), "lookalike-internal " + mode);
         }
     }
 
