@@ -198,12 +198,20 @@ QoreHashNode* qore_hash_private::getSlice(const QoreListNode* value_list, Except
 }
 
 void qore_hash_private::merge(const qore_hash_private& h, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         setKeyValue(i->key, i->val.refSelf(), xsink);
     }
 }
 
 void qore_hash_private::mergeNative(const qore_hash_private& h, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         hash_assignment_priv ha(*this, i->key.c_str());
         ha.assignNative(i->val.refSelf(), xsink);
@@ -211,6 +219,10 @@ void qore_hash_private::mergeNative(const qore_hash_private& h, ExceptionSink* x
 }
 
 void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         setKeyValue(i->key, i->val.refSelf(), sdh, xsink);
     }
@@ -218,6 +230,10 @@ void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, 
 
 void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     size_t count = 0;
     for (auto& i : h.member_list) {
         if (++count % 100 == 0 && qore_check_cancel(xsink, "hash merge")) {
