@@ -1,0 +1,292 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS connections with concurrent streams, and sandboxed HTTP handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpClientIo
+%requires ServerSentEventHandler
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp2HandlerSocketTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Holds its request until the test releases it; tells the test the request's stream
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        entered.push(cx."header-info".stream_id);
+        release.get(HangGuard);
+        return makeResponse(200, "held");
+    }
+}
+
+#! Answers its requests with the id of their connection
+class ConnectionIdHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, string(cx.id));
+    }
+}
+
+#! The handlers of HTTP/2 requests act on their own stream only (qore#7214)
+/** The streams of an HTTP/2 connection share its socket; a sandboxed handler gets a socket of its own that acts on
+    the request's own stream only, however it calls its methods; its close() and shutdown() end its own stream, and
+    the connection's other streams, which can be requests of the same client to other handlers, continue
+*/
+class HttpServerHttp2HandlerSocketTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's handlers
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires ServerSentEventHandler
+
+string sub try_it(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub get_victim(hash<auto> hdr) {
+    return (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
+}
+
+#! tries the socket on another stream of the connection; returns the attempts
+hash<string, string> sub attack(Socket s, int own, int victim, *AsyncSocketIo::AsyncSocketIoController ctrl) {
+    hash<string, string> r = {
+        \"is_http2\": s.isHttp2() ? \"yes\" : \"no\",
+        \"own_stream\": try_it(sub () { s.getHttp2StreamTakenBytes(own); }),
+        \"other_stream\": try_it(sub () { s.getHttp2StreamTakenBytes(victim); }),
+        \"response\": try_it(sub () { s.submitHttp2Response(victim, 200, NOTHING, \"FORGED\"); }),
+        \"reset\": try_it(sub () { s.resetHttp2Stream(victim); }),
+    };
+    if (ctrl) {
+        try {
+            ctrl.wakeSocket(s);
+        } catch () {
+        }
+    }
+    return r;
+}
+
+class TenantHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        int own = cx.\"header-info\".stream_id;
+        if (hdr.path =~ /close/) {
+            # ends the handler's own stream: the response is not sent
+            try {
+                s.shutdown();
+            } catch () {
+            }
+            s.close();
+            return makeResponse(200, \"closed\");
+        }
+        hash<string, string> r = attack(s, own, get_victim(hdr), cx.async_ctrl);
+        return makeResponse(200, (map $1.key + \"=\" + $1.value, r.pairIterator()).join(\"\\n\"));
+    }
+}
+
+class TenantSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) : ServerSentEventHandler::ServerSentEventHandler({}) {
+        self.to_host = to_host;
+    }
+
+    ServerSentEventHandler::ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid) {
+        to_host.push(try_it(sub () { sock.getHttp2StreamTakenBytes(get_victim(hdr)); }));
+        return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantHandler();
+}
+
+AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
+    return new TenantSseHandler(to_host);
+}
+";
+
+        #! the attempts of the tenant's handler on another stream of its connection
+        const AttackResults = {
+            "is_http2": "yes",
+            "own_stream": "ok",
+            "other_stream": "HTTP2-HANDLER-SOCKET-ERROR",
+            "response": "HTTP2-HANDLER-SOCKET-ERROR",
+            "reset": "HTTP2-HANDLER-SOCKET-ERROR",
+        };
+    }
+
+    constructor() : QUnit::Test("HTTP/2 handler socket", "1.0", \ARGV) {
+        addTestCase("a sandboxed HTTP/2 handler acts on its own stream only", \attackTest());
+        addTestCase("close() and shutdown() end the handler's own stream only", \closeTest());
+        addTestCase("an SSE connection over HTTP/2 gets its own socket", \sseTest());
+        set_return_value(main());
+    }
+
+    #! The tenant attacks another request of the same connection, in progress, through the socket of its request
+    attackTest() {
+        Program tenant = getTenantProgram();
+        HoldHandler hold();
+        hash<auto> srv = startServer(tenant.callFunction("get_handler"), hold);
+        on_exit delete srv.server;
+        # a held request ends before the server is deleted, also when the test fails
+        on_exit hold.release.push(True);
+
+        HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d/", srv.port);
+        # the victim: another request of the same connection, in progress
+        Queue victim_result();
+        background sub () {
+            try {
+                victim_result.push(mgr.request(url, "GET", "/hold").body);
+            } catch (hash<ExceptionInfo> ex) {
+                victim_result.push(ex.err);
+            }
+        }();
+        int victim = hold.entered.get(HangGuard);
+
+        string body = mgr.request(url, "GET", "/probe/attack?victim=" + victim).body;
+        assertEq(AttackResults, parseResult(body));
+        hold.release.push(True);
+        assertEq("held", victim_result.get(HangGuard), "the other request of the connection completes");
+    }
+
+    #! The handler's close() and shutdown() end its own stream; the connection's other streams continue
+    closeTest() {
+        Program tenant = getTenantProgram();
+        HoldHandler hold();
+        hash<auto> srv = startServer(tenant.callFunction("get_handler"), hold);
+        on_exit delete srv.server;
+        on_exit hold.release.push(True);
+
+        HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d/", srv.port);
+        # another request of the same connection, in progress while the handler ends its own stream
+        Queue other_result();
+        background sub () {
+            try {
+                other_result.push(mgr.request(url, "GET", "/hold").body);
+            } catch (hash<ExceptionInfo> ex) {
+                other_result.push(ex.err);
+            }
+        }();
+        hold.entered.get(HangGuard);
+        # the stream of the request ends without its response
+        string r;
+        try {
+            r = mgr.request(url, "GET", "/probe/close").body ?? "";
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        assertNeq("closed", r, "the handler's stream ended before its response");
+        # the connection's other stream continues
+        hold.release.push(True);
+        assertEq("held", other_result.get(HangGuard), "the other request of the connection completes");
+    }
+
+    #! A sandboxed SSE handler's connection over HTTP/2 gets the socket of its request
+    sseTest() {
+        Program tenant = getTenantProgram();
+        Queue to_host();
+        HoldHandler hold();
+        hash<auto> srv = startServer(tenant.callFunction("get_sse_handler", to_host), hold);
+        on_exit delete srv.server;
+        on_exit hold.release.push(True);
+
+        HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d/", srv.port);
+        Queue victim_result();
+        background sub () {
+            try {
+                victim_result.push(mgr.request(url, "GET", "/hold").body);
+            } catch (hash<ExceptionInfo> ex) {
+                victim_result.push(ex.err);
+            }
+        }();
+        int victim = hold.entered.get(HangGuard);
+        HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/probe/sse?victim=" + victim,
+            {"Accept": MimeTypeSse});
+        on_exit stream.cancel();
+        assertEq("HTTP2-HANDLER-SOCKET-ERROR", to_host.get(HangGuard), "the setup's socket acts on its own stream");
+        hold.release.push(True);
+        assertEq("held", victim_result.get(HangGuard), "the other request of the connection completes");
+    }
+
+    #! Starts a server with an HTTP/2 listener, the tenant's probe, the connection id handler and optionally a hold
+    #! handler
+    private hash<auto> startServer(AbstractHttpRequestHandler probe, *HoldHandler hold) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setHandler("probe", "^probe", NOTHING, probe);
+        server.setHandler("cid", "^cid", NOTHING, new ConnectionIdHandler());
+        if (hold) {
+            server.setHandler("hold", "^hold", NOTHING, hold);
+        }
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        return {"server": server, "port": port};
+    }
+
+    #! Returns an HTTP/2 client connection manager
+    private static HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    #! Returns the key=value lines of a result as a hash
+    private static hash<string, string> parseResult(string body) {
+        hash<string, string> r;
+        foreach string line in (body.split("\n")) {
+            (*string k, *string v) = (line =~ x/^([^=]+)=(.*)$/);
+            if (exists k) {
+                r{k} = v ?? "";
+            }
+        }
+        return r;
+    }
+
+    #! Returns a sandboxed Program with the tenant's handlers
+    private Program getTenantProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}
