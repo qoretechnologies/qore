@@ -3358,12 +3358,10 @@ handler.setCloseTimeout(2s);
             # NOTE: the 101 response was already sent via execAsyncPollOperation
             # before startImpl() was called — this is required because
             # registered() may throw and the client needs the 101 regardless.
-            *auto ws_async_io = cx."header-info".async_io_controller;
-            *auto ws_async_target = cx."header-info".async_target;
-            if (ws_async_io) {
-                *HttpServer::HttpListenerInterface ws_listener = cx.listener;
-                ws_async_io.registerH1WebSocketConnection(sock, ws_poll_op,
-                    ws_async_target, ws_listener, cx);
+            # the server's code registers the connection with its async I/O (qore#7200)
+            *code<nothing()> ws_register = cx."header-info".ws_register;
+            if (ws_register) {
+                ws_register();
             }
             # enables direct sends and atomically drains any data queued before that point
             # (for example from getConnectionImpl() or registered()), so a frame sent from

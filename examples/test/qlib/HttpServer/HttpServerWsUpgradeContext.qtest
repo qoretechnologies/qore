@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class HttpServerWsUpgradeContextTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The request context of the socket handler of a WebSocket upgrade concerns its own connection only (qore#7200)
+/** A sandboxed WebSocket handler gets no server object in the context of its connection, and its connection works:
+    the server registers it with its async I/O through the code that it gives the handler
+*/
+class HttpServerWsUpgradeContextTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's WebSocket handler: reports the server objects in the context of its connection, and
+        #! echoes the messages of its connection
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketHandler
+
+class TenantWsConnection inherits WebSocketConnection {
+    private {
+        # the server's code that registered the connection
+        *code reg;
+    }
+
+    constructor(WebSocketHandler handler, *code reg) : WebSocketConnection(handler) {
+        self.reg = reg;
+    }
+
+    gotMessage(string msg) {
+        if (msg == \"again\") {
+            # the registration again, once the connection is registered
+            string r;
+            try {
+                reg();
+                r = \"ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+            send(\"again \" + r);
+            return;
+        }
+        send(\"echo \" + msg);
+    }
+}
+
+class TenantWsHandler inherits WebSocketHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) : WebSocketHandler() {
+        self.to_host = to_host;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        to_host.push(sprintf(\"controller=%y target=%y\", exists cx.\"header-info\".async_io_controller,
+            exists cx.\"header-info\".async_target));
+        return new TenantWsConnection(self, cx.\"header-info\".ws_register);
+    }
+}
+
+AbstractHttpSocketHandler sub get_handler(Queue to_host) {
+    return new TenantWsHandler(to_host);
+}
+";
+    }
+
+    constructor() : QUnit::Test("WebSocket upgrade context", "1.0", \ARGV) {
+        addTestCase("a WebSocket handler gets no server object, and its connection works", \contextTest());
+        set_return_value(main());
+    }
+
+    contextTest() {
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        tenant.setSandboxManager(sm);
+        Queue to_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_handler", to_host);
+
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ws", "^ws", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+        }).port;
+        server.waitForAsyncIo();
+
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, {
+            "url": sprintf("ws://localhost:%d/ws", port),
+            "timeout": HangGuard,
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+        assertEq("controller=False target=False", to_host.get(HangGuard), "the handler gets no server object");
+        # the connection is registered with the server's async I/O
+        wsc.send("hello");
+        assertEq("echo hello", msgs.get(HangGuard), "the connection works");
+        # the registration code runs once: a later call is refused, and the connection keeps working
+        wsc.send("again");
+        assertEq("again WEBSOCKET-REGISTER-ERROR", msgs.get(HangGuard), "a later registration is refused");
+        wsc.send("still");
+        assertEq("echo still", msgs.get(HangGuard), "the connection still works");
+    }
+}
