@@ -6317,14 +6317,15 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     private doSubmitRequest() {
+        # a request cancelled while its connection was acquired, or after an earlier attempt, is not sent
+        checkSettled();
         state = SPS_IO_WAITING;
         if (isRedirected()) {
             # the request was prepared for the original request; it is sent as changed by the redirects
             hash<auto> result = rcio.submitRedirectAttemptWithNotifier(rf.getOrigin(), rf.getMethod(),
                 rf.getPath(), rf.getHeaders(), rf.getBody(), io_notifier);
             connector.submitted();
-            pending_future = result.future;
-            pending_stream = result.stream;
+            setPendingRequest(result.future, result.stream);
             sent = clock_get_monotonic_us();
             return;
         }
@@ -6335,8 +6336,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             hdr, prepared_attempt, io_notifier);
         connector.submitted();
         delete prepared_attempt;
-        pending_future = result.future;
-        pending_stream = result.stream;
+        setPendingRequest(result.future, result.stream);
         sent = clock_get_monotonic_us();
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
@@ -6399,6 +6399,39 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             } catch () {
             }
         }
+    }
+
+    #! Raises \c HTTPCLIENT-CANCELLED if the operation's Future has already been settled
+    /** @ref cancel() settles the Future from any thread; a request submitted after that would be left running
+        with nothing to end it.
+    */
+    private checkSettled() {
+        AutoLock al(m);
+        if (promise_done) {
+            throw "HTTPCLIENT-CANCELLED", "async request was canceled";
+        }
+    }
+
+    #! Records the response Future and the stream of a submitted request attempt
+    /** @ref cancel() runs in the caller's thread and cancels the stream it finds recorded; the request is
+        submitted in the thread driving the operation and reaches the server before its stream is recorded here.
+        A cancel in between finds no stream, so the stream is recorded under the lock that @ref cancel() takes, and
+        if the Future has been settled in the meantime the stream is cancelled here; its connection is closed
+        either way.
+
+        @throw HTTPCLIENT-CANCELLED the operation was cancelled while the request was submitted
+    */
+    private setPendingRequest(Future future, HttpClientIo::HttpClientStreamHandle stream) {
+        {
+            AutoLock al(m);
+            pending_future = future;
+            pending_stream = stream;
+            if (!promise_done) {
+                return;
+            }
+        }
+        cancelPendingStream();
+        throw "HTTPCLIENT-CANCELLED", "async request was canceled";
     }
 }
 
