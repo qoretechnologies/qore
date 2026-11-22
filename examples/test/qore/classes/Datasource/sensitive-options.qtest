@@ -20,6 +20,7 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("mask_datasource_options()", \maskOptions());
         addTestCase("mask_datasource_options() values that cannot be shown", \maskOptionValues());
         addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
+        addTestCase("option names that can name a credential", \credentialNames());
         set_return_value(main());
     }
 
@@ -119,5 +120,18 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         assertEq({"stream-chunk": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
         # the option information gives it as not sensitive, as the driver does not declare it sensitive
         assertFalse(dbi_get_driver_options("dbitest"){"stream-chunk"}.sensitive);
+    }
+
+    credentialNames() {
+        # "api_token" is registered with option flags and declared not sensitive, but its name can name a credential:
+        # its value is masked in every form, whatever the declaration (defense in depth); "rows", a harmless option
+        # registered with option flags, is shown
+        assertFalse(dbi_get_driver_options("dbitest").api_token.sensitive);
+        assertEq({"api_token": "****", "API_Token": "****", "rows": "5"}, mask_datasource_options("dbitest",
+            {"api_token": "abc", "API_Token": "abc", "rows": 5}));
+        hash<auto> h = {"type": "dbitest", "db": "db", "options": {"api_token": "abc", "rows": 5}};
+        assertEq("dbitest:****/****@db{api_token=****,rows=5}", mask_datasource(h, {"show_db": True,
+            "show_options": True}));
+        assertEq({"api_token": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
     }
 }

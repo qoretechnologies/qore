@@ -33,6 +33,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("values of non-sensitive options that cannot be shown", \valuesNotShown());
         addTestCase("connection strings and URLs in non-sensitive options", \credentialStrings());
         addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
+        addTestCase("option names that can name a credential", \credentialNames());
         set_return_value(main());
     }
 
@@ -156,5 +157,17 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("****", info.opts{"stream-chunk"});
         assertEq("5", info.opts.rows);
         assertEq("****", c.ping().opts{"stream-chunk"});
+    }
+
+    credentialNames() {
+        # "api_token" is declared not sensitive, but its name can name a credential: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{api_token=abc,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options.api_token);
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options.api_token);
+        assertEq("****", info.opts.api_token);
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts.api_token);
+        assertFalse(sprintf("%y", info).find("abc") >= 0, sprintf("%y", info));
     }
 }

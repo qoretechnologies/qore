@@ -75,6 +75,9 @@
 #define DBITEST_OPT_SESSION "session"
 //! driver option declared sensitive (QDBI_OPT_SENSITIVE): a string kept on the connection, as a credential would be
 #define DBITEST_OPT_SECRET "secret"
+//! driver option registered with option flags and declared not sensitive, whose name can name a credential: its value
+//! is masked by name in the masked forms of a datasource (qore#7070)
+#define DBITEST_OPT_API_TOKEN "api_token"
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -189,6 +192,8 @@ public:
     std::string fault;
     //! the value of the sensitive "secret" option; see DBITEST_OPT_SECRET
     std::string secret;
+    //! the value of the "api_token" option; see DBITEST_OPT_API_TOKEN
+    std::string api_token;
     //! rows reported as affected by exec operations
     int64 rows = 1;
     //! chunk size for the simulated bounded stream
@@ -682,6 +687,11 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->secret = str->c_str();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_API_TOKEN)) {
+        QoreStringNodeValueHelper str(val);
+        conn->api_token = str->c_str();
+        return 0;
+    }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         conn->report_session = val.getAsBool();
         return 0;
@@ -725,6 +735,9 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     }
     if (!strcmp(opt, DBITEST_OPT_SECRET)) {
         return new QoreStringNode(conn->secret);
+    }
+    if (!strcmp(opt, DBITEST_OPT_API_TOKEN)) {
+        return new QoreStringNode(conn->api_token);
     }
     if (!strcmp(opt, DBITEST_OPT_SESSION)) {
         return conn->report_session ? QoreValue(conn->id) : QoreValue();
@@ -947,6 +960,8 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
         "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo, 0);
     methods.registerOption(DBITEST_OPT_SECRET, "a string kept on the connection, declared sensitive as a credential "
         "would be", stringTypeInfo, QDBI_OPT_SENSITIVE);
+    methods.registerOption(DBITEST_OPT_API_TOKEN, "a string kept on the connection, declared not sensitive although "
+        "its name names a credential", stringTypeInfo, 0);
     // "fault" and "rows" are registered with option flags (not sensitive), so their values can be shown in the
     // masked forms of a datasource; the other options are registered without flags, which makes no decision about
     // their sensitivity, and their values are masked (qore#7070)
