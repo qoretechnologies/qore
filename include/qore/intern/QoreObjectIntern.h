@@ -290,6 +290,17 @@ public:
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
+    //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
+    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of a
+        class of the object that runs in an update scope for it (see SandboxManager::updateSharedObject()); see
+        checkSharedChange().  Set before the object is published to other Programs, and read with relaxed ordering on
+        every member write.  Declared with the other flags, in the padding before the next pointer, so that it does
+        not make the object larger: every Qore object has one, and 8 more bytes take it to the next size class of the
+        allocator (16 more bytes for each object; sizeof(qore_object_private) is 520 in an x86_64 Linux release
+        build, with or without this flag).  The flags around it are plain members, not bit-fields, so it is a memory
+        location of its own.
+    */
+    std::atomic<bool> shared_object{false};
 
     QoreObject* obj;
 
@@ -320,13 +331,6 @@ public:
     //! chain consumes stack that can push deep recursion past the stack guard).
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
 
-    //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
-    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of a
-        class of the object that runs in an update scope for it (see SandboxManager::updateSharedObject()); see
-        checkSharedChange().  Set before the object is published to other Programs, and read with relaxed ordering on
-        every member write.
-    */
-    std::atomic<bool> shared_object{false};
 
     //! Marks the object as shared by every Program of the process; see shared_object
     DLLLOCAL void setShared() {
