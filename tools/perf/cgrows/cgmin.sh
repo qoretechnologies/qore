@@ -33,7 +33,8 @@
 #                    the environment pad's growth per layout in characters (default 816)
 #   CGROW_LOOP_PAD_STEP
 #                    the loop pad's growth per layout in characters (default 1232; 0: no loop pad)
-#   CGROW_N0         the iterations of the first run (default 2000)
+#   CGROW_N0         the iterations of the first run (default 2000; given to the runs zero-padded to the width of
+#                    CGROW_N1: N=02000, so that both runs have environments of the same size)
 #   CGROW_N1         the iterations of the second run (default 22000)
 #   CGROW_DECIMALS   0 (default): the value rounded to an integer (cgmin2.sh truncated it, which printed a value
 #                    of the jit mode such as 825.99 as 825 and 826.00 as 826); n > 0: n decimals
@@ -80,6 +81,22 @@ if [ "$(sed -n 1p "$S")" != "%modern" ]; then
     echo "$0: the first line of '$S' is not %modern" >&2
     exit 2
 fi
+case $M in
+    aot*) if [ ! -x "$B/qcc" ]; then
+              echo "$0: the build '$B' has no qcc (build its qcc target) for the mode $M" >&2
+              exit 2
+          fi ;;
+esac
+# the scripts run nothing for an unknown row (most have no default case), which would measure a value of about 0
+if ! grep -F "case \"$L\":" "$S" > /dev/null; then
+    echo "$0: '$S' has no row '$L' (no 'case \"$L\":')" >&2
+    exit 2
+fi
+# N0 and N1 as decimal numbers of the same width (zero-padded: ENV.N.toInt() reads "02000" as 2000), so that the two
+# runs of a layout have environments of the same size
+W=$(( ${#N0} > ${#N1} ? ${#N0} : ${#N1} ))
+N0P=$(printf "%0${W}d" "$N0")
+N1P=$(printf "%0${W}d" "$N1")
 O=$(mktemp -d "${TMPDIR:-/tmp}/cgmin.XXXXXX") || exit 1
 trap 'rm -rf "$O"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -139,8 +156,8 @@ while [ $k -lt "$LAYOUTS" ]; do
                   exit 1
               fi ;;
     esac
-    a=$(run "$N0") || exit 1
-    b=$(run "$N1") || exit 1
+    a=$(run "$N0P") || exit 1
+    b=$(run "$N1P") || exit 1
     v=$(awk -v a="$a" -v b="$b" -v d="$((N1 - N0))" -v p="$DEC" 'BEGIN {
         printf "%." p "f", (b - a) / d }')
     if [ "$CGROW_VERBOSE" = 1 ]; then

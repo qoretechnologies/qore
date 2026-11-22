@@ -10,8 +10,9 @@ measures a change of a few instructions per iteration that no timing can show.
 - `bench/*.q` are the bench scripts.
 
 The tool was kept outside the repository until qore#7193 (as `cgmin2.sh` and the same bench scripts); its row names,
-scripts and default output are unchanged, and its values are the same except where the old layouts were sensitive to
-the addresses of early strings (see [Layouts](#layouts)).
+scripts and output format are unchanged.  Its values are the same except where the old layouts were sensitive to the
+addresses of early strings (see [Layouts](#layouts)), and except that a value is now rounded instead of truncated, so
+that a jit value such as 3489.98 is printed as 3490 where the old tool printed 3489 (see [Method](#method)).
 
 ## Usage
 
@@ -47,7 +48,11 @@ of the loop and one with `N=22000`.  The difference of their total instruction c
 iteration: parsing, startup, compilation (`QORE_JIT_SYNC_COMPILE=1` makes the jit mode compile before the loop runs)
 and exit cancel out.  The value is printed rounded to an integer (`CGROW_DECIMALS` for decimals).  The old tool truncated it; the
 values of the jit mode differ from an integer by a few hundredths between layouts and builds (ex: 825.99 and 826.00),
-which truncation printed as a difference of 1.  The values that are integers are the same as before.
+which truncation printed as a difference of 1.  The values that are integers are the same as before; awk rounds a
+value of exactly .5 to the even integer (ex: 4191.5 to 4192, 4190.5 to 4190).
+
+The two runs get `N` as numbers of the same width (`N=02000` and `N=22000`; `ENV.N.toInt()` reads `02000` as 2000), so
+that their environments have the same size, as the environment's size moves the heap (see [Layouts](#layouts)).
 
 ### Layouts
 
@@ -86,7 +91,10 @@ which is no change in the code (the member rows of batch AS measured on another 
 pad alone, `bench-member.q:mw` in ir still missed its minimum in all 5 layouts under some environments (by 2 to 11
 instructions, all of them in `__strcmp_avx2`), because the two strings it compares moved together; with all four,
 every member row measured the same minimum for both builds under each of 16 environment sizes from 0 to 3840 bytes.
-The rows whose values do not depend on such addresses measure the same with and without the pads.
+The rows whose values do not depend on such addresses measure the same with and without the pads.  This validation
+covered the ast, ir and jit modes; in the aot modes, each layout's pads and dead statements are compiled into its
+executable (and the environment pad is in the executable's environment), but the aot modes' layouts have not been
+validated (the validated trees had no qcc).
 
 When a delta of a row in one mode decides something, check its per-layout values with `CGROW_VERBOSE=1`.
 
@@ -97,7 +105,10 @@ When a delta of a row in one mode decides something, check its per-layout values
 - Put the trees at **paths of equal length** (ex: `~/tmp/q6126p0` and `~/tmp/q6126p1`): libqore embeds the paths of
   its source files (assertion and location strings), so a longer path shifts the library's string data, and with it
   the alignment of the strings that `strcmp()` and the hash functions read; trees at paths of different lengths can
-  differ by a few instructions per row that come from no change in the code.
+  differ by a few instructions per row that come from no change in the code.  The build path also moves the heap:
+  the runs' `LD_LIBRARY_PATH` (the build directory) is in the environment, which is copied to the heap (`ENV`), and
+  so is the path of the `qore` binary (`argv[0]`, in `QORE_ARGV`), so a longer path shifts the early heap
+  allocations too.
 - Run both builds' rows on the same host, in the same session, with the same environment (`rows.sh` with a base
   build does so).
 - A delta of a row is a change of the code only if it persists: a delta of a few instructions in one row and mode

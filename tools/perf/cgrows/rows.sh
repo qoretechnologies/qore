@@ -76,7 +76,8 @@ for r in $ROWS; do
         a=$(cat "$O/new.$s.$l.$m" 2>/dev/null)
         if [ -n "$BASE" ]; then
             b=$(cat "$O/base.$s.$l.$m" 2>/dev/null)
-            d=$(awk -v a="$a" -v b="$b" 'BEGIN { if (a == "" || b == "") print "-"; else print a - b }')
+            d=$(awk -v a="$a" -v b="$b" -v p="${CGROW_DECIMALS:-0}" 'BEGIN {
+                if (a == "" || b == "") print "-"; else printf "%." p "f\n", a - b }')
             echo "$r $m ${b:--} ${a:--} $d"
         else
             echo "$r $m ${a:--}"

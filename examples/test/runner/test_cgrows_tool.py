@@ -45,9 +45,10 @@ if log:
     with open(log, "a") as f:
         pad = os.environ.get("CGROW_ENV_PAD")
         keys = ",".join(sorted(k for k in os.environ if k != "CGROW_ENV_PAD"))
-        f.write("%s %s %s %s %s %s\n" % (os.environ["L"], os.environ["N"], os.environ.get("LD_LIBRARY_PATH", ""),
-                                         "unset" if pad is None else "%d:%s" % (len(pad), set(pad) <= {"e"}), keys,
-                                         " ".join(sys.argv[1:])))
+        size = sum(len(k) + len(v) + 2 for k, v in os.environ.items())
+        f.write("%s %s %s %s %s %d %s\n" % (os.environ["L"], os.environ["N"], os.environ.get("LD_LIBRARY_PATH", ""),
+                                            "unset" if pad is None else "%d:%s" % (len(pad), set(pad) <= {"e"}),
+                                            keys, size, " ".join(sys.argv[1:])))
 costs = [float(c) for c in os.environ["CGROW_TEST_COSTS"].split()]
 sys.stderr.write("==1== Events    : Ir\n==1== Collected : %d\n" % round(1000 + int(os.environ["N"]) * costs[k]))
 """
@@ -211,13 +212,17 @@ class CgrowsToolTest(unittest.TestCase):
         for k, run in enumerate(runs):
             fields = run.split()
             # two runs per layout, N=2000 then N=22000, with the build as the library path, in the given mode
-            self.assertEqual(["fc", "2000" if k % 2 == 0 else "22000", "/no/build"], fields[:3])
+            # N0 zero-padded to the width of N1, so that both runs have environments of the same size
+            self.assertEqual(["fc", "02000" if k % 2 == 0 else "22000", "/no/build"], fields[:3])
             # the environment pad of layout k // 2: k // 2 * 816 characters "e"; the other variables (the caller's,
             # the tool's own and those the shell adds) are the same in every run
             self.assertEqual("%d:True" % (k // 2 * 816), fields[3])
             keys = fields[4].split(",")
             self.assertTrue(set(self.env_keys) | {"L", "N", "LD_LIBRARY_PATH", "QORE_JIT_SYNC_COMPILE"} <= set(keys))
             self.assertEqual(runs[0].split()[4], fields[4])
+            # both runs of a layout have environments of the same size
+            if k % 2:
+                self.assertEqual(runs[k - 1].split()[5], fields[5])
             self.assertIn("--tool=callgrind", fields)
             self.assertIn("/no/build/qore", fields)
             self.assertIn("--exec-mode=jit", fields)
@@ -267,6 +272,17 @@ class CgrowsToolTest(unittest.TestCase):
                 self.assertEqual(2, p.returncode)
                 self.assertIn(message, p.stderr)
                 self.assertEqual("", p.stdout)
+        # an aot mode with a build that has no qcc
+        p = self.run_tool(["/no/build", script, "fs", "aot3"])
+        self.assertEqual(2, p.returncode)
+        self.assertIn("has no qcc", p.stderr)
+        # a row that the script does not run
+        for row in ("nope", "m", "f"):
+            with self.subTest(row=row):
+                p = self.run_tool(["/no/build", script, row, "ast"])
+                self.assertEqual(2, p.returncode)
+                self.assertIn("has no row '%s'" % row, p.stderr)
+                self.assertEqual("", p.stdout)
         # a script that does not start with %modern
         bad = self.tmp / "bad.q"
         bad.write_text("# no directive\n%modern\n")
@@ -281,7 +297,7 @@ class CgrowsToolTest(unittest.TestCase):
                 p = self.run_tool(["/no/build", script, "fs", "ast"], {"CGROW_VALGRIND": str(vg)})
                 self.assertEqual(1, p.returncode)
                 self.assertEqual("", p.stdout)
-                self.assertIn("the run with N=2000 of layout 0 failed", p.stderr)
+                self.assertIn("the run with N=02000 of layout 0 failed", p.stderr)
                 self.assertIn("it broke" if name == "fail" else "no count here", p.stderr)
         # a qcc that fails
         self.stand_in("qcc", "#!/bin/sh\necho 'qcc broke' >&2\nexit 1\n")
@@ -307,6 +323,17 @@ class CgrowsToolTest(unittest.TestCase):
         self.assertEqual(1, p.returncode)
         self.assertEqual("bench.q:fs ast -\n", p.stdout)
         self.assertIn("the cell bench.q:fs ast of the new build failed", p.stderr)
+        # an unknown row: the cell fails, with cgmin.sh's error
+        p = self.run_tool(["/no/new"], dict(env, ROWS="bench.q:nope", MODES="ast"), tool=ROWS)
+        self.assertEqual(1, p.returncode)
+        self.assertEqual("bench.q:nope ast -\n", p.stdout)
+        self.assertIn("has no row 'nope'", p.stderr)
+        # the delta with CGROW_DECIMALS decimals
+        p = self.run_tool(["/no/new", "/no/base"],
+                          dict(env, ROWS="bench.q:fs", MODES="ast", CGROW_DECIMALS="2",
+                               CGROW_TEST_COSTS="10.25 9.5 9.5 9.5 9.5"), tool=ROWS)
+        self.assertEqual(0, p.returncode, p.stderr)
+        self.assertEqual("bench.q:fs ast 9.50 9.50 0.00\n", p.stdout)
         for rows, message in (("bench.q", "is not <script>:<row>"), ("nope.q:x", "no bench script")):
             p = self.run_tool(["/no/new"], dict(env, ROWS=rows), tool=ROWS)
             self.assertEqual(2, p.returncode)
