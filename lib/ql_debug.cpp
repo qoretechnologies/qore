@@ -19237,8 +19237,8 @@ static QoreValue f_dbg_socket_has_async_io_owner(const QoreListNode* params, Run
     socket cancel has started to wait for an operation's step, until the pause is ended; 3, the caller of the
     cancellation waits before it cancels the operations handed back to it, until the pause is ended; 4, a stopping I/O
     thread waits before its last command drain; 5, the caller of the cancellation waits after it has sent its commands;
-    6, an I/O thread waits before it drains its commands; 7 does not pause, and records that stop() waits for a
-    cancellation in progress (qore#6703).  With @a pause
+    6, an I/O thread waits before it drains its commands; 7 and 8 do not pause, and record that stop() waits for a
+    cancellation in progress and that an idle I/O thread stays for a cancellation that waits for a step (qore#6703).  With @a pause
     false, the pause is ended (or cancelled if not taken yet), and the function returns True if a thread took it.
     A test must end the pauses that it requests (also when it fails), or the thread waits until the process exits.
 */
@@ -28003,6 +28003,25 @@ static QoreValue f_dbg_async_io_stop(const QoreListNode* params, RuntimeConfig& 
     return QoreValue();
 }
 
+//! Debug-only: sets the idle period before an I/O thread stops, in microseconds; negative for the default
+static QoreValue f_dbg_async_io_set_autostop_grace(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgSetAutostopGrace(get_param_value(params, 0).getAsBigInt());
+    return QoreValue();
+}
+
+//! Debug-only: returns the number of operations attached to a CancelByProgram command that followed a Quit command
+static QoreValue f_dbg_async_io_quit_batch_attaches(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgQuitBatchAttaches();
+}
+
+//! Debug-only: returns how many times stop() took the dispatcher while a cancellation of a Program was in progress
+static QoreValue f_dbg_async_io_stop_detached_during_cancel(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgStopDetachedDuringCancel();
+}
+
 //! Debug-only: returns the number of times that the async I/O controller has called the abort() of an operation
 static QoreValue f_dbg_async_io_abort_calls(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return AsyncIoControllerPriv::dbgAbortCalls();
@@ -30554,6 +30573,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
     qns.addBuiltinVariant("dbg_async_io_stop", f_dbg_async_io_stop, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_set_autostop_grace", f_dbg_async_io_set_autostop_grace, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
+    qns.addBuiltinVariant("dbg_async_io_quit_batch_attaches", f_dbg_async_io_quit_batch_attaches, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_stop_detached_during_cancel", f_dbg_async_io_stop_detached_during_cancel,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_abort_calls", f_dbg_async_io_abort_calls, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_park_program_releases", f_dbg_async_io_park_program_releases, QCF_NO_FLAGS,

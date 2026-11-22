@@ -53,17 +53,17 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
 
         const ExpectedRaces = {
             "quit-batch": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
-                "threads ended: True\ndone\n",
+                "threads ended: True\nattached from the Quit batch: True\ndone\n",
             "exit-drain": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
                 "threads ended: True\ndone\n",
             "stop": "step paused: True\nhanded back: True\nstop waits: True\nabort on the deleting thread: True\n"
-                "threads ended: True\ndone\n",
+                "threads ended: True\ndispatcher taken during the cancellation: False\ndone\n",
         };
 
         const ExpectedParked = "next release: active exception: False\nraised: RELEASE-ERROR\ndone\n";
 
-        const ExpectedLongStep = "step started: True\nabort: step running: False\nonComplete: canceled: True\n"
-            "result received: True\ndone\n";
+        const ExpectedLongStep = "step held: True\nthread stays: True\nabort: step has run: True\n"
+            "onComplete: canceled: True\nresult received: True\ndone\n";
     }
 
     constructor() : QUnit::Test("ProgramTeardownDeferredCancelTest", "1.0", \ARGV) {
@@ -74,7 +74,7 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
             \testAbortException());
         addTestCase("the cancellation of a Program races with the stop of the controller", \testRaces());
         addTestCase("the exception of a parked release is not active in the next release", \testParked());
-        addTestCase("an operation canceled during a step longer than the I/O thread's idle grace period",
+        addTestCase("an I/O thread stays for an operation whose cancellation waits for its step",
             \testLongStep());
         set_return_value(main());
     }
@@ -165,6 +165,9 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
 
     #! the I/O thread stays until the step's result arrives, so abort() does not run during the step
     testLongStep() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
         foreach string mode in (Modes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
                 "--exec-mode=%s %s/teardown-long-step.qr", qore_bin, mode, dir));

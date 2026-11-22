@@ -697,9 +697,12 @@ public:
         Draining here is also strictly safer than letting a worker discard the
         item later: an item popped after clearOwnerShuttingDown() no longer sees
         the mark and would run the user callback past the barrier.
+
+        Out of memory here ends the process, as on a callback worker: a discarded step's result can be what a caller
+        of cancelByProgram() waits for, and a partly moved queue must not be left behind.
     */
     DLLLOCAL void markOwnerShuttingDown(const std::string& owner,
-        const AioAppRestriction& restrict_app = AioAppRestriction());
+        const AioAppRestriction& restrict_app = AioAppRestriction()) noexcept;
 
     //! Remove an owner from the shutting-down set
     DLLLOCAL void clearOwnerShuttingDown(const std::string& owner,
@@ -815,6 +818,12 @@ private:
         pops an item whose owner or program is shutting down
     */
     DLLLOCAL static void releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink);
+
+    //! Tells the I/O thread that a discarded step has ended; out of memory ends the process, as on a callback worker
+    /** A caller of cancelByProgram() can be waiting for this result
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static void sendDiscardedStepResult(AsyncIoControllerPriv* ctrl,
+            const std::string& key, uint64_t op_id, int thread_idx) noexcept;
 
     //! Worker thread entry point
     DLLLOCAL static void workerEntry(ExceptionSink* xsink, void* arg);
@@ -944,6 +953,9 @@ public:
         @since %Qore 3.0
     */
     static constexpr int64 AUTOSTOP_GRACE_US = 2000000LL;
+    //! Returns the idle period before an I/O thread stops (AUTOSTOP_GRACE_US; a test can change it in a debug build)
+    DLLLOCAL static int64 autostopGraceUs();
+
 
     //! Creates the controller
     /** @param autostop if true, the I/O thread will stop when all operations complete
@@ -2686,8 +2698,10 @@ public:
         DBG_CANCEL_BEFORE_COMMAND_DRAIN = 6,
         //! not a pause: stop() has begun to wait for a cancelByProgram() call in progress
         DBG_CANCEL_STOP_WAITS = 7,
+        //! not a pause: an I/O thread that is otherwise idle stays because a cancellation waits for a step's result
+        DBG_CANCEL_AUTOSTOP_KEPT = 8,
         //! the number of points
-        DBG_CANCEL_POINT_COUNT = 8,
+        DBG_CANCEL_POINT_COUNT = 9,
     };
 
     //! Debug-only: requests a pause at the given point of the cancellation of a Program's operations, or ends it
@@ -2711,6 +2725,15 @@ public:
 
     //! Debug-only: records that a requested point was reached, without pausing; for a thread that holds a lock
     DLLLOCAL static void dbgNoteCancelPoint(int point);
+
+    //! Debug-only: sets the idle period before an I/O thread stops, in microseconds; negative for the default
+    DLLLOCAL static void dbgSetAutostopGrace(int64 us);
+
+    //! Debug-only: returns the number of operations attached to a CancelByProgram command that followed Quit
+    DLLLOCAL static int64 dbgQuitBatchAttaches();
+
+    //! Debug-only: returns how many times stop() took the dispatcher while another thread's cancelByProgram() ran
+    DLLLOCAL static int64 dbgStopDetachedDuringCancel();
 
     //! Debug-only: returns the number of calls of callAbort() in this process
     DLLLOCAL static int64 dbgAbortCalls();
@@ -2867,10 +2890,16 @@ private:
     */
     DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
 
-    //! Cancel an operation internally (delivers result, called from I/O thread)
     //! Records that the caller of the CancelByProgram command with this completion waits for the operation's
     //! deferred cancellation (qore#6703)
-    DLLLOCAL void attachDeferredCancel(PollInfo& pinfo, AsyncOpCompletion* completion);
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void attachDeferredCancel(PollInfo& pinfo,
+            AsyncOpCompletion* completion);
+
+    //! Marks the Program in the current dispatcher, which discards its queued items; out of memory ends the process
+    /** A discarded step's result can be what a deferred cancellation waits for (see cancelByProgram())
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void markProgramNoFail(QoreProgram* pgm,
+            ExceptionSink* xsink) noexcept;
 
     //! Hands an operation whose step has ended back to the caller that waits for it
     /** A socket cancel that waited for the step ends when the operation is handed back, not after its cleanup: the
@@ -2882,19 +2911,22 @@ private:
         (out of memory), in which case the operation keeps its holders, and the caller's wait ends when the operation
         is released after the calling thread has canceled it
     */
-    DLLLOCAL bool handBackDeferredCancel(PollInfo& pinfo, bool socket_barrier, ExceptionSink* xsink);
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD bool handBackDeferredCancel(PollInfo& pinfo, bool socket_barrier,
+            ExceptionSink* xsink);
 
     //! Cancels an operation handed back to cancelByProgram() in the context of the code that submitted it
-    DLLLOCAL void cancelHandedBack(PollInfo& pinfo, bool inline_on_complete, ExceptionSink* xsink);
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void cancelHandedBack(PollInfo& pinfo, bool inline_on_complete,
+            ExceptionSink* xsink);
 
     //! Returns true if an I/O thread is past its last command drain and has not ended its exit cancellations; the
     //! caller holds \c m
     /** Such a thread is canceling the operations that it held, and cancelByProgram() cannot reach them with a command
     */
-    DLLLOCAL bool anyThreadInExitDrain() const;
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD bool anyThreadInExitDrain() const;
 
     //! Reports the exception of an onComplete() run in the calling thread, as a callback worker reports it
-    DLLLOCAL void reportInlineOnCompleteException(const PollInfo& pinfo, ExceptionSink& on_complete_xsink);
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void reportInlineOnCompleteException(const PollInfo& pinfo,
+            ExceptionSink& on_complete_xsink);
 
     //! Cancels the operation
     /** @param pinfo the operation

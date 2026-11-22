@@ -68,6 +68,13 @@ bool sub reached(int point) {
     return call_function("dbg_async_io_wait_cancel_point", point, 30s);
 }
 
+#! a step of the race that must have happened for the test to mean anything
+sub need(int point) {
+    if (!reached(point)) {
+        throw "TEST-ERROR", sprintf("pause point %d was not reached", point);
+    }
+}
+
 string race = ARGV[0];
 pause(Step, True);
 on_exit {
@@ -100,10 +107,10 @@ switch (race) {
         AsyncIoController::waitForProcessing(30s);
         pause(CommandDrain, True);
         background stop_controller();
-        reached(CommandDrain);
+        need(CommandDrain);
         pause(ProgramSent, True);
         background delete_program();
-        reached(ProgramSent);
+        need(ProgramSent);
         pause(ProgramSent, False);
         pause(CommandDrain, False);
         break;
@@ -113,10 +120,10 @@ switch (race) {
         AsyncIoController::waitForProcessing(30s);
         pause(ExitDrain, True);
         background stop_controller();
-        reached(ExitDrain);
+        need(ExitDrain);
         pause(ProgramSent, True);
         background delete_program();
-        reached(ProgramSent);
+        need(ProgramSent);
         pause(ProgramSent, False);
         pause(ExitDrain, False);
         break;
@@ -138,4 +145,13 @@ if (race == "stop") {
 }
 pause(HandedBack, False);
 printf("threads ended: %y\n", !threads.waitForZero(30s));
+if (race == "stop") {
+    # stop() kept the dispatcher, which holds the Program's mark, until the cancellation had ended
+    printf("dispatcher taken during the cancellation: %y\n",
+        call_function("dbg_async_io_stop_detached_during_cancel") > 0);
+}
+if (race == "quit-batch") {
+    # the operation was reached through the CancelByProgram command that followed Quit in its batch
+    printf("attached from the Quit batch: %y\n", call_function("dbg_async_io_quit_batch_attaches") > 0);
+}
 printf("done\n");
