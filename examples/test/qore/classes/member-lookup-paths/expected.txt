@@ -1,0 +1,208 @@
+small: 21 22 2 31 32 3 1
+small5: 51 52 53 5 4
+small9: 91 92 93 94 9 8 7
+small17: 171 172 173 174 17 16 15
+big: 1 2 3 4 5 7 8 9 15 16 17 33 34
+written: -3 -32 -9 -94 -17 -174 -34 -8
+written untouched: 31 91 173 33
+untyped: 3 32 94 174 17 33
+untyped written: -2 -173 -5
+small{a}: 1
+small{a} iso-8859-1: 1
+small{ab}: -2
+small{ab} iso-8859-1: -2
+small{aq}: 22
+small{aq} iso-8859-1: 22
+small{qb}: 21
+small{qb} iso-8859-1: 21
+small{abc}: 3
+small{abc} iso-8859-1: 3
+small{abd}: INVALID-MEMBER
+small{abd} iso-8859-1: INVALID-MEMBER
+small{ab }: INVALID-MEMBER
+small{ab } iso-8859-1: INVALID-MEMBER
+small{b}: INVALID-MEMBER
+small{b} iso-8859-1: INVALID-MEMBER
+small{}: INVALID-MEMBER
+small{} iso-8859-1: INVALID-MEMBER
+small9{abcdefghi}: 9
+small9{abcdefghi} iso-8859-1: 9
+small9{abcdefghq}: 94
+small9{abcdefghq} iso-8859-1: 94
+small9{abcdefghz}: INVALID-MEMBER
+small9{abcdefghz} iso-8859-1: INVALID-MEMBER
+small9{zbcdefghi}: INVALID-MEMBER
+small9{zbcdefghi} iso-8859-1: INVALID-MEMBER
+small9{abcdefgh}: 8
+small9{abcdefgh} iso-8859-1: 8
+small9{abcdefghij}: INVALID-MEMBER
+small9{abcdefghij} iso-8859-1: INVALID-MEMBER
+small17{abcdefghijklmnopq}: 17
+small17{abcdefghijklmnopq} iso-8859-1: 17
+small17{abcdefghijklmnopz}: 174
+small17{abcdefghijklmnopz} iso-8859-1: 174
+small17{abcdefghijklmnopy}: INVALID-MEMBER
+small17{abcdefghijklmnopy} iso-8859-1: INVALID-MEMBER
+small17{abcdefghijklmnop}: 16
+small17{abcdefghijklmnop} iso-8859-1: 16
+small17{abcdefghijklmnopqr}: INVALID-MEMBER
+small17{abcdefghijklmnopqr} iso-8859-1: INVALID-MEMBER
+big{abcd}: 4
+big{abcd} iso-8859-1: 4
+big{abce}: INVALID-MEMBER
+big{abce} iso-8859-1: INVALID-MEMBER
+big{abcdefghijklmnopqrstuvwxyz0123456}: 33
+big{abcdefghijklmnopqrstuvwxyz0123456} iso-8859-1: 33
+big{abcdefghijklmnopqrstuvwxyz0123457}: 34
+big{abcdefghijklmnopqrstuvwxyz0123457} iso-8859-1: 34
+big{abcdefghijklmnopqrstuvwxyz0123458}: INVALID-MEMBER
+big{abcdefghijklmnopqrstuvwxyz0123458} iso-8859-1: INVALID-MEMBER
+big{abcdefghijklmnopqrstuvwxyz012345}: INVALID-MEMBER
+big{abcdefghijklmnopqrstuvwxyz012345} iso-8859-1: INVALID-MEMBER
+invalid write: INVALID-MEMBER
+invalid write runtime name: INVALID-MEMBER
+private typed: 21
+private any: 10 10
+private name: 10 11 2
+subclass own: 2
+private written: 22
+private outside: PRIVATE-MEMBER
+private outside subclass: PRIVATE-MEMBER
+private outside name: PRIVATE-MEMBER
+public inherited: 3
+internal: 100 200
+internal written: 101 200
+internal base: 100
+internal outside: PRIVATE-MEMBER
+internal host: 1
+internal host outside: PRIVATE-MEMBER
+dyn keys: ["a", "abcdefghi", "abcdefghijklmnopq", "ключ", "日本語キー", "naïve"]
+dyn{a}: 1
+dyn{a} iso-8859-1: 1
+dyn{b}: null
+dyn{b} iso-8859-1: null
+dyn{abcdefghi}: 9
+dyn{abcdefghi} iso-8859-1: 9
+dyn{abcdefghq}: null
+dyn{abcdefghq} iso-8859-1: null
+dyn{abcdefghijklmnopq}: 17
+dyn{abcdefghijklmnopq} iso-8859-1: 17
+dyn{abcdefghijklmnopz}: null
+dyn{abcdefghijklmnopz} iso-8859-1: null
+dyn{ключ}: "cyrillic"
+dyn{ключ} iso-8859-1: ENCODING-CONVERSION-ERROR
+dyn{ключи}: null
+dyn{ключи} iso-8859-1: ENCODING-CONVERSION-ERROR
+dyn{日本語キー}: "japanese"
+dyn{日本語キー} iso-8859-1: ENCODING-CONVERSION-ERROR
+dyn{日本語キ}: null
+dyn{日本語キ} iso-8859-1: ENCODING-CONVERSION-ERROR
+dyn{naïve}: "latin"
+dyn{naïve} iso-8859-1: "latin"
+dyn{naive}: null
+dyn{naive} iso-8859-1: null
+dyn deleted: null ["a", "abcdefghijklmnopq", "ключ", "日本語キー", "naïve"]
+dyn removed: "cyrillic" null ["a", "abcdefghijklmnopq", "日本語キー", "naïve"]
+dyn re-added: -9 "again" ["a", "abcdefghijklmnopq", "日本語キー", "naïve", "abcdefghi", "ключ"]
+dyn encoding: "converted" ["a", "abcdefghijklmnopq", "日本語キー", "naïve", "abcdefghi", "ключ"]
+dyn nul: HASH-KEY-ERROR
+gate: 1 null "gate:zz" "gate:hidden"
+gate deleted: null
+gate re-set: 3 "gate:abcdefghijklmnopq"
+deleted object: null
+hash{""}: "empty"
+hash{""} exists: True
+hash{""} iso-8859-1: "empty"
+hash{""} utf-16le: "empty"
+hash{"a"}: 1
+hash{"a"} exists: True
+hash{"a"} iso-8859-1: 1
+hash{"a"} utf-16le: 1
+hash{"b"}: null
+hash{"b"} exists: False
+hash{"b"} iso-8859-1: null
+hash{"b"} utf-16le: null
+hash{"ab"}: 2
+hash{"ab"} exists: True
+hash{"ab"} iso-8859-1: 2
+hash{"ab"} utf-16le: 2
+hash{"aq"}: 22
+hash{"aq"} exists: True
+hash{"aq"} iso-8859-1: 22
+hash{"aq"} utf-16le: 22
+hash{"abc"}: 3
+hash{"abc"} exists: True
+hash{"abc"} iso-8859-1: 3
+hash{"abc"} utf-16le: 3
+hash{"abd"}: null
+hash{"abd"} exists: False
+hash{"abd"} iso-8859-1: null
+hash{"abd"} utf-16le: null
+hash{"abcdefghi"}: 9
+hash{"abcdefghi"} exists: True
+hash{"abcdefghi"} iso-8859-1: 9
+hash{"abcdefghi"} utf-16le: 9
+hash{"abcdefghq"}: 99
+hash{"abcdefghq"} exists: True
+hash{"abcdefghq"} iso-8859-1: 99
+hash{"abcdefghq"} utf-16le: 99
+hash{"abcdefghz"}: null
+hash{"abcdefghz"} exists: False
+hash{"abcdefghz"} iso-8859-1: null
+hash{"abcdefghz"} utf-16le: null
+hash{"abcdefghijklmnopq"}: 17
+hash{"abcdefghijklmnopq"} exists: True
+hash{"abcdefghijklmnopq"} iso-8859-1: 17
+hash{"abcdefghijklmnopq"} utf-16le: 17
+hash{"abcdefghijklmnopz"}: 177
+hash{"abcdefghijklmnopz"} exists: True
+hash{"abcdefghijklmnopz"} iso-8859-1: 177
+hash{"abcdefghijklmnopz"} utf-16le: 177
+hash{"abcdefghijklmnopy"}: null
+hash{"abcdefghijklmnopy"} exists: False
+hash{"abcdefghijklmnopy"} iso-8859-1: null
+hash{"abcdefghijklmnopy"} utf-16le: null
+hash{"abcdefghijklmnopqrstuvwxyz0123456"}: 33
+hash{"abcdefghijklmnopqrstuvwxyz0123456"} exists: True
+hash{"abcdefghijklmnopqrstuvwxyz0123456"} iso-8859-1: 33
+hash{"abcdefghijklmnopqrstuvwxyz0123456"} utf-16le: 33
+hash{"abcdefghijklmnopqrstuvwxyz0123457"}: null
+hash{"abcdefghijklmnopqrstuvwxyz0123457"} exists: False
+hash{"abcdefghijklmnopqrstuvwxyz0123457"} iso-8859-1: null
+hash{"abcdefghijklmnopqrstuvwxyz0123457"} utf-16le: null
+hash{"ключ"}: "cyrillic"
+hash{"ключ"} exists: True
+hash{"ключ"} iso-8859-1: ENCODING-CONVERSION-ERROR
+hash{"ключ"} utf-16le: "cyrillic"
+hash{"ключи"}: null
+hash{"ключи"} exists: False
+hash{"ключи"} iso-8859-1: ENCODING-CONVERSION-ERROR
+hash{"ключи"} utf-16le: null
+hash{"日本語キー"}: "japanese"
+hash{"日本語キー"} exists: True
+hash{"日本語キー"} iso-8859-1: ENCODING-CONVERSION-ERROR
+hash{"日本語キー"} utf-16le: "japanese"
+hash{"日本語キ"}: null
+hash{"日本語キ"} exists: False
+hash{"日本語キ"} iso-8859-1: ENCODING-CONVERSION-ERROR
+hash{"日本語キ"} utf-16le: null
+hash{"naïve"}: "latin"
+hash{"naïve"} exists: True
+hash{"naïve"} iso-8859-1: "latin"
+hash{"naïve"} utf-16le: "latin"
+hash{"naive"}: null
+hash{"naive"} exists: False
+hash{"naive"} iso-8859-1: null
+hash{"naive"} utf-16le: null
+hash members: 1 99 177 33
+hash written: -99 "changed" "converted" "new" 20
+hash removed: null "japanese" False 18
+hash re-added: -9 "abcdefghi"
+hash nul: HASH-KEY-ERROR
+hash compare: True False True True
+hash minus: ["abcdefghijklmnopq", "ключ"]
+hash slice: {ab: 2, abcdefghijklmnopq: 1}
+hashdecl: 31 32 3 17
+hashdecl written: -3 32
+hashdecl invalid: INVALID-MEMBER
+hashdecl invalid long: INVALID-MEMBER

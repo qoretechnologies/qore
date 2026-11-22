@@ -37,6 +37,7 @@
 #include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
+#include "qore/intern/QoreKeyCompare.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
@@ -2083,10 +2084,24 @@ protected:
     }
 };
 
+//! A member of a QoreMemberMapBase: its name, its info and the length of its name (qore#7194)
+template <typename T>
+struct QoreMemberListElement {
+    //! the name, owned by the map
+    char* first;
+    //! the info, owned by the map
+    T* second;
+    //! the length of the name, so that a lookup compares the names without strcmp() (qore#7194)
+    size_t len;
+
+    DLLLOCAL QoreMemberListElement(char* first, T* second) : first(first), second(second), len(strlen(first)) {
+    }
+};
+
 template <typename T>
 class QoreMemberMapBase {
 public:
-    typedef std::pair<char*, T*> member_list_element_t;
+    typedef QoreMemberListElement<T> member_list_element_t;
     //typedef std::deque<member_list_element_t> member_list_t;
     typedef std::list<member_list_element_t> member_list_t;
     typedef typename member_list_t::iterator iterator;
@@ -2107,17 +2122,28 @@ public:
         return (bool)find(name);
     }
 
-    DLLLOCAL T* find(const char* name) const {
+    //! returns the member with the name \a name, or nullptr
+    /** Not inline: the paths of a member access, which are inlined, use find(const char*, size_t); the other callers
+        share this copy, so that the inline comparison of the names is not copied into each of them (qore#7194)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE T* find(const char* name) const {
+        return find(name, strlen(name));
+    }
+
+    //! returns the member with the name \a name of \a len bytes, or nullptr
+    DLLLOCAL T* find(const char* name, size_t len) const {
+        assert(strlen(name) == len);
         typename member_list_t::const_iterator i =
-            std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {QORE_CLASS_HIERARCHY_STEP(); return !strcmp(e.first, name); });
+            std::find_if(member_list.begin(), member_list.end(), [name, len](const member_list_element_t& e)
+                -> bool {QORE_CLASS_HIERARCHY_STEP(); return qore_key_equal(e.first, e.len, name, len); });
         return i == member_list.end() ? nullptr : i->second;
     }
 
     DLLLOCAL T* replace(const char* name, T* info) {
+        size_t len = strlen(name);
         typename member_list_t::iterator i =
-            std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {return !strcmp(e.first, name); });
+            std::find_if(member_list.begin(), member_list.end(), [name, len](const member_list_element_t& e)
+                -> bool {return qore_key_equal(e.first, e.len, name, len); });
         assert(i != member_list.end());
         T* rv = i->second;
         i->second = info;
@@ -2132,7 +2158,7 @@ public:
         assert(name);
         assert(info);
         assert(!inList(name));
-        member_list.push_back(std::make_pair(name, info));
+        member_list.emplace_back(name, info);
     }
 
     DLLLOCAL void addNoCheck(std::pair<char*, T*> pair) {
@@ -2186,15 +2212,23 @@ public:
     }
 
     //! Returns the member with the given name, or nullptr
+    /** Not inline: the paths of a member access, which are inlined, use find(const char*, size_t); the other callers
+        share this copy, so that the inline search is not copied into each of them (qore#7194)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreMemberInfo* find(const char* name) const {
+        return find(name, strlen(name));
+    }
+
+    //! Returns the member with the name \a name of \a len bytes, or nullptr
     /** Small, so that it is inlined as the linear search was: the lookup of the index, which is larger, is a call
         (an inlined hash table lookup made the callers call find() instead, which cost each write of a member of a
         small class about 20 instructions)
     */
-    DLLLOCAL QoreMemberInfo* find(const char* name) const {
+    DLLLOCAL QoreMemberInfo* find(const char* name, size_t len) const {
         if (const MemberIndex* idx = index.load(std::memory_order_acquire)) {
-            return findIndexed(*idx, name);
+            return findIndexed(*idx, name, len);
         }
-        return base_t::find(name);
+        return base_t::find(name, len);
     }
 
     DLLLOCAL bool inList(const char* name) const {
@@ -2254,7 +2288,7 @@ public:
         assert(info);
         assert(!inList(name));
         assertChangeAllowed();
-        member_list.insert(member_list.begin(), std::make_pair(name, info));
+        member_list.emplace(member_list.begin(), name, info);
         if (num_front != (size_t)-1) {
             ++num_front;
         }
@@ -2325,10 +2359,17 @@ public:
 #endif
 
 private:
-    typedef std::unordered_map<std::string_view, QoreMemberInfo*> MemberIndex;
+    //! compares the names of the index inline (qore#7194)
+    struct MemberIndexEq {
+        DLLLOCAL bool operator()(std::string_view a, std::string_view b) const {
+            return qore_key_equal(a.data(), a.size(), b.data(), b.size());
+        }
+    };
+    typedef std::unordered_map<std::string_view, QoreMemberInfo*, std::hash<std::string_view>, MemberIndexEq>
+        MemberIndex;
 
-    //! Returns the member with the given name in the index, or nullptr
-    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name);
+    //! Returns the member with the name \a name of \a len bytes in the index, or nullptr
+    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name, size_t len);
 
     //! the index of a frozen map with at least IndexThreshold members, or nullptr
     std::atomic<const MemberIndex*> index{nullptr};
@@ -2379,7 +2420,7 @@ private:
         }
         idx->reserve(member_list.size() * 2);
         for (auto& i : member_list) {
-            idx->emplace(std::string_view(i.first), i.second);
+            idx->emplace(std::string_view(i.first, i.len), i.second);
         }
     }
 
@@ -2401,7 +2442,7 @@ private:
             idx = new MemberIndex;
             idx->reserve(member_list.size());
             for (auto& i : member_list) {
-                idx->emplace(std::string_view(i.first), i.second);
+                idx->emplace(std::string_view(i.first, i.len), i.second);
             }
         }
         const MemberIndex* old = index.exchange(idx, std::memory_order_acq_rel);
@@ -3251,6 +3292,15 @@ public:
             return nullptr;
         }
         const QoreMemberInfo* mi = members.find(mem);
+        return mi && mi->getAccessors() ? mi : nullptr;
+    }
+
+    //! as findAccessorMember() for the member name \a mem of \a len bytes
+    DLLLOCAL const QoreMemberInfo* findAccessorMember(const char* mem, size_t len) const {
+        if (!has_member_accessors) {
+            return nullptr;
+        }
+        const QoreMemberInfo* mi = members.find(mem, len);
         return mi && mi->getAccessors() ? mi : nullptr;
     }
 
@@ -4417,9 +4467,15 @@ public:
     //! inline in the paths of a member access whatever the size of their translation units (issue #6760)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem,
             const qore_class_private* class_ctx) const {
+        return runtimeGetMemberInfo(mem, strlen(mem), class_ctx);
+    }
+
+    //! as runtimeGetMemberInfo() for the member name \a mem of \a len bytes
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem, size_t len,
+            const qore_class_private* class_ctx) const {
         QoreMemberInfo* info;
         if (class_ctx) {
-            info = class_ctx->members.find(mem);
+            info = class_ctx->members.find(mem, len);
             if (info && info->isLocalInternal()) {
                 return info;
             }
@@ -4428,7 +4484,7 @@ public:
         }
 
         if (class_ctx != this) {
-            info = members.find(mem);
+            info = members.find(mem, len);
         }
 
         if (info && info->access == Inaccessible && !info->getClassContext(class_ctx)) {

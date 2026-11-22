@@ -14865,7 +14865,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (o && o->isValid()) {
-                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                        out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     }
                     if (xsink && *xsink) {
                         unwindForException();
@@ -14897,7 +14897,7 @@ load_local_done:
                     out.refSelf();
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
-                    out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
                         cleanupLocalCaches();
@@ -24523,7 +24523,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (*xsink) {
                     return QoreValue();
                 }
-                ValueHolder rv(o->evalMember(key.c_str(), xsink), xsink);
+                ValueHolder rv(qore_object_private::get(*o)->evalMember(key.c_str(), key.size(), xsink), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }

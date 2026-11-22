@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class MemberLookupCompareTest
+
+#! The comparison of hash keys and member names, and lookups of hash keys whose hashes collide (qore#7194)
+/** Hash keys and member names are compared by their lengths and bytes (qore_key_equal()), with loads of 8, 4, 2 and 1
+    bytes; the comparison is checked for every length from 0 to 40 bytes with a difference at each position, and a
+    lookup of a key in a hash with the hash value of another key (as a collision of the two keys' hashes would) must
+    find only the key that is equal.  Debug builds only (the debug functions dbg_key_equal() and
+    dbg_hash_lookup_with_hash_of()).
+*/
+class MemberLookupCompareTest inherits QUnit::Test {
+    constructor() : QUnit::Test("member lookup compare test", "1.0", \ARGV) {
+        addTestCase("key comparison", \compareTest());
+        addTestCase("lookups with colliding hashes", \collisionTest());
+        set_return_value(main());
+    }
+
+    compareTest() {
+        requireDebug();
+        for (int len = 0; len <= 40; ++len) {
+            binary a = makeBytes(len);
+            # an equal copy in another buffer
+            binary b = makeBytes(len);
+            assertTrue(call_function("dbg_key_equal", a, b), sprintf("equal %d", len));
+            for (int p = 0; p < len; ++p) {
+                binary c = makeBytes(len, p);
+                assertFalse(call_function("dbg_key_equal", a, c), sprintf("differ len %d pos %d", len, p));
+                assertFalse(call_function("dbg_key_equal", c, a), sprintf("differ len %d pos %d reversed", len, p));
+            }
+            # one byte more, with the same prefix
+            binary longer = makeBytes(len + 1);
+            assertFalse(call_function("dbg_key_equal", a, longer), sprintf("longer %d", len));
+            assertFalse(call_function("dbg_key_equal", longer, a), sprintf("shorter %d", len));
+        }
+    }
+
+    collisionTest() {
+        requireDebug();
+        hash<auto> h = {
+            "": 0,
+            "abc": 1,
+            "abd": 2,
+            "abcdefghijklmnopq": 3,
+            "abcdefghijklmnopz": 4,
+            "ключ": 5,
+        };
+        # the key's own hash finds it
+        foreach string k in (keys h) {
+            assertEq({"exists": True, "value": h{k}}, call_function("dbg_hash_lookup_with_hash_of", h, k, k), k);
+        }
+        # another key with the hash of a key: an equal hash, but not an equal key
+        list<list<string>> collisions = (
+            ("abd", "abc"),
+            ("abc", "abd"),
+            ("abx", "abc"),
+            ("ab", "abc"),
+            ("abcd", "abc"),
+            ("", "abc"),
+            ("abc", ""),
+            ("abcdefghijklmnopz", "abcdefghijklmnopq"),
+            ("abcdefghijklmnopy", "abcdefghijklmnopq"),
+            ("abcdefghijklmnop", "abcdefghijklmnopq"),
+            ("abcdefghijklmnopqr", "abcdefghijklmnopq"),
+            ("ключи", "ключ"),
+            ("клюх", "ключ"),
+        );
+        foreach list<string> c in (collisions) {
+            assertEq({"exists": False, "value": NOTHING}, call_function("dbg_hash_lookup_with_hash_of", h, c[0], c[1]),
+                sprintf("%y with the hash of %y", c[0], c[1]));
+        }
+    }
+
+    #! returns \a len bytes of a fixed pattern (with NUL and high bytes), with the byte at \a diff changed if given
+    private binary makeBytes(int len, *int diff) {
+        string hex = "";
+        for (int i = 0; i < len; ++i) {
+            int c = (i * 37 + 11) % 256;
+            if (exists diff && i == diff) {
+                c = (c + 1) % 256;
+            }
+            hex += sprintf("%02x", c);
+        }
+        binary rv = parse_hex_string(hex);
+        assertEq(len, rv.size());
+        return rv;
+    }
+
+    private requireDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions dbg_key_equal() and dbg_hash_lookup_with_hash_of() are only in debug "
+                "builds");
+        }
+    }
+}
