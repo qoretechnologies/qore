@@ -222,6 +222,15 @@ string sub path_ping(object conn, *string url) {
     }
     return do_ping(conn);
 }
+string sub proxy_ping(object conn, string proxy) {
+    conn.opts.proxy = proxy;
+    try {
+        conn.real_opts.proxy = proxy;
+    } catch (hash<ExceptionInfo> ex) {
+        # a connection without real options
+    }
+    return do_ping(conn);
+}
 string sub path_poll(object conn, *string url) {
     if (url) {
         set_target(conn, url);
@@ -991,11 +1000,11 @@ string sub own_ping(string url) {
             push cases, (sprintf("http://[::1]:%d", rest_port6), sprintf("http://[::1:%d]/", rest_port6));
         }
 
-        code make_http = AbstractConnection sub (string url) {
-            return new HttpConnection("http", "test", url, {"monitor": False});
+        code make_http = AbstractConnection sub (string url, *hash<auto> opts) {
+            return new HttpConnection("http", "test", url, {"monitor": False}, opts ?? {});
         };
-        code make_jsonrpc = AbstractConnection sub (string url) {
-            return new JsonRpcConnection("jsonrpc", "test", url, {"monitor": False});
+        code make_jsonrpc = AbstractConnection sub (string url, *hash<auto> opts) {
+            return new JsonRpcConnection("jsonrpc", "test", url, {"monitor": False}, opts ?? {});
         };
         foreach hash<auto> kind in ({"name": "HTTP", "make": make_http, "poll": False},
                 {"name": "JSON-RPC", "make": make_jsonrpc, "poll": True}) {
@@ -1008,14 +1017,9 @@ string sub own_ping(string url) {
                     assertEq("PERMISSION-DENIED", p.callFunction("path_poll", conn, c[1]), label + ", polling");
                 }
             }
-            # the legitimate targets; an HTTP connection also with credentials in its configured URL, as its client's
-            # target is checked without them (the JSON-RPC connection's configured URL is checked as it is by
-            # HttpBasedConnection::checkLentClientTarget())
-            list<string> own = (tcp_own, socket_own);
-            if (!kind.poll) {
-                own += (sprintf("http://user:pass@127.0.0.1:%d/", rest_port),
-                    "http://user:pass@socket=" + encode_url(rest_socket, True));
-            }
+            # the legitimate targets, also with credentials in the configured URL, which are not given to the check
+            list<string> own = (tcp_own, socket_own, sprintf("http://user:pass@127.0.0.1:%d/", rest_port),
+                "http://user:pass@socket=" + encode_url(rest_socket, True));
             if (rest_port6) {
                 push own, sprintf("http://[::1]:%d", rest_port6);
             }
@@ -1029,6 +1033,23 @@ string sub own_ping(string url) {
                 }
             }
         }
+        # a lent connection with credentials in its proxy option reaches its own target through its own proxy (the REST
+        # server, as a plain HTTP proxy is only connected to), and another proxy is refused
+        string proxy = sprintf("http://pu:pp@127.0.0.1:%d", rest_port);
+        Socket evil_proxy();
+        evil_proxy.bind("127.0.0.1:0");
+        evil_proxy.listen();
+        on_exit evil_proxy.close();
+        foreach hash<auto> kind in ({"name": "HTTP", "make": make_http}, {"name": "JSON-RPC", "make": make_jsonrpc}) {
+            string label = sprintf("%s: credentials in the proxy option", kind.name);
+            AbstractConnection conn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": proxy});
+            assertEq("OK", p.callFunction("path_ping", conn), label);
+            conn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": proxy});
+            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", conn,
+                sprintf("http://pu:pp@127.0.0.1:%d", evil_proxy.getSocketInfo().port)), label + ", another proxy");
+        }
+        assertNothing(evil_proxy.accept(0), "no connection to the other proxy");
+
         foreach hash<auto> i in (listeners.pairIterator()) {
             assertNothing(i.value.accept(0), "no connection to " + i.key);
         }
