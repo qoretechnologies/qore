@@ -95,10 +95,19 @@ static bool instanceof_accepts(QoreValue val, Accepts accepts) {
     switch (val.getType()) {
         case NT_WEAKREF:
             return accepts(**val.get<const WeakReferenceNode>());
-        case NT_WEAKREF_HASH:
-            return accepts(**val.get<const WeakHashReferenceNode>());
-        case NT_WEAKREF_LIST:
-            return accepts(**val.get<const WeakListReferenceNode>());
+        // the target is checked with a reference of its own, or as a new empty one if it was freed (qore#7198)
+        case NT_WEAKREF_HASH: {
+            // a destructor run by the release of the last reference raises its exceptions here
+            ExceptionSink xsink;
+            ReferenceHolder<QoreHashNode> target(val.get<const WeakHashReferenceNode>()->lock(), &xsink);
+            return accepts(QoreValue(*target));
+        }
+        case NT_WEAKREF_LIST: {
+            // a destructor run by the release of the last reference raises its exceptions here
+            ExceptionSink xsink;
+            ReferenceHolder<QoreListNode> target(val.get<const WeakListReferenceNode>()->lock(), &xsink);
+            return accepts(QoreValue(*target));
+        }
     }
     return accepts(val);
 }
