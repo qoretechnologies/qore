@@ -6167,9 +6167,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     #! Checks if the connection can theoretically communicate, if not, sets the connection as down
-    /** Connections are assumed to be up when created; this method call is made during constructor initialization and
-        should set the \c up flag to @ref False and set the \c status key appropriately in case the connection has an
-        incomplete or invalid configuration
+    /** Connections are not up until they are checked (see @ref ConnectionProvider::AbstractConnection::up
+        "AbstractConnection::up"); this method call is made during constructor initialization and sets the \c status
+        key to the error (keeping the \c up flag @ref False) in case the connection has an incomplete or invalid
+        configuration, so that such a connection can be told apart from one that was never checked
 
         @since RestClient 2.2.0
     */
@@ -6445,14 +6446,35 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         return rest;
     }
 
+    #! Checks the connection for a ping without a ping request: connects to the server and disconnects
+    /** Connects the client of @ref getPollImpl() (and makes the TLS handshake for an HTTPS URL), as the polling ping
+        does with @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()", without logging in or
+        sending a request; the client's connect timeout applies
+
+        @since %RestClient 2.7
+    */
+    private pingConnect() {
+        RestClient conn_client = getPollImpl();
+        on_exit conn_client.disconnect();
+        conn_client.connect();
+    }
+
     #! performs the internal ping
-    /** Uses the ping options to make a request to the server; if \c ping_method or the ping path is not set, the
-        ping connects to the server (and makes the TLS handshake for an HTTPS URL) without sending a request, as the
-        polling ping (@ref startPollConnect()) does
+    /** Uses the ping options to make a request to the server; if \c ping_method is not set, the ping connects to the
+        server (and makes the TLS handshake for an HTTPS URL) without logging in or sending a request, as the polling
+        ping (@ref startPollConnect()) does; if \c ping_method is set but the connection gives no ping path, the
+        ping connects to the server in the same way after its client is created
 
         @since %RestClient 2.7 a ping without \c ping_method connects to the server; it made no check and succeeded
     */
     private pingImpl() {
+        # issue #7236: without a ping request, the ping only connects to the server, before any client that would log
+        # in is created
+        if (!opts.ping_method) {
+            pingConnect();
+            return;
+        }
+
         # Try async client first (RestClientIo), fall back to sync (RestClient).
         # Both implement restDoRequest() via AbstractRestClient.
         #
@@ -6471,14 +6493,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             }
             client = cast<AbstractRestClient>(get());
         }
-        *string ping_path;
-        if (!opts.ping_method || !exists (ping_path = getPingPath())) {
-            # issue #7236: without a ping request, the ping connects to the server, as the polling ping does with
-            # HTTPClient::startPollConnect() on the client of getPollImpl(), so that a ping that succeeds has checked
-            # the connection; the client's connect timeout applies
-            RestClient conn_client = getPollImpl();
-            on_exit conn_client.disconnect();
-            conn_client.connect();
+        *string ping_path = getPingPath();
+        if (!exists ping_path) {
+            pingConnect();
             return;
         }
 
