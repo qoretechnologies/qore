@@ -655,4 +655,14 @@ inline const std::unordered_set<std::string>& getForbiddenHopByHopHeaders() {
     return headers;
 }
 
+//! Returns true if a header field (lower-case name) is not sent in an HTTP/2 or HTTP/3 response
+/** The hop-by-hop fields of getForbiddenHopByHopHeaders(), and \c te, a field of requests only, whose only valid
+    value in HTTP/2 and HTTP/3, \c trailers, has no meaning in a response: a client rejects a message with another
+    value as malformed (RFC 9113 section 8.2.2, RFC 9114 section 4.2), which an HTTP/3 client answers by closing the
+    connection with all its streams (qoretechnologies/qore#7212)
+*/
+inline bool isForbiddenResponseHeader(const std::string& lname) {
+    return lname == "te" || getForbiddenHopByHopHeaders().count(lname);
+}
+
 #endif // _QORE_QUICCOMMON_H

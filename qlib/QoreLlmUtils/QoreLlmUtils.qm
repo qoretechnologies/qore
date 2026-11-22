@@ -129,6 +129,42 @@ hash<auto> result = backend.chatCompletions({"messages": messages},
     next event. No transport retry or repair request follows a cancellation, and a call cancelled before its
     request is sent sends nothing.
 
+    @section qorellmutils_async Asynchronous Calls
+
+    @ref QoreLlmUtils::LlmBackend::chatCompletionsAsync() "LlmBackend::chatCompletionsAsync()",
+    @ref QoreLlmUtils::LlmBackend::chatCompletionsStreamAsync() "chatCompletionsStreamAsync()",
+    @ref QoreLlmUtils::LlmBackend::chatAsync() "chatAsync()" and
+    @ref QoreLlmUtils::LlmBackend::chatStreamAsync() "chatStreamAsync()" make the calls of their synchronous
+    counterparts without holding a thread while the provider is awaited: they return an
+    @ref QoreLlmUtils::LlmAsyncOperation "LlmAsyncOperation" at once.  The request waits in the async I/O controller,
+    a transport retry waits on a timer, and a tool or structured-output repair request is made when the response
+    that needs it has been read.  Every step that runs %Qore code, including the stream callbacks and the completion
+    callback, runs in a thread of the @ref QoreLlmUtils::LlmAsyncExecutor "executor" given in
+    @ref QoreLlmUtils::LlmAsyncCallOptions "LlmAsyncCallOptions", one step of a call at a time; an application gives
+    its own worker pool, or uses @ref QoreLlmUtils::LlmThreadPoolExecutor "LlmThreadPoolExecutor".
+
+    The results (including \c usage), the errors (such as \c LLM-ERROR and \c LLM-CANCELLED), the stream chunks,
+    the telemetry events, the retries and the repairs are those of the synchronous calls for the same responses of
+    the provider.  A cancellation token given in the call options stops the call as it stops a synchronous call, and
+    so does @ref QoreLlmUtils::LlmAsyncOperation::cancel() "LlmAsyncOperation::cancel()".  The Anthropic provider and
+    the OpenAI-compatible providers make the request asynchronously; other providers run their synchronous call in
+    a thread of the executor (@ref QoreLlmUtils::LlmBackend::supportsAsyncChat() "supportsAsyncChat()").
+    @code{.py}
+LlmThreadPoolExecutor executor(4);
+LlmCancellation stop();
+LlmAsyncOperation op = backend.chatCompletionsAsync({"messages": messages}, <LlmAsyncCallOptions>{
+    "executor": executor,
+    "on_complete": sub (LlmAsyncOperation op) {
+        # runs in a thread of the executor when the call has ended
+        if (*hash<ExceptionInfo> ex = op.getError()) {
+            printf("%s: %s\n", ex.err, ex.desc);
+        } else {
+            printf("usage: %y\n", op.getResult().usage);
+        }
+    },
+}, <LlmFacadeCallOptions>{"cancellation": stop});
+    @endcode
+
     Reasoning models may consume their output budget before producing visible
     text. Size @c max_output_tokens (or @c max_tokens) for both reasoning and
     the answer, not just the requested answer length. Use supported reasoning
@@ -168,4 +204,6 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - initial release
+    - asynchronous chat and chat-completions calls that hold no thread while they wait for the provider
+      (@ref qorellmutils_async)
 */

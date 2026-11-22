@@ -43,6 +43,15 @@ client.close();
     @since yaml 1.3
 */
 public class YamlRpcClientIo {
+
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The constructor creates the first manager, and close() creates it again: the code that created the client
+            decides, so a client that the host creates and lends to restricted code keeps working for it, only for the
+            target that it had when it was created (the proof is bound to it) (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+    }
     public {
         #! Default connect timeout (45 seconds, matches native YamlRpcClient)
         const DefaultConnectTimeout = 45000;
@@ -119,6 +128,9 @@ YamlRpcClientIo client("http://localhost:8080/YAML", {"timeout": 30000});
         @endcode
     */
     constructor(string url, *hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url);
         # Map custom schemes to http/https
         self.url = get_http_endpoint_url(mapUrl(url), opts.default_path ?? DefaultYamlRpcPath);
         url_path = get_http_request_target(self.url);
@@ -157,6 +169,9 @@ YamlRpcClientIo client({"url": "http://localhost:8080/YAML", "timeout": 30000});
         @endcode
     */
     constructor(hash<auto> opts, softbool no_connect = False) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(opts.url);
         string input_url = opts.url ?? "";
         if (!input_url.val()) {
             throw "YAMLRPCCLIENTIO-ERROR", "missing required 'url' option";
@@ -381,13 +396,18 @@ auto result = client.callArgsWithInfo(\info, "method.name", arg_list);
 
     #! Internal: Creates a new HttpClientConnectionManager
     private HttpClientIo::HttpClientConnectionManager createConnectionManager() {
-        return new HttpClientIo::HttpClientConnectionManager(
+        # the proof of the code that created the client decides, also for the managers that close() creates again
+        # (qore#7262)
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts =
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "connect_timeout": connect_timeout,
                 "request_timeout": io_timeout,
                 "protocol": http_protocol ?? "auto",
                 "max_response_body_size": max_response_body_size,
-            });
+            };
+        return creator_proof
+            ? new HttpClientIo::HttpClientConnectionManager(mgr_opts, creator_proof)
+            : new HttpClientIo::HttpClientConnectionManager(mgr_opts);
     }
 
     #! Internal: Maps custom URL schemes to http/https

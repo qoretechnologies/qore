@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# get_default_ssl_ca_locations() returns the CA locations that TLS connections trust by default
+# (qoretechnologies/qore#7248)
+# test-platform: macos - the OpenSSL library's default CA locations and the process environment it reads them from
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GetDefaultSslCaLocationsTest
+
+class GetDefaultSslCaLocationsTest inherits QUnit::Test {
+    constructor() : Test("get_default_ssl_ca_locations()", "1.0") {
+        addTestCase("the environment and the library's defaults", \locationsTest());
+        addTestCase("the function is external information", \domainTest());
+        set_return_value(main());
+    }
+
+    locationsTest() {
+        *string old_file = getenv("SSL_CERT_FILE");
+        *string old_dir = getenv("SSL_CERT_DIR");
+        on_exit {
+            exists old_file ? setenv("SSL_CERT_FILE", old_file) : unsetenv("SSL_CERT_FILE");
+            exists old_dir ? setenv("SSL_CERT_DIR", old_dir) : unsetenv("SSL_CERT_DIR");
+        }
+        unsetenv("SSL_CERT_FILE");
+        unsetenv("SSL_CERT_DIR");
+        hash<auto> def = get_default_ssl_ca_locations();
+        assertEq(("file", "dir"), keys def);
+        assertTrue(def.file.val(), "the library's default file");
+        assertTrue(def.dir.val(), "the library's default directory");
+
+        setenv("SSL_CERT_FILE", "/qore-test-7248/ca.pem");
+        setenv("SSL_CERT_DIR", "/qore-test-7248/certs");
+        assertEq({"file": "/qore-test-7248/ca.pem", "dir": "/qore-test-7248/certs"}, get_default_ssl_ca_locations());
+
+        # an empty value is not used
+        setenv("SSL_CERT_FILE", "");
+        assertEq(def.file, get_default_ssl_ca_locations().file);
+    }
+
+    domainTest() {
+        Program p(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("hash<auto> sub t() { return get_default_ssl_ca_locations(); }",
+            "t"));
+    }
+}

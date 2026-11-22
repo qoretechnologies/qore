@@ -29,8 +29,17 @@ JsonStreamReadHandler::JsonStreamReadHandler(QoreObject* s, const QoreEncoding* 
 }
 
 JsonStreamReadHandler::~JsonStreamReadHandler() {
+    // an error of the stream that was not raised is not reported
+    stream_xsink.clear();
     ExceptionSink xsink;
     stream->deref(&xsink);
+}
+
+void JsonStreamReadHandler::raiseReadError(ExceptionSink* xsink) {
+    xsink->raiseException("JSON-SAX-PARSE-ERROR", "stream read error: %s", error_message.c_str());
+    if (stream_xsink) {
+        xsink->assimilate(stream_xsink);
+    }
 }
 
 bool JsonStreamReadHandler::read(std::string& out, size_t size) {
@@ -69,7 +78,9 @@ bool JsonStreamReadHandler::read(std::string& out, size_t size) {
                 QoreStringValueHelper errstr(err);
                 error_message = errstr->c_str();
             }
-            xsink.clear();
+            // kept to be raised with the parser's error (see raiseReadError())
+            stream_xsink.clear();
+            stream_xsink.assimilate(xsink);
             return false;
         }
 

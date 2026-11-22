@@ -44,6 +44,13 @@ class WeakReferenceReadDuringFreeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("WeakReferenceReadDuringFreeTest", "1.0", \ARGV) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("the reads during a free", sub () {
+                testSkip("the free is held with dbg_hold_container_free(), which only a library debug build has");
+            });
+            set_return_value(main());
+            return;
+        }
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("the IR interpreter reads foreach variables and identity maps as the AST does", \testInterpreters());

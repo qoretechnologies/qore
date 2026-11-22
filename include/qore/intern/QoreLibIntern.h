@@ -1993,7 +1993,7 @@ DLLLOCAL QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags);
 
 //! appends the masked description of a datasource hash with the given flags (qore#7016, qore#7017)
 /** The description has the form
-    <tt>driver:****</tt><tt>/****</tt><tt>\@db[(charset)][%host[:port]][{opt=****,...}]</tt>, made from
+    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=****,...}]</tt>, made from
     q_ds_masked_hash(); with no flags, it is identical to the description of q_ds_append_masked_hash().  A separate
     name, so that a call with flags never resolves to an overload of q_ds_append_masked().
 */

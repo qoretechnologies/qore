@@ -33,6 +33,8 @@ YamlStreamReadHandler::YamlStreamReadHandler(QoreObject* s, const QoreEncoding* 
 }
 
 YamlStreamReadHandler::~YamlStreamReadHandler() {
+    // an error of the stream that was not raised is not reported
+    stream_xsink.clear();
     // an owner releases the stream and the reader with its internal members
     if (owner) {
         return;
@@ -57,7 +59,9 @@ void YamlStreamReadHandler::setError(ExceptionSink& xsink, const char* default_m
             error_message = descstr->c_str();
         }
     }
-    xsink.clear();
+    // kept to be raised by raiseError()
+    stream_xsink.clear();
+    stream_xsink.assimilate(xsink);
 }
 
 int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
