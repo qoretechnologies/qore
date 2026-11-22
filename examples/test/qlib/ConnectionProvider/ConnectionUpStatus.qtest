@@ -152,6 +152,16 @@ class ResultMonitor inherits PollingConnectionMonitor {
     }
 }
 
+#! a REST connection whose lent-connection gate can be called directly
+class GateProbe inherits RestConnection {
+    constructor(string url) : RestConnection("probe", "test", url, {"monitor": False}) {
+    }
+
+    check(string url, *string proxy_url) {
+        checkLentNetworkTarget(url, proxy_url);
+    }
+}
+
 #! answers every request with 200 OK
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -173,6 +183,25 @@ string sub do_poll(object conn) {
     try {
         object op = conn.startPollConnect();
         return \"STARTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub retarget_creds(object conn, string url, string user, string pass) {
+    conn.url = url;
+    conn.real_url = url;
+    conn.real_opts.url = url;
+    conn.real_opts.username = user;
+    conn.real_opts.password = pass;
+    return do_ping(conn);
+}
+string sub poll_creds(object conn) {
+    return do_poll(conn);
+}
+string sub gate(object conn, string url, *string proxy) {
+    try {
+        conn.check(url, proxy);
+        return \"OK\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
@@ -259,6 +288,7 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("lent IPv6 REST connection pinged by restricted code", \lentRestIpv6Test());
         addTestCase("lent UNIX socket REST connection pinged by restricted code", \lentRestSocketTest());
         addTestCase("socket paths that read as other targets", \lentSocketPathTest());
+        addTestCase("credentials that read as other targets", \lentCredentialsTest());
         addTestCase("HTTP connection", \httpTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
@@ -839,6 +869,62 @@ string sub own_ping(string url) {
         date start = now_us();
         assertEq("OK", p.callFunction("do_ping", conn));
         assertUp(conn, start, "a lent socket connection at its own path");
+    }
+
+    #! credentials that the restricted code sets are not given to the check, which refuses a URL with user information
+    lentCredentialsTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-credentials");
+        string tcp_own = "http://127.0.0.1:" + rest_port;
+        string socket_own = "http://socket=" + encode_url(rest_socket, True);
+
+        # an evil UNIX socket and an evil TCP port, which must see no connection
+        string evil_path = sprintf("/tmp/q7236-%s-evil.sock", get_random_string(6));
+        Socket evil_socket();
+        evil_socket.bindUNIX(evil_path);
+        evil_socket.listen();
+        Socket evil_tcp();
+        evil_tcp.bind("127.0.0.1:0");
+        evil_tcp.listen();
+        on_exit {
+            evil_socket.close();
+            unlink(evil_path);
+            evil_tcp.close();
+        }
+        string evil_socket_url = "http://socket=" + encode_url(evil_path, True);
+        string evil_tcp_url = sprintf("http://127.0.0.1:%d/r", evil_tcp.getSocketInfo().port);
+
+        # passwords that make the URL with credentials read as the lent TCP target
+        foreach string pass in (sprintf("x@127.0.0.1:%d/", rest_port), "x@127.0.0.1?") {
+            foreach string target in ((evil_socket_url, evil_tcp_url)) {
+                string label = sprintf("password %y, target %y", pass, target);
+                RestConnection conn("lent", "test", tcp_own, {"monitor": False});
+                assertEq("PERMISSION-DENIED", p.callFunction("retarget_creds", conn, target, "u", pass), label);
+                assertEq("PERMISSION-DENIED", p.callFunction("poll_creds", conn), label + ", polling");
+            }
+        }
+        assertNothing(evil_socket.accept(0), "no connection to the evil socket");
+        assertNothing(evil_tcp.accept(0), "no connection to the evil port");
+
+        # a lent connection with credentials at its own target pings up, a socket and a TCP one
+        foreach string own in ((socket_own, tcp_own)) {
+            string with_creds = own =~ /socket=/
+                ? "http://user:pass@socket=" + encode_url(rest_socket, True)
+                : sprintf("http://user:pass@127.0.0.1:%d", rest_port);
+            RestConnection conn("lent", "test", with_creds, {"monitor": False});
+            date start = now_us();
+            assertEq("OK", p.callFunction("do_ping", conn), "a lent connection with credentials: " + with_creds);
+            assertUp(conn, start, "a lent connection with credentials: " + with_creds);
+        }
+
+        # the gate itself: a URL with user information, and a URL that is not valid UTF-8, are refused
+        GateProbe probe(tcp_own);
+        assertEq("OK", p.callFunction("gate", probe, tcp_own));
+        assertEq("PERMISSION-DENIED", p.callFunction("gate", probe, sprintf("http://u:x@127.0.0.1:%d", rest_port)));
+        assertEq("PERMISSION-DENIED", p.callFunction("gate", probe, tcp_own, "http://u:p@127.0.0.1:3128"));
+        GateProbe socket_probe(socket_own);
+        assertEq("OK", p.callFunction("gate", socket_probe, socket_own));
+        assertEq("PERMISSION-DENIED", p.callFunction("gate", socket_probe, "http://socket=%2Ftmp%2F%FF"));
     }
 
     httpTest() {
