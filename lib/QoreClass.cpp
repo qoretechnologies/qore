@@ -38,6 +38,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -2380,6 +2381,9 @@ int qore_class_private::initializeIntern() {
 
     initialized = true;
 
+    // the class names only its own type parameters (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
+
     assert(!name.empty());
     //printd(5, "qore_class_private::initializeIntern() %s class: %p scl: %p\n", name.c_str(), cls, scl);
 
@@ -3670,6 +3674,9 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // the parent class is named in the class's own type parameters, also when it is resolved while generic code
+        // is parsed (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
         // issue #6710: a parent class name is resolved in the namespace of the class that inherits it, as any other
         // class name in the class's code is; the hierarchy is resolved outside of that namespace (for all classes at
         // once, or when a class is first reached from code anywhere), where the current parse namespace is another
@@ -9341,6 +9348,9 @@ int qore_class_private::parseInitPartial() {
         return 0;
     }
 
+    // the class names only its own type parameters (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
+
     int err = parseResolveHierarchy();
 
     if (initialize() && !err) {
@@ -9445,6 +9455,9 @@ int qore_class_private::parseInit() {
     if (committed) {
         return 0;
     }
+
+    // the class names only its own type parameters (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     // make sure initialize() is called first
     int err = initialize();
@@ -10146,6 +10159,10 @@ int qore_class_private::parseResolveHierarchy() {
         if (!scl) {
             return 0;
         }
+
+        // the base classes are named in the class's own type parameters, also when the hierarchy is resolved on
+        // demand while generic code is parsed (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
 
         qcp_set_t qcp_set = {this};
         // issue #2657: initialize class hierarchy first before initializing code and members
@@ -13126,6 +13143,10 @@ int QoreVarInfo::parseInit(const char* name) {
         return 0;
     }
     QoreMemberInfoBaseAccess::init = true;
+
+    // the static variable names only its class's type parameters, also when it is first used in generic code
+    // (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
 
     int err = 0;
     if (!typeInfo) {
