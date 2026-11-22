@@ -114,7 +114,7 @@ sub teardown_case() {
     remove caller;
 
     Queue events();
-    dbg_hold_program_record_change(SiteThreadDataDeleted, p, tid);
+    call_function("dbg_hold_program_record_change", SiteThreadDataDeleted, p, tid);
     # the teardown runs in a thread of its own, as it parks there if it reads the thread's TID
     int deleter = background sub (Program pgm) {
         delete pgm;
@@ -124,13 +124,13 @@ sub teardown_case() {
     # reports when the teardown has parked; in the case that it never parks, it is woken by the hold of another
     # Program below
     int waiter = background sub () {
-        events.push(dbg_wait_program_record_held() ? "held" : "not held");
+        events.push(call_function("dbg_wait_program_record_held") ? "held" : "not held");
     }();
 
     # the teardown either parks at the deletion of the ended thread's data (and cannot finish the deletion until it
     # is released) or finishes the deletion without parking
     string first = events.get();
-    dbg_hold_program_record_change_clear();
+    call_function("dbg_hold_program_record_change_clear");
     if (first == "held") {
         # the teardown continues now
         string second = events.get();
@@ -140,13 +140,13 @@ sub teardown_case() {
     } else {
         # the waiter is still waiting: wake it with a hold that the teardown of another Program reaches
         Program other(PO_NEW_STYLE);
-        dbg_hold_program_record_change(SiteClearStart, other);
+        call_function("dbg_hold_program_record_change", SiteClearStart, other);
         int other_deleter = background sub (Program pgm) {
             delete pgm;
         }(other);
         remove other;
         string second = events.get();
-        dbg_hold_program_record_change_clear();
+        call_function("dbg_hold_program_record_change_clear");
         thread_join(other_deleter);
         if (second != "held") {
             throw "TEST-ERROR", sprintf("unexpected event %y after the deletion", second);

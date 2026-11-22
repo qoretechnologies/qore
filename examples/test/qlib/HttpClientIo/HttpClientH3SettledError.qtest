@@ -98,6 +98,9 @@ class HttpClientH3SettledErrorTest inherits QUnit::Test {
     }
 
     testRaceReportsSilentLeg() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http3_client_hide_error() is only registered in a library debug build");
+        }
         # nothing listens on the port for TCP or UDP: both candidates are refused
         Socket tmp();
         tmp.bind("127.0.0.1:0");

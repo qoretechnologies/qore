@@ -9753,10 +9753,9 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
 void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseOptionsOverride& o, bool new_gen) {
     // the caller restrictions apply only to the code of the given module Program
     assert(!o.caller_restrictions || o.module_pgm);
-    assert(!active);
+    assert(!state);
     assert(td == thread_data.get());
     state = &td->runtime_po_state;
-    active = true;
     old = *state;
     state->override_mask = o.mask;
     state->override_value = o.value;
@@ -9776,9 +9775,8 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
 }
 
 void RuntimeParseOptionsOverrideHelper::setCleared() {
-    assert(!active);
+    assert(!state);
     state = &thread_data.get()->runtime_po_state;
-    active = true;
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
