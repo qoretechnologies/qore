@@ -2636,6 +2636,9 @@
       @ref Qore::call_object_method() "call_object_method()" and \c getCallReference() as it calls it directly, and a
       call reference to a method selects only the variants that the code creating it can call, wherever it is called
       (see @ref private_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/6859">issue 6859</a>)
+    - a call reference to a method created in the code of a class of another Program could crash when it was called
+      after that Program had been deleted; it is now called with the access of the code that created it (see
+      @ref private_inheritance)
     - the default values of a function, method or closure are evaluated in the class context of the code that
       declared them; they were evaluated in the class context of the caller with its private access, which a default
       value that uses the private declarations of the caller's class no longer has (see

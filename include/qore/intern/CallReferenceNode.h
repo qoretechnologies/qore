@@ -682,8 +682,6 @@ private:
     //! the value
     QoreValue val;
     std::string method;
-    //! the class context of the code that created the reference, for a call with named arguments
-    const qore_class_private* cctx;
 
     //! returns the code member of a hash value with the name of the method, which a direct call calls, or nullptr
     DLLLOCAL const ResolvedCallReferenceNode* getHashMember() const;

@@ -434,8 +434,15 @@ code sub child_reference(string form, PB b) {
     p.parse("class Sub inherits PB {
     static code getRef(PB b) { return b.getCallReference(\"m\"); }
     static code parseRef(PB b) { return \\b.m(); }
+    static code pseudoRef() { string s = \"abcdef\"; return \\s.substr(); }
 }
-code sub get(string form, PB b) { return form == \"getCallReference\" ? Sub::getRef(b) : Sub::parseRef(b); }
+code sub get(string form, PB b) {
+    switch (form) {
+        case \"getCallReference\": return Sub::getRef(b);
+        case \"pseudo\": return Sub::pseudoRef();
+    }
+    return Sub::parseRef(b);
+}
 ", "child");
     code r = p.callFunction("get", form, b);
     delete p;
@@ -459,4 +466,10 @@ code sub get(string form, PB b) { return form == \"getCallReference\" ? Sub::get
             i.key + " string": tc(auto sub () { return r("x"); }),
         });
     }
+    # a reference to a pseudo-method of a value made there, called with positional and named arguments
+    code r = child_reference("pseudo", pb);
+    show("deleted creator", {
+        "pseudo-method positional": tc(auto sub () { return r(2); }),
+        "pseudo-method named": tc(auto sub () { return r(start: 2); }),
+    });
 }

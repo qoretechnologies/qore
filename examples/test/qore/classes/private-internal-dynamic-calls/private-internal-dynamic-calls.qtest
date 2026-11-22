@@ -92,7 +92,7 @@ class PrivateInternalDynamicCallsTest inherits QUnit::Test {
                 }
             } else if (line =~ /^deleted creator: /) {
                 # the reference keeps the class context of its creator after the creator's Program is deleted
-                assertTrue(line =~ /: "PB::m\((int|string)\)"$/, "the reference is called: " + line);
+                assertTrue(line =~ /: ("PB::m\((int|string)\)"|"cdef")$/, "the reference is called: " + line);
             }
         }
         assertEq(expected, output);

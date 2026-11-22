@@ -1022,8 +1022,7 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
 }
 
 RunTimePseudoMethodReferenceNode::RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val,
-        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method),
-        cctx(runtime_get_class()) {
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method) {
     assert(val.getType() != NT_OBJECT);
     // the restrictions that a call of the reference is checked against: those of the creating context
     captureCreatorParseOptions();
@@ -1094,8 +1093,10 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         assert(*xsink);
         return QoreValue();
     }
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false, cctx,
-        arg_names, policy);
+    // with no class context: a pseudo-method has no private variants, and the reference keeps no class, which could
+    // belong to a Program that is deleted before the reference is called
+    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false,
+        qore_no_class_ctx(), arg_names, policy);
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
