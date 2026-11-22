@@ -1743,8 +1743,21 @@ bool qore_class_private::spansPrograms() const {
     return rv;
 }
 
+//! a node of the cache of runtimeGetContextStorageMembers() (#7180)
+struct ContextStorageNode {
+    const qore_class_private* ctx;
+    qore_class_private::context_storage_list_t list;
+    ContextStorageNode* next;
+};
+
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    // the nodes of the cache of the members that a class context has a storage of (#7180)
+    for (ContextStorageNode* n = context_storage_head.load(std::memory_order_relaxed); n;) {
+        ContextStorageNode* next = n->next;
+        delete n;
+        n = next;
+    }
     releaseMethodsAndData(false);
 
     // the next class allocated can reuse these addresses and this class's
@@ -7772,6 +7785,92 @@ const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const cha
     return nullptr;
 }
 
+bool qore_class_private::runtimeHierarchyMembersFinal() const {
+    std::vector<const qore_class_private*> stack{this};
+    std::unordered_set<const qore_class_private*> seen;
+    while (!stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (!seen.insert(c).second) {
+            continue;
+        }
+        // a class that is not initialized, frozen and reachable can still change its members
+        if (!c->initialized || !c->members.isFrozen() || !c->isReachable()) {
+            return false;
+        }
+        if (c->scl) {
+            for (const BCNode* n : *c->scl) {
+                if (n->sclass) {
+                    stack.push_back(n->sclass->priv);
+                }
+            }
+        }
+    }
+    return true;
+}
+
+void qore_class_private::runtimeBuildContextStorageMembers(const qore_class_private* storage_ctx,
+        context_storage_list_t& out) const {
+    out.clear();
+    // the members that a class context uses on an object of this class are declared in this class (and the classes
+    // that it inherits) or are private:internal members of the class context itself
+    std::vector<std::pair<uint64_t, ContextStorageMember>> found;
+    std::unordered_set<std::string> seen;
+    auto consider = [&](const char* key) {
+        if (!seen.insert(key).second) {
+            return;
+        }
+        // as the access of the member finds it
+        const QoreMemberInfo* info = runtimeGetMemberInfo(key, storage_ctx);
+        if (!info || !runtimeCheckMemberAccess(info, storage_ctx)) {
+            return;
+        }
+        const qore_class_private* member_ctx = info->getClassContext(storage_ctx);
+        if (member_ctx) {
+            found.push_back({info->getDeclSeq(), {key, member_ctx}});
+        }
+    };
+    for (const auto& i : members.getList()) {
+        consider(i.first);
+    }
+    if (storage_ctx != this) {
+        for (const auto& i : storage_ctx->members.getList()) {
+            consider(i.first);
+        }
+    }
+    // the order of their declaration, whatever the order of the member maps
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    out.reserve(found.size());
+    for (const auto& f : found) {
+        out.push_back(f.second);
+    }
+}
+
+const qore_class_private::context_storage_list_t& qore_class_private::runtimeGetContextStorageMembers(
+        const qore_class_private* storage_ctx, context_storage_list_t& tmp) const {
+    for (ContextStorageNode* n = context_storage_head.load(std::memory_order_acquire); n; n = n->next) {
+        if (n->ctx == storage_ctx) {
+            return n->list;
+        }
+    }
+    runtimeBuildContextStorageMembers(storage_ctx, tmp);
+    if (!runtimeHierarchyMembersFinal()) {
+        return tmp;
+    }
+    std::unique_ptr<ContextStorageNode> node(new ContextStorageNode{storage_ctx, std::move(tmp), nullptr});
+    node->next = context_storage_head.load(std::memory_order_acquire);
+    // another thread can publish the node of the class context first: its list is the same
+    while (!context_storage_head.compare_exchange_weak(node->next, node.get(), std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
+        for (ContextStorageNode* n = node->next; n; n = n->next) {
+            if (n->ctx == storage_ctx) {
+                return n->list;
+            }
+        }
+    }
+    return node.release()->list;
+}
+
 bool qore_class_private::runtimeFindAllMembersPublic() const {
     // the members of a class that is not initialized or frozen are not known yet: they are checked one by one
     if (!initialized || !members.isFrozen()) {
@@ -12214,7 +12313,8 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     decl_cls(old.is_local ? cls : old.decl_cls),
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
-    member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
+    member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr),
+    decl_seq(old.decl_seq), is_local(old.is_local) {
     deferInitializerCopy(old);
 }
 

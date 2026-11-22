@@ -1,0 +1,287 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  private-internal-enumeration.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7180: code of a class that a subclass inherits with private:internal, in the middle of a hierarchy, uses its
+    own members on an object of a further subclass (qore#6800), but the enumeration of the members of the object
+    (the keys operator, the merge of the object into a hash, the iteration) returned nothing to it: it took the code
+    for code outside the hierarchy.  It lists the members that the class has a storage of in the object, as the access
+    of one member finds them, with the values that a direct read finds, and still shows unrelated code only the
+    public members.  The same holds for the size(), empty() and elements of the object.  (The first and last key of an
+    object, and val(), do not list the members of the storages and are as they were.)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class PrivateInternalEnumerationTest
+
+class Base {
+    public {
+        int pub_base = 1;
+    }
+    private {
+        int priv_base = 2;
+    }
+    private:internal {
+        int int_base = 3;
+    }
+
+    #! the members of the object, as the code of this class sees them, in every enumeration
+    hash<auto> view() {
+        hash<auto> h = self + {};
+        list<auto> iterated = ();
+        foreach auto k in (keys self) {
+            iterated += k;
+        }
+        return {
+            "keys": keys self,
+            "hash": h,
+            "iterated": iterated,
+            "size": self.size(),
+            "empty": self.empty(),
+            "elements": elements self,
+            "direct": (self.pub_base, self.priv_base, self.int_base),
+        };
+    }
+}
+
+class Mid inherits private:internal Base {
+    hash<auto> callBase() {
+        return view();
+    }
+
+    #! code of the class between Base and the object's class
+    list<string> midKeys() {
+        return keys self;
+    }
+
+    int midSize() {
+        return self.size();
+    }
+}
+
+class Leaf inherits Mid {
+    public {
+        int pub_leaf = 4;
+    }
+}
+
+#! only used by the threads of testConcurrentFirstUse(): its lists of members are built there for the first time
+class ConcLeaf inherits Leaf {
+}
+
+class Deeper inherits Leaf {
+    private {
+        int priv_deeper = 5;
+    }
+}
+
+#! another class on the path of the inheritance, with a member of its own
+class Other {
+    public {
+        int pub_other = 6;
+    }
+    private:internal {
+        int int_other = 7;
+    }
+}
+
+class MidOther inherits private:internal Base, private:internal Other {
+    list<auto> callBoth() {
+        return (view(), keys self);
+    }
+}
+
+class LeafOther inherits MidOther {
+}
+
+#! a base class with an internal member that a subclass behind a private:internal inheritance declares again, public
+class RedeclBase {
+    public {
+        int pub_r = 1;
+    }
+    private:internal {
+        int int_base = 3;
+    }
+
+    #! the member as the enumerations and a direct read of this class's code see it
+    hash<auto> view() {
+        hash<auto> h = self + {};
+        return {
+            "keys": sort(keys self),
+            "hash": h,
+            "size": self.size(),
+            "elements": elements self,
+            "direct": self.int_base,
+        };
+    }
+}
+
+class RedeclMid inherits private:internal RedeclBase {
+    hash<auto> callBase() {
+        return view();
+    }
+}
+
+class RedeclLeaf inherits RedeclMid {
+    public {
+        int int_base = 97;
+    }
+}
+
+class PrivateInternalEnumerationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("PrivateInternalEnumerationTest", "1.0") {
+        addTestCase("the object's class is the middle class", \testMid());
+        addTestCase("the object's class is a subclass of the middle class", \testLeaf());
+        addTestCase("a deeper hierarchy", \testDeeper());
+        addTestCase("two classes inherited with private:internal", \testTwoBases());
+        addTestCase("unrelated code sees only the public members", \testUnrelated());
+        addTestCase("a subclass declares a public member with the name of an internal member", \testRedeclared());
+        addTestCase("the first use of a class in several threads", \testConcurrentFirstUse());
+        addTestCase("repeated enumerations and objects of other classes", \testRepeated());
+        set_return_value(main());
+    }
+
+    #! checks what the code of Base sees of an object: its members, and the public members that the subclasses declare
+    private checkView(hash<auto> v, string what, hash<auto> extra = {}) {
+        hash<auto> expected = {"pub_base": 1, "priv_base": 2, "int_base": 3} + extra;
+        assertEq(sort(keys expected), sort(v.keys), what + ": keys");
+        assertEq(expected, v.hash, what + ": the members, merged into a hash");
+        assertEq(v.keys, v.iterated, what + ": iterated");
+        assertEq(expected.size(), v.size, what + ": size()");
+        assertEq(expected.size(), v.elements, what + ": elements");
+        assertFalse(v.empty, what + ": empty()");
+        assertEq((1, 2, 3), v.direct, what + ": direct reads");
+    }
+
+    testMid() {
+        Mid m();
+        checkView(m.callBase(), "Mid");
+        # the code of Mid sees what it can use of the members of Base
+        assertEq(("pub_base", "priv_base"), m.midKeys());
+        assertEq(2, m.midSize());
+    }
+
+    testLeaf() {
+        Leaf l();
+        # the same members as for an object of Mid: the direct reads in the same method succeed
+        checkView(l.callBase(), "Leaf", {"pub_leaf": 4});
+        assertEq(("priv_base", "pub_base", "pub_leaf"), sort(l.midKeys()), "the code of Mid");
+        assertEq(3, l.midSize(), "the size for the code of Mid");
+    }
+
+    testDeeper() {
+        Deeper d();
+        checkView(d.callBase(), "Deeper", {"pub_leaf": 4});
+        assertEq(("priv_base", "pub_base", "pub_leaf"), sort(d.midKeys()), "the code of Mid");
+    }
+
+    testTwoBases() {
+        LeafOther l();
+        list<auto> r = l.callBoth();
+        checkView(r[0], "LeafOther");
+        # the code of MidOther sees the members of both of the classes that it inherits
+        assertEq(("pub_base", "priv_base", "pub_other"), r[1], "MidOther");
+    }
+
+    testUnrelated() {
+        Leaf l();
+        Mid m();
+        Deeper d();
+        # code outside the hierarchy sees no member of an object of a class that inherits Base with private:internal
+        assertEq((), keys m);
+        assertEq({}, m + {});
+        assertEq(0, m.size());
+        assertTrue(m.empty());
+        assertEq(0, elements m);
+        # the public member that a subclass declares is seen, but not the private one
+        assertEq(("pub_leaf",), keys l);
+        assertEq(("pub_leaf",), keys d);
+        assertEq(1, l.size());
+        assertFalse(l.empty());
+        assertEq(1, elements d);
+        assertEq({"pub_leaf": 4, "x": 1}, d + {"x": 1});
+    }
+
+    testRedeclared() {
+        RedeclLeaf l();
+        hash<auto> v = l.callBase();
+        # the code of the base class reads its own internal member, and its enumerations show that value, not the
+        # public member of the subclass that has the same name
+        assertEq(3, v.direct, "the direct read");
+        assertEq(3, v.hash.int_base, "the member in the merge into a hash");
+        assertEq(("int_base", "pub_r"), v.keys, "the keys");
+        assertEq(2, v.size, "the size");
+        assertEq(2, v.elements, "elements");
+        # code outside the hierarchy sees the public member of the subclass
+        assertEq(97, (l + {}).int_base);
+        assertEq(("int_base",), keys l);
+        assertEq(1, l.size());
+    }
+
+    testConcurrentFirstUse() {
+        # the lists of the members that a class has a storage of are made at the first use of a class: the threads that
+        # use ConcLeaf first make them at the same time, and see the same members
+        int n = 8;
+        Counter ready(n);
+        Counter go(1);
+        Queue results();
+        for (int i = 0; i < n; ++i) {
+            background sub () {
+                try {
+                    ready.dec();
+                    go.waitForZero();
+                    ConcLeaf c();
+                    results.push({"view": c.callBase()});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"error": ex.err + ": " + ex.desc});
+                }
+            }();
+        }
+        assertEq(0, ready.waitForZero(10s), "the threads are ready");
+        go.dec();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> r = results.get(60s);
+            assertFalse(r.hasKey("error"), "no exception: " + r.error);
+            if (r.hasKey("view")) {
+                checkView(r.view, "concurrent", {"pub_leaf": 4});
+            }
+        }
+    }
+
+    testRepeated() {
+        # the lists are used for each call: another object, another class context, the same results
+        for (int i = 0; i < 3; ++i) {
+            Leaf l();
+            Deeper d();
+            Mid m();
+            checkView(l.callBase(), "Leaf " + i, {"pub_leaf": 4});
+            checkView(d.callBase(), "Deeper " + i, {"pub_leaf": 4});
+            checkView(m.callBase(), "Mid " + i);
+            assertEq(("pub_leaf",), keys l);
+            assertEq((), keys m);
+        }
+    }
+}

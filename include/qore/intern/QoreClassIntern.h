@@ -1561,6 +1561,11 @@ public:
         return decl_cls;
     }
 
+    //! returns the number that gives the order in which the member was declared
+    DLLLOCAL uint64_t getDeclSeq() const {
+        return decl_seq;
+    }
+
     // returns the last class where the member is accessible
     DLLLOCAL const qore_class_private* getLastClass() const {
         return cls_list ? cls_list->cls : decl_cls;
@@ -1701,6 +1706,9 @@ private:
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
     member_info_list_t* member_info_list = nullptr;
+    // the order in which the member was declared: a class lists the members that it inherits before its own, so the
+    // list does not give the order; a copy has the number of the member that it is a copy of (issue #7180)
+    uint64_t decl_seq = qore_next_decl_seq();
 
     // During parseInit(), the declaration and copies waiting for its initializer form a circular list.
     // A member removed during inheritance resolution can unlink itself without extending its lifetime.
@@ -3222,6 +3230,9 @@ public:
     //! the cached result of runtimeAllMembersPublic(): -1 if not determined yet, otherwise 0 or 1; beside the flag above,
     //! in its padding, so that the size of the class's data does not change (#7048)
     mutable std::atomic<int8_t> runtime_all_members_public{-1};
+    //! the cache of runtimeGetContextStorageMembers(): a chain of nodes, one for each class context; nodes are only added
+    //! and are deleted with the class (#7180)
+    mutable std::atomic<struct ContextStorageNode*> context_storage_head{nullptr};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -4042,6 +4053,40 @@ public:
 
     //! determines the result of runtimeAllMembersPublic() and caches it if the class can get no more members
     DLLLOCAL bool runtimeFindAllMembersPublic() const;
+
+    //! a member that a class context has a storage of in the internal data of an object of this class (qore#7180)
+    struct ContextStorageMember {
+        //! the member's name, owned by the member map of a class of the hierarchy
+        const char* key;
+        //! the class whose internal data of an object holds the member's value
+        const qore_class_private* storage;
+    };
+
+    typedef std::vector<ContextStorageMember> context_storage_list_t;
+
+    //! returns the declared members that a class context has a storage of in the internal data of an object of this
+    //! class, in the order of their declaration (qore#7180)
+    /** this = the object's class; \a storage_ctx must be this class or a class that it inherits, so that it lives as
+        long as this class does.  A member is listed if the class context can use it on an object of this class and
+        its value is not held in the object's data hash: whether the object holds a value in that storage is for the
+        caller to check.
+
+        The list is built once for each class context, when no member can be added to the hierarchy of the class any
+        more, and then read without a lock; before that it is built in \a tmp at each call.
+
+        @param storage_ctx the class context
+        @param tmp the list built when the result cannot be cached
+        @return the list, valid as long as \a tmp and this class
+    */
+    DLLLOCAL const context_storage_list_t& runtimeGetContextStorageMembers(const qore_class_private* storage_ctx,
+            context_storage_list_t& tmp) const;
+
+    //! builds the list of runtimeGetContextStorageMembers()
+    DLLLOCAL void runtimeBuildContextStorageMembers(const qore_class_private* storage_ctx,
+            context_storage_list_t& out) const;
+
+    //! returns true if the members of the hierarchy of the class cannot change any more
+    DLLLOCAL bool runtimeHierarchyMembersFinal() const;
 
     DLLLOCAL void parseImportMembers(qore_class_private& qc, ClassAccess access);
 
