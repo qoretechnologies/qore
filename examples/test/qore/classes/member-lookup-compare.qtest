@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - unaligned 8, 4 and 2 byte loads of the native key comparison and the hash table of hash keys
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
