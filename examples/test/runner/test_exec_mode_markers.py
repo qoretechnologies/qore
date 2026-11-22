@@ -345,6 +345,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
         #   without an execution mode
         # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
+        # - foreign-call-at-exit (#6904): its checks run in child processes that set their own --exec-mode and as qcc
+        #   executables, as the end of the process is checked
         # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
@@ -415,6 +417,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
+                                 "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",

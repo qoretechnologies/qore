@@ -290,6 +290,11 @@ DLLEXPORT int qore_deregister_process_end_callback(int64_t id);
     @return QFT_OK (0) if the thread was successfully registered, QFT_ERROR (-1) if an error occurred, or
     QFT_REGISTERED (-2) if it was already registered; see @ref q_register_foreign_thread_rv for more info
 
+    @note at the end of the process, a foreign thread that is still in a call into the Program of the script is waited
+    for at most 10 seconds after the script and the library's own threads have ended (see QoreProgramHelper); the
+    Program and the library are then left as they are to the thread, which is not interrupted, and the process ends
+    (since %Qore 3.0; before, the end of the process waited for the call forever: qore#6904)
+
     @see
     - QoreForeignThreadHelper
     - q_deregister_foreign_thread()

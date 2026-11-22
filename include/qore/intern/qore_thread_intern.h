@@ -4741,6 +4741,19 @@ DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 /** A child process created with fork() by the thread keeps only this count; see QoreForkHandlers.h
 */
 DLLLOCAL extern thread_local int qore_thread_counter_share;
+
+//! The bound, in milliseconds, of the waits of the end of the process for threads that do not end: exit() for the
+//! threads that are ending (qore_exit_process()), and the deletion of the Program of the script for the foreign threads
+//! that run in it (QoreProgramHelper, qore#6904)
+static constexpr int64 QORE_PROCESS_END_WAIT_MS = 10 * 1000;
+
+//! Returns the bound of the wait of the deletion of the Program of the script for the foreign threads that run in it
+/** QORE_PROCESS_END_WAIT_MS unless the tests changed it (dbg_set_process_end_foreign_wait())
+*/
+DLLLOCAL int64 qore_process_end_foreign_wait_ms();
+
+//! Sets the bound of qore_process_end_foreign_wait_ms(); for the tests (dbg_set_process_end_foreign_wait())
+DLLLOCAL void qore_set_process_end_foreign_wait_ms(int64 ms);
 //! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
 DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 

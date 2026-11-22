@@ -2729,6 +2729,10 @@
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
       object, so a shared object is expanded once per conversion (issue #7166).
+    - the end of the process waits at most 10 seconds for a thread of another runtime (registered with
+      \c q_register_foreign_thread(), such as a JVM thread of the \c jni module) whose call into the script never
+      returns, and then ends; it waited for the call forever
+      (<a href="https://github.com/qoretechnologies/qore/issues/6904">issue 6904</a>)
     - an abstract method that a private method of a parent class implements is private, so that code outside the
       class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
       executables did, also through a call reference (see @ref abstract_parent_implementation;

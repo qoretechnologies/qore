@@ -2762,7 +2762,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             waitForAllThreadsToTerminateIntern();
             // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
             // that it uses is not destroyed (see leaveForeignThreads())
-            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
+            leave = foreignThreadsLeftIntern() && !ptid
                 && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
             if (leave) {
                 // the Program is kept allocated for the thread
@@ -2770,7 +2770,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             } else if (!ptid) {
                 // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
                 // final, and is made before any of the Program's data is destroyed
-                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
+                foreign_teardown_tid = foreignThreadsLeftIntern() || foreign_wait_deadline_us ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
