@@ -80,6 +80,29 @@ class TestConnection inherits AbstractConnection {
     }
 }
 
+#! a connection whose ping makes a connection that takes ConnectTime and then fails
+class SlowPingConnection inherits TestConnection {
+    public {
+        const ConnectTime = 20ms;
+    }
+
+    constructor() : TestConnection("slow") {
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        # a busy wait, so that the connection takes at least ConnectTime
+        date end = now_us() + ConnectTime;
+        while (now_us() < end) {
+        }
+        return new Mutex();
+    }
+
+    private pingImpl() {
+        get();
+        throw "TEST-PING-ERROR", "the request failed";
+    }
+}
+
 #! answers every request with 200 OK
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -129,6 +152,9 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("unconnected object", \unconnectedTest());
         addTestCase("failed ping", \pingFailedTest());
         addTestCase("failed connection", \connectFailedTest());
+        addTestCase("transitions", \transitionTest());
+        addTestCase("failed ping time", \pingFailureTimeTest());
+        addTestCase("skipped automatic ping", \skippedAutomaticPingTest());
         addTestCase("restored and copied", \restoredTest());
         addTestCase("REST connection", \restTest());
         addTestCase("HTTP connection", \httpTest());
@@ -230,14 +256,82 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         assertEq("Mutex", conn.getAsync().className());
         assertNeverChecked(conn, "getAsync()");
 
-        # a connection made with a connection that is down brings it up again
+        # a connection that failed (not a ping) is marked up by a connection made with it
         conn = new TestConnection("test", True);
-        conn.ping();
-        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "failed ping");
+        assertThrows("TEST-CONNECT-ERROR", \conn.get());
         conn.fail = False;
         start = now_us();
         conn.get();
-        assertUp(conn, start, "get() after a failed ping");
+        assertUp(conn, start, "get() after a failed get()");
+    }
+
+    #! a connection that a ping found down comes up only with a successful ping, whose transition a monitor handles
+    transitionTest() {
+        TestConnection conn("test", True);
+        conn.ping();
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "failed ping");
+        conn.fail = False;
+        conn.get();
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "get() after a failed ping");
+        date start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "ping() after a failed ping");
+        # once a ping found it up, a connection made with it proves it up again after a failed get()
+        conn.fail = True;
+        assertThrows("TEST-CONNECT-ERROR", \conn.get());
+        assertTrue(conn.up);
+        conn.fail = False;
+        conn.get();
+        assertUp(conn, start, "get() after a successful ping");
+
+        # the same for a failure reported by a monitor through handlePingFailed()
+        conn.handlePingFailed(0s, "monitor failure");
+        conn.get();
+        assertFalse(conn.up);
+        assertEq("monitor failure", conn.status);
+        conn.handlePingSuccess(0s);
+        assertTrue(conn.up);
+        assertEq("OK", conn.status);
+    }
+
+    #! the duration of a failed ping is measured from its start, also when it made a connection before it failed
+    pingFailureTimeTest() {
+        SlowPingConnection conn();
+        hash<PingInfo> ping = conn.ping();
+        assertFalse(ping.ok);
+        assertEq("TEST-PING-ERROR: the request failed", ping.info);
+        assertGe(SlowPingConnection::ConnectTime, ping.time);
+        assertFalse(conn.up);
+    }
+
+    #! an automatic ping that the connection's disabled automatic pings skip changes nothing
+    skippedAutomaticPingTest() {
+        string url = "http://127.0.0.1:" + closed_port;
+        HttpConnection conn("http", "test", url, {"monitor": False}, {"disable_automatic_pings": True});
+        hash<PingInfo> ping = conn.ping(PF_AUTOMATIC_PING);
+        assertTrue(ping.ok);
+        assertTrue(ping.ping_info.skipped);
+        assertNeverChecked(conn, "skipped automatic ping");
+        ping = conn.ping(PF_AUTOMATIC_PING | PF_THROW_EXCEPTION);
+        assertTrue(ping.ping_info.skipped);
+        assertNeverChecked(conn, "skipped automatic ping (PF_THROW_EXCEPTION)");
+
+        # a ping that is not automatic checks the connection
+        ping = conn.ping();
+        assertFalse(ping.ok);
+        assertNothing(ping.ping_info);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping()");
+        date last_check = conn.last_check;
+        string status = conn.status;
+        conn.ping(PF_AUTOMATIC_PING);
+        assertFalse(conn.up);
+        assertEq(status, conn.status);
+        assertEq(last_check, conn.last_check);
+
+        # and an automatic ping of a connection that does not disable them as well
+        conn = new HttpConnection("http", "test", url, {"monitor": False});
+        assertFalse(conn.ping(PF_AUTOMATIC_PING).ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "automatic ping");
     }
 
     #! an object acquired without connecting proves nothing
@@ -326,6 +420,13 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
             assertEq(conn.last_check, copied.last_check, label + ": copied");
         }
         assertFalse(Serializable::deserialize(Serializable::serialize(never)).up);
+
+        # a connection serialized before ConnectionProvider 3.1 was up with the status "not checked"; it is restored
+        # as never checked
+        TestConnection old("old");
+        old.up = True;
+        TestConnection restored = Serializable::deserialize(Serializable::serialize(old));
+        assertNeverChecked(restored, "serialized as up and not checked");
         assertTrue(Serializable::deserialize(Serializable::serialize(up)).up);
         assertFalse(Serializable::deserialize(Serializable::serialize(down)).up);
     }
@@ -352,6 +453,23 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         hash<PingInfo> ping = conn.ping();
         assertTrue(ping.ok, ping.info);
         assertUp(conn, start, "ping()");
+
+        # a ping without a ping request connects to the server, as the polling ping does
+        conn = new RestConnection("rest", "test", url, {"monitor": False}, {"token": "bogus"});
+        start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping() without ping_method");
+        conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False},
+            {"token": "bogus"});
+        ping = conn.ping();
+        assertFalse(ping.ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() without ping_method of a closed port");
+        # as a monitor pings (the Qorus monitor pings with these flags)
+        conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False},
+            {"token": "bogus"});
+        assertThrows("SOCKET-CONNECT-ERROR", \conn.ping(), PF_THROW_EXCEPTION | PF_AUTOMATIC_PING);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "automatic ping without ping_method of a closed port");
 
         conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False}, ping_opts);
         assertFalse(conn.ping().ok);
