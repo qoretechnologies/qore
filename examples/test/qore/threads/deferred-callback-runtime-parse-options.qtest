@@ -398,7 +398,8 @@ class L inherits LoggerInterfaceBase {
 AsyncIoController::setLogger(new L());
 # trusted setup: the one callback worker of the process-wide controller
 AsyncIoController::setMaxCallbackWorkers(1);
-Program a(PO_NO_TERMINAL_IO);
+# \"nofs\": a caller restricted from the file system only, without a sandbox
+Program a(ARGV[0] == \"nofs\" ? PO_NO_FILESYSTEM : PO_NO_TERMINAL_IO);
 if (ARGV[0] == \"sandboxed\") {
     a.setSandboxManager(new SandboxManager());
 }
@@ -436,7 +437,8 @@ class L inherits LoggerInterfaceBase {
 AsyncIoController::setLogger(new L());
 # trusted setup: the one callback worker of the process-wide controller
 AsyncIoController::setMaxCallbackWorkers(1);
-Program a(PO_NO_TERMINAL_IO);
+# \"nofs\": a caller restricted from the file system only, without a sandbox
+Program a(ARGV[0] == \"nofs\" ? PO_NO_FILESYSTEM : PO_NO_TERMINAL_IO);
 if (ARGV[0] == \"sandboxed\") {
     # the module code opens a loopback connection: the sandbox allows the network, the restriction is the caller's
     # PO_NO_TERMINAL_IO
@@ -557,7 +559,9 @@ DeferredAppMod::stop();
         string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -b %s %%s 2>&1", env(), mods.path, qore_bin, script);
         # the module code runs with the restriction of its sandboxed caller, and so does the timer it adds
         string out = backquote(sprintf(cmd, "sandboxed"));
-        assertRegex("ILLEGAL-EXPRESSION", out, "sandboxed caller: " + out);
+        # refused by the runtime options of the sandboxed caller, before the caller rule (qore#7140)
+        assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called with a system constant object when "
+            "'no-terminal-io' is set", out, "sandboxed caller: " + out);
         # module code acting for a sandboxed caller may not change the process-wide controller's settings (qore#6836)
         assertRegex("workers: SANDBOX-REGISTRATION-ERROR\n", out, "sandboxed caller, controller setting: " + out);
         # without a sandbox, module code runs with its own options, so it may change the controller's settings; the
@@ -567,6 +571,12 @@ DeferredAppMod::stop();
         assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called for code that is restricted from terminal I/O",
             out, "caller without a sandbox: " + out);
         assertRegex("workers: allowed\n", out, "caller without a sandbox, controller setting: " + out);
+        # the caller rule covers terminal I/O only: for a caller without a sandbox that is restricted from another
+        # domain, the call runs and fails on the pipe
+        out = backquote(sprintf(cmd, "nofs"));
+        assertRegex("FILE-LOCK-ERROR", out, "caller restricted from the file system: " + out);
+        assertRegex("workers: allowed\n", out, "caller restricted from the file system, controller setting: " + out);
+        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller restricted from the file system: " + out);
     }
 
     moduleWsTest() {
@@ -579,7 +589,9 @@ DeferredAppMod::stop();
         # the module code runs with the restriction of its sandboxed caller, and so does the frame callback it sets,
         # which the I/O worker runs in no Program of the caller's
         string out = backquote(sprintf(cmd, "sandboxed"));
-        assertRegex("ILLEGAL-EXPRESSION", out, "sandboxed caller: " + out);
+        # refused by the runtime options of the sandboxed caller, before the caller rule (qore#7140)
+        assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called with a system constant object when "
+            "'no-terminal-io' is set", out, "sandboxed caller: " + out);
         # module code acting for a sandboxed caller may not change the process-wide controller's settings (qore#6836)
         assertRegex("workers: SANDBOX-REGISTRATION-ERROR\n", out, "sandboxed caller, controller setting: " + out);
         # without a sandbox, module code runs with its own options, so it may change the controller's settings; the
@@ -589,6 +601,12 @@ DeferredAppMod::stop();
         assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called for code that is restricted from terminal I/O",
             out, "caller without a sandbox: " + out);
         assertRegex("workers: allowed\n", out, "caller without a sandbox, controller setting: " + out);
+        # the caller rule covers terminal I/O only: for a caller without a sandbox that is restricted from another
+        # domain, the call runs and fails on the pipe
+        out = backquote(sprintf(cmd, "nofs"));
+        assertRegex("FILE-LOCK-ERROR", out, "caller restricted from the file system: " + out);
+        assertRegex("workers: allowed\n", out, "caller restricted from the file system, controller setting: " + out);
+        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller restricted from the file system: " + out);
     }
 
     appTest() {
