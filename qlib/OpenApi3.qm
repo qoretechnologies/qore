@@ -342,6 +342,24 @@ or a date, and a \c date-time string property of an object alternative a date
 
 #! main namespace for all public %OpenApi3 declarations
 public namespace OpenApi3 {
+#! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+/** A schema or schema object that trusted code created is shared by every Program of the process, so it can only be
+    changed by sandboxed code, or code that acts for it, in an update scope (qore#6843; see
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").  Each caller computes the
+    new state of the cache from the object itself, never from data that its caller gives.
+
+    @param obj the object whose cache is updated
+    @param update a closure created by a method of a class of \a obj in this module
+
+    @return the value that \a update returns
+*/
+auto sub update_shared_cache(object obj, code update) {
+    if (SandboxManager::isSharedObject(obj)) {
+        return SandboxManager::updateSharedObject(obj, update);
+    }
+    return update();
+}
+
 #! Schema objects whose composition type the current thread is building
 /** "Any JSON value" is a string, a number, a boolean, an array of JSON values or an object of them, and
     a vendor that accepts arbitrary JSON declares exactly that - Exa's \c JsonValue is a \c oneOf whose
@@ -1952,17 +1970,20 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         if (isTypeBuildActive()) {
             *AbstractDataProviderType prev = typemap{id}{key};
             recordTypeBuildWrite(sub () {
-                if (prev) {
-                    typemap{id}{key} = prev;
-                } else {
-                    remove typemap{id}{key};
-                    if (!typemap{id}) {
-                        remove typemap{id};
+                update_shared_cache(self, sub () {
+                    if (prev) {
+                        typemap{id}{key} = prev;
+                    } else {
+                        remove typemap{id}{key};
+                        if (!typemap{id}) {
+                            remove typemap{id};
+                        }
                     }
-                }
+                });
             });
         }
-        typemap{id}{key} = t;
+        # the type built from the document
+        update_shared_cache(self, sub () { typemap{id}{key} = t; });
     }
 
     #! Returns the data type corresponding to the values
@@ -6465,14 +6486,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
                 schema.recordTypeBuildWrite(sub () {
-                    remove alternativeDataType;
+                    update_shared_cache(self, sub () { remove alternativeDataType; });
                 });
             }
-            if (opaque) {
-                alternativeDataType @= t;
-            } else {
-                alternativeDataType = t;
-            }
+            # the type built from this schema object
+            update_shared_cache(self, sub () {
+                if (opaque) {
+                    alternativeDataType @= t;
+                } else {
+                    alternativeDataType = t;
+                }
+            });
         }
         return alternativeDataType;
     }

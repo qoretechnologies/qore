@@ -364,6 +364,24 @@ RestHandler handler(NOTHING, swagger);
 
 #! main namespace for all public %Swagger declarations
 public namespace Swagger {
+#! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+/** A schema or schema object that trusted code created is shared by every Program of the process, so it can only be
+    changed by sandboxed code, or code that acts for it, in an update scope (qore#6843; see
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").  Each caller computes the
+    new state of the cache from the object itself, never from data that its caller gives.
+
+    @param obj the object whose cache is updated
+    @param update a closure created by a method of a class of \a obj in this module
+
+    @return the value that \a update returns
+*/
+auto sub update_shared_cache(object obj, code update) {
+    if (SandboxManager::isSharedObject(obj)) {
+        return SandboxManager::updateSharedObject(obj, update);
+    }
+    return update();
+}
+
 /** @defgroup ParseOptionFlags Parse Option Flags
     Options that determine which common errors are acceptable when parsing Swagger schemas
 */
@@ -1230,7 +1248,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             return rv;
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
-        typemap{id}{required ? "Y" : "N"} = rv;
+        # the type built from the document
+        update_shared_cache(self, sub () { typemap{id}{required ? "Y" : "N"} = rv; });
         return rv;
     }
 
@@ -1336,7 +1355,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (!readonly_properties) {
             return type;
         }
-        return SwaggerHashDataType::forResponse(type, \response_types);
+        # the response copies are a cache of the document, built from its types
+        return update_shared_cache(self, AbstractDataProviderType sub () {
+            return SwaggerHashDataType::forResponse(type, \response_types);
+        });
     }
 
     #! Returns a field definition from the Swagger parameter

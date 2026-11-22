@@ -1,0 +1,9 @@
+Swagger: Thing; ["name", "tags"]; ["name", "inner"]; SCHEMA-VALIDATION-ERROR: Parameter "name" for path "/things/{id}" and method "POST" does not fit the parameter string pattern (pattern: "^[a-z]+$", value: "NOT VALID") (while checking parameter "name") (while checking parameter "body") (while checking body parameter)
+OpenAPI 3: Thing; ["name", "tags", "kind"]; ["name", "inner"]; SCHEMA-VALIDATION-ERROR: Parameter "name" for path "/things/{id}" and method "POST" does not fit the parameter string pattern (pattern: "^[a-z]+$", value: "NOT VALID") (while checking parameter "name") (while checking parameter "body") (while checking body parameter)
+Stripe:
+get-account: "get-account: request" "account"
+get-balance: "get-balance: request" "balance"
+list-balance-transactions: "list-balance-transactions: request" "response_200"
+get-balance-transaction: "get-balance-transaction: request" "balance_transaction"
+list-connected-accounts: "list-connected-accounts: request" "response_200"
+customer

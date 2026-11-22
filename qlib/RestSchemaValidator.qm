@@ -347,6 +347,25 @@ public namespace RestSchemaValidator {
         string example;
     }
 
+    #! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+    /** A schema object or a schema that trusted code created is shared by every Program of the process (see
+        AbstractObjectBase::markShared()), so it can only be changed by sandboxed code, or code that acts for it, in an
+        update scope (qore#6843; see @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").
+        Each caller computes the new state of the cache from the object itself, never from data that its caller
+        gives.
+
+        @param obj the object whose cache is updated
+        @param update a closure created by a method of a class of \a obj in this module
+
+        @return the value that \a update returns
+    */
+    auto sub update_shared_cache(object obj, code update) {
+        if (SandboxManager::isSharedObject(obj)) {
+            return SandboxManager::updateSharedObject(obj, update);
+        }
+        return update();
+    }
+
     #! Abstract base class for objects with vendor extensions
     /** This class provides common vendor extension support shared across
         Swagger 2.0, OpenAPI 3.0, and AsyncAPI 3.0 schema definitions.
@@ -737,7 +756,7 @@ public namespace RestSchemaValidator {
                 return pc.re;
             }
             Regex re(pattern);
-            pattern_cache = {"src": pattern, "re": re};
+            update_shared_cache(self, sub () { pattern_cache = {"src": pattern, "re": re}; });
             return re;
         }
 
@@ -1770,30 +1789,35 @@ public namespace RestSchemaValidator {
                 schema.recordTypeBuildWrite(sub () {
                     # the schema can have stopped opaque type caches since the write
                     bool opaque_undo = holdCacheEntryOpaquely(schema);
-                    if (required) {
-                        if (opaque_undo) {
-                            dataType @= prev;
+                    update_shared_cache(self, sub () {
+                        if (required) {
+                            if (opaque_undo) {
+                                dataType @= prev;
+                            } else {
+                                dataType = prev;
+                            }
+                        } else if (opaque_undo) {
+                            orNothingDataType @= prev;
                         } else {
-                            dataType = prev;
+                            orNothingDataType = prev;
                         }
-                    } else if (opaque_undo) {
-                        orNothingDataType @= prev;
-                    } else {
-                        orNothingDataType = prev;
-                    }
+                    });
                 });
             }
-            if (required) {
-                if (opaque) {
-                    dataType @= t;
+            # the type built from this schema object
+            update_shared_cache(self, sub () {
+                if (required) {
+                    if (opaque) {
+                        dataType @= t;
+                    } else {
+                        dataType = t;
+                    }
+                } else if (opaque) {
+                    orNothingDataType @= t;
                 } else {
-                    dataType = t;
+                    orNothingDataType = t;
                 }
-            } else if (opaque) {
-                orNothingDataType @= t;
-            } else {
-                orNothingDataType = t;
-            }
+            });
         }
 
         #! Returns @ref True if this object holds a type it caches in the type build in progress through an opaque reference
@@ -1811,7 +1835,7 @@ public namespace RestSchemaValidator {
                 return False;
             }
             if (!holds_opaque_type_caches) {
-                holds_opaque_type_caches = True;
+                update_shared_cache(self, sub () { holds_opaque_type_caches = True; });
             }
             return True;
         }
@@ -1871,44 +1895,49 @@ public namespace RestSchemaValidator {
                 schema.recordTypeBuildWrite(sub () {
                     # the schema can have stopped opaque type caches since the write
                     bool opaque_undo = prev && holdCacheEntryOpaquely(schema);
-                    if (use) {
-                        if (prev) {
-                            if (opaque_undo) {
-                                usemap{key}{rstr} @= prev;
+                    update_shared_cache(self, sub () {
+                        if (use) {
+                            if (prev) {
+                                if (opaque_undo) {
+                                    usemap{key}{rstr} @= prev;
+                                } else {
+                                    usemap{key}{rstr} = prev;
+                                }
                             } else {
-                                usemap{key}{rstr} = prev;
+                                remove usemap{key}{rstr};
+                                if (!usemap{key}) {
+                                    remove usemap{key};
+                                }
+                            }
+                        } else if (prev) {
+                            if (opaque_undo) {
+                                fieldmap{key}{rstr} @= prev;
+                            } else {
+                                fieldmap{key}{rstr} = prev;
                             }
                         } else {
-                            remove usemap{key}{rstr};
-                            if (!usemap{key}) {
-                                remove usemap{key};
+                            remove fieldmap{key}{rstr};
+                            if (!fieldmap{key}) {
+                                remove fieldmap{key};
                             }
                         }
-                    } else if (prev) {
-                        if (opaque_undo) {
-                            fieldmap{key}{rstr} @= prev;
-                        } else {
-                            fieldmap{key}{rstr} = prev;
-                        }
-                    } else {
-                        remove fieldmap{key}{rstr};
-                        if (!fieldmap{key}) {
-                            remove fieldmap{key};
-                        }
-                    }
+                    });
                 });
             }
-            if (use) {
-                if (opaque) {
-                    usemap{key}{rstr} @= field;
+            # the field built from this schema object
+            update_shared_cache(self, sub () {
+                if (use) {
+                    if (opaque) {
+                        usemap{key}{rstr} @= field;
+                    } else {
+                        usemap{key}{rstr} = field;
+                    }
+                } else if (opaque) {
+                    fieldmap{key}{rstr} @= field;
                 } else {
-                    usemap{key}{rstr} = field;
+                    fieldmap{key}{rstr} = field;
                 }
-            } else if (opaque) {
-                fieldmap{key}{rstr} @= field;
-            } else {
-                fieldmap{key}{rstr} = field;
-            }
+            });
         }
 
         #! Returns the data type for the given schema
@@ -2286,13 +2315,13 @@ public namespace RestSchemaValidator {
             # the field registered below is handed to anything that re-enters this schema while its type
             # is being built, so it must not be copied until that build has finished; the other variant of the
             # name can be built inside this build, so only this variant is marked and unmarked here
-            building{name}{rstr} = True;
-            on_exit {
+            update_shared_cache(self, sub () { building{name}{rstr} = True; });
+            on_exit update_shared_cache(self, sub () {
                 remove building{name}{rstr};
                 if (!building{name}) {
                     remove building{name};
                 }
-            }
+            });
             # create the field with a placeholder type
             RestSchemaExampleDataField field({
                 "name": name,
@@ -2756,27 +2785,33 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             @since RestSchemaValidator 2.5
         */
         auto runTypeBuild(code build) {
+            # the build of a shared schema runs only code of trusted library classes for a sandboxed caller, so that
+            # sandboxed code cannot hold the schema's lock (qore#6843)
+            SandboxManager::checkSharedObjectCallback(self, build, "run a type build");
             if (type_build_lock.lockOwner()) {
                 return build();
             }
             type_build_lock.lock();
             on_exit type_build_lock.unlock();
-            on_exit type_build_undo = ();
-            # run first, while the lock is held; see stopOpaqueTypeCaches()
-            on_exit if (release_opaque_type_caches) {
-                release_opaque_type_caches = False;
-                releaseOpaqueTypeCacheHolders();
-            }
-            try {
-                return build();
-            } catch (hash<ExceptionInfo> ex) {
-                # undo the writes of the build, the latest first
-                while (type_build_undo) {
-                    code undo_write = pop type_build_undo;
-                    undo_write();
+            # the state of the build in progress is a cache of the schema
+            return update_shared_cache(self, auto sub () {
+                on_exit type_build_undo = ();
+                # run first, while the lock is held; see stopOpaqueTypeCaches()
+                on_exit if (release_opaque_type_caches) {
+                    release_opaque_type_caches = False;
+                    releaseOpaqueTypeCacheHolders();
                 }
-                rethrow;
-            }
+                try {
+                    return build();
+                } catch (hash<ExceptionInfo> ex) {
+                    # undo the writes of the build, the latest first
+                    while (type_build_undo) {
+                        code undo_write = pop type_build_undo;
+                        undo_write();
+                    }
+                    rethrow;
+                }
+            });
         }
 
         #! Returns @ref True if the calling thread is building types of this schema
@@ -2835,7 +2870,7 @@ if (schema && schema.isTypeBuildActive() && schema.holdTypeCacheOpaquely(self)) 
             # have the same unique hash
             *AbstractRestSchemaObject holder = opaque_type_cache_holders{key};
             if (holder != so) {
-                opaque_type_cache_holders{key} := so;
+                update_shared_cache(self, sub () { opaque_type_cache_holders{key} := so; });
             }
             return True;
         }
@@ -2936,8 +2971,10 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @since RestSchemaValidator 2.5
         */
         recordTypeBuildWrite(code undo_write) {
+            # the undo of a write of a shared schema's build is code of a trusted library class (qore#6843)
+            SandboxManager::checkSharedObjectCallback(self, undo_write, "record a write of a type build");
             if (type_build_lock.lockOwner()) {
-                push type_build_undo, undo_write;
+                update_shared_cache(self, sub () { push type_build_undo, undo_write; });
             }
         }
 
