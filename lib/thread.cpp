@@ -972,6 +972,11 @@ public:
     // of memory: while one is active, no application Program is found for module code (see
     // qore_reflection_get_module_application_program())
     unsigned module_init_barrier_unrecorded = 0;
+#ifdef DEBUG
+    // the number of the next barriers of library code that fail to be recorded as if no memory could be allocated
+    // (see qore_dbg_fail_next_module_init_barrier_records())
+    int dbg_module_init_barrier_record_failures = 0;
+#endif
 
     // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
     // without touching the pending request, so that a bounded cleanup critical section (acquire a
@@ -7932,6 +7937,13 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
             // A nested initializer can have additional managers of its own. Keep their live composition as well
             // as the original denial, so a later decision observes revocations during initialization.
             ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(), nullptr);
+#ifdef DEBUG
+            // the allocation of the record fails here: the references above are released while unwinding
+            if (td->dbg_module_init_barrier_record_failures > 0) {
+                --td->dbg_module_init_barrier_record_failures;
+                throw std::bad_alloc();
+            }
+#endif
             td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
                 td->sandbox_context, td->inherited_sandbox_context, false, untrusted, owner.operator->(),
                 untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr, nullptr,
@@ -7995,6 +8007,18 @@ QoreModuleInitSandboxBarrierHelper::~QoreModuleInitSandboxBarrierHelper() {
 #ifdef DEBUG
 QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id) {
     return find_thread_sandbox_manager_ref_intern(pgm_id);
+}
+
+void qore_dbg_fail_next_module_init_barrier_records(int count) {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        td->dbg_module_init_barrier_record_failures = count > 0 ? count : 0;
+    }
+}
+
+unsigned qore_dbg_module_init_barrier_unrecorded() {
+    ThreadData* td = thread_data.get();
+    return td ? td->module_init_barrier_unrecorded : 0;
 }
 #endif
 

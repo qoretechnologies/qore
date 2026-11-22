@@ -629,6 +629,11 @@ DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
 DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id);
+//! Debug-only: makes the next \a count barriers of library code (QoreModuleInitSandboxBarrierHelper(true)) on the
+//! current thread fail to be recorded as if no memory could be allocated; 0 disarms it
+DLLLOCAL void qore_dbg_fail_next_module_init_barrier_records(int count);
+//! Debug-only: returns the number of active barriers of library code on the current thread that could not be recorded
+DLLLOCAL unsigned qore_dbg_module_init_barrier_unrecorded();
 #endif
 
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
