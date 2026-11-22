@@ -281,3 +281,49 @@
 8 O8 string outside: METHOD-IS-PRIVATE
 8 O8 string outside ref: ILLEGAL-CALL-REFERENCE
 8 O8 string outside com: METHOD-IS-PRIVATE
+9 XQ9 outside: METHOD-IS-PRIVATE
+9 XQ9 outside untyped: METHOD-IS-PRIVATE
+9 XQ9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9 outside com: METHOD-IS-PRIVATE
+9 XQ9i outside: METHOD-IS-PRIVATE
+9 XQ9i outside untyped: METHOD-IS-PRIVATE
+9 XQ9i outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9i outside com: METHOD-IS-PRIVATE
+9 XA9 outside: METHOD-IS-PRIVATE
+9 XA9 outside untyped: METHOD-IS-PRIVATE
+9 XA9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9 outside com: METHOD-IS-PRIVATE
+9 XA9i outside: METHOD-IS-PRIVATE
+9 XA9i outside untyped: METHOD-IS-PRIVATE
+9 XA9i outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9i outside com: METHOD-IS-PRIVATE
+9 XD9 outside: METHOD-IS-PRIVATE
+9 XD9 outside untyped: METHOD-IS-PRIVATE
+9 XD9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XD9 outside com: METHOD-IS-PRIVATE
+9 YP9 outside: METHOD-IS-PRIVATE
+9 YP9 outside untyped: METHOD-IS-PRIVATE
+9 YP9 outside ref: ILLEGAL-CALL-REFERENCE
+9 YP9 outside com: METHOD-IS-PRIVATE
+9 XI9 outside: BASE-CLASS-IS-PRIVATE
+9 XI9 outside untyped: BASE-CLASS-IS-PRIVATE
+9 XI9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XI9 outside com: BASE-CLASS-IS-PRIVATE
+9 XB9 outside: BASE-CLASS-IS-PRIVATE
+9 XB9 outside untyped: BASE-CLASS-IS-PRIVATE
+9 XB9 outside ref: ILLEGAL-CALL-REFERENCE
+9 XB9 outside com: BASE-CLASS-IS-PRIVATE
+9 XQ9c outside: METHOD-IS-PRIVATE
+9 XQ9c outside untyped: METHOD-IS-PRIVATE
+9 XQ9c outside ref: ILLEGAL-CALL-REFERENCE
+9 XQ9c outside com: METHOD-IS-PRIVATE
+9 XA9c outside: METHOD-IS-PRIVATE
+9 XA9c outside untyped: METHOD-IS-PRIVATE
+9 XA9c outside ref: ILLEGAL-CALL-REFERENCE
+9 XA9c outside com: METHOD-IS-PRIVATE
+9 XO9 int outside: RUNTIME-OVERLOAD-ERROR
+9 XO9 int outside ref: RUNTIME-OVERLOAD-ERROR
+9 XO9 int outside com: RUNTIME-OVERLOAD-ERROR
+9 XO9 string outside: "C09o::m(string)"
+9 XO9 string outside ref: "C09o::m(string)"
+9 XO9 string outside com: "C09o::m(string)"

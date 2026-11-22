@@ -280,6 +280,46 @@ class N8 inherits N8p {
 }
 class O8 inherits N8p {}
 
+# 9: a method of a class that inherits the class of the abstract declaration and that the class reaches only through
+# private inheritance does not give the abstract variant its own access (XQ9 to XO9); XB9 to XA9c are the controls
+class C09 {
+    private abstract string m();
+}
+class C19 inherits C09 {
+    string m() { return "C19::m"; }
+}
+class D09 {
+    private abstract string m();
+}
+class C09i {
+    private:internal abstract string m();
+}
+class C19i inherits C09i {
+    string m() { return "C19i::m"; }
+}
+class C09o {
+    private abstract string m(int i);
+    string m(string s) { return "C09o::m(string)"; }
+}
+class C19o inherits C09o {
+    string m(int i) { return "C19o::m(int)"; }
+}
+class XQ9 inherits private C09, private C19 {}
+class XQ9i inherits private:internal C09, private:internal C19 {}
+class XA9 inherits C09, private C19 {}
+class XA9i inherits C09, private:internal C19 {}
+class XD9 inherits D09, private C19 {}
+class YP9 inherits XA9 {}
+class XI9 inherits C09i, private C19i {}
+class XO9 inherits C09o, private:internal C19o {}
+class XB9 inherits private C19 {}
+class XQ9c inherits private C09, private C19 {
+    private string m() { return "XQ9c::m"; }
+}
+class XA9c inherits C09, private C19 {
+    private string m() { return "XA9c::m"; }
+}
+
 A1 a1();
 S1 s1();
 check("1 A1 outside", auto sub () { return a1.m(); });
@@ -416,4 +456,20 @@ foreach object x in ((new G8(), new H8(), new I8(), new J8(), new K8(), new L8()
         check(sprintf("8 %s %s outside ref", cx, t), auto sub () { return Calls7::r(x, a); });
         check(sprintf("8 %s %s outside com", cx, t), auto sub () { return Calls7::c(x, a); });
     }
+}
+
+foreach object x in ((new XQ9(), new XQ9i(), new XA9(), new XA9i(), new XD9(), new YP9(), new XI9(), new XB9(),
+        new XQ9c(), new XA9c())) {
+    string cx = x.className();
+    check(sprintf("9 %s outside", cx), auto sub () { return x.m(); });
+    check(sprintf("9 %s outside untyped", cx), auto sub () { return Calls::u(x); });
+    check(sprintf("9 %s outside ref", cx), auto sub () { return Calls::r(x); });
+    check(sprintf("9 %s outside com", cx), auto sub () { return Calls::c(x); });
+}
+XO9 xo9();
+foreach auto a in ((1, "a")) {
+    string t = a.typeCode() == NT_INT ? "int" : "string";
+    check(sprintf("9 XO9 %s outside", t), auto sub () { return xo9.m(a); });
+    check(sprintf("9 XO9 %s outside ref", t), auto sub () { return Calls7::r(xo9, a); });
+    check(sprintf("9 XO9 %s outside com", t), auto sub () { return Calls7::c(xo9, a); });
 }

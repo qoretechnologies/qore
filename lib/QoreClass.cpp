@@ -1100,35 +1100,25 @@ static bool reaches_class_publicly(const BCList& scl, const qore_class_private& 
 }
 
 //! sets the access \a va (that of \a v in the method of the class that has it) of the concrete variant \a v that
-//! implements the abstract variant \a av in a class whose parent classes are \a scl (qore#7277)
-/** A public path to the class of \a v gives the variant its own access, as the least restrictive path to a class does
-    (multiple_path_inheritance).  Otherwise the variant has at least the access of \a av, unless the class of \a v
-    inherits the class of \a av: its variant then overrides the abstract variant, and its access is that class's
-    choice.
+//! implements the abstract variant \a av in the class \a qc (qore#7277)
+/** The variant has at least the access of \a av, except that a variant of a class that a public path from \a qc
+    reaches has its own access, as the least restrictive path to a class does (multiple_path_inheritance), and a
+    variant of \a qc itself (runtimeInit()) is its own override.
 */
 static void abstract_variant_restrict_access(ClassAccess& va, const MethodVariantBase* v,
-        const MethodVariantBase* av, const BCList& scl) {
+        const MethodVariantBase* av, const qore_class_private& qc) {
     const QoreClass* vc = v->getClass();
-    if (vc && va > v->getAccess()) {
-        qcp_set_t visited;
-        if (reaches_class_publicly(scl, *qore_class_private::get(*vc), visited)) {
-            va = v->getAccess();
-        }
-    }
-    if (va >= av->getAccess()) {
-        return;
-    }
-    const QoreClass* ac = av->getClass();
-    if (vc && ac && vc->getClass(ac->getID())) {
-        return;
-    }
     if (vc) {
+        const qore_class_private& vcp = *qore_class_private::get(*vc);
         qcp_set_t visited;
-        if (reaches_class_publicly(scl, *qore_class_private::get(*vc), visited)) {
+        if (vcp.sameClass(qc) || (qc.scl && reaches_class_publicly(*qc.scl, vcp, visited))) {
+            va = v->getAccess();
             return;
         }
     }
-    va = av->getAccess();
+    if (va < av->getAccess()) {
+        va = av->getAccess();
+    }
 }
 
 // try to find match non-abstract variants in base classes (allows concrete variants to be inherited from another
@@ -1145,7 +1135,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
             if (v) {
                 // the variant has the more restrictive access of the abstract variant and of its own in the method of
                 // its class (qore#7277)
-                abstract_variant_restrict_access(va, v, vi->second, *scl);
+                abstract_variant_restrict_access(va, v, vi->second, qc);
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;
@@ -1248,7 +1238,7 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
             }
             if (v) {
                 // as in parseInit() (qore#7277)
-                abstract_variant_restrict_access(va, v, vi->second, *scl);
+                abstract_variant_restrict_access(va, v, vi->second, qc);
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;

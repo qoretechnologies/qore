@@ -534,10 +534,9 @@ x1.viaB();    # "P1::m": B1's code can call P1::m()
     @endcode
     Each variant that implements an abstract variant has the more restrictive of its own access (in the method of the
     class that has it) and of the access of the abstract declaration, also when another parent class declares the
-    abstract variant or a subclass declares it again, except that a variant of a class that a public path reaches, or
-    of a class that inherits the class of the abstract declaration (whose variant overrides it), has its own access
-    (see @ref multiple_path_inheritance).  This also applies when the class that declares the abstract method inherits the
-    implementing class with @ref private_inheritance "private" or <tt><b>private:internal</b></tt> access: the method
+    abstract variant or a subclass declares it again, except that a variant of a class that a public path reaches keeps
+    its own access (see @ref multiple_path_inheritance).  This also applies when the class that declares the abstract
+    method inherits the implementing class with @ref private_inheritance "private" or <tt><b>private:internal</b></tt> access: the method
     is a method of that class, declared by its abstract declaration, as a method that it implements with a method of
     its own, so a public abstract method that a public method of a privately inherited class implements is public, as
     the class declares it (the inherited class itself stays private: an object of the class is not an instance of it),
