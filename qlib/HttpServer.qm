@@ -5953,7 +5953,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # context without this code, so that the code and the context do not reference each other.
                         hash<auto> reg_cx = ws_cx;
                         HttpServer::HttpListenerInterface ws_listener = ws_cx.listener;
+                        # the connection is registered once: a later call raises an error
+                        Mutex reg_lock();
+                        bool reg_done;
                         ws_cx."header-info".ws_register = sub () {
+                            {
+                                AutoLock al(reg_lock);
+                                if (reg_done) {
+                                    throw "WEBSOCKET-REGISTER-ERROR", "the WebSocket connection is already "
+                                        "registered";
+                                }
+                                reg_done = True;
+                            }
                             asyncIo.registerH1WebSocketConnection(s, ws_poll_op, asyncTarget, ws_listener, reg_cx);
                         };
                     }
