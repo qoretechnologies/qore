@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -1035,9 +1036,15 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
 
 //! returns the class context of the calling code if it can see the non-public members of objects of the class, as
 //! getRuntimeMemberHash() determines it, or nullptr
-static const qore_class_private* qore_object_runtime_member_class_context(const QoreClass& cls) {
+static const qore_class_private* qore_object_runtime_member_class_context(const QoreClass& cls,
+        const qore_class_private** storage_ctx = nullptr) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(cls, class_ctx)) {
+        // a class context with no private access to the object's class still has the storage of some members
+        // (qore#7180)
+        if (storage_ctx) {
+            *storage_ctx = class_ctx;
+        }
         class_ctx = nullptr;
     }
     return class_ctx;
@@ -1074,7 +1081,8 @@ QoreListNode* qore_object_private::getRuntimeMemberList(ExceptionSink* xsink) co
 // out of line, with the lock of its own: the common path above keeps the lock's code inline
 QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink) const {
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+    const qore_class_private* storage_ctx = nullptr;
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
 
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
@@ -1089,6 +1097,17 @@ QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink
         while (hi.next()) {
             if (!theclass->isPrivateMember(hi.getKey())) {
                 l->push(new QoreStringNode(hi.getKey()), xsink);
+            }
+        }
+        // and the members that its class has a storage of (qore#7180): a member of the same name that is public
+        // is listed already, with the value of the storage
+        if (storage_ctx && cdmap) {
+            std::vector<ContextStorageMember> sm;
+            getContextStorageMembers(storage_ctx, sm);
+            for (const auto& m : sm) {
+                if (!data->existsKey(m.key) || theclass->isPrivateMember(m.key)) {
+                    l->push(new QoreStringNode(m.key), xsink);
+                }
             }
         }
         return l.release();
@@ -1137,7 +1156,8 @@ int64 qore_object_private::getRuntimeMemberCount() const {
 // out of line, with the lock of its own: the common path above keeps the lock's code inline
 int64 qore_object_private::getRuntimeMemberCountSlow() const {
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+    const qore_class_private* storage_ctx = nullptr;
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
 
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
@@ -1151,6 +1171,16 @@ int64 qore_object_private::getRuntimeMemberCountSlow() const {
         while (hi.next()) {
             if (!theclass->isPrivateMember(hi.getKey())) {
                 ++rc;
+            }
+        }
+        // and the members that its class has a storage of (qore#7180), see getRuntimeMemberListSlow()
+        if (storage_ctx && cdmap) {
+            std::vector<ContextStorageMember> sm;
+            getContextStorageMembers(storage_ctx, sm);
+            for (const auto& m : sm) {
+                if (!data->existsKey(m.key) || theclass->isPrivateMember(m.key)) {
+                    ++rc;
+                }
             }
         }
         return rc;
@@ -1214,16 +1244,67 @@ bool qore_object_private::hasRuntimeMembers() const {
             return !data->empty();
         }
     }
-    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass);
+    const qore_class_private* storage_ctx = nullptr;
+    const qore_class_private* class_ctx = qore_object_runtime_member_class_context(*theclass, &storage_ctx);
     QoreSafeVarRWReadLocker sl(rml);
-    return status != OS_DELETED && getFirstRuntimeMemberKeyIntern(class_ctx);
+    if (status == OS_DELETED) {
+        return false;
+    }
+    if (getFirstRuntimeMemberKeyIntern(class_ctx)) {
+        return true;
+    }
+    // the members that a class context with no private access has a storage of (qore#7180)
+    if (!class_ctx && storage_ctx && cdmap) {
+        std::vector<ContextStorageMember> sm;
+        getContextStorageMembers(storage_ctx, sm);
+        return !sm.empty();
+    }
+    return false;
+}
+
+void qore_object_private::getContextStorageMembers(const qore_class_private* storage_ctx,
+        std::vector<ContextStorageMember>& out) const {
+    assert(storage_ctx);
+    // the storage that a class context has for a member is in the object's internal data: an object with no internal
+    // data has no member of that kind
+    if (!cdmap) {
+        return;
+    }
+    const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+    // a class context outside the object's hierarchy has no storage in it; the lists are kept for the classes of the
+    // hierarchy only, which live as long as the object's class
+    // (findInHierarchy() only reads the hierarchy, but is not declared const)
+    if (!const_cast<qore_class_private*>(theclass_priv)->findInHierarchy(*storage_ctx)) {
+        return;
+    }
+
+    // the members in the order of their declaration, resolved once for the class context; here only whether the object
+    // holds a value of each
+    qore_class_private::context_storage_list_t tmp;
+    const qore_class_private::context_storage_list_t& list = theclass_priv->runtimeGetContextStorageMembers(
+        storage_ctx, tmp);
+    const qore_class_private* last_ctx = nullptr;
+    const QoreHashNode* last_store = nullptr;
+    for (const auto& e : list) {
+        if (e.storage != last_ctx) {
+            last_ctx = e.storage;
+            last_store = getInternalData(e.storage);
+        }
+        if (last_store && last_store->existsKey(e.key)) {
+            out.push_back({e.key, last_store});
+        }
+    }
 }
 
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
+    // a class context with no private access to the object's class still has the storage of some members (issue #7180)
+    const qore_class_private* storage_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        storage_ctx = class_ctx;
         class_ctx = nullptr;
+    }
 
     QoreSafeVarRWReadLocker sl(rml);
 
@@ -1269,6 +1350,18 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 
         // not possible for an exception to happen here
         qore_hash_private::get(*h)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+    }
+
+    // code with no private access to the object's class also gets the declared members that its class has a storage
+    // of, with the values that a direct access finds there: they replace a public member of the same name that a
+    // subclass declares (issue #7180)
+    if (storage_ctx && cdmap) {
+        std::vector<ContextStorageMember> sm;
+        getContextStorageMembers(storage_ctx, sm);
+        for (auto& m : sm) {
+            // not possible for an exception to happen here
+            qore_hash_private::get(*h)->setKeyValueIntern(m.key, m.store->getKeyValue(m.key).refSelf());
+        }
     }
 
     return h;
@@ -1641,22 +1734,27 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
         LexicalSemanticPolicy policy) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
+    const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        // the class context has no private access to the object's class: it still has the storage of some members
+        // (issue #7180)
+        storage_ctx = class_ctx;
         class_ctx = nullptr;
     }
 
     if constexpr (Lock) {
         QoreSafeVarRWReadLocker sl(rml);
-        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx);
+        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx, storage_ctx);
     } else {
         // this thread holds the object's lock for writing (qore#7107)
-        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx);
+        mergeDataToHashIntern<Lexical>(hash, sdh, xsink, policy, class_ctx, storage_ctx);
     }
 }
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh,
-        ExceptionSink* xsink, LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const {
+        ExceptionSink* xsink, LexicalSemanticPolicy policy, const qore_class_private* class_ctx,
+        const qore_class_private* storage_ctx) const {
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
         return;
@@ -1713,6 +1811,21 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashIntern(QoreHa
             hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink, policy);
         } else {
             hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink);
+        }
+    }
+
+    // code with no private access to the object's class also gets the declared members that its class has a storage
+    // of (issue #7180)
+    if (storage_ctx && cdmap) {
+        std::vector<ContextStorageMember> sm;
+        getContextStorageMembers(storage_ctx, sm);
+        for (auto& m : sm) {
+            // the value that a direct access finds replaces a public member of the same name that a subclass declares
+            if constexpr (Lexical) {
+                hp->setKeyValue(m.key, m.store->getKeyValue(m.key).refSelf(), sdh, xsink, policy);
+            } else {
+                hp->setKeyValue(m.key, m.store->getKeyValue(m.key).refSelf(), sdh, xsink);
+            }
         }
     }
 }

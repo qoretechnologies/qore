@@ -400,7 +400,30 @@ public:
 
     template <bool Lexical>
     DLLLOCAL void mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const;
+            LexicalSemanticPolicy policy, const qore_class_private* class_ctx,
+            const qore_class_private* storage_ctx) const;
+
+    //! a declared member that a class context with no private access to the object's class uses on the object, and the
+    //! storage that holds its value (qore#7180)
+    struct ContextStorageMember {
+        const char* key;
+        const QoreHashNode* store;
+    };
+
+    //! returns the declared members that a class context with no private access to the object's class uses on the
+    //! object, in the order in which they were declared, with the storage of their values; the object's lock must be held
+    /** A class that is on the path of a private:internal inheritance to a member (the class that declares it, and the
+        classes between it and the class that inherits it with private:internal) uses the member on the objects of the
+        subclasses of that class, as through self, and the member's value is in the storage that the class context has
+        for it, which is not the object's data hash (issue #6800): the enumerations of the members list it as the
+        access of the member finds it.  The keys are valid as long as the object's class lives; the storages while the
+        object's lock is held.
+
+        The members are found in the internal data of the object, so an object with none has no such member, and
+        nothing is done for a class context that is not in the object's hierarchy.
+    */
+    DLLLOCAL void getContextStorageMembers(const qore_class_private* storage_ctx,
+            std::vector<ContextStorageMember>& out) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
