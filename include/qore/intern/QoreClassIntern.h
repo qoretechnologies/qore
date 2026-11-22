@@ -3236,6 +3236,11 @@ public:
     //! the cache of runtimeGetContextStorageMembers(): a chain of nodes, one for each class context; nodes are only added
     //! and are deleted with the class (#7180)
     mutable std::atomic<struct ContextStorageNode*> context_storage_head{nullptr};
+    //! the cache of the method that code of a class context calls in place of a method found by a run-time lookup in
+    //! this class (the object's class) in a hierarchy with a diamond (see runtime_find_context_override()): a chain of
+    //! nodes, one for each class context and method found; nodes are only added, and are deleted with the methods of
+    //! the class (qore#6798)
+    mutable std::atomic<struct ContextOverrideNode*> context_override_head{nullptr};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -5247,8 +5252,9 @@ public:
     /** True if, for a private method of one of its parent classes, the method of the name that code of this class calls
         on an object of this class is another one (it overrides the private method), or if the hierarchy of the class is
         not known completely; the run-time lookups from the class context of the class then skip such a private method
-        when an earlier parent class of the object's class reaches it first.  Computed once, at run time: the hierarchy
-        of a class does not change once committed
+        when an earlier parent class of the object's class reaches it first.  Computed once, at run time, when the
+        hierarchy of the class is known completely: it does not change then; the conservative answer for a hierarchy
+        not known completely is not cached
     */
     DLLLOCAL bool runtimeOverridesPrivateParentMethod() const {
         int8_t rv = overrides_private_parent_method.load(std::memory_order_relaxed);

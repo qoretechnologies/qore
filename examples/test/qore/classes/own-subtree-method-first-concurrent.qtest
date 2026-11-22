@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads that fill a lock-free cache of the class at the same time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class OwnSubtreeMethodFirstConcurrentTest
+
+#! the method that code of a class calls in place of a private method of a common parent class is the same when threads
+#! call it for the first time at the same time (qore#6798)
+/** The run-time lookup caches the method that code of a class context calls in place of a method found in a hierarchy
+    with a diamond in the class of the object, for each class context and method found; the threads of each round
+    call the methods on objects of classes that no call has looked a method up in yet (the classes of a new Program),
+    all released at once, so that they fill the cache at the same time.  The calls cover a private method that the
+    context's hierarchy overrides (normal and static, typed, untyped, through call_object_method() and
+    call_static_method()), a private method that it does not override (the cached result is the method found) and a
+    public method reached through private inheritance first.
+*/
+class OwnSubtreeMethodFirstConcurrentTest inherits QUnit::Test {
+    private {
+        const Rounds = 20;
+        const Threads = 8;
+        const Calls = 25;
+
+        const Src = "%modern
+%require-types
+class P2 {
+    private string m() { return \"P2::m\"; }
+    private string n() { return \"P2::n\"; }
+    private static string sm() { return \"P2::sm\"; }
+}
+class A2 inherits P2 {}
+class B22 inherits P2 {
+    string m() { return \"B22::m\"; }
+    static string sm() { return \"B22::sm\"; }
+    string calls(X2 x, auto o) {
+        return sprintf(\"%s %s %s %s %s %s %s\", self.m(), x.m(), o.m(), call_object_method(o, \"m\"), o.n(),
+            X2::sm(), call_static_method(\"X2\", \"sm\"));
+    }
+}
+class X2 inherits A2, B22 {}
+
+class P1 {
+    string m() { return \"P1::m\"; }
+}
+class A1 inherits private P1 {}
+class B1 inherits P1 {
+    string m() { return \"B1::m\"; }
+    string calls(X1 x, auto o) {
+        return sprintf(\"%s %s %s\", x.m(), o.m(), call_object_method(o, \"m\"));
+    }
+}
+class X1 inherits A1, B1 {}
+
+string sub calls(int n) {
+    X2 x2();
+    X1 x1();
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += x2.calls(x2, x2) + \" | \" + x1.calls(x1, x1);
+    }
+    return (map $1, l, $1 != l[0]) ? \"inconsistent: \" + l.join(\", \") : l[0];
+}
+";
+        const Expected = "B22::m B22::m B22::m B22::m P2::n B22::sm B22::sm | B1::m B1::m B1::m";
+    }
+
+    constructor() : QUnit::Test("OwnSubtreeMethodFirstConcurrentTest", "1.0") {
+        addTestCase("concurrent first calls", \concurrentFirstCalls());
+        set_return_value(main());
+    }
+
+    concurrentFirstCalls() {
+        for (int r = 0; r < Rounds; ++r) {
+            Program p(PO_NEW_STYLE);
+            p.parse(Src, "own-subtree-concurrent");
+            Counter ready(Threads);
+            Counter gate(1);
+            Queue q();
+            for (int t = 0; t < Threads; ++t) {
+                background sub () {
+                    try {
+                        ready.dec();
+                        gate.waitForZero();
+                        q.push(p.callFunction("calls", Calls));
+                    } catch (hash<ExceptionInfo> ex) {
+                        q.push(sprintf("%s: %s", ex.err, ex.desc));
+                    }
+                }();
+            }
+            # all threads are released at once
+            ready.waitForZero();
+            gate.dec();
+            for (int t = 0; t < Threads; ++t) {
+                assertEq(Expected, q.get(), sprintf("round %d", r));
+            }
+        }
+    }
+}

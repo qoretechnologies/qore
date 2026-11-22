@@ -1751,6 +1751,22 @@ struct ContextStorageNode {
     ContextStorageNode* next;
 };
 
+//! a node of the cache of runtime_find_context_override() (qore#6798)
+/** The result for the method \a w found by a run-time lookup in the class (the object's class) from the code of the
+    class context with the serial \a ctx_serial: \a rv, with the access \a access, if the context calls it in place of
+    \a w, otherwise nullptr (\a w is called).  The serial identifies the class context for the lifetime of the
+    process, also once the class context has been freed and its address reused (see
+    qore_class_private::instance_serial), so a node never matches another class context; \a w and \a rv are methods of
+    the class's hierarchy or of the live class context that the serial matches
+*/
+struct ContextOverrideNode {
+    uint64_t ctx_serial;
+    const QoreMethod* w;
+    const QoreMethod* rv;
+    ClassAccess access;
+    ContextOverrideNode* next;
+};
+
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
     // the nodes of the cache of the members that a class context has a storage of (#7180)
@@ -1830,6 +1846,14 @@ void qore_class_private::releaseMethodsAndData(bool retiring) {
             i.second.discard(&xsink);
         }
         kvmap.clear();
+    }
+
+    // the cache of the methods that class contexts call in place of the methods found, which names methods of the
+    // class's hierarchy (qore#6798)
+    for (ContextOverrideNode* n = context_override_head.exchange(nullptr, std::memory_order_acquire); n;) {
+        ContextOverrideNode* next = n->next;
+        delete n;
+        n = next;
     }
 
     // delete normal methods
@@ -7965,8 +7989,11 @@ const QoreMethod* qore_class_private::raiseInaccessibleMethodError(const char* n
 bool qore_class_private::computeOverridesPrivateParentMethod() const {
     bool rv = false;
     if (scl) {
-        // a hierarchy not known completely is checked at each lookup
-        rv = !scl->sml_complete;
+        // a hierarchy not known completely may override a private method: the conservative answer is not cached, so
+        // it is computed again at each lookup (a hierarchy known completely is cached)
+        if (!scl->sml_complete) {
+            return true;
+        }
         for (auto i = scl->sml.begin(), e = scl->sml.end(); !rv && i != e; ++i) {
             const qore_class_private& p = *i->first->priv;
             for (const hm_method_t* map : {&p.hm, &p.shm}) {
@@ -7996,20 +8023,21 @@ bool qore_class_private::computeOverridesPrivateParentMethod() const {
 }
 
 //! returns the method that code of the class context calls in place of the method \a w found by a run-time lookup in
-//! the class \a cls (the object's class) if the context's own hierarchy overrides \a w, otherwise \a w (qore#6798)
+//! the class \a cls (the object's class) if the context's own hierarchy overrides \a w, otherwise nullptr (qore#6798)
 /** \a w is a private method, or a public method found through private inheritance.  As
     parse_find_context_override(), qore_class_private::parseFindContextPublicOverride() and
     qore_class_private::parseFindContextCallableMethod() at parse time: the lookup of
     qore_class_private::runtimeFindContextCallableCommittedMethod(), skipping the private methods of the context's
     parent classes that the method that code of the class context calls on an object of its own class overrides, and a
-    public method \a w that it overrides and that a caller outside the class hierarchy does not call.  Not inlined:
-    called only for such a method of another class found in a hierarchy with a diamond
+    public method \a w that it overrides and that a caller outside the class hierarchy does not call.  The access of
+    the method returned is set in \a found_access.  The result depends only on the committed hierarchies of \a cls and
+    of the class context, which do not change, and on \a w, so runtime_find_context_override() caches it
 */
-static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_context_override(const qore_class_private& cls,
-        const char* nme, const QoreMethod* w, ClassAccess& access, const qore_class_private* class_ctx) {
+static const QoreMethod* runtime_find_context_override_intern(const qore_class_private& cls, const char* nme,
+        const QoreMethod* w, const qore_class_private* class_ctx, ClassAccess& found_access) {
     // the special methods are not looked up further, as by runtimeFindPublicCommittedMethod()
     if (!strcmp(nme, "constructor") || !strcmp(nme, "destructor") || !strcmp(nme, "copy")) {
-        return w;
+        return nullptr;
     }
     bool is_static = w->isStatic();
     const QoreMethod* skip_public = nullptr;
@@ -8018,19 +8046,17 @@ static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_context_override(cons
         // calls it as well, through a public path
         if (!context_may_override(cls, w, class_ctx)
                 || cls.runtimeFindPublicCommittedMethod(nme, is_static ? QCCM_STATIC : QCCM_NORMAL) == w) {
-            return w;
+            return nullptr;
         }
         skip_public = w;
-    } else if (!class_ctx->runtimeOverridesPrivateParentMethod() || !context_may_override(cls, w, class_ctx)) {
-        // a class context that overrides no private method of its parent classes, the common case, is checked once
-        // (see runtimeOverridesPrivateParentMethod())
-        return w;
+    } else if (!context_may_override(cls, w, class_ctx)) {
+        return nullptr;
     }
     ClassAccess own_access = Public;
     const QoreMethod* ctx_own = is_static ? class_ctx->runtimeFindCommittedStaticMethod(nme, own_access, class_ctx)
         : class_ctx->runtimeFindCommittedMethod(nme, own_access, class_ctx);
     if (!ctx_own || ctx_own == w) {
-        return w;
+        return nullptr;
     }
     ClassAccess a = Public;
     const QoreMethod* m = runtime_find_local_committed_method(cls, nme, is_static);
@@ -8049,11 +8075,77 @@ static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_context_override(cons
                 const qore_class_private*, bool, const QoreMethod*, const QoreMethod*>(*cls.scl, nme, a, class_ctx,
                 false, ctx_own, skip_public);
     }
-    if (!cw) {
+    if (cw) {
+        found_access = a;
+    }
+    return cw;
+}
+
+//! returns the method that code of the class context calls in place of the method \a w found by a run-time lookup in
+//! the class \a cls (the object's class) if the context's own hierarchy overrides \a w, otherwise \a w (qore#6798)
+/** See runtime_find_context_override_intern(), whose result is cached in the class \a cls for the class context and
+    \a w (ContextOverrideNode), also when \a w is called: the lookup is not repeated for each call.  Not inlined:
+    called only for such a method of another class found in a hierarchy with a diamond
+
+    The nodes of the cache are immutable once published: a thread that does not find the node of the class context and
+    of \a w computes the result and publishes a new node at the head of the chain with a compare-and-swap; when
+    threads publish nodes for the same key at the same time, the one that sees the node of another one first returns
+    its result, which is the same
+*/
+static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_context_override(const qore_class_private& cls,
+        const char* nme, const QoreMethod* w, ClassAccess& access, const qore_class_private* class_ctx) {
+    assert(w && class_ctx);
+    assert(!strcmp(nme, w->getName()));
+    // a class context that overrides no private method of its parent classes, the common case, is checked once (see
+    // runtimeOverridesPrivateParentMethod()), before the cache
+    if (w->getAccess() != Public && !class_ctx->runtimeOverridesPrivateParentMethod()) {
         return w;
     }
-    access = a;
-    return cw;
+    // the class context is live (it is the running code's class or the context given to a call), so its serial can
+    // be read; a node of a class context that has been freed never matches
+    uint64_t ctx_serial = class_ctx->getInstanceSerial();
+    ContextOverrideNode* head = cls.context_override_head.load(std::memory_order_acquire);
+    for (ContextOverrideNode* n = head; n; n = n->next) {
+        if (n->ctx_serial == ctx_serial && n->w == w) {
+            if (!n->rv) {
+                return w;
+            }
+            access = n->access;
+            return n->rv;
+        }
+    }
+    ClassAccess found_access = Public;
+    const QoreMethod* rv = runtime_find_context_override_intern(cls, nme, w, class_ctx, found_access);
+    // cached once the hierarchy of the class is known completely; it does not change then
+    if (cls.scl && cls.scl->smlComplete()) {
+        std::unique_ptr<ContextOverrideNode> node(new ContextOverrideNode{ctx_serial, w, rv, found_access, head});
+        while (true) {
+            if (cls.context_override_head.compare_exchange_weak(node->next, node.get(), std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                node.release();
+                break;
+            }
+            // node->next is the current head: another thread may have published the node of the same key among the
+            // nodes added since the head that was read, with the same result; nodes are not removed while the class
+            // can be called
+            bool found = false;
+            for (ContextOverrideNode* n = node->next; n != head; n = n->next) {
+                if (n->ctx_serial == ctx_serial && n->w == w) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                break;
+            }
+            head = node->next;
+        }
+    }
+    if (!rv) {
+        return w;
+    }
+    access = found_access;
+    return rv;
 }
 
 const QoreMethod* qore_class_private::runtimeFindPublicContextOverride(const char* nme, const QoreMethod* w,
