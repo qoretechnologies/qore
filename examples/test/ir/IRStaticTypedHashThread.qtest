@@ -54,7 +54,7 @@ class Entry {
     }
 
     constructor() {
-        expires = now_us() + milliseconds(5000);
+        expires = microseconds(clock_get_monotonic_us()) + milliseconds(5000);
     }
 
     hash<auto> info() {
@@ -97,7 +97,7 @@ class Registry {
         entry.state = \"reached\";
         condition.broadcast();
         while (!entry.released) {
-            condition.wait(mutex, entry.expires - now_us());
+            condition.wait(mutex, entry.expires - microseconds(clock_get_monotonic_us()));
         }
         entry.state = \"completed\";
         condition.broadcast();
@@ -113,7 +113,7 @@ class Registry {
         on_exit mutex.unlock();
         Entry entry = entries{dynamic_key};
         while (entry.state == \"armed\") {
-            condition.wait(mutex, entry.expires - now_us());
+            condition.wait(mutex, entry.expires - microseconds(clock_get_monotonic_us()));
         }
     }
 

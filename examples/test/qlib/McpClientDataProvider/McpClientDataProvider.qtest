@@ -569,7 +569,7 @@ class McpEventObserver inherits Observer {
     }
 
     waitForEvent(string event_id) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (True) {
             m.lock();
             bool ready = (events{event_id} && events{event_id}.size() > 0);
@@ -577,7 +577,7 @@ class McpEventObserver inherits Observer {
             if (ready) {
                 return;
             }
-            if ((now_us() - start) > 5s) {
+            if ((microseconds(clock_get_monotonic_us() - start)) > 5s) {
                 throw "ERROR", sprintf("timeout waiting for event %s", event_id);
             }
             sleep(100ms);

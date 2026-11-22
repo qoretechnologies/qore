@@ -325,9 +325,9 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
             "no resource leaked across repeated sessions on a reused connection");
 
         # listener is healthy: a normal request completes promptly
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertEq(200, rc.restGet("/normal").status_code, "server healthy after repeated sessions");
-        assertTrue(now_us() - start < 5s, "normal request completed promptly");
+        assertTrue(microseconds(clock_get_monotonic_us() - start) < 5s, "normal request completed promptly");
     }
 
     #! Destroying the server is clean whether or not a session was just active —

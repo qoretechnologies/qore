@@ -650,6 +650,12 @@ QoreQopStripe& qore_qop_stripe(const QoreObject* obj) {
 }
 }
 
+#ifdef DEBUG
+size_t qore_dbg_registered_qore_ops() {
+    return qore_qop_count.load(std::memory_order_acquire);
+}
+#endif
+
 void AsyncIoControllerPriv::registerQoreOp(const QoreObject* obj) {
     QoreQopStripe& stripe = qore_qop_stripe(obj);
     AutoLocker al(stripe.lock);
@@ -9791,43 +9797,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         // a canceled completion (deliver-exactly-once
                         // invariant), exactly like the cancelled_owners path
                         // below.
-                        PollInfo pinfo;
-                        pinfo.sock_obj = cmd.submit_sock_obj;
-                        pinfo.sock = cmd.submit_sock;
-                        pinfo.spop_obj = cmd.submit_spop_obj;
-                        pinfo.spop_base = cmd.submit_spop_base;
-                        pinfo.poll_info = cmd.submit_poll_info;
-                        pinfo.other = cmd.submit_other;
-                        pinfo.queue = cmd.submit_queue;
-                        pinfo.queue_obj = cmd.submit_queue_obj;
-                        pinfo.state_queue = cmd.submit_state_queue;
-                        pinfo.state_queue_obj = cmd.submit_state_queue_obj;
-                        pinfo.timeout_us = cmd.submit_timeout_us;
-                        pinfo.owner = cmd.owner;
-                        pinfo.has_qore_abort = cmd.submit_has_qore_abort;
-                        pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
-                        pinfo.socket_async_io = cmd.submit_socket_async_io;
-                        pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
-                        pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
-                        pinfo.controller = this;
-                        pinfo.sync_release = std::move(cmd.submit_sync_release);
-                        // Null command fields to prevent double-deref on
-                        // command destruction — pinfo.cleanup() owns them now.
-                        cmd.submit_sock_obj = nullptr;
-                        cmd.submit_sock = nullptr;
-                        cmd.submit_spop_obj = nullptr;
-                        cmd.submit_spop_base = nullptr;
-                        cmd.submit_poll_info = nullptr;
-                        cmd.submit_other = nullptr;
-                        cmd.submit_queue = nullptr;
-                        cmd.submit_queue_obj = nullptr;
-                        cmd.submit_state_queue = nullptr;
-                        cmd.submit_state_queue_obj = nullptr;
-                        cmd.submit_socket_async_io = false;
-                        cmd.submit_route_sock_hash.clear();
-                        cmd.submit_route_thread_idx = -1;
-                        doCancelIntern(pinfo, xsink);
-                        pinfo.cleanup(xsink);
+                        // the operation is completed as when it is admitted and canceled: with the sandbox context of its
+                        // submitter, its inherited owner and its state events, and its registration is released
+                        refuseSubmit(cmd, nullptr, xsink);
                         break;
                     }
                     // Detect the cancelByOwner-before-submit race: if this owner
@@ -9862,43 +9834,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // Build a PollInfo from the submit payload so
                             // doCancelIntern() can fire the action's abort and
                             // dispatch onComplete(canceled=true) to the caller.
-                            PollInfo pinfo;
-                            pinfo.sock_obj = cmd.submit_sock_obj;
-                            pinfo.sock = cmd.submit_sock;
-                            pinfo.spop_obj = cmd.submit_spop_obj;
-                            pinfo.spop_base = cmd.submit_spop_base;
-                            pinfo.poll_info = cmd.submit_poll_info;
-                            pinfo.other = cmd.submit_other;
-                            pinfo.queue = cmd.submit_queue;
-                            pinfo.queue_obj = cmd.submit_queue_obj;
-                            pinfo.state_queue = cmd.submit_state_queue;
-                            pinfo.state_queue_obj = cmd.submit_state_queue_obj;
-                            pinfo.timeout_us = cmd.submit_timeout_us;
-                            pinfo.owner = cmd.owner;
-                            pinfo.has_qore_abort = cmd.submit_has_qore_abort;
-                            pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
-                            pinfo.socket_async_io = cmd.submit_socket_async_io;
-                            pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
-                            pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
-                            pinfo.controller = this;
-                            pinfo.sync_release = std::move(cmd.submit_sync_release);
-                            // Null command fields to prevent double-deref on
-                            // command destruction — pinfo.cleanup() owns them now.
-                            cmd.submit_sock_obj = nullptr;
-                            cmd.submit_sock = nullptr;
-                            cmd.submit_spop_obj = nullptr;
-                            cmd.submit_spop_base = nullptr;
-                            cmd.submit_poll_info = nullptr;
-                            cmd.submit_other = nullptr;
-                            cmd.submit_queue = nullptr;
-                            cmd.submit_queue_obj = nullptr;
-                            cmd.submit_state_queue = nullptr;
-                            cmd.submit_state_queue_obj = nullptr;
-                            cmd.submit_socket_async_io = false;
-                            cmd.submit_route_sock_hash.clear();
-                            cmd.submit_route_thread_idx = -1;
-                            doCancelIntern(pinfo, xsink);
-                            pinfo.cleanup(xsink);
+                            // the operation is completed as when it is admitted and canceled: with the sandbox context of its
+                            // submitter, its inherited owner and its state events, and its registration is released
+                            refuseSubmit(cmd, nullptr, xsink);
                             break;
                         }
                     }
@@ -9931,12 +9869,25 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // submission's
                                 step_in_flight = old_pinfo.continue_poll_in_flight;
                                 old_pinfo.cleanup(xsink);
+                            } else if (!cmd.submit_replace) {
+                                // A different operation under the key, and the caller did not ask to replace it (as
+                                // on the same-thread path above, where the submit raises): the submission is
+                                // refused, and the operation that is there is left alone (qore#7108).  The caller
+                                // gets a canceled result with the error, so that nothing waits for it forever (the
+                                // deliver-exactly-once invariant, as for a stale submission above).
+                                ExceptionSink refuse_xsink;
+                                refuse_xsink.raiseException("ASYNC-IO-ERROR", "operation with key '%s' already exists; "
+                                    "use replace=True to replace", cmd.key.c_str());
+                                ReferenceHolder<QoreHashNode> refuse_ex(nullptr, xsink);
+                                if (QoreException* ex_obj = qore_exception_sink_ops(refuse_xsink).getException()) {
+                                    refuse_ex = ex_obj->makeExceptionObject();
+                                }
+                                refuse_xsink.clear();
+                                refuseSubmit(cmd, *refuse_ex, xsink);
+                                break;
                             } else {
-                                // Different spop on same key — cancel the
-                                // old operation and clean up.  Only valid
-                                // when the caller passed replace=True; for
-                                // replace=False this is a caller bug but
-                                // we still avoid leaking.
+                                // Different spop on same key and the caller asked to replace it: cancel the old
+                                // operation and clean up
                                 PollInfo old_pinfo = retireOp(t, it, xsink);
                                 if (old_pinfo.continue_poll_in_flight) {
                                     // a step of the replaced operation is still running on a worker: its
@@ -10381,7 +10332,59 @@ void AsyncIoControllerPriv::cancelAdmittedAfterModuleCleanupDeadline(IoThreadCon
     qore_module_cleanup_report_canceled(QMCRC_SUBMITTED_AFTER_DEADLINE, names);
 }
 
-void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink) {
+void AsyncIoControllerPriv::refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink) {
+    // the operation is described as it is when it is admitted (processCommands(), SubmitOp), so that its abort() and
+    // onComplete() run, and its result is delivered, as for an admitted operation that is canceled: with the
+    // sandbox context of the code that submitted it (and its module cleanup state), the owner that it inherited, and
+    // the state events that it asked for; a refused submission does not run with less than it was submitted with
+    PollInfo pinfo;
+    pinfo.sock_obj = cmd.submit_sock_obj;
+    pinfo.sock = cmd.submit_sock;
+    pinfo.spop_obj = cmd.submit_spop_obj;
+    pinfo.spop_base = cmd.submit_spop_base;
+    pinfo.poll_info = cmd.submit_poll_info;
+    pinfo.other = cmd.submit_other;
+    pinfo.queue = cmd.submit_queue;
+    pinfo.queue_obj = cmd.submit_queue_obj;
+    pinfo.state_queue = cmd.submit_state_queue;
+    pinfo.state_queue_obj = cmd.submit_state_queue_obj;
+    pinfo.notify_states = std::move(cmd.submit_notify_states);
+    pinfo.timeout_us = cmd.submit_timeout_us;
+    pinfo.owner = cmd.owner;
+    pinfo.inherited_owner = cmd.inherited_owner;
+    pinfo.has_qore_abort = cmd.submit_has_qore_abort;
+    pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+    pinfo.socket_async_io = cmd.submit_socket_async_io;
+    pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
+    pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
+    pinfo.controller = this;
+    pinfo.sandbox_ctx = std::move(cmd.submit_sandbox_ctx);
+    pinfo.sync_release = std::move(cmd.submit_sync_release);
+    // the registration by the operation's object of an operation implemented in %Qore passes to the entry, whose
+    // cleanup() releases it (qore#6531); it is not left registered for an operation that is never in the cache
+    if (!pinfo.spop_base && cmd.submit_qop_registered) {
+        pinfo.qop_registered = true;
+        cmd.submit_qop_registered = false;
+    }
+    // the payload now belongs to pinfo: its cleanup() releases it
+    cmd.submit_sock_obj = nullptr;
+    cmd.submit_sock = nullptr;
+    cmd.submit_spop_obj = nullptr;
+    cmd.submit_spop_base = nullptr;
+    cmd.submit_poll_info = nullptr;
+    cmd.submit_other = nullptr;
+    cmd.submit_queue = nullptr;
+    cmd.submit_queue_obj = nullptr;
+    cmd.submit_state_queue = nullptr;
+    cmd.submit_state_queue_obj = nullptr;
+    cmd.submit_socket_async_io = false;
+    cmd.submit_route_sock_hash.clear();
+    cmd.submit_route_thread_idx = -1;
+    doCancelIntern(pinfo, xsink, cancel_ex);
+    pinfo.cleanup(xsink);
+}
+
+void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex) {
     // an operation that the module cleanup cancels (directly, or with a command that it created: see
     // Command::module_cleanup_delegate) is canceled for the cleanup: its abort(), its onComplete() and the release of
     // its references are work that the cleanup hands over, which can enter the Programs of the modules after the
@@ -10409,7 +10412,7 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     deliverStateEnd(pinfo);
 
     // Build result hash
-    QoreHashNode* result = deliver_result ? buildResultHash(pinfo, true, nullptr, xsink) : nullptr;
+    QoreHashNode* result = deliver_result ? buildResultHash(pinfo, true, cancel_ex, xsink) : nullptr;
 
     if (async_abort) {
         ensureCallDispatcher();

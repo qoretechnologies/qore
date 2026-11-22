@@ -1,0 +1,260 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# qore#7108: AsyncIoController::submit() with replace_existing set to False and another operation under the same key
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoReplaceExistingTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation that waits for its notifier until it is canceled
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! True if abort() was called
+        bool aborted = False;
+    }
+
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        aborted = True;
+    }
+}
+
+#! A waiting operation that records whether its callbacks run in a sandbox
+class ProbeOperation inherits WaitingOperation {
+    public {
+        #! the result, from onComplete()
+        Queue done();
+        #! True if abort() ran in a sandbox
+        bool abort_sandboxed = False;
+        #! True if onComplete() ran in a sandbox
+        bool complete_sandboxed = False;
+    }
+
+    constructor(EventNotifier notifier) : WaitingOperation(notifier) {
+    }
+
+    abort() {
+        abort_sandboxed = SandboxManager::isSandboxed();
+        WaitingOperation::abort();
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        complete_sandboxed = SandboxManager::isSandboxed();
+        done.push(result);
+    }
+}
+
+class AsyncIoReplaceExistingTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoReplaceExistingTest", "1.0") {
+        addTestCase("replace_existing False, also by default, refuses a colliding operation", \testRefused());
+        addTestCase("replace_existing True replaces the colliding operation", \testReplaced());
+        addTestCase("the same operation submitted again is not a collision", \testSameOperation());
+        addTestCase("a refused operation runs its callbacks with the sandbox of its submitter", \testRefusedSandbox());
+        addTestCase("a refused operation leaves nothing registered", \testRefusedRegistration());
+        set_return_value(main());
+    }
+
+    #! Submits an operation under the key
+    private Queue<hash<SocketPollResultInfo>> submitOp(string owner, string key, EventNotifier n,
+            WaitingOperation op, *bool replace_existing) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        }, replace_existing);
+    }
+
+    testRefused() {
+        # replace_existing is False when it is not given
+        foreach auto replace in (False, NOTHING) {
+            refusedCase(replace);
+        }
+    }
+
+    private refusedCase(*bool replace_existing) {
+        string owner = sprintf("replace-existing-refused-%y-%d", replace_existing, getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        EventNotifier n();
+
+        WaitingOperation op1(n);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n, op1);
+
+        # another operation under the key, without the request to replace it
+        WaitingOperation op2(n);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n, op2, replace_existing);
+
+        # the submission is refused: its result says so
+        hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+        assertTrue(r2.canceled, "the refused operation is reported canceled");
+        assertEq("ASYNC-IO-ERROR", r2.ex.err, "with the reason");
+        assertTrue(r2.ex.desc =~ /already exists/, "which names the collision: " + r2.ex.desc);
+        assertTrue(op2.aborted, "the refused operation was aborted");
+
+        # and the operation that was there is not touched: it is canceled only by the cancellation below
+        assertEq(0, rq1.size(), "the first operation has no result");
+        assertFalse(op1.aborted, "the first operation was not aborted");
+        AsyncIoController::cancelByOwner(owner);
+        hash<SocketPollResultInfo> r1 = rq1.get(HangGuard);
+        assertTrue(r1.canceled, "the first operation is canceled by the cancellation");
+        assertEq(NOTHING, r1.ex, "without an error");
+        assertTrue(op1.aborted, "and aborted then");
+    }
+
+    testReplaced() {
+        foreach auto replace in (True,) {
+            string owner = sprintf("replace-existing-replaced-%y-%d", replace, getpid());
+            on_exit AsyncIoController::cancelByOwner(owner);
+            string key = owner + "-key";
+            EventNotifier n();
+
+            WaitingOperation op1(n);
+            Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n, op1);
+            WaitingOperation op2(n);
+            Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n, op2, replace);
+
+            # the first operation is canceled by the replacing one, which keeps the key
+            hash<SocketPollResultInfo> r1 = rq1.get(HangGuard);
+            assertTrue(r1.canceled, sprintf("replace=%y: the first operation is canceled", replace));
+            assertEq(NOTHING, r1.ex, sprintf("replace=%y: without an error", replace));
+            assertTrue(op1.aborted);
+            assertEq(0, rq2.size(), sprintf("replace=%y: the replacing operation has no result", replace));
+            AsyncIoController::cancelByOwner(owner);
+            hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+            assertTrue(r2.canceled, sprintf("replace=%y: the replacing operation is canceled by the cancellation",
+                replace));
+            assertEq(NOTHING, r2.ex);
+        }
+    }
+
+    testSameOperation() {
+        # a manager submits the same operation again after each of its steps, without replace_existing
+        string owner = sprintf("replace-existing-same-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        EventNotifier n();
+
+        WaitingOperation op(n);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n, op);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n, op, False);
+        AsyncIoController::cancelByOwner(owner);
+
+        # the submission is accepted: the cancellation ends the operation, which is not reported as refused
+        hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+        assertTrue(r2.canceled, "the second submission is canceled by the cancellation");
+        assertEq(NOTHING, r2.ex, "and was not refused");
+    }
+
+    #! Code of the sandboxed Program that submits an operation of the host
+    const SandboxedCode = "
+%modern
+sub submit_op(AbstractPollOperation op, string owner, string key, EventNotifier n) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": op,
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+";
+
+    testRefusedSandbox() {
+        string owner = sprintf("replace-existing-sandbox-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        EventNotifier n();
+
+        # the operation that holds the key is not sandboxed
+        WaitingOperation op1(n);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n, op1);
+
+        # a sandboxed Program submits an operation of the host (trusted code) under the key without replace_existing:
+        # the submission is refused
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxedCode, "refused-sandbox");
+        ProbeOperation probe(n);
+        p.callFunction("submit_op", probe, owner, key, n);
+        hash<SocketPollResultInfo> r = probe.done.get(HangGuard);
+        assertTrue(r.canceled, "the refused operation is reported canceled");
+        assertEq("ASYNC-IO-ERROR", r.ex.err, "with the reason");
+
+        # its abort() and onComplete() run with the sandbox of the code that submitted it, as for an admitted
+        # operation that is canceled; without it, the callbacks of an object that sandboxed code submits run
+        # unrestricted when it submits under a key that is in use
+        assertTrue(probe.abort_sandboxed, "abort() of the refused operation is sandboxed");
+        assertTrue(probe.complete_sandboxed, "onComplete() of the refused operation is sandboxed");
+        assertFalse(op1.aborted, "the operation that holds the key is untouched");
+        AsyncIoController::cancelByOwner(owner);
+        assertTrue(rq1.get(HangGuard).canceled);
+    }
+
+    testRefusedRegistration() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        string owner = sprintf("replace-existing-registration-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        EventNotifier n();
+
+        # the operations of the other test cases release their registrations on the I/O threads after they deliver
+        # their results; a cancellation returns after the I/O threads processed the commands before it, so the count
+        # that follows is the count of this test case alone
+        AsyncIoController::cancelByOwner(owner + "-other");
+
+        WaitingOperation op1(n);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n, op1);
+        # the operation that holds the key is registered by its object
+        int held = call_function("dbg_async_io_registered_qore_ops");
+
+        {
+            WaitingOperation op2(n);
+            Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n, op2);
+            assertTrue(rq2.get(HangGuard).canceled, "the submission is refused");
+        }
+        # a cancellation of another owner returns after the I/O thread processed the refusal's command
+        AsyncIoController::cancelByOwner(owner + "-other");
+        assertEq(held, call_function("dbg_async_io_registered_qore_ops"),
+            "the refused operation's registration was released");
+        AsyncIoController::cancelByOwner(owner);
+        assertTrue(rq1.get(HangGuard).canceled);
+    }
+}

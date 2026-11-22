@@ -957,6 +957,11 @@ set_thread_resource(obj);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    // the expression of the background operator does not give the new thread code of a Program that may not control
+    // threads, which it would run when it ends (qore#7087)
+    if (qore_check_background_direct_callable(get_param_value(args, 0), xsink)) {
+        return QoreValue();
+    }
     set_thread_resource(*resource);
 }
 
@@ -1004,6 +1009,11 @@ set_thread_resource(\func(), code);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(code resource, auto argument) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    // the expression of the background operator does not give the new thread code of a Program that may not control
+    // threads, which it would run when it ends (qore#7087)
+    if (qore_check_background_direct_callable(get_param_value(args, 0), xsink)) {
+        return QoreValue();
+    }
     set_thread_resource(resource, argument);
 }
 
@@ -1553,6 +1563,58 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     return cleanup->invoke(*vargs, xsink);
 }
 
+//! Raises \c PERMISSION-DENIED if the given code was created by code that may not control threads
+/** For module code that runs code that it is given in another thread through a queue of its own, as the
+    @ref background "background" operator, @ref Qore::Thread::ThreadPool "ThreadPool" and the other builtins that run
+    code in another thread check the code that they are given: code that a %Program that may not control threads
+    (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") authored cannot be run in another thread, whichever code
+    passes it on.  Code that the host creates, also for an object that it lends to restricted code, passes, and so
+    does a closure that module code creates for a restricted caller (see @ref sandbox_thread_callables).
+
+    @par Example:
+    @code{.py}
+submitToWorker(code<nothing()> body) {
+    check_thread_callable(body, "MyScheduler::submitToWorker()");
+    queue.push(body);
+}
+    @endcode
+
+    @param c the code to check
+    @param api the name of the API that runs the code, for the exception
+
+    @throw PERMISSION-DENIED \a c was authored by code that may not control threads
+
+    @since %Qore 3.0
+*/
+nothing check_thread_callable(code c, string api) {
+    qore_check_thread_callable(c, QDOM_THREAD_CONTROL, api->c_str(), xsink);
+}
+
+//! Raises \c PERMISSION-DENIED if the class of the given object was authored by code that may not control threads
+/** For module code that runs methods of an object that it is given in another thread: the object of a class of such
+    a %Program runs its code; an object of a class of a module, of a builtin class or of a class of the host passes,
+    whichever code creates it (see @ref sandbox_thread_callables)
+
+    @par Example:
+    @code{.py}
+submitToWorker(Target target, code<nothing()> body) {
+    check_thread_callable(target, "MyScheduler::submitToWorker()");
+    check_thread_callable(body, "MyScheduler::submitToWorker()");
+    queue.push({"target": target, "body": body});
+}
+    @endcode
+
+    @param o the object to check
+    @param api the name of the API that runs the methods of the object, for the exception
+
+    @throw PERMISSION-DENIED the class of \a o was authored by code that may not control threads
+
+    @since %Qore 3.0
+*/
+nothing check_thread_callable(object o, string api) {
+    qore_check_thread_callable(QoreValue(const_cast<QoreObject*>(o)), QDOM_THREAD_CONTROL, api->c_str(), xsink);
+}
+
 //! Calls the given code in a background thread and returns a Future for the result
 /** This function creates a Promise, spawns a background thread that calls the given function
     with the given arguments, and returns the associated Future. If the function throws an exception,
@@ -1622,7 +1684,9 @@ list<auto> results = map $1.get(), futures;
 */
 Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL;flags=MODULE_OWNED] {
     if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "call_async()",
-            "schedule", xsink)) {
+                "schedule", xsink)
+            || qore_check_thread_callable(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "call_async()",
+                xsink)) {
         return QoreValue();
     }
     // Get the code reference (callable is const ResolvedCallReferenceNode* from QPP)
@@ -1861,7 +1925,9 @@ list<auto> hashes = parallel_map(auto sub(auto pw) {
 */
 list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS,MODULE_OWNED;dom=THREAD_CLASS,THREAD_CONTROL] {
     if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_map()",
-            "schedule", xsink)) {
+                "schedule", xsink)
+            || qore_check_thread_callable(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_map()",
+                xsink)) {
         return QoreValue();
     }
     const QoreListNode* l = items;
@@ -2017,7 +2083,9 @@ try {
 */
 nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS,MODULE_OWNED;dom=THREAD_CLASS,THREAD_CONTROL] {
     if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_foreach()",
-            "schedule", xsink)) {
+                "schedule", xsink)
+            || qore_check_thread_callable(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_foreach()",
+                xsink)) {
         return QoreValue();
     }
     const QoreListNode* l = items;

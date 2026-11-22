@@ -117,7 +117,7 @@ class HttpServerContentLengthTest inherits QUnit::Test {
     testInvalid() {
         int calls = ContentLengthTestHandler::calls.getCount();
         # none of these waits for a body: the request is refused at once (the timeout of the read is long)
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         foreach string bad in ("+0", "+5", "-1", "0x0", "0x5", "1e0", "5, 5", "5a", "0.0", "99999999999999999999") {
             hash<auto> r = exchange(bad, "hello");
             assertEq(400, r.code, "Content-Length: " + bad);
@@ -125,18 +125,19 @@ class HttpServerContentLengthTest inherits QUnit::Test {
             # the error is the only response: a second one (500, for a handler that sent no response) followed it
             assertEq("closed", r.end, "the connection is closed after the error: " + bad);
         }
-        assertLt(Timeout, now_us() - start, "refused without waiting for a body to be read");
+        assertLt(Timeout, microseconds(clock_get_monotonic_us()) - start,
+            "refused without waiting for a body to be read");
         assertEq(calls, ContentLengthTestHandler::calls.getCount(), "the handler was not called");
     }
 
     testZero() {
         int calls = ContentLengthTestHandler::calls.getCount();
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         foreach string zero in ("0", "00", "000", " 0 ") {
             hash<auto> r = exchange(zero);
             assertEq((200, "0"), (r.code, r.body), "Content-Length: '" + zero + "'");
         }
-        assertLt(Timeout, now_us() - start, "no wait for a body");
+        assertLt(Timeout, microseconds(clock_get_monotonic_us()) - start, "no wait for a body");
         assertEq(calls + 4, ContentLengthTestHandler::calls.getCount());
     }
 

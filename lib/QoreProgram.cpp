@@ -5712,6 +5712,11 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
 }
 
 QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
+    // the top-level code of a Program that may not control threads is not run by the expression of the background
+    // operator itself (qore#7087)
+    if (qore_check_background_direct_entry(this, false, xsink)) {
+        return QoreValue();
+    }
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();

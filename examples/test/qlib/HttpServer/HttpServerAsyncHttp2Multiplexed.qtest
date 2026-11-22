@@ -748,9 +748,9 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
                 try {
                     RestClient rc = getRestClient(timeout_ms);
                     on_exit delete rc;
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     hash<auto> resp = rc.get("/slow/200");
-                    date elapsed = now_us() - start;
+                    date elapsed = microseconds(clock_get_monotonic_us() - start);
                     mx.lock();
                     on_exit mx.unlock();
                     results += {
@@ -784,9 +784,9 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
                 try {
                     RestClient rc = getRestClient(timeout_ms);
                     on_exit delete rc;
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     hash<auto> resp = rc.get("/simple");
-                    date elapsed = now_us() - start;
+                    date elapsed = microseconds(clock_get_monotonic_us() - start);
                     mx.lock();
                     on_exit mx.unlock();
                     results += {
@@ -1743,7 +1743,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
             string key = sprintf("s" + idx);
             background sub () {
                 on_exit c.dec();
-                date start = now_us();
+                int start = clock_get_monotonic_us();
                 try {
                     RestClient rc({
                         "url": url,
@@ -1757,14 +1757,14 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
                     results{key} = {
                         "ok": True,
                         "status": resp.status_code,
-                        "elapsed_ms": (now_us() - start).durationMilliseconds(),
+                        "elapsed_ms": (microseconds(clock_get_monotonic_us() - start)).durationMilliseconds(),
                     };
                 } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(results_lock);
                     results{key} = {
                         "err": ex.err,
                         "desc": ex.desc,
-                        "elapsed_ms": (now_us() - start).durationMilliseconds(),
+                        "elapsed_ms": (microseconds(clock_get_monotonic_us() - start)).durationMilliseconds(),
                     };
                 }
             }();
@@ -1779,7 +1779,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         # Now stop the server.  Release handler threads first so server
         # shutdown doesn't wait on them — we measure client-side cleanup,
         # not handler blocking.
-        date shutdown_time = now_us();
+        int shutdown_time = clock_get_monotonic_us();
         block_handler.signalStop();
         delete test_server;
 
@@ -1798,7 +1798,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
             fail("timed out waiting for all H2 shutdown client requests");
             return;
         }
-        int total_elapsed_ms = (now_us() - shutdown_time).durationMilliseconds();
+        int total_elapsed_ms = (microseconds(clock_get_monotonic_us() - shutdown_time)).durationMilliseconds();
 
         # Every request must have completed — no hangs.  Some may succeed
         # if the handler response won the race with server shutdown (frames
@@ -1868,9 +1868,9 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         # Connection is now idle — stop the server.  A well-behaved server
         # sends GOAWAY(NO_ERROR) so the client connection becomes unusable
         # immediately instead of waiting for a new request to discover EOF.
-        date shutdown_time = now_us();
+        int shutdown_time = clock_get_monotonic_us();
         delete test_server;
-        int shutdown_ms = (now_us() - shutdown_time).durationMilliseconds();
+        int shutdown_ms = (microseconds(clock_get_monotonic_us() - shutdown_time)).durationMilliseconds();
 
         # Shutdown itself must be prompt — no waiting on idle connections
         assertTrue(shutdown_ms < 5000,
@@ -1880,7 +1880,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         # Without proper GOAWAY / EOF detection, the client would queue the
         # request and wait for its own timeout (30s above).  With proper
         # close detection, this should fail in milliseconds.
-        date req_time = now_us();
+        int req_time = clock_get_monotonic_us();
         bool got_error = False;
         string err_str = "<no error>";
         try {
@@ -1891,7 +1891,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
             got_error = True;
             err_str = sprintf("%s: %s", ex.err, ex.desc);
         }
-        int req_elapsed_ms = (now_us() - req_time).durationMilliseconds();
+        int req_elapsed_ms = (microseconds(clock_get_monotonic_us() - req_time)).durationMilliseconds();
 
         assertTrue(got_error,
             sprintf("post-shutdown request must fail (got: %s)", err_str));

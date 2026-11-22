@@ -209,11 +209,11 @@ public class HttpServerMultiValueHeadersTest inherits QUnit::Test {
             };
         }
         AbstractPollOperation op = hc.startPollSendRecv("GET", path, NOTHING, req_headers);
-        date deadline = now_us() + 30s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 30s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (pi) {
-                int remaining = (deadline - now_us()).durationMilliseconds();
+                int remaining = (deadline - microseconds(clock_get_monotonic_us())).durationMilliseconds();
                 if (remaining <= 0) {
                     op.abort();
                     throw "TEST-TIMEOUT", msg;

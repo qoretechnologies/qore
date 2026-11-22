@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the JIT's LLVM instruction count of a lowered function and its native compilation budget
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class JITLLVMBudgetTest
+
+#! the budget of the lowered size of a function that the JIT compiles natively (qore#7174)
+/** The IR instruction budget (QORE_JIT_MAX_IR_INSTRUCTIONS) did not tell how large the native code of a function is:
+    an instruction on an untyped value lowers to about three times the LLVM code of one on a typed value, and a
+    function of untyped locals within the IR budget took 40 s and 0.9 GB to compile.  The lowered module is checked
+    against QORE_JIT_MAX_LLVM_INSTRUCTIONS (default 150000, 0 for no limit, and no limit when it is not set and
+    QORE_JIT_MAX_IR_INSTRUCTIONS is 0) before it is optimized; a function over it stays on the IR tier, with the
+    results of the AST.
+*/
+class JITLLVMBudgetTest inherits QUnit::Test {
+    public {
+        #! the trace line of a compilation of big() skipped for its lowered size, which gives the size
+        const SkippedSizePattern = "^\\[JIT\\] skipped native compilation of 'big@[^']*' \\(LLVM budget exceeded; "
+            "([0-9]+) LLVM instructions";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JIT LLVM instruction budget", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("the default budget keeps a large function of untyped locals on the IR tier", \testDefault());
+        addTestCase("a function of typed locals of the same size is compiled", \testTyped());
+        addTestCase("an explicit budget, 0 and the IR budget's no limit", \testSettings());
+        set_return_value(main());
+    }
+
+    testDefault() {
+        string code = getCode(200, False);
+        hash<auto> r = run(code, "");
+        assertTrue(overBudget(r), "skipped: " + r.trace.join("\n"));
+        assertEq(getAstOutput(code), r.stdout, "results");
+        # a value that is not an unsigned decimal integer is ignored
+        r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=abc");
+        assertTrue(overBudget(r), "skipped with an invalid value");
+        r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=-1");
+        assertTrue(overBudget(r), "skipped with a negative value");
+    }
+
+    testTyped() {
+        string code = getCode(200, True);
+        hash<auto> r = run(code, "");
+        assertFalse(overBudget(r), "not skipped: " + r.trace.join("\n"));
+        assertTrue(compiledNatively(r), "compiled: " + r.trace.join("\n"));
+        int size = loweredSize(code);
+        assertTrue(size > 0 && size <= 150000, "lowered size within the default budget: " + size);
+        assertEq(getAstOutput(code), r.stdout, "results");
+    }
+
+    testSettings() {
+        string code = getCode(20, False);
+        int size = loweredSize(code);
+        assertTrue(size > 0, "the lowered size is reported");
+        # a budget under the function's size keeps it on the IR tier, one at its size compiles it
+        hash<auto> r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=" + (size - 1));
+        assertTrue(overBudget(r), "skipped under its size");
+        assertEq(getAstOutput(code), r.stdout, "results on the IR tier");
+        r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=" + size);
+        assertTrue(compiledNatively(r), "compiled at its size");
+        # 0 is no limit
+        code = getCode(200, False);
+        r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=0");
+        assertTrue(compiledNatively(r), "compiled with no limit");
+        assertEq(getAstOutput(code), r.stdout, "results with no limit");
+        # no IR budget is no LLVM budget either, unless that is given
+        r = run(code, "QORE_JIT_MAX_IR_INSTRUCTIONS=0");
+        assertTrue(compiledNatively(r), "compiled with no IR budget");
+        r = run(code, "QORE_JIT_MAX_IR_INSTRUCTIONS=0 QORE_JIT_MAX_LLVM_INSTRUCTIONS=1000");
+        assertTrue(overBudget(r), "skipped with no IR budget and an LLVM budget");
+    }
+
+    #! runs \a code in the jit mode with the native compilation trace and the environment \a env
+    private hash<auto> run(string code, string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s --exec-mode=jit %s",
+            env, qore_bin, tmp.path));
+        ExecModeHarness::check_loader_warnings(r);
+        assertEq(0, r.rc, "exit status: " + r.stderr);
+        return r;
+    }
+
+    #! returns the output of \a code in the AST interpreter
+    private string getAstOutput(string code) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("%s --exec-mode=ast %s", qore_bin, tmp.path));
+    }
+
+    #! returns True if the native compilation of big() was skipped for its lowered size
+    private static bool overBudget(hash<auto> r) {
+        return (select r.trace, $1 =~ /^\[JIT\] skipped native compilation of 'big@.*\(LLVM budget exceeded;/)
+            .size() == 1;
+    }
+
+    #! returns True if big() was compiled to native code
+    private static bool compiledNatively(hash<auto> r) {
+        return (select r.trace, $1 =~ /^\[BG-JIT\] compiled 'big@[^']*' and promoted to JIT tier/).size() == 1;
+    }
+
+    #! returns the lowered size of big() in \a code, which a compilation skipped for it reports, or 0
+    private int loweredSize(string code) {
+        hash<auto> r = run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=1");
+        foreach string line in (r.trace) {
+            *list<*string> m = regex_extract(line, SkippedSizePattern);
+            if (m) {
+                return m[0].toInt();
+            }
+        }
+        return 0;
+    }
+
+    #! Returns a script with a function of 10 locals set in catch blocks and \a stmts statements that use them
+    /** The locals are untyped, and a reference keeps them on the runtime stack, unless \a typed
+    */
+    private static string getCode(int stmts, bool typed) {
+        string type = typed ? "int" : "auto";
+        string code = "%modern
+string log;
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+sub touch(reference<int> z) {}
+string sub big(int n) {
+    " + type + " r = 0;
+    int z = 0;
+    touch(\\z);
+    *D keep;
+";
+        for (int i = 0; i < 10; ++i) {
+            code += sprintf("    %s l%d = 0;
+    try {
+        r += may_throw(n - %d);
+        keep = new D(\"t%d\");
+    } catch (hash<ExceptionInfo> ex) {
+        l%d = r + %d;
+    }
+", type, i, i % 7 == 3 ? 1000 : 0, i, i, i);
+        }
+        for (int i = 0; i < stmts; ++i) {
+            code += sprintf("    l%d += may_throw(r + %d) + (\"x\" + string(r)).size();\n", i % 10, i);
+        }
+        code += "    return sprintf(\"%d:%s %s\", r, keep.get(), log);
+}
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    printf(\"rv%d:%s\\n\", c, big(c));
+}
+";
+        return code;
+    }
+}

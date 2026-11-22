@@ -274,6 +274,8 @@ log("started listener on %s", lh.desc);
       "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
       it was skipped; an error that it raises is logged with the listener's logger
       (<a href="https://github.com/qoretechnologies/qore/issues/6967">issue 6967</a>)
+    - the undocumented \c startConnection() method is internal: it ran code that it was given on a thread of the
+      server's pool, also code of a %Program that may not control threads (issue #7056)
     - on the thread of a dedicated persistent connection, a request for another handler than the session's (after the
       session's handler ended its persistence while keeping the connection dedicated, or in the requests processed
       after a persistent session ended) runs with the thread context of its own handler: it does not see the user
@@ -3726,7 +3728,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         return AsyncSocketIo::getGlobalAsyncIoController().waitForProcessing(timeout);
     }
 
-    startConnection(code<nothing()> c) {
+    private:internal startConnection(code<nothing()> c) {
         threadPool.submit(c);
     }
 
@@ -6052,13 +6054,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 try {
                     ctrl.submitToHandlerPool(target, c);
                     return;
-                } catch () {
+                } catch (hash<ExceptionInfo> ex) {
+                    # code that may not be run in another thread is refused, never run elsewhere (qore#7056)
+                    if (ex.err == "PERMISSION-DENIED") {
+                        rethrow;
+                    }
                     # the pool is stopping or refuses the task: run it on a thread of its own
                 }
             }
             try {
                 background c();
-            } catch () {
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "PERMISSION-DENIED") {
+                    rethrow;
+                }
                 # no thread can be started (a thread limit): the end must still run, so it runs here
                 c();
             }
