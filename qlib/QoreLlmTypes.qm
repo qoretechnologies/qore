@@ -1390,6 +1390,16 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         return opts.cancellation ? opts.cancellation.addHandler(handler) : 0;
     }
 
+    #! Returns a transport registration function for a request with a cancellation token
+    /** The transport supplies its abort callback on submission and calls the returned cleanup on every exit. */
+    private code<code<nothing()>(code<nothing()>)> getRequestCancelRegistration(*hash<LlmRequestOptions> opts) {
+        LlmCancellation token = opts.cancellation;
+        return code<nothing()> sub (code<nothing()> abort_request) {
+            int id = token.addHandler(abort_request);
+            return sub () { token.removeHandler(id); };
+        };
+    }
+
     #! Removes a handler registered with @ref addRequestCancelHandler()
     /** @param opts the per-call request overrides given to @ref addRequestCancelHandler()
         @param id the ID returned by @ref addRequestCancelHandler()
