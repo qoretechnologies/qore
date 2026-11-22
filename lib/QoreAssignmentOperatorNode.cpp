@@ -799,10 +799,26 @@ static bool qore_weak_path_member_step(const QoreHashObjectDereferenceOperatorNo
     if (cls->parseHasMemberGate()) {
         return false;
     }
+    // the class was initialized by the parse of the member access that gives the step its type; a class that is not
+    // initialized has no members yet, and the step is then not made unique.  No initialization is started here: the
+    // check also runs when the code is first evaluated or lowered to IR, in any thread
     const qore_class_private* member_class = nullptr;
     ClassAccess access = Public;
-    const QoreMemberInfo* mi = cls->parseFindMember(mem, member_class, access);
+    const QoreMemberInfo* mi = cls->parseFindMemberNoInit(mem, member_class, access, true);
     return mi && access == Public;
+}
+
+//! returns true if an index step of an lvalue path can be made unique as the AST evaluates it (qore#7242): an index
+//! that is not a list, of a value whose type cannot be a string, a binary or a buffer, which an lvalue cannot be
+//! indexed in; the read of a character, a byte or a buffer element would otherwise be refused by the lvalue
+static bool qore_weak_path_index_step(const QoreSquareBracketsOperatorNode* sb) {
+    if (!qore_weak_path_selector_not_list(sb->getRight())) {
+        return false;
+    }
+    const QoreTypeInfo* lti = qore_weak_path_operand_type(sb->getLeft());
+    return QoreTypeInfo::hasType(lti) && QoreTypeInfo::parseReturns(lti, NT_STRING) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseReturns(lti, NT_BINARY) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseReturns(lti, NT_BUFFER) == QTI_NOT_EQUAL;
 }
 
 //! returns true if \a node is an lvalue path whose container a weak assignment makes unique (qore#7242): a member of
@@ -830,7 +846,7 @@ static QORE_INTERN_NOINLINE bool qore_weak_assignment_path_source_made_unique(co
             }
             root = hd->getLeft().getInternalNode();
         } else if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(root)) {
-            if (!qore_weak_path_selector_not_list(sb->getRight())) {
+            if (!qore_weak_path_index_step(sb)) {
                 return false;
             }
             root = sb->getLeft().getInternalNode();
@@ -990,6 +1006,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
             if (*xsink) {
                 return QoreValue();
             }
+            // a path that leads to no value (a missing key, an index beyond the end of a list, a step through NOTHING)
+            // gives NOTHING, as an rvalue read of it does, without being evaluated again
             if (source) {
                 // a weak reference held by the source and a value of another type are left as they are; the operand
                 // evaluates a weak reference to its target
@@ -997,8 +1015,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
                     source.ensureUnique();
                 }
                 unique_source = source.getReferencedValue();
-                source_read = true;
             }
+            source_read = true;
         }
     }
 

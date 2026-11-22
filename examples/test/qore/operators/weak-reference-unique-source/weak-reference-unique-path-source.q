@@ -169,8 +169,105 @@ sub not_paths() {
     printf("index: i %d %s\n", i, w3.className());
 }
 
+#! gives the hash a key that designates a hash weakly, which is freed when the function returns
+sub weak_hash_member(reference<hash<string, hash<auto>>> h) {
+    hash<auto> tmp = {"x": (1,)};
+    h.k := tmp;
+}
+
+#! gives the hash a key that designates a list weakly, which is freed when the function returns
+sub weak_list_member(reference<hash<string, list<auto>>> h) {
+    list<auto> tmp = ((1,),);
+    h.k := tmp;
+}
+
+int sub idx(int i) {
+    ++calls;
+    return i;
+}
+
+#! paths through a string or a binary, which an lvalue cannot be indexed in, are read as before; a path that leads to
+#! no value gives NOTHING, and its keys and indexes are evaluated once
+sub no_value_paths() {
+    hash<auto> h = {"k": "abc"};
+    auto w;
+    auto v = (w := h.k[1]);
+    printf("string in a hash: %y\n", v);
+    auto a = "abc";
+    v = (w := a[1]);
+    printf("string variable: %y\n", v);
+    hash<string, string> hs = {"k": "abc"};
+    v = (w := hs.k[2]);
+    printf("typed string: %y\n", v);
+    auto b = <0102>;
+    calls = 0;
+    v = (w := b[idx(1)]);
+    printf("binary: %y calls %d\n", v, calls);
+
+    hash<auto> h2 = {};
+    calls = 0;
+    v = (w := h2{key("missing")});
+    printf("missing key: %y calls %d h2 %y\n", v, calls, h2);
+    list<auto> l = (1,);
+    calls = 0;
+    v = (w := l[idx(5)]);
+    printf("beyond the end: %y calls %d l %y\n", v, calls, l);
+    int i = 3;
+    v = (w := l[i++]);
+    printf("beyond the end: %y i %d\n", v, i);
+    hash<string, *hash<auto>> h3 = {"a": NOTHING};
+    calls = 0;
+    v = (w := h3{key("a")}{key("b")});
+    printf("through NOTHING: %y calls %d h3 %y\n", v, calls, h3);
+    *hash<auto> nh;
+    v = (w := nh.k);
+    printf("NOTHING hash: %y nh %y\n", v, nh);
+    *Holder nc;
+    v = (w := nc.l);
+    printf("NOTHING object: %y\n", v);
+
+    # a buffer cannot be indexed as an lvalue either
+    buffer bf = new buffer<int64>((0, 7, 0));
+    v = (w := bf[1]);
+    printf("buffer: %y\n", v);
+    hash<string, buffer> hb = {"k": new buffer<string>(("x", "abc"))};
+    v = (w := hb.k[1]);
+    printf("buffer in a hash: %y\n", v);
+
+    # a step through a hash or a list that a weak reference designates and that no longer exists is a step through
+    # an lvalue that no longer exists, as for the other assignments
+    hash<string, hash<auto>> hw = {};
+    weak_hash_member(\hw);
+    try {
+        v = (w := hw.k.x);
+        printf("freed weak hash: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("freed weak hash: %s\n", ex.err);
+    }
+    hash<string, list<auto>> hl = {};
+    weak_list_member(\hl);
+    try {
+        v = (w := hl.k[0]);
+        printf("freed weak list: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("freed weak list: %s\n", ex.err);
+    }
+
+    # a member of a deleted object is an lvalue of a deleted object, as for the other assignments
+    Holder c();
+    Holder c2 = c;
+    delete c2;
+    try {
+        v = (w := c.l);
+        printf("deleted object: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("deleted object: %s\n", ex.err);
+    }
+}
+
 literals();
 shared();
 unshared();
 edges();
 not_paths();
+no_value_paths();

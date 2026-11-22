@@ -20,3 +20,18 @@ memberGate("p")
 private member: [9]
 key calls: 2
 index: i 1 Mutex
+string in a hash: b
+string variable: b
+typed string: c
+binary: 2 calls 1
+missing key: null calls 1 h2 {}
+beyond the end: null calls 1 l [1]
+beyond the end: null i 4
+through NOTHING: null calls 2 h3 {a: null}
+NOTHING hash: null nh null
+NOTHING object: null
+buffer: 7
+buffer in a hash: "abc"
+freed weak hash: HASH-ERROR
+freed weak list: LIST-ERROR
+deleted object: OBJECT-ALREADY-DELETED
