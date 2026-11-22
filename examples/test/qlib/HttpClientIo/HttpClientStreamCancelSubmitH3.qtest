@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpClientStreamCancelSubmitH3.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%exec-class HttpClientStreamCancelSubmitH3Test
+
+#! A logger that runs a hook once, when a message matching a pattern is logged
+/** HttpClientStreamHandle logs "submitting async request" and "starting [SSE ]streaming request" after its last
+    check of the stream's state and before it submits the request.
+*/
+class HookLogger inherits LoggerWrapper {
+    private {
+        Mutex m();
+        *string pattern;
+        *code<nothing()> hook;
+    }
+
+    #! Arms the hook: it runs once, for the next message matching @p pattern
+    arm(string pattern, code<nothing()> hook) {
+        AutoLock al(m);
+        self.pattern = pattern;
+        self.hook = hook;
+    }
+
+    #! The streams log through this method
+    log(int level, string message, ...) {
+        *code<nothing()> run;
+        {
+            AutoLock al(m);
+            if (hook && regex(message, pattern)) {
+                run = hook;
+                remove hook;
+            }
+        }
+        if (run) {
+            run();
+        }
+    }
+}
+
+#! Answers "/held" only when the test releases it, and every other request at once
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "held") {
+            release.get(60s);
+        }
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpClientStreamCancelSubmitH3Test inherits QUnit::Test {
+    private {
+        #! the time a request waits for its response; a request left running is answered only at the end of the test
+        const ResponseWait = 30s;
+    }
+
+    constructor() : Test("HTTP/3 HttpClientStreamHandle cancellation during request submission", "1.0", \ARGV) {
+        addTestCase("HTTP/3: a stream cancelled while submitAsync() submits its request ends the request",
+            \testSubmitAsync());
+        addTestCase("HTTP/3: a stream cancelled while submitAsyncWithDatagram() submits its request ends the request",
+            \testSubmitAsyncWithDatagram());
+        addTestCase("HTTP/3: a stream cancelled while startStreaming() submits its request ends the request",
+            \testStartStreaming());
+        addTestCase("HTTP/3: a stream cancelled while startSseStreaming() submits its request ends the request",
+            \testStartSseStreaming());
+        set_return_value(main());
+    }
+
+    #! Runs a test with an HTTP/3 server and a stream on a ready HTTP/3 connection, which logs to the hook logger
+    private run(code<nothing(HttpClientStreamHandle, HookLogger)> test) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        HoldHandler handler();
+        # a request left running is answered when the test ends
+        on_exit map handler.release.push(True), xrange(4);
+        server.setDefaultHandler("hold", handler);
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        string url = sprintf("https://127.0.0.1:%d", port);
+        HookLogger logger();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": 3600s,
+            "idle_timeout": 3600s,
+        });
+        on_exit mgr.closeAll();
+        # the connection is ready before the test
+        assertEq(200, mgr.acquireStream(url).request("GET", "/ok").status_code);
+        mgr.setLogger(logger);
+        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        assertEq("h3", stream.getConnection().getProtocol());
+        test(stream, logger);
+        # the connection serves later requests
+        assertEq(200, mgr.acquireStream(url).request("GET", "/after").status_code,
+            "a request sent after the cancellation is answered");
+    }
+
+    private assertFutureCancelled(Future future) {
+        *string err;
+        try {
+            future.get(ResponseWait);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertRegex("^HTTP(CLIENT|3)-CANCELLED$", err ?? "", "the request's Future is rejected as cancelled");
+    }
+
+    testSubmitAsync() {
+        run(sub (HttpClientStreamHandle stream, HookLogger logger) {
+            logger.arm("submitting async request:", sub () { stream.cancel(); });
+            hash<auto> result = stream.submitAsync("POST", "/held", {"Content-Type": "text/plain"}, "body");
+            assertFutureCancelled(result.future);
+        });
+    }
+
+    #! The datagram is refused when the server does not take datagrams, which ends the request as well
+    testSubmitAsyncWithDatagram() {
+        run(sub (HttpClientStreamHandle stream, HookLogger logger) {
+            HttpClientConnection conn = stream.getConnection();
+            logger.arm("submitting async request with datagram:", sub () { stream.cancel(); });
+            hash<auto> result;
+            try {
+                result = stream.submitAsyncWithDatagram("POST", "/held", {"Content-Type": "text/plain"}, "body",
+                    <01>);
+            } catch (hash<ExceptionInfo> ex) {
+                # the submission failed: the reservation of the cancelled stream is released
+                assertEq(0, conn.getPendingStreamCount(), "the reservation of the cancelled stream is released");
+                return;
+            }
+            assertFutureCancelled(result.future);
+        });
+    }
+
+    testStartStreaming() {
+        run(sub (HttpClientStreamHandle stream, HookLogger logger) {
+            logger.arm("starting streaming request:", sub () { stream.cancel(); });
+            assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+                \stream.startStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, False, "body"));
+        });
+    }
+
+    testStartSseStreaming() {
+        run(sub (HttpClientStreamHandle stream, HookLogger logger) {
+            logger.arm("starting SSE streaming request:", sub () { stream.cancel(); });
+            assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+                \stream.startSseStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, binary("body")));
+        });
+    }
+}
