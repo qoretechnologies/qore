@@ -6074,7 +6074,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         # issue #7236: as for a synchronous ping, a connection whose configuration cannot work fails the ping with the
         # configuration's error (a monitor handles it as a ping that could not be started, which marks it down)
-        checkConfiguration();
+        checkConfiguration(getConnectionOptions());
 
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
@@ -6625,19 +6625,36 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         cannot work fails with the configuration's error, and one that was authorized since it was created pings
         normally (issue #7236)
 
+        @param client_opts the options of the connection's clients (@ref getConnectionOptions()), given by the pings:
+        sealed OAuth2 credentials in them (\c oauth2_sealed_credentials, see
+        @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials") replace the client secret and the token
+        URL, and give the client ID if the connection has none, as for the clients
+
         @throw OAUTH2-ERROR the OAuth2 options are incomplete, or the connection uses an OAuth2 grant type with an
         authorization step and is not yet authorized
 
         @since %RestClient 2.7
     */
-    private checkConfiguration() {
+    private checkConfiguration(*hash<auto> client_opts) {
         # a connection authenticated by another credential does not use the grant type, which is usually a
         # default value (qore#6901)
         if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
             # the options are checked as the clients check them: an empty value is missing, and an empty
             # redirect URL takes the default (qore#6906)
-            *list<string> missing = RestClient::getMissingOAuth2GrantOptions(opts.oauth2_grant_type,
-                opts + {"oauth2_redirect_url": opts.oauth2_redirect_url ?: RestClient::DefaultOAuth2RedirectUrl});
+            hash<auto> check_opts = opts + {
+                "oauth2_redirect_url": opts.oauth2_redirect_url ?: RestClient::DefaultOAuth2RedirectUrl,
+            };
+            # sealed credentials that the clients get replace the client secret and the token URL (qore#7248)
+            *hash<string, bool> satisfied;
+            if (client_opts.oauth2_sealed_credentials instanceof SealedOAuth2Credentials) {
+                satisfied = {"oauth2_client_secret": True, "oauth2_token_url": True};
+                if (!check_opts.oauth2_client_id.val()) {
+                    check_opts.oauth2_client_id = cast<SealedOAuth2Credentials>(
+                        client_opts.oauth2_sealed_credentials).getClientId();
+                }
+            }
+            *list<string> missing = RestClient::getMissingOAuth2GrantOptions(opts.oauth2_grant_type, check_opts,
+                satisfied);
             # the username and password of the "password" grant are checked below
             if (missing = (map $1, missing, $1 != "username" && $1 != "password")) {
                 throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires the following options to be "
@@ -6926,7 +6943,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     */
     private pingImpl() {
         # issue #7236: a connection whose configuration cannot work fails the ping with the configuration's error
-        checkConfiguration();
+        checkConfiguration(getConnectionOptions());
 
         # issue #7236: without a ping request, the ping only connects to the server, before any client that would log
         # in is created

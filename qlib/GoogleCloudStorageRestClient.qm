@@ -478,7 +478,7 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
     private pingImpl() {
         # issue #7236: a ping of a connection whose configuration cannot work fails with its error, as
         # RestConnection::pingImpl() and the polling ping (RestConnection::startPollConnect()) do
-        checkConfiguration();
+        checkConfiguration(getConnectionOptions());
 
         AbstractRestClient client;
         try {
