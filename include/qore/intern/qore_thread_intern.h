@@ -2669,6 +2669,41 @@ DLLLOCAL void thread_ensure_local_program_data();
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
 
+//! Checks whether resolving a reference in the current thread can raise an exception before its lvalue is reached
+/** This makes the checks of RuntimeReferenceHelperBase without changing the thread's state: it enters no Program and
+    does not add the reference to the thread's set of references being resolved (qore#7264)
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the resolution can raise nothing before its lvalue: the reference's Program is the one that the thread
+    runs (entering it does nothing), the stack is within its limit and the reference is not being resolved by the
+    thread; 0 if the Program would have to be entered or the reference is being resolved (the caller resolves it with
+    RuntimeReferenceHelper, which raises the exception if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink,
+    as RuntimeReferenceHelper would raise it
+*/
+DLLLOCAL int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
+
+//! Returns whether binding a reference to a parameter of type \c reference<target_ti> leaves its lvalue as it is
+/** QoreTypeSpec::acceptInputImpl() reads the referenced value and assigns it back with the parameter's referenced type
+    to apply that type; this returns 1 when that read and assignment are known to change nothing and to raise nothing,
+    so that they can be skipped (qore#7264):
+    - \a target_ti is \c hash<auto>, \c *hash<auto>, \c list<auto> or \c *list<auto>, whose acceptance of a value
+      of their own type neither converts nor rejects it (see the QTS_COMPLEXHASH and QTS_COMPLEXLIST cases of
+      QoreTypeSpec::acceptInputImpl()), and which LValueHelper::assign() stores as it is;
+    - the reference's lvalue is a closure-bound variable itself (a local variable or a closure variable, not an
+      element, a key or a member of one), which is not read-only, holds no reference (its type is not a reference
+      type, so it cannot change, see ClosureVarValue::getReference()), and whose type is \a target_ti, so that its
+      value is one that \a target_ti accepted;
+    - resolving the reference raises nothing (qore_reference_resolution_check())
+
+    @return 1 if the read and assignment can be skipped, 0 if not, -1 if resolving the reference raised an exception in
+    \a xsink (the exception that the resolution with LValueHelper would raise)
+*/
+DLLLOCAL int qore_reference_binding_keeps_value(const ReferenceNode* r, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink);
+
 // pushes a new argv reference counter
 DLLLOCAL void new_argv_ref();
 

@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of reference arguments and their type checks
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class ReferenceArgTypesTest
+
+#! Tests the binding of reference arguments to typed reference parameters in every execution mode and in qcc-compiled
+#! executables
+/** A reference argument is checked against the type of the parameter, and the referenced value is converted to the
+    parameter's referenced type; a local variable of that type, whose value needs no conversion, is not read and
+    assigned back (issue #7264).  cases.q passes references to locals of the parameter's type (holding typed hashes,
+    hashdecl hashes and lists, weak references, or no value, in a loop, through call references, from closures and
+    other threads), to locals of other types (values converted, or rejected with an exception), and to members, hash
+    keys, list elements, globals, references, and locals of other Programs, also deleted ones; every execution mode
+    and executables compiled with qcc -O0 and -O3 must give the output of the AST interpreter, which is checked here
+    as well.
+*/
+class ReferenceArgTypesTest inherits QUnit::Test {
+    public {
+        #! the output of the cases with the AST interpreter
+        const ExpectedAstLines = (
+            "hash-same-type-read => hash<string, int> {a: 1}",
+            "hash-same-type-read-shared => True",
+            "hash-same-type-write => hash<string, int> {a: 1, w: 1}",
+            "hash-same-type-other => hash<string, int> {a: 1}",
+            "hash-same-type-typed-value => hash<string, int> {a: 1, b: 2}",
+            "hash-same-type-typed-value-write => hash<string, int> {a: 1, b: 2, w: 2}",
+            "hash-same-type-hashdecl-value => hash<RefArgDecl> {a: 1, b: \"x\"}",
+            "ohash-same-type-nothing => nothing null",
+            "ohash-same-type-nothing-write => hash<auto> {w: 0}",
+            "ohash-same-type-typed-value => hash<string, int> {a: 1, b: 2}",
+            "list-same-type-typed-value => list<int> [1, 2]",
+            "list-same-type-write => list<int> [1, 2, 2]",
+            "olist-same-type-nothing => nothing null",
+            "olist-same-type-nothing-write => list<auto> [0]",
+            "hash-same-type-loop => hash<string, int> {loop: 0, w: 2}",
+            "hash-same-type-loop-sum => 99",
+            "hash-same-type-call-ref => hash<string, int> {cr: 1, w: 1}",
+            "hash-same-type-call-function => hash<string, int> {cr: 1, w: 2}",
+            "hash-weak-stays-weak => 0",
+            "list-weak-stays-weak => 0",
+            "auto-to-typed-hash => hash<string, int> {a: 1}",
+            "auto-int-to-float => float 1.0",
+            "auto-int-to-float-write => float 1.5",
+            "auto-int-to-hash => RUNTIME-TYPE-ERROR: <reference> expects type 'hash<auto>', but got type 'integer' instead",
+            "auto-nothing-to-hash => hash<auto> {w: 0}",
+            "auto-typed-list-to-list => list<int> [1, 2, 2]",
+            "int-to-hash => RUNTIME-OVERLOAD-ERROR: no variant matching 'hash_ref(reference<int>, bool)' can be found; the following variants were tested:",
+            "typed-hash-to-hash => RUNTIME-OVERLOAD-ERROR: no variant matching 'hash_ref(reference<hash<string, int>>, bool)' can be found; the following variants were tested:",
+            "hash-to-typed-hash => hash<string, int> {a: 1, w: 1}",
+            "ohash-to-hash => hash<string, int> {a: 1, w: 1}",
+            "hash-to-ohash => RUNTIME-OVERLOAD-ERROR: no variant matching 'ohash_ref(reference<hash<auto>>, bool)' can be found; the following variants were tested:",
+            "list-to-hash => RUNTIME-OVERLOAD-ERROR: no variant matching 'hash_ref(reference<list<auto>>, bool)' can be found; the following variants were tested:",
+            "hashdecl-same-type => hash<RefArgDecl> {a: 2, b: \"x\"}",
+            "hashdecl-to-hash => RUNTIME-OVERLOAD-ERROR: no variant matching 'hash_ref(reference<hash<RefArgDecl>>, bool)' can be found; the following variants were tested:",
+            "no-narrow-hash-to-hash => hash<auto> {a: 1, b: 2, w: 2}",
+            "int-same-type => integer 2",
+            "member-hash => hash<string, int> {m: 1, w: 1}",
+            "member-ohash => hash<auto> {w: 0}",
+            "member-list => list<int> [1, 1]",
+            "member-int => integer 2",
+            "member-deleted-object => RUNTIME-TYPE-ERROR: cannot convert lvalue declared as object<RefArgHolder> to a hash",
+            "hash-key-hash => hash<auto> {k: {a: 1, w: 1}, i: 1}",
+            "hash-key-int => RUNTIME-TYPE-ERROR: <reference> expects type 'hash<auto>', but got type 'integer' instead",
+            "hash-key-missing => hash<auto> {k: {a: 1, w: 1}, i: 1, missing: {w: 0}}",
+            "list-element-hash => list<auto> [{a: 1, w: 1}, 2]",
+            "global-hash => hash<string, int> {g: 1, w: 1}",
+            "global-ohash => hash<auto> {w: 0}",
+            "global-list => list<int> [1, 2, 2]",
+            "reference-to-reference => hash<string, int> {r: 1, w: 1}",
+            "reference-value-passed-on => hash<string, int> {r: 1, w: 1}",
+            "closure-bound-local => hash<string, int> {c: 1, w: 1}",
+            "closure-bound-local-closure => 2",
+            "closure-variable-in-closure => hash<string, int> {c: 1, w: 1}",
+            "closure-list-in-closure => list<int> [1, 1, 2]",
+            "closure-bound-local-thread => hash<string, int> {t: 0, w: 1}",
+            "args-list-local => hash<string, int> {l: 1, w: 1}",
+            "other-program-local => hash<string, int> {a: 1, w: 1}",
+            "other-program-reference => hash<string, int> {a: 1, w: 1}",
+            "other-program-args-list => 2",
+            "deleted-program-reference => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
+            "deleted-program-args-list => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime"
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string cases;
+    }
+
+    constructor() : QUnit::Test("ReferenceArgTypes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        cases = get_script_dir() + DirSep + "cases.q";
+
+        addTestCase("every execution mode gives the expected result", \testModes());
+        addTestCase("compiled executables give the expected result", \testExecutables());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            compare(mode, runMode(mode));
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-reference-arg-types-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "cases" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, cases));
+            assertTrue(is_file(exe), sprintf("%s compiled the executable: %s", opt, out));
+            compare("qcc " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    private list<string> runMode(string mode) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, cases)).split("\n");
+    }
+
+    #! compares the lines of a run with the expected lines, reporting the first differences
+    private compare(string mode, list<string> actual) {
+        # a trailing newline gives an empty last line
+        if (actual && actual.last() == "") {
+            pop actual;
+        }
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(ExpectedAstLines.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (ExpectedAstLines[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("expected: %y\n%s: %y", ExpectedAstLines[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+}

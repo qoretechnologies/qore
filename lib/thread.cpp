@@ -3554,6 +3554,25 @@ void thread_ref_remove(const lvalue_ref* r) {
     td->ref_set.erase(r);
 }
 
+int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // the entry into the Program does nothing only in the case of ProgramThreadCountContextHelper::set() that returns
+    // at once; the others enter the Program, which can fail
+    if (pgm && (pgm != td->current_pgm || !td->tlpd || td->entry_pgm != pgm || td->cancel_defer_count
+            || td->dtor_cancel_defer_count)) {
+        return 0;
+    }
+    // the stack check of RuntimeReferenceHelperBase
+    if (check_stack_intern(xsink, td)) {
+        return -1;
+    }
+    // a reference being resolved raises CIRCULAR-REFERENCE-ERROR
+    if (!td->ref_set.empty() && td->ref_set.find(r) != td->ref_set.end()) {
+        return 0;
+    }
+    return 1;
+}
+
 LocalVarValue* thread_instantiate_lvar() {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     assert(tlpd && "thread_instantiate_lvar called without tlpd - missing ProgramThreadCountContextHelper");
