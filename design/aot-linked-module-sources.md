@@ -178,8 +178,9 @@ loader's checks (`qore_aot_check_module_sources()`, internal, for qcc only):
 - each file of the depfile is compared with its fingerprint: another size, or the same size and another content hash
   when its modification time differs, makes the module out of date, as does a file that no longer exists; a file
   without a fingerprint makes it out of date if it is newer than the module;
-  without a depfile, which Ninja removes once it has read it into its log, the files of the fingerprint file are
-  compared;
+  without a depfile, the files of the fingerprint file are compared (under policy CMP0116 NEW, which
+  `cmake/QoreMacros.cmake` sets for its rules, Ninja reads the copy of a depfile that CMake rewrites for it under
+  `CMakeFiles/d`, and qcc's depfile stays beside the module);
 - for a module whose `<qmod>.d.optional` is not empty (a failed `%try-module` directive): a candidate file of one of
   those modules that the depfile does not list, and `QoreModuleManager::findAvailableOptionalModule()` with the module
   path directories of the module's metadata.

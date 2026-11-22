@@ -54,9 +54,15 @@ def make_copy(source, target, rpath_to=None):
     if rpath_to:
         commands = subprocess.run(["otool", "-l", str(target)], check=True, capture_output=True, text=True).stdout
         rpaths = re.findall(r"cmd LC_RPATH\n\s+cmdsize \d+\n\s+path (.*) \(offset \d+\)", commands)
-        if len(rpaths) != 1:
-            raise RuntimeError(f"{source} records {rpaths}, not one library directory")
-        subprocess.run(["install_name_tool", "-rpath", rpaths[0], str(rpath_to), str(target)], check=True,
+        # a program linked against other shared libraries outside the build (for example qcc against an LLVM
+        # installed in its own prefix) records their directories as well; only the one that holds libqore moves
+        origin = str(Path(source).resolve().parent)
+        libqore_rpaths = [path for path in rpaths if (Path(path.replace("@loader_path", origin)
+                                                           .replace("@executable_path", origin))
+                                                      / LIBQORE.name).exists()]
+        if len(libqore_rpaths) != 1:
+            raise RuntimeError(f"{source} records {rpaths}, not exactly one directory holding {LIBQORE.name}")
+        subprocess.run(["install_name_tool", "-rpath", libqore_rpaths[0], str(rpath_to), str(target)], check=True,
                        capture_output=True)
         subprocess.run(["codesign", "-f", "-s", "-", str(target)], check=True, capture_output=True)
 

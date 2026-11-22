@@ -27,6 +27,12 @@
     variables are covered by weak-reference-unique-source-untyped.qtest (qore#5847).  Every mode must print the
     output of the AST.
 
+    \c weak-reference-unique-path-source.q covers the lvalue paths: an object member, a member of the object, a hash
+    key, a list element, a nested path and a path from a class static variable, holding a literal of the program or a
+    container shared with another variable, which now get a copy of their own as a variable does, a container that
+    only the path holds, and paths that hold no container or no value (qore#7242).  The AST interpreter changed the
+    literals of the program, and every mode changed the other owner of a shared container.
+
     The program is in \c weak-reference-unique-source/.
 */
 class WeakReferenceUniqueSourceTest inherits QUnit::Test {
@@ -35,7 +41,7 @@ class WeakReferenceUniqueSourceTest inherits QUnit::Test {
         string dir = get_script_dir() + "/weak-reference-unique-source";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("weak-reference-unique-source",);
+        const Programs = ("weak-reference-unique-source", "weak-reference-unique-path-source");
     }
 
     constructor() : QUnit::Test("WeakReferenceUniqueSourceTest", "1.0", \ARGV) {
