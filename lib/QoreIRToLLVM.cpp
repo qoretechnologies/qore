@@ -463,6 +463,7 @@ static bool isFastMethodCallEligible(
 #include "qore/intern/QoreValueEncoding.h"
 #include <qore/QoreStringNode.h>
 #include <atomic>
+#include <tuple>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
@@ -6796,6 +6797,33 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
     llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
     auto saved_ip = builder->GetInsertPoint();
     llvm::DebugLoc saved_loc = builder->getCurrentDebugLocation();
+    // the releases of the temporaries on the edges are shared by the edges whose remaining releases are the same
+    // (qore#7174): a release continues with the release of the rest of its edge's temporaries, and the edges of the
+    // exception checks of a statement share the releases of the temporaries that they release last, so that they
+    // take code for each of its temporaries, not for each check and temporary (a statement of untyped code has
+    // dozens of checks); a release is shared only by the checks of a line, whose location it has.  The releases form
+    // a tree whose root is the error return; a release that is the entry of an edge, or that more than one release
+    // continues with, starts a block, and the others are in the block of the release before them, so that edges that
+    // share nothing take one block each, as before
+    struct SharedRelease {
+        llvm::Value* alloca_ptr;
+        //! the release that it continues with, or -1 for the error return
+        ptrdiff_t next;
+        llvm::DebugLoc loc;
+        //! the number of edges that enter at it and of releases that continue with it
+        size_t preds = 0;
+        llvm::BasicBlock* block = nullptr;
+    };
+    std::vector<SharedRelease> releases;
+    std::map<std::tuple<llvm::Value*, ptrdiff_t, unsigned, const llvm::MDNode*>, size_t> release_index;
+    struct EdgePlan {
+        const OrderedErrorReturnSite* site;
+        //! the first release of the edge, or -1 if it releases no temporary or releases them with a table
+        ptrdiff_t entry = -1;
+        //! the temporaries that a table releases
+        std::vector<llvm::Value*> table_released;
+    };
+    std::vector<EdgePlan> plans;
     size_t count = 0;
     for (const OrderedErrorReturnSite& site : ordered_error_return_sites) {
         if (!(++count % 100)) {
@@ -6824,12 +6852,92 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
         if (!orderExceptionTemps(indices, true, temps)) {
             continue;
         }
-        llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
-        builder->SetInsertPoint(edge);
-        builder->SetCurrentDebugLocation(site.loc);
-        emitOperatorIteratorRelease(module, site.iter_start, site.iter_end);
-        emitOrderedErrorReturnTemps(module, temps);
-        builder->CreateBr(error_return_block);
+        // the temporaries that the edge releases (see emitOrderedErrorReturnTemps())
+        std::vector<llvm::Value*> released;
+        released.reserve(temps.size());
+        for (llvm::Value* a : temps) {
+            if (return_value_ids.empty() || !isReturnValueAlloca(a)) {
+                released.push_back(a);
+            }
+        }
+        EdgePlan plan;
+        plan.site = &site;
+        if (released.size() >= MinTableTempRelease && invoke_cleanup_table.active && !invoke_cleanup_array_overflow) {
+            // a single call releases them with a table (emitTempReleaseSequence())
+            plan.table_released = std::move(released);
+        } else if (!released.empty()) {
+            unsigned line = site.loc ? site.loc.getLine() : 0;
+            const llvm::MDNode* scope = site.loc ? site.loc.getScope() : nullptr;
+            // from the last release: the edge enters at the release of its first temporary
+            ptrdiff_t next = -1;
+            for (size_t i = released.size(); i; --i) {
+                auto key = std::make_tuple(released[i - 1], next, line, scope);
+                auto [it, inserted] = release_index.try_emplace(key, releases.size());
+                if (inserted) {
+                    if (next >= 0) {
+                        ++releases[next].preds;
+                    }
+                    releases.push_back(SharedRelease{released[i - 1], next, site.loc});
+                }
+                next = static_cast<ptrdiff_t>(it->second);
+            }
+            plan.entry = next;
+            ++releases[next].preds;
+        }
+        if (plan.entry < 0 && plan.table_released.empty() && site.iter_start >= site.iter_end) {
+            continue;
+        }
+        plans.push_back(std::move(plan));
+    }
+    // the blocks of the releases that start one
+    for (SharedRelease& release : releases) {
+        if (release.preds != 1) {
+            release.block = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+        }
+    }
+    for (const EdgePlan& plan : plans) {
+        if (plan.entry >= 0 && !releases[plan.entry].block) {
+            releases[plan.entry].block = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+        }
+    }
+    llvm::FunctionCallee decref = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (size_t r = 0, e = releases.size(); r < e; ++r) {
+        if (!releases[r].block) {
+            continue;
+        }
+        if (!((r + 1) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM ordered error return releases");
+        }
+        builder->SetInsertPoint(releases[r].block);
+        // this release and those that continue in its block
+        ptrdiff_t i = static_cast<ptrdiff_t>(r);
+        do {
+            builder->SetCurrentDebugLocation(releases[i].loc);
+            emitCleanupSlotRelease(releases[i].alloca_ptr, decref);
+            i = releases[i].next;
+        } while (i >= 0 && !releases[i].block);
+        builder->CreateBr(i >= 0 ? releases[i].block : error_return_block);
+    }
+    for (const EdgePlan& plan : plans) {
+        const OrderedErrorReturnSite& site = *plan.site;
+        llvm::BasicBlock* edge = plan.entry >= 0 ? releases[plan.entry].block : error_return_block;
+        if (!plan.table_released.empty()) {
+            edge = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+            builder->SetInsertPoint(edge);
+            builder->SetCurrentDebugLocation(site.loc);
+            emitTempReleaseSequence(module, plan.table_released, 0, plan.table_released.size());
+            builder->CreateBr(error_return_block);
+        }
+        // the iterators of the operators of the statement are released first
+        if (site.iter_start < site.iter_end) {
+            llvm::BasicBlock* iterators = llvm::BasicBlock::Create(ctx, "exception_ordered_temps", llvm_func);
+            builder->SetInsertPoint(iterators);
+            builder->SetCurrentDebugLocation(site.loc);
+            emitOperatorIteratorRelease(module, site.iter_start, site.iter_end);
+            builder->CreateBr(edge);
+            edge = iterators;
+        }
 #ifdef DEBUG
         // the recorded branch leads to the error return directly: the exception check's own, or the single block of
         // the implicit-context restore (getImplicitContextRestoreEdge()); otherwise the edge would be lost silently
