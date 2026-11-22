@@ -216,24 +216,46 @@ public class Http3StreamContext inherits AbstractStreamContext {
         int last_acked = -1;
         # the waits in a row that found the stream ended, with the send still refused
         int ended_waits = 0;
+        # True once this send has waited with a minimum rate set: the time after it is not waiting for the peer
+        bool rate_wait;
+        on_exit if (rate_wait) {
+            try {
+                send_rate.update(sock.getQuicStreamAckedBytes(session_id, stream_id), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+        }
         while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
             # the data already queued must be sent before the stream can drain
             if (wake_callback) {
                 wake_callback();
             }
             int wait_ms = -1;
-            if (timeout_ms > 0) {
+            if (timeout_ms > 0 || send_rate) {
                 int now = clock_get_monotonic_us() / 1000;
                 int acked = sock.getQuicStreamAckedBytes(session_id, stream_id);
-                if (!stall_deadline || acked > last_acked) {
-                    last_acked = acked;
-                    stall_deadline = now + timeout_ms;
+                if (timeout_ms > 0) {
+                    if (!stall_deadline || acked > last_acked) {
+                        last_acked = acked;
+                        stall_deadline = now + timeout_ms;
+                    }
+                    wait_ms = stall_deadline - now;
+                    if (wait_ms <= 0) {
+                        throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within "
+                            "%d ms and the peer acknowledged no data meanwhile; %d bytes were not sent", stream_id,
+                            timeout_ms, data.size());
+                    }
                 }
-                wait_ms = stall_deadline - now;
-                if (wait_ms <= 0) {
-                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
-                        "ms and the peer acknowledged no data meanwhile; %d bytes were not sent", stream_id,
-                        timeout_ms, data.size());
+                # the rate of the peer over the window, which the waits of all the sends on the stream share (#7280)
+                if (send_rate) {
+                    rate_wait = True;
+                    if (send_rate.update(acked, True, now)) {
+                        throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the peer took less than the minimum "
+                            "rate of %d bytes/s over %d ms; %d bytes were not sent", stream_id,
+                            send_rate.getMinRate(), send_rate.getWindow(), data.size());
+                    }
+                    int check_ms = send_rate.getCheckInterval();
+                    wait_ms = wait_ms < 0 ? check_ms : min(wait_ms, check_ms);
                 }
             }
             # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is made

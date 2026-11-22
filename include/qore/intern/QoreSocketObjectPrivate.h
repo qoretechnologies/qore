@@ -69,6 +69,9 @@ public:
             : so(const_cast<QoreSocketObject*>(n_so)), priv(const_cast<QoreSocketObject*>(n_so)->priv) {
     }
 
+    //! Returns the bytes of the socket's send buffer that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL int64 getUnacknowledgedSendBytes() const;
+
     //! Shuts down the sending side of the connection only (a half-close); see Socket::shutdownWrite()
     /** @return 0 for success, -1 for error (exception raised)
     */

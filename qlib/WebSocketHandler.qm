@@ -140,6 +140,11 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - added the \c send_min_rate and \c send_min_rate_window options
+      (@ref WebSocketHandler::WebSocketHandler::setSendMinRate() "setSendMinRate()"; default: 1 KiB/s over 60 seconds):
+      a client that takes data more slowly while a send waits for it is disconnected, on HTTP/1.1, HTTP/2 and HTTP/3;
+      on HTTP/1.1, \c send_timeout bounds the time in which the client takes no data, as on HTTP/2 and HTTP/3, instead
+      of the total time of a send (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -624,6 +629,10 @@ public class WebSocketConnection {
     */
     setStreamContext(*AsyncSocketIo::AbstractStreamContext ctx) {
         self.stream_ctx = ctx;
+        # the rate is measured for the stream, across its sends (qore#7280)
+        if (ctx) {
+            ctx.setSendMinRate(handler.getSendMinRate(), get_duration_milliseconds(handler.getSendMinRateWindow()));
+        }
     }
 
     #! Returns the stream context for WebSocket over HTTP/2 or HTTP/3
@@ -639,7 +648,7 @@ public class WebSocketConnection {
     /** @deprecated Use @ref setStreamContext() instead
     */
     deprecated setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
-        self.stream_ctx = ctx;
+        setStreamContext(ctx);
     }
 
     #! Returns the HTTP/2 stream context
@@ -655,7 +664,7 @@ public class WebSocketConnection {
     /** @deprecated Use @ref setStreamContext() instead
     */
     deprecated setHttp3StreamContext(*AsyncSocketIo::Http3StreamContext ctx) {
-        self.stream_ctx = ctx;
+        setStreamContext(ctx);
     }
 
     #! Returns the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
@@ -2551,6 +2560,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         */
         const DefaultCloseTimeout = 5s;
 
+        #! the default minimum average rate of a peer while a send waits for it, in bytes per second
+        /** @since WebSocketHandler 2.8 */
+        const DefaultSendMinRate = 1024;
+
+        #! the default length of the sliding window of the minimum rate
+        /** @since WebSocketHandler 2.8 */
+        const DefaultSendMinRateWindow = 60s;
+
         #! default heartbeat interval
         const DefaultHeartbeatInterval = 20s;
 
@@ -2595,6 +2612,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "max_queue_size",
             "idle_timeout",
             "close_timeout",
+            "send_timeout",
+            "send_min_rate",
+            "send_min_rate_window",
+            "logger",
         );
     }
 
@@ -2629,11 +2650,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! Send timeout
         date send_timeout = DefaultSocketSendTimeout;
+        #! True if the send timeout was set explicitly, which is then applied exactly
+        bool send_timeout_set = False;
 
         #! How long a close started by the server waits for the client's close frame
         /** @since WebSocketHandler 2.8
         */
         date close_timeout = DefaultCloseTimeout;
+        #! the minimum average rate of a peer while a send waits for it, in bytes per second; 0: no check
+        int send_min_rate = DefaultSendMinRate;
+        #! the sliding window of the minimum rate
+        date send_min_rate_window = DefaultSendMinRateWindow;
 
         #! Maximum WebSocket message size in bytes (0 = the built-in limits)
         /** Limits the size of a frame (with HTTP/1.1, also of the fragments of a message as they arrive) and of a
@@ -2693,8 +2720,19 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         - \c logger: a @ref Qore::Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
           (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds; a client
-          that does not read the messages sent to it within this time is disconnected (on HTTP/2 and HTTP/3, this is
-          the longest time a send waits for a full stream send buffer to drain)
+          that takes none of the data sent to it for this time is disconnected
+        - \c send_min_rate: the minimum average rate, in bytes per second, at which a client must take data while a
+          send waits for it; a slower client is disconnected, so that a client that takes very little data cannot hold
+          a send (default: @ref DefaultSendMinRate); 0 disables the check, and \c send_timeout then applies unscaled
+        - \c send_min_rate_window: a relative date/time value, or an integer in milliseconds, of at least one
+          millisecond (default: @ref DefaultSendMinRateWindow).  On HTTP/2 and HTTP/3 it is the sliding window of the
+          rate.  Over HTTP/1.1 a sender sees a slow client's progress only in steps of its TCP receive window, so a
+          client instead has a credit of the time that the most seen from it in a sample or a second (128 KiB to
+          8 MiB) takes at the minimum rate, for at most 10 minutes and at least this window, which the bytes that it
+          takes renew; the default \c send_timeout allows the same time, and one set explicitly is applied exactly.  A
+          client that stays below the minimum rate runs out of credit and is disconnected, the closer to the rate the
+          later: after a full credit of 10 minutes, at half of the rate in 20 minutes.  A client that shows no
+          progress for 10 minutes is disconnected even if it is reading a very large receive buffer very slowly.
         - \c close_timeout: a relative date/time value giving how long a close started by the server (with
           @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", when the server or a
           listener stops, on an idle timeout, or on a protocol error) waits for the client's close frame once the
@@ -2744,22 +2782,22 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
                 case "send_timeout": {
-                    if (h.value.typeCode() == NT_INT) {
-                        h.value = milliseconds(h.value);
-                    }
-                    if (h.value.typeCode() != NT_DATE) {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
                             h.key, h.value.fullType());
                     }
-                    if (h.value.absolute()) {
+                    if (value.absolute()) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is absolute; expecting "
-                            "relative date/time value", h.key, h.value);
+                            "relative date/time value", h.key, value);
                     }
-                    if (h.value < 0s) {
+                    if (value < 0s) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is negative; expecting "
-                            "non-negative relative date/time value", h.key, h.value);
+                            "non-negative relative date/time value", h.key, value);
                     }
-                    send_timeout = h.value;
+                    send_timeout = value;
+                    send_timeout_set = True;
                     break;
                 }
                 case "extensions": {
@@ -2776,14 +2814,31 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
                 case "close_timeout": {
-                    if (h.value.typeCode() == NT_INT) {
-                        h.value = milliseconds(h.value);
-                    }
-                    if (h.value.typeCode() != NT_DATE) {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
                             h.key, h.value.fullType());
                     }
-                    setCloseTimeout(h.value);
+                    setCloseTimeout(value);
+                    break;
+                }
+                case "send_min_rate": {
+                    if (h.value.typeCode() != NT_INT && (h.value.typeCode() != NT_STRING || h.value !~ /^-?[0-9]+$/)) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y cannot be converted to an "
+                            "integer giving the minimum rate in bytes per second", h.key, h.value);
+                    }
+                    setSendMinRate(int(h.value), send_min_rate_window);
+                    break;
+                }
+                case "send_min_rate_window": {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting a relative "
+                            "date/time value or an integer in milliseconds", h.key, h.value.fullType());
+                    }
+                    setSendMinRate(send_min_rate, value);
                     break;
                 }
                 case "max_message_size": {
@@ -2965,6 +3020,39 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 "expecting non-negative relative date/time value", to);
         }
         send_timeout = to;
+        send_timeout_set = True;
+    }
+
+    #! Returns the minimum average rate of a client while a send waits for it, in bytes per second (0: no check)
+    /** @since WebSocketHandler 2.8 */
+    int getSendMinRate() {
+        return send_min_rate;
+    }
+
+    #! Returns the sliding window of the minimum rate
+    /** @since WebSocketHandler 2.8 */
+    date getSendMinRateWindow() {
+        return send_min_rate_window;
+    }
+
+    #! Sets the minimum average rate of a client while a send waits for it, for the connections made after this call
+    /** @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the relative length of the sliding window, which must be positive
+
+        @throw WEBSOCKETHANDLER-OPTION-ERROR invalid arguments
+
+        @since WebSocketHandler 2.8
+    */
+    setSendMinRate(int min_rate, date window = DefaultSendMinRateWindow) {
+        if (min_rate < 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_min_rate\" value %d is negative", min_rate);
+        }
+        if (window.absolute() || get_duration_milliseconds(window) <= 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_min_rate_window\" value %y is not a positive "
+                "relative date/time value", window);
+        }
+        send_min_rate = min_rate;
+        send_min_rate_window = window;
     }
 
     #! Set the send timeout with a non-negative value in milliseconds
@@ -3313,6 +3401,8 @@ handler.setCloseTimeout(2s);
             ws_poll_op.setHeartbeat(heartbeat * 1000);
             ws_poll_op.setIdleTimeout(idle_timeout * 1000);
             ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
+            ws_poll_op.setSendTimeoutScaled(!send_timeout_set);
+            ws_poll_op.setSendMinRate(send_min_rate, get_duration_milliseconds(send_min_rate_window));
             ws_poll_op.setCloseTimeout(close_timeout);
             if (max_message_size > 0) {
                 ws_poll_op.setMaxFrameSize(max_message_size);

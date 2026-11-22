@@ -18480,29 +18480,7 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
 
 //! returns the number of bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
 static int64 dbg_unacknowledged_bytes(int fd) {
-#ifdef DARWIN
-    int n = 0;
-    socklen_t len = sizeof n;
-    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
-#elif defined(TIOCOUTQ)
-    int n = 0;
-    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
-        return 0;
-    }
-#if defined(__linux__) && defined(TCP_INFO)
-    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
-    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
-    struct tcp_info ti;
-    socklen_t len = sizeof ti;
-    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
-            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
-        --n;
-    }
-#endif
-    return n;
-#else
-    return 0;
-#endif
+    return qore_socket_private::getUnacknowledgedBytes(fd);
 }
 
 //! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell

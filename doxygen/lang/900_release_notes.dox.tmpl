@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+
+    @par WebSocket Send Timeout and Minimum Transfer Rate
+    The \c send_timeout of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" bounds the time in which a client
+    takes no data, and a client below the new \c send_min_rate (default: 1 KiB/s over a 60 s window; 0 disables it) is
+    disconnected (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
     also in library code, and the standard modules (also a host's logger, for the lines that library code writes for
@@ -1315,6 +1320,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Minimum Send Rate Monitor
+    @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
+    waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
@@ -2385,6 +2394,8 @@
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module
+       - added the \c send_min_rate and \c send_min_rate_window options, which bound how slowly a client can take data
+         on HTTP/1.1, HTTP/2 and HTTP/3 (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
       - permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>) and AsyncAPI 3.0
         message validation

@@ -74,6 +74,7 @@
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/QC_AbstractPollableIoObjectBase.h"
+#include "qore/intern/QC_SendRateMonitor.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -1691,6 +1692,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initFastResponseSlotClass(qns));
     qns.addSystemClass(initHttpFastRoutesClass(qns));
     qns.addSystemClass(initSocketClass(qns));
+    qns.addSystemClass(initSendRateMonitorClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));
     // EventPollInfo/TimerEventInfo must be initialized before initEventLoopClass which uses them
     // EventPollInfo references AbstractPollableIoObject; must be after initSocketClass
