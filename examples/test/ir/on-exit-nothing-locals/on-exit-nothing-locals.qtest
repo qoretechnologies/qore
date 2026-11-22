@@ -59,6 +59,11 @@ class OnExitNothingLocalsTest inherits QUnit::Test {
         # and the one that holds a value
         assertTrue(out.find("exit object with a value (fail=True): caught: N(7)\n") >= 0, "a value");
         assertTrue(out.find("thread_exit: exit NOTHING\n") >= 0, "thread_exit");
+        # a scoped switch to a callee's tenant that raises an exception restores the host tenant (NOTHING) as well as
+        # one with a value, and the handler raises no exception of its own, which would be chained to the callee's
+        # (#5951)
+        assertTrue(out.find("tenant restore: TENANT-PROBE: 100000000042, chained: none; tenant after: null; "
+            "TENANT-PROBE: 100000000042, chained: none; tenant after: 7; \n") >= 0, "tenant restore");
     }
 
     #! runs the script in every execution mode, on the IR tier and with synchronous JIT compilation, and checks that it
