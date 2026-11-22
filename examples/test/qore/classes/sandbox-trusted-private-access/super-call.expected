@@ -1,0 +1,6 @@
+decoy-from-other-method: parse: PARSE-EXCEPTION: illegal access to private method 'privOp' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+decoy-from-itself: parse: PARSE-EXCEPTION: illegal access to private method 'privOp' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+override-from-other-method: parse: PARSE-EXCEPTION: illegal access to private method 'privOp' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+reference-in-override: parse: PARSE-EXCEPTION: illegal access to private method 'privOp' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+override: parse: OK
+override called by the base class: "tenant+trusted"

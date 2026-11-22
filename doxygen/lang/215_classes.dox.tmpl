@@ -710,12 +710,16 @@ while (i.next) {}  # parse exception: the call is i.next()
     can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
     a member name computed at run time, the conversion of the object to a hash or its keys, a
     @ref call_reference "call reference", or the reflection API) raises the same
-    exception as an access from outside the class hierarchy.
-
-
+    exception as an access from outside the class hierarchy.  This applies to each private variant of a method that
+    also has public variants, to the private constructors of the trusted class (an object of it cannot be created with
+    them, with @ref new "new" or @ref Qore::create_object() "create_object()"), and to the public members and methods
+    that the trusted class inherits privately (<tt><b>inherits private</b></tt>).\n\n
     The class can still use its own members and methods and the public members and methods that it inherits, implement
-    and override the private (abstract) methods of the trusted class, which the trusted class then calls, and call the
-    version of a method that it overrides in a base class (<tt>Base::method()</tt>).  Code of the trusted class keeps
+    and override the private (abstract) methods of the trusted class, which the trusted class then calls, call the
+    version of a method of a base class in its own method that overrides it (<tt>Base::method()</tt> in the method
+    \c method() with the parameter types of a variant of the base class's method; not from another method, and not
+    through a call reference), and call a private constructor of its base class in its own base-class constructor call
+    (<tt>constructor() : Base(args)</tt>), which constructs its own object.  Code of the trusted class keeps
     its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
     library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
     need as public members and methods.  The access is decided by the state of the class's Program when the class is

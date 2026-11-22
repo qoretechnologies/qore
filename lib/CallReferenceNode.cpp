@@ -681,7 +681,8 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                 m = qore_class_private::get(*const_cast<QoreClass*>(n_qc))->parseFindAnyMethod(method.c_str(),
                     class_ctx);
                 // as for a call of the method (qore#6843)
-                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false) && !err) {
+                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false,
+                        qore_class_private::get(*n_qc)) && !err) {
                     err = -1;
                 }
                 if (m) {
@@ -773,7 +774,7 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, meth);
@@ -817,7 +818,7 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
         return -1;
     }
     // as for a call of the method (qore#6843)
-    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, true)) {
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, false)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, method);
@@ -1508,7 +1509,7 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
             // as for a call of the method (qore#6843)
-            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), true)) {
+            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), false)) {
                 return -1;
             }
             if (m) {
@@ -2276,11 +2277,11 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         return -1;
     }
 
-    // as for a call of the method (qore#6843): a reference to a normal method is a reference to the method of the
-    // object of the code
+    // as for a call of the method (qore#6843); a reference is not a call of the version of a base class by its
+    // override: the method is called when the reference is called, which may be anywhere
     if (qore_class_private::parseCheckSandboxMethodAccess(loc, qm, parse_context.oflag
             ? qore_class_private::get(*QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
-            : parse_get_class_priv(), !qm->isStatic())) {
+            : parse_get_class_priv(), false)) {
         return -1;
     }
 

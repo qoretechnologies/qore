@@ -1,0 +1,15 @@
+member-self: parse: PARSE-EXCEPTION: illegal access to private member 'xpub' of class 'X' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-self: parse: PARSE-EXCEPTION: illegal access to method 'xm' of class 'X' in class 'T': a class declared by sandboxed code cannot use the methods that a class declared by trusted code inherits privately
+method-self-dot: parse: PARSE-EXCEPTION: illegal access to method 'xm' of class 'X' in class 'T': a class declared by sandboxed code cannot use the methods that a class declared by trusted code inherits privately
+method-typed: parse: PARSE-EXCEPTION: illegal access to method 'xm' of class 'X' in class 'T': a class declared by sandboxed code cannot use the methods that a class declared by trusted code inherits privately
+member-typed: parse: PARSE-EXCEPTION: illegal access to private member 'xpub' of class 'X' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+own-private-inheritance: parse: OK
+public-method: parse: OK
+memberAuto: PRIVATE-MEMBER: 'xpub' is a private member of class 'T'
+methodAuto: BASE-CLASS-IS-PRIVATE: xm() is a method of a privately-inherited class T
+callObjectMethod: BASE-CLASS-IS-PRIVATE: xm() is a method of a privately-inherited class T
+publicMethod: OK "xpub:xm"
+otherMemberAuto: PRIVATE-MEMBER: 'xpub' is a private member of class 'D'
+otherMethodAuto: BASE-CLASS-IS-PRIVATE: xm() is a method of a privately-inherited class D
+own private inheritance: OK ["xpub", "xm", "xpub", "xm"]
+trusted: OK "xpub:xm"

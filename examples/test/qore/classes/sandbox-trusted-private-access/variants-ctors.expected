@@ -1,0 +1,28 @@
+variant-self: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op()
+variant-self-dot: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op()
+variant-typed: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::op(int)' can be found; the following variants were tested:
+   Trusted::op()
+new-private-ctor: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::constructor(string)' can be found; the following variants were tested:
+   Trusted::constructor()
+new-private-ctor-decl: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::constructor(string)' can be found; the following variants were tested:
+   Trusted::constructor()
+base-private-ctor: parse: OK
+public-variant: parse: OK
+variantAuto: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
+   ::Trusted::op()
+variantCallObjectMethod: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
+   ::Trusted::op()
+variantRef: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
+   ::Trusted::op()
+createObject: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::constructor(string)' can be found; the following variants were tested:
+   ::Trusted::constructor()
+createObjectArgs: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::constructor(string)' can be found; the following variants were tested:
+   ::Trusted::constructor()
+newPublic: OK "public constructor"
+variantSelfAuto: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
+   ::Trusted::op()
+publicVariant: OK ["public variant", "public variant"]
+initialiser: OK "private constructor: initialiser"
+trusted: OK ["public variant", "private constructor: trusted/private variant 2"]

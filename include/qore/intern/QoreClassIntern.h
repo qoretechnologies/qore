@@ -5067,6 +5067,32 @@ public:
     DLLLOCAL static int parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
             const qore_class_private* class_ctx, const char* kind, const char* what);
 
+    //! Returns true if \a m is called by its override in the class context: a call of the base class's version of a
+    //! method in the code of the method of the class context that overrides it (with the parameter types of one of
+    //! its variants), which a class that sandboxed code declared may make also for a private method (qore#6843)
+    DLLLOCAL static bool parseIsSandboxSuperCall(const QoreMethod* m, const qore_class_private* class_ctx);
+
+    //! Returns how this class reaches \a target: 0 not at all, 1 only through the private inheritance of a class that
+    //! trusted code declared, 2 otherwise (qore#6843)
+    /** A method of \a target that this class reaches only through the private inheritance of a class that trusted
+        code declared is private for the code of a class that sandboxed code declared
+
+        @param target the class to reach
+        @param restricted true if the path to this class already went through such an inheritance
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int sandboxPathAccess(const qore_class_private& target, bool restricted) const;
+
+    //! Returns the method whose private variants the call parsed in this thread may use (see
+    //! QoreSandboxSuperCallHelper)
+    DLLLOCAL static const QoreMethod* getSandboxSuperCall();
+
+    //! Returns true if \a m is the method whose private variants the call parsed in this thread may use, also when it
+    //! is the method of another copy of the declaration of its class
+    DLLLOCAL static bool isSandboxSuperCall(const QoreMethod* m);
+
+    //! Sets the method whose private variants the call parsed in this thread may use; returns the previous one
+    DLLLOCAL static const QoreMethod* setSandboxSuperCall(const QoreMethod* m);
+
     //! Raises a parse error if the parse class context cannot call the private method \a m that a parse-time lookup
     //! found (qore#6843); returns -1 if an error was raised, 0 if not
     /** An abstract method is looked up at run time, which checks the implementation called.
@@ -5075,10 +5101,12 @@ public:
         @param m the method found
         @param class_ctx the class context of the call
         @param base_call true if \a m is called on the object of the code (a call of a method of the class or of a
-        base class); then a normal method that the class context declares itself, which overrides \a m, can call it
+        base class); then the override of \a m can call it (see parseIsSandboxSuperCall())
+        @param objclass the class of the object of the call, if not the class context: a public method that it reaches
+        only through the private inheritance of a class that trusted code declared cannot be called either
     */
     DLLLOCAL static int parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
-            const qore_class_private* class_ctx, bool base_call);
+            const qore_class_private* class_ctx, bool base_call, const qore_class_private* objclass = nullptr);
 
     //! Sets sandbox_ctx and sandbox_private_members when the class is committed (qore#6843)
     DLLLOCAL void initSandboxAccess();
@@ -7160,6 +7188,21 @@ public:
 private:
     std::vector<qore_class_private*> classes;
     std::vector<qore_class_private*>* prev;
+};
+
+//! While a call of a base class's version of a method by its override is parsed, the variants of the method can be
+//! selected also if they are private for a class context that sandboxed code declared (qore#6843)
+class QoreSandboxSuperCallHelper {
+public:
+    DLLLOCAL QoreSandboxSuperCallHelper(const QoreMethod* m) : old(qore_class_private::setSandboxSuperCall(m)) {
+    }
+
+    DLLLOCAL ~QoreSandboxSuperCallHelper() {
+        qore_class_private::setSandboxSuperCall(old);
+    }
+
+private:
+    const QoreMethod* old;
 };
 
 #endif

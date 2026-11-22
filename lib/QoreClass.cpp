@@ -3573,6 +3573,9 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
             QoreParseContext parse_context;
             parse_context.oflag = qore_class_private::getSelfId(*sclass);
             if (m) {
+                // the class's own call of the constructor of its base class can select a private constructor of a
+                // class that trusted code declared also in a class that sandboxed code declared (qore#6843)
+                QoreSandboxSuperCallHelper super_call(m);
                 err = parseArgsVariant(loc, parse_context, qore_method_private::get(*m)->getFunction(), nullptr);
             } else {
                 if (parse_args) {
@@ -7589,6 +7592,12 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                         && sandboxDeniesPrivateAccess(get(*w->getClass()), class_ctx)) {
                     return raiseInaccessibleMethodError(nme, w, xsink);
                 }
+                // nor a public method that the object's class reaches only through the private inheritance of a
+                // class that trusted code declared
+                if (class_ctx->sandbox_ctx && access > Public && w->getAccess() == Public
+                        && sandboxPathAccess(*get(*w->getClass()), false) == 1) {
+                    return raiseInaccessibleMethodError(nme, w, xsink);
+                }
             }
         }
     }
@@ -8140,15 +8149,123 @@ int qore_class_private::parseCheckSandboxPrivateAccess(const QoreProgramLocation
 }
 
 int qore_class_private::parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
-        const qore_class_private* class_ctx, bool base_call) {
-    if (!m || !class_ctx || qore_method_private::getAccess(*m) != Private || qore_method_private::get(*m)->isAbstract()) {
+        const qore_class_private* class_ctx, bool base_call, const qore_class_private* objclass) {
+    if (!m || !class_ctx) {
+        return 0;
+    }
+    ClassAccess ma = qore_method_private::getAccess(*m);
+    // a public method that the class of the object reaches only through the private inheritance of a class that
+    // trusted code declared
+    if (ma == Public) {
+        const qore_class_private* oc = objclass ? objclass : class_ctx;
+        if (class_ctx->isSandboxDeclared() && oc->sandboxPathAccess(*get(*m->getClass()), false) == 1) {
+            parse_error(*loc, "illegal access to method '%s' of class '%s' in class '%s': a class declared by "
+                "sandboxed code cannot use the methods that a class declared by trusted code inherits privately",
+                m->getName(), m->getClass()->getName(), class_ctx->name.c_str());
+            return -1;
+        }
+        return 0;
+    }
+    if (ma != Private || qore_method_private::get(*m)->isAbstract()) {
         return 0;
     }
     // an override calls the version of a base class: it is called on the object of the override
-    if (base_call && !m->isStatic() && const_cast<qore_class_private*>(class_ctx)->parseFindLocalMethod(m->getName())) {
+    if (base_call && parseIsSandboxSuperCall(m, class_ctx)) {
         return 0;
     }
     return parseCheckSandboxPrivateAccess(loc, get(*m->getClass()), class_ctx, "method", m->getName());
+}
+
+bool qore_class_private::parseIsSandboxSuperCall(const QoreMethod* m, const qore_class_private* class_ctx) {
+    if (!m || !class_ctx || m->isStatic() || get(*m->getClass())->isClassContext(class_ctx)) {
+        return false;
+    }
+    // only in the method of the class context that overrides the method: the method whose code is parsed
+    const char* code = get_parse_code();
+    if (!code || strcmp(code, m->getName())) {
+        return false;
+    }
+    const QoreMethod* lm = const_cast<qore_class_private*>(class_ctx)->parseFindLocalMethod(m->getName());
+    if (!lm || lm == m) {
+        return false;
+    }
+    // that really overrides it: one of its variants has the parameter types of a variant of the method
+    QoreFunction* lf = qore_method_private::get(*lm)->getFunction();
+    QoreFunction* bf = qore_method_private::get(*m)->getFunction();
+    lf->resolvePendingSignatures();
+    bf->resolvePendingSignatures();
+    QoreFunctionIterator li(*lf);
+    while (li.next()) {
+        const AbstractFunctionSignature* ls = li.getVariant()->getSignature();
+        QoreFunctionIterator bi(*bf);
+        while (bi.next()) {
+            const AbstractFunctionSignature* bs = bi.getVariant()->getSignature();
+            if (ls->numParams() != bs->numParams()) {
+                continue;
+            }
+            bool same = true;
+            for (unsigned i = 0; i < ls->numParams(); ++i) {
+                if (!QoreTypeInfo::equal(ls->getParamTypeInfo(i), bs->getParamTypeInfo(i))) {
+                    same = false;
+                    break;
+                }
+            }
+            if (same) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int qore_class_private::sandboxPathAccess(const qore_class_private& target, bool restricted) const {
+    if (target.isClassContext(this)) {
+        return restricted ? 1 : 2;
+    }
+    if (!scl) {
+        return 0;
+    }
+    int rv = 0;
+    for (auto& i : *scl) {
+        if (!(*i).sclass) {
+            continue;
+        }
+        int r = get(*(*i).sclass)->sandboxPathAccess(target, restricted
+            || ((*i).getAccess() > Public && !isSandboxDeclared()));
+        if (r == 2) {
+            return 2;
+        }
+        if (r) {
+            rv = 1;
+        }
+    }
+    return rv;
+}
+
+namespace {
+//! the method whose private variants the call parsed now may use: an override's call of its base class's version
+//! (see QoreSandboxSuperCallHelper)
+thread_local const QoreMethod* sandbox_super_call = nullptr;
+}
+
+const QoreMethod* qore_class_private::getSandboxSuperCall() {
+    return sandbox_super_call;
+}
+
+bool qore_class_private::isSandboxSuperCall(const QoreMethod* m) {
+    const QoreMethod* sc = sandbox_super_call;
+    if (!sc || !m) {
+        return false;
+    }
+    // the same method also of another copy of the declaration of its class (a class imported into the Program)
+    return m == sc || (!strcmp(m->getName(), sc->getName())
+        && get(*m->getClass())->isClassContext(get(*sc->getClass())));
+}
+
+const QoreMethod* qore_class_private::setSandboxSuperCall(const QoreMethod* m) {
+    const QoreMethod* old = sandbox_super_call;
+    sandbox_super_call = m;
+    return old;
 }
 
 void qore_class_private::initSandboxAccess() {
@@ -12076,7 +12193,9 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false),
-    decl_non_public(old.declaredNonPublic()) {
+    // a member that a class that trusted code declared inherits through private inheritance is not public for the
+    // classes that sandboxed code declares and that inherit it (qore#6843)
+    decl_non_public(old.declaredNonPublic() || (cls_access > Public && !cls->isSandboxDeclared())) {
     //printd(5, "QoreMemberInfo::QoreMemberInfo() copy cls: %p '%s' member_info_list: %p old.access: '%s' "
     //    "new.access: '%s' context_map: %p (%d) member_info_list: %p (%d)\n", cls, cls->name.c_str(),
     //    member_info_list, privpub(old.access), privpub(access), cls_context_map,

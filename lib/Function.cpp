@@ -2292,8 +2292,13 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
     if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
+        // a private variant of a class that trusted code declared is private:internal for the code of a class that
+        // sandboxed code declared (qore#6843)
         if ((va > Public && !class_ctx) || (va == Internal
-            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
+            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))
+            || (va == Private && qore_class_private::sandboxDeniesPrivateAccess(
+                qore_class_private::get(*mv->getClass()), class_ctx)
+                && !qore_class_private::isSandboxSuperCall(mv->method()))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
                 mv->className(), func->getName(), mv->getSignature()->getSignatureText());
             return -1;
@@ -3312,8 +3317,13 @@ static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore
     assert(dynamic_cast<const MethodVariantBase*>(v));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
-    // skip if the variant is not accessible
-    return ((!class_ctx && va > Public) || (va == Internal && !internal_access));
+    // skip if the variant is not accessible; a private variant of a class that trusted code declared is
+    // private:internal for the code of a class that sandboxed code declared (qore#6843)
+    // (except in the call of a base class's version of a method by its override, see QoreSandboxSuperCallHelper)
+    return ((!class_ctx && va > Public) || (va == Internal && !internal_access)
+        || (va == Private && class_ctx
+            && qore_class_private::sandboxDeniesPrivateAccess(mvb->getClassPriv(), class_ctx)
+            && !qore_class_private::isSandboxSuperCall(mvb->method())));
 }
 
 static const QoreParameterizedClassTypeInfo* get_receiver_owner_type_info(const QoreTypeInfo* receiver_type_info,
