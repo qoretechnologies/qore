@@ -448,6 +448,26 @@ struct QoreDbgCaresLocalTransport {
 */
 DLLLOCAL QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport);
 
+//! Sets the longest wait of a thread that reaches an end point of the process while the process-end callbacks run on
+//! another thread (qore#7191)
+DLLLOCAL void qore_dbg_process_end_set_wait_ms(int64 ms);
+
+//! Waits until the process-end callbacks have started to run, at most \a timeout_ms; returns true if they have
+DLLLOCAL bool qore_dbg_process_end_wait_started(int64 timeout_ms);
+
+//! Waits until a thread waits for the process-end callbacks that run, at most \a timeout_ms; returns true if one does
+DLLLOCAL bool qore_dbg_process_end_wait_waiter(int64 timeout_ms);
+
+//! A registry of process-end callbacks for the unit tests, with its own process ID and wait bound; see
+//! qore_register_process_end_callback()
+DLLLOCAL void* qore_dbg_process_end_cbs_new(int64 wait_ms);
+DLLLOCAL void qore_dbg_process_end_cbs_delete(void* cbs);
+DLLLOCAL int64 qore_dbg_process_end_cbs_add(void* cbs, qore_process_end_callback_t cb, void* arg, pid_t pid);
+DLLLOCAL int qore_dbg_process_end_cbs_remove(void* cbs, int64 id);
+DLLLOCAL bool qore_dbg_process_end_cbs_run(void* cbs, qore_process_end_e reason, pid_t pid);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_started(void* cbs, int64 timeout_ms);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms);
+
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file
 

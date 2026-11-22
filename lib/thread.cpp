@@ -9870,6 +9870,240 @@ static int qore_exit_wait_finishing_threads() {
     return qore_counter_ops(thread_counter).waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
 }
 
+namespace {
+//! The process-end callbacks (qore_register_process_end_callback(), qore#7191)
+/** The process has one (qore_process_end_callbacks()); the unit tests make their own, with their own process ID and
+    wait bound (qore_dbg_process_end_cbs_new())
+*/
+class QoreProcessEndCallbacks {
+public:
+    //! @param wait_ms the longest wait of a thread that reaches an end point while the callbacks run on another thread
+    DLLLOCAL explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
+    }
+
+    //! Registers a callback of the process \a pid; returns its ID, or -1 if the process has started to end
+    DLLLOCAL int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
+        std::lock_guard<std::mutex> l(m);
+        if (!isIdleLocked(pid)) {
+            return -1;
+        }
+        entries.push_back({++next_id, cb, arg, pid, false});
+        return next_id;
+    }
+
+    //! Deregisters a callback; never waits: 0 if it had not run, 1 if it ran or runs on another thread, -1 if unknown
+    DLLLOCAL int remove(int64 id) {
+        std::lock_guard<std::mutex> l(m);
+        for (auto i = entries.begin(), e = entries.end(); i != e; ++i) {
+            if (i->id == id) {
+                int rc = (i->ran || running_id == id) ? 1 : 0;
+                entries.erase(i);
+                return rc;
+            }
+        }
+        return -1;
+    }
+
+    //! Runs the callbacks of the process \a pid once, in the reverse order of their registration
+    /** A thread that calls it while another runs the callbacks waits for them at most the wait bound; the thread that
+        runs them (a callback that calls exit()) does not wait.
+
+        @return true if this call ran the callbacks
+    */
+    DLLLOCAL bool run(qore_process_end_e reason, pid_t pid) {
+        std::vector<Entry> snapshot;
+        {
+            std::unique_lock<std::mutex> l(m);
+            if (!isIdleLocked(pid)) {
+                if (state == Running && !pthread_equal(runner, pthread_self())) {
+#ifdef DEBUG
+                    ++waiters;
+                    waiter_cond.notify_all();
+#endif
+                    cond.wait_for(l, std::chrono::milliseconds(wait_ms), [this] () { return state != Running; });
+                }
+                return false;
+            }
+            state = Running;
+            state_pid = pid;
+            runner = pthread_self();
+            for (const Entry& e : entries) {
+                if (e.pid == pid) {
+                    snapshot.push_back(e);
+                }
+            }
+#ifdef DEBUG
+            started_cond.notify_all();
+#endif
+        }
+        for (auto i = snapshot.rbegin(), e = snapshot.rend(); i != e; ++i) {
+            {
+                std::lock_guard<std::mutex> l(m);
+                // a callback deregistered meanwhile does not run
+                if (!findLocked(i->id)) {
+                    continue;
+                }
+                running_id = i->id;
+            }
+            try {
+                i->cb(reason, i->arg);
+            } catch (...) {
+                // a callback must not throw; the others run nonetheless
+            }
+            {
+                std::lock_guard<std::mutex> l(m);
+                running_id = 0;
+                if (Entry* entry = findLocked(i->id)) {
+                    entry->ran = true;
+                }
+            }
+        }
+        {
+            std::lock_guard<std::mutex> l(m);
+            state = Done;
+        }
+        cond.notify_all();
+        return true;
+    }
+
+#ifdef DEBUG
+    //! sets the wait bound
+    DLLLOCAL void setWaitMs(int64 ms) {
+        std::lock_guard<std::mutex> l(m);
+        wait_ms = ms;
+    }
+
+    //! waits until the callbacks have started to run, at most \a timeout_ms; returns true if they have
+    DLLLOCAL bool waitStarted(int64 timeout_ms) {
+        std::unique_lock<std::mutex> l(m);
+        return started_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return state != Idle; });
+    }
+
+    //! waits until a thread waits for the callbacks, at most \a timeout_ms; returns true if one does
+    DLLLOCAL bool waitWaiter(int64 timeout_ms) {
+        std::unique_lock<std::mutex> l(m);
+        return waiter_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return waiters > 0; });
+    }
+#endif
+
+private:
+    struct Entry {
+        int64 id;
+        qore_process_end_callback_t cb;
+        void* arg;
+        //! the process that registered it: a child created with fork() does not run its parent's callbacks
+        pid_t pid;
+        //! true once it has run
+        bool ran;
+    };
+
+    enum State {
+        Idle,
+        Running,
+        Done,
+    };
+
+    std::mutex m;
+    //! signaled when the callbacks have run
+    std::condition_variable cond;
+    std::vector<Entry> entries;
+    int64 next_id = 0;
+    State state = Idle;
+    //! the process in which the state was set; a child created with fork() has an idle state of its own
+    pid_t state_pid = 0;
+    //! the thread that runs the callbacks
+    pthread_t runner;
+    //! the ID of the callback that runs, if any
+    int64 running_id = 0;
+    int64 wait_ms;
+#ifdef DEBUG
+    std::condition_variable started_cond;
+    std::condition_variable waiter_cond;
+    int waiters = 0;
+#endif
+
+    DLLLOCAL bool isIdleLocked(pid_t pid) const {
+        return state == Idle || state_pid != pid;
+    }
+
+    DLLLOCAL Entry* findLocked(int64 id) {
+        for (Entry& e : entries) {
+            if (e.id == id) {
+                return &e;
+            }
+        }
+        return nullptr;
+    }
+};
+
+//! the longest wait of a thread that reaches an end point of the process while the callbacks run on another thread,
+//! as exit() waits for the threads that are ending (qore_exit_wait_finishing_threads())
+constexpr int64 QORE_PROCESS_END_WAIT_MS = 10 * 1000;
+
+//! the process's callbacks; never destroyed, as they can run while the static objects are destroyed
+QoreProcessEndCallbacks* qore_process_end_callbacks() {
+    static QoreProcessEndCallbacks* cbs = new QoreProcessEndCallbacks(QORE_PROCESS_END_WAIT_MS);
+    return cbs;
+}
+}
+
+int64_t qore_register_process_end_callback(qore_process_end_callback_t callback, void* arg) {
+    if (!callback) {
+        return -1;
+    }
+    return qore_process_end_callbacks()->add(callback, arg, getpid());
+}
+
+int qore_deregister_process_end_callback(int64_t id) {
+    return qore_process_end_callbacks()->remove(id);
+}
+
+void qore_run_process_end_callbacks(qore_process_end_e reason) {
+    qore_process_end_callbacks()->run(reason, getpid());
+}
+
+#ifdef DEBUG
+void qore_dbg_process_end_set_wait_ms(int64 ms) {
+    qore_process_end_callbacks()->setWaitMs(ms);
+}
+
+bool qore_dbg_process_end_wait_started(int64 timeout_ms) {
+    return qore_process_end_callbacks()->waitStarted(timeout_ms);
+}
+
+bool qore_dbg_process_end_wait_waiter(int64 timeout_ms) {
+    return qore_process_end_callbacks()->waitWaiter(timeout_ms);
+}
+
+void* qore_dbg_process_end_cbs_new(int64 wait_ms) {
+    return new QoreProcessEndCallbacks(wait_ms);
+}
+
+void qore_dbg_process_end_cbs_delete(void* cbs) {
+    delete static_cast<QoreProcessEndCallbacks*>(cbs);
+}
+
+int64 qore_dbg_process_end_cbs_add(void* cbs, qore_process_end_callback_t cb, void* arg, pid_t pid) {
+    return static_cast<QoreProcessEndCallbacks*>(cbs)->add(cb, arg, pid);
+}
+
+int qore_dbg_process_end_cbs_remove(void* cbs, int64 id) {
+    return static_cast<QoreProcessEndCallbacks*>(cbs)->remove(id);
+}
+
+bool qore_dbg_process_end_cbs_run(void* cbs, qore_process_end_e reason, pid_t pid) {
+    return static_cast<QoreProcessEndCallbacks*>(cbs)->run(reason, pid);
+}
+
+bool qore_dbg_process_end_cbs_wait_started(void* cbs, int64 timeout_ms) {
+    return static_cast<QoreProcessEndCallbacks*>(cbs)->waitStarted(timeout_ms);
+}
+
+bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms) {
+    return static_cast<QoreProcessEndCallbacks*>(cbs)->waitWaiter(timeout_ms);
+}
+#endif
+
 void qore_exit_process(int rc) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
@@ -9881,13 +10115,16 @@ void qore_exit_process(int rc) {
     // External workers remain in tp_thread_counter until their native join,
     // including TLS destruction after releasing their Qore TID. Do not wait for
     // them here: exit() can be called by a worker or while its cleanup is blocked.
-    if (thread_list.getNumThreads() <= 1
+    bool single_threaded = thread_list.getNumThreads() <= 1
 #ifdef HAVE_SIGNAL_HANDLING
         && q_gettid() > 0
 #endif
         && !tp_thread_counter.getCount()
-        && !qore_exit_wait_finishing_threads()
-    ) {
+        && !qore_exit_wait_finishing_threads();
+    // the process-end callbacks of the modules run before the process ends, which runs no qore_cleanup() here
+    // (qore#7191)
+    qore_run_process_end_callbacks(single_threaded ? QPE_EXIT : QPE_QUICK_EXIT);
+    if (single_threaded) {
 #ifdef HAVE_SIGNAL_HANDLING
         // TID 0 is not included in the application-thread count. Its signal wait can wake during
         // static destruction and access the destroyed manager mutex unless it has been joined.

@@ -416,6 +416,9 @@ void qore_cleanup() {
     qore_run_exit_hooks(nullptr);
     qore_counter_ops(thread_counter).waitForZero();
 
+    // the process-end callbacks of the modules run before anything is torn down (qore#7191)
+    qore_run_process_end_callbacks(QPE_CLEANUP);
+
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
     // the declarations retired from now on are freed by the library cleanup (issue #6419)
