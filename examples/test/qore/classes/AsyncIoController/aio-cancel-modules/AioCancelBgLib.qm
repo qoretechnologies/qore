@@ -46,6 +46,8 @@ public class Lib {
         #! deleted is canceled
         static list<auto> held;
         static Mutex lck();
+        static Queue service_requests();
+        static Queue service_replies();
     }
 
     #! runs the code in a thread that the module starts and returns its result, or the error that it raised
@@ -96,6 +98,60 @@ public class Lib {
     #! its result queue
     static auto replaceBg(string key) {
         return inThread(auto sub () { return Lib::submitIntern(key, True); });
+    }
+
+    #! adds a timer in a thread that the module starts; returns its ID and the TID of the thread
+    static hash<auto> addTimerBgTid() {
+        return inThread(hash<auto> sub () {
+            return {"id": AsyncIoController::addTimerDelay(1D, True), "tid": gettid()};
+        });
+    }
+
+    #! cancels a timer in a thread that the module starts; returns the result and the TID of the thread
+    static hash<auto> cancelTimerBgTid(int id) {
+        return inThread(hash<auto> sub () {
+            return {"result": AsyncIoController::cancelTimer(id), "tid": gettid()};
+        });
+    }
+
+    #! starts the module's service thread, which serves every caller of the module (qore#6208)
+    static startService() {
+        background Lib::service();
+    }
+
+    #! has the service thread add a timer; returns its ID
+    static int serviceAddTimer() {
+        service_requests.push({"op": "timer"});
+        return service_replies.get(60s);
+    }
+
+    #! has the service thread submit an operation with the key; returns its result queue
+    static auto serviceSubmit(string key) {
+        service_requests.push({"op": "submit", "key": key});
+        return service_replies.get(60s);
+    }
+
+    #! stops the service thread
+    static stopService() {
+        service_requests.push({"op": "stop"});
+        service_replies.get(60s);
+    }
+
+    #! cancels a timer in the call
+    static bool cancelTimerCall(int id) {
+        return AsyncIoController::cancelTimer(id);
+    }
+
+    #! the service thread: its own code adds the timers and submits the operations, for no caller of its own
+    private:internal static service() {
+        while (True) {
+            hash<auto> r = service_requests.get();
+            switch (r.op) {
+                case "stop": service_replies.push(True); return;
+                case "timer": service_replies.push(AsyncIoController::addTimerDelay(1D, True)); break;
+                case "submit": service_replies.push(Lib::submitIntern(r.key, False)); break;
+            }
+        }
     }
 
     #! cancels by key in a thread that the module starts

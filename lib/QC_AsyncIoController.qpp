@@ -501,6 +501,11 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
     another application with the key, or of none (an operation of the initialization of library code), is not
     canceled (see @ref sandbox_process_wide_registries)
 
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     @param key the operation key to cancel
     @return @ref True "True" if an operation was found and canceled; when called on an I/O thread of the controller
     (in a poll operation's callback, for example), an operation on another I/O thread is canceled asynchronously, as
@@ -525,6 +530,11 @@ static bool AsyncIoController::cancelByKey(string key) [flags=NAMED_ARGS] {
     owner as canceled (which cancels the owner's operations submitted meanwhile) only if it canceled one of them; the
     operations of another application with the owner, or of none, are not affected (see
     @ref sandbox_process_wide_registries)
+
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
 
     @param owner the owner identifier whose operations should be canceled
     @return the number of operations canceled
@@ -1108,9 +1118,10 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
     a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
     its application, so the timers that it adds on its own (for work handed to it by a call of another application,
-    for example) belong to no application: no application can cancel them, and the thread itself can cancel only
-    such timers, not those of an application nor those of the host, so it cannot be used to cancel the timers of an
-    application.  Code that does not run module code for a restricted caller (the host, code without restrictions,
+    for example) belong to no application: no application can cancel them, not even the one whose call started the
+    thread, and the thread itself can cancel only such timers that it added itself, not those of an application, of
+    the host or of another thread that module code started, so it cannot be used to cancel the timers of an
+    application or of another one's thread.  Code that does not run module code for a restricted caller (the host, code without restrictions,
     and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
     cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
     other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work

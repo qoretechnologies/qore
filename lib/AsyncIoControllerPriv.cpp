@@ -5468,26 +5468,16 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
     if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))) {
         return aio_callback_app_id;
     }
-    // a module is no application: module code that no call and no callback records an application for (the code of a
-    // thread that module code started) runs for the application of the module code that started the thread, and
-    // sandboxed module code with none recorded runs for no application, so that it acts on no operation
-    if (pgm && qore_program_is_module(pgm)) {
-        if (qore_program_id_t app_id = runtime_get_thread_start_app_id()) {
-            return app_id;
-        }
-        if (qore_caller_is_sandboxed()) {
-            return QORE_NO_PROGRAM_ID;
-        }
+    // a module is no application: sandboxed module code that no call and no callback records an application for
+    // runs for no application, so that it acts on no operation; such is the code of a thread that module code starts,
+    // which can serve every caller of the module, as #6208 has it (giving a call's application to the thread that
+    // serves it is issue #6245)
+    if (pgm && qore_program_is_module(pgm) && qore_caller_is_sandboxed()) {
+        return QORE_NO_PROGRAM_ID;
     }
     return pgm ? runtime_get_module_call_app_id(pgm) : QORE_NO_PROGRAM_ID;
 }
 
-qore_program_id_t qore_async_io_thread_start_app_id() {
-    // only module code records an application for the threads that it starts: the code of another Program runs for
-    // that Program in its new thread
-    QoreProgram* pgm = getProgram();
-    return pgm && qore_program_is_module(pgm) ? AsyncIoControllerPriv::callerAppId() : 0;
-}
 
 bool AsyncIoControllerPriv::submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
         const QoreObject* spop_obj) {
@@ -7225,6 +7215,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.runtime_po = std::move(timer_po);
         tinfo.for_app = for_app;
         tinfo.cb_app_id = cb_app_id;
+        tinfo.adder_gen = runtime_get_thread_generation();
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
 
@@ -7259,6 +7250,12 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             return false;
         }
         if (for_app && (!it->second.for_app || it->second.app_pgm_id != app_pgm_id)) {
+            return false;
+        }
+        // module code that runs for no application (a thread that module code started, which can serve every caller
+        // of the module, qore#6208) cancels only the timers for no application that its own thread added: not those
+        // of the threads that the module started during the calls of other applications (qore#7010)
+        if (for_app && !app_pgm_id && it->second.adder_gen != runtime_get_thread_generation()) {
             return false;
         }
         found = true;
