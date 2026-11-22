@@ -66,6 +66,7 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
     @since %Qore 1.12
 */
 qclass SocketPollOperation [
+    dom=NETWORK;
     arg=SocketPollOperationBase* op;
     vparent=SocketPollOperationBase<auto>
 ];

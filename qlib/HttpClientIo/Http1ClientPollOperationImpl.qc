@@ -164,20 +164,14 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
             *string ssl_ca_path) {
         # the caller check of the operation, which this method runs first (qore#6981)
         HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
-        Socket sock();
         bool ssl_required = url_info.protocol == "https";
+        Socket sock = ssl_required ? http_client_tls_socket(url_info, client_cert, client_pk) : new Socket();
         if (ssl_required) {
             if (exists ssl_verify_mode) {
                 sock.setSslVerifyMode(ssl_verify_mode);
             }
             if (accept_all_certs) {
                 sock.acceptAllCertificates(True);
-            }
-            if (client_cert) {
-                sock.setCertificate(client_cert);
-            }
-            if (client_pk) {
-                sock.setPrivateKey(client_pk);
             }
             if (ssl_ca_file || ssl_ca_path) {
                 sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);

@@ -72,9 +72,9 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         for (int i = 0; i < 20; ++i) {
             int port = closedPort();
             Socket c();
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             assertThrows("SOCKET-CONNECT-ERROR", \c.connect(), ("127.0.0.1:" + port, ConnectTimeout));
-            assertLt(QuickMs, (now_us() - start).durationMilliseconds(), "the refusal is reported at once");
+            assertLt(QuickMs, (clock_get_monotonic_us() - start) / 1000, "the refusal is reported at once");
             # the socket is usable again
             Socket l = listener();
             on_exit l.close();
@@ -100,9 +100,9 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         int port = l.getPort();
         for (int i = 0; i < 20; ++i) {
             Socket c();
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             c.connect("localhost:" + port, ConnectTimeout);
-            assertLt(QuickMs, (now_us() - start).durationMilliseconds(), "the connect does not wait for its timeout");
+            assertLt(QuickMs, (clock_get_monotonic_us() - start) / 1000, "the connect does not wait for its timeout");
             Socket a = l.accept(ConnectTimeout);
             c.send("y");
             assertEq("y", a.recv(1, ConnectTimeout));

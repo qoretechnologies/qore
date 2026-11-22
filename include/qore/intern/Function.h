@@ -2344,13 +2344,26 @@ protected:
 public:
     DLLLOCAL static QoreProgram* getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh);
 
+    //! returns the Program that the call runs in, or nullptr if the call is refused (qore#7087)
+    /** A call that the expression of the background operator makes itself, of code of a Program that may not control
+        threads, is refused (qore_check_background_direct_entry(): the call's frame, which the CodeEvaluationHelper
+        pushed, is the current frame) and does not enter the Program; a call without a CodeEvaluationHelper (a
+        destructor) is not checked: it runs where the last reference of its object is released
+    */
+    DLLLOCAL static QoreProgram* getCheckedExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh,
+            ExceptionSink* xsink) {
+        return ceh && qore_check_background_direct_entry(uvb->pgm, true, xsink) ? nullptr
+            : getExecutionProgram(uvb, ceh);
+    }
+
     DLLLOCAL UserVariantExecHelper(const UserVariantBase* n_uvb, CodeEvaluationHelper* ceh, ExceptionSink* n_xsink) :
-            ProgramThreadCountContextHelper(n_xsink, getExecutionProgram(n_uvb, ceh), true),
+            ProgramThreadCountContextHelper(n_xsink, getCheckedExecutionProgram(n_uvb, ceh, n_xsink), true),
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink))
+        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
+        }
     }
 
     DLLLOCAL ~UserVariantExecHelper();

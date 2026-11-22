@@ -107,9 +107,9 @@ class AbruptDropEvictionTest inherits QUnit::Test {
         call_function("dbg_detach_async_io_socket", accepted);
 
         # the controller must evict the operation with SOCKET-CLOSED, not spin forever on the torn-down socket
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         auto result = q.get(10s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(Qore::NT_HASH, result.typeCode(), "the operation delivered a completion");
         assertTrue(exists result.ex, "the completion carries an error");

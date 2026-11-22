@@ -5938,6 +5938,11 @@ public:
     }
 
     DLLLOCAL QoreValue evalExpression(q_exp_t exp, ExceptionSink* xsink) {
+        // an expression of a Program that may not control threads is not evaluated by the expression of the
+        // background operator itself (qore#7087)
+        if (qore_check_background_direct_entry(pgm, false, xsink)) {
+            return QoreValue();
+        }
         ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();

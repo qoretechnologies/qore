@@ -323,11 +323,11 @@ class PersistentClosedTracker {
 
     #! Waits until at least one close notification is received
     bool waitForClosed(timeout max_wait = 5s) {
-        date deadline = now_us() + max_wait;
+        int deadline = clock_get_monotonic_us() + max_wait * 1000;
         mtx.lock();
         on_exit mtx.unlock();
         while (closed_count == 0) {
-            timeout remaining = deadline - now_us();
+            timeout remaining = microseconds(deadline - clock_get_monotonic_us());
             if (remaining <= 0) {
                 return False;
             }

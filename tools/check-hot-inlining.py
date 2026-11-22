@@ -17,7 +17,11 @@ max is the number of out-of-line calls allowed (default 0: every call is inlined
 the hot call sites of the caller and called out of line at its others.  "#" starts a comment.
 
 The check needs an unstripped release build of libqore made by GCC (the symbols of its local functions); a library
-made by another compiler is reported and not checked, unless --force is given.  CI runs it in the build-perf job.
+made by another compiler is reported and not checked, unless --force is given (the output of GNU binutils is read:
+--force does not make the tools of another toolchain readable).  The calls are recognized in the code of x86_64
+(call, jmp) and aarch64 (bl, b; with their PLT stubs; a call through a linker veneer, which a library larger than
+the 128MB range of bl would need, names the veneer and is not recognized); the check fails for a library of another
+architecture, as it could not see any call there (qore#7165).  CI runs it in the build-perf job.
 
 Usage: check-hot-inlining.py <build-dir> [--list <file>] [--force]
 """
@@ -76,6 +80,44 @@ def find_library(build_dir):
     sys.exit("no libqore found in %s" % build_dir)
 
 
+#! the out-of-line calls and tail jumps of each architecture in the output of objdump -d -C --no-show-raw-insn: the
+#! direct ones, which name their target (an indirect call through a register names none)
+CALL_PATTERNS = {
+    # x86_64: call, jmp (and their suffixed forms)
+    "x86-64": re.compile(r"\s(?:call|jmp)[a-z]*\s+[0-9a-f]+ <(.*?)(?:@plt)?(?:\+0x[0-9a-f]+)?>"),
+    # aarch64: bl (a call) and b (a tail call); not b.<cond>, cbz and the like, which branch within the function, nor
+    # blr and br, which name no target
+    "aarch64": re.compile(r"\s(?:bl|b)\s+[0-9a-f]+ <(.*?)(?:@plt)?(?:\+0x[0-9a-f]+)?>"),
+}
+
+
+def library_arch(lib):
+    """Returns the architecture of the library: a key of CALL_PATTERNS, or what objdump reports for another one"""
+    out = subprocess.run(["objdump", "-f", lib], capture_output=True, text=True, check=True).stdout
+    m = re.search(r"architecture:\s*([^,\s]+)", out)
+    arch = m.group(1) if m else ""
+    if arch in ("i386:x86-64", "x86-64"):
+        return "x86-64"
+    if arch.startswith("aarch64"):
+        return "aarch64"
+    return arch
+
+
+def count_calls(dis, pattern):
+    """Returns the number of out-of-line calls to each callee (its base name) in the disassembly; calls of .cold
+    fragments are not counted"""
+    found = {}
+    for line in dis.splitlines():
+        m = pattern.search(line)
+        if m:
+            target = m.group(1)
+            if "[clone .cold" in target:
+                continue
+            t = base_name(target)
+            found[t] = found.get(t, 0) + 1
+    return found
+
+
 def compiler_of(lib):
     try:
         out = subprocess.run(["readelf", "-p", ".comment", lib], capture_output=True, text=True).stdout
@@ -97,6 +139,14 @@ def main():
         print("%s was not made by GCC; the hot inlines are not checked" % lib)
         return 0
 
+    # a library of an architecture whose calls are not recognized cannot be checked: every call would look inlined
+    arch = library_arch(lib)
+    call = CALL_PATTERNS.get(arch)
+    if not call:
+        print("ERROR: %s is a library of the architecture %r, whose calls this script does not recognize; the hot "
+              "inlines cannot be checked (see CALL_PATTERNS in %s)" % (lib, arch, os.path.basename(__file__)))
+        return 2
+
     pairs = read_list(args.list)
     callers = {c for c, _, _, _ in pairs}
 
@@ -115,7 +165,6 @@ def main():
             ranges.setdefault(name, []).append((int(m.group(1), 16), int(m.group(2), 16), sig))
 
     failures = 0
-    call = re.compile(r"\s(?:call|jmp)[a-z]*\s+[0-9a-f]+ <(.*?)(?:@plt)?(?:\+0x[0-9a-f]+)?>")
     calls_of = {}
     for name, rs in ranges.items():
         found = {}
@@ -123,14 +172,8 @@ def main():
             dis = subprocess.run(["objdump", "-d", "-C", "--no-show-raw-insn", "--start-address=%#x" % addr,
                                   "--stop-address=%#x" % (addr + size), lib], capture_output=True, text=True,
                                  check=True).stdout
-            for line in dis.splitlines():
-                m = call.search(line)
-                if m:
-                    target = m.group(1)
-                    if "[clone .cold" in target:
-                        continue
-                    t = base_name(target)
-                    found[t] = found.get(t, 0) + 1
+            for t, n in count_calls(dis, call).items():
+                found[t] = found.get(t, 0) + n
         calls_of[name] = found
 
     for caller, callee, allowed, n in pairs:
@@ -148,7 +191,7 @@ def main():
     if failures:
         print("%d of %d hot inlines failed; see tools/hot-inlining.txt and qore#6494" % (failures, len(pairs)))
         return 1
-    print("all %d hot inlines of %s are inlined" % (len(pairs), lib))
+    print("all %d hot inlines of %s (%s) are inlined" % (len(pairs), lib, arch))
     return 0
 
 

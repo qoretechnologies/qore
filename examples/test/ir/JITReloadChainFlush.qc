@@ -30,6 +30,16 @@ class JITReloadChainFlushBase inherits QUnit::Test {
         const Small = 40;
         const Large = 80;
 
+        #! the catch blocks of the function that the inline flush is forced for (testResultsInline())
+        /** The inline flush reloads every tracked local at each boundary, so its code grows with the product of the
+            blocks and the locals, which is why a function over the threshold does not use it; every local of the
+            function is tracked (it is untyped, and a reference keeps it on the runtime stack: #5951), and LLVM's
+            optimization of the inline flush of the larger function took 171 s and 7.3 GB in a debug build, and the
+            test exceeded the runner's limit under load (it took 6.4 s when its locals were typed); with this many
+            blocks it takes 6.6 s and 0.8 GB
+        */
+        const InlineSize = 30;
+
         #! the largest ratio of the calls of the larger and of the smaller function (2.0 when linear; 2.47 with a call
         #! for each tracked local at each boundary)
         const MaxCallRatio = 2.2;
@@ -253,7 +263,7 @@ for (int c = 0; c < 3; ++c) {
 
     #! the inline form for every function gives the same results
     testResultsInline() {
-        string code = getCode(Large);
+        string code = getCode(InlineSize);
         string expected = getExpectedResults(code);
         assertEq(expected, getResults(runScript(code, "jit", "QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD=0")),
             "jit with the inline flush");

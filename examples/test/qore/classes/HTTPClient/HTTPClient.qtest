@@ -607,10 +607,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
     }
 
     private pollSocketOperation(SocketPollOperation spop, date max_wait = 20s) {
-        date start = now();
+        date start = microseconds(clock_get_monotonic_us());
         while (*hash<SocketPollInfo> info = spop.continuePoll()) {
             Socket::poll((info,), 50ms);
-            if (now() - start > max_wait) {
+            if (microseconds(clock_get_monotonic_us()) - start > max_wait) {
                 fail(sprintf("poll timeout waiting for %s (state: %s)", spop.getGoal(), spop.getState()));
             }
         }
@@ -650,6 +650,12 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         SSLCertificate cert(TestCert);
         SSLPrivateKey key(TestCert);
 
+        # the outcome of the TLS handshake of each connection to the TLS listener: True if it completed (qore#7121)
+        Queue tls_done();
+        # while set, the TLS listener holds the handshake of a connection until the client's request has failed (see
+        # tls_gate), so that the connect deadline passes in the ALPN negotiation (qore#7121)
+        bool hold_tls;
+        Queue tls_gate();
         # the accepted connections are kept open until the test ends
         Queue accepted();
         Counter running(2);
@@ -666,14 +672,20 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     continue;
                 }
                 if (tls) {
+                    if (hold_tls) {
+                        tls_gate.get();
+                    }
                     s.setCertificate(cert);
                     s.setPrivateKey(key);
                     s.setAlpnProtocols(("h2",));
+                    bool done = False;
                     try {
                         s.upgradeServerToSSL(30s);
+                        done = True;
                     } catch (hash<ExceptionInfo> ex) {
                         # the client gave up first
                     }
+                    tls_done.push(done);
                 }
                 accepted.push(s);
             }
@@ -682,6 +694,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background accept_loop(tls_listener, True);
         on_exit {
             stop.inc();
+            # a held handshake of the connection that wakes the TLS listener
+            tls_gate.push(True);
             foreach int p in ((port, tls_port)) {
                 Socket wake();
                 wake.connect(sprintf("127.0.0.1:%d", p));
@@ -696,17 +710,27 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 "err": "HTTP1-CONNECT-TIMEOUT"},
             {"opts": {"url": sprintf("http://127.0.0.1:%d", port), "http_version": "2.0"},
                 "err": "HTTP2-CONNECT-TIMEOUT"},
-            # HTTP/2 negotiated with ALPN: the connection that adopts the socket keeps the connect deadline
+            # HTTP/2 negotiated with ALPN: the connection that adopts the socket keeps the connect deadline; the error
+            # is that of the phase in which the deadline passes: HTTP2-CONNECT-TIMEOUT if the TLS handshake completed
+            # in time (the HTTP/2 preface is not answered), HTTPCLIENT-NEGOTIATE-TIMEOUT if it did not, as on a loaded
+            # host (qore#7121)
             {"opts": {"url": sprintf("https://127.0.0.1:%d", tls_port), "ssl_verify_cert": False},
-                "err": "HTTP2-CONNECT-TIMEOUT", "label": "negotiated h2"},
+                "label": "negotiated h2", "negotiated": True},
+            # the same with the server's TLS handshake held until the request has failed: the deadline passes in the
+            # ALPN negotiation
+            {"opts": {"url": sprintf("https://127.0.0.1:%d", tls_port), "ssl_verify_cert": False},
+                "label": "negotiated h2, TLS held", "negotiated": True, "hold": True},
             {"opts": {"url": sprintf("https://127.0.0.1:%d", tls_port), "ssl_verify_cert": False,
                 "http_version": "2.0"}, "err": "HTTP2-CONNECT-TIMEOUT", "label": "h2 over TLS"},
         );
+        string tls_url = sprintf("https://127.0.0.1:%d", tls_port);
         foreach hash<auto> c in (cases) {
             foreach string api in (("sync", "async")) {
                 string msg = sprintf("%s %s", c.label ?? c.opts.http_version ?? "negotiate", api);
+                hold_tls = c.hold ?? False;
                 HTTPClient hc(c.opts + {"connect_timeout": 1s, "timeout": 60s});
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
+                *hash<ExceptionInfo> err;
                 try {
                     if (api == "sync") {
                         hc.get("/");
@@ -718,12 +742,37 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     }
                     fail(msg + ": the request did not fail");
                 } catch (hash<ExceptionInfo> ex) {
-                    assertEq(c.err, ex.err, msg + ": " + ex.desc);
+                    err = ex;
                 }
                 # the transport deadline fails the request, not the caller's backstop wait
-                assertLt(20s, now_us() - start, msg);
+                assertLt(20s, microseconds(clock_get_monotonic_us()) - start, msg);
+                *string expected = c.err;
+                if (c.opts.url == tls_url) {
+                    # the client's connection is closed, so that a handshake that did not complete ends at once
+                    delete hc;
+                    if (c.hold) {
+                        tls_gate.push(True);
+                    }
+                    # whether the TLS handshake completed: the client completes it before the server does, and a client
+                    # whose deadline passed in the negotiation does not complete it, so the outcome tells the phase in
+                    # which the deadline passed
+                    bool tls_completed = tls_done.get();
+                    if (c.hold) {
+                        assertFalse(tls_completed, msg + ": the handshake was held");
+                    }
+                    if (c.negotiated) {
+                        expected = tls_completed ? "HTTP2-CONNECT-TIMEOUT" : "HTTPCLIENT-NEGOTIATE-TIMEOUT";
+                    }
+                }
+                if (err) {
+                    assertEq(expected, err.err, msg + ": " + err.desc);
+                    if (expected == "HTTPCLIENT-NEGOTIATE-TIMEOUT" && c.negotiated) {
+                        assertRegex("neg state: connecting", err.desc, msg);
+                    }
+                }
             }
         }
+        hold_tls = False;
     }
 
     timeoutTest() {
@@ -837,7 +886,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             on_exit done.dec();
             try {
-                Socket conn = server.accept(5s);
+                Socket conn = server.accept(30s);
                 on_exit conn.close();
 
                 req = conn.readHTTPHeader(5s);
@@ -1748,10 +1797,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
     #! Drives a poll operation on this thread until it completes and returns its output
     static auto drivePoll(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 30s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - microseconds(clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

@@ -73,12 +73,12 @@ class FtpClientIoTest inherits QUnit::Test {
 
     #! Drive a poll operation to completion using continuePoll + Socket::poll
     private drivePollOp(AbstractPollOperation op, timeout tmout = 10s) {
-        date deadline = now_us() + tmout;
+        int deadline = clock_get_monotonic_us() + tmout * 1000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (pi) {
                 list<hash<SocketPollInfo>> poll_list = (pi,);
-                timeout remaining = deadline - now_us();
+                timeout remaining = microseconds(deadline - clock_get_monotonic_us());
                 if (remaining <= 0) {
                     throw "TIMEOUT", "poll operation timed out";
                 }

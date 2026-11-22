@@ -55,7 +55,7 @@ class TypeRetirementDeepHierarchyTest inherits QUnit::Test {
     }
 
     deepTest() {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         list<auto> kept;
         {
             Program a(Opts);
@@ -79,6 +79,6 @@ class TypeRetirementDeepHierarchyTest inherits QUnit::Test {
         list<auto> l = kept[1];
         assertThrows("RUNTIME-TYPE-ERROR", sub () { l += objs[0]; });
         # the walks of the hierarchies take milliseconds; a walk of every path of the diamonds does not end
-        assertLt(60s, now_us() - start);
+        assertLt(60s, microseconds(clock_get_monotonic_us()) - start);
     }
 }

@@ -109,6 +109,11 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 
 // forward reference to private class implementation
 class qore_class_private;
+
+//! returns the methods of a method map in the order in which they were declared (issue #7169)
+/** The iteration order of the map itself is not defined: see qore_method_private::decl_seq
+*/
+DLLLOCAL std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m);
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 
@@ -3189,6 +3194,9 @@ public:
         serializes its setting.
     */
     std::atomic<bool> reachable{false};
+    //! the cached result of runtimeAllMembersPublic(): -1 if not determined yet, otherwise 0 or 1; beside the flag above,
+    //! in its padding, so that the size of the class's data does not change (#7048)
+    mutable std::atomic<int8_t> runtime_all_members_public{-1};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3996,6 +4004,19 @@ public:
             const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver);
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
+
+    //! Returns true if the class hierarchy declares no member that is non-public for code outside it and no
+    //! private:internal member; cached once the class can get no more members (#7048)
+    /** This covers the members that the class and its parents declare: a caller must also check that the object holds
+        no internal data, as a child class's method can store its private:internal members on an object of this class
+    */
+    DLLLOCAL bool runtimeAllMembersPublic() const {
+        int8_t cached = runtime_all_members_public.load(std::memory_order_acquire);
+        return cached >= 0 ? cached : runtimeFindAllMembersPublic();
+    }
+
+    //! determines the result of runtimeAllMembersPublic() and caches it if the class can get no more members
+    DLLLOCAL bool runtimeFindAllMembersPublic() const;
 
     DLLLOCAL void parseImportMembers(qore_class_private& qc, ClassAccess access);
 
@@ -6571,10 +6592,26 @@ public:
     const QoreClass* parent_class;
     MethodFunctionBase* func;
     bool static_flag, all_user;
+    //! the order in which the method was declared; the methods of a class are enumerated in this order (issue #7169)
+    /** The method maps of a class are hash maps, whose iteration order depends on the number of times that the
+        class was copied (a copy inserts the methods in the order of the map that it copies), so the order of a
+        class that was copied once more is another one, as is that of a class that is compiled.  A method that is
+        copied keeps the sequence of the method that it is copied from.
+    */
+    uint64_t decl_seq;
 
     DLLLOCAL qore_method_private(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
-            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true) {
+            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true),
+            decl_seq(nextDeclSeq()) {
         assert(parent_class == n_func->getClass());
+    }
+
+    //! returns the next declaration sequence number
+    DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! returns the declaration sequence number of the method
+    DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {
+        return m.priv->decl_seq;
     }
 
     DLLLOCAL ~qore_method_private() {

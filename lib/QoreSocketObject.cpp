@@ -6486,17 +6486,21 @@ QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, int timeout_
 // c must be already referenced before this call
 void QoreSocketObject::setCertificate(QoreSSLCertificate* c) {
     AutoLocker al(priv->m);
-    if (priv->cert)
+    if (priv->cert) {
         priv->cert->deref();
+    }
     priv->cert = c;
+    priv->opaque_cert = false;
 }
 
 // p must be already referenced before this call
 void QoreSocketObject::setPrivateKey(QoreSSLPrivateKey* p) {
     AutoLocker al(priv->m);
-    if (priv->pk)
+    if (priv->pk) {
         priv->pk->deref();
+    }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSSLPrivateKey* p) {
@@ -6505,10 +6509,12 @@ void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSS
         priv->cert->deref();
     }
     priv->cert = c;
+    priv->opaque_cert = false;
     if (priv->pk) {
         priv->pk->deref();
     }
     priv->pk = p;
+    priv->opaque_key = false;
 }
 
 void QoreSocketObject::freeQuicServerSslCtx() {

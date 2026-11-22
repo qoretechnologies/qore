@@ -1368,6 +1368,7 @@ sub legacy() {
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
     |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); raises \c INVALID-ENCODING if the string is not valid in its encoding
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
+    |\a expression @ref object_type "object"|Returns the number of members of the object that the calling code can access: only the public members when called from outside the object's class hierarchy, as with the @ref keys "keys operator"
 
     @see @ref <value>::size()
 

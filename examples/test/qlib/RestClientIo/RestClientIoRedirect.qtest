@@ -138,9 +138,9 @@ class RedirectObserver inherits DataProvider::Observer {
 
     bool waitForEvents(timeout t) {
         AutoLock al(m);
-        date end = now_us() + t;
+        int end = clock_get_monotonic_us() + t * 1000;
         while (events.size() < expected) {
-            date remaining = end - now_us();
+            date remaining = microseconds(end - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -498,13 +498,13 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
     }
 
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(30s);
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - clock_get_monotonic_us()) / 1000;
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

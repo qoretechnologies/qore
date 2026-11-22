@@ -202,6 +202,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("streams after failed socket transfers", \failedStreamSocketTransferTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL upgrade test", \sslUpgradeTest());
+        addTestCase("SSL upgrade with held and split handshake flights", \sslUpgradeHeldFlightsTest());
         addTestCase("SSL upgrade poll output test", \sslUpgradePollOutputTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
@@ -2019,7 +2020,15 @@ class SocketTest inherits QUnit::Test {
     sslUpgradeTest() {
         Queue q();
 
+        # the server thread pushes its port, then its outcome: on a failure the step that failed, and the times at
+        # which it accepted the connection and started and completed its handshake, so that a failure of the client's
+        # handshake tells a server that was late (load) from a server that completed its handshake while the client
+        # still waited (a stall) (qore#7118)
         background sub () {
+            string step = "listen";
+            *date accepted;
+            *date upgrade_started;
+            *date upgraded;
             try {
                 Socket server();
                 server.bind("127.0.0.1:0");
@@ -2028,31 +2037,224 @@ class SocketTest inherits QUnit::Test {
                 server.setPrivateKey(TestCert);
                 q.push(server.getSocketInfo().port);
 
+                step = "accept";
                 Socket peer = server.accept(15s);
+                accepted = now_us();
+                step = "upgradeServerToSSL";
+                upgrade_started = now_us();
                 peer.upgradeServerToSSL(15s);
-                assertTrue(peer.isSecure());
+                upgraded = now_us();
+                if (!peer.isSecure()) {
+                    throw "SSL-UPGRADE-ERROR", "the socket is not secure after upgradeServerToSSL()";
+                }
+                step = "second upgradeServerToSSL";
                 peer.upgradeServerToSSL(15s);
+                step = "send";
                 peer.send("ok");
+                step = "shutdownSSL";
                 peer.shutdownSSL();
-                q.push(True);
+                q.push({"accepted": accepted, "upgrade started": upgrade_started, "upgraded": upgraded});
             } catch (hash<ExceptionInfo> ex) {
-                q.push(ex);
+                q.push({"ex": ex, "step": step, "accepted": accepted, "upgrade started": upgrade_started,
+                    "upgraded": upgraded});
             }
         }();
 
         Socket client();
-        client.connect("127.0.0.1:" + q.get());
-        client.upgradeClientToSSL(15s);
-        assertTrue(client.isSecure());
-        client.upgradeClientToSSL(15s);
-        assertEq("ok", client.recv(2));
-        client.shutdownSSL();
-
-        auto server_result = q.get();
-        if (server_result.typeCode() == NT_HASH) {
-            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        client.connect("127.0.0.1:" + q.get(15s));
+        date start = now_us();
+        *string err;
+        bool secure;
+        string ok;
+        try {
+            client.upgradeClientToSSL(15s);
+            secure = client.isSecure();
+            client.upgradeClientToSSL(15s);
+            ok = client.recv(2, 15s);
+            client.shutdownSSL();
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s after %d ms", ex.err, ex.desc, get_duration_milliseconds(now_us() - start));
+            # a server still in its handshake ends it when the connection is closed
+            client.close();
         }
-        assertTrue(server_result);
+
+        hash<auto> server_result;
+        try {
+            server_result = q.get(30s);
+        } catch (hash<ExceptionInfo> ex) {
+            server_result = {"step": "?", "ex": {"err": ex.err, "desc": "no outcome within 30 s"}};
+        }
+        if (err) {
+            fail(sprintf("client: %s; server: %s", err, getSslUpgradeServerOutcome(server_result, start)));
+        }
+        assertTrue(secure);
+        assertEq("ok", ok);
+        if (server_result.ex) {
+            fail("server: " + getSslUpgradeServerOutcome(server_result, start));
+        }
+    }
+
+    #! The outcome of the server thread of sslUpgradeTest(), with its times relative to the start of the client's
+    #! handshake
+    private static string getSslUpgradeServerOutcome(hash<auto> r, date start) {
+        string str = r.ex
+            ? sprintf("failed in %s: %s: %s", r.step, r.ex.err, r.ex.desc)
+            : "completed";
+        foreach string k in (("accepted", "upgrade started", "upgraded")) {
+            if (r{k}) {
+                str += sprintf("; %s at %d ms", k, get_duration_milliseconds(r{k} - start));
+            } else {
+                str += sprintf("; not %s", k);
+            }
+        }
+        return str;
+    }
+
+    #! Forwards data from @p src to @p dst for sslUpgradeHeldFlightsTest()
+    /** @param holds chunk i is held for holds[i] before it is forwarded
+        @param split chunk i is forwarded in two halves split[i] apart
+        @param frag if not 0, every chunk is forwarded in pieces of this size, @p gap apart
+    */
+    private static forwardTlsFlights(Socket src, Socket dst, list<auto> holds, list<auto> split, int frag, date gap,
+            Counter done) {
+        on_exit {
+            try {
+                dst.shutdown();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            done.dec();
+        }
+        try {
+            for (int i = 0; True; ++i) {
+                binary b = src.recvBinary(0, 30s);
+                if (!b.size()) {
+                    break;
+                }
+                if (*date h = holds[i]) {
+                    usleep(h);
+                }
+                if (*date sp = split[i]) {
+                    int half = b.size() / 2;
+                    dst.send(b.substr(0, half));
+                    usleep(sp);
+                    dst.send(b.substr(half));
+                } else if (frag) {
+                    for (int o = 0; o < b.size(); o += frag) {
+                        dst.send(b.substr(o, frag));
+                        if (gap) {
+                            usleep(gap);
+                        }
+                    }
+                } else {
+                    dst.send(b);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection was closed
+        }
+    }
+
+    #! A TLS upgrade completes as soon as the data of a delayed peer arrives (qore#7118)
+    /** A relay between the client and the server holds or splits each flight of the handshake; the client's and the
+        server's upgrade must complete once it is forwarded, and not wait for a timeout (a lost wakeup).
+    */
+    sslUpgradeHeldFlightsTest() {
+        date hold = 500ms;
+        hash<string, hash<auto>> cases = {
+            "the server upgrades late": {"server_delay": hold},
+            "the ClientHello is held": {"c2s": (hold,)},
+            "the server's first flight is held": {"s2c": (hold,)},
+            "the client's Finished is held": {"c2s": (NOTHING, hold)},
+            "the server's data after its first flight is held": {"s2c": (NOTHING, hold)},
+            "the ClientHello is split": {"c2s_split": (hold,)},
+            "the server's first flight is split": {"s2c_split": (hold,)},
+            "the client's Finished is split": {"c2s_split": (NOTHING, hold)},
+            "1-byte fragments": {"frag": 1, "min": 0s},
+            "7-byte fragments 1 ms apart": {"frag": 7, "gap": 1ms, "min": 0s},
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            string label = i.key;
+            hash<auto> c = i.value;
+
+            Socket server();
+            server.bind("127.0.0.1:0");
+            server.listen();
+            server.setCertificate(TestCert);
+            server.setPrivateKey(TestCert);
+            int server_port = server.getSocketInfo().port;
+
+            Socket relay();
+            relay.bind("127.0.0.1:0");
+            relay.listen();
+            int relay_port = relay.getSocketInfo().port;
+
+            # the relay's accept thread and its forwarding threads
+            Counter relay_done(1);
+            background sub () {
+                on_exit relay_done.dec();
+                try {
+                    Socket a = relay.accept(15s);
+                    Socket b();
+                    b.connect("127.0.0.1:" + server_port, 15s);
+                    relay_done.inc();
+                    relay_done.inc();
+                    background SocketTest::forwardTlsFlights(a, b, c.c2s ?? (), c.c2s_split ?? (), c.frag ?? 0,
+                        c.gap ?? 0s, relay_done);
+                    background SocketTest::forwardTlsFlights(b, a, c.s2c ?? (), c.s2c_split ?? (), c.frag ?? 0,
+                        c.gap ?? 0s, relay_done);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client's or the server's connection failed, which the checks below report
+                }
+            }();
+
+            Queue q();
+            background sub () {
+                try {
+                    Socket peer = server.accept(15s);
+                    if (c.server_delay) {
+                        usleep(c.server_delay);
+                    }
+                    peer.upgradeServerToSSL(15s);
+                    peer.send("ok");
+                    q.push(peer);
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex);
+                }
+            }();
+
+            Socket client();
+            client.connect("127.0.0.1:" + relay_port, 15s);
+            date start = now_us();
+            *hash<ExceptionInfo> err;
+            string ok;
+            try {
+                client.upgradeClientToSSL(15s);
+                ok = client.recv(2, 15s);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            date elapsed = now_us() - start;
+            client.close();
+            auto server_result = q.get(30s);
+            if (server_result.typeCode() == NT_OBJECT) {
+                server_result.close();
+            }
+            # the relay's threads end with the connections
+            relay_done.waitForZero(30s);
+            relay.close();
+            server.close();
+
+            if (err) {
+                fail(sprintf("%s: client: %s: %s after %d ms", label, err.err, err.desc,
+                    get_duration_milliseconds(elapsed)));
+            }
+            assertEq("ok", ok, label);
+            if (server_result.typeCode() == NT_HASH) {
+                fail(sprintf("%s: server: %s: %s", label, server_result.err, server_result.desc));
+            }
+            # the hold took effect
+            assertGe(c.min ?? hold, elapsed, label);
+        }
     }
 
     sslUpgradePollOutputTest() {
@@ -2073,8 +2275,8 @@ class SocketTest inherits QUnit::Test {
         SocketPollOperation server_op = peer.startPollUpgradeServerToSSL();
         SocketPollOperation client_op = client.startPollUpgradeClientToSSL();
 
-        date deadline = now_us() + 15s;
-        while ((!server_op.goalReached() || !client_op.goalReached()) && now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(15s);
+        while ((!server_op.goalReached() || !client_op.goalReached()) && clock_get_monotonic_us() < deadline) {
             list<hash<SocketPollInfo>> poll_list = ();
 
             if (!server_op.goalReached()) {
@@ -2339,7 +2541,7 @@ class SocketTest inherits QUnit::Test {
         s.bindINET("127.0.0.1", 0);
         s.listen();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         list<hash<SocketPollInfo>> ready = Socket::poll((
             <SocketPollInfo>{
                 "events": SOCK_POLLIN,
@@ -2347,7 +2549,7 @@ class SocketTest inherits QUnit::Test {
                 "poll_timeout_ms": 25,
             },
         ), 5s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(0, ready.size());
         assertTrue(elapsed < 1s, "poll_timeout_ms should wake before caller timeout");
@@ -3314,7 +3516,7 @@ class SocketTest inherits QUnit::Test {
             }
             rethrow;
         }
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         bool got_socket_closed = False;
         try {
             accepted.recv(1, 500ms);
@@ -3325,7 +3527,7 @@ class SocketTest inherits QUnit::Test {
                 printf("fdGenerationTest: got %s: %s\n", ex.err, ex.desc);
             }
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(got_socket_closed,
             "recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT) when fd_generation "
@@ -3670,9 +3872,9 @@ class SocketTest inherits QUnit::Test {
     /** Fails the test instead of waiting forever if the goal is not reached in time.
     */
     private auto drivePollOperation(AbstractPollOperation op) {
-        date deadline = now_us() + 10s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(10s);
         while (!op.goalReached()) {
-            if (now_us() > deadline) {
+            if (clock_get_monotonic_us() > deadline) {
                 fail(sprintf("poll operation %y did not reach its goal", op.getState()));
             }
             *hash<SocketPollInfo> info = op.continuePoll();
