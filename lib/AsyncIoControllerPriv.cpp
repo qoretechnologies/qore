@@ -3156,6 +3156,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (submitter_restrictions) {
             item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
         }
+        // the item is work of the code that submitted the operation or added the timer, whose generation its context
+        // carries, or else work of its own: a worker does not share one generation between the work of different
+        // callers (qore#7010)
+        QoreWorkGenerationHelper work_gen_helper(async_item.sandbox_ctx && async_item.sandbox_ctx->work_gen
+            ? async_item.sandbox_ctx->work_gen : qore_new_work_generation());
         QoreThreadRuntimeParseOptionsHelper item_po_helper((async_item.pgm || submitter_restrictions)
             ? &item_po : nullptr);
         // a callback that is not run in a Program (a timer's) runs with the options of the code that registered it,
@@ -5517,6 +5522,28 @@ AioAppRestriction AsyncIoControllerPriv::cancelRestriction(bool& none) {
     return rv;
 }
 
+AioTimerRestriction AsyncIoControllerPriv::timerCancelRestriction() {
+    AioTimerRestriction rv;
+    rv.gen = runtime_get_thread_generation();
+    AioAppRestriction op_rv = cancelRestriction(rv.none);
+    rv.restricted = op_rv.restricted;
+    rv.app_id = op_rv.app_id;
+    return rv;
+}
+
+bool AsyncIoControllerPriv::timerCancelAllowed(const AioTimerRestriction& restrict_app, const TimerInfo& tinfo) {
+    if (!restrict_app.restricted) {
+        return true;
+    }
+    // fails closed: sandboxed code that runs for no known application cancels only the timers for no application
+    // that its own work added (a module's service thread cancels its own, qore#6208)
+    if (restrict_app.none) {
+        return (!tinfo.cb_app_id || tinfo.cb_app_id == QORE_NO_PROGRAM_ID) && tinfo.adder_gen
+            && tinfo.adder_gen == restrict_app.gen;
+    }
+    return tinfo.cb_app_id == restrict_app.app_id;
+}
+
 bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink* xsink) {
     if (checkForked("cancelByKey", xsink)) {
         return false;
@@ -7258,6 +7285,9 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     // module code running for an application with restrictions can cancel only the timers added for it
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
+    // code that is sandboxed cancels only the timers of the application that it runs for, as for operations (see
+    // cancelRestriction()); computed before the lock (qore#7010)
+    AioTimerRestriction restrict_app = timerCancelRestriction();
 
     {
         AutoLocker al(m);
@@ -7270,9 +7300,12 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             return false;
         }
         // module code that runs for no application (a thread that module code started, which can serve every caller
-        // of the module, qore#6208) cancels only the timers for no application that its own thread added: not those
+        // of the module, qore#6208) cancels only the timers for no application that its own work added: not those
         // of the threads that the module started during the calls of other applications (qore#7010)
-        if (for_app && !app_pgm_id && it->second.adder_gen != runtime_get_thread_generation()) {
+        if (for_app && !app_pgm_id && it->second.adder_gen != restrict_app.gen) {
+            return false;
+        }
+        if (!timerCancelAllowed(restrict_app, it->second)) {
             return false;
         }
         found = true;

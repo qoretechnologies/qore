@@ -693,7 +693,10 @@ private:
     std::string method;
 
     //! returns the code member of a hash value with the name of the method, which a direct call calls, or nullptr
-    DLLLOCAL const ResolvedCallReferenceNode* getHashMember() const;
+    /** @param hash_holder holds the hash of a weak reference, read with a reference of its own (qore#7198), while the
+        member returned is used
+    */
+    DLLLOCAL const ResolvedCallReferenceNode* getHashMember(ReferenceHolder<QoreHashNode>& hash_holder) const;
 
     DLLLOCAL virtual ~RunTimePseudoMethodReferenceNode();
 };

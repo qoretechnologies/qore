@@ -1152,7 +1152,8 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
     if (val.getType() == NT_HASH) {
         hash_member = check_call_ref(val.getInternalNode(), method) != nullptr;
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        hash_member = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method) != nullptr;
+        ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+        hash_member = check_call_ref(*h, method) != nullptr;
     }
     if (!hash_member && pseudo_classes_check_method(val, method, xsink)) {
         return QoreValue();
@@ -1178,12 +1179,14 @@ bool RunTimePseudoMethodReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
 }
 
-const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember() const {
+const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember(
+        ReferenceHolder<QoreHashNode>& hash_holder) const {
     const AbstractQoreNode* ref = nullptr;
     if (val.getType() == NT_HASH) {
         ref = check_call_ref(val.getInternalNode(), method.c_str());
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        ref = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method.c_str());
+        hash_holder = val.get<WeakHashReferenceNode>()->lock();
+        ref = check_call_ref(*hash_holder, method.c_str());
     }
     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref);
 }
@@ -1197,7 +1200,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* ar
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // a code member of a hash with the name of the method, as a direct call calls (QoreDotEvalOperatorNode)
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         return ref->execValue(args, xsink);
     }
     return pseudo_classes_eval(val, method.c_str(), args, xsink);
@@ -1211,7 +1215,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListN
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member runs with its own declaration policy
         return ref->execValue(args, xsink);
     }
@@ -1226,7 +1231,8 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member binds the names, as a named call through it does
         if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
             return iref->dispatchNamed(args, arg_names, policy, xsink);

@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - debugger attach, and AOT code generation and linking of the debug IR of handlers
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%include InlineHandlerFlowLoop.qc
+
+%exec-class InlineHandlerFlowLoopPart3
+
+#! runs part 3 of 3 of the cases of InlineHandlerFlowLoopBase: qcc -O3
+class InlineHandlerFlowLoopPart3 inherits InlineHandlerFlowLoopBase {
+    constructor() : InlineHandlerFlowLoopBase("InlineHandlerFlowLoopPart3", 3) {
+    }
+}

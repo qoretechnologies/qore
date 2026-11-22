@@ -879,6 +879,10 @@ public:
 
         @note a weak reference whose target has already been deleted resolves to NOTHING
 
+        @note the list or hash of a weak reference is returned without a reference of its own: another thread can
+        free it while it is read unless the caller knows that it is referenced; a value that is kept must be read
+        with a reference of its own
+
         @since %Qore 3.0
     */
     DLLEXPORT QoreValue resolveIndirect() const;

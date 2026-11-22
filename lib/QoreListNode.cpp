@@ -41,6 +41,7 @@
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/ql_debug.h"
 
 #include <limits>
 #include <algorithm>
@@ -1318,6 +1319,10 @@ QoreListNode* QoreListNode::sortStable(const ResolvedCallReferenceNode* fr, Exce
     return rv.release();
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook{nullptr};
+#endif
+
 namespace {
 // the nesting depth of the lists and hashes whose entries this thread is freeing recursively
 thread_local unsigned container_free_depth = 0;
@@ -1425,6 +1430,12 @@ bool QoreListNode::derefImpl(ExceptionSink* xsink) {
     if (priv->weakRefs.hasHolders()) [[unlikely]] {
         priv->weak_hold = true;
         ref();
+#ifdef DEBUG
+        // the free of a list that has weak holders starts; see dbg_hold_container_free()
+        if (qore_dbg_container_free_hook_t hook = qore_dbg_container_free_hook.load()) {
+            hook("list");
+        }
+#endif
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {

@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class HashIdentityTest
+
+hashdecl HashIdentityInfo {
+    int a = 1;
+    string b = "two";
+}
+
+#! <hash>::isSame() tests the identity of hashes, not their equality (qore#7240)
+class HashIdentityTest inherits QUnit::Test {
+    constructor() : QUnit::Test("hash identity", "1.0", \ARGV) {
+        addTestCase("a copy is the same hash until one of them is changed", \copyTest());
+        addTestCase("equal hashes are not the same hash", \equalTest());
+        addTestCase("a hash passed as an argument or kept in a container is the same hash", \argumentTest());
+        addTestCase("a change through a reference makes a different hash", \referenceTest());
+        addTestCase("typed hashes", \typedTest());
+        set_return_value(main());
+    }
+
+    copyTest() {
+        hash<auto> h = makeHash();
+        hash<auto> c = h;
+        assertTrue(h.isSame(c), "a copy that is not changed");
+        assertTrue(c.isSame(h), "the other way round");
+        assertTrue(h.isSame(h), "a hash and itself");
+        c.x = 1;
+        assertFalse(h.isSame(c), "a copy that was changed");
+        assertFalse(c.isSame(h), "the other way round");
+        assertTrue(h.isSame(h), "the original and itself");
+        # the values that were not changed are still the same
+        assertTrue(h.nested.isSame(c.nested), "the nested hash of a changed copy");
+        hash<auto> d = h;
+        remove d.a;
+        assertFalse(h.isSame(d), "a copy with a removed key");
+    }
+
+    equalTest() {
+        hash<auto> h = makeHash();
+        hash<auto> e = makeHash();
+        assertEq(h, e, "the hashes are equal");
+        assertFalse(h.isSame(e), "equal hashes are not the same hash");
+        hash<auto> c = h;
+        # an assignment of an equal value makes a copy that is equal, but not the same
+        c.a = h.a;
+        assertEq(h, c);
+        assertFalse(h.isSame(c), "a changed copy with the same values");
+        hash<auto> e1 = {"n": h.a};
+        hash<auto> e2 = {"n": h.a};
+        assertFalse(e1.isSame(e2), "two hashes made with the same values");
+    }
+
+    argumentTest() {
+        hash<auto> h = makeHash();
+        assertTrue(isSameArg(h, h), "a hash passed twice");
+        list<hash<auto>> l = (h,);
+        assertTrue(l[0].isSame(h), "a hash kept in a list");
+        hash<auto> outer = {"inner": h};
+        assertTrue(outer.inner.isSame(h), "a hash kept in a hash");
+        code c = bool sub (hash<auto> x) { return x.isSame(h); };
+        assertTrue(c(h), "a hash passed to a closure");
+        # a named argument
+        assertTrue(h.isSame(other_hash: h), "a named argument");
+    }
+
+    referenceTest() {
+        hash<auto> h = makeHash();
+        hash<auto> c = h;
+        changeByReference(\c);
+        assertFalse(h.isSame(c), "a copy changed through a reference");
+        hash<auto> d = h;
+        readByReference(\d);
+        assertTrue(h.isSame(d), "a copy only read through a reference");
+    }
+
+    typedTest() {
+        hash<HashIdentityInfo> t();
+        hash<HashIdentityInfo> c = t;
+        assertTrue(t.isSame(c), "a typed hash and its copy");
+        c.a = 2;
+        assertFalse(t.isSame(c), "a changed typed copy");
+        hash<HashIdentityInfo> u();
+        assertFalse(t.isSame(u), "two typed hashes with the same values");
+    }
+
+    #! Returns a new hash: a constant hash value can be shared by the places that give it
+    static hash<auto> makeHash(int a = 1) {
+        return {"a": a, "b": "two", "nested": {"x": (a, 2, 3)}};
+    }
+
+    static bool isSameArg(hash<auto> x, hash<auto> y) {
+        return x.isSame(y);
+    }
+
+    static changeByReference(reference<hash<auto>> r) {
+        r.changed = True;
+    }
+
+    static readByReference(reference<hash<auto>> r) {
+        auto v = r.a;
+    }
+}

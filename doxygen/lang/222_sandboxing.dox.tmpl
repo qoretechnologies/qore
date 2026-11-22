@@ -566,9 +566,13 @@ authenticate();
     @ref Qore::AsyncIoController::cancelByKey() "cancelByKey()",
     @ref Qore::AsyncIoController::cancelByOwner() "cancelByOwner()" and
     @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()").
+    This holds for all code that is sandboxed, whether a @ref Qore::SandboxManager "SandboxManager" or the
+    restrictions of its %Program sandbox it, directly, in the calls of module code that it makes and in the threads
+    that module code starts for it.
     The code of a thread that module code starts runs for no application, as such a thread can serve every caller
     of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
-    is sandboxed; giving the application of a call to the thread that serves it is
+    is sandboxed; sandboxed code that runs for no application acts on no operation and cancels only the timers that its
+    own work added.  Giving the application of a call to the thread that serves it is
     <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
 
     The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
@@ -819,7 +823,10 @@ authenticate();
       C0 and C1 control characters and DEL, the Unicode line and paragraph separators and the bidirectional formatting
       characters (as \c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN and \c \\u{NNNN}), as are the bytes of
       invalid UTF-8 (\c \\xNN); the asynchronous I/O controller's error log lines escape the text of every exception
-      and the names that the submitter chose (owner, key)
+      and the names that the submitter chose (owner, key), and every message of the asynchronous I/O loggers and of
+      the controller's debug trace (\c QORE_ASYNC_IO_TRACE) keeps the text that submitting code chose on its line:
+      its line breaks and other control characters except tab are escaped (backslash is kept) and a \c % is printed as
+      it is (qore#7216)
 
     The marked report on @ref Qore::stderr "stderr" is a compact form of the report of other code: for each exception of
     the chain, the location where it was raised, the error, description and argument, and the function, file and line
