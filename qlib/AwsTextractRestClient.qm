@@ -213,6 +213,10 @@ public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection
 
     #! Only a successful authenticated service response qualifies as a ping
     private pingImpl() {
+        # issue #7236: a ping of a connection whose configuration cannot work fails with its error, as
+        # RestConnection::pingImpl() and the polling ping (RestConnection::startPollConnect()) do
+        checkConfiguration();
+
         try {
             AwsTextractRestClientIo client = cast<AwsTextractRestClientIo>(getAsync());
             hash<RestResponseInfo> response = client.restPost("/", {"MaxResults": 1},

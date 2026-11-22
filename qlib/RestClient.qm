@@ -5639,6 +5639,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     /**
         @return a socket poll operation object that will allow the connection goal to be reached with polling
 
+        @throw OAUTH2-ERROR the connection's configuration cannot work (incomplete OAuth2 options, or an OAuth2 grant
+        type with an authorization step that is not yet authorized; see @ref checkConfiguration()); a monitor handles
+        it as a failed ping, which marks the connection down
+
         @see supportsPollingApi()
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
