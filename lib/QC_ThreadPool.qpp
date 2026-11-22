@@ -89,6 +89,8 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // which takes the pool's lock, and the pool's lock must not be requested while this one is held (see below);
         // the task stays assigned to this busy thread until then, so the pool does not hand it another one
         task->del(xsink);
+        // the exceptions of the destructors that the release ran (qore#7139)
+        xsink->handleExceptions();
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) only after task cleanup/derefs complete so destructors still
         // have access to thread-local state if needed, while preventing leakage
