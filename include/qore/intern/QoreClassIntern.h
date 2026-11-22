@@ -3490,6 +3490,9 @@ public:
     */
     mutable std::atomic<bool> multi_path{false};
 
+    //! the cached result of runtimeOverridesPrivateParentMethod(): -1 if not computed yet
+    mutable std::atomic<int8_t> overrides_private_parent_method{-1};
+
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under dataLock()
     */
@@ -5234,6 +5237,22 @@ public:
 
     //! computes and caches the result of getMemberInitCode()
     DLLLOCAL int8_t computeMemberInitCode() const;
+
+    //! returns true if code of this class may call another method than a private method of one of its parent classes
+    //! (qore#6798)
+    /** True if, for a private method of one of its parent classes, the method of the name that code of this class calls
+        on an object of this class is another one (it overrides the private method), or if the hierarchy of the class is
+        not known completely; the run-time lookups from the class context of the class then skip such a private method
+        when an earlier parent class of the object's class reaches it first.  Computed once, at run time: the hierarchy
+        of a class does not change once committed
+    */
+    DLLLOCAL bool runtimeOverridesPrivateParentMethod() const {
+        int8_t rv = overrides_private_parent_method.load(std::memory_order_relaxed);
+        return rv < 0 ? computeOverridesPrivateParentMethod() : rv;
+    }
+
+    //! computes and caches the result of runtimeOverridesPrivateParentMethod()
+    DLLLOCAL QORE_INTERN_NOINLINE bool computeOverridesPrivateParentMethod() const;
 
     //! sets multi_path in each base class that the class's hierarchy reaches through more than one path (qore#6513)
     /** Called once for the class, by computeMemberInitCode(), before its first object's constructors run
