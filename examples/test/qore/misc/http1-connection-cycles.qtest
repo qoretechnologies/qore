@@ -42,8 +42,10 @@ class Http1ConnectionCycles inherits QUnit::Test {
         {
             Http1Connection conn("127.0.0.1", listener.getSocketInfo().port);
             assertTrue(conn.waitForReady(5000));
-            # Unregister the operation synchronously. An active controller would be another legitimate owner.
+            # Cancellation unregisters the operation, but a callback worker releases the controller's
+            # transport references. Drain those releases before testing the connection as the sole owner.
             conn.close();
+            AsyncIoController::flushCallbacks();
             call_function("dbg_http1_transport_backlink", conn, through_socket, new TransportBacklink(conn, destroyed));
             assertEq(0, destroyed.getCount(), "the live connection still owns the backlink");
         }
