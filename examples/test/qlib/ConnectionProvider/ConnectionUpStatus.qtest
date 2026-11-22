@@ -194,6 +194,10 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         TokenHandler token_handler();
         int token_port;
         int rest_port;
+        #! the port of the REST server's IPv6 loopback listener, if any
+        int rest_port6;
+        #! the path of the REST server's UNIX domain socket
+        string rest_socket;
         int ws_port;
         int sse_port;
         #! a port where nothing listens
@@ -203,10 +207,20 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
     constructor() : Test("ConnectionUpStatus", "1.0") {
         Logger logger("server", LoggerLevel::getLevelError());
 
+        # a short path, as the path of a UNIX domain socket is limited (103 bytes on macOS); removed after the server
+        # stops
+        rest_socket = sprintf("/tmp/q7236-%s.sock", get_random_string(10));
+        on_exit unlink(rest_socket);
         rest_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         on_exit rest_server.stop();
         rest_server.setDefaultHandler("ok", new OkHandler());
         rest_port = rest_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        rest_server.addListener(<HttpListenerOptionInfo>{"node": rest_socket});
+        try {
+            rest_port6 = rest_server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": 0}).port;
+        } catch (hash<ExceptionInfo> ex) {
+            # no IPv6 loopback; the IPv6 test case is skipped
+        }
 
         ws_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         on_exit ws_server.stop();
@@ -242,6 +256,8 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("REST connection", \restTest());
         addTestCase("unauthorized REST connection", \unauthorizedRestTest());
         addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
+        addTestCase("lent IPv6 REST connection pinged by restricted code", \lentRestIpv6Test());
+        addTestCase("lent UNIX socket REST connection pinged by restricted code", \lentRestSocketTest());
         addTestCase("HTTP connection", \httpTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
@@ -701,6 +717,68 @@ string sub own_ping(string url) {
         start = now_us();
         assertTrue(conn.ping().ok);
         assertUp(conn, start, "an unrestricted ping");
+    }
+
+    #! an IPv6 target is compared as host and port, not as an ambiguous URL text
+    lentRestIpv6Test() {
+        if (!rest_port6) {
+            testSkip("no IPv6 loopback listener");
+        }
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-ipv6");
+        string own = sprintf("http://[::1]:%d", rest_port6);
+
+        # a lent connection at its own target
+        RestConnection conn("lent6", "test", own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent IPv6 connection pinged by restricted code");
+
+        # the host "::1:<port>" with the default port: its URL without brackets would read as the lent target
+        conn = new RestConnection("lent6", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, sprintf("http://[::1:%d]/", rest_port6)),
+            "an IPv6 host that names the lent port");
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent IPv6 connection");
+
+        # another IPv6 target: refused before any connection is attempted
+        Socket listener();
+        listener.bind("[::1]:0");
+        listener.listen();
+        on_exit listener.close();
+        conn = new RestConnection("lent6", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn,
+            sprintf("http://[::1]:%d", listener.getSocketInfo().port)), "another IPv6 target");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another IPv6 target");
+        assertNothing(listener.accept(0), "no connection to the other IPv6 target was attempted");
+    }
+
+    #! a UNIX domain socket target is compared by its socket path
+    lentRestSocketTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-socket");
+        string own = "http://socket=" + encode_url(rest_socket, True);
+
+        # a lent connection at its own socket
+        RestConnection conn("lent-socket", "test", own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent UNIX socket connection pinged by restricted code");
+
+        # another socket: refused before any connection is attempted
+        string other_path = sprintf("/tmp/q7236-%s.sock", get_random_string(10));
+        Socket listener();
+        listener.bind(other_path);
+        on_exit {
+            listener.close();
+            unlink(other_path);
+        }
+        listener.listen();
+        conn = new RestConnection("lent-socket", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(other_path, True)),
+            "another UNIX socket");
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent UNIX socket connection");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another UNIX socket");
+        assertNothing(listener.accept(0), "no connection to the other UNIX socket was attempted");
     }
 
     httpTest() {
