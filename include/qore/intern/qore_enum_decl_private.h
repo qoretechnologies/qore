@@ -329,13 +329,6 @@ public:
         return instance_serial;
     }
 
-    //! Returns the number that gives the order in which the enum was declared
-    /** It is the serial number of the original declaration, which a copy shares (issue #7171).
-    */
-    DLLLOCAL uint64_t getDeclSeq() const {
-        return orig->instance_serial;
-    }
-
 protected:
     // references
     mutable QoreReferenceCounter refs;
