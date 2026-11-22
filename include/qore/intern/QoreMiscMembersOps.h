@@ -131,9 +131,10 @@ public:
     }
 
     //! gets the current read-write lock
-    DLLLOCAL static QoreVarRWLock* getRWLImpl(AutoVLock* b);
+    /** inline: the += operator reads it for each merge into an object (qore#7107)
+    */
     DLLLOCAL QoreVarRWLock* getRWL() {
-        return getRWLImpl(b);
+        return b->lock.getRWL();
     }
 
     //! adds an object member notification entry, internal-only

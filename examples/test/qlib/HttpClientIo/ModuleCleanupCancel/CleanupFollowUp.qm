@@ -1,0 +1,139 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes at the end of the process: its destructor cancels an operation
+# whose onComplete() or release starts new work, or submits operations and timers itself, which the cleanup waits for
+# until its deadline or cancels (qore#7027); see ModuleCleanupCancel.qtest
+
+%modern
+
+%requires FollowUpOps
+
+module CleanupFollowUp {
+    version = "1.0";
+    desc = "the module cleanup waits for or cancels the operations of its work";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CleanupFollowUp {
+#! does the work of the mode in the module cleanup, when it deletes the module's data
+public class Canceller {
+    private {
+        string mode;
+        EventNotifier notifier();
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
+    destructor() {
+        switch (mode) {
+            case "chain":
+            case "chain-timer":
+            case "chain-task":
+            case "chain-task-cancel":
+            case "chain-exec":
+            case "chain-release":
+                # the cleanup cancels the operation; its onComplete() or the release of its references starts new
+                # work
+                AsyncIoController::cancelByOwner("module-cleanup-follow-up-first");
+                break;
+            case "done":
+                # an operation without a timeout of its own that the cleanup submits is waited for: it reaches its
+                # goal at once
+                submit_operation(notifier, "done", FollowUpGoal::AtOnce, FollowUpAction::None);
+                break;
+            case "done-task":
+                # its onComplete() submits a task, which the cleanup waits for
+                submit_operation(notifier, "done-task", FollowUpGoal::AtOnce, FollowUpAction::Task);
+                break;
+            case "pending-done":
+                # it waits for its socket, which becomes readable after it was submitted: it reaches its goal later,
+                # before the deadline of the cleanup
+                submit_operation(notifier, "pending-done", FollowUpGoal::OnEvent, FollowUpAction::None);
+                notifier.notify();
+                break;
+            case "deadline":
+                # it never reaches its goal: the cleanup cancels it at its deadline
+                submit_operation(notifier, "deadline", FollowUpGoal::Never, FollowUpAction::None);
+                break;
+            case "window-a":
+            case "window-b":
+            case "window-b-exec":
+            case "window-b-chain":
+                # the step of the operation is held in flight; the cleanup, at its deadline, releases it after (a) or
+                # before (b) its cancel round
+                call_function("dbg_async_io_hold_step_results", True);
+                # (b): its onComplete() runs after the deadline, and cannot add a timer then
+                # (b-exec): its onComplete() runs an operation synchronously after the deadline, which is canceled at
+                # once, as its wait would keep the cleanup from ending
+                submit_operation(notifier, mode, mode == "window-a" ? FollowUpGoal::Never : FollowUpGoal::AtOnce,
+                    WindowActions{mode} ?? FollowUpAction::None);
+                call_function("dbg_async_io_wait_held_step_results", 1, 20s);
+                call_function("dbg_async_io_hold_step_results", False);
+                break;
+            case "window-c":
+                # a timer fires and its callback is held; the cleanup dispatches it after its scan of the timers
+                call_function("dbg_async_io_hold_timer_callbacks", True);
+                AsyncIoController::addTimerDelay(0s, sub () {
+                    printf("timer ran\n");
+                    flush();
+                });
+                call_function("dbg_async_io_wait_held_timer_callbacks", 1, 20s);
+                call_function("dbg_async_io_hold_timer_callbacks", False);
+                break;
+        }
+    }
+}
+
+#! what the onComplete() of the operation of the window modes does
+const WindowActions = {
+    "window-b": FollowUpAction::Timer,
+    "window-b-exec": FollowUpAction::ExecNever,
+    "window-b-chain": FollowUpAction::TaskChain,
+};
+
+#! what the onComplete() of the first operation of the chain modes does
+const ChainActions = {
+    "chain": FollowUpAction::Submit,
+    "chain-timer": FollowUpAction::Timer,
+    "chain-task": FollowUpAction::Task,
+    "chain-task-cancel": FollowUpAction::TaskCancel,
+    "chain-exec": FollowUpAction::Exec,
+};
+
+public class Holder {
+    public {
+        static *EventNotifier notifier;
+        static *Canceller canceller;
+    }
+
+    #! prepares the mode: the chain mode submits the first operation
+    static start(string mode) {
+        notifier = new EventNotifier();
+        canceller = new Canceller(mode);
+        if (mode =~ /^chain/) {
+            # the first step of the operation runs before the end of the process, which would refuse it to a worker
+            # (it is not work of the module cleanup), so the operation waits for its socket when the cleanup cancels it
+            Counter started(1);
+            submit_operation(notifier, "first", FollowUpGoal::Never, ChainActions{mode} ?? FollowUpAction::None,
+                -1s, started, mode == "chain-release" ? new ReleaseResubmitter(notifier, "first") : NOTHING);
+            if (started.waitForZero(20s)) {
+                throw "FOLLOW-UP-ERROR", "the first step of the operation did not run";
+            }
+        } else if (mode == "abort-teardown") {
+            # nothing cancels the operation before the cleanup tears down the Program of its class (FollowUpOps), which
+            # cancels it on the thread of the cleanup, where its abort() runs
+            Counter started(1);
+            submit_aborting_operation(notifier, "teardown", started);
+            if (started.waitForZero(20s)) {
+                throw "FOLLOW-UP-ERROR", "the first step of the operation did not run";
+            }
+        }
+    }
+}
+}

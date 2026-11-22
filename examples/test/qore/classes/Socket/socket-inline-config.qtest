@@ -282,11 +282,12 @@ class SocketInlineConfigTest inherits QUnit::Test {
             # close the sockets the calls wait on (or are about to start on): the close must end every call, so that none
             # waits for its timeout; as with a close of a socket that a recv() waits on in socket-sync-io, a call ends
             # with an exception or, when it was cancelled while it waited, returns
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             recv_c.close();
             send_a.close();
             assertEq(0, done.waitForZero(Timeout), "the calls end after the close");
-            assertTrue(now_us() - start < Timeout / 2, "the calls end because of the close, not by their timeout");
+            assertTrue(microseconds(clock_get_monotonic_us() - start) < Timeout / 2,
+                "the calls end because of the close, not by their timeout");
             assertEq(2, results.size());
             while (results.size()) {
                 list<auto> r = results.get();

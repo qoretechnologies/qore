@@ -290,13 +290,15 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            needs_deref = false;
-            return val.get<WeakHashReferenceNode>()->get();
+            // a new reference, or a new empty hash if the hash was freed (qore#7198)
+            needs_deref = true;
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            needs_deref = false;
-            return val.get<WeakListReferenceNode>()->get();
+            // a new reference, or a new empty list if the list was freed (qore#7198)
+            needs_deref = true;
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue(needs_deref);
@@ -322,11 +324,11 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get()->refSelf();
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get()->refSelf();
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();
@@ -417,9 +419,10 @@ public:
             && !rset.load(std::memory_order_acquire);
     }
 
-    //! Evaluates the variable, returning the target of a weak reference without a reference of its own
-    /** @param weak set to true if the variable holds a weak reference, in which case the value returned is its
-        target, borrowed from the variable; otherwise the value returned is referenced for the caller
+    //! Evaluates the variable, returning the target of a weak reference to an object without a reference of its own
+    /** @param weak set to true if the variable holds a weak reference to an object, in which case the value returned
+        is the object, borrowed from the variable; otherwise the value returned is referenced for the caller, also the
+        list or hash of a weak reference, which is never read without a reference of its own (qore#7198)
 
         The type of the value is read under the lock, since other threads can change the variable.
     */
@@ -430,12 +433,6 @@ public:
                 case NT_WEAKREF:
                     weak = true;
                     return val.get<WeakReferenceNode>()->get();
-                case NT_WEAKREF_HASH:
-                    weak = true;
-                    return val.get<WeakHashReferenceNode>()->get();
-                case NT_WEAKREF_LIST:
-                    weak = true;
-                    return val.get<WeakListReferenceNode>()->get();
                 default:
                     break;
             }
@@ -543,13 +540,15 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            needs_deref = false;
-            return val.get<WeakHashReferenceNode>()->get();
+            // a new reference, or a new empty hash if the hash was freed (qore#7198)
+            needs_deref = true;
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            needs_deref = false;
-            return val.get<WeakListReferenceNode>()->get();
+            // a new reference, or a new empty list if the list was freed (qore#7198)
+            needs_deref = true;
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();
@@ -577,11 +576,11 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get()->refSelf();
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get()->refSelf();
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();

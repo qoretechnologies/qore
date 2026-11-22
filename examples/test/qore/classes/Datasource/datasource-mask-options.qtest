@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceMaskOptionsTest
+
+#! the masked forms of a datasource that identify a connection (qore#7016, qore#7017)
+/** mask_datasource() and mask_datasource_hash() with the options \c show_db and \c show_options: the database name,
+    the character encoding and the option names are shown, and no credential: not the user name, not the password and
+    no option value, which can hold a credential.  Each option is checked through each entry point (a string and a
+    hash, the string and the hash forms), so that a flag that reached another function than the one meant would fail.
+*/
+class DatasourceMaskOptionsTest inherits QUnit::Test {
+    public {
+        #! the secrets of the datasource; none may be in any masked form
+        const Secrets = ("scott", "tiger-secret", "opt-secret-1", "user=u password=opt-secret-2");
+
+        #! the datasource string
+        const DsString = "pgsql:scott/tiger-secret@orders(utf8)%dbhost.example:5432{min=opt-secret-1,"
+            "conn=user=u password=opt-secret-2}";
+
+        #! the datasource hash
+        const DsHash = {
+            "type": "pgsql",
+            "user": "scott",
+            "pass": "tiger-secret",
+            "db": "orders",
+            "charset": "utf8",
+            "host": "dbhost.example",
+            "port": 5432,
+            "options": {"min": "opt-secret-1", "conn": "user=u password=opt-secret-2"},
+        };
+
+        #! the expected masked strings by option set
+        const Strings = {
+            "none": "pgsql:****/****@****%dbhost.example:5432",
+            "db": "pgsql:****/****@orders%dbhost.example:5432",
+            "options": "pgsql:****/****@****(utf8)%dbhost.example:5432{min=****,conn=****}",
+            "both": "pgsql:****/****@orders(utf8)%dbhost.example:5432{min=****,conn=****}",
+        };
+
+        #! the options for each option set
+        const Opts = {
+            "none": NOTHING,
+            "db": {"show_db": True},
+            "options": {"show_options": True},
+            "both": {"show_db": True, "show_options": True},
+        };
+    }
+
+    constructor() : QUnit::Test("datasource mask options", "1.0", \ARGV) {
+        addTestCase("the masked string of a string and of a hash", \stringTest());
+        addTestCase("the masked hash of a string and of a hash", \hashTest());
+        addTestCase("the default form is unchanged", \defaultTest());
+        addTestCase("a database name with a control character", \controlDbTest());
+        addTestCase("a database name that can be more than a database name", \connectionStringDbTest());
+        addTestCase("a database name in another encoding", \encodedDbTest());
+        addTestCase("option names that cannot be shown", \badOptionNameTest());
+        addTestCase("an ambiguous string is described by its driver only", \ambiguousTest());
+        addTestCase("an unknown option", \unknownOptionTest());
+        addTestCase("false options are the default", \falseOptionTest());
+        set_return_value(main());
+    }
+
+    stringTest() {
+        foreach string k in (keys Strings) {
+            *hash<auto> opts = Opts{k};
+            string s = mask_datasource(DsString, opts);
+            assertEq(Strings{k}, s, "string " + k);
+            checkNoSecret(s, "string " + k);
+            s = mask_datasource(DsHash, opts);
+            assertEq(Strings{k}, s, "hash " + k);
+            checkNoSecret(s, "hash " + k);
+        }
+    }
+
+    hashTest() {
+        hash<auto> both = {
+            "type": "pgsql",
+            "user": "****",
+            "db": "orders",
+            "charset": "utf8",
+            "host": "dbhost.example",
+            "port": 5432,
+            "options": {"min": "****", "conn": "****"},
+        };
+        hash<auto> none = both - ("charset", "options") + {"db": "****"};
+        hash<auto> db = both - ("charset", "options");
+        hash<auto> options = both + {"db": "****"};
+        hash<auto> expected = {"none": none, "db": db, "options": options, "both": both};
+        foreach string k in (keys expected) {
+            *hash<auto> opts = Opts{k};
+            hash<auto> h = mask_datasource_hash(DsString, opts);
+            assertEq(expected{k}, h, "string " + k);
+            assertFalse(h.hasKey("pass"), "string " + k + ": no password key");
+            checkNoSecret(sprintf("%y", h), "string " + k);
+            h = mask_datasource_hash(DsHash, opts);
+            assertEq(expected{k}, h, "hash " + k);
+            assertFalse(h.hasKey("pass"), "hash " + k + ": no password key");
+            checkNoSecret(sprintf("%y", h), "hash " + k);
+        }
+    }
+
+    # the description for messages is the same as before the options were added
+    defaultTest() {
+        assertEq("pgsql:****/****@****%dbhost.example:5432", mask_datasource(DsString));
+        assertEq("pgsql:****/****@****%dbhost.example:5432", mask_datasource(DsHash));
+        assertEq("pgsql:****/****@****", mask_datasource("pgsql:scott/tiger@orders"));
+        assertEq("pgsql:****/****@****", mask_datasource({"type": "pgsql", "db": "orders"}));
+        assertEq("****:****/****@****", mask_datasource({}));
+    }
+
+    # a database name with a control character could forge a line of a log: it is masked
+    controlDbTest() {
+        hash<auto> h = DsHash + {"db": "orders\nforged"};
+        assertEq("pgsql:****/****@****%dbhost.example:5432", mask_datasource(h, {"show_db": True}));
+        assertEq("****", mask_datasource_hash(h, {"show_db": True}).db);
+    }
+
+    # a database name can be a connection string of its own, with credentials, or make the description show another
+    # host or options: it is masked
+    connectionStringDbTest() {
+        list<string> masked = (
+            # a PostgreSQL conninfo string and URI, an ODBC string
+            "host=h user=u password=db-secret dbname=d",
+            "postgresql://u:db-secret@h/d",
+            "DSN=x;UID=u;PWD=db-secret",
+            # the separators of a datasource string
+            "orders@other",
+            "orders%evil.host:1",
+            "orders{opt=1}",
+            "orders(latin1)",
+            # a C1 control character (NEL) and a bidirectional override
+            "orders\u0085forged",
+            "orders\u202esecret",
+            "orders\u2066x",
+        );
+        foreach string db in (masked) {
+            hash<auto> h = DsHash + {"db": db};
+            assertEq("****", mask_datasource_hash(h, Opts.both).db, sprintf("%y", db));
+            string s = mask_datasource(h, Opts.both);
+            assertEq("pgsql:****/****@****(utf8)%dbhost.example:5432{min=****,conn=****}", s, sprintf("%y", db));
+            assertEq(-1, s.find("db-secret"));
+        }
+        # names that are only names are shown: a path with ":" and "/" (SQLite, Windows), non-ASCII letters
+        foreach string db in (("/var/lib/db/orders.sqlite", "C:\\data\\orders.db", "bestellungen-ä", "db_1.x")) {
+            assertEq(db, mask_datasource_hash(DsHash + {"db": db}, Opts.db).db, sprintf("%y", db));
+        }
+    }
+
+    # a database name in another encoding is checked and shown in UTF-8; bytes that are not valid in the encoding of
+    # the string mask it
+    encodedDbTest() {
+        string latin1 = convert_encoding("bestellungen-ä", "ISO-8859-1");
+        hash<auto> h = mask_datasource_hash(DsHash + {"db": latin1}, Opts.db);
+        assertEq("bestellungen-ä", h.db);
+        assertEq("UTF-8", h.db.encoding());
+        binary invalid = binary("orders") + <ff>;
+        assertEq("****", mask_datasource_hash(DsHash + {"db": force_encoding(invalid.toString(), "UTF-8")},
+            Opts.db).db);
+    }
+
+    # an option name that cannot be shown masks the whole option block
+    badOptionNameTest() {
+        hash<auto> h = DsHash + {"options": {"bad name": "x", "min": "y"}};
+        assertEq("pgsql:****/****@orders(utf8)%dbhost.example:5432{****}", mask_datasource(h, Opts.both));
+        assertEq("****", mask_datasource_hash(h, Opts.both).options);
+    }
+
+    # an option value with "@" makes the split of a string ambiguous: only the driver is shown
+    ambiguousTest() {
+        string s = "pgsql:scott/tiger@orders{conn=a@b}";
+        assertEq("pgsql:****", mask_datasource(s, Opts.both));
+        assertEq({"type": "pgsql"}, mask_datasource_hash(s, Opts.both));
+        assertEq({"type": "****"}, mask_datasource_hash("not a datasource", Opts.both));
+    }
+
+    unknownOptionTest() {
+        assertThrows("DATASOURCE-MASK-ERROR", \mask_datasource(), (DsString, {"show_password": True}));
+        assertThrows("DATASOURCE-MASK-ERROR", \mask_datasource(), (DsHash, {"x": True}));
+        assertThrows("DATASOURCE-MASK-ERROR", \mask_datasource_hash(), (DsString, {"x": True}));
+        assertThrows("DATASOURCE-MASK-ERROR", \mask_datasource_hash(), (DsHash, {"x": True}));
+    }
+
+    falseOptionTest() {
+        hash<auto> opts = {"show_db": False, "show_options": False};
+        assertEq(Strings.none, mask_datasource(DsString, opts));
+        assertEq(Strings.none, mask_datasource(DsHash, opts));
+    }
+
+    private checkNoSecret(string s, string label) {
+        foreach string secret in (Secrets) {
+            assertEq(-1, s.find(secret), sprintf("%s: %y is not in %y", label, secret, s));
+        }
+    }
+}

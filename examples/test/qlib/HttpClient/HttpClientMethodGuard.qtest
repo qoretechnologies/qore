@@ -103,8 +103,8 @@ class HttpClientMethodGuardTest inherits QUnit::Test {
         for (int i = 0; i < n_threads; ++i) {
             background sub() {
                 on_exit done.dec();
-                date deadline = now_us() + per_thread_ms * 1ms;
-                while (now_us() < deadline) {
+                int deadline = clock_get_monotonic_us() + per_thread_ms * 1000;
+                while (clock_get_monotonic_us() < deadline) {
                     try {
                         client.send("", "GET", "/ok", NOTHING, True);
                         m_stats.lock();

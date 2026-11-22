@@ -215,9 +215,9 @@ class AuthenticationTest inherits QUnit::Test {
 
     private pollPingTest() {
         auto poll = connection().startPollConnect();
-        date deadline = now_us() + 15s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 15s;
         while (auto info = poll.continuePoll()) {
-            assertTrue(now_us() < deadline, "ping has a bounded deadline");
+            assertTrue(microseconds(clock_get_monotonic_us()) < deadline, "ping has a bounded deadline");
             Socket::poll((info,), 1s);
         }
         assertTrue(poll.goalReached());

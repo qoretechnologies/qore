@@ -623,6 +623,10 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             resp = withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableRequestTarget("POST", getMessagesTarget(), body,
+                        buildAuthHeaders(), getRequestTimeoutMs(opts), getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoRequestTargetWithTimeout("POST", getMessagesTarget(), body,
                     buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);

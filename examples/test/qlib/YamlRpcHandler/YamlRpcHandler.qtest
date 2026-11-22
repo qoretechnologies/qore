@@ -242,18 +242,27 @@ class YamlRpcHandlerTest inherits QUnit::Test {
         assertEq(500, result.code);
     }
 
-    testIntrospection() {
-        # Test unknown method handling for introspection-style calls
-        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
-        hash<auto> hdr = {"method": "POST", "path": "/YAML"};
-        string body = make_yaml({"method": "system.listMethods", "params": ()});
+    private auto introspect(string method) {
+        hash<auto> response = handler.testHandleRequest({"peer-info": {"address_desc": "127.0.0.1"}},
+            {"method": "POST", "path": "/YAML"}, make_yaml({"method": method, "params": ()}));
+        assertEq(200, response.code, method);
+        hash<auto> reply = parse_yaml(response.body);
+        assertFalse(reply.hasKey("error"), method);
+        return reply.result;
+    }
 
-        hash<auto> result = handler.testHandleRequest(cx, hdr, body);
-        # Should return error for unknown method
-        assertEq(200, result.code);
-        hash<auto> parsed = parse_yaml(result.body);
-        assertTrue(parsed.hasKey("error"));
-        assertEq(104, parsed.error.code);  # Error code
+    testIntrospection() {
+        list<string> names = introspect("system.listMethods");
+        assertEq(("help", "system.listMethods", "system.describe") + (map $1.text, Methods), names);
+
+        hash<auto> help = introspect("help");
+        assertEq("add two numbers", help.add.description);
+        assertEq("lists YAML-RPC method names registered with this handler", help{"system.listMethods"}.description);
+
+        hash<auto> description = introspect("system.describe");
+        assertEq("1.0", description.sdversion);
+        assertEq("Qore YAML-RPC Handler", description.name);
+        assertTrue(inlist({"name": "add", "summary": "add two numbers"}, description.procs));
     }
 
     testLogging() {

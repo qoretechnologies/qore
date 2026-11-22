@@ -58,29 +58,43 @@ public class DatasourceConnectionTest inherits QUnit::Test {
         assertEq(5432, urlh.port);
     }
 
+    # the safe URL, which user interfaces and logs show, has no credentials: no password, no user name and no option
+    # value, as a driver option can hold a credential; the driver, database, encoding, host, port and option names
+    # identify the connection (qore#7017)
     testSafeUrl() {
         {
             DatasourceConnection conn("test", "test safe url",
-                "db://pgsql:user/pass@dbname%dbhost:5432");
+                "db://pgsql:secret-user/secret-pass@dbname(utf8)%dbhost:5432{min=secret-opt,"
+                "conn=password=secret-conn}");
             string safe = conn.safe_url;
-            # safe URL must start with "db://"
-            assertTrue(safe =~ /^db:\/\//);
-            # safe URL must not contain password
-            assertFalse(safe =~ /pass/);
-            # safe URL must contain the driver, user, db, host
-            assertTrue(safe =~ /pgsql/);
-            assertTrue(safe =~ /user/);
-            assertTrue(safe =~ /dbname/);
-            assertTrue(safe =~ /dbhost/);
+            assertEq("db://pgsql:****/****@dbname(utf8)%dbhost:5432{min=****,conn=****}", safe);
+            assertEq(safe, conn.getInfo().url);
+            assertEq({"type": "pgsql", "user": "****", "db": "dbname", "charset": "utf8", "host": "dbhost",
+                "port": 5432, "options": {"min": "****", "conn": "****"}, "protocol": "db"}, conn.getInfo().url_hash);
+            # the information with passwords keeps the credentials, for the host that asks for them
+            assertEq("secret-pass", conn.getInfo({"with_passwords": True}).url_hash.pass);
+            foreach string secret in (("secret-user", "secret-pass", "secret-opt", "secret-conn")) {
+                assertEq(-1, safe.find(secret), secret);
+                assertEq(-1, sprintf("%y", conn.getInfo()).find(secret), "info: " + secret);
+            }
         }
-        # no password case
+        # no password case: the user name is masked all the same
         {
             DatasourceConnection conn("test", "test safe url no pass",
-                "db://pgsql:user@dbname");
-            string safe = conn.safe_url;
-            assertTrue(safe =~ /^db:\/\//);
-            assertTrue(safe =~ /user/);
-            assertTrue(safe =~ /dbname/);
+                "db://pgsql:secret-user@dbname");
+            assertEq("db://pgsql:****/****@dbname", conn.safe_url);
+        }
+        # the options of the connection: a driver option value is masked, the pool sizes are shown
+        {
+            DatasourceConnection conn("test", "test safe url options",
+                "db://pgsql:user/pass@dbname{min=1,max=2,conn=password=secret-conn}");
+            assertEq({"min": 1, "max": 2, "conn": "****"}, conn.getInfo().opts);
+            assertEq({"min": 1, "max": 2, "conn": "****"}, conn.getInfoAsData().opts);
+            assertEq("password=secret-conn", conn.getInfo({"with_passwords": True}).opts.conn);
+            # the ping results, also of a ping that fails, show the same options
+            hash<PingInfo> ping = conn.ping();
+            assertEq({"min": 1, "max": 2, "conn": "****"}, ping.opts);
+            assertEq(-1, sprintf("%y", ping).find("secret-conn"));
         }
     }
 

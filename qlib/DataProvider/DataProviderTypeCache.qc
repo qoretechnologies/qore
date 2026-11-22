@@ -595,7 +595,22 @@ public class DataProviderTypeCache inherits Qore::Serializable {
     }
 
     #! Returns the RWLock to allow for external serialization
+    /** @return the lock of the cache
+
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the cache is the process-wide cache of the module
+        (DataProvider::getTypeCache()) and the calling code is sandboxed or acts for sandboxed code: the lock
+        serializes the changes and lookups of every caller of the module, also of other tenants and of trusted code
+        (qore#6749)
+
+        @since DataProvider 3.12 the process-wide cache does not give its lock to sandboxed code
+    */
     RWLock getLock() {
+        # the lock of the process-wide cache serializes every caller of the module: not handed to sandboxed code
+        # (qore#6749)
+        if (shared && !DataProviderSandboxState::mayRegisterShared()) {
+            throw "DATA-PROVIDER-REGISTRATION-DENIED", "sandboxed code cannot get the lock of the process-wide data "
+                "provider type cache, which serializes the changes and lookups of every caller of the module";
+        }
         return rwlock;
     }
 

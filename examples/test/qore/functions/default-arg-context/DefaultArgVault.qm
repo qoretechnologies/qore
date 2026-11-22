@@ -1,0 +1,180 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of default-arg-context.qtest: a class with private declarations, whose methods call code that other code
+# gives them, and code with default values that use the private declarations of the class (qore#7066)
+
+%modern
+
+module DefaultArgVault {
+    version = "1.0";
+    desc = "a class whose methods call code that other code gives them";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DefaultArgVault {
+#! holds the object whose private declarations the default values of the functions below use
+public class VaultHolder {
+    public {
+        static *object v;
+    }
+}
+
+#! a class whose private declarations the default values of other code must not reach
+public class Vault {
+    private {
+        string secret = "secret";
+        static string svar = "svar";
+    }
+
+    private:internal {
+        string isecret = "isecret";
+    }
+
+    private string helper() {
+        return "helper";
+    }
+
+    private:internal string ihelper() {
+        return "ihelper";
+    }
+
+    private static string shelper() {
+        return "shelper";
+    }
+
+    #! the values of the private members, which show that no other code changed them
+    string state() {
+        return secret + "/" + isecret;
+    }
+
+    #! calls a method of an object that other code gave
+    auto notify(object listener) {
+        return listener.onEvent();
+    }
+
+    #! calls a method of an object that other code gave by its name
+    auto callMethod(object listener) {
+        return call_object_method(listener, "onEvent");
+    }
+
+    #! calls code that other code gave
+    auto callIt(code c) {
+        return c();
+    }
+
+    #! calls code that other code gave with call_function_args()
+    auto callArgs(code c) {
+        return call_function_args(c);
+    }
+
+    #! calls code that other code gave in a background thread
+    auto callBackground(code c) {
+        Queue q();
+        background sub () {
+            try {
+                q.push({"v": c()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        hash<auto> h = q.get();
+        if (h.err) {
+            throw h.err, h.desc;
+        }
+        return h.v;
+    }
+
+    #! creates an object of a class that other code gave (a reflection Class object)
+    auto construct(object cls) {
+        return call_object_method(cls, "newObject");
+    }
+
+    #! sorts a list with a callback that other code gave
+    auto callSort(code c) {
+        return sort((2, 1), c);
+    }
+
+    #! calls code that other code gave in a static method: the class context without an object
+    static auto callStatic(code c) {
+        return c();
+    }
+
+    #! calls a function of this module whose default value uses a private member of the class
+    auto peekDirect() {
+        return vault_peek();
+    }
+
+    #! the default values of the method, which use the private declarations of its class whoever calls it
+    list<auto> own(auto a = secret, auto b = isecret, auto c = helper(), auto d = ihelper()) {
+        return (a, b, c, d);
+    }
+
+    #! the default values of a static method, which use the private static declarations of its class
+    static list<auto> sown(auto a = Vault::svar, auto b = Vault::shelper()) {
+        return (a, b);
+    }
+
+    #! a closure created in a method: its default values use the private members of the class with its object
+    code closure() {
+        return auto sub (auto a = secret, auto b = isecret) { return (a, b); };
+    }
+
+    #! a closure created in a static method: its default values use the private static declarations of the class
+    static code sclosure() {
+        return auto sub (auto a = Vault::svar, auto b = Vault::shelper()) { return (a, b); };
+    }
+}
+
+#! a subclass that calls an inherited method with default values
+public class SubVault inherits Vault {
+    list<auto> fromSub() {
+        return own();
+    }
+}
+
+#! a class whose constructor has default values that use its private declarations
+public class VaultCtor {
+    public {
+        list<auto> got;
+    }
+
+    private {
+        string secret = "csecret";
+    }
+
+    private:internal {
+        string isecret = "cisecret";
+    }
+
+    private string helper() {
+        return "chelper";
+    }
+
+    constructor(auto a = secret, auto b = isecret, auto c = helper()) {
+        got = (a, b, c);
+    }
+}
+
+#! a subclass whose constructor calls the constructor of VaultCtor with its default values
+public class SubVaultCtor inherits VaultCtor {
+    constructor() {
+    }
+}
+
+#! a function whose default value uses a private member of a Vault: it has no class context, whatever its caller's
+public auto sub vault_peek(auto a = VaultHolder::v.secret) {
+    return a;
+}
+
+#! a function whose default value uses a private:internal member of a Vault
+public auto sub vault_ipeek(auto a = VaultHolder::v.isecret) {
+    return a;
+}
+
+#! a function whose default value calls a private method of a Vault
+public auto sub vault_call(auto a = VaultHolder::v.helper()) {
+    return a;
+}
+}

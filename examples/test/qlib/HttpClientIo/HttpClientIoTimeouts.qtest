@@ -253,13 +253,13 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
             "max_request_retries": 0,
         });
         on_exit mgr.closeAll();
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         r.request = record(auto sub () { return mgr.request(url, "GET", "/stall"); });
         HttpCancellableFuture f = mgr.requestAsync(url, "GET", "/stall");
         r.async = record(auto sub () { return f.get(30s); });
         r.poller = record(auto sub () { return runPoller(new HttpClientRequestPollOperation(mgr, url + "/stall")); });
         r.stream = record(auto sub () { return mgr.openStream(url + "/stall"); });
-        r.elapsed = now_us() - start;
+        r.elapsed = microseconds(clock_get_monotonic_us() - start);
         r.done = record(auto sub () { return mgr.request(url, "GET", "/x").body; });
         HttpClientConnectionManager both(<HttpClientConnectionManagerOptions>{
             "protocol": proto,
@@ -395,13 +395,13 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + 30000000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (microseconds(deadline - clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

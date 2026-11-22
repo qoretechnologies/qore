@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of sandboxed-exception-report.qtest (qore#7139): its code raises for the code that calls it
+
+%modern
+
+module ReportCheck {
+    version = "1.0";
+    desc = "raises an exception with the text given";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ReportCheck {
+#! raises MOD-ERR with \a text
+public sub raise(string text) {
+    throw "MOD-ERR", text;
+}
+}

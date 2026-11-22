@@ -80,11 +80,9 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
 }
 
 void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm) {
-    // only a reference to library module code records anything, and then only for restricted creating code
-    if (!code_pgm || !qore_program_is_library_module(code_pgm)) {
-        return;
-    }
-    QoreParseOptions origin = qore_creation_origin_restrictions();
+    // only a reference whose code runs where the creating code is not on the stack records anything, and then only
+    // for restricted creating code
+    QoreParseOptions origin = qore_creation_origin_for(code_pgm);
     if (!origin) {
         return;
     }
@@ -121,6 +119,115 @@ void qore_release_call_reference_provenance(const ResolvedCallReferenceNode* ref
     if (context) {
         context->deref();
     }
+}
+
+//! returns the restricting options of a Program that is not a module's, or none for a module's Program or nullptr
+/** The code of a Program that is not a module's runs with that Program on the stack, which decides for it and records
+    nothing; the Program that creates a value runs the creating code
+*/
+static QoreParseOptions qore_non_module_program_restrictions(const QoreProgram* pgm) {
+    return pgm && !qore_program_is_module_inline(pgm) ? qore_program_private::getParseOptions(*pgm)
+        : QoreParseOptions();
+}
+
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr);
+
+// returns the restrictions of a callable or object: with \a recorded_origin, also those that module or builtin code
+// recorded when it created the value for the code that called it (qore_callable_origin_restrictions_po()), otherwise
+// only those of the code that authored it (qore_callable_authored_restrictions_po(), qore#7056)
+static QoreParseOptions qore_callable_restrictions_po(const QoreValue v, bool recorded_origin) {
+    // only the restricting options are domains: not the positive options (PO_ALLOW_*) or PO_IN_MODULE
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    QoreParseOptions rv;
+    switch (v.getType()) {
+        case NT_FUNCREF:
+        case NT_RUNTIME_CLOSURE: {
+            const ResolvedCallReferenceNode* rcr = v.get<const ResolvedCallReferenceNode>();
+            // the restrictions recorded when it was created, for module or builtin code
+            // (qore_capture_call_reference_origin())
+            if (recorded_origin) {
+                QoreSandboxContext* context = qore_get_call_reference_provenance(rcr);
+                if (context) {
+                    rv = context->origin_restrictions;
+                    context->deref();
+                }
+            }
+            // the Program whose code it runs, and the Program that created it, which the reference keeps alive: the
+            // code of a restricted Program, or a reference that it created to the code of another Program (a method of
+            // an object of a class that the host imported into it, for example)
+            // the Program whose code it runs: for a method, the source Program of its class, referenced, as it can be
+            // deleted while the reference exists; otherwise a Program that the reference keeps alive
+            const QoreMethod* m = qore_call_reference_code_method(rcr);
+            if (m) {
+                const QoreClass* cls = m->getClass();
+                QoreProgram* code_pgm = qore_class_private::get(*cls)->getReferencedSourceProgram();
+                if (code_pgm) {
+                    rv |= qore_non_module_program_restrictions(code_pgm);
+                    code_pgm->deref();
+                } else {
+                    rv |= qore_non_module_program_restrictions(cls->getProgram());
+                }
+            } else {
+                rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
+            }
+            // the Program of the reference is not its author: for a method reference it is the Program of the object,
+            // for a closure the Program that was current when it was created (that of a restricted subclass for code of
+            // a module that runs a method of its object); the author is the code that the reference runs (above: the
+            // method that a call dispatches to on the object's class, the Program that defines a closure or a
+            // function) and the code that created it (below) (qore#7056, qore#7087)
+            if (recorded_origin) {
+                rv |= qore_non_module_program_restrictions(rcr->getProgram());
+            }
+            // the code that created a run-time reference, if it is the code of a Program that is not a module's: a
+            // reference that restricted code created to a method of an object of another Program (one lent to it)
+            const ResolvedCallReferenceNodeIntern* intern = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(rcr);
+            const QoreParseOptions* creator_po = intern ? intern->getNonModuleCreatorParseOptions() : nullptr;
+            if (creator_po) {
+                rv |= *creator_po;
+            }
+            break;
+        }
+        case NT_OBJECT: {
+            const QoreObject* obj = v.get<const QoreObject>();
+            const qore_object_private* priv = qore_object_private::get(*obj);
+            // set when the object is constructed and not changed after
+            if (recorded_origin && priv->sandbox_provenance) {
+                rv = priv->sandbox_provenance->origin_restrictions;
+            }
+            // the Program that created it, which the object keeps alive: also for an object of a builtin class or of
+            // a class that the host imported into it, which records nothing; an object is authored by the code of its
+            // class, whichever code creates it: the Program that is current when it is created can be that of a
+            // restricted caller for which module code creates it (in a method of an object of a restricted subclass,
+            // for example), and an object of a module or builtin class runs only that code (qore#7056)
+            if (recorded_origin) {
+                rv |= qore_non_module_program_restrictions(obj->getProgram());
+            }
+            // the source Program of its class, referenced, as it can be deleted while the object exists
+            const qore_class_private* qc = qore_class_private::get(*obj->getClass());
+            QoreProgram* code_pgm = qc->getReferencedSourceProgram();
+            if (code_pgm) {
+                rv |= qore_non_module_program_restrictions(code_pgm);
+                code_pgm->deref();
+            }
+            break;
+        }
+        default:
+            return QoreParseOptions();
+    }
+    return rv & restricting;
+}
+
+QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
+    return qore_callable_restrictions_po(v, true);
+}
+
+QoreParseOptions qore_callable_authored_restrictions_po(const QoreValue v) {
+    return qore_callable_restrictions_po(v, false);
+}
+
+int64 qore_callable_origin_restrictions(const QoreValue v) {
+    return qore_callable_origin_restrictions_po(v).getLo();
 }
 
 QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
@@ -365,6 +472,14 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
+// refuses a call of a reference that code that may not control threads created, to code that does not check it when
+// it is entered (the code of another Program, builtin code), if the expression of the background operator makes it
+// itself (qore#7087)
+static int check_background_creator(const ResolvedCallReferenceNodeIntern* r, ExceptionSink* xsink) {
+    const QoreParseOptions* po = r->getNonModuleCreatorParseOptions();
+    return po && (*po & QoreParseOptions(QDOM_THREAD_CONTROL)) ? qore_check_background_direct_call(xsink) : 0;
+}
+
 void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
     creator_po = runtime_get_effective_program_parse_options();
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
@@ -378,6 +493,7 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
         creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
     }
     has_creator_po = true;
+    creator_non_module = pgm && !qore_program_is_module_inline(pgm);
     // the run-time call reference classes call this from their constructors, when the reference is complete: a
     // reference to library module code records the restrictions of the code that creates it (qore#6520)
     qore_capture_call_reference_origin(this, getOriginCodeProgram());
@@ -698,7 +814,18 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                     if (check_call_reference_domain(loc, parse_context, m) && !err) {
                         err = -1;
                     }
-                    qc = n_qc;
+                    // a method with abstract variants that its class does not implement is resolved for the class of
+                    // the object when the reference is made, as a call of it is (QoreDotEvalOperatorNode): another
+                    // parent class of the object's class implements them, and the abstract methods of the classes
+                    // are resolved after this code is parsed, so that the method found here may not be the one that
+                    // is called (qore#7206)
+                    if (!m->isStatic() && (qore_method_private::get(*m)->isAbstract()
+                            || qore_class_private::get(*m->getClass())->hasUnimplementedAbstractVariants(
+                                method.c_str()))) {
+                        m = nullptr;
+                    } else {
+                        qc = n_qc;
+                    }
                 } else {
                     // issue #995: a pseudo-method of objects, such as className(), or a member, which a direct call
                     // calls if it holds code; the reference is made for the object's class when the expression is
@@ -846,6 +973,15 @@ void RunTimeResolvedMethodReferenceNode::init(QoreProgram* creator) {
     // the restrictions that a call of the reference is checked against: those of the creating context (#5803)
     captureCreatorParseOptions();
     printd(5, "RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
+    // the class context of the creator selects the variants of a call wherever it is made: with none, only the
+    // public variants, not those that the class context of the caller could select.  The class is referenced, as it
+    // can belong to another Program than the object, which releases it when it is deleted, while the reference can
+    // be called afterwards; as for a static method call reference (qore#6622), the class only, not its Program
+    if (qc) {
+        qc->ref();
+    } else {
+        qc = qore_no_class_ctx();
+    }
     obj->tRef();
     QoreProgram* opgm = qore_object_private::get(*obj)->pgm;
     // created in the object's own Program, the usual case, or a user method: the reference runs there, as before,
@@ -875,10 +1011,16 @@ RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
     if (pgm_ref & PGM_CREATOR) {
         reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR)->depDeref();
     }
+    if (qc != qore_no_class_ctx()) {
+        const_cast<qore_class_private*>(qc)->deref(false, false, false);
+    }
     obj->tDeref();
 }
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -906,6 +1048,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* 
 }
 
 QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -925,6 +1070,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* arg
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -946,6 +1094,9 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* 
 
 QoreValue RunTimeResolvedMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -1014,7 +1165,8 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
     if (val.getType() == NT_HASH) {
         hash_member = check_call_ref(val.getInternalNode(), method) != nullptr;
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        hash_member = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method) != nullptr;
+        ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+        hash_member = check_call_ref(*h, method) != nullptr;
     }
     if (!hash_member && pseudo_classes_check_method(val, method, xsink)) {
         return QoreValue();
@@ -1023,8 +1175,7 @@ QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, Qore
 }
 
 RunTimePseudoMethodReferenceNode::RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val,
-        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method),
-        cctx(runtime_get_class()) {
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method) {
     assert(val.getType() != NT_OBJECT);
     // the restrictions that a call of the reference is checked against: those of the creating context
     captureCreatorParseOptions();
@@ -1041,23 +1192,29 @@ bool RunTimePseudoMethodReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
 }
 
-const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember() const {
+const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember(
+        ReferenceHolder<QoreHashNode>& hash_holder) const {
     const AbstractQoreNode* ref = nullptr;
     if (val.getType() == NT_HASH) {
         ref = check_call_ref(val.getInternalNode(), method.c_str());
     } else if (val.getType() == NT_WEAKREF_HASH) {
-        ref = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method.c_str());
+        hash_holder = val.get<WeakHashReferenceNode>()->lock();
+        ref = check_call_ref(*hash_holder, method.c_str());
     }
     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref);
 }
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // a code member of a hash with the name of the method, as a direct call calls (QoreDotEvalOperatorNode)
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         return ref->execValue(args, xsink);
     }
     return pseudo_classes_eval(val, method.c_str(), args, xsink);
@@ -1065,10 +1222,14 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* ar
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member runs with its own declaration policy
         return ref->execValue(args, xsink);
     }
@@ -1077,10 +1238,14 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListN
 
 QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+    ReferenceHolder<QoreHashNode> member_hash(xsink);
+    if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member binds the names, as a named call through it does
         if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
             return iref->dispatchNamed(args, arg_names, policy, xsink);
@@ -1095,8 +1260,10 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         assert(*xsink);
         return QoreValue();
     }
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false, cctx,
-        arg_names, policy);
+    // with no class context: a pseudo-method has no private variants, and the reference keeps no class, which could
+    // belong to a Program that is deleted before the reference is called
+    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false,
+        qore_no_class_ctx(), arg_names, policy);
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -1137,7 +1304,7 @@ template <typename F>
 QoreValue RunTimeObjectMethodReferenceNode::evalInContext(F f) const {
     // a direct call of a pseudo-method runs in the class context of its code: a call through the reference runs in
     // that of the code that made the reference, which can differ from the context it is called in
-    if (missing && qc != runtime_get_class()) {
+    if ((missing || !qc) && qc != runtime_get_class()) {
         ClassOnlySubstitutionHelper csh(qc);
         return f();
     }
@@ -1153,6 +1320,11 @@ RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QorePro
     captureCreatorParseOptions();
     printd(5, "RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, n_method, qc);
+    // the class context can belong to another Program than the object, which releases it when it is deleted; as for a
+    // static method call reference (qore#6622), the class is referenced, not its Program
+    if (qc) {
+        qc->ref();
+    }
     // the method is called as a direct call in the Program that creates the reference would be; the object holds a
     // weak reference to its own Program, which is where a reference is usually created; any other Program is held
     // with a weak reference of the reference's own, as a strong one could cause a recursive reference
@@ -1172,10 +1344,16 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
     if (pgm_ref & PGM_WEAK_REF) {
         reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF)->depDeref();
     }
+    if (qc) {
+        const_cast<qore_class_private*>(qc)->deref(false, false, false);
+    }
     obj->tDeref();
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1199,6 +1377,9 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* ar
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -1216,6 +1397,9 @@ QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args,
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1268,12 +1452,16 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
             method.c_str());
         return QoreValue();
     }
-    return qore_method_private::evalNamed(*m, xsink, rc, obj, args, false, qc, nullptr, nullptr, arg_names, policy,
-        pgm_ctx);
+    // with no class context, only the public variants of the method, as for a call with positional arguments
+    return qore_method_private::evalNamed(*m, xsink, rc, obj, args, false, qc ? qc : qore_no_class_ctx(), nullptr,
+        nullptr, arg_names, policy, pgm_ctx);
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -1357,8 +1545,10 @@ int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, Excep
     return 0;
 }
 
-const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
-    assert(rcr);
+//! returns the method whose code a call of a method or static method reference runs, or nullptr for another reference
+/** For a method of an object, the method that the call is dispatched to on the object's class
+*/
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr) {
     const QoreMethod* m = nullptr;
     // the object a method is called on, if any: the call is dispatched on its class
     const QoreObject* obj = nullptr;
@@ -1382,6 +1572,12 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
             m = dm;
         }
     }
+    return m;
+}
+
+const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
+    assert(rcr);
+    const QoreMethod* m = qore_call_reference_code_method(rcr);
     if (!m) {
         // a closure's code is that of the Program that defines it, which is not necessarily the Program it runs
         // in: a closure that module code creates while running a method for an object of a class of its caller
@@ -1804,6 +2000,11 @@ StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLo
             held_classes[i] = classes[i];
         }
     }
+    // a reference created with no class context is called with none, so that a call selects only the public variants
+    // of the method, not those that the class context of the code calling it could select
+    if (!class_ctx) {
+        class_ctx = qore_no_class_ctx();
+    }
 }
 
 bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
@@ -1822,6 +2023,9 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1837,6 +2041,9 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
 }
 
 QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -1847,6 +2054,9 @@ QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Ex
 
 QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -1862,6 +2072,9 @@ QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
 
 QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -2021,6 +2234,9 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2029,6 +2245,9 @@ QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, Excep
 }
 
 QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -2038,6 +2257,9 @@ QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Exceptio
 
 QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2048,6 +2270,9 @@ QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const
 
 QoreValue MethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -2421,6 +2646,9 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2429,6 +2657,9 @@ QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, Exc
 }
 
 QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // as dispatchValue(): the call runs with the permissions of the context that created the reference
@@ -2438,6 +2669,9 @@ QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, Except
 
 QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
@@ -2447,6 +2681,9 @@ QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, con
 
 QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
+    if (check_background_creator(this, xsink)) {
+        return QoreValue();
+    }
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
@@ -2771,7 +3008,7 @@ private:
         // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
         // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
         QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
-        barrier.emplace(QoreTrustedBuildTag());
+        barrier.emplace(QoreTrustedBuildTag{trusted_program});
         if (!barrier->recorded()) {
             if (callers) {
                 callers->deref(nullptr);
@@ -3011,4 +3248,10 @@ QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const Q
     xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "a call through a %s cannot take named arguments; use "
         "positional arguments", r->getTypeName());
     return QoreValue();
+}
+
+QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm) {
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    return qore_non_module_program_restrictions(pgm) & restricting;
 }

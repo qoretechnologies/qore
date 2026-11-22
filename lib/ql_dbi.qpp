@@ -180,6 +180,36 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
 
     A datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the text
     before the first \c ":" is taken as the driver name; always give the driver prefix.
+
+    @subsection datasource_mask_options Masked Forms That Identify a Connection
+    The masked description above is for messages, also those that restricted code can see: it shows neither the user
+    name nor the database name.  A form that identifies a connection, such as the safe URL of a \c db:// connection
+    that a user interface or a log shows, or the configuration that serialized @ref sqlutilintro "SqlUtil" data keeps,
+    shows more, given with the \a opts of @ref Qore::SQL::mask_datasource(string, *hash<auto>) "mask_datasource()" and
+    @ref Qore::SQL::mask_datasource_hash(string, *hash<auto>) "mask_datasource_hash()":
+    |!Option|!Type|!Description
+    |\c show_db|\c bool|the database name is shown if it can be only a database name: it is masked if it is not \
+        valid in its encoding, or has a control or bidirectional formatting character, a separator of a datasource \
+        string (\c "@", \c "%", \c "{", \c "}", \c "(", \c ")"), or \c "=", \c ";" or \c "://", as a database \
+        name can be a connection string of its own with credentials (a PostgreSQL conninfo string or URI, an ODBC \
+        string); a database name that is shown is given in UTF-8
+    |\c show_options|\c bool|the character encoding and the names of the options are shown, with every option value \
+        masked as \c "****"
+
+    The two rules side by side:
+    |!Part|!Messages (the default)|!Forms that identify a connection (\c show_db, \c show_options)
+    |driver, host, port|shown|shown
+    |user name|\c "****"|\c "****"
+    |password|\c "****"|\c "****" (never in the hash form)
+    |database name|\c "****"|shown
+    |character encoding|not shown|shown
+    |option names|not shown|shown
+    |option values|not shown|\c "****"
+
+    Every option value is masked, as no DBI driver declares which of its options hold secrets: a driver option can
+    hold a credential, such as a full connection string.
+
+    (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@orders%dbhost:5432{min=****}</tt>)
 */
 ///@{
 namespace Qore::SQL;
@@ -387,6 +417,7 @@ string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARG
     set; this is the description that %Qore uses for datasources in its own exception messages
 
     @param datasource a datasource string as accepted by @ref Qore::SQL::parse_datasource() "parse_datasource()"
+    @param opts options for the parts that are shown; see @ref datasource_mask_options (since %Qore 3.0)
 
     @return the masked description of the datasource; a string that cannot be parsed, or whose option block has an
     option with \c "@" (which makes the split of the string ambiguous), is described as
@@ -401,8 +432,10 @@ string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARG
 string desc = mask_datasource("pgsql:user/pass@dbname%dbhost.internal:5432");
     @endcode
 
+    @throw DATASOURCE-MASK-ERROR an unknown key in \a opts
+
     @note
-    - this function never throws an exception, also for a string that cannot be parsed
+    - this function never throws an exception for the datasource, also for a string that cannot be parsed
     - a datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the
       text before the first \c ":" is taken as the driver name (see
       @ref Qore::SQL::parse_datasource() "parse_datasource()"); always give the driver prefix
@@ -413,9 +446,13 @@ string desc = mask_datasource("pgsql:user/pass@dbname%dbhost.internal:5432");
 
     @since %Qore 3.0
 */
-string mask_datasource(string datasource) [flags=CONSTANT,NAMED_ARGS] {
+string mask_datasource(string datasource, *hash<auto> opts) [flags=CONSTANT,NAMED_ARGS] {
+    unsigned flags;
+    if (q_ds_mask_flags(opts, flags, xsink)) {
+        return QoreValue();
+    }
     QoreStringNodeHolder rv(new QoreStringNode);
-    q_ds_append_masked_string_desc(**rv, *datasource);
+    q_ds_append_masked_string_flags(**rv, *datasource, flags);
     return rv.release();
 }
 
@@ -433,6 +470,8 @@ string mask_datasource(string datasource) [flags=CONSTANT,NAMED_ARGS] {
     \c "****" otherwise; a host name is shown only if it has only ASCII letters, digits, \c ".", \c "-", \c "_", \c ":",
     \c "[" and \c "]", and is replaced with \c "****" otherwise; see @ref datasource_secrets
 
+    @param opts options for the parts that are shown; see @ref datasource_mask_options (since %Qore 3.0)
+
     @return the masked description of the datasource
 
     @par Example:
@@ -448,7 +487,9 @@ string desc = mask_datasource({
 });
     @endcode
 
-    @note this function never throws an exception
+    @throw DATASOURCE-MASK-ERROR an unknown key in \a opts
+
+    @note this function never throws an exception for the datasource
 
     @see
     - @ref Qore::SQL::mask_datasource(string) "mask_datasource(string)"
@@ -456,10 +497,64 @@ string desc = mask_datasource({
 
     @since %Qore 3.0
 */
-string mask_datasource(hash<auto> config) [flags=CONSTANT,NAMED_ARGS] {
+string mask_datasource(hash<auto> config, *hash<auto> opts) [flags=CONSTANT,NAMED_ARGS] {
+    unsigned flags;
+    if (q_ds_mask_flags(opts, flags, xsink)) {
+        return QoreValue();
+    }
     QoreStringNodeHolder rv(new QoreStringNode);
-    q_ds_append_masked_hash(**rv, config);
+    q_ds_append_masked_flags(**rv, config, flags);
     return rv.release();
+}
+
+//! Returns the masked form of a datasource string as a @ref datasource_hash "datasource hash"
+/** The hash has the parts of the masked description of
+    @ref Qore::SQL::mask_datasource(string, *hash<auto>) "mask_datasource()": the password is never in it, the user name
+    is always \c "****", and the other parts are shown as \a opts give; see @ref datasource_mask_options
+
+    @param datasource a datasource string as accepted by @ref Qore::SQL::parse_datasource() "parse_datasource()"
+    @param opts options for the parts that are shown; see @ref datasource_mask_options
+
+    @return the masked datasource hash; a string that cannot be parsed, or whose option block has an option with
+    \c "@", gives a hash with only \c "type": its driver name, or \c "****"
+
+    @par Example:
+    @code{.py}
+# {"type": "pgsql", "user": "****", "db": "orders", "host": "dbhost", "port": 5432, "options": {"min": "****"}}
+hash<auto> h = mask_datasource_hash("pgsql:user/pass@orders%dbhost:5432{min=2}",
+    {"show_db": True, "show_options": True});
+    @endcode
+
+    @throw DATASOURCE-MASK-ERROR an unknown key in \a opts
+
+    @since %Qore 3.0
+*/
+hash<auto> mask_datasource_hash(string datasource, *hash<auto> opts) [flags=CONSTANT,NAMED_ARGS] {
+    unsigned flags;
+    if (q_ds_mask_flags(opts, flags, xsink)) {
+        return QoreValue();
+    }
+    return q_ds_masked_string_hash(*datasource, flags);
+}
+
+//! Returns the masked form of a datasource hash
+/** See @ref Qore::SQL::mask_datasource_hash(string, *hash<auto>) "mask_datasource_hash(string)"
+
+    @param config a @ref datasource_hash "datasource hash"
+    @param opts options for the parts that are shown; see @ref datasource_mask_options
+
+    @return the masked datasource hash
+
+    @throw DATASOURCE-MASK-ERROR an unknown key in \a opts
+
+    @since %Qore 3.0
+*/
+hash<auto> mask_datasource_hash(hash<auto> config, *hash<auto> opts) [flags=CONSTANT,NAMED_ARGS] {
+    unsigned flags;
+    if (q_ds_mask_flags(opts, flags, xsink)) {
+        return QoreValue();
+    }
+    return q_ds_masked_hash(config, flags);
 }
 ///@}
 

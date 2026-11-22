@@ -303,13 +303,13 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
 
     #! Returns the connection of the request with the given path, once it has been registered
     ServerSentEventHandler::ServerSentEventConnection waitConn(string path) {
-        date deadline = now_us() + HangGuard;
+        date deadline = microseconds(clock_get_monotonic_us()) + HangGuard;
         AutoLock al(rm);
         while (!conns{path}) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 throw "SSE-TEST-ERROR", sprintf("connection %y was not registered", path);
             }
-            rc.wait(rm, deadline - now_us());
+            rc.wait(rm, deadline - microseconds(clock_get_monotonic_us()));
         }
         return conns{path};
     }
@@ -399,13 +399,13 @@ class CountingObservable inherits Observable {
 
     #! Waits until the Observable has @p n observers; returns True if it has
     bool waitLive(int n) {
-        date deadline = now_us() + HangGuard;
+        date deadline = microseconds(clock_get_monotonic_us()) + HangGuard;
         AutoLock al(m);
         while (live != n) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 return False;
             }
-            c.wait(m, deadline - now_us());
+            c.wait(m, deadline - microseconds(clock_get_monotonic_us()));
         }
         return True;
     }

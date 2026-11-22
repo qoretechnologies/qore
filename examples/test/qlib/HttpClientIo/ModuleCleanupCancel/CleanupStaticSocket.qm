@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose only data is a static Socket: the module cleanup destroys it, and the destructor of the Socket gets
+# the asynchronous I/O controller, so the cleanup creates it and its I/O threads; see ModuleCleanupCancel.qtest
+
+%modern
+
+module CleanupStaticSocket {
+    version = "1.0";
+    desc = "the module cleanup destroys a static Socket, which creates the asynchronous I/O controller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CleanupStaticSocket {
+#! holds the module's static Socket, which no code of the process uses
+public class Holder {
+    private {
+        static Socket s();
+    }
+}
+}

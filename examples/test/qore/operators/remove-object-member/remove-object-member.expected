@@ -1,0 +1,31 @@
+remove never-set returns: null
+remove never-set: "keys=[] elements=0 key-iterator=[] pairs=[] foreach=[] formatted={<Dynamic object>: {}}"
+delete never-set: "keys=[] elements=0 key-iterator=[] pairs=[] foreach=[] formatted={<Dynamic object>: {}}"
+remove set returns: 1
+remove set: "keys=[\"b\"] elements=1 key-iterator=[\"b\"] pairs=[\"b=2\"] foreach=[\"b\"] formatted={<Dynamic object>: {b: 2}}"
+removed member: null
+removed member exists: False
+delete set: "keys=[] elements=0 key-iterator=[] pairs=[] foreach=[] formatted={<Dynamic object>: {}}"
+remove slice returns: {c: 1, d: 2}
+remove slice: "keys=[\"e\"] elements=1 key-iterator=[\"e\"] pairs=[\"e=3\"] foreach=[\"e\"] formatted={<Dynamic object>: {e: 3}}"
+delete slice: "keys=[\"f\"] elements=1 key-iterator=[\"f\"] pairs=[\"f=4\"] foreach=[\"f\"] formatted={<Dynamic object>: {f: 4}}"
+remove own members: [1, ["f"]]
+own members: "keys=[\"f\"] elements=1 key-iterator=[\"f\"] pairs=[\"f=4\"] foreach=[\"f\"] formatted={<Dynamic object>: {f: 4}}"
+remove through a reference returns: 5
+remove through a reference: "keys=[\"f\"] elements=1 key-iterator=[\"f\"] pairs=[\"f=4\"] foreach=[\"f\"] formatted={<Dynamic object>: {f: 4}}"
+added again: "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"
+delete of an object member: [1, "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"]
+remove of an object member: [1, "Counted", "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"]
+remove of a cycle: "keys=[\"g\", \"f\"] elements=2 key-iterator=[\"g\", \"f\"] pairs=[\"g=6\", \"f=8\"] foreach=[\"g\", \"f\"] formatted={<Dynamic object>: {g: 6, f: 8}}"
+declared remove never-set returns: null
+declared remove never-set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=1\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 1, h: {x: 1}, p: \"p\"}}"
+declared remove set returns: 1
+declared remove set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h={x: 1}\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: {x: 1}, p: \"p\"}}"
+declared delete set: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
+declared slice returns: {m: null, i: null, h: null}
+declared slice: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=null\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: null, h: null, p: \"p\"}}"
+declared set again: "keys=[\"m\", \"i\", \"h\"] elements=3 key-iterator=[\"m\", \"i\", \"h\"] pairs=[\"m=null\", \"i=2\", \"h=null\"] foreach=[\"m\", \"i\", \"h\"] formatted={<Declared object>: {m: null, i: 2, h: null, p: \"p\"}}"
+private remove: ["p", null, ["m", "i", "h", "p"]]
+undeclared beside private: remove returns: 1
+undeclared beside private: ["p"]
+hash: {}

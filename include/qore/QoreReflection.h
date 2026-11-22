@@ -1007,6 +1007,27 @@ public:
     */
     DLLEXPORT int checkModuleExport(bool visible, const char* kind, const char* name, ExceptionSink* xsink) const;
 
+    //! Returns the application Program that the calling library module code runs for, or nullptr
+    /** When the caller runs in the Program of a library module (one found in the module path), returns the first
+        Program that is not a user module's that the module code was called from on the current thread, reached only
+        through the contexts of library module code (the walk that checkProgramAccess() makes for a module reflecting
+        back into its caller).  The Program is taken from the thread's call chain only.
+
+        Fails closed: returns nullptr for a caller that is not library module code, while a module is initialized or
+        its init or del closure runs (also if this could not be recorded), if module code that is not library code is
+        reached first, and if no such Program is on the call chain (a thread that module code started, for example).
+
+        @par Example
+        DataProvider's \c HashDataType::addField() evaluates the default value of a typed hash member that a
+        sandboxed Program declares and passes to it: the sandboxed Program is the one returned, so the typed hash is
+        decided on what that Program could name in the language (qore#7154).
+
+        @param xsink a cancellation of the thread during the walk is raised here
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreProgram* getModuleCallerProgram(ExceptionSink* xsink) const;
+
 private:
     int checkProgramAccess(const QoreProgram* target, const char* what, Access access, ExceptionSink* xsink,
         const QoreClass* cls) const;

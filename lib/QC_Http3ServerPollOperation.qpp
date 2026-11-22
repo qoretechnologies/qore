@@ -1552,10 +1552,17 @@ nothing Http3ServerPollOperation::deregisterStreamListener(int session_id, int s
     case the callback is not called
 
     @throw QUIC-ERROR the QUIC session is gone; the callback is not called
+    @throw PERMISSION-DENIED the callback was authored by code that may not control threads, as it runs on another
+    thread (see @ref sandbox_thread_callables)
 
     @since %Qore 3.0
 */
 bool Http3ServerPollOperation::watchResponseSend(int session_id, int stream_id, code callback) {
+    // the callback runs on a controller worker (qore#7056)
+    if (qore_check_thread_callable(callback, QDOM_THREAD_CONTROL, "Http3ServerPollOperation::watchResponseSend()",
+            xsink)) {
+        return false;
+    }
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
     if (!setResponseSendCallback(self, priv, skey, callback, xsink)) {
         return false;

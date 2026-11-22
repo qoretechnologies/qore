@@ -10,6 +10,8 @@
 # (LANG), which is not specific to Qore, Qore prints an error and uses UTF-8, as for an encoding that iconv does not
 # know.  Each of the three sources is tested.  With QORE_TEST_VALGRIND set, each refused encoding and an invalid
 # option also run under valgrind, which must find nothing lost in the process that exits at startup (issue #7000).
+# ARGV and QORE_ARGV, which are made from the command line before the default encoding is set, are tagged with it as
+# ENV is (issue #7045).
 
 %modern
 %no-child-restrictions
@@ -40,6 +42,7 @@ class DefaultCharsetTest inherits QUnit::Test {
         addTestCase("--charset", \testOption());
         addTestCase("QORE_CHARSET", \testEnv());
         addTestCase("LANG", \testLang());
+        addTestCase("ARGV and QORE_ARGV take the default encoding", \testArgvEncoding());
         addTestCase("valgrind: nothing is lost at a startup exit", \testValgrind());
         set_return_value(main());
     }
@@ -81,6 +84,44 @@ class DefaultCharsetTest inherits QUnit::Test {
         r = run("QORE_CHARSET=UTF-32", "--charset=UTF-8");
         assertEq(0, r.rc, r.out);
         assertEq("UTF-8", r.out);
+    }
+
+    #! the strings of ARGV and QORE_ARGV are tagged with the default encoding of each source (issue #7045)
+    /** The argument is the byte 0xE9 ("é" in ISO-8859-1 and WINDOWS-1250); the child prints the encoding of ARGV[0], of
+        the last element of QORE_ARGV and of ENV.HOME, the bytes of ARGV[0] and whether it is valid
+    */
+    testArgvEncoding() {
+        list<list<string>> cases = (
+            ("--charset", "", "--charset=ISO-8859-1", "ISO-8859-1"),
+            ("QORE_CHARSET", "QORE_CHARSET=WINDOWS-1250", "", "WINDOWS-1250"),
+            ("LANG", "LANG=de_DE.ISO-8859-15", "", "ISO-8859-15"),
+        );
+        foreach list<string> c in (cases) {
+            string cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s -b %s -e 'printf(\"%%s %%s %%s %%s %%y\", ARGV[0].encoding(), QORE_ARGV.last().encoding(), "
+                # live-provider-optin: the child prints the encoding of HOME's value; it reads no file
+                "ENV.HOME.encoding(), binary(ARGV[0]).toHex(), ARGV[0].isEncodingValid());' \"$(printf '\\351')\" "
+                "2>&1", c[1], libqore_dir, libqore_dir, qore_bin, c[2]);
+            string out = backquote(cmd);
+            assertEq(sprintf("%s %s %s e9 True", c[3], c[3], c[3]), out, c[0]);
+        }
+        # the bytes of a valid UTF-8 argument in the default encoding UTF-8
+        string cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE LANG=C LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "-b -e 'printf(\"%%s %%s %%s %%y\", ARGV[0].encoding(), QORE_ARGV.last().encoding(), "
+            "binary(ARGV[0]).toHex(), ARGV[0].isEncodingValid());' \"$(printf '\\303\\251')\" 2>&1", libqore_dir,
+            libqore_dir, qore_bin);
+        assertEq("UTF-8 UTF-8 c3a9 True", backquote(cmd), "UTF-8");
+
+        # short arguments (a string of up to 6 bytes can be held inline, with no string node: issue #7038), in ARGV
+        # and in QORE_ARGV ("-b"): every string is tagged with the default encoding and keeps its bytes; the child
+        # prints ARGV, the encodings of the strings of ARGV and QORE_ARGV, and whether QORE_ARGV has "-b"
+        foreach list<string> c in ((("ISO-8859-1", "--charset=ISO-8859-1"), ("UTF-8", ""))) {
+            cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE LANG=C LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "-b %s -e 'printf(\"%%y %%y %%y\", ARGV, keys (map {$1.encoding(): True}, ARGV + QORE_ARGV), "
+                "inlist(\"-b\", QORE_ARGV));' a bc def 2>&1", libqore_dir, libqore_dir, qore_bin, c[1]);
+            assertEq(sprintf("[\"a\", \"bc\", \"def\"] [\"%s\"] True", c[0]), backquote(cmd),
+                c[0] + ": short arguments");
+        }
     }
 
     #! the encodings that are refused as the default encoding, given with --charset and with QORE_CHARSET

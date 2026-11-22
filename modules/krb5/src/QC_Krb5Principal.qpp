@@ -120,10 +120,13 @@ bool Krb5Principal::equals(Krb5Principal[QoreKrb5Principal] other) [flags=CONSTA
 }
 
 //! Returns the default realm from the local Kerberos configuration
-/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+/** It reads the Kerberos configuration of the host, as a @ref Qore::Krb5::Krb5Context "Krb5Context" does, and so
+    requires the same functional domain (\c FILESYSTEM)
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-REALM-ERROR if no default realm is configured on this host
 */
-static string Krb5Principal::getDefaultRealm() [flags=CONSTANT] {
+static string Krb5Principal::getDefaultRealm() [flags=CONSTANT;dom=FILESYSTEM] {
     krb5_context ctx = nullptr;
     krb5_error_code rc = krb5_init_context(&ctx);
     if (rc) {

@@ -238,9 +238,9 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForCount(int count, timeout t = SseTestTimeout) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        int end_time = clock_get_monotonic_us() + t * 1000;
         while (events.size() < count) {
-            date remaining = end_time - now_us();
+            date remaining = microseconds(end_time - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -251,7 +251,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForDataEvent(string event_name, timeout t = SseTestTimeout) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        int end_time = clock_get_monotonic_us() + t * 1000;
         while (True) {
             foreach hash<auto> evt in (events) {
                 if (evt.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
@@ -260,7 +260,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
                 }
             }
 
-            date remaining = end_time - now_us();
+            date remaining = microseconds(end_time - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -270,7 +270,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForDataEventCount(string event_name, int count, timeout t = SseTestTimeout) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        int end_time = clock_get_monotonic_us() + t * 1000;
         while (True) {
             int found = 0;
             foreach hash<auto> evt in (events) {
@@ -283,7 +283,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
                 return True;
             }
 
-            date remaining = end_time - now_us();
+            date remaining = microseconds(end_time - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -293,7 +293,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForHeartbeat(timeout t = SseTestTimeout) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        int end_time = clock_get_monotonic_us() + t * 1000;
         while (True) {
             foreach hash<auto> evt in (events) {
                 if (evt.event_id == HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
@@ -302,7 +302,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
                 }
             }
 
-            date remaining = end_time - now_us();
+            date remaining = microseconds(end_time - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -312,7 +312,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForEvent(string event_id, timeout t = SseTestTimeout) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        int end_us = clock_get_monotonic_us() + t * 1000;
         while (True) {
             foreach hash<auto> evt in (events) {
                 if (evt.event_id == event_id) {
@@ -320,7 +320,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
                 }
             }
 
-            date remaining = end_time - now_us();
+            date remaining = microseconds(end_us - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -455,13 +455,13 @@ class CallbackSseHandler inherits HttpServer::AbstractHttpSocketHandler {
                         return CallbackSseHandler::makeEvent("progress", "waiting");
                     }
 
-                    date deadline = now_us() + milliseconds(tick_ms);
+                    int deadline = clock_get_monotonic_us() + tick_ms * 1000;
                     if (!wait_registered) {
                         wait_registered = True;
                         ready_wait_counter.dec();
                     }
                     while (!ready && generation == last_generation) {
-                        date remaining = deadline - now_us();
+                        date remaining = microseconds(deadline - clock_get_monotonic_us());
                         if (remaining <= 0us) {
                             break;
                         }

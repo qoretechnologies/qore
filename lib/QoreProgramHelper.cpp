@@ -75,6 +75,13 @@ QoreProgramHelper::~QoreProgramHelper() {
     // issue #4228: ensure we are running in a qore thread
     QoreForeignThreadHelper qfth;
 
+    // the end of the process waits for the foreign threads that run in the Program at most as long as exit() waits
+    // for the threads that are ending, and then leaves the Program as it is to them: a call of a thread of another
+    // runtime that never returns made it wait forever (qore#6904)
+    if (pgm) {
+        qore_program_private::get(*pgm)->setProcessEndForeignWait(qore_process_end_foreign_wait_ms());
+    }
+
     // waits for the current Program to terminate
     pgm->waitForTerminationAndDeref(&xsink);
 }

@@ -44,6 +44,7 @@
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/DbiForkRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreDsConnectionName.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <map>
@@ -213,6 +214,8 @@ protected:
     QoreValue callback_arg{};
 
     DatasourceConfig config;
+    //! the name of the connection that the pool was created for, set once (qore#7016)
+    QoreDsConnectionName connection_name;
 
     bool valid;
 
@@ -382,6 +385,16 @@ public:
     DLLLOCAL const DBIDriver* getDriver() const {
         return pool[0]->getDriver();
     }
+    //! sets the name of the connection that the pool was created for, once (qore#7016)
+    DLLLOCAL int setConnectionName(const QoreString& name, ExceptionSink* xsink) {
+        return connection_name.set(name, xsink);
+    }
+
+    //! returns the name of the connection that the pool was created for with a reference, or nullptr
+    DLLLOCAL QoreStringNode* getConnectionName() const {
+        return connection_name.getReferencedName();
+    }
+
     DLLLOCAL const char* getDriverName() const {
         return pool[0]->getDriverName();
     }

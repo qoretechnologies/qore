@@ -19,7 +19,8 @@
     \c private:internal is accessible only in \c BI and \c A's line (\c A's own methods use it on objects of \c BI and
     of its subclasses, as \c CI, through any reference: issue #6800), not in a subclass of \c BI, another base class of
     the inheriting class (\c P for \c BIP) or another class, also not in
-    the member hash (\c keys), and a member that a class reaches through a public path as well is public there.  The
+    the member hash (\c keys), which A's own code sees for the objects of BI and of its subclasses as it sees the member
+    (issue #7180), and a member that a class reaches through a public path as well is public there.  The
     probe prints, for each class context and object, the results of a method call, a member read and write, a call of
     a method of \c A that reads the member and the keys of the object, and the result of parsing typed member
     accesses; a name in a class resolves to a member only if the class can access it (issue #6667): a member reached

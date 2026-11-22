@@ -1,0 +1,297 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections, the async I/O controller's handler pool and the destruction of a server on one of its threads
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The last reference to a server is released while the server's end of an open WebSocket connection runs (the end
+    that a thread of the server's handler pool runs when a connection that its handler manages externally has ended).
+    The end used the server through its listener's weak reference to it, so the server could be destroyed in the end
+    itself, whose connection was still counted by the listener: the destructor's stop of the listener waited for the
+    connection, which only the end could uncount once the destructor returned, so the end never returned, and the
+    Program, whose ExternalConnectionKeeper waits for the connection, never ended (seen when the module cleanup at the
+    end of the process released the server in another thread).  The end now holds the server until the connection is
+    no longer counted.
+
+    Here the last reference is released by the listener's logger when the end logs the stop of the connection's
+    handler, in the end itself, so the server is destroyed while the end runs: deterministically, without timing.
+
+    The handler's part of the end (the connection's cleanup, which runs WebSocketConnection::connectionClosed() and
+    the handler's deregistration) runs before the server's, while the connection is still counted: the last reference
+    released there destroyed the server there as well, and its stop of the listener waited for the connection, whose
+    server's end could not run (issue #7188).  The server is now held for the whole end.  The cases that release it in
+    connectionClosed() check this, also with other connections open on a server whose handler pool has one thread,
+    whose ends are queued in the pool while its thread runs the end that destroys the server.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketEndServerReleaseTest
+
+#! Holds the only strong reference to the server
+class ServerHolder {
+    public {
+        *HttpServer server;
+    }
+}
+
+#! Releases the server when the server's end of the connection logs the stop of the connection's handler
+class ReleasingAppender inherits LoggerAppenderWithLayout {
+    private {
+        ServerHolder holder;
+        Counter released;
+    }
+
+    constructor(ServerHolder holder, Counter released)
+            : LoggerAppenderWithLayout("releasing", new LoggerLayoutPattern("%m")) {
+        self.holder = holder;
+        self.released = released;
+    }
+
+    processEventImpl(int type, auto params) {
+        # the message of the server's end of the connection ("dedicated socket <id>: ..."), not the one of a request
+        # that ends a connection that it served itself ("cid <id>: ...")
+        if (type == EVENT_LOG && params =~ /dedicated socket [^ ]+: stopped dedicated socket handler/) {
+            # the server's last reference: before the fix, the server was destroyed here, in the end of the
+            # connection, and this call never returned
+            remove holder.server;
+            released.dec();
+        }
+    }
+}
+
+#! Echoes each message; releases the server in the handler's part of the end of the connection if a holder is given
+class EchoConnection inherits WebSocketConnection {
+    private {
+        *ServerHolder holder;
+        *Counter released;
+    }
+
+    constructor(WebSocketHandler handler, *ServerHolder holder, *Counter released) : WebSocketConnection(handler) {
+        self.holder = holder;
+        self.released = released;
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        # the handler's part of the end of the connection, which runs before the server's (issue #7188); the first
+        # connection that ends releases the server
+        if (holder && holder.server) {
+            remove holder.server;
+            released.dec();
+        }
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    private {
+        *ServerHolder holder;
+        *Counter released;
+    }
+
+    constructor(*ServerHolder holder, *Counter released) : WebSocketHandler() {
+        self.holder = holder;
+        self.released = released;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new EchoConnection(self, holder, released);
+    }
+}
+
+class WebSocketEndServerReleaseTest inherits QUnit::Test {
+    private {
+        #! Upper bound for any wait that a regression turns into a hang
+        const HangTimeout = 30s;
+
+        #! The protocols of the WebSocket connections
+        const Protocols = ("h1", "h2", "h3");
+    }
+
+    constructor() : Test("WebSocketEndServerReleaseTest", "1.0") {
+        foreach string proto in (Protocols) {
+            addTestCase(sprintf("%s: a server released in the end of a WebSocket connection is destroyed once the "
+                "connection has ended", proto), \testRelease(), (proto, False));
+            addTestCase(sprintf("%s: a server released in the handler's part of the end of a WebSocket connection is "
+                "destroyed once the connection has ended", proto), \testRelease(), (proto, True));
+            addTestCase(sprintf("%s: a server released in the handler's part of the end of a WebSocket connection, "
+                "with other connections open and one handler thread", proto), \testReleaseOthersOpen(), proto);
+        }
+        set_return_value(main());
+    }
+
+    #! releases the server in the end of a connection
+    /** @param proto the protocol
+        @param in_handler @ref True: the connection's connectionClosed() releases it, in the handler's part of the end
+        (issue #7188); @ref False: the listener's logger releases it, in the server's end (issue #7186)
+    */
+    testRelease(string proto, bool in_handler) {
+        ServerHolder holder();
+        Counter released(1);
+        Counter stopped(1);
+        int port = startServer(proto, holder, released, stopped, in_handler);
+
+        Queue received();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                received.push(msg);
+            }
+        }, clientOptions(proto, port));
+        wsc.connect();
+        if ((proto == "h2" && !wsc.isHttp2()) || (proto == "h3" && !wsc.isHttp3())) {
+            wsc.disconnect();
+            remove holder.server;
+            testSkip(sprintf("%s was not negotiated", proto));
+        }
+        wsc.send("hello");
+        assertEq("hello", received.get(HangTimeout), "the server echoes the message");
+
+        # the server's end of the connection runs when the client has closed it, and releases the server
+        wsc.disconnect();
+        assertEq(0, released.waitForZero(HangTimeout), "the end of the connection releases the last reference to "
+            "the server and goes on");
+        assertEq(0, stopped.waitForZero(HangTimeout), "the server is destroyed once the connection has ended");
+        assertNothing(holder.server, "the holder no longer references the server");
+    }
+
+    #! releases the server in the handler's part of the end of a connection while other connections are open
+    /** The server has one handler thread: the ends of the other connections, which the destruction of the server
+        ends, are queued in the pool while its thread runs the end that destroys the server (qore#6508)
+    */
+    testReleaseOthersOpen(string proto) {
+        ServerHolder holder();
+        Counter released(1);
+        Counter stopped(1);
+        int port = startServer(proto, holder, released, stopped, True, 1);
+
+        list<WebSocketClient> clients = ();
+        on_exit map $1.disconnect(), clients;
+        for (int i = 0; i < 3; ++i) {
+            Queue received();
+            WebSocketClient wsc(sub (*data msg) {
+                if (exists msg) {
+                    received.push(msg);
+                }
+            }, clientOptions(proto, port));
+            wsc.connect();
+            clients += wsc;
+            if ((proto == "h2" && !wsc.isHttp2()) || (proto == "h3" && !wsc.isHttp3())) {
+                remove holder.server;
+                testSkip(sprintf("%s was not negotiated", proto));
+            }
+            wsc.send("hello " + i);
+            assertEq("hello " + i, received.get(HangTimeout), sprintf("the server echoes the message of client %d",
+                i));
+        }
+
+        # the end of the first connection releases the server, whose destruction ends the others
+        clients[0].disconnect();
+        assertEq(0, released.waitForZero(HangTimeout), "the end of the connection releases the last reference to "
+            "the server and goes on");
+        assertEq(0, stopped.waitForZero(HangTimeout), "the server is destroyed once the connection has ended");
+        assertNothing(holder.server, "the holder no longer references the server");
+    }
+
+    #! Starts a server whose only strong reference is in \a holder; returns the port of its WebSocket listener
+    /** The case is skipped if no listener of the protocol can be created
+
+        @param in_handler @ref True: the connections release the server in connectionClosed(); @ref False: the
+        listener's logger releases it when the server's end of a connection logs it
+        @param max_handler_threads the maximum number of threads of the handler pool, if set
+    */
+    private int startServer(string proto, ServerHolder holder, Counter released, Counter stopped,
+            bool in_handler = False, *int max_handler_threads) {
+        Logger logger("ws-end-release", LoggerLevel::getLevelInfo());
+        if (!in_handler) {
+            ReleasingAppender appender(holder, released);
+            appender.open();
+            logger.addAppender(appender);
+        }
+        # the server's logger too: an HTTP/3 connection logs through it
+        hash<HttpServerOptionInfo> server_opts({"logger": logger});
+        if (max_handler_threads) {
+            server_opts.max_handler_threads = max_handler_threads;
+        }
+        HttpServer server(server_opts);
+        server.setHandler("ws-handler", "/ws", NOTHING, in_handler ? new EchoHandler(holder, released)
+            : new EchoHandler());
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "logger": logger,
+            "stopc": sub (string name) {
+                stopped.dec();
+            },
+        };
+        if (proto != "h1") {
+            opts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+                "enable_h3": proto == "h3",
+            };
+        }
+        int port;
+        try {
+            port = server.addListener(opts).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+        holder.server = server;
+        return port;
+    }
+
+    #! Returns the options of a client of the protocol
+    private static hash<auto> clientOptions(string proto, int port) {
+        if (proto == "h1") {
+            return {
+                "url": sprintf("ws://localhost:%d/ws", port),
+                "http_version": "1.1",
+                "timeout": 30000,
+            };
+        }
+        return {
+            "url": sprintf("wss://localhost:%d/ws", port),
+            "http_version": proto == "h2" ? "2.0" : "3.0",
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        };
+    }
+}

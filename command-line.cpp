@@ -235,6 +235,10 @@ static const char helpstr[] =
    "                               MIT; GPL modules cannot be loaded\n"
    "  -m, --show-module-errors     shows error messages related to loading and\n"
    "                               initializing qore modules\n"
+   "      --module-cleanup-timeout=arg\n"
+   "                               the deadline in milliseconds of the async I/O\n"
+   "                               work of the module cleanup at the end of the\n"
+   "                               process (default: 5000)\n"
    "      --module-dir             show qore binary module directory and exit\n"
    "      --user-module-dir        show qore user module directory and exit\n"
    "      --module-path            show qore module search path and exit\n"
@@ -1158,6 +1162,18 @@ static void set_exec_mode(const char* arg) {
     printe("error: invalid --exec-mode value '%s' (use ast, ir, jit, or tiered)\n", arg);
     opt_errors++;
 }
+static void set_module_cleanup_timeout(const char* arg) {
+    // a non-negative decimal integer of milliseconds, nothing else
+    char* end = nullptr;
+    errno = 0;
+    long long v = arg && *arg >= '0' && *arg <= '9' ? strtoll(arg, &end, 10) : -1;
+    if (v < 0 || errno || !end || *end || qore_set_module_cleanup_timeout(v)) {
+        printe("error: invalid --module-cleanup-timeout value '%s' (expecting a non-negative integer number of "
+            "milliseconds)\n", arg ? arg : "");
+        opt_errors++;
+    }
+}
+
 static void set_ir_dump(const char* arg) {
     ir_dump = true;
 }
@@ -1361,6 +1377,7 @@ static struct opt_struct_s {
    { '\0', "no-io",                ARG_NONE, do_no_io },
    { '\0', "lgpl",                 ARG_NONE, set_lgpl },
    { '\0', "mit",                  ARG_NONE, set_mit },
+   { '\0', "module-cleanup-timeout", ARG_MAND, set_module_cleanup_timeout },
    { '\0', "module-dir",           ARG_NONE, show_binary_module_dir },
    { '\0', "user-module-dir",      ARG_NONE, show_user_module_dir },
    { '\0', "module-path",          ARG_NONE, show_module_path },

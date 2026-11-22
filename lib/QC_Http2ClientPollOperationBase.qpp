@@ -78,6 +78,7 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
       ssl_required(ssl_required), proxy_tunnel(proxy_tunnel), proxy_ssl(proxy_ssl && proxy_tunnel),
       target_host(std::move(target_host)), target_port(target_port),
       connection_priv(conn_priv) {
+    credential_connection_id = my_socket_priv::getPriv(*sock)->takeHttpHandshakeCredentials(client_cert, client_pk);
     // sock and connect_op are ref'd by the caller; ownership transferred
     // connection_priv is a raw (unrefed) pointer to the C++ priv data;
     // the strong QoreObject ref (for DGC cycle detection) is held in the
@@ -539,8 +540,9 @@ void Http2ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
-    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
-        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal);
+    SocketPollOperationBase* op = qore_http_client_ssl_upgrade(xsink, sock_obj,
+        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal,
+        *client_cert, *client_pk, credential_connection_id);
     if (*xsink) {
         op->deref(xsink);
         return;
@@ -1308,10 +1310,23 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     }
 
     // Pure C++ error dispatch — no execValue()
+    std::vector<int32_t> failed_streams;
     for (auto& [sid, action] : actions_copy) {
         if (action) {
             action->executeError(err, desc, xsink);
             action->deref(xsink);
+            failed_streams.push_back(static_cast<int32_t>(std::strtol(sid.c_str(), nullptr, 10)));
+        }
+    }
+
+    // A stream that a listener reads (WebSocket/SSE over HTTP/2) gets the end of the stream as a sentinel in its queue:
+    // the listener is woken, as it is by the end of a stream that the peer ended (see handleReading()); otherwise it
+    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965)
+    // (the registrations are not checked: the connection's close has cleared them, and a stream without a listener
+    // only has its notification kept, on a connection that is gone)
+    for (int32_t sid32 : failed_streams) {
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
+            data_ready_streams.push_back(sid32);
         }
     }
 }
@@ -2182,6 +2197,7 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
 */
 qclass Http2ClientPollOperationBase [
     ns=Qore;
+    dom=NETWORK;
     arg=Http2ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
