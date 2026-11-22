@@ -28,8 +28,8 @@ class PeerHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! The handlers of HTTP/1.1, HTTP/2 and HTTP/3 requests get the peer's address, and of HTTP/1.1 and HTTP/2 requests
-#! the client's certificate, in the request context (qore#7214; the certificate over HTTP/3: qore#7261)
+#! The handlers of HTTP/1.1, HTTP/2 and HTTP/3 requests get the client's certificate and the peer's address in the
+#! request context (qore#7214, qore#7261)
 /** The socket of an HTTP/2 or HTTP/3 request is the handler's own, not connected: the request context gives the
     peer's information (\c cx."peer-info") and its certificate (\c cx."client-cert"), for every protocol
 */
@@ -38,12 +38,48 @@ class HttpServerClientCertContextTest inherits QUnit::Test {
         addTestCase("HTTP/1.1", \certTest(), "1.1");
         addTestCase("HTTP/2", \certTest(), "2.0");
         addTestCase("HTTP/3", \certTest(), "3.0");
+        addTestCase("HTTP/1.1 required certificate", \requiredCertTest(), "1.1");
+        addTestCase("HTTP/2 required certificate", \requiredCertTest(), "2.0");
+        addTestCase("HTTP/3 required certificate", \requiredCertTest(), "3.0");
         set_return_value(main());
     }
 
     certTest(string http_version) {
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit delete server;
+        int port = startListener(server);
+
+        TmpDir tmp();
+        string r = get(port, http_version, writeClientPem(tmp));
+        string expected = sprintf("cert=%s peer=", new SSLCertificate(CertPem).getSignature().toHex());
+        assertEq(expected, r.substr(0, expected.size()), "the context gives the client's certificate");
+        assertRegex("peer=(127\\.0\\.0\\.1|::1)$", r, "the context gives the peer's address");
+    }
+
+    #! the listener's verify flags apply to the QUIC listener paired with it as to its TCP listener (qore#7261)
+    requiredCertTest(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        int port = startListener(server, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
+
+        TmpDir tmp();
+        string expected = sprintf("cert=%s peer=", new SSLCertificate(CertPem).getSignature().toHex());
+        string r = get(port, http_version, writeClientPem(tmp));
+        assertEq(expected, r.substr(0, expected.size()), "a client with a certificate is served");
+
+        # the server's TLS alert ends the handshake or the connection: the error depends on the protocol and on whether
+        # the alert arrives before or after the request is sent, but it is never a timeout or a response
+        *string err;
+        try {
+            r = get(port, http_version);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq(Type::String, err.type(), "a client without a certificate is refused");
+        assertFalse(err =~ /TIMEOUT/, "the refusal is not a timeout");
+    }
+
+    private int startListener(HttpServer server, int ssl_verify_flags = SSL_VERIFY_NONE) {
         server.setHandler("peer", "^peer", NOTHING, new PeerHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
@@ -52,31 +88,33 @@ class HttpServerClientCertContextTest inherits QUnit::Test {
             "key": new SSLPrivateKey(KeyPem),
             "http_version": "auto",
             "get_remote_certs": True,
+            "ssl_verify_flags": ssl_verify_flags,
         }).port;
         server.waitForAsyncIo();
+        return port;
+    }
 
-        TmpDir tmp();
+    private static string writeClientPem(TmpDir tmp) {
         string path = tmp.path + "/client.pem";
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(CertPem + "\n" + KeyPem + "\n");
         f.close();
+        return path;
+    }
 
-        HTTPClient hc({
+    private static string get(int port, string http_version, *string path) {
+        hash<auto> opts = {
             "url": "https://localhost:" + port,
             "http_version": http_version,
             "ssl_verify_cert": False,
-            "ssl_cert_path": path,
-            "ssl_key_path": path,
             "timeout": HangGuard,
-        });
-        on_exit hc.disconnect();
-        string expected = sprintf("cert=%s peer=", new SSLCertificate(CertPem).getSignature().toHex());
-        string r = hc.get("/peer");
-        # the QUIC listener does not request the client's certificate yet (qore#7261)
-        if (http_version != "3.0") {
-            assertEq(expected, r.substr(0, expected.size()), "the context gives the client's certificate");
+        };
+        if (path) {
+            opts += {"ssl_cert_path": path, "ssl_key_path": path};
         }
-        assertRegex("peer=(127\\.0\\.0\\.1|::1)$", r, "the context gives the peer's address");
+        HTTPClient hc(opts);
+        on_exit hc.disconnect();
+        return hc.get("/peer");
     }
 }

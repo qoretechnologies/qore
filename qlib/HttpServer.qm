@@ -4235,6 +4235,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         "max_decoded_body_size": info.max_decoded_body_size,
                         # and the same bound of the data held for the clients of SSE streams
                         "sse_max_buffer_size": info.sse_max_buffer_size,
+                        # and the same client certificate options (qore#7261)
+                        "get_remote_certs": info.get_remote_certs,
+                        "ssl_verify_flags": info.ssl_verify_flags,
+                        "ssl_accept_all_certs": info.ssl_accept_all_certs,
                     };
                     if (info.additional_info) {
                         quic_opts.additional_info = info.additional_info;
