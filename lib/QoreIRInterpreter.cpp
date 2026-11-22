@@ -607,6 +607,11 @@ static QoreValue evalTmpCallAndRef(AbstractFunctionCallNode* node, ExceptionSink
     return result;
 }
 
+// defined in JITRuntime.cpp (issue #7267)
+DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* call);
+DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+
 // Overload for QoreValue (used with ValueHolder::operator->())
 static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     if (!val.hasNode()) {
@@ -2369,6 +2374,40 @@ static QoreListNode* buildArgListFromIROperands(
     }
     return arg_list;
 }
+
+//! The arguments of a call as NaN-boxed values read from their slots, which keep their references (issue #7267)
+class IRSelfCallArgs {
+public:
+    DLLLOCAL IRSelfCallArgs(const IRValueSlots& values, const std::vector<QoreIRValue>& operands)
+            : nargs(static_cast<int>(operands.size())) {
+        if (nargs > SmallBufSize) {
+            heap.reset(new uint64_t[nargs]);
+            args = heap.get();
+        }
+        for (int i = 0; i < nargs; ++i) {
+            args[i] = toBits(getIRValue(values, operands[i]));
+        }
+    }
+
+    IRSelfCallArgs(const IRSelfCallArgs&) = delete;
+    IRSelfCallArgs& operator=(const IRSelfCallArgs&) = delete;
+
+    //! returns the arguments, or nullptr if there are none
+    DLLLOCAL uint64_t* get() {
+        return nargs ? args : nullptr;
+    }
+
+    DLLLOCAL int size() const {
+        return nargs;
+    }
+
+private:
+    static constexpr int SmallBufSize = 8;
+    int nargs;
+    uint64_t buf[SmallBufSize];
+    uint64_t* args = buf;
+    std::unique_ptr<uint64_t[]> heap;
+};
 
 // Attempt the decomposed-background path for one of the five supported inner
 // expression shapes (self.method / foo(args) / Class::sm(args) / obj.method(args) /
@@ -8349,6 +8388,22 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 QoreValue arg = getIRValue(values, inv->operands[0]);
                 return fromBits(qore_rt_pseudo_type(toBits(arg)));
             }
+            // an unqualified call of a method of self (m()) on an object of the class of the call or of the method
+            // takes the fast method call path, with the references of the arguments given to the call (issue #7267);
+            // a call that cannot take it is made below, with the arguments as they were
+            if (op == QoreIROpcode::CallMethod) {
+                if (const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
+                        inv->expr.getInternalNode())) {
+                    if (QoreObject* self = qore_rt_self_call_fast_object(self_call)) {
+                        IRSelfCallArgs self_args(values, inv->operands);
+                        uint64_t result;
+                        if (qore_rt_try_self_call_fast_object(self, self_call, self_args.get(),
+                                GIVEN ? given->get() : nullptr, self_args.size(), xsink, result)) {
+                            return fromBits(result);
+                        }
+                    }
+                }
+            }
             QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 0,
                 inv->operands.size(), values);
             if (xsink && *xsink) {
@@ -10558,6 +10613,38 @@ DLLLOCAL QORE_IR_COLD_NOINLINE uint64_t irNewObjectGiven(const IRConsumedCallArg
     return rv;
 }
 
+//! makes an unqualified call of a method of self (m()) on an object that qore_rt_self_call_fast_object() returned,
+//! with the references of the temporary arguments that it consumes given to it (issue #7267)
+/** With the fast method call path if the call can take it; otherwise as the generic call makes it, with an argument
+    list that holds the last references of the arguments given to the call
+*/
+DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irCallSelfMethodGiven(const IRConsumedCallArgs& consumed,
+        const QoreIRInstruction* inst, const SelfFunctionCallNode* call, QoreObject* self, uint64_t* nanboxed_args,
+        int nargs, ExceptionSink* xsink) {
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(inst, given);
+    uint64_t result;
+    if (qore_rt_try_self_call_fast_object(self, call, nanboxed_args, given.get(), nargs, xsink, result)) {
+        // a reference given to the call that it did not release is released when it returns
+        given.release();
+        return fromBits(result);
+    }
+    // the argument list takes references of its own, and the references given to the call are released: the list
+    // holds the last ones, which the call moves into its parameters, as the AST interpreter does
+    QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    {
+        qore_list_private* priv = qore_list_private::get(*arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(nanboxed_args[i]);
+            priv->pushIntern(val.needsRef() ? val.refSelf() : val);
+        }
+    }
+    given.release();
+    SelfFunctionCallNode clone(*call, arg_list);
+    return evalTmpCallAndRef(&clone, xsink);
+}
+
 DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed,
         const QoreIRInvokeInstruction* inv, const IRValueSlots& values, ExceptionSink* xsink,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip, bool preserve_hash_key_weak_result) {
@@ -10596,6 +10683,8 @@ DLLLOCAL bool irInvokeDotEvalMethodDirectGiven(const IRConsumedCallArgs& consume
 DLLLOCAL uint64_t irNewObjectGiven(const IRConsumedCallArgs& consumed, QoreIRNewObjectInstruction* no_inst,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
         uint64_t* nb_args, int nargs, ExceptionSink* xsink);
+DLLLOCAL QoreValue irCallSelfMethodGiven(const IRConsumedCallArgs& consumed, const QoreIRInstruction* inst,
+        const SelfFunctionCallNode* call, QoreObject* self, uint64_t* nanboxed_args, int nargs, ExceptionSink* xsink);
 DLLLOCAL QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed, const QoreIRInvokeInstruction* inv,
         const IRValueSlots& values, ExceptionSink* xsink, const QoreIRFunction* func, const QoreIRBasicBlock* block,
         size_t ip, bool preserve_hash_key_weak_result);
@@ -21769,6 +21858,31 @@ load_local_done:
                             }
                         }
                         used_operands = true;
+                    }
+                }
+                // an unqualified call of a method of self (m()) on an object of the class of the call or of the
+                // method takes the fast method call path (issue #7267): with the references of the temporary arguments
+                // that it consumes given to it, as a CallMethodDirect call gives them; a call that cannot take it is
+                // made below, with the arguments as they were
+                if (!used_operands && effective_opcode == QoreIROpcode::CallMethod) {
+                    if (const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
+                            call_expr.getInternalNode())) {
+                        if (QoreObject* self = qore_rt_self_call_fast_object(self_call)) {
+                            IRSelfCallArgs self_args(values, inst->operands);
+                            if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                                res = irCallSelfMethodGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                                    weak_load_temp_slots, borrowed_temp_remaining}, inst, self_call, self,
+                                    self_args.get(), self_args.size(), xsink);
+                                used_operands = true;
+                            } else {
+                                uint64_t result;
+                                if (qore_rt_try_self_call_fast_object(self, self_call, self_args.get(), nullptr,
+                                        self_args.size(), xsink, result)) {
+                                    res = fromBits(result);
+                                    used_operands = true;
+                                }
+                            }
+                        }
                     }
                 }
                 if (!inst->operands.empty() && !used_operands) {

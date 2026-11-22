@@ -1,0 +1,142 @@
+Base run: "Base::m(1)"
+Base runPrivate: "Base::p(2)"
+Base runInternal: "Base::pi(3)"
+Base runStatic: "Base::st(4)"
+Base runDefault: "Base::def(1, 10) Base::def(1, 2)"
+Base runNamed: "Base::def(4, 3)"
+Base runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
+Base runReference: 7
+Base runThrow: "caught BASE-ERROR: Base::thrower(6)"
+Base runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Base fib: 55
+Base depth: 5
+Base runClosure: "Base::m(8) Base::m(9)"
+Base runNested: "Base::m(10)"
+Base runLoop: "Base::m(0), Base::m(1), Base::m(2)"
+Base log: ["constructor: Base::who"]
+Derived run: "Derived::m(1)"
+Derived runPrivate: "Derived::p(2)"
+Derived runInternal: "Base::pi(3)"
+Derived runStatic: "Base::st(4)"
+Derived runDefault: "Derived::def(1, 20) Derived::def(1, 2)"
+Derived runNamed: "Derived::def(4, 3)"
+Derived runVarargs: "Derived::va(1, [2, 3]) Derived::va(4, null)"
+Derived runReference: 205
+Derived runThrow: "caught DERIVED-ERROR: Derived::thrower(6)"
+Derived runThrowOut: "DERIVED-ERROR: Derived::thrower(7)"
+Derived fib: 55
+Derived depth: 50
+Derived runClosure: "Derived::m(8) Derived::m(9)"
+Derived runNested: "Derived::m(1)"
+Derived runLoop: "Derived::m(0), Derived::m(1), Derived::m(2)"
+Derived log: ["constructor: Derived::who"]
+Base run: "Base::m(1)"
+Base runPrivate: "Base::p(2)"
+Base runInternal: "Base::pi(3)"
+Base runStatic: "Base::st(4)"
+Base runDefault: "Base::def(1, 10) Base::def(1, 2)"
+Base runNamed: "Base::def(4, 3)"
+Base runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
+Base runReference: 7
+Base runThrow: "caught BASE-ERROR: Base::thrower(6)"
+Base runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Base fib: 55
+Base depth: 5
+Base runClosure: "Base::m(8) Base::m(9)"
+Base runNested: "Base::m(10)"
+Base runLoop: "Base::m(0), Base::m(1), Base::m(2)"
+Base log: ["constructor: Base::who"]
+Inherits run: "Base::m(1)"
+Inherits runPrivate: "Base::p(2)"
+Inherits runInternal: "Base::pi(3)"
+Inherits runStatic: "Base::st(4)"
+Inherits runDefault: "Base::def(1, 10) Base::def(1, 2)"
+Inherits runNamed: "Base::def(4, 3)"
+Inherits runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
+Inherits runReference: 7
+Inherits runThrow: "caught BASE-ERROR: Base::thrower(6)"
+Inherits runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Inherits fib: 55
+Inherits depth: 5
+Inherits runClosure: "Base::m(8) Base::m(9)"
+Inherits runNested: "Base::m(10)"
+Inherits runLoop: "Base::m(0), Base::m(1), Base::m(2)"
+Inherits log: ["constructor: Base::who"]
+InheritsOverride run: "InheritsOverride::m(1)"
+InheritsOverride runPrivate: "Base::p(2)"
+InheritsOverride runInternal: "Base::pi(3)"
+InheritsOverride runStatic: "Base::st(4)"
+InheritsOverride runDefault: "Base::def(1, 10) Base::def(1, 2)"
+InheritsOverride runNamed: "Base::def(4, 3)"
+InheritsOverride runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
+InheritsOverride runReference: 7
+InheritsOverride runThrow: "caught BASE-ERROR: Base::thrower(6)"
+InheritsOverride runThrowOut: "BASE-ERROR: Base::thrower(7)"
+InheritsOverride fib: 55
+InheritsOverride depth: 5
+InheritsOverride runClosure: "InheritsOverride::m(8) InheritsOverride::m(9)"
+InheritsOverride runNested: "InheritsOverride::m(22)"
+InheritsOverride runLoop: "InheritsOverride::m(0), InheritsOverride::m(1), InheritsOverride::m(2)"
+InheritsOverride log: ["constructor: Base::who"]
+Derived run: "Derived::m(1)"
+Derived runPrivate: "Derived::p(2)"
+Derived runInternal: "Base::pi(3)"
+Derived runStatic: "Base::st(4)"
+Derived runDefault: "Derived::def(1, 20) Derived::def(1, 2)"
+Derived runNamed: "Derived::def(4, 3)"
+Derived runVarargs: "Derived::va(1, [2, 3]) Derived::va(4, null)"
+Derived runReference: 205
+Derived runThrow: "caught DERIVED-ERROR: Derived::thrower(6)"
+Derived runThrowOut: "DERIVED-ERROR: Derived::thrower(7)"
+Derived fib: 55
+Derived depth: 50
+Derived runClosure: "Derived::m(8) Derived::m(9)"
+Derived runNested: "Derived::m(1)"
+Derived runLoop: "Derived::m(0), Derived::m(1), Derived::m(2)"
+Derived log: ["constructor: Derived::who"]
+FinalClass run: "FinalClass::m(1)"
+FinalClass runPrivate: "Base::p(2)"
+FinalClass runInternal: "Base::pi(3)"
+FinalClass runStatic: "Base::st(4)"
+FinalClass runDefault: "Base::def(1, 10) Base::def(1, 2)"
+FinalClass runNamed: "Base::def(4, 3)"
+FinalClass runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
+FinalClass runReference: 7
+FinalClass runThrow: "caught BASE-ERROR: Base::thrower(6)"
+FinalClass runThrowOut: "BASE-ERROR: Base::thrower(7)"
+FinalClass fib: 55
+FinalClass depth: 5
+FinalClass runClosure: "FinalClass::m(8) FinalClass::m(9)"
+FinalClass runNested: "FinalClass::m(16)"
+FinalClass runLoop: "FinalClass::m(0), FinalClass::m(1), FinalClass::m(2)"
+FinalClass log: ["constructor: Base::who"]
+destructor of Base: Base::who
+destructor of Derived: Derived::who
+destructor of Base: Base::who
+destructor of Inherits: Base::who
+destructor of InheritsOverride: Base::who
+destructor of Derived: Derived::who
+destructor of FinalClass: Base::who
+Inherits runOwn: "Base::m(1) Base::who"
+InheritsOverride runOwn: "InheritsOverride::m(2) Base::who"
+Inherits runOwn again: "Base::m(3) Base::who"
+destructor of InheritsOverride: Base::who
+destructor of Inherits: Base::who
+FinalClass runFinal: "FinalClass::m(1)"
+destructor of FinalClass: Base::who
+X2 viaB2: "B2::dm"
+X2 viaP2: "P2::dm"
+B2 viaB2: "B2::dm"
+B2 viaP2: "B2::dm"
+Y2 viaB2: "Y2::dm"
+Y2 viaP2: "Y2::dm"
+X2 viaB2 again: "B2::dm"
+Impl1 runAbstract: "Impl1::am(1)"
+Impl2 runAbstract: "Impl2::am(2)"
+Impl1 runAbstract again: "Impl1::am(3)"
+child ChildBase run: "ChildBase::m(1) ChildBase::p(1)"
+child ChildBase fib: 144
+child ChildDerived run: "ChildDerived::m(1) ChildDerived::p(1)"
+child ChildDerived fib: 144
+child ChildBase run: "ChildBase::m(1) ChildBase::p(1)"
+child ChildBase fib: 144

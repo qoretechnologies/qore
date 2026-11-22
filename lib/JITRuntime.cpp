@@ -12437,6 +12437,33 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uin
 static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! makes an unqualified call of a method of self with the fast method call path if the call can take it (issue #7267)
+static bool qore_rt_try_self_call_fast(QoreObject* self, const QoreMethod* method, const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink, uint64_t& result);
+
+//! returns the object of an unqualified call of a method of self (m()) that can take the fast method call path, or
+//! nullptr (issue #7267)
+/** The call has a method and a variant resolved at parse time, is not a call of a static method, of copy(), with
+    explicit type arguments or a named call resolved at run time by parameter name, and the object's class is the class
+    of the call or the method's class: see qore_rt_try_self_call_fast()
+*/
+static QORE_INTERN_ALWAYS_INLINE QoreObject* qore_rt_self_call_fast_object_intern(const SelfFunctionCallNode* call) {
+    const QoreMethod* method = call->getMethod();
+    const QoreClass* qc = call->getClass();
+    if (!method || !qc || !call->getVariant() || !call->hasSingleName() || call->isCopyCall()
+            || call->hasExplicitTypeArgs() || call->getRuntimeArgNames() || method->isStatic()) {
+        return nullptr;
+    }
+    // the object of the call, as SelfFunctionCallNode::evalImpl() takes it
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreObject* self = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    if (!self || (self->getClass() != qc && self->getClass() != method->getClass())) {
+        return nullptr;
+    }
+    return self;
+}
+
 #ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
 //! as qore_rt_call_with_args(), for a call that gives the references of its temporary arguments (\a arg_cleanups) to
 //! the callee, whose parameters take them over (issues #5882, #5958): a call made through its expression in JIT code,
@@ -12521,6 +12548,18 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
                 } else if (!strcmp(mname, "values")) {
                     return qore_fast_hash_values(args[0], xsink);
                 }
+            }
+        }
+    }
+
+    // an unqualified call of a method of self (m()) on an object of the class of the call or of the method takes the
+    // fast method call path, as a call of a method of an object of the resolved class does (issue #7267)
+    if (const SelfFunctionCallNode* call = qore_get_self_function_call_node(expr.getInternalNode())) {
+        if (QoreObject* self = qore_rt_self_call_fast_object_intern(call)) {
+            uint64_t result;
+            if (qore_rt_try_self_call_fast(self, call->getMethod(), call->getClass(), call->getVariant(), args,
+                    arg_cleanups, nargs, xsink, result)) {
+                return result;
             }
         }
     }
@@ -15352,6 +15391,16 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
     if (!self) {
         xsink->raiseException("JIT-ERROR", "no self object in self method dispatch");
         return toBits(QoreValue());
+    }
+
+    // an unqualified call on an object of the class of the call or of the method takes the fast method call path
+    // (issue #7267); a call with explicit type arguments keeps the generic path below
+    if (target.self_ns_single && !target.self_is_copy && !target.explicit_type_param_instantiation) {
+        uint64_t result;
+        if (qore_rt_try_self_call_fast(self, method, target.qc, target.variant, args, arg_cleanups, nargs, xsink,
+                result)) {
+            return result;
+        }
     }
 
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
@@ -22332,6 +22381,51 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return try_dispatch_method_fast_consume(o, method, qc, variant, args, arg_cleanups, nargs, xsink, result);
     }
     return try_dispatch_method_fast_t<false>(o, method, qc, variant, args, arg_cleanups, nargs, xsink, result);
+}
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+
+// documented above
+/** An unqualified call of a method of self is virtual: SelfFunctionCallNode::evalImpl() makes it with
+    AbstractMethodCallNode::exec(), which calls the method and variant resolved at parse time when the object's class is
+    the class of the call (the class whose code makes the call) or the method's class, and otherwise looks the method
+    up by name in the object's class.  With the same test, the call is made here with the method and variant resolved
+    at parse time, as try_dispatch_method_fast() makes a call of a method of an object of the resolved class; any other
+    call (a subclass object, which can override the method; a call without a parse-time variant; a static method,
+    which keeps its call path) returns false, and the caller makes it as before.  The classes are compared by
+    identity, as exec() compares them (qore#7036).
+*/
+static bool qore_rt_try_self_call_fast(QoreObject* self, const QoreMethod* method, const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink, uint64_t& result) {
+    assert(self && method);
+    if (!qc || !variant || method->isStatic()
+            || (self->getClass() != qc && self->getClass() != method->getClass())) {
+        return false;
+    }
+#ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+    // this unit makes only the calls that give the references of their temporary arguments
+    return arg_cleanups
+        && try_dispatch_method_fast_consume(self, method, qc, variant, args, arg_cleanups, nargs, xsink, result);
+#else
+    return try_dispatch_method_fast(self, method, qc, variant, args, arg_cleanups, nargs, xsink, result);
+#endif
+}
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+//! returns the object of an unqualified call of a method of self (m()) that can take the fast method call path, or
+//! nullptr: the IR interpreter's test of its calls (issue #7267)
+DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* call) {
+    return qore_rt_self_call_fast_object_intern(call);
+}
+
+//! makes an unqualified call of a method of self (m()) on the object that qore_rt_self_call_fast_object() returned
+//! with the fast method call path; returns false, having done nothing, if the call cannot take it (issue #7267)
+/** @param arg_cleanups the cleanup slots of the arguments whose references the caller gives to the call, or nullptr
+*/
+DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+    return qore_rt_try_self_call_fast(self, call->getMethod(), call->getClass(), call->getVariant(), args,
+        arg_cleanups, nargs, xsink, result);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
