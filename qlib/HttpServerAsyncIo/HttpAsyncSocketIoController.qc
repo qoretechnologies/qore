@@ -103,6 +103,27 @@ public enum HttpVersionMode : string {
     H3 = "h3",
 }
 
+#! Releases a handle of work of the module cleanup that was handed over to code that is destroyed without being run
+/** See HttpAsyncSocketIoController::wrapCleanupHandover() (qore#7239); releasing a handle again has no effect, so the
+    release when the code has run (AsyncIoController::runModuleCleanupWork()) and the release here do not conflict
+*/
+class ModuleCleanupHandoverGuard {
+    public {
+        #! the handle
+        int handle;
+    }
+
+    #! Creates the object with the handle that it releases when it is destroyed
+    constructor(int handle) {
+        self.handle = handle;
+    }
+
+    #! Releases the handle if it is still held
+    destructor() {
+        AsyncIoController::releaseModuleCleanupWork(handle);
+    }
+}
+
 #! HTTP-aware async I/O controller for managing HTTP connections
 /** This controller manages HTTP connections through their lifecycle:
 
@@ -5134,8 +5155,10 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
-        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239)
-        c = wrapCleanupHandover(c);
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5157,30 +5180,40 @@ public class HttpAsyncSocketIoController {
         code that such work leaves to another thread (a thread of its own, a thread of the handler pool) is waited for
         too, until it has run (see
         @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
-        qore#7239); outside of such work \a c is returned as it is
+        qore#7239); outside of such work \a c is returned as it is.  If the returned code is discarded without being
+        run (a pool that drops its queued tasks, a caller that refuses it), the handle is released when the code is
+        destroyed, so that the cleanup does not wait for it
+
+        @param c the code to run on another thread
+        @param what the name of the caller for the error raised if \a c cannot be run on another thread
+
+        @return the code to run on the other thread
+
+        @throw PERMISSION-DENIED \a c cannot be run on another thread (see @ref Qore::check_thread_callable())
+
+        @since HttpServerAsyncIo 1.0
     */
-    private:internal static code<nothing()> wrapCleanupHandover(code<nothing()> c) {
+    static code<nothing()> wrapCleanupHandover(code<nothing()> c, string what) {
         int handle = AsyncIoController::holdModuleCleanupWork();
         if (!handle) {
             return c;
         }
+        # releases the handle if the code returned is destroyed without being run
+        ModuleCleanupHandoverGuard guard(handle);
         # the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056);
         # checked here, as the code below runs it in a closure of this module
-        try {
-            check_thread_callable(c, "HttpAsyncSocketIoController::wrapCleanupHandover()");
-        } catch (hash<ExceptionInfo> ex) {
-            AsyncIoController::releaseModuleCleanupWork(handle);
-            rethrow;
-        }
+        check_thread_callable(c, what);
         return sub () {
-            AsyncIoController::runModuleCleanupWork(handle, c);
+            AsyncIoController::runModuleCleanupWork(guard.handle, c);
         };
     }
 
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
-        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239)
-        c = wrapCleanupHandover(c);
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         try {
             background c();
         } catch () {

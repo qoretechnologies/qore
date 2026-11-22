@@ -314,25 +314,31 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     its operations are canceled when admitted and its tasks waited for (a message delivery), and the cleanup thread
     itself can do all of it (its operations are canceled by its next round).
     Synchronous I/O and `AsyncIoController::exec()`, which use the internal `submit()`, are not refused
-  - work that the cleanup counts and that module code hands over to a thread that is already running, or to a
-    thread of its own, stays counted until that thread has done it (qore#7239): the work takes a handle with
-    `AsyncIoController::holdModuleCleanupWork()` (`qore_module_cleanup_hold_work()`; 0 outside of counted work,
-    which `QoreModuleCleanupCountedWorkScope` marks on a dispatcher worker and `qore_module_cleanup_task_running` in
-    a task), which the other thread releases with `releaseModuleCleanupWork()`, or runs the code with
-    `runModuleCleanupWork()`, which marks it as counted work while it runs (so that it can hand work over in turn) and
-    releases the handle when it returns.  The handover sites: the admission gates that leave a notification to the
-    thread already processing (`WebSocketStreamProcessor::notifyIo()`, `HttpWebSocketPollOperation::onPollComplete()`
-    and `onComplete()`), the controller's `runOnThreadOfItsOwn()` and `runOnHandlerPool()` (the close notification of
-    a canceled HTTP/2 or HTTP/3 connection's streams), and the server's handler-pool submitter of a WebSocket
-    connection's end.  Each handle is counted in the cleanup's count and listed with who took it and where; after the
-    deadline the cleanup waits for handles at most the grace period (`qore_get_module_cleanup_handover_grace()`:
-    `QORE_MODULE_CLEANUP_HANDOVER_GRACE` or `--module-cleanup-handover-grace`, by default the deadline but at least
-    5 s, measured from the deadline); then it names the handles still held in a warning, stops counting them, and
-    sets `qore_module_cleanup_abandoned()`, after which `delUser()` deletes no further module and `qore_cleanup()`
-    leaves the modules and their Programs as they are, as for a foreign thread in module code, instead of tearing
-    them down under the threads that hold the handles.  Other counted work is waited for as before.  The servers case
-    of `ModuleCleanupCancel.qtest` checks that the end of the canceled server connection runs with a handle held; its
-    handover cases check release twice, a handle outside counted work and a handle never released
+  - work that the cleanup counts and that module code hands over to a thread that is already running, or to a thread of
+    its own, stays counted until that thread has done it (qore#7239): the work takes a handle with
+    `AsyncIoController::holdModuleCleanupWork()` (`qore_module_cleanup_hold_work()`; 0 outside of counted work, which
+    `QoreModuleCleanupCountedWorkScope` marks on a dispatcher worker and `qore_module_cleanup_task_running` in a task),
+    which the other thread releases with `releaseModuleCleanupWork()`, or runs the code with `runModuleCleanupWork()`,
+    which marks it as counted work while it runs (so that it can hand work over in turn) and releases the handle when it
+    returns.  The handover sites: the admission gates that leave a notification to the thread already processing
+    (`WebSocketStreamProcessor::notifyIo()`, `HttpWebSocketPollOperation::onPollComplete()` and `onComplete()`), the
+    controller's `runOnThreadOfItsOwn()` and `runOnHandlerPool()` (the close notification of a canceled HTTP/2 or HTTP/3
+    connection's streams), and the server's handler-pool submitter of a WebSocket connection's end; the last two share
+    `HttpAsyncSocketIoController::wrapCleanupHandover()`, whose closure captures a guard object that releases the handle
+    when the closure is destroyed without running (a pool that drops its queued tasks), and the gates release the
+    handles left to them when their object is destroyed.  Each handle is counted in the cleanup's count and listed with
+    who took it and where; after the deadline the cleanup waits for handles at most the grace period
+    (`qore_get_module_cleanup_handover_grace()`: `QORE_MODULE_CLEANUP_HANDOVER_GRACE` or
+    `--module-cleanup-handover-grace`, by default the deadline but at least 5 s, measured from the deadline); then it
+    names the handles still held in a warning, stops counting them, and sets `qore_module_cleanup_abandoned()`, after
+    which `delUser()` deletes no further module and `qore_cleanup()` leaves the modules and their Programs as they are,
+    as for a foreign thread in module code, instead of tearing them down under the threads that hold the handles.  Other
+    counted work is waited for as before.  The servers case of `ModuleCleanupCancel.qtest` checks that the end of the
+    canceled server connection runs with a handle held; its gate cases (HTTP/2 and HTTP/1.1) block the thread in a
+    stream's loop in a handler until the held notification of the next frame has handed the cleanup's work over at the
+    gate (`dbg_module_cleanup_wait_handles()` with the gate's file), and check that the frame is processed before the
+    next module's data is deleted; its handover cases check release twice, a handle outside counted work, a handle
+    never released and the handle of handed-over code that is discarded without running
   - the three windows of the drain (a step in flight at the cancel, an operation that completes after the wait and
     before the cancel round, a timer that fires after the scan of the timers) are pinned by debug hooks
     (`dbg_async_io_module_cleanup_drain_releases()` with the step-result and timer-callback holds; the first two at

@@ -2450,11 +2450,10 @@ private:
     there are any; with \a end_hold, the hook holds no more items
 */
 DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
-//! Debug-only: an item held by the dbg_async_io_hold_module_cleanup_work() test hook has run (or been discarded) and
-//! ended (qore#7239)
-DLLLOCAL void qore_dbg_held_module_cleanup_item_ended();
-//! Debug-only: waits until \a count items held by the test hook have ended; returns false on timeout (qore#7239)
-DLLLOCAL bool qore_dbg_wait_held_module_cleanup_work_ended(int64 count, int64 timeout_ms);
+//! Debug-only: waits until at least \a count handles of handed-over module cleanup work are held, only counting
+//! those whose description (who took the handle and where) contains \a where if not null; returns false on timeout
+//! (qore#7239)
+DLLLOCAL bool qore_dbg_module_cleanup_wait_handles(size_t count, const char* where, int64 timeout_ms);
 
 //! Debug-only: holds the calling ThreadPool task of the module cleanup while the
 //! dbg_async_io_hold_module_cleanup_work() test hook holds its work, until the cleanup waits for its work

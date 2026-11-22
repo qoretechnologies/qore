@@ -1334,6 +1334,12 @@ on_exit AsyncIoController::releaseModuleCleanupWork(h);
     @since %Qore 3.0
 */
 static int AsyncIoController::holdModuleCleanupWork() {
+    // outside of work that the module cleanup counts (in particular before the end of the process): no handle, and
+    // nothing is formatted, as gates call this method at run time for every notification that they leave to another
+    // thread
+    if (!qore_module_cleanup_counted_work_running()) {
+        return 0;
+    }
     std::string where;
     try {
         if (qore_module_cleanup_counted_owner && !qore_module_cleanup_counted_owner->empty()) {

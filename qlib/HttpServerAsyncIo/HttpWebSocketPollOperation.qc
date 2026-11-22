@@ -127,6 +127,16 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     constructor(Socket sock) : HttpWebSocketPollOperationBase(sock) {
     }
 
+    #! Releases the handles of work of the module cleanup that are still left to the drainer
+    /** Handles are left only if the object is destroyed without the drainer taking them (qore#7239): the cleanup at
+        the end of the process does not then wait for them
+    */
+    destructor() {
+        foreach int handle in (pending_cleanup_work) {
+            AsyncIoController::releaseModuleCleanupWork(handle);
+        }
+    }
+
     #! Sets the connection and handler references for frame dispatch
     /** Called from startImpl() after the WebSocketConnection is created.
 

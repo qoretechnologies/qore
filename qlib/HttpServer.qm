@@ -6107,21 +6107,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
             # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
-            int handle = AsyncIoController::holdModuleCleanupWork();
-            if (handle) {
-                # the code runs on another thread: code that cannot start threads cannot have its code run there
-                # (qore#7056); checked here, as the code below runs it in a closure of this module
-                try {
-                    check_thread_callable(c, "HttpServer handler pool submitter");
-                } catch (hash<ExceptionInfo> ex) {
-                    AsyncIoController::releaseModuleCleanupWork(handle);
-                    rethrow;
-                }
-                code<nothing()> end = c;
-                c = sub () {
-                    AsyncIoController::runModuleCleanupWork(handle, end);
-                };
-            }
+            c = HttpAsyncSocketIoController::wrapCleanupHandover(c, "HttpServer handler pool submitter");
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {

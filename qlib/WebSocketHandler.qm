@@ -1874,6 +1874,16 @@ class WebSocketStreamProcessor {
         self.last_recv_ms = clock_get_monotonic_us() / 1000;
     }
 
+    #! Releases the handles of work of the module cleanup that are still left to the thread in the loop
+    /** Handles are left only if the object is destroyed without the thread taking them (qore#7239): the cleanup at
+        the end of the process does not then wait for them
+    */
+    destructor() {
+        foreach int handle in (pending_cleanup_work) {
+            AsyncIoController::releaseModuleCleanupWork(handle);
+        }
+    }
+
     #! Sets the code that ends the stream once it has closed, in place of a thread waiting for @ref done
     /** The code is called once, in the thread that closes the stream (an async I/O callback worker, for example), so
         it must not block or run user code itself: the handler's code submits the end of the stream to a thread of the

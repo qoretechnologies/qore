@@ -3,10 +3,13 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # a module whose destructor submits an operation whose onComplete(), work of the module cleanup that the cleanup
-# counts, takes a handle of its work (AsyncIoController::holdModuleCleanupWork()) and releases it twice, or never;
-# see ModuleCleanupCancel.qtest (qore#7239)
+# counts, takes a handle of its work (AsyncIoController::holdModuleCleanupWork()) and releases it twice, or never, or
+# hands itself over to code that it then discards without running it
+# (HttpAsyncSocketIoController::wrapCleanupHandover()); see ModuleCleanupCancel.qtest (qore#7239)
 
 %modern
+
+%requires HttpServerAsyncIo
 
 module AaHandover {
     version = "1.0";
@@ -56,6 +59,17 @@ class HandoverOperation inherits AbstractPollOperation<auto> {
             case "never":
                 # the handle is never released: the cleanup waits for it until the grace period after its deadline
                 break;
+            case "drop": {
+                printf("release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                # code that would run on another thread holds a handle of this work; it is discarded without being
+                # run, which releases the handle, so the cleanup does not wait for it
+                code<nothing()> wrapped = HttpAsyncSocketIoController::wrapCleanupHandover(sub () {
+                    printf("the discarded code ran\n");
+                }, "AaHandover");
+                remove wrapped;
+                printf("code discarded\n");
+                break;
+            }
         }
         flush();
     }

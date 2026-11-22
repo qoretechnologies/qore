@@ -1077,6 +1077,9 @@ void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     QoreModuleCleanupDelegateHelper delegate(module_cleanup_delegate);
     // those of an operation that the cleanup canceled cannot start new asynchronous work (qore#7027)
     ModuleCleanupAsyncCallbackHelper canceled_work(module_cleanup_canceled);
+    // the release is work that the cleanup counts: its destructors can hand work over to another thread
+    // (AsyncIoController::holdModuleCleanupWork(), qore#7239)
+    QoreModuleCleanupCountedWorkScope counted_scope(static_cast<bool>(module_cleanup_delegate), nullptr);
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -1363,10 +1366,6 @@ struct AsyncIoDebugHeldModuleCleanupWork {
     //! incremented when the counted tasks held are released, and when the hold ends
     uint64_t counted_task_release_gen = 0;
     uint64_t task_hold_end_gen = 0;
-    //! the number of items held that have run (or been discarded) and ended, signaled on @ref ended_cond
-    //! (qore_dbg_wait_held_module_cleanup_work_ended(), qore#7239)
-    int64 ended = 0;
-    QoreCondition ended_cond;
 
     //! Returns the state, which is never destroyed (see AsyncIoDebugHeldReleases::get())
     static AsyncIoDebugHeldModuleCleanupWork& get() {
@@ -1478,27 +1477,6 @@ void qore_dbg_hold_module_cleanup_task(bool counted) {
     while (end_gen == state.task_hold_end_gen && (!counted || release_gen == state.counted_task_release_gen)) {
         state.task_cond.wait(state.lock);
     }
-}
-
-void qore_dbg_held_module_cleanup_item_ended() {
-    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
-    AutoLocker al(state.lock);
-    ++state.ended;
-    state.ended_cond.broadcast();
-}
-
-bool qore_dbg_wait_held_module_cleanup_work_ended(int64 count, int64 timeout_ms) {
-    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
-    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
-    AutoLocker al(state.lock);
-    while (state.ended < count) {
-        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
-        if (remaining_us <= 0) {
-            return false;
-        }
-        state.ended_cond.wait2(state.lock, (remaining_us + 999) / 1000);
-    }
-    return true;
 }
 
 void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
@@ -2629,7 +2607,6 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
 #ifdef DEBUG
         if (dbg_held) {
             fprintf(stderr, "held module cleanup work: an item was discarded and ended\n");
-            qore_dbg_held_module_cleanup_item_ended();
             fflush(stderr);
         }
 #endif
@@ -3257,6 +3234,13 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             }
         } cb_worker_guard;
 
+        // the item is work that the module cleanup counts: its callbacks and the release of its references below
+        // (which can run destructors of objects of a module's classes) can hand work over to another thread
+        // (AsyncIoController::holdModuleCleanupWork(), qore#7239); declared after the item, so it ends before the
+        // item's work is no longer counted
+        QoreModuleCleanupCountedWorkScope counted_scope(async_item.module_cleanup_work
+            || (async_item.sandbox_ctx && async_item.sandbox_ctx->module_cleanup_work), &async_item.owner);
+
         if (pgm_shutting_down || owner_shutting_down) {
             if (async_item.type == DT_CONTINUE_POLL && async_item.controller) {
                 // Tell the I/O thread this op is done (cache entry likely
@@ -3268,10 +3252,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             }
             // Fall through to cleanup below
         } else {
-            // the item is work that the module cleanup counts: it can hand itself over to another thread
-            // (AsyncIoController::holdModuleCleanupWork(), qore#7239)
-            QoreModuleCleanupCountedWorkScope counted_scope(async_item.module_cleanup_work
-                || (async_item.sandbox_ctx && async_item.sandbox_ctx->module_cleanup_work), &async_item.owner);
             switch (async_item.type) {
                 case DT_ABORT: {
                     method_name = "abort";
@@ -3741,7 +3721,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             fprintf(stderr, "held module cleanup work: an item %s and ended\n",
                 (pgm_shutting_down || owner_shutting_down || async_item.type == DT_RELEASE) ? "was discarded" : "ran");
             fflush(stderr);
-            qore_dbg_held_module_cleanup_item_ended();
         }
 #endif
 

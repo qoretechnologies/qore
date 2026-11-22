@@ -37,6 +37,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <limits>
 
 #ifdef __linux__
@@ -6003,8 +6004,6 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
     //! the handles of counted work handed over to another thread that are still held, with who took them and where
     //! (qore_module_cleanup_hold_work(), qore#7239); each one is counted in @ref count
     std::map<int64, std::string> handles;
-    //! the generator of the handles, which other code cannot guess
-    std::mt19937_64 rng{std::random_device{}()};
 #ifdef DEBUG
     //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
     bool dbg_held = false;
@@ -6052,6 +6051,58 @@ size_t qore_module_cleanup_handle_count() {
     return work.handles.size();
 }
 
+#ifdef DEBUG
+bool qore_dbg_module_cleanup_wait_handles(size_t count, const char* where, int64 timeout_ms) {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+    AutoLocker al(work.lock);
+    // every change of the state is broadcast on the condition (see qore_module_cleanup_hold_work())
+    while (true) {
+        size_t n = 0;
+        for (auto& i : work.handles) {
+            if (!where || i.second.find(where) != std::string::npos) {
+                ++n;
+            }
+        }
+        if (n >= count) {
+            break;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
+    }
+    return true;
+}
+#endif
+
+//! Returns a new random handle id (positive or 0) for qore_module_cleanup_hold_work(); called without the lock
+/** The id comes from the cryptographically secure generator of OpenSSL, so that code cannot predict the handles of
+    other work from the handles that it takes itself; if that generator fails, from a Mersenne Twister of the thread
+    seeded from the random device, or, if that throws, from the clock
+*/
+static int64 qore_module_cleanup_new_handle_id() {
+    uint64_t v = 0;
+    if (RAND_bytes(reinterpret_cast<unsigned char*>(&v), sizeof v) != 1) {
+        ERR_clear_error();
+        thread_local std::unique_ptr<std::mt19937_64> fallback_rng;
+        if (!fallback_rng) {
+            uint64_t seed;
+            try {
+                std::random_device rd;
+                seed = (static_cast<uint64_t>(rd()) << 32) ^ rd();
+            } catch (std::exception&) {
+                seed = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())
+                    ^ reinterpret_cast<uintptr_t>(&v);
+            }
+            fallback_rng.reset(new std::mt19937_64(seed));
+        }
+        v = (*fallback_rng)();
+    }
+    return static_cast<int64>(v & 0x7fffffffffffffffull);
+}
+
 int64 qore_module_cleanup_hold_work(const std::string& where) {
     // only the work that the cleanup counts can hand it over, so that a handle cannot keep the cleanup waiting for
     // work that it does not wait for in the first place
@@ -6059,18 +6110,24 @@ int64 qore_module_cleanup_hold_work(const std::string& where) {
         return 0;
     }
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
-    AutoLocker al(work.lock);
-    // checked under the lock, which the cleanup holds when it drops the handles
-    if (qore_module_cleanup_abandoned()) {
-        return 0;
-    }
     try {
         // a random handle that other code cannot guess, so that it cannot release a handle of other work or run code
-        // as work of the cleanup with it (see runModuleCleanupWork())
-        int64 id;
-        do {
-            id = static_cast<int64>(work.rng() & 0x7fffffffffffffffull);
-        } while (!id || work.handles.find(id) != work.handles.end());
+        // as work of the cleanup with it (see runModuleCleanupWork()); drawn without the lock, which is a leaf lock
+        int64 id = qore_module_cleanup_new_handle_id();
+        SafeLocker sl(work.lock);
+        // checked under the lock, which the cleanup holds when it drops the handles
+        if (qore_module_cleanup_abandoned()) {
+            return 0;
+        }
+        // a collision (or 0), which is very unlikely, is drawn again, also without the lock
+        while (!id || work.handles.find(id) != work.handles.end()) {
+            sl.unlock();
+            id = qore_module_cleanup_new_handle_id();
+            sl.lock();
+            if (qore_module_cleanup_abandoned()) {
+                return 0;
+            }
+        }
         work.handles.emplace(id, where);
         ++work.count;
         // a cleanup that waits without a time limit for the other work waits for the handles until the end of the
