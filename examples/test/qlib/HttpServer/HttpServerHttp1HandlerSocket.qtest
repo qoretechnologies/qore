@@ -199,17 +199,21 @@ class StreamBodyRequest inherits AbstractStreamRequest {
         int ctor_size;
         int parts;
         int bytes;
-        int recv_size;
+        *Queue grabbed;
     }
 
     constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
-            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+            hash<auto> hdr, auto body, *Queue grabbed) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
         ctor_size = body.size();
-        recv_size = s.recvBinary(16, 1s).size();
+        self.grabbed = grabbed;
     }
 
     private nothing recvImpl(hash<auto> v) {
         if (v.data) {
+            if (grabbed && !parts) {
+                # the handler reads far more than the rest of the body through the socket of its request
+                grabbed.push(s.recvBinary(100 * 1024 * 1024, HangGuard).size());
+            }
             ++parts;
             bytes += v.data.size();
         }
@@ -219,6 +223,8 @@ class StreamBodyRequest inherits AbstractStreamRequest {
     }
 
     private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        # after the body, the socket of the request gives no data, also with a request after it on the connection
+        int recv_size = s.recvBinary(16, 1s).size();
         return <HttpResponseInfo>{
             "code": 200,
             "body": sprintf("ctor=%d\nparts=%d\nbytes=%d\nrecv=%d", ctor_size, parts, bytes, recv_size),
@@ -226,14 +232,23 @@ class StreamBodyRequest inherits AbstractStreamRequest {
     }
 }
 
-#! A stream handler
+#! A stream handler that wants a body with a Content-Length as a stream (qore#7308)
 class StreamBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the size that a request of the "stream-grab" path read through its socket
+        Queue grabbed();
+    }
+
     constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
-        return new StreamBodyRequest(listener, self, s, cx, hdr, body);
+        return new StreamBodyRequest(listener, self, s, cx, hdr, body, hdr.path == "stream-grab" ? grabbed : NOTHING);
     }
 }
 
@@ -452,13 +467,14 @@ nothing sub run_code(code c) {
     private {
         HttpServer server;
         ProbeHandler probe();
+        StreamBodyHandler stream_handler();
         int port;
     }
 
     constructor() : QUnit::Test("HTTP/1.1 handler socket", "1.0", \ARGV) {
         server = new HttpServer(<HttpServerOptionInfo>{});
         server.setHandler("probe", "", NOTHING, probe);
-        server.setHandler("stream", "^stream", NOTHING, new StreamBodyHandler());
+        server.setHandler("stream", "^stream", NOTHING, stream_handler);
         server.setDefaultHandler("probe", probe);
         port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         server.waitForAsyncIo();
@@ -475,7 +491,10 @@ nothing sub run_code(code c) {
         addTestCase("DataStream", \dataStreamTest());
         addTestCase("DataStream of a sandboxed handler", \sandboxedDataStreamTest());
         addTestCase("the request context", \contextTest());
-        addTestCase("a Content-Length body to a stream handler", \streamBodyTest());
+        addTestCase("a Content-Length body to a stream handler", \streamBodyTest(), DefaultBodyStreamThreshold * 2);
+        addTestCase("a Content-Length body read before the dispatch to a stream handler", \streamBodyTest(),
+            DefaultBodyStreamThreshold / 2);
+        addTestCase("a stream handler reads no more than its body", \streamGrabTest());
         addTestCase("sandboxed code cannot abort the connection", \sandboxedAbortTest());
         addTestCase("the server's target aborts a request", \targetAbortTest());
         addTestCase("WebSocket", \webSocketTest());
@@ -660,23 +679,35 @@ nothing sub run_code(code c) {
         assertEq("Http1HandlerSocket", r.own, "the handler's socket is its request's");
     }
 
-    #! the server reads a body with a Content-Length before a stream request starts, which gets it whole, in its
-    #! constructor and in one part (as before qore#7305; see qore#7308); the socket of the request gives no data
-    streamBodyTest() {
+    #! a stream handler that wants a body with a Content-Length as a stream gets it in parts, each byte once, read
+    #! through the socket of its request for the part that the server did not read before the dispatch (qore#7308);
+    #! the socket gives no data after the body
+    streamBodyTest(int size) {
         Socket c = connect();
         on_exit c.close();
-        # larger than twice the read buffer of the server
-        int size = 1024 * 1024;
         c.send(sprintf("POST /stream HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
             "Content-Length: %d\r\n\r\n", size));
         c.send(strmul("x", size).toBinary());
         c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
         hash<auto> r = parse(readResponse(c));
-        assertEq(string(size), r.ctor, "the stream request gets the body whole");
-        assertEq("1", r.parts, "the body is received in one part");
-        assertEq(string(size), r.bytes);
-        assertEq("0", r.recv, "the socket of the request gives no data");
+        assertEq("0", r.ctor, "no body in the constructor");
+        assertEq(string((size + BodyStreamPartSize - 1) / BodyStreamPartSize), r.parts, "the body in parts");
+        assertEq(string(size), r.bytes, "each byte once");
+        assertEq("0", r.recv, "the socket of the request gives no data after the body");
         assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! a read through the socket of the request gives no more than the rest of its body, never the next request
+    streamGrabTest() {
+        int size = DefaultBodyStreamThreshold * 2;
+        Socket c = connect();
+        on_exit c.close();
+        c.send(sprintf("POST /stream-grab HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
+            "Content-Length: %d\r\n\r\n", size));
+        c.send(strmul("x", size).toBinary());
+        c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the first part was given by the server's reader; the handler read the rest of the body
+        assertEq(size - BodyStreamPartSize, stream_handler.grabbed.get(HangGuard), "the rest of the body only");
     }
 
     #! a sandboxed handler cannot abort the connection of its request, which then serves the next request

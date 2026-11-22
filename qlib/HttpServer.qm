@@ -190,8 +190,9 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps.  The
     socket of an HTTP/1.x request sends the request's own response (once), reads the request's own body only (a
     chunked body once, by its chunks, with @ref Qore::Socket::readHTTPChunkedBody() "readHTTPChunkedBody()" and its
-    variants; the server reads a body with a \c Content-Length before the handler gets the request, so the socket
-    then gives no data), and gives the connection's information, such as
+    variants; a body with a \c Content-Length up to its length, which the server reads before the handler gets the
+    request, except the part that it did not read of a body that a stream handler gets in parts: see
+    @ref HttpServer::Http1BodyReader "Http1BodyReader"), and gives the connection's information, such as
     @ref Qore::Socket::getPeerInfo() "getPeerInfo()"; it raises \c HTTP-HANDLER-SOCKET-ERROR for a read of the next
     request on the connection (@ref Qore::Socket::readHTTPHeader() "readHTTPHeader()"), for shutdown() and close() (a
     handler closes the connection with the \c close key of its response; code that is not sandboxed aborts it at once,
@@ -4656,7 +4657,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     */
     private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
-            bool want_body_reader, hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            bool want_body_reader, Socket body_sock, hash<auto> info,
+            *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
         # the fields of the request that its body is read and decoded by (qore#6851)
         auto content_type = http_get_field(hdr, "content-type");
@@ -4679,7 +4681,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             # the server keeps no copy of the bytes read before the dispatch: each byte reaches the handler once
             *binary buffered = remove cx."header-info".body;
-            cx."header-info".body_reader = new Http1BodyReader(s, content_length, buffered, max_body);
+            # the reader, which the handler's code gets, reads the rest of the body through the socket of the
+            # handler's request, which gives no more than the rest of the body (qore#7305)
+            Http1HandlerSocket::setBodyLength(body_sock, content_length - (buffered ? buffered.size() : 0));
+            cx."header-info".body_reader = new Http1BodyReader(body_sock, content_length, buffered, max_body);
             return {"body": NOTHING};
         }
         if (cx."header-info".body_streaming && !want_streaming) {
@@ -5243,7 +5248,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
             *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
-                want_streaming, want_body_reader, info, \async_response_out);
+                want_streaming, want_body_reader, request_helper.handler_sock ?? s, info, \async_response_out);
             if (!body_info) {
                 return;
             }
@@ -10821,9 +10826,11 @@ class Http2HandlerSocket inherits Qore::Socket {
     readHTTPChunkedBodyBinary(), their \c WithCallback() variants or readHTTPChunkedBodyToOutputStream(), which stop
     at the end of the body (its last chunk and trailer section); a chunked body cannot be read with recv() or any
     other method that reads bytes, as only the decoding of its chunks tells where it ends.  The server reads a body
-    with a \c Content-Length itself before the handler gets the request, so recv(), recvBinary() and
-    recvToOutputStream() give no data (the end of the input), and the methods that read an integer raise an
-    exception.
+    with a \c Content-Length before the handler gets the request, except the part that it did not read of a body
+    that a stream handler gets in parts (see @ref HttpServer::Http1BodyReader "Http1BodyReader", which reads it
+    through this object): recv(), recvBinary(), recvToOutputStream() and the methods that read an integer read only
+    that rest of the body (recv() and recvBinary() with a size of 0 or less, all of it), and then give no data (the
+    end of the input), or raise an exception for an integer.
 
     Its readHTTPHeader() and readHTTPHeaderString(), which would read the next request on the connection, raise an
     exception, as do shutdown(), shutdownWrite(), shutdownSSL() and close() (a handler closes the connection after
@@ -10854,11 +10861,23 @@ class Http1HandlerSocket inherits Qore::Socket {
         bool body_read;
         #! set when a complete response was sent
         bool response_complete;
+        #! the bytes of the request's body with a Content-Length that the server did not read (see setBodyLength())
+        int body_remaining = 0;
     }
 
     #! Creates the object for the current request on the connection's socket
     constructor(Socket real) {
         self.real = real;
+    }
+
+    #! Sets the number of bytes of the request's body with a Content-Length that the server did not read (qore#7305)
+    /** The reads of the object give no more than these bytes; called by the server before the handler gets the
+        request; the class is not exported, so only the module's code can call it
+    */
+    static setBodyLength(*Socket sock, int length) {
+        if (sock instanceof Http1HandlerSocket) {
+            cast<Http1HandlerSocket>(sock).setBodyRemaining(length);
+        }
     }
 
     #! Raises an exception: the object is the request's own and cannot be copied
@@ -11317,71 +11336,97 @@ class Http1HandlerSocket inherits Qore::Socket {
         refuse("sendHTTPMessageWithCallback");
     }
 
-    # the reads of the request's own body
+    # the reads of the request's own body: the rest of a body with a Content-Length that the server did not read
     string recv(softint size = 0, timeout timeout_ms = -1) {
-        enterRead("recv");
+        int n = enterRead("recv", size);
         on_exit active.dec();
-        # the server read a body with a Content-Length: the end of the input
-        return "";
+        return n ? real.recv(n, timeout_ms) : "";
     }
 
     binary recvBinary(softint size = 0, timeout timeout_ms = -1) {
-        enterRead("recvBinary");
+        int n = enterRead("recvBinary", size);
         on_exit active.dec();
-        return binary();
+        return n ? real.recvBinary(n, timeout_ms) : binary();
     }
 
     nothing recvToOutputStream(OutputStream output_stream, softint size = -1, timeout timeout_ms = -1) {
-        enterRead("recvToOutputStream");
+        int n = enterRead("recvToOutputStream", size);
         on_exit active.dec();
+        if (n) {
+            real.recvToOutputStream(output_stream, n, timeout_ms);
+        }
     }
 
     int recvi1(timeout timeout_ms = -1) {
-        refuseIntRead("recvi1");
+        enterIntRead("recvi1", 1);
+        on_exit active.dec();
+        return real.recvi1(timeout_ms);
     }
 
     int recvi2(timeout timeout_ms = -1) {
-        refuseIntRead("recvi2");
+        enterIntRead("recvi2", 2);
+        on_exit active.dec();
+        return real.recvi2(timeout_ms);
     }
 
     int recvi4(timeout timeout_ms = -1) {
-        refuseIntRead("recvi4");
+        enterIntRead("recvi4", 4);
+        on_exit active.dec();
+        return real.recvi4(timeout_ms);
     }
 
     int recvi8(timeout timeout_ms = -1) {
-        refuseIntRead("recvi8");
+        enterIntRead("recvi8", 8);
+        on_exit active.dec();
+        return real.recvi8(timeout_ms);
     }
 
     int recvi2LSB(timeout timeout_ms = -1) {
-        refuseIntRead("recvi2LSB");
+        enterIntRead("recvi2LSB", 2);
+        on_exit active.dec();
+        return real.recvi2LSB(timeout_ms);
     }
 
     int recvi4LSB(timeout timeout_ms = -1) {
-        refuseIntRead("recvi4LSB");
+        enterIntRead("recvi4LSB", 4);
+        on_exit active.dec();
+        return real.recvi4LSB(timeout_ms);
     }
 
     int recvi8LSB(timeout timeout_ms = -1) {
-        refuseIntRead("recvi8LSB");
+        enterIntRead("recvi8LSB", 8);
+        on_exit active.dec();
+        return real.recvi8LSB(timeout_ms);
     }
 
     int recvu1(timeout timeout_ms = -1) {
-        refuseIntRead("recvu1");
+        enterIntRead("recvu1", 1);
+        on_exit active.dec();
+        return real.recvu1(timeout_ms);
     }
 
     int recvu2(timeout timeout_ms = -1) {
-        refuseIntRead("recvu2");
+        enterIntRead("recvu2", 2);
+        on_exit active.dec();
+        return real.recvu2(timeout_ms);
     }
 
     int recvu4(timeout timeout_ms = -1) {
-        refuseIntRead("recvu4");
+        enterIntRead("recvu4", 4);
+        on_exit active.dec();
+        return real.recvu4(timeout_ms);
     }
 
     int recvu2LSB(timeout timeout_ms = -1) {
-        refuseIntRead("recvu2LSB");
+        enterIntRead("recvu2LSB", 2);
+        on_exit active.dec();
+        return real.recvu2LSB(timeout_ms);
     }
 
     int recvu4LSB(timeout timeout_ms = -1) {
-        refuseIntRead("recvu4LSB");
+        enterIntRead("recvu4LSB", 4);
+        on_exit active.dec();
+        return real.recvu4LSB(timeout_ms);
     }
 
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
@@ -11455,15 +11500,53 @@ class Http1HandlerSocket inherits Qore::Socket {
         return True;
     }
 
-    #! Counts a read of bytes of the request's body: a body with a Content-Length was read by the server, and a
-    #! chunked body can only be read by its chunks
-    private:internal enterRead(string method) {
+    #! Counts a read of bytes of the request's body and returns how many bytes it reads
+    /** A chunked body can only be read by its chunks; a read of a body with a Content-Length takes at most the rest
+        of the body that the server did not read, all of it for a size of 0 or less
+
+        @return the number of bytes to read; 0 at the end of the body
+    */
+    private:internal int enterRead(string method, int size) {
         enter(method);
         if (!body_read && real.pendingHttpChunkedBody()) {
             active.dec();
             throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the chunked body of the HTTP/1.1 request of "
                 "this socket is read with Socket::readHTTPChunkedBody() or its variants", method);
         }
+        return takeBody(size);
+    }
+
+    #! Counts a read of an integer from the request's body, which needs the integer's bytes in the rest of the body
+    private:internal enterIntRead(string method, int width) {
+        enter(method);
+        if ((!body_read && real.pendingHttpChunkedBody()) || !takeBodyBytes(width)) {
+            active.dec();
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): no data can be read past the end of the body "
+                "of the HTTP/1.1 request of this socket", method);
+        }
+    }
+
+    #! Takes up to the given number of bytes of the rest of the body, all of it for a size of 0 or less
+    /** The bytes are taken before they are read, so that reads in different threads never read past the body
+    */
+    private:internal synchronized int takeBody(int size) {
+        int n = (size <= 0 || size > body_remaining) ? body_remaining : size;
+        body_remaining -= n;
+        return n;
+    }
+
+    #! Takes exactly the given number of bytes of the rest of the body, or none
+    private:internal synchronized bool takeBodyBytes(int width) {
+        if (body_remaining < width) {
+            return False;
+        }
+        body_remaining -= width;
+        return True;
+    }
+
+    #! Sets the rest of the body that the server did not read
+    private:internal synchronized setBodyRemaining(int length) {
+        body_remaining = length > 0 ? length : 0;
     }
 
     #! Counts the read of the request's chunked body, which is refused if the request has none, or if it is read or
@@ -11484,14 +11567,6 @@ class Http1HandlerSocket inherits Qore::Socket {
         }
         body_read = True;
         return True;
-    }
-
-    #! Raises the exception of a read of an integer: the request's body is read by the server or by its chunks
-    private:internal refuseIntRead(string method) {
-        enterRead(method);
-        active.dec();
-        throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): no data can be read past the end of the body of "
-            "the HTTP/1.1 request of this socket", method);
     }
 
     #! Raises the exception of a method that the handler's code cannot call on the connection's socket
