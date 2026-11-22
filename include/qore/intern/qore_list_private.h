@@ -51,16 +51,22 @@ struct qore_list_private {
     size_t allocated = 0;
     unsigned obj_count = 0;
     const QoreTypeInfo* complexTypeInfo = nullptr;
-    QoreReferenceCounter weakRefs;
+    QoreContainerWeakRefs weakRefs;
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
     size_t eval_result_size = 0;
     //! the sandbox memory charge of entry (see design/sandbox-resource-limits.md); synced with allocated
     QoreSandboxChargeRecord sb;
     bool finalized : 1;
     bool vlist : 1;
+    //! false if the list cannot be changed: it was freed, or it is a copy of a freed list (see copyFreedState())
     bool valid : 1;
+    //! true once the list has been freed (see QoreListNode::derefImpl())
+    bool freed : 1;
+    //! true if the weak holders of the list hold one reference of their own since its free started (see
+    //! QoreContainerWeakRefs)
+    bool weak_hold : 1;
 
-    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true) {
+    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true), freed(false), weak_hold(false) {
     }
 
     DLLLOCAL ~qore_list_private() {
@@ -127,7 +133,7 @@ struct qore_list_private {
     }
 
     DLLLOCAL QoreListNode* copyCheckNewElementType(const QoreTypeInfo* newElementType) const {
-        QoreListNode* rv = copy();
+        QoreListNode* rv = copyValue();
         rv->priv->setListTypeFromNewElementType(newElementType);
         return rv;
     }
@@ -169,7 +175,23 @@ struct qore_list_private {
         QoreListNode* l = new QoreListNode;
         l->priv->complexTypeInfo = newComplexTypeInfo;
         copyIntern(*l->priv);
+        copyFreedState(*l->priv);
         return l;
+    }
+
+    //! A copy of a freed list cannot be changed either (qore#7163)
+    /** A list freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
+        reference to it is never its only one, and changing the list through that reference copies it; the copy reads
+        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  The same
+        holds for its conversion to another list type, which is the list given to a typed variable or parameter.  A
+        value computed from it (sorted, or with an element added: see copyValue()) is a new list.
+
+        The copy is not freed: it is freed as any other list when its last reference is released.
+    */
+    DLLLOCAL void copyFreedState(qore_list_private& l) const {
+        if (!valid) {
+            l.valid = false;
+        }
     }
 
     // strip = copy without type information
@@ -178,6 +200,7 @@ struct qore_list_private {
         if (!strip || !complexTypeInfo) {
             QoreListNode* l = getCopy();
             copyIntern(*l->priv);
+            copyFreedState(*l->priv);
             return l;
         }
         QoreListNode* l = new QoreListNode;
@@ -185,6 +208,15 @@ struct qore_list_private {
         for (size_t i = 0; i < length; ++i) {
             l->priv->pushIntern(copy_strip_complex_types(entry[i]));
         }
+        copyFreedState(*l->priv);
+        return l;
+    }
+
+    //! Returns a copy of the list to compute a new value from (ex: to sort), which can be changed also when the list
+    //! was freed (see copyFreedState())
+    DLLLOCAL QoreListNode* copyValue() const {
+        QoreListNode* l = getCopy();
+        copyIntern(*l->priv);
         return l;
     }
 
@@ -828,10 +860,6 @@ public:
         return eval_result_size;
     }
 
-    DLLLOCAL void weakRef() {
-        weakRefs.ROreference();
-    }
-
     DLLLOCAL bool weakDeref() {
         if (weakRefs.ROdereference()) {
             return true;
@@ -858,10 +886,17 @@ public:
 
     //! Finishes freeing a list after its entries have been freed
     DLLLOCAL static void finishFree(QoreListNode& l) {
-        // a weak reference (":=") keeps the node allocated after its entries were freed, and must read it as an empty
-        // list, not as the entries that no longer exist
-        l.priv->length = 0;
-        l.priv->valid = false;
+        qore_list_private* p = l.priv;
+        p->length = 0;
+        if (!p->weak_hold) {
+            // no weak holder can take a reference to the list (see QoreContainerWeakRefs)
+            delete &l;
+            return;
+        }
+        // its weak holders keep the node allocated, and must read it as an empty list, not as the entries that no
+        // longer exist
+        p->valid = false;
+        p->freed = true;
         l.weakDeref();
     }
 

@@ -954,7 +954,8 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreV
 }
 
 QoreListNode* QoreListNode::sort(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -973,7 +974,8 @@ QoreListNode* QoreListNode::sort(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescending(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -992,7 +994,8 @@ QoreListNode* QoreListNode::sortDescending(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -1242,7 +1245,8 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
 }
 
 QoreListNode* QoreListNode::sort(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -1261,7 +1265,8 @@ QoreListNode* QoreListNode::sort(const ResolvedCallReferenceNode* fr, ExceptionS
 }
 
 QoreListNode* QoreListNode::sortStable(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(0, true, xsink)) {
             return nullptr;
@@ -1272,7 +1277,8 @@ QoreListNode* QoreListNode::sortStable(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescendingStable(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(0, false, xsink)) {
             return nullptr;
@@ -1283,7 +1289,8 @@ QoreListNode* QoreListNode::sortDescendingStable(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescendingStable(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(fr, false, xsink)) {
             return nullptr;
@@ -1294,7 +1301,8 @@ QoreListNode* QoreListNode::sortDescendingStable(const ResolvedCallReferenceNode
 }
 
 QoreListNode* QoreListNode::sortStable(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(fr, true, xsink)) {
             return nullptr;
@@ -1397,12 +1405,20 @@ bool QoreListNode::derefImpl(ExceptionSink* xsink) {
     // A list that was already freed was referenced again through a weak reference, which keeps the node allocated
     // after its last reference is released.  Only what it was given since is freed: the weak reference that its
     // first release dropped must not be dropped again, which would delete the node under its weak holders.
-    if (!priv->valid) {
+    if (priv->freed) {
         for (size_t i = 0; i < priv->length; ++i) {
             priv->entry[i].discard(xsink);
         }
         priv->length = 0;
-        return false;
+        // the last reference of a freed list: its weak holders released theirs (qore#7163; see QoreContainerWeakRefs)
+        assert(!priv->weakRefs.reference_count());
+        return true;
+    }
+    // taken before the entries are freed, directly or by free_nested_containers(): a destructor of an entry can take a
+    // reference to the list through a weak holder (qore#7163; see QoreContainerWeakRefs)
+    if (priv->weakRefs.hasHolders()) [[unlikely]] {
+        priv->weak_hold = true;
+        ref();
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
@@ -1847,13 +1863,29 @@ const QoreTypeInfo* QoreListNode::getTypeInfo() const {
 }
 
 void QoreListNode::weakRef() {
-    priv->weakRef();
+    if (priv->weakRefs.refFromZero()) [[unlikely]] {
+        // a freed list whose weak holders released their reference, given a weak holder again by code that holds a
+        // reference to it: the holders take a reference again (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->freed && priv->weak_hold);
+        ref();
+    }
+}
+
+namespace {
+// releases the reference that the weak holders of a freed list took (qore#7163; see QoreContainerWeakRefs)
+QORE_INTERN_NOINLINE void release_list_weak_hold(QoreListNode* l) {
+    ExceptionSink xsink;
+    l->deref(&xsink);
+}
 }
 
 bool QoreListNode::weakDeref() {
     bool b = priv->weakDeref();
     if (b) {
-        delete this;
+        // the last weak reference, which a freed list's weak holders release after the list released its own: the
+        // node is deleted by the release of its last reference (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->weak_hold);
+        release_list_weak_hold(this);
     }
     return b;
 }
