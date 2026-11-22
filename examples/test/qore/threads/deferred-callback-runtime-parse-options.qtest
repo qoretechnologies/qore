@@ -560,10 +560,12 @@ DeferredAppMod::stop();
         assertRegex("ILLEGAL-EXPRESSION", out, "sandboxed caller: " + out);
         # module code acting for a sandboxed caller may not change the process-wide controller's settings (qore#6836)
         assertRegex("workers: SANDBOX-REGISTRATION-ERROR\n", out, "sandboxed caller, controller setting: " + out);
-        # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
+        # without a sandbox, module code runs with its own options, so it may change the controller's settings; the
+        # caller is restricted from terminal I/O, which the callback records: File::lock() on the standard output is
+        # refused for it, with or without a sandbox (qore#7140)
         out = backquote(sprintf(cmd, "open"));
-        assertRegex("FILE-LOCK-ERROR", out, "caller without a sandbox");
-        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller without a sandbox: " + out);
+        assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called for code that is restricted from terminal I/O",
+            out, "caller without a sandbox: " + out);
         assertRegex("workers: allowed\n", out, "caller without a sandbox, controller setting: " + out);
     }
 
@@ -580,10 +582,12 @@ DeferredAppMod::stop();
         assertRegex("ILLEGAL-EXPRESSION", out, "sandboxed caller: " + out);
         # module code acting for a sandboxed caller may not change the process-wide controller's settings (qore#6836)
         assertRegex("workers: SANDBOX-REGISTRATION-ERROR\n", out, "sandboxed caller, controller setting: " + out);
-        # without a sandbox, module code runs with its own options: the call runs and fails on the pipe
+        # without a sandbox, module code runs with its own options, so it may change the controller's settings; the
+        # caller is restricted from terminal I/O, which the callback records: File::lock() on the standard output is
+        # refused for it, with or without a sandbox (qore#7140)
         out = backquote(sprintf(cmd, "open"));
-        assertRegex("FILE-LOCK-ERROR", out, "caller without a sandbox");
-        assertFalse(out =~ /ILLEGAL-EXPRESSION/, "caller without a sandbox: " + out);
+        assertRegex("ILLEGAL-EXPRESSION: lock\\(\\) cannot be called for code that is restricted from terminal I/O",
+            out, "caller without a sandbox: " + out);
         assertRegex("workers: allowed\n", out, "caller without a sandbox, controller setting: " + out);
     }
 

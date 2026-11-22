@@ -40,6 +40,8 @@ Program sub make_program(int po, *SandboxManager sm) {
 bool sub via_module() { return TermCheck::allowed(); }
 *string sub ds() { try { return DatasourceProvider::get_ds_string(\"qore-7140-no-such-ds\", True); } "
         "catch (hash<ExceptionInfo> ex) { return ex.err; } }
+# the connection providers name a module that cannot be loaded; checks only that nothing is written for the caller
+# live-provider-optin: the providers' module cannot be loaded, so no credential is read
 *hash<auto> sub connections() { return ConnectionProvider::get_connections(True); }
 class Term inherits TelnetClient {
     constructor() : TelnetClient(\"localhost:1\") {}
