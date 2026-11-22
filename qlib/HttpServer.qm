@@ -6147,12 +6147,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     int session_id = cx."header-info".session_id;
                     s.submitQuicResponseStreaming(session_id, stream_id,
                         rv."code" ?? 200, resp_hdr);
+                    # the handler and its event source get the socket of the request, which acts on its own
+                    # session only; the listener's socket stays in the server's wake callback (qore#6953)
+                    Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
+                            handler_sock, cx, hdr, cid, session_id, stream_id, wake_cb);
                     } else {
-                        sse_conn = new HttpServerAsyncIo::Http3SseStream(s, session_id, stream_id, wake_cb,
-                            True);
+                        sse_conn = new HttpServerAsyncIo::Http3SseStream(handler_sock, session_id, stream_id,
+                            wake_cb, True);
                     }
                 } else {
                     s.submitHttp2StreamingResponseHeaders(stream_id,
