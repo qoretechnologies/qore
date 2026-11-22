@@ -73,6 +73,47 @@ class BadHandler inherits AbstractHttpRequestHandler {
                 case "sock-204-cl":
                     submit(204, {"content-length": "5"});
                     break;
+                case "sock-204-cl-00":
+                    # a client accepts only "0" itself in a 204 response
+                    submit(204, {"content-length": "00"});
+                    break;
+                case "sock-cl-space":
+                    # a client accepts digits only
+                    submit(200, {"content-length": " 1"}, binary("x"));
+                    break;
+                case "head-cl-huge":
+                    # beyond the largest length that an HTTP/3 client accepts (2^62 - 1)
+                    submit(200, {"content-length": "4611686018427387904"});
+                    break;
+                case "ret-te":
+                    # te is a request header; a response does not send it
+                    return <HttpResponseInfo>{"code": 200, "hdr": {"TE": "gzip"}, "body": "te"};
+                case "sock-te":
+                    submit(200, {"te": "gzip"}, binary("te"));
+                    break;
+                case "stream-head-large":
+                    # more data than one frame for a streamed response to HEAD, given at once with its end
+                    stream({}, binary(strmul("d", 100000)));
+                    break;
+                case "connect-204-cl":
+                case "connect-400-cl-dup":
+                case "connect-400-cl-data": {
+                    # a CONNECT response other than a 2xx that opens the tunnel is checked as every response
+                    int status = c == "connect-204-cl" ? 204 : 400;
+                    hash<auto> h = c == "connect-204-cl"
+                        ? {"content-length": "5"}
+                        : c == "connect-400-cl-dup"
+                            ? {"content-length": "0", "Content-Length": "0"}
+                            : {"content-length": "0"};
+                    h3 ? s.submitQuicConnectResponse(session_id, sid, status, h)
+                       : s.submitHttp2ConnectResponse(sid, status, h);
+                    if (c == "connect-400-cl-data") {
+                        # data beyond the declared length resets the stream
+                        h3 ? s.submitQuicStreamData(session_id, sid, binary("tunnel data"))
+                           : s.sendHttp2StreamData(sid, binary("tunnel data"));
+                    }
+                    break;
+                }
                 case "head-cl":
                     # a content-length without a body, as in a response to HEAD, is sent
                     submit(200, {"content-length": "100"});
@@ -208,6 +249,8 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         addTestCase("a response without content sends no body", \noBodyTest());
         addTestCase("a streamed body of another length than declared resets its stream", \streamLengthTest());
         addTestCase("a compressed body is sent with its own length", \compressedTest());
+        addTestCase("te is not sent in a response", \teTest());
+        addTestCase("a CONNECT response is never malformed", \connectTest());
         addTestCase("no second response on a stream", \secondResponseTest());
         addTestCase("a status that does not fit in an int is refused", \overflowStatusTest());
         addTestCase("HTTP/2 trailers before the response are refused", \trailersFirstTest());
@@ -287,7 +330,9 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 "the content-length of the response (100) does not match the length of its body (1 bytes)");
             checkRefused(protocol, "sock-cl-dup", "the response has 2 content-length fields");
             checkRefused(protocol, "sock-cl-invalid", "the content-length of the response ('1x') is not a valid length");
-            checkRefused(protocol, "sock-204-cl", "a 204 response has a content-length of 5, not 0");
+            checkRefused(protocol, "sock-204-cl", "a 204 response has a content-length of '5', not '0'");
+            checkRefused(protocol, "sock-204-cl-00", "a 204 response has a content-length of '00', not '0'");
+            checkRefused(protocol, "sock-cl-space", "the content-length of the response (' 1') is not a valid length");
 
             # the server does not send it for the handler's return value: the request gets an error response
             hash<auto> rv = withHeldStream(protocol, "ret-cl", "GET", "/bad/ret-cl");
@@ -309,7 +354,12 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
             assertNothing(rv.ex, protocol + " head-cl: the client gets the response");
             assertEq(200, rv.response.status_code, protocol + " head-cl");
 
-            foreach string c in ("head-body", "stream-head") {
+            # but it is still a length that the client accepts
+            rv = withHeldStream(protocol, "head-cl-huge", "HEAD", "/bad/head-cl-huge");
+            assertNothing(rv.ex, protocol + " head-cl-huge: the client gets the handler's answer");
+            assertEq(200, rv.response.status_code, protocol + " head-cl-huge");
+
+            foreach string c in ("head-body", "stream-head", "stream-head-large") {
                 rv = withHeldStream(protocol, c, "HEAD", "/bad/" + c);
                 assertNothing(rv.ex, sprintf("%s %s: the client gets the response", protocol, c));
                 assertEq(200, rv.response.status_code, protocol + " " + c);
@@ -330,6 +380,51 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 rv = withHeldStream(protocol, c, "GET", "/bad/" + c);
                 assertEq(Type::Hash, rv.ex.type(), sprintf("%s %s: the request fails", protocol, c));
                 assertRegex("RESET", rv.ex.desc, sprintf("%s %s: the stream is reset", protocol, c));
+            }
+        }
+    }
+
+    teTest() {
+        foreach string protocol in ("h2", "h3") {
+            foreach string c in ("ret-te", "sock-te") {
+                hash<auto> rv = withHeldStream(protocol, c, "GET", "/bad/" + c);
+                string msg = protocol + " " + c;
+                assertNothing(rv.ex, msg + ": the client gets the response");
+                assertEq(200, rv.response.status_code, msg);
+                assertEq("te", bodyStr(rv.response), msg);
+                assertFalse(exists rv.response.headers.te, msg + ": te is not sent");
+            }
+        }
+    }
+
+    connectTest() {
+        foreach string protocol in ("h2", "h3") {
+            foreach string c in ("connect-204-cl", "connect-400-cl-dup", "connect-400-cl-data") {
+                string msg = protocol + " " + c;
+                HttpClientConnectionManager mgr = manager(protocol);
+                on_exit delete mgr;
+                auto held = mgr.requestAsync(url, "GET", "/held");
+                bool released;
+                on_exit if (!released) {
+                    plain.release.push(1);
+                }
+                assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection is up");
+                HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url + "/bad/" + c);
+                stream.startStreaming("CONNECT", "/bad/" + c, {
+                    ":protocol": "websocket",
+                    "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+                    "Sec-WebSocket-Version": "13",
+                }, True);
+                # the response, or the reset of the stream; the bound only guards against a hang
+                try {
+                    stream.readData(10s);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                stream.cancel();
+                assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection goes on");
+                plain.release.push(1);
+                released = True;
+                assertEq(200, held.get(10s).status_code, msg + ": the held stream of another handler completes");
             }
         }
     }

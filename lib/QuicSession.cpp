@@ -2083,6 +2083,7 @@ int QuicSession::resetHttp3(ExceptionSink* xsink) {
     body_data_.clear();
     streaming_body_data_.clear();
     responded_streams_.clear();
+    pending_length_resets_.clear();
     updateKeepAliveAfterStreamStateChangeLocked();
     // Clear any pre-H3 buffered data and completed streams from the 0-RTT attempt
     pre_h3_buffer_.clear();
@@ -3430,7 +3431,7 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
         std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
                        [](unsigned char c) { return std::tolower(c); });
         // Skip HTTP/1.x hop-by-hop headers forbidden in HTTP/3
-        if (h3_forbidden_headers.count(lower_key)) {
+        if (isForbiddenResponseHeader(lower_key)) {
             continue;
         }
         lower_keys.push_back(std::move(lower_key));
@@ -3537,7 +3538,7 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
         std::string lower_key = h.first;
         std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
                        [](unsigned char c) { return std::tolower(c); });
-        if (h3_forbidden_headers.count(lower_key)) {
+        if (isForbiddenResponseHeader(lower_key)) {
             continue;
         }
         lower_keys.push_back(std::move(lower_key));
@@ -3990,7 +3991,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
         std::string lower_key = h.first;
         std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
                        [](unsigned char c) { return std::tolower(c); });
-        if (h3_forbidden_headers.count(lower_key)) {
+        if (isForbiddenResponseHeader(lower_key)) {
             continue;
         }
         lower_keys.push_back(std::move(lower_key));
@@ -4030,6 +4031,22 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
         return -1;
     }
 
+    // a 2xx response other than 204 opens the tunnel, and the client drops its content-length; any other response is
+    // checked as every response, so that it is never malformed (qoretechnologies/qore#7212; see
+    // QoreHttpResponseBodyRule)
+    const bool tunnel = status_code >= 200 && status_code < 300 && status_code != 204;
+    QoreHttpResponseBodyRule rule(status_code, "CONNECT");
+    if (!tunnel) {
+        for (const auto& h : headers) {
+            rule.add(h.first.data(), h.first.size(), h.second.data(), h.second.size());
+        }
+        std::string rule_err = rule.check(-1);
+        if (!rule_err.empty()) {
+            xsink->raiseException("QUIC-HTTP3-ERROR", "%s", rule_err.c_str());
+            return -1;
+        }
+    }
+
     // Create deferred streaming body data entry — the CONNECT tunnel keeps the
     // stream open indefinitely; h3ReadDataCallback returns NGHTTP3_ERR_WOULDBLOCK
     // until data is pushed via sendStreamData()
@@ -4037,6 +4054,10 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     sbd = QuicStreamingBodyData{};
     sbd.deferred = true;
     sbd.no_end_stream = true;  // CONNECT tunnel: keep stream open for bidirectional data
+    if (!tunnel) {
+        sbd.no_body = rule.noBody();
+        sbd.content_length = rule.streamLength();
+    }
 
     int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
     if (rv != 0) {
@@ -6826,7 +6847,15 @@ void QuicSession::noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData
     sbd.deferred = true;
     sbd.data.clear();
     sbd.pending_pong.clear();
-    pending_length_resets_.push_back(stream_id);
+    // called from nghttp3's C callback: no exception may leave it; without memory for the record, the stream sends
+    // nothing more and is not reset, which the client sees as a stalled stream, not a malformed one
+    try {
+        pending_length_resets_.push_back(stream_id);
+    } catch (const std::bad_alloc&) {
+        printd(0, "QuicSession::noteLengthErrorLocked() stream %lld: no memory to record the reset\n",
+            (long long)stream_id);
+        return;
+    }
     pending_write_.store(true, std::memory_order_release);
 }
 

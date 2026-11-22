@@ -675,7 +675,7 @@ static const auto& forbidden_headers = getForbiddenHopByHopHeaders();
 template<typename HeaderRange>
 static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         std::vector<std::string>& lowered_names, const HeaderRange& headers,
-        bool skip_host) {
+        bool skip_host, bool response = false) {
     for (const auto& h : headers) {
         // Lowercase in-place
         std::string lname(h.first);
@@ -691,7 +691,8 @@ static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         if (skip_host && lname == "host") {
             continue;
         }
-        if (forbidden_headers.count(lname)) {
+        // a response does not send te either (qoretechnologies/qore#7212)
+        if (response ? isForbiddenResponseHeader(lname) : forbidden_headers.count(lname) > 0) {
             continue;
         }
         lowered_names.push_back(std::move(lname));
@@ -951,7 +952,7 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
         stream_id, status_code, body_len, nva.size());
@@ -1037,7 +1038,7 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     // Create a deferred data provider - body will be fed via sendStreamData()
     auto provider_ctx = std::make_unique<DataProviderContext>();
@@ -2944,13 +2945,21 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     }
     // the call does not change the map: the reference is valid
     StreamedResponseRule& sr = rit->second;
-    // a response without content sends none of the data given for it (qoretechnologies/qore#7212)
+    // a response without content sends none of the data given for it (qoretechnologies/qore#7212): the data buffered
+    // for the stream is drained and dropped in this call, so that its end, if given, is reached without another
+    // call, which nothing would make after a deferral
     if (sr.no_body) {
+        while (rv > 0 && !(*data_flags & NGHTTP2_DATA_FLAG_EOF)) {
+            rv = dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+            if (rv < 0) {
+                return rv;
+            }
+        }
         if (*data_flags & NGHTTP2_DATA_FLAG_EOF) {
             return 0;
         }
-        // the data is dropped; the stream is resumed when more data or its end is given
-        return rv ? NGHTTP2_ERR_DEFERRED : rv;
+        // nothing more is buffered: the stream is resumed when more data or its end is given
+        return NGHTTP2_ERR_DEFERRED;
     }
     // content longer or shorter than declared would make the response malformed: the stream is reset with
     // RST_STREAM (INTERNAL_ERROR) instead (qoretechnologies/qore#7212)
@@ -3748,7 +3757,7 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         // RFC 7540 Section 8.1.2.2: Skip connection-specific headers (forbidden in HTTP/2)
         std::string lname = h.first;
         std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
-        if (forbidden_headers.count(lname)) {
+        if (isForbiddenResponseHeader(lname)) {
             continue;
         }
         // Store lowercase name
@@ -3759,6 +3768,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
             lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
+    }
+
+    // a 2xx response other than 204 opens the tunnel, and the client drops its content-length; any other response is
+    // checked as every response, so that it is never malformed (qoretechnologies/qore#7212; see
+    // QoreHttpResponseBodyRule)
+    const bool tunnel = status_code >= 200 && status_code < 300 && status_code != 204;
+    QoreHttpResponseBodyRule rule(status_code, "CONNECT");
+    if (!tunnel && checkResponseLocked(stream_id, status_code, nva, -1, rule, xsink)) {
+        return -1;
     }
 
     std::unique_ptr<DataProviderContext> provider_ctx = std::make_unique<DataProviderContext>();
@@ -3777,6 +3795,12 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         return -1;
     }
     stream->response_submitted = true;
+    if (!tunnel && (rule.noBody() || rule.streamLength() >= 0)) {
+        StreamedResponseRule& sr = streamed_response_rules[stream_id];
+        sr.no_body = rule.noBody();
+        sr.content_length = rule.streamLength();
+        sr.provided = 0;
+    }
     if (http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: submitConnectResponse ok stream=%d\n", stream_id);
         fflush(stderr);

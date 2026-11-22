@@ -63,27 +63,25 @@ DLLLOCAL void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_
 DLLLOCAL int qore_get_http2_request_headers(const QoreHashNode* headers, std::string& method, std::string& path,
         qore_http_header_pairs_t& out, ExceptionSink* xsink);
 
-//! Parses a \c Content-Length field value: decimal digits with optional surrounding whitespace (RFC 9110 section 8.6)
-/** @return the length, or -1 if the value is not a valid length (a value that does not fit in an int64)
+//! The largest value of a \c Content-Length that an HTTP/3 client accepts (2^62 - 1, a QUIC variable-length integer)
+static constexpr int64 QORE_HTTP_MAX_CONTENT_LENGTH = (static_cast<int64>(1) << 62) - 1;
+
+//! Parses a \c Content-Length field value as the HTTP/2 and HTTP/3 clients do (nghttp2, nghttp3)
+/** The value is decimal digits only, without whitespace, and at most @ref QORE_HTTP_MAX_CONTENT_LENGTH
+
+    @return the length, or -1 if a client does not accept the value as a length
 */
 DLLLOCAL inline int64 qore_http_parse_content_length(const char* value, size_t vlen) {
-    size_t i = 0;
-    while (i < vlen && (value[i] == ' ' || value[i] == '\t')) {
-        ++i;
-    }
-    while (vlen > i && (value[vlen - 1] == ' ' || value[vlen - 1] == '\t')) {
-        --vlen;
-    }
-    if (i == vlen) {
+    if (!vlen) {
         return -1;
     }
     int64 v = 0;
-    for (; i < vlen; ++i) {
+    for (size_t i = 0; i < vlen; ++i) {
         if (value[i] < '0' || value[i] > '9') {
             return -1;
         }
         int64 d = value[i] - '0';
-        if (v > (INT64_MAX - d) / 10) {
+        if (v > (QORE_HTTP_MAX_CONTENT_LENGTH - d) / 10) {
             return -1;
         }
         v = v * 10 + d;
@@ -96,8 +94,9 @@ DLLLOCAL inline int64 qore_http_parse_content_length(const char* value, size_t v
     connection with every other stream on it (a malformed message cannot be confined to its stream with nghttp3), so
     a server must never send one: with these rules, it refuses or corrects the response of a handler instead.
 
-    - more than one \c Content-Length field, or one that is not a length: refused;
-    - a 204 response with a \c Content-Length other than 0: refused;
+    - more than one \c Content-Length field, or one that is not a length as the clients parse it (digits only, at
+      most @ref QORE_HTTP_MAX_CONTENT_LENGTH): refused;
+    - a 204 response with a \c Content-Length other than \c "0": refused;
     - a response to HEAD, or with status 204 or 304, has no content: a body given for it is not sent;
     - otherwise the content sent must have the declared length: a complete body of another length is refused, and a
       streamed body that turns out longer or shorter ends the stream with a reset (a stream error) instead of a
@@ -118,9 +117,10 @@ public:
             return;
         }
         ++count;
+        raw.assign(value, vlen);
         int64 v = qore_http_parse_content_length(value, vlen);
         if (v < 0) {
-            invalid.assign(value, vlen);
+            invalid = raw;
             return;
         }
         content_length = v;
@@ -136,8 +136,9 @@ public:
         if (!invalid.empty() || (count && content_length < 0)) {
             return "the content-length of the response ('" + invalid + "') is not a valid length";
         }
-        if (status == 204 && count && content_length) {
-            return "a 204 response has a content-length of " + std::to_string(content_length) + ", not 0";
+        // a client accepts only "0" itself in a 204 response
+        if (status == 204 && count && raw != "0") {
+            return "a 204 response has a content-length of '" + raw + "', not '0'";
         }
         if (!no_body && count && body_len >= 0 && content_length != body_len) {
             return "the content-length of the response (" + std::to_string(content_length)
@@ -161,6 +162,8 @@ private:
     bool no_body;
     int count = 0;
     int64 content_length = -1;
+    //! the value of the last content-length field
+    std::string raw;
     std::string invalid;
 };
 

@@ -2877,6 +2877,13 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 handler error response");
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
+                        session_id, stream_id, uh);
+                    return;
+                }
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",
                     session_id, stream_id, uh, ex.err, ex.desc);
@@ -6069,6 +6076,13 @@ public class HttpAsyncSocketIoController {
                 try {
                     connection_gone = !cinfo.sock.isOpen();
                 } catch (hash<ExceptionInfo> ex2) {
+                }
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream=%d on %y: the handler submitted the response", stream_id,
+                        uh);
+                    return;
                 }
                 log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
