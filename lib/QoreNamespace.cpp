@@ -118,6 +118,7 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 
 namespace {
@@ -4249,6 +4250,14 @@ const QoreTypeInfo* TypedefEntry::parseResolve(const char* name, int& err) {
             flag = false;
         }
     } resolving_guard(resolving);
+    // the typedef names only what the names in its type refer to where it is declared, also when it is first used in
+    // generic code: the type parameters of the generic function, closure, hashdecl or class being parsed are not
+    // visible, and the type is cached for every later use (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
+    std::optional<QoreParseClassHelper> class_scope;
+    if (qore_ns_private* decl_ns = parse_ns ? parse_ns : parse_get_ns()) {
+        class_scope.emplace(nullptr, decl_ns);
+    }
     const QoreTypeInfo* rv;
     if (parse_ns) {
         // a name in the type refers to what it refers to in the namespace that declares the typedef

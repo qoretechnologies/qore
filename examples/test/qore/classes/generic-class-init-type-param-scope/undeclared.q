@@ -8,6 +8,7 @@ const Sources = (
     "class member": "class K { public { *T m; } } auto sub f<T>(T a) { K k(); k.m = a; return k.m; } f<int>(1);",
     "class constant": "class K { const C = cast<*T>(NOTHING); } auto sub f<T>(T a) { return K::C; } f<int>(1);",
     "namespace constant": "const NC = cast<*T>(NOTHING); auto sub f<T>(T a) { return NC; } f<int>(1);",
+    "typedef": "typedef TD = *T; auto sub f<T>(T a) { TD v = a; return v; } f<int>(1);",
 );
 
 sub check() {

@@ -3618,6 +3618,9 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // the parent class is named in the class's own type parameters, also when it is resolved while generic code
+        // is parsed (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
         // issue #6710: a parent class name is resolved in the namespace of the class that inherits it, as any other
         // class name in the class's code is; the hierarchy is resolved outside of that namespace (for all classes at
         // once, or when a class is first reached from code anywhere), where the current parse namespace is another

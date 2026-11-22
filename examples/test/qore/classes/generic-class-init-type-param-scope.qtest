@@ -22,11 +22,12 @@
     class.  The programs (generic-class-init-type-param-scope/: a generic function, which uses its own type
     parameter after the class is initialized, a closure in a generic function, a generic hashdecl's member
     initializer, and a subclass with a method parameter and a return type of its type parameter; non-generic
-    hashdecls, a static class variable and class and namespace constants that name a class \c T, first used in a
-    generic function whose type parameter is \c T, which the declarations named before; and the same declarations
-    naming an undeclared type \c T, which were accepted and are parse errors) run in each execution mode in a child
-    process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled executables (-O0,
-    -O3).
+    hashdecls, a static class variable, class and namespace constants and typedefs that name a class \c T, first
+    used in a generic function (or a generic class's method, or a generic function's default arguments) whose type
+    parameter is \c T, which the declarations named before; a generic hashdecl inheriting a generic parent; and the
+    same declarations naming an undeclared type \c T, which were accepted and are parse errors) run in each
+    execution mode in a child process, at the IR tier and promoted to native code with tiered execution, and as
+    qcc-compiled executables (-O0, -O3).
 */
 class GenericClassInitTypeParamScopeTest inherits QUnit::Test {
     public {
@@ -44,13 +45,17 @@ class GenericClassInitTypeParamScopeTest inherits QUnit::Test {
             "hashdecl-member": "hashdecl: 7\ngeneric hashdecl: 7\nclass member: 7\nRUNTIME-TYPE-ERROR\n",
             "static-var": "static: 7\nRUNTIME-TYPE-ERROR\n",
             "constant": "constants: 14\n",
+            "typedef": "function: 7\nmethod: 7\nRUNTIME-TYPE-ERROR\n",
+            "default-arg": "default arguments: 14\n",
+            "hashdecl-parent": "inherited: 6\nRUNTIME-TYPE-ERROR\n",
             # declarations that name an undeclared type T are parse errors
             "undeclared": "hashdecl: PARSE-EXCEPTION: reference to undefined type 'T'\n"
                 "static: PARSE-EXCEPTION: reference to undefined type 'T'\n"
                 "class member: PARSE-EXCEPTION: reference to undefined type 'T'\n"
                 "class constant: PARSE-EXCEPTION: reference to undefined type 'T'\n"
                 "namespace constant: PARSE-EXCEPTION: reference to undefined type 'T' (while initializing constant "
-                "'NC')\n",
+                "'NC')\n"
+                "typedef: PARSE-EXCEPTION: reference to undefined type 'T'\n",
         };
     }
 
