@@ -4933,7 +4933,6 @@ public class AbstractHttpSocketHandlerInterface {
         string cid = cx.id.toString();
         # the stream of a connection over HTTP/2, decided by the transport
         *int h2_stream_id = (!s.isQuic() && s.isHttp2()) ? cx."header-info".stream_id : NOTHING;
-        auto ctrl = cx.async_ctrl;
 
         # return a closure to confirm that the connection has been closed
         return sub () {
@@ -4941,7 +4940,7 @@ public class AbstractHttpSocketHandlerInterface {
             # only this handler's own connection is removed (qore#6921)
             listener.removeExternalDedicatedSocket(cid, self);
             if (exists h2_stream_id) {
-                endHttp2Stream(s, h2_stream_id, ctrl);
+                endHttp2Stream(s, h2_stream_id);
             } else {
                 s.shutdown();
                 s.close();
@@ -4950,22 +4949,17 @@ public class AbstractHttpSocketHandlerInterface {
     }
 
     #! Ends the stream of a connection over HTTP/2 after its pending data, or resets it if it cannot be ended
-    /** The socket is the client's connection, which its other streams share: it is left open
+    /** The socket is the client's connection, which its other streams share: it is left open.  Both calls hand the
+        frame to the server's async I/O controller and wake it, so that the end is sent also when nothing else
+        happens on the connection; the handler needs no controller of its own for it (qore#7213)
     */
-    private static endHttp2Stream(Socket s, int stream_id, auto ctrl) {
+    private static endHttp2Stream(Socket s, int stream_id) {
         try {
             s.sendHttp2StreamData(stream_id, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {
             # the stream has already ended or been reset by the peer
             try {
                 s.resetHttp2Stream(stream_id);
-            } catch () {
-            }
-        }
-        # the I/O controller flushes the end of the stream
-        if (ctrl) {
-            try {
-                ctrl.wakeSocket(s);
             } catch () {
             }
         }
