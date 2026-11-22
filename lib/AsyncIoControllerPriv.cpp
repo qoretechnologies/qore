@@ -5294,13 +5294,31 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
         return app_id;
     }
     QoreProgram* pgm = getProgram();
-    // the code of a callback of an operation runs for the application of the operation, unless it is the sandboxed
-    // code of an application Program, which runs for its own application: the callback of an operation that other
+    // the code of a callback of an operation runs for the application of the operation, unless it is the code of a
+    // sandboxed application Program, which runs for its own application: the callback of an operation that other
     // code submitted with an object of sandboxed code does not act for the submitter
-    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_caller_is_sandboxed())) {
+    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))) {
         return aio_callback_app_id;
     }
+    // a module is no application: module code that no call and no callback records an application for (the code of a
+    // thread that module code started) runs for the application of the module code that started the thread, and
+    // sandboxed module code with none recorded runs for no application, so that it acts on no operation
+    if (pgm && qore_program_is_module(pgm)) {
+        if (qore_program_id_t app_id = runtime_get_thread_start_app_id()) {
+            return app_id;
+        }
+        if (qore_caller_is_sandboxed()) {
+            return QORE_NO_PROGRAM_ID;
+        }
+    }
     return pgm ? runtime_get_module_call_app_id(pgm) : QORE_NO_PROGRAM_ID;
+}
+
+qore_program_id_t qore_async_io_thread_start_app_id() {
+    // only module code records an application for the threads that it starts: the code of another Program runs for
+    // that Program in its new thread
+    QoreProgram* pgm = getProgram();
+    return pgm && qore_program_is_module(pgm) ? AsyncIoControllerPriv::callerAppId() : 0;
 }
 
 bool AsyncIoControllerPriv::submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
@@ -6832,6 +6850,8 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
     // the application that module code adds the timer for, if it runs for one with restrictions
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
+    // the application that the timer's code runs for (qore#7010), computed before the controller's lock is taken
+    qore_program_id_t cb_app_id = callerAppId();
 
     {
         AutoLocker al(m);
@@ -6870,7 +6890,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.sandbox_ctx = std::move(sandbox_ctx);
         tinfo.runtime_po = std::move(timer_po);
         tinfo.for_app = for_app;
-        tinfo.cb_app_id = callerAppId();
+        tinfo.cb_app_id = cb_app_id;
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
 

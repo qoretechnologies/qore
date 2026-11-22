@@ -720,6 +720,10 @@ public:
         user call saves and restores
     */
     QoreParseOptions thread_caller_restrictions;
+    //! the application that the module code of the thread runs for if no call records one: that of the module code
+    //! that started the thread (see QoreThreadRuntimeParseOptions::start_app_pgm_id); set with
+    //! thread_caller_restrictions (qore#7010)
+    qore_program_id_t thread_start_app_pgm_id = 0;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
@@ -8794,6 +8798,10 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
         return false;
     }
     app_pgm_id = td->runtime_po_state.app_pgm_id;
+    // the code of a thread that module code started for an application runs for that application (qore#7010)
+    if (!app_pgm_id && td->thread_start_app_pgm_id && td->thread_start_app_pgm_id != QORE_NO_PROGRAM_ID) {
+        app_pgm_id = td->thread_start_app_pgm_id;
+    }
     return true;
 }
 
@@ -8987,6 +8995,9 @@ void QoreThreadRuntimeParseOptions::derefPrograms() {
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
     QoreThreadRuntimeParseOptions rv = capture();
     rv.override.app_pgm_id = 0;
+    // the application that module code starting the thread runs for, for the async I/O operations of the module code
+    // of the new thread (qore#7010); 0 for other code
+    rv.start_app_pgm_id = qore_async_io_thread_start_app_id();
     return rv;
 }
 
@@ -9045,10 +9056,20 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     // the restrictions of the code that started the thread (qore#6337)
     old_caller_restrictions = td->thread_caller_restrictions;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
+    // the application of the module code that started the thread (qore#7010)
+    old_start_app_pgm_id = td->thread_start_app_pgm_id;
+    td->thread_start_app_pgm_id = o->start_app_pgm_id;
 }
 
 void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
-    thread_data.get()->thread_caller_restrictions = old_caller_restrictions;
+    ThreadData* td = thread_data.get();
+    td->thread_caller_restrictions = old_caller_restrictions;
+    td->thread_start_app_pgm_id = old_start_app_pgm_id;
+}
+
+qore_program_id_t runtime_get_thread_start_app_id() {
+    ThreadData* td = thread_data.get();
+    return td ? td->thread_start_app_pgm_id : 0;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

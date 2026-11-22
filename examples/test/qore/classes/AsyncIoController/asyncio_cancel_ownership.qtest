@@ -14,6 +14,7 @@
 # loaded before the module that requires it, so that it does not take the restriction of that module
 %requires AioCancelChainM2
 %requires AioCancelChainM1
+%requires AioCancelBgLib
 %requires FsUtil
 %requires ../../../TestInterpreter.qm
 
@@ -92,6 +93,48 @@ class CompletingOperation inherits AbstractPollOperation<auto> {
         if (gate) {
             gate.waitForZero(HangGuard);
         }
+    }
+}
+
+#! An operation of the host's code that completes at once; its completion cancels an operation by key
+class HostCancellingOperation inherits AbstractPollOperation<auto> {
+    public {
+        Queue report();
+    }
+
+    private {
+        EventNotifier notifier;
+        bool done;
+        string cancel_key;
+    }
+
+    constructor(EventNotifier notifier, string cancel_key) {
+        self.notifier = notifier;
+        self.cancel_key = cancel_key;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        report.push(AsyncIoController::cancelByKey(cancel_key));
     }
 }
 
@@ -200,6 +243,13 @@ list<auto> notifiers;
 auto sub keep(auto o) {
     push notifiers, o;
     return o;
+}
+
+# submits an operation object that the tenant is given
+sub submit_given(object op, EventNotifier n, string key) {
+    push notifiers, n;
+    AsyncIoController::submit(<SocketPollOperationInfo>{\"sock\": n, \"spop\": op, \"owner\": key, \"key\": key,
+        \"to\": 30s});
 }
 
 # returns an operation object of the tenant's code
@@ -316,6 +366,35 @@ Queue sub reporting(string key, string follow_key) {
 }
 ";
 
+        #! the code of a tenant that uses a module that acts in threads that it starts
+        const TenantBgSource = "%modern
+%requires AioCancelBgLib
+
+auto sub submit_bg(string key) {
+    return AioCancelBgLib::Lib::submitBg(key);
+}
+
+auto sub replace_bg(string key) {
+    return AioCancelBgLib::Lib::replaceBg(key);
+}
+
+auto sub cancel_bg(string key) {
+    return AioCancelBgLib::Lib::cancelBg(key);
+}
+
+auto sub cancel_owner_bg(string owner) {
+    return AioCancelBgLib::Lib::cancelOwnerBg(owner);
+}
+
+auto sub add_timer_bg() {
+    return AioCancelBgLib::Lib::addTimerBg();
+}
+
+auto sub cancel_timer_bg(int id) {
+    return AioCancelBgLib::Lib::cancelTimerBg(id);
+}
+";
+
         #! the code of a tenant that calls a module (with a restriction of its own) that calls another module
         const TenantChainSource = "%modern
 %requires AioCancelChainM1
@@ -366,6 +445,13 @@ bool sub direct_key(string key) {
         addTestCase("the canceled result of a refused submission runs for the submitter", \refusedResultTest());
         addTestCase("a submission that is not started leaves no registration of its object behind",
             \refusedRegistrationTest());
+        addTestCase("the threads that a module starts for tenants act for those tenants", \moduleThreadTest());
+        addTestCase("a tenant does not cancel the operation of a listener of the host by its key or owner",
+            \listenerOperationTest());
+        addTestCase("the timers of the threads that a module starts for tenants are those tenants'",
+            \moduleThreadTimerTest());
+        addTestCase("the host's code in the callback of a tenant's operation acts for the tenant",
+            \hostCodeInTenantCallbackTest());
         set_return_value(main());
     }
 
@@ -621,6 +707,11 @@ bool sub direct_key(string key) {
             AsyncIoController::cancelByOwner(key);
             AsyncIoController::cancelByOwner(key + "-follow");
         }
+        # the tenant's submission meets the host's operation: there is one I/O thread, and the host's operation is in
+        # its cache (getInfo() is answered by the I/O thread after the commands sent before it)
+        hash<auto> info = AsyncIoController::getInfo();
+        assertEq(1, info.io_threads);
+        assertTrue(inlist(key, info.cache_keys), "the host's operation is in the cache");
         Queue report = tenant.callFunction("reporting", key, key + "-follow");
         hash<auto> h = report.get(HangGuard);
         assertTrue(h.canceled, "the submission was refused");
@@ -656,6 +747,105 @@ bool sub direct_key(string key) {
         AsyncIoController::getInfo();
         assertEq(before, call_function("dbg_async_io_qop_registered_count"), "no registration is left behind");
         assertEq(0, rq.size(), "the host's operation is still there");
+    }
+
+    #! the code of a thread that a module starts for a tenant acts for that tenant: another tenant does not cancel or
+    #! replace its operations, nor the host's, through the module's threads (H1)
+    moduleThreadTest() {
+        Program a = getTenantBg();
+        Program b = getTenantBg();
+        string key = getName("module-thread");
+        EventNotifier hn();
+        auto host_rq = submitHost(key + "-host", key + "-host", hn);
+        on_exit {
+            map AsyncIoController::cancelByOwner(key + $1), ("-host", "-hostmod", "-a", "-b");
+        }
+        # the host's operations: one of its own, and one that it submits through the module's thread
+        auto hostmod_rq = AioCancelBgLib::Lib::submitBg(key + "-hostmod");
+        assertEq(NT_OBJECT, hostmod_rq.typeCode(), "the host's submission through the module");
+        assertFalse(b.callFunction("cancel_bg", key + "-host"), "another tenant does not cancel the host's operation");
+        assertFalse(b.callFunction("cancel_bg", key + "-hostmod"),
+            "another tenant does not cancel the host's operation of the module's thread");
+        assertEq(0, host_rq.size());
+        assertEq(0, hostmod_rq.size());
+
+        # the tenant's operation, which the module's thread submits for it
+        auto a_rq = a.callFunction("submit_bg", key + "-a");
+        assertEq(NT_OBJECT, a_rq.typeCode(), "the tenant's submission");
+        assertFalse(b.callFunction("cancel_bg", key + "-a"), "another tenant's cancel by key");
+        assertEq(0, b.callFunction("cancel_owner_bg", key + "-a"), "another tenant's cancel by owner");
+        # another tenant's replacement is refused: its operation is not started, and its result is a canceled result
+        auto b_rq = b.callFunction("replace_bg", key + "-a");
+        assertEq(NT_OBJECT, b_rq.typeCode(), "another tenant's replacement");
+        assertTrue(b_rq.get(HangGuard).canceled, "another tenant's replacement is refused");
+        assertEq(0, a_rq.size(), "the tenant's operation was not canceled or replaced");
+        # the tenant cancels its own operation through the module's thread
+        assertTrue(a.callFunction("cancel_bg", key + "-a"), "the tenant's cancel");
+        assertTrue(a_rq.get(HangGuard).canceled);
+    }
+
+    #! the operation of a listener that the host's server runs (the shape of an HTTP/3 listener's operation: the key
+    #! "<unique hash>:quic" and the owner "<unique hash>" of the listener's socket, submitted by module code in a thread
+    #! that it starts for trusted code) is not canceled by a sandboxed handler by its key or owner, directly or through
+    #! module code
+    listenerOperationTest() {
+        Program tenant = getTenantBg();
+        Socket listener();
+        string owner = listener.uniqueHash();
+        string key = owner + ":quic";
+        auto rq = AioCancelBgLib::Lib::submitBgFor(owner, key);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertEq(NT_OBJECT, rq.typeCode(), "the listener's operation");
+        assertFalse(tenant.callFunction("cancel_bg", key), "by key through module code");
+        assertEq(0, tenant.callFunction("cancel_owner_bg", owner), "by owner through module code");
+        Program direct = getTenant();
+        assertFalse(direct.callFunction("cancel_key", key), "by key");
+        assertEq(0, direct.callFunction("cancel_owner", owner), "by owner");
+        assertEq(0, rq.size(), "the listener's operation was not canceled");
+        # the host cancels it
+        assertEq(1, AsyncIoController::cancelByOwner(owner));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    #! a timer that the thread of a module adds for a tenant is that tenant's: another tenant's thread of the module
+    #! does not cancel it (L2)
+    moduleThreadTimerTest() {
+        # tenants with a restriction that the module does not have, for which the module's timers are tagged
+        Program a = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program b = getTenantBg(PO_NO_LOCALE_CONTROL);
+        int id = a.callFunction("add_timer_bg");
+        on_exit AsyncIoController::cancelTimer(id);
+        assertFalse(b.callFunction("cancel_timer_bg", id), "another tenant does not cancel the timer");
+        assertTrue(a.callFunction("cancel_timer_bg", id), "the tenant cancels its timer");
+    }
+
+    #! the host's code that runs in the callback of a tenant's operation (an object of the host's class that the
+    #! tenant submits) acts for the tenant, not for the host (M1)
+    hostCodeInTenantCallbackTest() {
+        Program tenant = getTenant();
+        string key = getName("host-in-tenant-callback");
+        EventNotifier hn();
+        auto host_rq = submitHost(key + "-host", key + "-host", hn);
+        on_exit {
+            AsyncIoController::cancelByOwner(key + "-host");
+            AsyncIoController::cancelByOwner(key);
+        }
+        EventNotifier n();
+        n.notify();
+        HostCancellingOperation op(n, key + "-host");
+        tenant.callFunction("submit_given", op, n, key);
+        assertFalse(op.report.get(HangGuard), "the host's code in the tenant's callback");
+        assertEq(0, host_rq.size(), "the host's operation was not canceled");
+    }
+
+    #! Returns a tenant that uses the module that acts in threads that it starts
+    private Program getTenantBg(int po = 0) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS | po);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantBgSource, "tenant");
+        return p;
     }
 
     #! runs the given code in a child process with the test's library modules in the process-wide module path

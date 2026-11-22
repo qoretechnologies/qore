@@ -2295,6 +2295,9 @@ private:
     */
     DLLLOCAL static qore_program_id_t callerAppId();
 
+    //! the capture of the application of a thread that module code starts (see callerAppId())
+    friend qore_program_id_t qore_async_io_thread_start_app_id();
+
     //! Returns the operations that the calling code may cancel or flush by key or owner
     /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no
         operation
