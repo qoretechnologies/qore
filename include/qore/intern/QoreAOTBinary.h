@@ -2186,7 +2186,7 @@ public:
         Keep the inline readers local to the binary that establishes the section bounds: libqore and its tools
         each have their own qore_aot_read_bounds.
     */
-    DLLLOCAL static bool readFits(const uint8_t*& ptr, size_t n) {
+    DLLLOCAL __attribute__((always_inline)) static bool readFits(const uint8_t*& ptr, size_t n) {
         const uint8_t* end = qore_aot_read_bounds.end;
         // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
         assert(!end || ptr >= qore_aot_read_bounds.start);
@@ -2218,7 +2218,10 @@ public:
     }
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
-    DLLLOCAL static uint32_t readU32(const uint8_t*& ptr) {
+    /** Always inlined: the record readers read most of their fields with it, and a call per field is a large part of
+        the cost of reading a record
+    */
+    DLLLOCAL __attribute__((always_inline)) static uint32_t readU32(const uint8_t*& ptr) {
         if (!readFits(ptr, 4)) {
             return 0;
         }
