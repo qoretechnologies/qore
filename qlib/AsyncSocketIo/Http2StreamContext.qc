@@ -166,11 +166,14 @@ public class Http2StreamContext inherits AbstractStreamContext {
         the sender down instead of losing the data.
 
         @param data the binary payload to send
-        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
-        zero waits without a limit
+        @param timeout_ms the maximum time that the stream send buffer may make no progress: the time starts again
+        whenever the connection has taken more of the stream's buffered data (see
+        @ref Qore::Socket::getHttp2StreamTakenBytes()), so that a large send that a slow or loaded peer takes does not
+        fail while it is taken; a value less than or equal to zero waits without a limit
         @param end_stream if @ref True, signals end of stream after this data
 
-        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw STREAM-SEND-TIMEOUT the connection took no data of the stream for this time, or the stream ended with
+        its send buffer full; the data was not sent
         @throw SOCKET-SYNC-ON-IO-THREAD-ERROR the stream send buffer is full and this method was called on the async
         I/O controller's I/O path, where it cannot wait
 
@@ -180,8 +183,14 @@ public class Http2StreamContext inherits AbstractStreamContext {
     */
     sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
         checkWebSocketDataFrame(data);
-        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
-        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
+        # the wait is bounded by the timeout of STALLED time, not of total time: a large message that the peer takes
+        # slowly (a loaded host) makes progress all the while (issue #7252, as on the client: #6968).  The deadline
+        # moves only when the count grows, so an unknown count (-1: the stream or session is gone) ends the wait
+        # on the monotonic clock, in milliseconds
+        *int stall_deadline;
+        int last_taken = -1;
+        # the waits in a row that found the stream ended, with the send still refused
+        int ended_waits = 0;
         while (True) {
             try {
                 sock.sendHttp2StreamData(stream_id, data, end_stream);
@@ -196,14 +205,28 @@ public class Http2StreamContext inherits AbstractStreamContext {
                 wake_callback();
             }
             int wait_ms = -1;
-            if (deadline) {
-                wait_ms = deadline - clock_get_monotonic_us() / 1000;
+            if (timeout_ms > 0) {
+                int now = clock_get_monotonic_us() / 1000;
+                int taken = getTakenBytes();
+                if (!stall_deadline || taken > last_taken) {
+                    last_taken = taken;
+                    stall_deadline = now + timeout_ms;
+                }
+                wait_ms = stall_deadline - now;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the send buffer did not drain within %d "
-                        "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
+                        "ms and the peer granted no credit meanwhile; %d bytes were not sent", stream_id, timeout_ms,
+                        data.size());
                 }
             }
-            sock.waitForHttp2StreamDrain(stream_id, wait_ms);
+            # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send is
+            # made again in each case; a stream that has ended and still refuses it will never take it
+            if (sock.waitForHttp2StreamDrain(stream_id, wait_ms) >= 0) {
+                ended_waits = 0;
+            } else if (++ended_waits > 1) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the stream ended with its send buffer full; "
+                    "%d bytes were not sent", stream_id, data.size());
+            }
         }
         # the stream was ended with the data: it is not ended again
         if (end_stream) {
@@ -211,6 +234,20 @@ public class Http2StreamContext inherits AbstractStreamContext {
         }
         if (wake_callback) {
             wake_callback();
+        }
+    }
+
+    #! Returns the bytes of the stream's buffered data that the connection has taken, or -1 if that is not known
+    /** A session that has ended has no count: the send that is made next reports the state of the stream
+    */
+    private:internal int getTakenBytes() {
+        try {
+            return sock.getHttp2StreamTakenBytes(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-ERROR") {
+                rethrow;
+            }
+            return -1;
         }
     }
 

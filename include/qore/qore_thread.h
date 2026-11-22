@@ -174,13 +174,13 @@ DLLEXPORT q_trid_t qore_get_trid();
     @note this is a global object and not an attribute of a thread
  */
 class ThreadCleanupList {
+    friend class qore_thread_cleanup_list_ops;
 private:
    static ThreadCleanupNode *head;
 
 public:
    DLLLOCAL ThreadCleanupList();
    DLLLOCAL ~ThreadCleanupList();
-   DLLLOCAL void exec();
 
    //! must only be called in the module initialization function
    /** @param func the cleanup function to be run whenever a thread ends
@@ -197,6 +197,84 @@ public:
 //! the interface to the thread cleanup list
 DLLEXPORT extern ThreadCleanupList tclist;
 
+//! defined if the process-end callbacks are available (qore_register_process_end_callback())
+/** @since %Qore 3.0 (qore#7191)
+*/
+#define QORE_HAS_PROCESS_END_CALLBACKS 1
+
+//! Why the process-end callbacks run; see qore_register_process_end_callback()
+/** @since %Qore 3.0 (qore#7191)
+*/
+enum qore_process_end_e : int {
+    //! qore_cleanup() starts its teardown: the script ended, or a host that embeds the library (also a JVM that
+    //! loaded it) calls qore_cleanup(); the exit hooks have run and the %Qore threads have ended, and nothing has
+    //! been torn down yet: all modules are loaded
+    QPE_CLEANUP = 0,
+    //! exit() with no other application thread running: the process ends with C exit(), without qore_cleanup();
+    //! all modules are loaded
+    QPE_EXIT = 1,
+    //! the process ends with _Exit() at once: exit() on the signal handler thread, or while other threads run;
+    //! nothing of the library or of any module runs after the callbacks
+    QPE_QUICK_EXIT = 2,
+};
+
+//! A process-end callback; see qore_register_process_end_callback()
+/** @param reason why the callback runs
+    @param arg the argument given when the callback was registered
+*/
+typedef void (*qore_process_end_callback_t)(qore_process_end_e reason, void* arg);
+
+//! Registers a callback that runs once when the process ends, for the cleanup of a binary module
+/** The callbacks run once per process, at the first of these points that the process reaches, in the reverse order
+    of their registration, on the thread that reached it, which holds no lock of the library while they run:
+    - the start of qore_cleanup() (#QPE_CLEANUP): after the exit hooks and the wait for the %Qore threads, before
+      the library or any module is torn down;
+    - exit() with no other application thread running (#QPE_EXIT), before C exit(), as qore_cleanup() does not run
+      then;
+    - exit() on the signal handler thread or while other threads run (#QPE_QUICK_EXIT), before _Exit(), which runs
+      nothing else: no qore_cleanup(), no atexit() handler and no module deletion.
+
+    Not covered: the fatal ends of the process (an exception that cannot be handled, the end of a forked child that
+    failed to exec, a signal that ends the process with its default action, \c SIGKILL), crashes, and C exit() or
+    _exit() called directly.
+
+    A callback:
+    - must not throw (an exception is caught and ignored), run %Qore code, start threads, or call exit(),
+      qore_cleanup() or this API (a call of exit() goes on with the end of the process without waiting, and a
+      registration fails);
+    - must end in a bounded time: a thread that reaches one of the points while the callbacks run on another thread
+      waits for them at most 10 seconds, as exit() waits for the threads that are ending, and then goes on with its
+      own end of the process;
+    - for #QPE_QUICK_EXIT: other threads can still run and hold any lock, of the library or of the module, so it must
+      not wait for a lock that another thread can hold (it can use a try-lock), and it should only do cleanup that it
+      can do with its own data, such as removing files with system calls; it is not a signal handler (the signal
+      handler thread of %Qore is an ordinary thread).
+
+    The callbacks of a process do not run in a child process created with fork(), which can register its own.
+
+    @param callback the callback
+    @param arg the argument given to the callback
+
+    @return the ID of the registration (positive), or -1 if the process has started to end
+
+    @since %Qore 3.0 (qore#7191)
+*/
+DLLEXPORT int64_t qore_register_process_end_callback(qore_process_end_callback_t callback, void* arg);
+
+//! Deregisters a process-end callback; it does not run afterwards
+/** It never waits: no binary module is unloaded while the callbacks can run (modules are deleted after the
+    #QPE_CLEANUP callbacks have returned, on the same thread, and the other reasons end the process), so it can be
+    called with any lock held, also by the callback itself.
+
+    @param id the ID that qore_register_process_end_callback() returned
+
+    @return 0 if the callback was deregistered before it ran, 1 if it has run or is running on another thread, -1
+    if the ID is not known
+
+    @since %Qore 3.0 (qore#7191)
+*/
+DLLEXPORT int qore_deregister_process_end_callback(int64_t id);
+
 /** @defgroup q_register_foreign_thread_rv Return Value Codes for q_register_foreign_thread()
  */
 ///@{
@@ -211,6 +289,11 @@ DLLEXPORT extern ThreadCleanupList tclist;
 
     @return QFT_OK (0) if the thread was successfully registered, QFT_ERROR (-1) if an error occurred, or
     QFT_REGISTERED (-2) if it was already registered; see @ref q_register_foreign_thread_rv for more info
+
+    @note at the end of the process, a foreign thread that is still in a call into the Program of the script is waited
+    for at most 10 seconds after the script and the library's own threads have ended (see QoreProgramHelper); the
+    Program and the library are then left as they are to the thread, which is not interrupted, and the process ends
+    (since %Qore 3.0; before, the end of the process waited for the call forever: qore#6904)
 
     @see
     - QoreForeignThreadHelper
@@ -425,12 +508,22 @@ DLLEXPORT int q_get_unique_thread_local_data_key();
 //! saves thread-local data
 /** can only be called in a registered %Qore thread
 
+    @note a destructor that is still registered when the thread ends runs when the thread's data is deleted, after
+    the thread has left every Program and its Program data has been freed: it must release only native resources,
+    not %Qore values whose release can run %Qore code (an object of a user class, a closure, or a container that
+    holds one), as entering their Program then crashes the process; no thread-end hook runs early enough to release
+    them, so a module that stores such values releases them itself while the thread still runs %Qore code, with
+    q_remove_thread_local_data() or q_swap_thread_local_data() (a destructor that these or this function run for a
+    replaced value runs in the caller's context, where it can) (qore#7024)
+
     @since %Qore 0.9.5
 */
 DLLEXPORT void q_save_thread_local_data(int key, void* data, q_thread_local_destructor destructor = nullptr);
 
 //! swaps thread-local data
 /** can only be called in a registered %Qore thread
+
+    @note the destructor is subject to the same constraint as that of q_save_thread_local_data()
 
     @since %Qore 0.9.5
 */

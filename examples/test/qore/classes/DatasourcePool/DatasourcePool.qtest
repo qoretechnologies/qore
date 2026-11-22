@@ -8,6 +8,7 @@
 %requires QUnit
 # the tests that need a connection run against every database connection that is configured
 %requires ../../../DbTestConnections.qm
+%requires ../../../qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class DatasourcePoolTest
 
@@ -48,7 +49,12 @@ public class DatasourcePoolTest inherits QUnit::Test {
             dsp = new DatasourcePool(oracle_connstr);
             assertEq("oracle", dsp.getDriverName());
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping tests: " + ex.err + ": " + ex.desc);
+            # a database outage is not a reason to skip (qore#6934); the error of the default datasource string,
+            # which names its user and database, is not printed
+            if (ENV.QORE_DB_CONNSTR_ORACLE && ex.err != "LOAD-MODULE-ERROR" && ex.err !~ /^TEST-/) {
+                TestRun::failUnreachable(ENV.QORE_DB_CONNSTR_ORACLE, ex);
+            }
+            testSkip("skipping tests: " + ex.err);
         }
 
         Counter c(1);
@@ -69,7 +75,12 @@ public class DatasourcePoolTest inherits QUnit::Test {
         try {
             ds = getAnyDatasourcePool(connstr);
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping tests: " + ex.err + ": " + ex.desc);
+            # a database outage is not a reason to skip (qore#6934)
+            if (ex.err != "LOAD-MODULE-ERROR" && ex.err !~ /^TEST-/
+                && TestRun::getVariable(connstr) != "the datasource string") {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            testSkip("skipping tests: " + ex.err);
         }
 
         hash<SerializationInfo> h = ds.serializeToData();

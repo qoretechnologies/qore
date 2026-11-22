@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of handlers that run out of line with locals that hold NOTHING
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OnExitNothingLocalsTest
+
+#! issue #7244: an on_exit, on_error or on_success handler runs when its local holds NOTHING
+/** A local that only handlers reference is IR-only in the optimized execution modes (#5951): the handler's frame takes
+    over its slot.  A slot that holds NOTHING was taken as a local that does not exist yet, which the handler looked for
+    on the runtime stack, where an IR-only local is not: the handler ran no statement when an exception left the block
+    (module-xml's WSDL.qm restores a thread-local variable that way: it stayed set after a failed decode).
+
+    on-exit-nothing-locals.q runs handlers of every kind on blocks left normally, by an exception that is caught in the
+    function and by one that leaves it, by a break and a continue and by a thread_exit, with locals that hold NOTHING
+    and locals that hold a value, of the types object, string, int, list and hash, in nested blocks, a recursion and a
+    method; its output must be that of the AST interpreter in every execution mode, on the IR tier, with synchronous
+    JIT compilation and as AOT executables.
+
+    on-exit-child-program.q (#7259) calls functions of a child Program with Program::callFunctionArgs(): wrappers that
+    save a global in a local, set it and restore it with on_exit when the function throws directly, through
+    call_function_args(), through a method and inside a try block, whether the saved value is a value or NOTHING.
+*/
+class OnExitNothingLocalsTest inherits QUnit::Test {
+    public {
+        #! the scripts that the test runs
+        const Scripts = ("on-exit-nothing-locals", "on-exit-child-program");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("handlers with locals that hold NOTHING", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("the AST output is the expected one", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks that the AST interpreter's output has the lines that the handlers must produce, so that the comparison
+    #! with the other modes compares the right thing
+    astTest() {
+        string out = expected("on-exit-nothing-locals");
+        # a block left by an exception: the handler restores the local that holds NOTHING before the catch block runs
+        assertTrue(out.find("exit object (fail=True): caught: NOTHING\n") >= 0, "exit object");
+        assertTrue(out.find("exit string: caught: NOTHING\n") >= 0, "exit string");
+        assertTrue(out.find("exit object, the exception leaves the function: caught: NOTHING\n") >= 0,
+            "the exception leaves the function");
+        assertTrue(out.find("on_error (fail=True): caught: NOTHING\n") >= 0, "on_error");
+        # and the one that holds a value
+        assertTrue(out.find("exit object with a value (fail=True): caught: N(7)\n") >= 0, "a value");
+        assertTrue(out.find("thread_exit: exit NOTHING\n") >= 0, "thread_exit");
+        # a function of a child Program restores the saved value, whatever the way it is left
+        string child = expected("on-exit-child-program");
+        assertTrue(child.find("  wrapArgs: threw X, then -1\n") >= 0, "call_function_args in a child Program");
+        assertTrue(child.find("  wrapDirect: threw X, then null\n") >= 0, "a saved NOTHING in a child Program");
+    }
+
+    #! runs the script in every execution mode, on the IR tier and with synchronous JIT compilation, and checks that it
+    #! gives the output of the AST interpreter
+    modesTest() {
+        foreach string script in (Scripts) {
+            string exp = expected(script);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                    scriptPath(script))), script + ": " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+                scriptPath(script))), script + ": " + ExecModeHarness::IRTierName);
+            assertEq(exp, ExecModeHarness::run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s", env,
+                qore_bin, scriptPath(script))), script + ": jit (synchronous)");
+        }
+    }
+
+    #! compiles the script with qcc and checks that the executables give the output of the AST interpreter
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("on-exit-nothing-locals-aot-");
+        foreach string script in (Scripts) {
+            foreach int opt in (0, 3) {
+                string exe = sprintf("%s/%s-O%d", dir.path, script, opt);
+                string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe,
+                    scriptPath(script)));
+                assertTrue(is_file(exe), sprintf("qcc -O%d compiles %s: %s", opt, script, out));
+                assertEq(expected(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)),
+                    sprintf("%s: qcc -O%d", script, opt));
+            }
+        }
+    }
+
+    private string scriptPath(string script) {
+        return get_script_dir() + "/" + script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string expected(string script) {
+        return backquote(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath(script)));
+    }
+}

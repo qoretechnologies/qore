@@ -131,7 +131,7 @@ Counter done(nclients);
 int failures = 0;
 Mutex fm();
 
-date start = now_us();
+int start = clock_get_monotonic_us();
 for (int i = 0; i < nclients; ++i) {
     int cid = i;
     background sub () {
@@ -145,7 +145,7 @@ for (int i = 0; i < nclients; ++i) {
     }();
 }
 done.waitForZero();
-date elapsed = now_us() - start;
+date elapsed = microseconds(clock_get_monotonic_us() - start);
 
 printf("\n=== Results: %d/%d clients x %d batches succeeded in %y (failures=%d) ===\n",
     nclients - failures, nclients, nbatches, elapsed, failures);

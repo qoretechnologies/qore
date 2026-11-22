@@ -48,6 +48,7 @@
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -688,14 +689,14 @@ const DomainStringMap = qore(pomaps.getStringToDomainMap());
 
     @since %Qore 0.8.13
  */
-const ParseOptionCmdCodeMap = qore(ParseOptionMap::getCodeToStringMap());
+const ParseOptionCmdCodeMap = qore(qore_parse_option_map_ops::getCodeToStringMap());
 
 //! Maps from parse option strings to parse option integer codes. Names are in form used in script or on command line, e.g. new-style.
 /** @see ParseOptionCmdCodeMap for the reverse mapping
 
     @since %Qore 0.8.13
  */
-const ParseOptionCmdStringMap = qore(ParseOptionMap::getStringToCodeMap());
+const ParseOptionCmdStringMap = qore(qore_parse_option_map_ops::getStringToCodeMap());
 
 //! Prohibits the use of the '$' character in variable names, method calls, and object member references
 /** This option should probably be named \c "PO_REQUIRE_BARE_REFS" as it is an error to use the \c "$" character when this option is set
@@ -722,7 +723,7 @@ const PO_DEFAULT = PO_DEFAULT;
 const PO_FREE_OPTIONS = PO_FREE_OPTIONS;
 
 //! Only set by the system when in a @ref user_modules "user module" Program
-/** @note This option cannot be set manually or an exception will be raised
+/** @note Program raises PROGRAM-OPTION-ERROR if user code asks to set or clear this option
  */
 const PO_IN_MODULE = PO_IN_MODULE;
 
@@ -1683,9 +1684,7 @@ Program pgm();
  */
 Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
-    if (parse_options & PO_SYSTEM_OPS) {
-        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that "
-            "can only be set by the system", parse_options);
+    if (qore_program_private::checkSystemParseOptions(parse_options, xsink)) {
         return;
     }
 
@@ -1753,13 +1752,17 @@ Program pgm(opts);
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    const QoreParseOptions requested = parse_options->get();
+    if (qore_program_private::checkSystemParseOptions(requested, xsink)) {
+        return;
+    }
     QoreProgram* creator = getProgram();
     // as the constructor with integer options
     bool restricted = false;
     QoreParseOptions restrictions;
     QoreParseOptions po = independent
-        ? qore_program_private::restrictForCreator(creator, parse_options->get(), restrictions, restricted)
-        : parse_options->get();
+        ? qore_program_private::restrictForCreator(creator, requested, restrictions, restricted)
+        : requested;
     // the parent's options are read once: the %modern check and the options that the child inherits use the same
     // value, also if they change meanwhile (issue #6176)
     QoreProgram* parent = independent ? nullptr : creator;
@@ -1871,6 +1874,10 @@ while (wh) {
  */
 *hash<ExceptionInfo> Program::parse(string code, string label, *softint warning_mask, *string source,
         *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (warning_mask) {
         ExceptionSink wsink;
         p->parse(code, label, xsink, &wsink, warning_mask, source, offset);
@@ -1931,6 +1938,10 @@ pgm.parseCommit();
  */
 *hash<ExceptionInfo> Program::parsePending(string code, string label, *softint warning_mask, *string source,
         *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (warning_mask) {
         ExceptionSink wsink;
         p->parsePending(code, label, xsink, &wsink, warning_mask, source, offset);
@@ -1971,6 +1982,10 @@ pgm.parseCommit();
     @since %Qore 0.9 parsing can only be executed once per %Program object
  */
 nothing Program::parseCommit() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     p->parseCommit(xsink);
 }
 
@@ -2003,6 +2018,10 @@ while (exists wh) {
     @since %Qore 0.9 parsing can only be executed once per %Program object
  */
 *hash<ExceptionInfo> Program::parseCommit(int warning_mask) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     ExceptionSink wsink;
     p->parseCommit(xsink, &wsink, warning_mask);
     if (!wsink.isException())
@@ -2038,6 +2057,10 @@ foreach hash<ParseDiagnosticInfo> d in (pgm.getParseDiagnostics()) {
     @since %Qore 3.0
 */
 nothing Program::setParseDiagnosticsCollected(bool collect = True) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     qore_program_private::get(*p)->setParseDiagnosticsCollected(collect);
 }
 
@@ -2049,6 +2072,10 @@ nothing Program::setParseDiagnosticsCollected(bool collect = True) {
     @since %Qore 3.0
 */
 bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::get(*p)->parseDiagnosticsCollected();
 }
 
@@ -2070,6 +2097,10 @@ bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
     @since %Qore 3.0
 */
 list<hash<ParseDiagnosticInfo>> Program::getParseDiagnostics() [flags=RET_VALUE_ONLY] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::get(*p)->getParseDiagnosticList();
 }
 
@@ -2112,6 +2143,10 @@ pgm.parseCommit();
     committed state when used with @ref PO_ALLOW_REPARSE
  */
 nothing Program::parseRollback() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     p->parseRollback(xsink);
 }
 
@@ -2139,6 +2174,10 @@ auto result = pgm.callFunction("func_name", arg1, arg2);
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::callFunction(string name, ...) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
@@ -2178,6 +2217,10 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
@@ -2218,12 +2261,20 @@ auto result = p.callStaticMethod("Namespace::Class::method", arg1, arg2);
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 
     @note a Program object is a capability: the code runs with the freedom of this %Program and its own
     @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
 */
 auto Program::callStaticMethod(string class_name, string method, ...) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> call_args(xsink);
     // if there are arguments to pass
     if (num_args(args) > 2) {
@@ -2263,6 +2314,10 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
     from anywhere); a call made through call_function() or through a call reference to this function has the
     class context of that call, so it cannot call a private method
+    @note the method called is the one that a static method call in the caller's code calls: a caller that cannot
+    call the private static method of the first parent class that has a method of the name calls the public static
+    method of a later parent class, as the call does; a class's own code can call its @ref private_inheritance
+    "private:internal" static methods (since %Qore 3.0; before, the first method found was refused)
 
     @note a Program object is a capability: the code runs with the freedom of this %Program and its own
     @ref parse_options "parse options", not with those of the caller; only the caller's runtime sandbox policy
@@ -2270,6 +2325,10 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
 */
 auto Program::callStaticMethodArgs(
         string class_name, string method_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return q_call_static_method_args(p, class_name, method_name, arguments, xsink);
 }
 
@@ -2290,6 +2349,10 @@ if (pgm.existsFunction("my_func"))
     returns \c EINVAL
  */
 bool Program::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(function_name->c_str(), function_name->size())) {
         return false;
@@ -2313,6 +2376,10 @@ pgm.run();
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 auto Program::run() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->run(xsink);
 }
 
@@ -2345,6 +2412,10 @@ try {
     @since %Qore 3.0
  */
 int Program::skipPendingStatements() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::skipPendingStatements(*p, xsink);
 }
 
@@ -2372,6 +2443,10 @@ pgm.importFunction("log");
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
 nothing Program::importFunction(string function_name) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-IMPORTFUNCTION-NO-FUNCTION", xsink)) {
         return QoreValue();
@@ -2418,6 +2493,10 @@ pgm.importFunction("service_log", "log");
     - %Qore 0.8.12 added the \a inject parameter
  */
 nothing Program::importFunction(string function_name, string import_as, *softbool inject) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the names are looked up and created as C strings, which would be cut at a NUL character and name another
     // function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names",
@@ -2459,6 +2538,10 @@ pgm.importGlobalVariable("var");
     @ref default_encoding "default character encoding"
  */
 nothing Program::importGlobalVariable(string variable_name, bool readonly = False) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
     if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", xsink)) {
         return QoreValue();
@@ -2491,6 +2574,10 @@ pgm.importGlobalVariable("var", "another_var");
  */
 nothing Program::importGlobalVariable(
         string variable_name, string import_as, bool readonly = False) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(variable_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         return QoreValue();
@@ -2537,6 +2624,10 @@ pgm.importClass("MyNamespace::MyClass");
  */
 nothing Program::importClass(string class_name, *string import_as, *softbool inject,
         int module_visibility = CSP_UNCHANGED, bool reexport = False) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the names are looked up and created as C strings, which would be cut at a NUL character and name another class
     if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "CLASS-IMPORT-ERROR",
             xsink)
@@ -2593,6 +2684,10 @@ pgm.importHashDecl("MyNamespace::MyHash");
     - %Qore 3.0 added the \a reexport parameter
  */
 nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool reexport = False) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the names are looked up and created as C strings, which would be cut at a NUL character and name another
     // hashdecl
     if (q_check_no_nul(hashdecl_name->c_str(), hashdecl_name->size(), "hashdecl name", "hashdecl names",
@@ -2639,6 +2734,10 @@ list<string> l = pgm.getUserFunctionList();
     @note the <a href="../../modules/reflection/html/index.html">reflection</a> module supercedes this functionality
  */
 softlist<string> Program::getUserFunctionList() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getUserFunctionList();
 }
 
@@ -2651,6 +2750,10 @@ int mask = pgm.getParseOptions();
     @endcode
  */
 int Program::getParseOptions() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getParseOptions().getLo();
 }
 
@@ -2668,6 +2771,10 @@ if (po.hasAny("no-class-defs")) {
     @since %Qore 3.0
 */
 ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
     obj->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(p->getParseOptions()));
     return obj;
@@ -2684,6 +2791,10 @@ list<string> l = pgm.getParseOptionStringList();
     @since %Qore 0.9
 */
 list<string> Program::getParseOptionStringList() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return parse_option_bitfield_to_string_list(p->getParseOptions().getLo(), xsink);
 }
 
@@ -2706,12 +2817,11 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
-   if (parse_options & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR",
-          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
-          parse_options);
-
-   p->setParseOptions(parse_options, xsink);
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    p->setParseOptions(parse_options, xsink);
 }
 
 //! Sets parse options from a ParseOptions object
@@ -2724,12 +2834,17 @@ pgm.setParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-OPTION-ERROR the requested mask contains a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     p->setParseOptions(parse_options->get(), xsink);
 }
 
@@ -2758,6 +2873,10 @@ pgm.parse(ReadOnlyFile::readTextFile(path), path);
     @since %Qore 3.0
 */
 bool Program::applySourceDefaults(string path) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     TempEncodingHelper tpath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2785,12 +2904,11 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::disableParseOptions(softint parse_options) [flags=NAMED_ARGS] {
-   if (parse_options & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR",
-          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
-          parse_options);
-
-   p->disableParseOptions(parse_options, xsink);
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    p->disableParseOptions(parse_options, xsink);
 }
 
 //! Disables parse options from a ParseOptions object
@@ -2803,12 +2921,17 @@ pgm.disableParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-OPTION-ERROR the requested mask contains a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     p->disableParseOptions(parse_options->get(), xsink);
 }
 
@@ -2831,12 +2954,17 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw OPTION-ERROR The calling Program does not have the @ref PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()
     @throw OPTIONS-LOCKED the parse options are locked, and the replacement would remove a restriction locked in or
     add an option that gives more freedom
+    @throw PROGRAM-OPTION-ERROR the requested mask would change a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @see Program::setParseOptions() and Program::disableParseOptions().
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::replaceParseOptions(softint parse_options) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    p->replaceParseOptions(parse_options, xsink);
 }
 
@@ -2851,6 +2979,10 @@ pgm.setScriptPath("/users/test/test.q");
     @throw PROGRAM-ERROR the path contains a NUL character; see @ref path_nul_characters
  */
 nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    // the script directory becomes part of paths (get_script_dir(), $dir$ in parse directives)
    if (path && q_check_path(*path, "PROGRAM-ERROR", xsink)) {
       return QoreValue();
@@ -2869,6 +3001,10 @@ nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
     @endcode
  */
 *string Program::getScriptDir() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getScriptDir();
 }
 
@@ -2883,6 +3019,10 @@ nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
     @endcode
  */
 *string Program::getScriptName() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getScriptName();
 }
 
@@ -2897,6 +3037,10 @@ nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
     @endcode
  */
 *string Program::getScriptPath() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getScriptPath();
 }
 
@@ -2912,6 +3056,10 @@ pgm.lockOptions();
    @endcode
  */
 nothing Program::lockOptions() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     p->lockOptions();
 }
 
@@ -2932,6 +3080,10 @@ auto val = pgm.getGlobalVariable("error_count", \existsv);
     returns \c EINVAL
  */
 auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     TempEncodingHelper t(variable_name, QCS_DEFAULT, xsink);
     if (!t)
         return QoreValue();
@@ -2972,6 +3124,10 @@ pgm.setTimeZoneRegion("Europe/Prague");
     @ref sandbox_fs_tz_regions
  */
 nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
@@ -3001,6 +3157,10 @@ pgm.setTimeZoneUTCOffset(PT2H);
     @see TimeZone::setUTCOffset()
  */
 nothing Program::setTimeZoneUTCOffset(softint seconds_east) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    const AbstractQoreZoneInfo *zone = QTZM.findCreateOffsetZone(seconds_east);
    p->setTZ(zone);
 }
@@ -3016,6 +3176,10 @@ pgm.setTimeZone(tz);
     @see TimeZone::set()
  */
 nothing Program::setTimeZone(TimeZone[TimeZoneData] zone) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    p->setTZ(zone->get());
 }
 
@@ -3028,6 +3192,10 @@ TimeZone tz = pgm.getTimeZone();
     @endcode
  */
 TimeZone Program::getTimeZone() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return new QoreObject(QC_TIMEZONE, 0, new TimeZoneData(p->currentTZ()));
 }
 
@@ -3056,6 +3224,10 @@ pgm.setSandboxManager(sm);
     @since Qore 3.0
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    // sandboxed or restricted code could otherwise loosen the sandbox of a Program that it can reach, its own included,
    // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
    // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
@@ -3095,6 +3267,10 @@ if (sm) {
     @since Qore 3.0
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    QoreSandboxManager* sm = qore_program_private::get(*p)->getOwnSandboxManagerRef();
    if (!sm) {
        return QoreValue();
@@ -3131,6 +3307,10 @@ pgm.setExecMode(EM_JIT);
     @since %Qore 3.0
  */
 nothing Program::setExecMode(enum<ExecMode> mode) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    p->setExecMode(static_cast<qore_exec_mode_t>(mode), true);
 }
 
@@ -3153,6 +3333,10 @@ if (mode == EM_JIT) {
     @since %Qore 3.0
  */
 enum<ExecMode> Program::getExecMode() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return static_cast<int64>(p->getExecMode());
 }
 
@@ -3169,6 +3353,10 @@ pgm.define("PRODUCTION", True);
     @throw PROGRAM-ERROR the define name contains a NUL character (since %Qore 3.0)
  */
 nothing Program::define(string parse_define, auto value) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another define
     if (q_check_no_nul(parse_define->c_str(), parse_define->size(), "define name", "define names", "PROGRAM-ERROR", xsink)) {
         return QoreValue();
@@ -3190,6 +3378,10 @@ pgm.undefine("PRODUCTION");
     @throw PROGRAM-ERROR the define name contains a NUL character (since %Qore 3.0)
  */
 nothing Program::undefine(string parse_define) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another define
     if (q_check_no_nul(parse_define->c_str(), parse_define->size(), "define name", "define names", "PROGRAM-ERROR", xsink)) {
         return QoreValue();
@@ -3215,6 +3407,10 @@ bool b = pgm.isDefined("PRODUCTION");
     returns \c EINVAL
  */
 bool Program::isDefined(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
         return false;
@@ -3239,6 +3435,10 @@ auto val = pgm.getDefine("PRODUCTION");
     returns \c EINVAL
  */
 auto Program::getDefine(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
         return QoreValue();
@@ -3260,6 +3460,10 @@ auto Program::getDefine(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @since %Qore 0.8.13
  */
 *hash<auto> Program::getAllDefines() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return qore_program_private::runTimeGetAllDefines(p);
 }
 
@@ -3306,6 +3510,10 @@ pgm.loadModule("mysql");
     - %Qore 0.9 added the \c warning_mask parameter
 */
 Program::loadModule(string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3345,6 +3553,10 @@ pgm.loadModule("mysql");
 */
 *hash<ExceptionInfo> Program::loadModuleWarn(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3373,6 +3585,8 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
+    @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -3389,14 +3603,24 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     - %Qore 0.8.12 introduced this method
     - %Qore 0.9 added the \c warning_mask parameter
 */
-Program::loadUserModuleWithProgram(string module_name, !Qore::Program[QoreProgram] program,
+Program::loadUserModuleWithProgram(string module_name, Qore::Program[QoreProgram] program,
         int warning_mask = WARN_MODULES) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
-    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
-        // the Program container has been taken from its object and is owned by this call
-        ReferenceHolder<QoreProgram> holder(program, xsink);
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
-    QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
+    // the container is taken from its object, which is deleted, only if it is not another tenant's Program
+    // (qore#6536)
+    QoreProgram* container = qore_take_module_container(obj_program, *program, xsink);
+    if (!container) {
+        return QoreValue();
+    }
+    // the Program container is owned by this call
+    ReferenceHolder<QoreProgram> holder(container, xsink);
+    if (*xsink || QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
+    QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, holder.release(), QMLO_INJECT, warning_mask);
 }
 
 //! Loads a %Qore user module into the Program object at run-time using the given @ref Qore::Program "Program" object as the container for the user module code
@@ -3418,6 +3642,8 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
+    @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -3433,15 +3659,25 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     @since %Qore 0.9 introduced this method
 */
 *hash<ExceptionInfo> Program::loadUserModuleWithProgramWarn(string module_name,
-        !Qore::Program[QoreProgram] program, int warning_mask = WARN_MODULES)
+        Qore::Program[QoreProgram] program, int warning_mask = WARN_MODULES)
         [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
-    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
-        // the Program container has been taken from its object and is owned by this call
-        ReferenceHolder<QoreProgram> holder(program, xsink);
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the container is taken from its object, which is deleted, only if it is not another tenant's Program
+    // (qore#6536)
+    QoreProgram* container = qore_take_module_container(obj_program, *program, xsink);
+    if (!container) {
+        return QoreValue();
+    }
+    // the Program container is owned by this call
+    ReferenceHolder<QoreProgram> holder(container, xsink);
+    if (*xsink || QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
     ExceptionSink wsink;
-    QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
+    QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, holder.release(), QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
         return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
@@ -3480,6 +3716,10 @@ pgm.loadUserModuleWithProgram("MyModule", p);
  */
 Program::loadApplyToUserModule(string module_name, *softbool reinject,
         int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3535,6 +3775,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
  */
 *hash<ExceptionInfo> Program::loadApplyToUserModuleWarn(string module_name, *softbool reinject,
         int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3589,6 +3833,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
  */
 Program::loadApplyToPrivateUserModule(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3640,6 +3888,10 @@ Program::loadApplyToPrivateUserModule(
  */
 *hash<ExceptionInfo> Program::loadApplyToPrivateUserModuleWarn(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
@@ -3683,6 +3935,10 @@ pgm.importSystemClasses();
     @since %Qore 0.8.12
 */
 Program::importSystemClasses() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    qore_program_private::runtimeImportSystemClasses(*p, xsink);
 }
 
@@ -3699,6 +3955,10 @@ pgm.importSystemHashDecls();
     @since %Qore 0.8.13
 */
 Program::importSystemHashDecls() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    qore_program_private::runtimeImportSystemHashDecls(*p, xsink);
 }
 
@@ -3715,6 +3975,10 @@ pgm.importSystemConstants();
     @since %Qore 0.8.12
 */
 Program::importSystemConstants() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    qore_program_private::runtimeImportSystemConstants(*p, xsink);
 }
 
@@ -3731,6 +3995,10 @@ pgm.importSystemFunctions();
     @since %Qore 0.8.12
 */
 Program::importSystemFunctions() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     qore_program_private::runtimeImportSystemFunctions(*p, xsink);
 }
 
@@ -3757,6 +4025,10 @@ pgm.importSystemApi();
     @since %Qore 0.8.12
 */
 Program::importSystemApi() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     qore_program_private::runtimeImportSystemApi(*p, xsink);
 }
 
@@ -3791,6 +4063,10 @@ pgm.setThreadInit(sub () { var = 123; });
     @since %Qore 0.8.13
 */
 bool Program::setThreadInit(*code callback) [dom=THREAD_CONTROL; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::setThreadInit(*p, callback, xsink);
 }
 
@@ -3884,6 +4160,10 @@ pgm.setThreadEntryHandler(
 */
 bool Program::setThreadEntryHandler(*code on_enter, *code on_exit)
         [dom=THREAD_CONTROL,EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // code that has its own Program object must not change the context that the embedding code set for its thread
     // entries
     if (getProgram() == p) {
@@ -3964,6 +4244,10 @@ pgm.unsubscribeThreadEvents(sub.id);
 */
 hash<ProgramThreadSubscription> Program::subscribeThreadEvents(Qore::Thread::Queue[Queue] queue,
         *hash<ProgramThreadEventOptions> opts) [dom=THREAD_CONTROL,EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // code that has its own Program object must not observe or control the embedding of its own threads
     if (getProgram() == p) {
         return xsink->raiseException("PROGRAM-THREAD-EVENT-ERROR", "code cannot subscribe to the thread events of "
@@ -4003,6 +4287,10 @@ pgm.unsubscribeThreadEvents(sub.id);
     @since %Qore 3.0
 */
 bool Program::unsubscribeThreadEvents(int id) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (getProgram() == p) {
         return xsink->raiseException("PROGRAM-THREAD-EVENT-ERROR", "code cannot remove subscriptions to the thread "
             "events of the Program it runs in");
@@ -4023,6 +4311,10 @@ hash<auto> h = pgm.getGlobalVars();
     @since %Qore 0.8.13
  */
 hash<auto> Program::getGlobalVars() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getGlobalVars();
 }
 
@@ -4044,6 +4336,10 @@ pgm.setGlobalVarValue("a", 1);
     @since %Qore 0.8.13
  */
 nothing Program::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
     if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
         return QoreValue();
@@ -4065,6 +4361,10 @@ nothing Program::setGlobalVarValue(string variable_name, auto value) [flags=NAME
     @note the <a href="../../modules/reflection/html/index.html">reflection</a> module supercedes this functionality
 */
 list<hash<auto>> Program::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-ERROR", xsink)) {
         return QoreValue();
@@ -4089,6 +4389,10 @@ list<int> l = pgm.getThreadList();
     @since %Qore 0.8.13
 */
 list<int> Program::getThreadList() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getThreadList();
 }
 
@@ -4103,6 +4407,10 @@ int count = pgm.getThreadCount();
     @since %Qore 3.0
 */
 int Program::getThreadCount() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getThreadCount();
 }
 
@@ -4119,6 +4427,10 @@ background sub () { pgm.waitForThreads(); queue.push("program-idle"); }();
     @since %Qore 3.0
 */
 bool Program::waitForThreads(*timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->waitForThreads(xsink, limit == 0 ? -1 : (limit < 0 ? 0 : limit));
 }
 
@@ -4130,6 +4442,10 @@ bool Program::waitForThreads(*timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC]
     @since %Qore 3.0
 */
 bool Program::waitForThread(int tid, *timeout limit) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (tid <= 0 || tid > INT_MAX) {
         xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
         return false;
@@ -4146,6 +4462,10 @@ bool Program::waitForThread(int tid, *timeout limit) [dom=THREAD_CONTROL,EMBEDDE
     @since %Qore 3.0
 */
 bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (tid <= 0 || tid > INT_MAX) {
         xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
         return false;
@@ -4163,6 +4483,10 @@ bool Program::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL,EMBEDDED
     @since %Qore 3.0
 */
 int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->cancelThreads(xsink, reason ? reason->c_str() : nullptr);
 }
 
@@ -4170,6 +4494,10 @@ int Program::cancelThreads(*string reason) [dom=THREAD_CONTROL,EMBEDDED_LOGIC] {
 /**
  */
 ProgramControl Program::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    // the Program object holds a reference to the Program
    QoreObject* o = qore_program_private::getProgramControl(p);
    assert(o);
@@ -4196,6 +4524,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
 
+    @note the description of an exception that the command raises ends with
+    <tt>: module command error from command '</tt><em>command</em><tt>'</tt>, in the encoding of the description; a
+    command longer than one line or 200 characters is cut there and followed by \c "..."
+
     @note the module decides what the command may do from the restrictions of the code that issues it (its effective
     parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
     module whose commands execute code, change a class path or a search path, or touch the filesystem or the network
@@ -4204,6 +4536,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @since %Qore 0.9
 */
 nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES; flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();
@@ -4254,6 +4590,10 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
  */
 code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the switch to the Program below hides a sandboxed caller from sandbox resolution: the caller's sandbox is
     // applied as the provenance of the call reference, as for a reference that the caller creates with the \
     // operator (issue #6149)
@@ -4286,6 +4626,10 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     follows it (see @ref Qore::Program "Program" and @ref sandbox_program_capability)
 */
 Expression Program::getExpression(string source, string label) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreExpression> exp(new QoreExpression(*p, *source, *label, xsink), xsink);
     if (!*xsink) {
         return new QoreObject(QC_EXPRESSION, p, exp.release());
@@ -4299,6 +4643,10 @@ Expression Program::getExpression(string source, string label) [flags=NAMED_ARGS
     @since %Qore 1.0
 */
 list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getFeatureList();
 }
 
@@ -4308,6 +4656,10 @@ list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
     @since %Qore 2.0
 */
 int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getParseOptions().getLo();
 }
 
@@ -4328,6 +4680,10 @@ int level = pgm.getJitOptimizationLevel();
     @since %Qore 3.0
  */
 int Program::getJitOptimizationLevel() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return p->getJitOptimizationLevel();
 }
 
@@ -4352,6 +4708,10 @@ pgm.setJitOptimizationLevel(3);
     @since %Qore 3.0
  */
 nothing Program::setJitOptimizationLevel(softint level) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (p->setJitOptimizationLevel(static_cast<int>(level))) {
         xsink->raiseException("PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR", "JIT optimization level "
             QLLD " is invalid; expecting 0 - 3, or -1 to use the process-wide default", level);
@@ -4396,6 +4756,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
+
+    @note the description of an exception that the command raises ends with
+    <tt>: module command error from command '</tt><em>command</em><tt>'</tt>, in the encoding of the description; a
+    command longer than one line or 200 characters is cut there and followed by \c "..."
 
     @note the module decides what the command may do from the restrictions of the code that issues it (its effective
     parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
@@ -4561,6 +4925,10 @@ static nothing Program::setJitOptimizationLevel(softint level) [flags=NAMED_ARGS
     @since %Qore 3.0
 */
 nothing Program::saveObject(object obj) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     qore_program_private::get(*p)->saveObject(const_cast<QoreObject*>(obj));
 }
 
@@ -4574,6 +4942,10 @@ nothing Program::saveObject(object obj) {
     @since %Qore 3.0
 */
 bool Program::clearObject(object obj) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::get(*p)->clearObject(const_cast<QoreObject*>(obj), xsink);
 }
 
@@ -4585,6 +4957,10 @@ bool Program::clearObject(object obj) {
     @since %Qore 3.0
 */
 *date Program::checkObjectCache(object obj) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     int64 epoch = qore_program_private::get(*p)->checkSavedObject(const_cast<QoreObject*>(obj));
     // the stored timestamp is a UTC epoch (q_epoch()); present it as an absolute date in the
     // current time zone
@@ -4597,6 +4973,10 @@ bool Program::clearObject(object obj) {
     @since %Qore 3.0
 */
 int Program::clearObjectCache() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return qore_program_private::get(*p)->clearSavedObjects(xsink);
 }
 
@@ -4608,6 +4988,10 @@ int Program::clearObjectCache() {
     @since %Qore 3.0
 */
 int Program::clearObjectCache(date cutoff) {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the stored timestamps are UTC epochs (q_epoch()); compare against the cutoff's UTC epoch
     return qore_program_private::get(*p)->clearSavedObjectsBefore(cutoff->getEpochSecondsUTC(), xsink);
 }
@@ -4618,6 +5002,10 @@ int Program::clearObjectCache(date cutoff) {
     @since %Qore 3.0
 */
 int Program::objectCacheSize() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     return (int64)qore_program_private::get(*p)->getSavedObjectCount();
 }
 

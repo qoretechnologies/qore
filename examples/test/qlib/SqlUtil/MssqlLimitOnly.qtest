@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module freetds
 %define NoFreetds
@@ -58,7 +59,7 @@ class MssqlLimitOnlyTest inherits QUnit::Test {
 
     limitTest() {
         if (!ds) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         on_exit ds.rollback();
         AbstractTable t = new Table(ds, "limit_only_6583").getTable();

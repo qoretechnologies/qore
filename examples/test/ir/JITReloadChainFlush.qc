@@ -30,6 +30,16 @@ class JITReloadChainFlushBase inherits QUnit::Test {
         const Small = 40;
         const Large = 80;
 
+        #! the catch blocks of the function that the inline flush is forced for (testResultsInline())
+        /** The inline flush reloads every tracked local at each boundary, so its code grows with the product of the
+            blocks and the locals, which is why a function over the threshold does not use it; every local of the
+            function is tracked (it is untyped, and a reference keeps it on the runtime stack: #5951), and LLVM's
+            optimization of the inline flush of the larger function took 171 s and 7.3 GB in a debug build, and the
+            test exceeded the runner's limit under load (it took 6.4 s when its locals were typed); with this many
+            blocks it takes 6.6 s and 0.8 GB
+        */
+        const InlineSize = 30;
+
         #! the largest ratio of the calls of the larger and of the smaller function (2.0 when linear; 2.47 with a call
         #! for each tracked local at each boundary)
         const MaxCallRatio = 2.2;
@@ -83,8 +93,14 @@ class D {
 
 int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
 
+# a reference created in the function keeps its untyped locals on the runtime stack, where the handlers' native
+# code tracks them (#5951: a typed local that only a handler references is IR-only)
+sub touch(reference<int> z) {}
+
 string sub big(int n) {
-    int r = 0;
+    auto r = 0;
+    int z = 0;
+    touch(\\z);
     *D keep;
 ";
         for (int i = 0; i < n; ++i) {
@@ -92,7 +108,7 @@ string sub big(int n) {
         r += may_throw(n - %d);
         keep = new D(\"t%d\");
     } catch (hash<ExceptionInfo> ex) {
-        int l%d = r + %d;
+        auto l%d = r + %d;
         D d%d = new D(\"c%d\");
         on_exit { r += l%d; log += \"x%d\"; }
         r += d%d.get().size();
@@ -247,7 +263,7 @@ for (int c = 0; c < 3; ++c) {
 
     #! the inline form for every function gives the same results
     testResultsInline() {
-        string code = getCode(Large);
+        string code = getCode(InlineSize);
         string expected = getExpectedResults(code);
         assertEq(expected, getResults(runScript(code, "jit", "QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD=0")),
             "jit with the inline flush");

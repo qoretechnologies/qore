@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a C++ program built with the toolchain links the deprecated symbols of libqore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestBuildTools.qm
+%requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
+
+%exec-class ReflectionLegacyTypeVecTest
+
+#! The deprecated forms of qore_type_get_type_arguments() and qore_type_get_code_param_types() still work (qore#6936)
+/** #6419 changed both functions within module API 2.3 to copy the types to a vector of the caller; the earlier forms,
+    which return a pointer to a vector that lives as long as the type, are kept as deprecated exports, so that a module
+    built with the earlier 2.3 headers still loads.  The fixture is a C++ program built with the headers of this
+    checkout and linked with the libqore of the build tree; it calls the deprecated forms through the header and
+    through the symbols that an old module refers to, compares them with the new forms, and checks that the vectors
+    name the tombstones once the declarations that they named are retired with their deleted Program, and live types
+    once those declarations are freed.  It runs in each execution mode.
+*/
+public class ReflectionLegacyTypeVecTest inherits QUnit::Test {
+    constructor() : Test("ReflectionLegacyTypeVecTest", "1.0") {
+        addTestCase("deprecated reflection type vector forms", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private check() {
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir;
+        if (ENV.QORE_LIBDIR) {
+            # as in run_tests.sh, QORE_LIBDIR names the build tree
+            libdir = realpath(ENV.QORE_LIBDIR);
+        } else {
+            *string dir = QoreBuildTree::build_dir();
+            if (!dir) {
+                testSkip("the qore under test is not in a build tree (the fixture is compiled with the headers of "
+                    "this checkout and of its build tree): set QORE_LIBDIR to the build tree, or run the test with "
+                    "the qore of a build tree");
+            }
+            libdir = dir;
+        }
+        # CXX can be a command line, such as "ccache c++": its words are the first arguments
+        list<string> cxx = TestBuildTools::command_words(ENV.CXX, "c++");
+        # only a missing compiler skips the test: a compiler that cannot build the program is a failure
+        if (!TestBuildTools::find_command(cxx[0])) {
+            testSkip(sprintf("no C++ compiler to build the program: %y is not available", cxx[0]));
+        }
+        TmpDir dir("qore-reflection-legacy-type-vec-");
+        string exe = dir.path + "/reflection-legacy-type-vec";
+        list<string> args = cxx + ("-std=c++17", "-pthread", "-g", "-O2",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/reflection_legacy_type_vec.cpp", "-L" + libdir, "-Wl,-rpath," + libdir, "-lqore",
+            "-o", exe);
+        if (PlatformOS == "Linux") {
+            # dlsym() is in libdl before glibc 2.34
+            push args, "-ldl";
+        }
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        # a sanitizer build of libqore needs the same sanitizer in the fixture (qore#6587)
+        args += QoreBuildTree::sanitizer_flags(libdir);
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+                + quote(exe) + " " + mode + " 2>&1", \status);
+            assertEq(0, status, mode + ": " + output);
+            assertEq("reflection-legacy-type-vec: ok\n", output, mode);
+        }
+    }
+}

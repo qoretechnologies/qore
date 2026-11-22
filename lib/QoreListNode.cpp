@@ -41,6 +41,7 @@
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/ql_debug.h"
 
 #include <limits>
 #include <algorithm>
@@ -64,9 +65,9 @@ static QoreListNode* do_args(const QoreValue& e1, const QoreValue& e2) {
     return l;
 }
 
-QoreValue& QoreListNodeEvalOptionalRefHolder::getEntryReference(size_t index) {
+QoreListEntryEdit QoreListNodeEvalOptionalRefHolder::editEntry(size_t index) {
     editIntern();
-    return qore_list_private::get(*val)->getEntryReference(index);
+    return QoreListEntryEdit(*qore_list_private::get(*val), index);
 }
 
 // with this variant, we can edit and reuse references from "exp"
@@ -90,7 +91,8 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
         return;
     }
     // the arguments of a named call bound at parse time are placed at the positions of their parameters
-    if (qore_list_private::get(*exp)->hasCallArgEvalMap()) {
+    qore_list_private* ep = qore_list_private::get(*exp);
+    if (ep->hasCallArgEvalMap()) {
         evalInternMapped(exp);
         return;
     }
@@ -120,14 +122,13 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     vl->reserve(exp->size());
 
     for (unsigned i = 0; i < exp->size(); ++i) {
-        QoreValue& ev = exp->getEntryReference(i);
-        QoreValue& vv = val->getEntryReference(i);
+        QoreValue ev = exp->retrieveEntry(i);
         if (!ev.needsEval() || ev.getType() == NT_REFERENCE || ev.getType() == NT_WEAKREF
-            || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
-            vv.swap(ev);
+                || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
+            ep->moveEntryTo(i, *vl, i);
             continue;
         }
-        vv = ev.eval(xsink);
+        vl->pushIntern(ev.eval(xsink));
         if (*xsink) {
             return;
         }
@@ -139,7 +140,7 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
 // they are evaluated in source order and placed at the positions of their parameters, as qore_list_private::eval()
 // places them
 void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
-    const qore_list_private* ep = qore_list_private::get(*exp);
+    qore_list_private* ep = qore_list_private::get(*exp);
     const std::vector<size_t>& pos_map = *ep->getCallArgEvalMap();
     assert(pos_map.size() == exp->size());
     needs_deref = true;
@@ -147,15 +148,14 @@ void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
     qore_list_private* vl = qore_list_private::get(*val);
     vl->resize(ep->getCallArgEvalResultSize());
     for (size_t i = 0, e = exp->size(); i < e; ++i) {
-        QoreValue& ev = exp->getEntryReference(i);
         assert(pos_map[i] < val->size());
-        QoreValue& vv = val->getEntryReference(pos_map[i]);
+        QoreValue ev = exp->retrieveEntry(i);
         if (!ev.needsEval() || ev.getType() == NT_REFERENCE || ev.getType() == NT_WEAKREF
-            || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
-            vv.swap(ev);
+                || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
+            ep->moveEntryTo(i, *vl, pos_map[i]);
             continue;
         }
-        vv = ev.eval(xsink);
+        vl->initEntry(pos_map[i], ev.eval(xsink));
         if (*xsink) {
             return;
         }
@@ -463,7 +463,7 @@ int qore_list_private::acceptConstructorArg(const QoreTypeInfo* vti, size_t inde
     // a value of a type that the element type does not accept raises the error that the parse raises for an argument
     // of such a type (issue #6172); another error (of the conversion of an accepted value) is raised as it is
     QoreValue err = arg_xsink.getExceptionErr();
-    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
+    if (QoreStringDataHelper(err) == "RUNTIME-TYPE-ERROR") {
         arg_xsink.clear();
         xsink->raiseException("RUNTIME-TYPE-ERROR", getConstructorArgErrorDesc(vti, index, arg_ti));
         return -1;
@@ -521,7 +521,8 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
         qore_list_private* ll = qore_list_private::get(*l);
         ListIterator i(l);
         while (i.next()) {
-            QoreValue& entry = ll->getEntryReference(i.index());
+            QoreListEntryEdit edit(*ll, i.index());
+            QoreValue& entry = edit.get();
             bool retyped;
             if constexpr (Lexical) {
                 retyped = QoreTypeInfo::retypeValue(entry, vti, xsink, policy);
@@ -954,7 +955,8 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreV
 }
 
 QoreListNode* QoreListNode::sort(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -973,7 +975,8 @@ QoreListNode* QoreListNode::sort(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescending(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -992,7 +995,8 @@ QoreListNode* QoreListNode::sortDescending(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -1106,6 +1110,8 @@ int qore_list_private::mergesort(const ResolvedCallReferenceNode* fr, bool ascen
     // set length to 0 - the temporary lists own the entry references now
     length = 0;
 
+    obj_count = 0;
+
     // mergesort the two lists
     if (l->mergesort(fr, ascending, xsink) || r->mergesort(fr, ascending, xsink)) {
         return -1;
@@ -1175,12 +1181,14 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
                 safe_qorelist_t args(do_args(entry[right], pivot), xsink);
                 ValueHolder rv(fr->invoke(*args, xsink), xsink);
                 if (*xsink) {
+                    entry[left] = pivot;
                     return -1;
                 }
                 rc = (int)rv->getAsBigInt();
             } else {
                 rc = QoreLogicalComparisonOperatorNode::doComparison(entry[right], pivot, xsink);
                 if (*xsink) {
+                    entry[left] = pivot;
                     return -1;
                 }
             }
@@ -1204,12 +1212,14 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
                 safe_qorelist_t args(do_args(entry[left], pivot), xsink);
                 ValueHolder rv(fr->invoke(*args, xsink), xsink);
                 if (*xsink) {
+                    entry[right] = pivot;
                     return -1;
                 }
                 rc = (int)rv->getAsBigInt();
             } else {
                 rc = QoreLogicalComparisonOperatorNode::doComparison(entry[left], pivot, xsink);
                 if (*xsink) {
+                    entry[right] = pivot;
                     return -1;
                 }
             }
@@ -1242,7 +1252,8 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
 }
 
 QoreListNode* QoreListNode::sort(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         // issue #4355: our quicksort algorithm can exhaust the stack with larger lists
         // use mergesort for lists > 1000 elements
@@ -1261,7 +1272,8 @@ QoreListNode* QoreListNode::sort(const ResolvedCallReferenceNode* fr, ExceptionS
 }
 
 QoreListNode* QoreListNode::sortStable(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(0, true, xsink)) {
             return nullptr;
@@ -1272,7 +1284,8 @@ QoreListNode* QoreListNode::sortStable(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescendingStable(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(0, false, xsink)) {
             return nullptr;
@@ -1283,7 +1296,8 @@ QoreListNode* QoreListNode::sortDescendingStable(ExceptionSink* xsink) const {
 }
 
 QoreListNode* QoreListNode::sortDescendingStable(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(fr, false, xsink)) {
             return nullptr;
@@ -1294,7 +1308,8 @@ QoreListNode* QoreListNode::sortDescendingStable(const ResolvedCallReferenceNode
 }
 
 QoreListNode* QoreListNode::sortStable(const ResolvedCallReferenceNode* fr, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreListNode> rv(copy(), xsink);
+    // a new value, which can be changed also when this list was freed
+    ReferenceHolder<QoreListNode> rv(priv->copyValue(), xsink);
     if (priv->length) {
         if (rv->priv->mergesort(fr, true, xsink)) {
             return nullptr;
@@ -1303,6 +1318,10 @@ QoreListNode* QoreListNode::sortStable(const ResolvedCallReferenceNode* fr, Exce
 
     return rv.release();
 }
+
+#ifdef DEBUG
+std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook{nullptr};
+#endif
 
 namespace {
 // the nesting depth of the lists and hashes whose entries this thread is freeing recursively
@@ -1397,12 +1416,26 @@ bool QoreListNode::derefImpl(ExceptionSink* xsink) {
     // A list that was already freed was referenced again through a weak reference, which keeps the node allocated
     // after its last reference is released.  Only what it was given since is freed: the weak reference that its
     // first release dropped must not be dropped again, which would delete the node under its weak holders.
-    if (!priv->valid) {
+    if (priv->freed) {
         for (size_t i = 0; i < priv->length; ++i) {
             priv->entry[i].discard(xsink);
         }
         priv->length = 0;
-        return false;
+        // the last reference of a freed list: its weak holders released theirs (qore#7163; see QoreContainerWeakRefs)
+        assert(!priv->weakRefs.reference_count());
+        return true;
+    }
+    // taken before the entries are freed, directly or by free_nested_containers(): a destructor of an entry can take a
+    // reference to the list through a weak holder (qore#7163; see QoreContainerWeakRefs)
+    if (priv->weakRefs.hasHolders()) [[unlikely]] {
+        priv->weak_hold = true;
+        ref();
+#ifdef DEBUG
+        // the free of a list that has weak holders starts; see dbg_hold_container_free()
+        if (qore_dbg_container_free_hook_t hook = qore_dbg_container_free_hook.load()) {
+            hook("list");
+        }
+#endif
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
@@ -1504,6 +1537,7 @@ QoreValue QoreListNode::max(const ResolvedCallReferenceNode* fr, ExceptionSink* 
 QoreListNode* QoreListNode::reverse() const {
     QoreListNode* l = priv->getCopy();
     l->priv->resize(priv->length);
+    l->priv->obj_count = priv->obj_count;
     for (size_t i = 0; i < priv->length; ++i) {
         l->priv->entry[i] = priv->entry[priv->length - i - 1].refSelf();
     }
@@ -1645,7 +1679,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     }
 
     if (!size()) {
-        qore_string_private::get(str)->concat(&EmptyListString);
+        qore_string_private::get(str)->concatAsciiName(EmptyListString);
         return 0;
     }
     str.concat("list: (");
@@ -1847,13 +1881,29 @@ const QoreTypeInfo* QoreListNode::getTypeInfo() const {
 }
 
 void QoreListNode::weakRef() {
-    priv->weakRef();
+    if (priv->weakRefs.refFromZero()) [[unlikely]] {
+        // a freed list whose weak holders released their reference, given a weak holder again by code that holds a
+        // reference to it: the holders take a reference again (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->freed && priv->weak_hold);
+        ref();
+    }
+}
+
+namespace {
+// releases the reference that the weak holders of a freed list took (qore#7163; see QoreContainerWeakRefs)
+QORE_INTERN_NOINLINE void release_list_weak_hold(QoreListNode* l) {
+    ExceptionSink xsink;
+    l->deref(&xsink);
+}
 }
 
 bool QoreListNode::weakDeref() {
     bool b = priv->weakDeref();
     if (b) {
-        delete this;
+        // the last weak reference, which a freed list's weak holders release after the list released its own: the
+        // node is deleted by the release of its last reference (qore#7163; see QoreContainerWeakRefs)
+        assert(priv->weak_hold);
+        release_list_weak_hold(this);
     }
     return b;
 }

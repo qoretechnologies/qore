@@ -23,6 +23,7 @@ module SqlUtilTestBase {
 %requires(reexport) Schema
 %requires(reexport) DbDataProvider
 %requires(reexport) Mapper
+%requires ./TestRunIsolation.qm
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     private {
@@ -89,6 +90,27 @@ public class SqlTestBase inherits QUnit::Test {
         list upsert_data;
 
         Logger logger;
+    }
+
+
+    #! Adds a failing test case when the datasource could not be made because its database cannot be connected to
+    /** A database outage is not a reason to skip (qore#6934): the reason is the precondition failure that an
+        isolation module raised, or that of the datasource string of an environment variable; any other error (a
+        datasource string that is not set, a driver module that cannot be loaded) leaves the tests to skip
+
+        @param ex the exception raised while the datasource was made
+    */
+    private checkConnectFailure(hash<auto> ex) {
+        *string reason;
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            reason = ex.desc;
+        } else if (m_options.connstr && ex.err != "LOAD-MODULE-ERROR" && ex.err !~ /^TEST-/
+            && TestRun::getVariable(m_options.connstr) != "the datasource string") {
+            reason = TestRun::getPreconditionFailure(TestRun::getVariable(m_options.connstr), m_options.connstr, ex);
+        }
+        if (reason) {
+            addTestCase("the database can be connected to", sub () { fail(reason); });
+        }
     }
 
     constructor(string testName, string testVer, any args, *hash mopts) : Test(testName, testVer, \args, mopts) {
@@ -178,8 +200,33 @@ public class SqlTestBase inherits QUnit::Test {
         if (!table) testSkip("no DB connection");
 
         hash<SerializationInfo> h = table.serializeToData();
+
+        # the serialized data keeps no credentials of the datasource (qore#7016): no password
+        AbstractDatasource ds = table.getDatasource();
+        *string pass = ds.getPassword();
+        if (pass) {
+            assertEq(-1, sprintf("%y", h).find(pass), "the serialized data has no password");
+        }
+
+        # the credentials are restored by a resolver of the datasource's configuration, which gets the masked
+        # configuration of the serialized data: no password, and a masked user name
+        hash<auto> config = ds.getConfigHash();
+        list<hash<auto>> calls = ();
+        sqlutil_register_ds_credential_resolver(hash<auto> sub (string type, hash<auto> masked_config) {
+            calls += masked_config;
+            return config;
+        });
+        on_exit sqlutil_register_ds_credential_resolver();
+
         AbstractTable t = AbstractTable::deserialize(h);
         assertTrue(t instanceof AbstractTable);
+        assertGt(0, calls.size(), "the credential resolver gives the credentials");
+        foreach hash<auto> m in (calls) {
+            assertFalse(m.hasKey("pass"), "the masked configuration has no password");
+            if (exists m.user) {
+                assertEq("****", m.user, "the masked configuration has a masked user name");
+            }
+        }
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());

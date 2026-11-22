@@ -54,6 +54,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param client_pk optional client private key for mutual TLS (mTLS)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param address_family the address family to connect in; if not set, the family of the first address of the
             host is used, unless it is in \a avoid_families
         @param avoid_families address families not to connect in if the host also has an address in another family
@@ -61,19 +63,25 @@ public class Http3ClientConnection inherits HttpClientConnection {
         Creating the connection runs nothing that can block, so it can also be created on an async I/O thread: the
         host name is resolved and the UDP socket is bound by the connection's poll operation once it is submitted to
         the I/O controller (see @ref getAddressFamily())
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store,
             *int address_family, *list<int> avoid_families)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
-
+        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
+        HttpClientCallerExemption exemption();
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
-            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, address_family,
+            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, ssl_trust_store, address_family,
             avoid_families);
     }
 
@@ -336,8 +344,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param end_stream if True, signals end of stream
         @param drain_timeout the time to wait for the stream's send buffer to drain when it is full (the peer has not
         granted enough flow-control credit for the data staged): the data is sent once there is room; with a timeout
-        of zero or less, a full buffer raises \c HTTP3-FLOW-CONTROL at once.  A send that raises took none of the
-        data, so it can be made again
+        of zero or less, a full buffer raises \c HTTP3-FLOW-CONTROL at once.  The timeout bounds the time the buffer
+        makes no progress, not the total wait: the wait goes on after a period of the timeout in which the peer
+        acknowledged more of the stream's data (see @ref Qore::Socket::getQuicClientStreamAckedBytes()), so that a
+        large send that a slow or loaded peer takes does not fail while it is taken.  A send that raises took none
+        of the data, so it can be made again
 
         @return 0 on success, -1 on error
 
@@ -374,8 +385,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
         # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, at most
         # drain_timeout, as on HTTP/2; the wait is woken when the stream's staged data is handed to the transport and
         # when the stream closes, so a reset ends it at once (a fixed retry bound was a hidden timeout)
-        # on the monotonic clock, in microseconds
-        *int deadline;
+        # the wait is bounded by drain_timeout of STALLED time, not of total time: a large request that the peer takes
+        # slowly (a loaded host) makes progress all the while, and a wait that ended without the peer having
+        # acknowledged more of the stream's data than at its start raises (issue #6968)
         while (True) {
             int rv = poll_op.sendStreamData(stream_id, data, end_stream);
             if (ctl) {
@@ -388,18 +400,16 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer is full; the data was not sent",
                     stream_id);
             }
-            if (!deadline) {
-                deadline = clock_get_monotonic_us() + drain_timeout * 1000;
-            }
-            int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
-            if (remaining <= 0) {
-                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
-                    "data was not sent", stream_id, drain_timeout);
-            }
             # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is
             # made again in each case, and reports a closed or reset stream
+            # the progress of the wait: the bytes the peer acknowledged at its start, and at its end if it timed out
+            int acked_before = -1;
+            int acked_after = -1;
             try {
-                sock.waitForQuicClientStreamDrain(stream_id, remaining);
+                acked_before = sock.getQuicClientStreamAckedBytes(stream_id);
+                if (sock.waitForQuicClientStreamDrain(stream_id, drain_timeout) == 1) {
+                    acked_after = sock.getQuicClientStreamAckedBytes(stream_id);
+                }
             } catch (hash<ExceptionInfo> wait_ex) {
                 # the wait failed (for example, the session is gone, or the wait was made on the I/O thread): the
                 # send is made once more, so that it reports the stream's state, or the data is sent
@@ -412,6 +422,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 }
                 throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer is full and cannot be waited for "
                     "(%s: %s); the data was not sent", stream_id, wait_ex.err, wait_ex.desc);
+            }
+            # no drain in drain_timeout: a stall only if the peer acknowledged nothing meanwhile
+            if (acked_after >= 0 && acked_after <= acked_before) {
+                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms and the "
+                    "peer acknowledged no data meanwhile; the data was not sent", stream_id, drain_timeout);
             }
         }
     }

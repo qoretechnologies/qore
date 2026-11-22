@@ -73,6 +73,7 @@ class QlibModuleDomainsTest inherits QUnit::Test {
             ("module": "SqlUtil", "code": "SqlUtil::sqlutil_register_table_resolver(NOTHING);"),
             ("module": "SqlUtil", "code": "SqlUtil::sqlutil_clear_table_cache();"),
             ("module": "QoreLlmTypes", "code": "QoreLlmUtils::LlmProviderRegistry::deregisterFactory(\"openai\");"),
+            ("module": "QoreLlmTypes", "code": "new QoreLlmUtils::LlmThreadPoolExecutor(1);", "dom": "THREAD_CONTROL"),
             ("module": "ConnectionProvider",
              "code": "sub f(hash<ConnectionProvider::ConnectionSchemeInfo> i) { "
                 "ConnectionProvider::ConnectionSchemeCache::registerScheme(\"x\", i); }"),
@@ -159,6 +160,19 @@ printf(\"end\\n\");
                 assertEq(-1, out.find("loaded\n"), api.code);
             }
         }
+        # Waiting sleeps the current thread under the module's process domain.
+        foreach bool sandbox in ((False, True)) {
+            assertEq("loaded\nend\n", run(InterfaceRestrictions, "DiscordDataProvider",
+                "DiscordDataProvider::DiscordDataProviderBase::threadWait(1ms);", sandbox));
+        }
+        # A source loaded outside the library path inherits its loader's restrictions.
+        string source = tmp.path + "/DiscordWebSocketClient.qm";
+        copy_file(qlib_dir + "/DiscordWebSocketClient.qm", source);
+        assertEq("loaded\nend\n", run(0, source));
+        string denied = run(PO_NO_THREAD_CONTROL, source);
+        assertRegex("^PARSE-EXCEPTION: .*background.*PO_NO_THREAD_CONTROL", denied);
+        assertEq(-1, denied.find("loaded\n"));
+
         # an indirect call is refused at run time
         string out = run(InterfaceRestrictions, "ProviderIndexUtil",
             "try { call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"setEnvironmentVariable\", \"/x\"); "
@@ -196,6 +210,7 @@ printf(\"end\\n\");
     testUnrestricted() {
         string out = run(0, "ProviderIndexUtil",
             "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/qlib-module-domains\"); "
+            # live-provider-optin: the provider index directory that the child sets
             "printf(\"%s\\n\", getenv(ProviderIndexUtil::ProviderIndexEnvVar));");
         assertEq("loaded\n/qlib-module-domains\nend\n", out);
     }

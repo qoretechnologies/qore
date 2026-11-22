@@ -84,6 +84,8 @@ public class Http2IntegrationTest inherits QUnit::Test {
 
     constructor() : Test("Http2IntegrationTest", "1.0") {
         addTestCase("HTTP/2 client-server basic GET", \testBasicGet());
+        addTestCase("HTTP/2 negotiated version with a streamed response", \testStreamedVersion());
+        addTestCase("negotiated version follows the last response", \testProtocolChange());
         addTestCase("HTTP/2 client-server POST with body", \testPostWithBody());
         addTestCase("HTTP/2 multiple sequential requests", \testSequentialRequests());
         addTestCase("HTTP/2 large body transfer", \testLargeBody());
@@ -135,8 +137,31 @@ public class Http2IntegrationTest inherits QUnit::Test {
         hash<auto> resp = client.send(NOTHING, "GET", "/get", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(200, resp.status_code, "Status should be 200");
+        assertEq("HTTP/2", client.getHttpVersion(), "the blocking client reports the protocol negotiated by ALPN");
+        assertFalse(exists resp.protocol, "the legacy response keeps its existing keys");
         assertEq(Type::String, resp.body.type(), "Body should be string");
         assertEq("GET", parse_json(resp.body).method);
+    }
+
+    testStreamedVersion() {
+        HTTPClient client = getClient();
+        StringOutputStream out();
+        client.send(out, NOTHING, "GET", "/get", NOTHING, 0, True);
+        assertEq("GET", parse_json(out.getData()).method);
+        assertEq("HTTP/2", client.getHttpVersion(), "streamed response uses the negotiated protocol");
+    }
+
+    testProtocolChange() {
+        int plain_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+            "http_version": "1.1"}).port;
+        server.waitForAsyncIo();
+        HTTPClient client = getClient();
+        client.get("/get");
+        assertEq("HTTP/2", client.getHttpVersion());
+        hash<auto> resp = client.sendUrl(NOTHING, "GET", sprintf("http://localhost:%d/get", plain_port),
+            NOTHING, True);
+        assertEq(200, resp.status_code);
+        assertEq("HTTP/1.1", client.getHttpVersion(), "the next request used the plaintext origin");
     }
 
     #! Test POST request with JSON body

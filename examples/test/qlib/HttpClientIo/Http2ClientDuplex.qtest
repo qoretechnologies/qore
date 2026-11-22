@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over a backpressured loopback TLS connection
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../RawHttp2TestServer.qm
+%requires ../../TestCertificates.qm
+%exec-class Http2ClientDuplex
+
+public class Http2ClientDuplex inherits QUnit::Test {
+    private {
+        const Guard = 30s;
+    }
+
+    constructor() : Test("Http2ClientDuplex", "1.0") {
+        addTestCase("a GET completes during a stalled upload", sub () { exercise(False); });
+        addTestCase("a WebSocket receives its welcome during a stalled upload", sub () { exercise(True); });
+        addTestCase("server dispatches a completed request during a stalled response", sub () { serverRead(False); });
+        addTestCase("server dispatches request headers during a stalled response", sub () { serverRead(True); });
+        addTestCase("discarding a stalled TLS write closes its connection", sub () {
+            Socket client();
+            Socket peer = connectPeer(client);
+            on_exit {
+                peer.close();
+                client.close();
+            }
+            discardStalledWrite(client);
+            assertFalse(client.isOpen(), "the abandoned TLS write cannot be finished by a later send");
+        });
+        addTestCase("TLS retries, idle reads, and aborted ciphertext", sub () {
+            if (!exists_function("dbg_run_tls_duplex_tests")) {
+                testSkip("the per-connection transport BIO gate requires a Debug build with OpenSSL BIO callbacks");
+            }
+            hash<auto> result = call_function("dbg_run_tls_duplex_tests");
+            assertTrue(result.test_count > 0);
+            assertEq(0, result.fail_count);
+        });
+        set_return_value(main());
+    }
+
+    private Socket connectPeer(Socket client) {
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        client.connect("127.0.0.1:" + listener.getPort(), Guard);
+        Socket peer = listener.accept(Guard);
+        client.setAlpnProtocols(("h2",));
+        peer.setAlpnProtocols(("h2",));
+        Counter tls(1);
+        background sub () {
+            on_exit tls.dec();
+            peer.upgradeServerToSSL(Guard);
+        }();
+        client.upgradeClientToSSL(Guard);
+        assertEq(0, tls.waitForZero(Guard));
+
+        peer.setNoDelay(True);
+        client.setNoDelay(True);
+        return peer;
+    }
+
+    private discardStalledWrite(Socket client) {
+        AbstractPollOperation send = client.startPollSend(binary(strmul("x", 12 * 1024 * 1024)));
+        for (int i = 0; i < 64; ++i) {
+            *hash<SocketPollInfo> wait = send.continuePoll();
+            assertTrue(exists wait, "the undrained payload exceeds the TCP send buffer");
+            assertTrue((wait.events & SOCK_POLLOUT) != 0);
+            if (!Socket::poll((wait,), 0).size()) {
+                return;
+            }
+        }
+        fail("the socket never reached transport backpressure");
+    }
+
+    private exercise(bool websocket) {
+        Socket client();
+        Socket peer = connectPeer(client);
+        on_exit {
+            peer.shutdown();
+            client.shutdown();
+            peer.close();
+            client.close();
+        }
+        RawHttp2Connection conn(peer);
+        # The peer advertises a large stream and connection window. TCP, rather than HTTP/2 flow
+        # control, will hold up the upload. SETTINGS_ENABLE_CONNECT_PROTOCOL permits the tunnel.
+        conn.sendFrame(FrameSettings, 0, 0, <000401000000000800000001>);
+        conn.sendFrame(8, 0, 0, <01000000>);
+        AbstractPollOperation mux = client.startPollHttp2ClientMultiplex();
+        mux.continuePoll();
+        assertEq("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", peer.recvBinary(24, Guard).toString());
+        hash<auto> headers = {
+            ":method": websocket ? "CONNECT" : "GET", ":scheme": "https", ":authority": "localhost", ":path": "/",
+        };
+        if (websocket) {
+            headers.":protocol" = "websocket";
+        }
+        int target = client.submitHttp2Request(headers, NOTHING, websocket);
+        conn.sendFrame(FramePing, 0, 0, <0000000000000000>);
+        mux.continuePoll();
+        hash<auto> frame;
+        do {
+            frame = conn.readFrame(Guard);
+        } while (frame.type != FrameHeaders);
+        assertEq(target, frame.stream_id);
+        if (websocket) {
+            conn.sendFrame(FrameHeaders, FlagEndHeaders, target, <88>);
+            *hash<auto> accepted;
+            for (int i = 0; i < 8 && !accepted; ++i) {
+                mux.continuePoll();
+                accepted = mux.getOutput();
+            }
+            assertEq(200, accepted.status_code, "the extended CONNECT handshake is complete");
+        }
+        headers = {":method": "POST", ":scheme": "https", ":authority": "localhost", ":path": "/upload"};
+        client.submitHttp2Request(headers, binary(strmul("u", 12 * 1024 * 1024)));
+        conn.sendFrame(FramePing, 0, 0, <0000000000000001>);
+        *hash<SocketPollInfo> info = mux.continuePoll();
+        assertTrue((info.events & SOCK_POLLOUT) != 0, "the client has an outstanding socket write");
+        if (websocket) {
+            conn.sendFrame(FrameData, 0, target, <810777656c636f6d65>);
+        } else {
+            # HEADERS (:status 200) and DATA in one TLS record, so receipt of its first
+            # byte does not depend on scheduling another peer write.
+            binary sid = target.encodeMsb(4);
+            peer.send(<0000010104> + sid + <88> + <0000020001> + sid + <6f6b>);
+        }
+        # Drive only bounded passes, with no application reads from the peer's upload socket.
+        # Waiting for read readiness makes the check independent of packet arrival time.
+        info.events = SOCK_POLLIN;
+        assertTrue(Socket::poll((info,), Guard).size() > 0, "the peer response is readable");
+        *hash<auto> response;
+        for (int i = 0; i < 8 && !response; ++i) {
+            mux.continuePoll();
+            response = mux.getOutput();
+        }
+        assertEq(target, response.stream_id, "the target receives its response before the upload drains");
+        if (websocket) {
+            assertEq(<810777656c636f6d65>, response.body);
+        } else {
+            assertEq("ok", response.body);
+        }
+    }
+    private serverRead(bool headers_only) {
+        Socket client();
+        Socket server = connectPeer(client);
+        on_exit {
+            server.shutdown();
+            client.shutdown();
+            server.close();
+            client.close();
+        }
+        RawHttp2Connection conn(client);
+        client.send("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+        conn.sendFrame(FrameSettings, 0, 0, <000401000000>);
+        conn.sendFrame(8, 0, 0, <01000000>);
+        # Indexed GET, HTTPS, /, and a literal :authority "localhost".
+        binary headers = <82878401096c6f63616c686f7374>;
+        conn.sendFrame(FrameHeaders, FlagEndHeaders | FlagEndStream, 1, headers);
+        AbstractPollOperation first = server.startPollReadHttp2Request();
+        while (!first.goalReached()) {
+            *hash<SocketPollInfo> pending = first.continuePoll();
+            if (pending) {
+                assertTrue(Socket::poll((pending,), Guard).size() > 0);
+            }
+        }
+        assertEq(1, first.getOutput().stream_id);
+        server.submitHttp2Response(1, 200, {}, binary(strmul("r", 12 * 1024 * 1024)));
+        AbstractPollOperation next = server.startPollReadHttp2Request({"headers_only":headers_only});
+        conn.sendFrame(FramePing, 0, 0, <0000000000000002>);
+        *hash<SocketPollInfo> pending = next.continuePoll();
+        assertTrue((pending.events & SOCK_POLLOUT) != 0, "server response is backpressured");
+        conn.sendFrame(FrameHeaders, FlagEndHeaders | (headers_only ? 0 : FlagEndStream), 3, headers);
+        pending.events = SOCK_POLLIN;
+        assertTrue(Socket::poll((pending,), Guard).size() > 0, "second request is readable");
+        for (int i = 0; i < 8 && !next.goalReached(); ++i) {
+            next.continuePoll();
+        }
+        assertTrue(next.goalReached(), "second request is dispatched before the first response drains");
+        assertEq(3, next.getOutput().stream_id);
+    }
+
+}

@@ -80,6 +80,9 @@
 #include "qore/intern/SseEventFramer.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cassert>
@@ -193,7 +196,7 @@ static std::optional<std::string> get_string_header_value(ExceptionSink* xsink, 
     return std::string(str->c_str());
 }
 
-const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
+const char* qore_http_client_object_ops::getHttpStatusMessage(int code) {
     switch (code) {
         // 1xx: Informational
         case 100: return "Continue";
@@ -403,9 +406,8 @@ static void convert_response_body_limit_error(int64 max_size, ExceptionSink* xsi
     if (!*xsink) {
         return;
     }
-    QoreValue err = xsink->getExceptionErr();
-    if (err.getType() != NT_STRING
-            || strcmp(err.get<const QoreStringNode>()->c_str(), "DECOMPRESSION-LIMIT-EXCEEDED")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(xsink->getExceptionErr()) != "DECOMPRESSION-LIMIT-EXCEEDED") {
         return;
     }
     xsink->clear();
@@ -1074,7 +1076,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             rh->setKeyValue("status_message", sm.refSelf(), xsink);
         } else if (!sc.isNullOrNothing()) {
             rh->setKeyValue("status_message",
-                new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(
+                new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(
                     (int)sc.getAsBigInt())), xsink);
         }
         QoreValue hv = src->getKeyValue("http_version");
@@ -1151,7 +1153,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             sm_str = sm_storage.c_str();
         }
         if (!sm_str[0]) {
-            sm_str = QoreHttpClientObject::getHttpStatusMessage(
+            sm_str = qore_http_client_object_ops::getHttpStatusMessage(
                 (int)sc.getAsBigInt());
         }
         const char* ver = "HTTP/1.1";
@@ -1255,6 +1257,44 @@ struct qore_httpclient_priv {
     prot_map_t prot_map;
 
     con_info connection, proxy_connection;
+
+    // Only HTTP handshakes at the configured origins receive these objects. In particular, the raw Socket
+    // methods inherited by HTTPClient must never inherit them as reusable socket credentials.
+    SimpleRefHolder<QoreSSLCertificate> owned_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> owned_key;
+    std::unique_ptr<const con_info> owned_origin;
+    std::vector<con_info> additional_credential_origins;
+
+    DLLLOCAL QoreSSLCertificate* httpCertificate() {
+        return msock->opaque_cert ? *owned_cert : msock->cert;
+    }
+
+    DLLLOCAL QoreSSLPrivateKey* httpKey() {
+        return msock->opaque_key ? *owned_key : msock->pk;
+    }
+
+    DLLLOCAL int checkCredentialOrigin(const con_info& target, const char* scheme, ExceptionSink* xsink) const {
+        if (!owned_origin) {
+            return 0;
+        }
+        if (target.has_url() && scheme && !strcasecmp(scheme, target.ssl ? "https" : "http")) {
+            if (is_same_origin(*owned_origin, target)) {
+                return 0;
+            }
+            size_t checked = 0;
+            for (const auto& origin : additional_credential_origins) {
+                if (!(++checked % 100) && qore_check_cancel(xsink, "checking TLS credential origins")) {
+                    return -1;
+                }
+                if (is_same_origin(origin, target)) {
+                    return 0;
+                }
+            }
+        }
+        xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+            "TLS client credentials are restricted to the configured origins");
+        return -1;
+    }
 
     // issue #3978: default output encoding
     const QoreEncoding* enc = nullptr;
@@ -1481,7 +1521,7 @@ struct qore_httpclient_priv {
         @param retried true if the request has already been repeated
     */
     DLLLOCAL static bool canRepeatOnNewConnection(const char* meth, bool conn_reused, bool retried) {
-        return conn_reused && !retried && HttpClientConnectionManagerBase::isIdempotentMethod(meth);
+        return conn_reused && !retried && qore_http_manager_ops::isIdempotentMethod(meth);
     }
 
     //! Returns the Proxy-Authorization value for the connection manager, or an empty string if not needed
@@ -1611,8 +1651,9 @@ struct qore_httpclient_priv {
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.ssl_ca_file != msock->socket->priv->ssl_ca_file
                         || opts.ssl_ca_path != msock->socket->priv->ssl_ca_path
-                        || opts.client_cert != msock->cert
-                        || opts.client_key != msock->pk) {
+                        || opts.ssl_trust_store != msock->socket->priv->ssl_trust_store
+                        || opts.client_cert != httpCertificate()
+                        || opts.client_key != httpKey()) {
                     old_mgr = std::move(conn_mgr);
                     conn_mgr.reset();
                 }
@@ -1636,8 +1677,9 @@ struct qore_httpclient_priv {
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
                 opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
                 opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-                opts.client_cert = msock->cert;
-                opts.client_key = msock->pk;
+                opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
+                opts.client_cert = httpCertificate();
+                opts.client_key = httpKey();
                 // Proxy URL from the existing connection info
                 opts.proxy_url = getConnMgrProxyUrl();
                 opts.proxy_authorization = getConnMgrProxyAuthorization();
@@ -1752,7 +1794,7 @@ struct qore_httpclient_priv {
             sink_q->ref();
         }
         QoreValue sink_arg = arg.refSelf();
-        msock->socket->setEventQueue(xsink, q, arg, with_data);
+        qore_socket_ops(msock->socket).setEventQueue(xsink, q, arg, with_data);
         event_sink->set(xsink, sink_q, sink_arg, with_data);
     }
 
@@ -1889,10 +1931,10 @@ struct qore_httpclient_priv {
         if (!http_fields_at_top_level.load(std::memory_order_relaxed)) {
             h->setKeyValueIntern("http_fields_at_top_level", false);
         }
-        if (priv.cert) {
+        if (priv.cert && !priv.opaque_cert) {
             h->setKeyValueIntern("ssl_cert_data", priv.cert->getDER(nullptr));
         }
-        if (priv.pk) {
+        if (priv.pk && !priv.opaque_key) {
             h->setKeyValueIntern("ssl_key_data", priv.pk->getDER(nullptr));
         }
         if (sock.ssl_verify_mode == SSL_VERIFY_PEER) {
@@ -1903,6 +1945,13 @@ struct qore_httpclient_priv {
         }
         if (!sock.ssl_ca_path.empty()) {
             h->setKeyValueIntern("ssl_ca_path", new QoreStringNode(sock.ssl_ca_path));
+        }
+        // the trust store object, which cannot be serialized: a client that uses one is not serialized without it
+        // (qoretechnologies/qore#7248)
+        if (sock.ssl_trust_store) {
+            sock.ssl_trust_store->ref();
+            h->setKeyValueIntern("ssl_trust_store", new QoreObject(QC_SSLTRUSTSTORE, getProgram(),
+                sock.ssl_trust_store));
         }
         if (timeout != HTTPCLIENT_DEFAULT_TIMEOUT) {
             h->setKeyValueIntern("timeout", timeout);
@@ -1990,7 +2039,7 @@ struct qore_httpclient_priv {
 
     DLLLOCAL void setNoDelay() {
         if (nodelay) {
-            if (msock->socket->setNoDelay(1)) {
+            if (qore_socket_ops(msock->socket).setNoDelay(1)) {
                 nodelay = false;
             }
         }
@@ -2243,7 +2292,7 @@ struct qore_httpclient_priv {
             return 0;
         }
 
-        if (msock->socket->setNoDelay(1)) {
+        if (qore_socket_ops(msock->socket).setNoDelay(1)) {
             return -1;
         }
 
@@ -2427,6 +2476,9 @@ struct qore_httpclient_priv {
                 return -1;
             }
         }
+        if (checkCredentialOrigin(conn, resolved.scheme.c_str(), xsink)) {
+            return -1;
+        }
         // octets that cannot appear in a request target are percent-encoded; everything else is sent as received
         target.clear();
         QoreUriReference::appendEncoded(target, resolved.getRequestTarget(), xsink);
@@ -2561,8 +2613,9 @@ struct qore_httpclient_priv {
             return -1;
         }
 
+        con_info next;
         bool port_set = false;
-        if (connection.set_url(url, port_set, xsink)) {
+        if (next.set_url(url, port_set, xsink)) {
             return -1;
         }
 
@@ -2576,19 +2629,34 @@ struct qore_httpclient_priv {
             }
 
             // set port only if it wasn't overridden in the URL
-            if (!port_set && !connection.is_unix) {
-                connection.port = get_port(i->second);
+            if (!port_set && !next.is_unix) {
+                next.port = get_port(i->second);
             }
 
             // set SSL setting from protocol default
-            connection.ssl = get_ssl(i->second);
+            next.ssl = get_ssl(i->second);
         } else {
-            connection.ssl = false;
-            if (!port_set && !connection.is_unix) {
-                connection.port = default_port;
+            next.ssl = false;
+            if (!port_set && !next.is_unix) {
+                next.port = default_port;
             }
         }
 
+        if (checkCredentialOrigin(next, tmp ? tmp->c_str() : nullptr, xsink)) {
+            return -1;
+        }
+        // The original URL of connection-owned credentials is an HTTP(S) URL. Constructor protocol overrides
+        // must not reinterpret its scheme or implicit port when establishing the binding.
+        if (!owned_origin && (owned_cert || owned_key)) {
+            bool https = tmp && !strcasecmp(tmp->c_str(), "https");
+            if (!tmp || (!https && strcasecmp(tmp->c_str(), "http")) || https != next.ssl
+                    || (!next.is_unix && !url.getPort() && next.port != (https ? 443 : 80))) {
+                xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+                    "TLS client credentials require an unambiguous HTTP or HTTPS origin");
+                return -1;
+            }
+        }
+        connection = next;
         return 0;
     }
 
@@ -3219,14 +3287,16 @@ struct qore_httpclient_priv {
     */
     DLLLOCAL std::string getBodyContentType(const QoreHashNode& ans, QoreValue ct) const {
         std::string rv;
-        if (ct.getType() == NT_STRING) {
-            rv = ct.get<const QoreStringNode>()->c_str();
+        // the values can be inline short strings, which have no node (issue #7038)
+        QoreStringDataHelper ct_str(ct);
+        if (ct_str) {
+            rv = ct_str.c_str();
         }
-        QoreValue ce = ans.getKeyValue("content-encoding");
-        if (ce.getType() != NT_STRING) {
+        QoreStringDataHelper ce(ans.getKeyValue("content-encoding"));
+        if (!ce) {
             return rv;
         }
-        const char* start = ce.get<const QoreStringNode>()->c_str();
+        const char* start = ce.c_str();
         while (*start == ' ' || *start == '\t') {
             ++start;
         }
@@ -3579,9 +3649,10 @@ struct qore_httpclient_priv {
         // and the peer may have closed the connection after rejecting it
         {
             std::string sent;
-            QoreValue v = nh->getKeyValue(auth_hdr);
-            if (v.getType() == NT_STRING) {
-                sent = v.get<const QoreStringNode>()->c_str();
+            // the value can be an inline short string, which has no node (issue #7038)
+            QoreStringDataHelper v(nh->getKeyValue(auth_hdr));
+            if (v) {
+                sent = v.c_str();
             } else if (code == 407) {
                 // the credentials that the connection manager sends to the proxy with every request
                 sent = getConnMgrProxyAuthorization();
@@ -3649,7 +3720,7 @@ qore_httpclient_priv::pct_encoding_map_t qore_httpclient_priv::pct_encoding_map 
 };
 
 // static initialization
-void QoreHttpClientObject::static_init() {
+void qore_http_client_object_ops::static_init() {
     // setup static members of QoreHttpClientObject class
     method_map.insert(method_map_t::value_type("OPTIONS", true));
     // Historical compatibility: GET accepts a message body even though it
@@ -3676,7 +3747,7 @@ QoreHttpClientObject::~QoreHttpClientObject() {
 
 void QoreHttpClientObject::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        cleanup(xsink);
+        qore_http_client_object_ops(this).cleanup(xsink);
         delete this;
     }
 }
@@ -3710,13 +3781,74 @@ const char* QoreHttpClientObject::getConnectionPath() const {
     return http_priv->connection.path.empty() ? getDefaultPath() : http_priv->connection.path.c_str();
 }
 
-void QoreHttpClientObject::setConnectionPath(const char* path) {
-    SafeLocker sl(priv->m);
-    if (path && path[0]) {
-        http_priv->connection.path = path;
-    } else {
-        http_priv->connection.path.clear();
+void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* key, const QoreListNode* origins, ExceptionSink* xsink) {
+    auto* http = qore_httpclient_priv::get(client);
+    http->owned_cert = cert;
+    http->owned_key = key;
+    http->msock->opaque_cert = cert != nullptr;
+    http->msock->opaque_key = key != nullptr;
+    if (!origins) {
+        return;
     }
+    ConstListIterator it(origins);
+    while (it.next()) {
+        if (!((it.index() + 1) % 100) && qore_check_cancel(xsink, "reading TLS credential origins")) {
+            return;
+        }
+        QoreStringDataHelper value(it.getValue());
+        if (q_check_no_nul(value.c_str(), value.size(), "credential origin", "HTTP client credentials",
+                "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", xsink)) {
+            return;
+        }
+        QoreURL url(value.c_str());
+        const QoreString* scheme = url.getProtocol();
+        if (!url.isValid() || !url.getHost() || !scheme
+                || (strcasecmp(scheme->c_str(), "https") && strcasecmp(scheme->c_str(), "http"))) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "expected an absolute HTTP(S) credential origin");
+            return;
+        }
+        con_info origin;
+        bool has_port = false;
+        if (origin.set_url(url, has_port, xsink)) {
+            return;
+        }
+        if (origin.host != url.getHost()->c_str()) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "ambiguous credential origin host");
+            return;
+        }
+        origin.ssl = !strcasecmp(scheme->c_str(), "https");
+        if (!has_port && !origin.is_unix) {
+            origin.port = origin.ssl ? 443 : 80;
+        }
+        http->additional_credential_origins.push_back(std::move(origin));
+    }
+}
+
+void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink) {
+    auto* http = qore_httpclient_priv::get(client);
+    SafeLocker sl(http->msock->m);
+    if (http->owned_origin && path && *path) {
+        QoreUriReference ref;
+        ref.parse(path, strlen(path), xsink);
+        if (*xsink) {
+            return;
+        }
+        if (ref.has_scheme || ref.has_authority) {
+            HttpRequestTarget target;
+            QoreString url(path);
+            if (!http->resolveRequestUrlUnlocked(xsink, url, target)) {
+                http->connection.path = target.target;
+            }
+            return;
+        }
+    }
+    http->connection.path = path ? path : "";
+}
+
+void QoreHttpClientObject::setConnectionPath(const char* path) {
+    ExceptionSink xsink;
+    qore_httpclient_set_connection_path(*this, path, &xsink);
 }
 
 void QoreHttpClientObject::setDefaultPath(const char* def_path) {
@@ -3953,7 +4085,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         qore_socket_private::get(*priv->socket)->setAssumedEncoding(!val->empty() ? val->c_str() : nullptr);
     }
 
-    n = opts->getKeyValue("ssl_cert_data");
+    n = priv->opaque_cert ? QoreValue() : opts->getKeyValue("ssl_cert_data");
     if (n) {
         SimpleRefHolder<QoreSSLCertificate> cert;
         if (n.getType() == NT_BINARY) {
@@ -3976,7 +4108,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         assert(!priv->cert);
         priv->cert = cert.release();
     } else {
-        n = opts->getKeyValue("ssl_cert_path");
+        n = priv->opaque_cert ? QoreValue() : opts->getKeyValue("ssl_cert_path");
         if (!n.isNothing()) {
             if (n.getType() != NT_STRING) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string filename as value for the "
@@ -3987,9 +4119,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
-                    "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_cert_path option requires filesystem access "
+                    "in the current Program and its caller");
                 return -1;
             }
 
@@ -4028,7 +4160,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         key_password = key_password_storage.c_str();
     }
 
-    n = opts->getKeyValue("ssl_key_data");
+    n = priv->opaque_key ? QoreValue() : opts->getKeyValue("ssl_key_data");
     if (n) {
         SimpleRefHolder<QoreSSLPrivateKey> pk;
         if (n.getType() == NT_BINARY) {
@@ -4052,7 +4184,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         assert(!priv->pk);
         priv->pk = pk.release();
     } else {
-        n = opts->getKeyValue("ssl_key_path");
+        n = priv->opaque_key ? QoreValue() : opts->getKeyValue("ssl_key_path");
         if (!n.isNothing()) {
             if (n.getType() != NT_STRING) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string filename as value for the "
@@ -4063,9 +4195,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
-                    "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_key_path option requires filesystem access "
+                    "in the current Program and its caller");
                 return -1;
             }
 
@@ -4106,10 +4238,12 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "options hash; got type \"%s\" instead", key, n.getTypeName());
             return -1;
         }
-        if (q_check_path(*n.get<const QoreStringNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringValueHelper path_str(n);
+        if (q_check_path(**path_str, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
-        const char* path = n.get<const QoreStringNode>()->c_str();
+        const char* path = path_str->c_str();
         if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
                 "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
@@ -4123,6 +4257,33 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             qore_socket_private::get(*priv->socket)->ssl_ca_file = path;
         } else {
             qore_socket_private::get(*priv->socket)->ssl_ca_path = path;
+        }
+    }
+
+    // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+    n = opts->getKeyValue("ssl_trust_store");
+    if (!n.isNothing()) {
+        QoreSSLTrustStore* ts = nullptr;
+        if (n.getType() == NT_OBJECT && n.get<const QoreObject>()->getClass(CID_SSLTRUSTSTORE)) {
+            ts = reinterpret_cast<QoreSSLTrustStore*>(const_cast<QoreObject*>(n.get<const QoreObject>())
+                ->getReferencedPrivateData(CID_SSLTRUSTSTORE, xsink));
+            if (*xsink) {
+                return -1;
+            }
+        }
+        if (!ts) {
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting an SSLTrustStore object for the "
+                "\"ssl_trust_store\" key in the options hash; got type \"%s\" instead", n.getFullTypeName());
+            return -1;
+        }
+        // the socket takes a reference of its own
+        qore_socket_private::get(*priv->socket)->setSslTrustStore(ts);
+        ts->deref();
+        // the trust store verifies the server's certificate: it implies verification unless ssl_verify_cert is given
+        // as False, so that it is not ignored
+        QoreValue vc = opts->getKeyValue("ssl_verify_cert");
+        if (vc.isNothing() || vc.getAsBool()) {
+            priv->socket->setSslVerifyMode(SSL_VERIFY_PEER);
         }
     }
 
@@ -4194,6 +4355,13 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         http_priv->enc = enc;
     }
 
+    if ((http_priv->owned_cert || http_priv->owned_key) && !http_priv->owned_origin) {
+        auto origin = std::make_unique<con_info>(http_priv->connection.port);
+        origin->host = http_priv->connection.host;
+        origin->is_unix = http_priv->connection.is_unix;
+        origin->ssl = http_priv->connection.ssl;
+        http_priv->owned_origin = std::move(origin);
+    }
     return 0;
 }
 
@@ -4221,11 +4389,10 @@ int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
     int rc;
     {
         SafeLocker sl(priv->m);
-        // disconnect immediately if not using a proxy
-        if (!http_priv->proxy_connection.has_url()) {
+        rc = http_priv->setUrlUnlocked(str, xsink);
+        if (!rc && !http_priv->proxy_connection.has_url()) {
             close_priv = http_priv->disconnect_unlocked_prepare_close();
         }
-        rc = http_priv->setUrlUnlocked(str, xsink);
     }
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     return rc;
@@ -4551,7 +4718,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "HTTP/2 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4569,7 +4736,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4776,7 +4943,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "HTTP/3 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4795,7 +4962,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4944,7 +5111,7 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5153,7 +5320,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5290,10 +5457,22 @@ QoreStringNode* QoreHttpClientObject::getProxyPassword() const {
     return nullptr;
 }
 
+void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink) {
+    auto* http = qore_httpclient_priv::get(client);
+    SafeLocker sl(http->msock->m);
+    if (http->owned_origin && secure != http->connection.ssl) {
+        con_info target(http->connection);
+        target.ssl = secure;
+        if (http->checkCredentialOrigin(target, secure ? "https" : "http", xsink)) {
+            return;
+        }
+    }
+    http->connection.ssl = secure;
+}
+
 void QoreHttpClientObject::setSecure(bool is_secure) {
-    lock();
-    http_priv->connection.ssl = is_secure;
-    unlock();
+    ExceptionSink xsink;
+    qore_httpclient_set_secure(*this, is_secure, &xsink);
 }
 
 bool QoreHttpClientObject::isSecure() const {
@@ -5623,6 +5802,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     }
     // a streamed request body cannot be sent again for a redirect that repeats the request
     bool stream_body = send_callback || is;
+    // set once a request that an HTTP/3 connection did not deliver has been repeated on a new connection (qore#6930)
+    bool undelivered_h3_retried = false;
     bool has_body = stream_body || body_len;
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
@@ -5634,6 +5815,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     ReferenceHolder<QoreHashNode> ans(xsink);
     // the headers of the last response with lower-case names, as received
     ReferenceHolder<QoreHashNode> resp_headers(xsink);
+    ValueHolder response_protocol(xsink);
+    auto set_response = [&](QoreHashNode* raw) {
+        // Only the manager's response metadata identifies the transport. Keep it across the
+        // redirect loop independently of the response hash exposed to the caller.
+        response_protocol = raw->getKeyValue("protocol").refSelf();
+        resp_headers = get_response_headers_ref(raw);
+        ans = transformConnMgrResponse(raw, xsink);
+    };
     int code = 0;
 
     while (true) {
@@ -5985,7 +6174,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                                 "connection closed before response received");
                             // a cancellation of this thread that closed the connection is reported as such
-                            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         }
                         break;
                     }
@@ -6013,7 +6202,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s",
                             desc_str.c_str());
                         // a cancellation of this thread that ended the request first is reported as such
-                        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         close_and_evict_if_unusable();
                         return nullptr;
                     }
@@ -6022,8 +6211,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     QoreValue sc_val = h->getKeyValue("status_code");
                     if (!sc_val.isNullOrNothing() && !got_headers) {
                         got_headers = true;
-                        ans = transformConnMgrResponse(h, xsink);
-                        resp_headers = get_response_headers_ref(h);
+                        set_response(h);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -6254,7 +6442,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
                     // a cancellation of this thread that ended the request first (the code that it ends closes the
                     // transport) is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     result.discard(xsink);
                     close_and_evict_if_unusable();
                     return nullptr;
@@ -6273,8 +6461,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // Transform to legacy flat format
                 ReferenceHolder<QoreHashNode> raw_resp(
                     result.get<QoreHashNode>(), xsink);
-                ans = transformConnMgrResponse(*raw_resp, xsink);
-                resp_headers = get_response_headers_ref(*raw_resp);
+                set_response(*raw_resp);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -6434,11 +6621,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     // a cancellation of this thread that ended the request first is reported as such, and the
                     // request is not repeated
-                    if (HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink)) {
+                    if (qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink)) {
                         return nullptr;
                     }
                     // a reused connection closed by the peer before a response was received
-                    if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
+                    if (!got_headers && qore_http_manager_ops::isConnectionClosedError(*xsink)
                             && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
                         xsink->clear();
                         stream_retry = true;
@@ -6452,8 +6639,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!sc_val.isNullOrNothing() && !got_headers) {
                     got_headers = true;
                     // Transform to flat format for redirect/error processing
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6822,7 +7008,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!has_value) {
                     xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                         "connection closed before response headers received");
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
@@ -6847,15 +7033,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         desc_str = desc->c_str();
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
                 // Check for response headers
                 QoreValue sc_val = h->getKeyValue("status_code");
                 if (!sc_val.isNullOrNothing()) {
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6928,13 +7113,33 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
+                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed
+                // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
+                // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
+                // still have processed it before it went away, so only an idempotent request is repeated, once, on
+                // a new connection (RFC 9110 section 9.2.2): the next pass takes the Alt-Svc upgrade again, and
+                // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
+                // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
+                if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
+                        && qore_http_manager_ops::isIdempotentMethod(meth)
+                        && !qore_http_manager_ops::isCancelPending()) {
+                    QoreStringValueHelper err(xsink->getExceptionErr());
+                    if (!strcmp(err->c_str(), "HTTP3-PEER-UNRESPONSIVE")
+                            || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
+                        undelivered_h3_retried = true;
+                        http3_active = false;
+                        dropConnMgr(true);
+                        xsink->clear();
+                        continue;
+                    }
+                }
                 // If this was an Alt-Svc-driven H3 upgrade attempt,
                 // mark the Alt-Svc entry with a backoff and retry
                 // over H1/H2.
                 // (not for a cancelled request: the cancellation is reported, and the Alt-Svc entry is kept)
                 if (attempted_h3_upgrade
                         && http3_mode != HTTP3_MODE_REQUIRED
-                        && !HttpClientConnectionManagerBase::isCancelPending()) {
+                        && !qore_http_manager_ops::isCancelPending()) {
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
                     http3_active = false;
@@ -6967,7 +7172,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), raw_resp->getKeyValue("arg").refSelf(), "%s",
                         desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -6998,14 +7203,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             "received");
                     }
                     // a cancellation of this thread that ended the request first is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
             }
 
             // Transform to legacy flat format
-            ans = transformConnMgrResponse(*raw_resp, xsink);
-            resp_headers = get_response_headers_ref(*raw_resp);
+            set_response(*raw_resp);
             if (*xsink) {
                 return nullptr;
             }
@@ -7152,20 +7356,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    // Refresh http2_active for NEGOTIATE clients: the first successful
-    // response reveals the actual protocol the conn_mgr selected.  Phase 6
-    // of design/conn-mgr-alpn-negotiation.md (Option β).
-    {
-        QoreValue proto = ans->getKeyValue("protocol");
-        if (proto.getType() == NT_STRING) {
-            QoreStringValueHelper proto_str(proto);
-            const char* p = proto_str->c_str();
-            if (!strcmp(p, "h2")) {
-                http2_active = true;
-            } else if (!strcmp(p, "h3")) {
-                http3_active = true;
-            }
-        }
+    if (response_protocol->getType() == NT_STRING) {
+        // the protocol can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper protocol_str(*response_protocol);
+        const char* protocol = protocol_str.c_str();
+        http2_active = !strcmp(protocol, "h2");
+        http3_active = !strcmp(protocol, "h3");
     }
 
     // Parse Alt-Svc for future HTTP/3 upgrades.  Without this, the conn_mgr
@@ -7328,8 +7524,9 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
     opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
     opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-    opts.client_cert = msock->cert;
-    opts.client_key = msock->pk;
+    opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
+    opts.client_cert = httpCertificate();
+    opts.client_key = httpKey();
     opts.proxy_url = getConnMgrProxyUrl();
     opts.proxy_authorization = getConnMgrProxyAuthorization();
 
@@ -7399,7 +7596,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         if (!has_value) {
             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                 "connection closed before WebSocket Upgrade response received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -7418,7 +7615,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             // the description is text, not a format
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -8879,12 +9076,11 @@ public:
         // HTTP/2 and HTTP/3 carry no reason phrase; the blocking request derives the standard one from the status
         // code (see HttpClientConnectionManagerBase::request()), so the same message is reported here
         QoreValue smv = resp->getKeyValue("status_message");
+        // the message can be an inline short string, which has no node (issue #7038)
         SimpleRefHolder<QoreStringNode> derived_message(smv.getType() == NT_STRING
-            ? nullptr
-            : new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(code)));
-        const QoreStringNode* status_message = smv.getType() == NT_STRING
-            ? smv.get<const QoreStringNode>()
-            : *derived_message;
+            ? QoreStringNodeValueHelper(smv).getReferencedValue()
+            : new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(code)));
+        const QoreStringNode* status_message = *derived_message;
         const char* msg = status_message && !status_message->empty() ? status_message->c_str() : "<no message>";
 
         SimpleRefHolder<QoreStringNode> loc(resp_headers
@@ -9502,8 +9698,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("received"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
         }
         return rv.release();
     };
@@ -9759,8 +9955,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -9813,8 +10009,8 @@ QoreObject* qore_httpclient_priv::deferredAcquireErrorPollOp(ExceptionSink& acqu
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode(goal), xsink);
     }
     return rv.release();
 }
@@ -9912,8 +10108,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return rv.release();
     }
@@ -9965,8 +10161,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
                 new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
             if (!*xsink) {
                 p->setSelf(*rv);
-                rv->setValue("sock", n2_obj.release(), xsink);
-                rv->setValue("goal", new QoreStringNode("connect"), xsink);
+                qore_poll_op_set_member(rv, "sock", n2_obj.release(), xsink);
+                qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
             }
             return rv.release();
         }
@@ -10021,8 +10217,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), err_poller.release()), xsink);
         if (!*xsink) {
             err_p->setSelf(*err_rv);
-            err_rv->setValue("sock", err_notifier_obj.release(), xsink);
-            err_rv->setValue("goal", new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(err_rv, "sock", err_notifier_obj.release(), xsink);
+            qore_poll_op_set_member(err_rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return err_rv.release();
     }
@@ -10041,8 +10237,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
     }
     return rv.release();
 }
@@ -10110,7 +10306,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
         }
         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         // a cancellation of this thread that ended the stream first is reported as such
-        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
         return nullptr;
     }
 
@@ -10226,14 +10422,15 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 
         const char* ptr = nullptr;
         size_t len = 0;
+        // the body can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper body_str(body_val);
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
             ptr = static_cast<const char*>(bin->getPtr());
             len = bin->size();
-        } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
-            ptr = str->c_str();
-            len = str->size();
+        } else if (body_str) {
+            ptr = body_str.c_str();
+            len = body_str.size();
         }
         if (len) {
             SafeLocker sl(priv->m);
@@ -10633,19 +10830,19 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
     http_priv->setEventQueueUnlocked(xsink, q, arg, with_data);
 }
 
-void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
+void qore_http_client_object_ops::cleanupImpl(QoreHttpClientObject* b, ExceptionSink* xsink) {
     qore_socket_private* close_priv = nullptr;
     std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
-        AutoLocker al(priv->m);
-        close_priv = http_priv->disconnect_unlocked_prepare_close();
-        old_mgr = http_priv->resetConnMgr();
-        priv->invalidate();
+        AutoLocker al(b->priv->m);
+        close_priv = b->http_priv->disconnect_unlocked_prepare_close();
+        old_mgr = b->http_priv->resetConnMgr();
+        b->priv->invalidate();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
-    http_priv->getEventSink()->clear(xsink);
-    priv->socket->cleanup(xsink);
+    b->http_priv->getEventSink()->clear(xsink);
+    b->priv->socket->cleanup(xsink);
 }
 
 void QoreHttpClientObject::lock() {

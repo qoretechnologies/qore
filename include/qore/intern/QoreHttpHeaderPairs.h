@@ -34,12 +34,14 @@
 
 #include <qore/common.h>
 
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <strings.h>
 #include <utility>
 #include <vector>
 
+class ExceptionSink;
 class QoreHashNode;
 
 //! HTTP header fields as name/value pairs in order
@@ -56,6 +58,114 @@ typedef std::vector<std::pair<std::string, std::string>> qore_http_header_pairs_
     @param out the fields are appended here
 */
 DLLLOCAL void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out);
+
+//! Builds an HTTP/2 request header block and extracts the required method and path; returns -1 on error.
+DLLLOCAL int qore_get_http2_request_headers(const QoreHashNode* headers, std::string& method, std::string& path,
+        qore_http_header_pairs_t& out, ExceptionSink* xsink);
+
+//! The largest value of a \c Content-Length that an HTTP/3 client accepts (2^62 - 1, a QUIC variable-length integer)
+static constexpr int64 QORE_HTTP_MAX_CONTENT_LENGTH = (static_cast<int64>(1) << 62) - 1;
+
+//! Parses a \c Content-Length field value as the HTTP/2 and HTTP/3 clients do (nghttp2, nghttp3)
+/** The value is decimal digits only, without whitespace, and at most @ref QORE_HTTP_MAX_CONTENT_LENGTH
+
+    @return the length, or -1 if a client does not accept the value as a length
+*/
+DLLLOCAL inline int64 qore_http_parse_content_length(const char* value, size_t vlen) {
+    if (!vlen) {
+        return -1;
+    }
+    int64 v = 0;
+    for (size_t i = 0; i < vlen; ++i) {
+        if (value[i] < '0' || value[i] > '9') {
+            return -1;
+        }
+        int64 d = value[i] - '0';
+        if (v > (QORE_HTTP_MAX_CONTENT_LENGTH - d) / 10) {
+            return -1;
+        }
+        v = v * 10 + d;
+    }
+    return v;
+}
+
+//! The body rules of an HTTP/2 or HTTP/3 server response, which the client's HTTP layer enforces (qore#7212)
+/** A client treats a response that breaks them as malformed: with HTTP/3, the client's nghttp3 closes the whole
+    connection with every other stream on it (a malformed message cannot be confined to its stream with nghttp3), so
+    a server must never send one: with these rules, it refuses or corrects the response of a handler instead.
+
+    - more than one \c Content-Length field, or one that is not a length as the clients parse it (digits only, at
+      most @ref QORE_HTTP_MAX_CONTENT_LENGTH): refused;
+    - a 204 response with a \c Content-Length other than \c "0": refused;
+    - a response to HEAD, or with status 204 or 304, has no content: a body given for it is not sent;
+    - otherwise the content sent must have the declared length: a complete body of another length is refused, and a
+      streamed body that turns out longer or shorter ends the stream with a reset (a stream error) instead of a
+      normal end.
+
+    Add the response's header fields with add(), then call check().
+*/
+class QoreHttpResponseBodyRule {
+public:
+    //! Creates the object for a response with the given status to a request with the given method
+    DLLLOCAL QoreHttpResponseBodyRule(int status, const char* method)
+            : status(status), no_body((method && !strcmp(method, "HEAD")) || status == 204 || status == 304) {
+    }
+
+    //! Adds a header field; the name is compared case-insensitively
+    DLLLOCAL void add(const char* name, size_t nlen, const char* value, size_t vlen) {
+        if (nlen != 14 || strncasecmp(name, "content-length", 14)) {
+            return;
+        }
+        ++count;
+        raw.assign(value, vlen);
+        int64 v = qore_http_parse_content_length(value, vlen);
+        if (v < 0) {
+            invalid = raw;
+            return;
+        }
+        content_length = v;
+    }
+
+    //! Returns an empty string if the response is valid, otherwise why it is not
+    /** @param body_len the length of the complete body, or -1 for a body that is streamed
+    */
+    DLLLOCAL std::string check(int64 body_len) const {
+        if (count > 1) {
+            return "the response has " + std::to_string(count) + " content-length fields";
+        }
+        if (!invalid.empty() || (count && content_length < 0)) {
+            return "the content-length of the response ('" + invalid + "') is not a valid length";
+        }
+        // a client accepts only "0" itself in a 204 response
+        if (status == 204 && count && raw != "0") {
+            return "a 204 response has a content-length of '" + raw + "', not '0'";
+        }
+        if (!no_body && count && body_len >= 0 && content_length != body_len) {
+            return "the content-length of the response (" + std::to_string(content_length)
+                + ") does not match the length of its body (" + std::to_string(body_len) + " bytes)";
+        }
+        return std::string();
+    }
+
+    //! Returns true if no content may be sent with the response (a response to HEAD, or with status 204 or 304)
+    DLLLOCAL bool noBody() const {
+        return no_body;
+    }
+
+    //! Returns the length that a streamed body must have: 0 without content, the declared length, or -1
+    DLLLOCAL int64 streamLength() const {
+        return no_body ? 0 : (count == 1 ? content_length : -1);
+    }
+
+private:
+    int status;
+    bool no_body;
+    int count = 0;
+    int64 content_length = -1;
+    //! the value of the last content-length field
+    std::string raw;
+    std::string invalid;
+};
 
 //! Returns the value of the first field with the given name, compared case-insensitively, or nullptr
 DLLLOCAL inline const std::string* qore_find_http_header(const qore_http_header_pairs_t& headers,

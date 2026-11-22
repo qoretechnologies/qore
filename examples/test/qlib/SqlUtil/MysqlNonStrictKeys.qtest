@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -194,7 +195,7 @@ class MysqlNonStrictKeysTest inherits QUnit::Test {
 
     private Datasource getDs() {
         if (!ds) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         return ds;
     }

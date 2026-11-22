@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs in child processes that set their own --exec-mode
+# test-platform: macos - asynchronous I/O timers, thread pool tasks and background threads of sandboxed code
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxedExceptionReportTest
+
+#! The exceptions of code that is sandboxed are reported marked (qore#7139)
+/** An exception that code that is sandboxed or acts for sandboxed code raises records it, and every report of it (the
+    asynchronous I/O controller's log line, the unhandled exception report on stderr of a timer, a task, a thread pool
+    task, the release of thread-local data or a background thread, also one that the host runs) starts each line with
+    the mark "[caller Program N] " and has the text of the code's choosing escaped, so that it cannot pass for the
+    host's own; the exceptions of the host's code are reported as before.  Each case runs in a child process
+    (sandboxed-exception-report/sandboxed-exception-report-child.q) in each execution mode.
+*/
+class SandboxedExceptionReportTest inherits QUnit::Test {
+    private {
+        string child;
+        string qore_bin;
+    }
+
+    constructor() : Test("SandboxedExceptionReportTest", "1.0") {
+        child = get_script_dir() + "/sandboxed-exception-report/sandboxed-exception-report-child.q";
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a timer, logged", sub () { checkSandboxed("timer-logger", True); });
+        addTestCase("a timer, on stderr", sub () { checkSandboxed("timer-stderr"); });
+        addTestCase("a task", sub () { checkSandboxed("task"); });
+        addTestCase("thread-local data of a task", sub () { checkSandboxed("tld-task"); });
+        addTestCase("a ThreadPool task", sub () { checkSandboxed("pool"); });
+        addTestCase("a background thread", sub () { checkSandboxed("background"); });
+        addTestCase("a closure the host runs", sub () { checkSandboxed("host-runs-tenant-closure"); });
+        addTestCase("control and Unicode line characters", sub () {
+            checkEscaped("chars", "TENANT-ERR: a\\rb\\u{2028}c\\u{0085}d\\x1b[2J\\\\e");
+        });
+        addTestCase("a short string", sub () { checkEscaped("short", "E: abc"); });
+        addTestCase("a queue error", sub () { checkEscaped("queue-error", "Q-ERR: tenant line\\nforged line"); });
+        addTestCase("a queue error that the host reads", sub () {
+            checkEscaped("queue-read", "Q-ERR: tenant line\\nforged line");
+        });
+        addTestCase("parallel_map() of the sandboxed code's closure", sub () {
+            checkEscaped("parallel", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("module code for the sandboxed code", sub () {
+            checkEscaped("module", "MOD-ERR: tenant line\\nforged line");
+        });
+        addTestCase("invalid UTF-8 and another encoding", sub () {
+            checkEscaped("encodings", "TENANT-ERR: C\\u{0085}, arg: A\\xffB");
+        });
+        addTestCase("values that are not strings", sub () { checkEscaped("values", "tenant line\\nforged line"); });
+        addTestCase("a chained exception", \chainedTest());
+        addTestCase("a pipeline step of the sandboxed code on the I/O thread", sub () {
+            checkEscaped("pipeline", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a JSON stream of the sandboxed code", sub () {
+            checkEscaped("json-stream", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a YAML input stream of the sandboxed code", sub () {
+            checkEscaped("yaml-read", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a module load of the sandboxed code that a host thread waits for", sub () {
+            # the test waits for the host's thread with a debug hook of debug builds
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_module_load_waiters())");
+            }
+            checkEscaped("module-load", "TENANT-ERR: module 'ReportLoadFail' failed to load in another thread: tenant "
+                "line\\nforged line", True);
+        });
+        addTestCase("the completion of an operation of the sandboxed code on the I/O thread", sub () {
+            # the operation is a test hook of debug builds
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkEscaped("completion", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("the completion of a worker step of an operation of the sandboxed code", sub () {
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkEscaped("completion-worker", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a YAML output stream of the sandboxed code", sub () {
+            checkEscaped("yaml-write", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a future that the sandboxed code rejects", sub () {
+            checkEscaped("promise-error", "P-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a future of the sandboxed code", sub () {
+            checkEscaped("async-error", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a forged mark", sub () {
+            checkEscaped("mark", "TENANT-ERR: x\\n[caller Program 1] forged line");
+        });
+        addTestCase("the host's code, logged", sub () { checkHost("host-timer-logger", True); });
+        addTestCase("the host's code, on stderr", sub () { checkHost("host-timer-stderr"); });
+        addTestCase("the host's task", sub () { checkHost("host-task"); });
+        addTestCase("the host's background thread", sub () { checkHost("host-background"); });
+        addTestCase("the host's pipeline on the I/O thread", sub () { checkHost("host-pipeline"); });
+        addTestCase("the host's JSON stream", sub () { checkHost("host-json-stream"); });
+        addTestCase("the completion of the host's operation", sub () {
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_completion_reject_op())");
+            }
+            checkHost("host-completion");
+        });
+        set_return_value(main());
+    }
+
+    #! runs the child with \a mode in each execution mode; returns its stdout, stderr and exit code for each
+    private list<hash<auto>> run(string mode) {
+        list<hash<auto>> rv = ();
+        foreach string exec_mode in (ExecModeHarness::ExecModes) {
+            hash<ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=%s %s %s", qore_bin,
+                exec_mode, child, mode));
+            ExecModeHarness::check_loader_warnings(r);
+            ExecModeHarness::check_native(r);
+            rv += {"exec": exec_mode, "rc": r.rc, "out": r.stdout, "err": r.stderr};
+        }
+        return rv;
+    }
+
+    #! the ID of the sandboxed Program that the child printed
+    private static string pgmId(string out) {
+        *string id = (out =~ x/^pgm=([0-9]+)$/m)[0];
+        return id ?? "?";
+    }
+
+    #! checks the marked report in \a text: the mark, the escaped text on a marked line, and every line of the
+    #! exception's text marked
+    private checkMarked(string text, string mark, string what, string escaped) {
+        assertTrue(text.find(mark) >= 0, what + ": the mark");
+        assertTrue(text.find("TENANT-ERR: " + escaped) >= 0, what + ": the escaped text");
+        list<string> unmarked = select text.split("\n"), ($1 =~ /TENANT-ERR|forged/)
+            && !$1.equalPartial(mark) && !$1.equalPartial("LOG: " + mark);
+        assertEq((), unmarked, what + ": every line of the exception marked");
+        assertEq((), (select text.split("\n"), $1 =~ /^(LOG: )?forged line/), what + ": no forged line");
+    }
+
+    private checkSandboxed(string mode, *bool logged) {
+        foreach hash<auto> r in (run(mode)) {
+            string what = mode + ", " + r.exec;
+            assertEq(0, r.rc, what + ": exit code");
+            assertTrue(r.out.find("done\n") >= 0, what + ": done");
+            string mark = "[caller Program " + pgmId(r.out) + "] ";
+            if (logged) {
+                checkMarked(r.out, mark, what, "tenant line\\nforged line");
+                assertTrue(r.out.find("LOG: " + mark + "QoreCallDispatcher::workerLoop() callback exception: "
+                    "TENANT-ERR") >= 0, what + ": the logged line starts with the mark");
+                assertEq("", r.err, what + ": nothing on stderr");
+            } else {
+                checkMarked(r.err, mark, what, "tenant line\\nforged line");
+                assertTrue(r.err.find(mark + "unhandled QORE User exception thrown in TID ") >= 0,
+                    what + ": the report starts with the mark");
+                assertTrue(r.err.find(mark + "call stack:") >= 0, what + ": the call stack is marked");
+            }
+        }
+    }
+
+    #! checks the marked report on stderr of \a mode: \a escaped on a marked line, every line marked, no escape
+    #! character or carriage return
+    #! with \a module_mark, the mark is that of the Program of a module that the sandboxed code loaded by path, whose
+    #! code raised the exception
+    private checkEscaped(string mode, string escaped, *bool module_mark) {
+        foreach hash<auto> r in (run(mode)) {
+            string what = mode + ", " + r.exec;
+            assertEq(0, r.rc, what + ": exit code");
+            string mark = "[caller Program " + pgmId(r.out) + "] ";
+            if (module_mark) {
+                *string id = (r.err =~ x/^\[caller Program ([0-9]+)\] /m)[0];
+                assertTrue(id.toInt() > pgmId(r.out).toInt(), what + ": the module's Program, created after the tenant's");
+                mark = "[caller Program " + (id ?? "?") + "] ";
+            }
+            assertTrue(r.err.find(mark) >= 0, what + ": the mark");
+            assertTrue(r.err.find(escaped) >= 0, what + ": the escaped text");
+            assertEq((), (select r.err.split("\n"), $1 && !$1.equalPartial(mark)), what + ": every line marked");
+            assertEq(-1, r.err.find(chr(27)), what + ": no escape character");
+            assertEq(-1, r.err.find("\r"), what + ": no carriage return");
+        }
+    }
+
+    chainedTest() {
+        foreach hash<auto> r in (run("chained")) {
+            string what = "chained, " + r.exec;
+            assertEq(0, r.rc, what + ": exit code");
+            string mark = "[caller Program " + pgmId(r.out) + "] ";
+            assertTrue(r.err.find(mark + "chained exception:") >= 0, what + ": the chain");
+            assertEq(2, (select r.err.split("\n"), $1 =~ /TENANT-ERR: tenant line\\nforged line/).size(),
+                what + ": both exceptions");
+            assertEq((), (select r.err.split("\n"), $1 && !$1.equalPartial(mark)), what + ": every line marked");
+        }
+    }
+
+    private checkHost(string mode, *bool logged) {
+        foreach hash<auto> r in (run(mode)) {
+            string what = mode + ", " + r.exec;
+            assertEq(0, r.rc, what + ": exit code");
+            string text = logged ? r.out : r.err;
+            assertTrue(text.find(logged
+                    ? "LOG: QoreCallDispatcher::workerLoop() callback exception: HOST-ERR: host line"
+                    : "HOST-ERR: host line") >= 0, what + ": the host's report");
+            assertEq(-1, (r.out + r.err).find("[caller Program"), what + ": no mark");
+        }
+    }
+}

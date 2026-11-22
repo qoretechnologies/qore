@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -160,7 +161,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
 
     #! Sets up the JotForm client for integration tests
     private setupConnection() {
-        *string token = m_options.token ?? ENV.JOTFORM_TOKEN;
+        *string token = LiveProvider::get("jotform", "JOTFORM_TOKEN", m_options.token);
         if (!token) {
             if (m_options.verbose) {
                 printf("No token provided (use -t option or JOTFORM_TOKEN env var)\n");

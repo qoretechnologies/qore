@@ -67,11 +67,11 @@ report("--- Benchmark 1: Lock Acquisition ---\n");
 Mutex m();
 int ITERATIONS = 1000000;
 
-date start = now_us();
+date start = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     AutoLock al(m);
 }
-date elapsed = now_us() - start;
+date elapsed = microseconds(clock_get_monotonic_us()) - start;
 float ns_per_lock = elapsed.durationMicroseconds() * 1000.0 / ITERATIONS;
 report("Lock acquisition: %s/acq\n", format_ns(ns_per_lock));
 
@@ -84,11 +84,11 @@ Promise p();
 Future f = p.getFuture();
 ITERATIONS = 1000000;
 
-date start2 = now_us();
+date start2 = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     f.isDone();
 }
-date elapsed2 = now_us() - start2;
+date elapsed2 = microseconds(clock_get_monotonic_us()) - start2;
 float ns_per_isdone = elapsed2.durationMicroseconds() * 1000.0 / ITERATIONS;
 report("isDone(): %s/call\n", format_ns(ns_per_isdone));
 
@@ -98,11 +98,11 @@ report("isDone(): %s/call\n", format_ns(ns_per_isdone));
 report("\n--- Benchmark 3: now_us() Baseline Cost ---\n");
 
 ITERATIONS = 1000000;
-date start3 = now_us();
+date start3 = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     now_us();
 }
-date elapsed3 = now_us() - start3;
+date elapsed3 = microseconds(clock_get_monotonic_us()) - start3;
 float ns_per_now_us = elapsed3.durationMicroseconds() * 1000.0 / ITERATIONS;
 report("now_us(): %s/call\n", format_ns(ns_per_now_us));
 
@@ -115,14 +115,14 @@ date base = now_us();
 date future = base + 10s;
 ITERATIONS = 1000000;
 
-date start4 = now_us();
+date start4 = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     date remaining = future - base;
     if (remaining <= 0us) {
         # dummy operation
     }
 }
-date elapsed4 = now_us() - start4;
+date elapsed4 = microseconds(clock_get_monotonic_us()) - start4;
 float ns_per_date_op = elapsed4.durationMicroseconds() * 1000.0 / ITERATIONS;
 report("Date subtraction + comparison: %s/op\n", format_ns(ns_per_date_op));
 
@@ -147,19 +147,19 @@ int sub withOnExit() {
 ITERATIONS = 100000;
 
 # Measure without on_exit
-date start5a = now_us();
+date start5a = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     noOnExit();
 }
-date elapsed5a = now_us() - start5a;
+date elapsed5a = microseconds(clock_get_monotonic_us()) - start5a;
 float ns_per_no_onexit = elapsed5a.durationMicroseconds() * 1000.0 / ITERATIONS;
 
 # Measure with on_exit
-date start5b = now_us();
+date start5b = microseconds(clock_get_monotonic_us());
 for (int i = 0; i < ITERATIONS; i++) {
     withOnExit();
 }
-date elapsed5b = now_us() - start5b;
+date elapsed5b = microseconds(clock_get_monotonic_us()) - start5b;
 float ns_per_with_onexit = elapsed5b.durationMicroseconds() * 1000.0 / ITERATIONS;
 
 report("Function without on_exit: %s/call\n", format_ns(ns_per_no_onexit));
@@ -174,7 +174,7 @@ report("\n--- Benchmark 6: Simple Polling Loop Pattern ---\n");
 Mutex lock();
 int done_flag = 0;
 
-date start6 = now_us();
+date start6 = microseconds(clock_get_monotonic_us());
 int total_iterations = 0;
 
 while (True) {
@@ -191,7 +191,7 @@ while (True) {
     }
 }
 
-date elapsed6 = now_us() - start6;
+date elapsed6 = microseconds(clock_get_monotonic_us()) - start6;
 float ns_per_iteration = elapsed6.durationMicroseconds() * 1000.0 / total_iterations;
 report("Polling loop: %d iterations in %.2f ms\n", total_iterations, elapsed6.durationMilliseconds());
 report("Average: %s/iteration\n", format_ns(ns_per_iteration));
@@ -206,7 +206,7 @@ int active_requests = 20;
 int poll_count = 0;
 
 Counter done(20);
-date start7 = now_us();
+date start7 = microseconds(clock_get_monotonic_us());
 
 for (int t = 0; t < 20; t++) {
     background sub() {
@@ -228,7 +228,7 @@ for (int t = 0; t < 20; t++) {
 }
 
 done.waitForZero();
-date elapsed7 = now_us() - start7;
+date elapsed7 = microseconds(clock_get_monotonic_us()) - start7;
 report("Concurrent polling (20 threads): %.2f ms\n", elapsed7.durationMilliseconds());
 
 # ============================================================================
@@ -251,7 +251,7 @@ report("Simple polling: %s/iteration\n", format_ns(ns_per_iteration));
 float estimated_cost_per_iteration = ns_per_isdone + ns_per_lock +
                                      ns_per_now_us + ns_per_date_op;
 report("\nEstimated per-iteration cost: %s\n", format_ns(estimated_cost_per_iteration));
-report("  (isDone + lock + now_us + date_op)\n");
+report("  (isDone + lock + microseconds(clock_get_monotonic_us()) + date_op)\n");
 
 # ============================================================================
 # Benchmark 8: Qore method calls with on_exit (20 concurrent threads)
@@ -269,7 +269,7 @@ int sub qore_method_with_on_exit() {
 Mutex bench8_lock();
 int bench8_count = 0;
 Counter bench8_done(20);
-date bench8_start = now_us();
+date bench8_start = microseconds(clock_get_monotonic_us());
 
 for (int t = 0; t < 20; t++) {
     background sub() {
@@ -285,7 +285,7 @@ for (int t = 0; t < 20; t++) {
 }
 
 bench8_done.waitForZero();
-date bench8_elapsed = now_us() - bench8_start;
+date bench8_elapsed = microseconds(clock_get_monotonic_us()) - bench8_start;
 report("Qore method calls with on_exit (20 threads, 100k total calls): %.2f ms\n",
        bench8_elapsed.durationMilliseconds());
 report("Average: %s/call\n", format_ns(bench8_elapsed.durationMicroseconds() * 1000.0 / bench8_count));
@@ -301,7 +301,7 @@ Future bench9_future = bench9_promise.getFuture();
 Mutex bench9_lock();
 int bench9_count = 0;
 Counter bench9_done(20);
-date bench9_start = now_us();
+date bench9_start = microseconds(clock_get_monotonic_us());
 
 for (int t = 0; t < 20; t++) {
     background sub() {
@@ -318,7 +318,7 @@ for (int t = 0; t < 20; t++) {
 }
 
 bench9_done.waitForZero();
-date bench9_elapsed = now_us() - bench9_start;
+date bench9_elapsed = microseconds(clock_get_monotonic_us()) - bench9_start;
 report("Built-in C++ method calls (20 threads, 200k total calls): %.2f ms\n",
        bench9_elapsed.durationMilliseconds());
 report("Average: %s/call\n", format_ns(bench9_elapsed.durationMicroseconds() * 1000.0 / bench9_count));
@@ -335,7 +335,7 @@ Mutex bench10_lock();
 int bench10_active = 20;
 int bench10_poll_count = 0;
 Counter bench10_done(20);
-date bench10_start = now_us();
+date bench10_start = microseconds(clock_get_monotonic_us());
 
 for (int t = 0; t < 20; t++) {
     background sub() {
@@ -360,6 +360,6 @@ for (int t = 0; t < 20; t++) {
 }
 
 bench10_done.waitForZero();
-date bench10_elapsed = now_us() - bench10_start;
+date bench10_elapsed = microseconds(clock_get_monotonic_us()) - bench10_start;
 report("Full polling pattern (20 threads): %.2f ms\n", bench10_elapsed.durationMilliseconds());
 report("Avg per polling iteration: %s\n", format_ns(bench10_elapsed.durationMicroseconds() * 1000.0 / (20 * 50)));

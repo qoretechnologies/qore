@@ -360,11 +360,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             # it, when the owner drops its last reference
             SseIoThreadRef ref(self, m, stop_cond, run_state);
             code<nothing()> fn = ServerSentEventClientIo::makeEventThreadClosure(ref, reader);
-%ifdef PO_NO_THREAD_CONTROL
-            new_tid = start_thread(fn);
-%else
             new_tid = start_thread ? start_thread(fn) : background fn();
-%endif
         } catch (hash<ExceptionInfo> ex) {
             # the event thread was not started
             AutoLock al1(m);
@@ -712,13 +708,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
                     return;
                 }
                 # Timeout — yield and retry
-%ifdef PO_NO_PROCESS_CONTROL
-                call_function(step.yield);
-%else
                 if (step.yield) {
                     call_function(step.yield);
                 }
-%endif
                 continue;
             }
 

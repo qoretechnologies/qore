@@ -173,7 +173,7 @@ class SendHttpErrorHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
-        server.sendHttpError(cast<HttpListener>(listener), cx, s, 500, NOTHING,
+        server.sendHttpError(listener, cx, s, 500, NOTHING,
             new BinaryInputStream(binary(FramingResponses::Body)), NOTHING, NOTHING, hdr.method == "HEAD");
         return <HttpResponseInfo>{"code": 500, "reply_sent": True};
     }

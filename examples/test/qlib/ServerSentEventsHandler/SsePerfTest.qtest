@@ -59,10 +59,10 @@ class PerfObserver inherits Observer {
     }
 
     waitForEvents(int count, *timeout dur) {
-        date deadline = now_us() + (dur ?? 30s);
+        date deadline = microseconds(clock_get_monotonic_us()) + (dur ?? 30s);
 
         while (event_count < count) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 return;
             }
             try {
@@ -118,7 +118,7 @@ class PerfObserver inherits Observer {
             *string ts_str = (data_.data =~ x/^ts:(\d+)/)[0];
             if (ts_str) {
                 int sent_us = ts_str.toInt();
-                int now_us_val = (now_us() - 1970-01-01).durationMicroseconds();
+                int now_us_val = clock_get_monotonic_us();
                 float lat = (now_us_val - sent_us) / 1000.0;
                 if (lat >= 0) {
                     latencies += lat;
@@ -172,9 +172,9 @@ class SsePerfTest inherits QUnit::Test {
 
     #! Wait for server-side connections to be registered
     private waitForConnection(ServerSentEventHandler sse, int count, *timeout dur) {
-        date deadline = now_us() + (dur ?? 10s);
+        date deadline = microseconds(clock_get_monotonic_us()) + (dur ?? 10s);
         while (sse.getConnectionIds().size() < count) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 throw "TIMEOUT", sprintf("waitForConnection: expected %d connections, got %d",
                     count, sse.getConnectionIds().size());
             }
@@ -184,9 +184,9 @@ class SsePerfTest inherits QUnit::Test {
 
     #! Wait for the server-side connection count to reach an exact value
     private waitForConnectionCount(ServerSentEventHandler sse, int count, *timeout dur) {
-        date deadline = now_us() + (dur ?? 10s);
+        date deadline = microseconds(clock_get_monotonic_us()) + (dur ?? 10s);
         while (sse.getConnectionIds().size() != count) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 throw "TIMEOUT", sprintf("waitForConnectionCount: expected %d connections, got %d",
                     count, sse.getConnectionIds().size());
             }
@@ -230,7 +230,7 @@ class SsePerfTest inherits QUnit::Test {
 
     #! Compute elapsed milliseconds from a start timestamp
     private float elapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000.0;
+        return (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
     }
 
     #! Print latency statistics if verbose
@@ -285,11 +285,11 @@ class SsePerfTest inherits QUnit::Test {
         observer.waitForConnected();
         usleep(100ms);
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < event_count; ++i) {
             srv.sse.sendAll(<SseMessageInfo>{
                 "event": "perf",
-                "data": sprintf("ts:%d:msg-%d", (now_us() - 1970-01-01).durationMicroseconds(), i),
+                "data": sprintf("ts:%d:msg-%d", clock_get_monotonic_us(), i),
                 "id": i + 1,
             });
         }
@@ -349,7 +349,7 @@ class SsePerfTest inherits QUnit::Test {
         }
         usleep(100ms);
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < event_count; ++i) {
             srv.sse.sendAll(<SseMessageInfo>{
                 "event": "broadcast",
@@ -425,7 +425,7 @@ class SsePerfTest inherits QUnit::Test {
 
             string payload = strmul("D", size);
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             srv.sse.sendAll(<SseMessageInfo>{
                 "event": "large",
                 "data": payload,
@@ -482,8 +482,8 @@ class SsePerfTest inherits QUnit::Test {
         background sub() {
             on_exit sender_done.dec();
             try {
-                date deadline = now_us() + seconds(duration_secs);
-                while (now_us() < deadline && !stop_sender) {
+                date deadline = microseconds(clock_get_monotonic_us()) + seconds(duration_secs);
+                while (microseconds(clock_get_monotonic_us()) < deadline && !stop_sender) {
                     srv.sse.sendAll(<SseMessageInfo>{
                         "event": "sustained",
                         "data": sprintf("seq-%d", total_sent),
@@ -598,7 +598,7 @@ class SsePerfTest inherits QUnit::Test {
         }
 
         # Send events while churning
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < event_count; ++i) {
             try {
                 srv.sse.sendAll(<SseMessageInfo>{
@@ -684,7 +684,7 @@ class SsePerfTest inherits QUnit::Test {
         usleep(100ms);
 
         # Send events with sequential IDs
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < event_count; ++i) {
             srv.sse.sendAll(<SseMessageInfo>{
                 "event": "order",

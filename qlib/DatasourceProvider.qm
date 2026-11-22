@@ -94,8 +94,15 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
     @subsection datasourceprovider_1_2 DatasourceProvider 1.2
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
       output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
-      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code has no terminal I/O
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code or the code that calls
+      it has no terminal I/O (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
+    - the \c DATASOURCE-ERROR exceptions and the script path of the program of a provider module show the masked
+      description (see @ref Qore::SQL::mask_datasource(string) "mask_datasource()") of a string given that is not a
+      plain datasource identifier, such as a datasource string, which can have a user name, a password and a database
+      name, instead of the string; the verbose output of @ref DatasourceProvider::get_ds_string() "get_ds_string()"
+      shows no text of the exception of a provider module for such a string
+      (<a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>)
 
     @subsection datasourceprovider_1_1 DatasourceProvider 1.1
     - added support for the \c get_ds_hash() function
@@ -114,8 +121,12 @@ string connstr = get_ds_string(str);
 
         @param str the identifier or datasource connection string
         @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
-            displayed when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
-            when code without it loaded the module first, or a sandbox without it governs the call
+            displayed when the module's code or the code that calls it has no terminal I/O
+            (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO", see
+            @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()"); for a string
+            given that is not a plain datasource identifier, such as a datasource string, only the error code and the
+            masked description of the string (see @ref Qore::SQL::mask_datasource(string) "mask_datasource()") are
+            shown, not the text of the error, which can show the string
 
         @return the datasource connection string
 
@@ -140,24 +151,26 @@ string connstr = get_ds_string(str);
                 } catch (hash<ExceptionInfo> ex) {
                     # the stdout constant needs terminal I/O only when it is written, so that the module can be
                     # loaded by code without it; such code gets no output (qore#6438)
-                    if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
-                        stdout.printf("%s: %s\n", ex.err, ex.desc);
+                    if (verbose && SandboxManager::isTerminalIoAllowed()) {
+                        # the text of a provider module's exception can show the datasource string, so the string
+                        # is masked in it (issue #6988)
+                        stdout.printf("%s: %s\n", ex.err, mask_ds_text(ex.desc, str));
                     }
                     # otherwise ignore exceptions
                 }
             }
             if (!driver)
-                throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; tried the following datasource provider modules: %y", str, pl);
+                throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; tried the following datasource provider modules: %y", get_ds_desc(str), pl);
         }
 
         if (!driver)
-            throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; there is no driver specification in the string (ex: \"driver:...\") and no datasource provider modules are set in the QORE_DATASOURCE_PROVIDERS environment variable", str);
+            throw "DATASOURCE-ERROR", sprintf("datasource identifier %y could not be matched to a known datasource; there is no driver specification in the string (ex: \"driver:...\") and no datasource provider modules are set in the QORE_DATASOURCE_PROVIDERS environment variable", get_ds_desc(str));
         return str;
     }
 
     #! Returns all datasource supported with their connection strings prefixed by \c "db://"
     /** @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
-            displayed when the module's code has no terminal I/O (see get_ds_string())
+            displayed when the module's code or the code that calls it has no terminal I/O (see get_ds_string())
     */
     public *hash<string, string> sub get_ds_hash(*bool verbose) {
         hash<string, string> rv;
@@ -170,7 +183,7 @@ string connstr = get_ds_string(str);
                     rv += try_get_ds_hash(mod);
                 } catch (hash<ExceptionInfo> ex) {
                     # see get_ds_string()
-                    if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (verbose && SandboxManager::isTerminalIoAllowed()) {
                         stdout.printf("%s: %s\n", ex.err, ex.desc);
                     }
                     # otherwise ignore exceptions
@@ -184,11 +197,29 @@ string connstr = get_ds_string(str);
 
 # private, non-exported namespace
 namespace Priv {
+    # returns the string given for messages: a datasource identifier as given, and the masked description of any
+    # other string, such as a datasource string, which can have a user name, a password and a database name
+    # (issue #6988)
+    string sub get_ds_desc(string str) {
+        return (str =~ /[\/@:%({]/) ? mask_datasource(str) : str;
+    }
+
+    # returns the text of an exception for the verbose output: the text is shown for a datasource identifier; for any
+    # other string, such as a datasource string, it is not, as a provider module can show the string or a part of it
+    # in any form (issue #6988)
+    string sub mask_ds_text(*string text, string str) {
+        string desc = get_ds_desc(str);
+        return desc == str
+            ? (text ?? "")
+            : sprintf("(the text of the error is not shown, as it can show the datasource string %s)", desc);
+    }
+
     string sub try_get_ds_string(string mod, string str) {
         Program p();
         p.loadModule(mod);
         # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod, str));
+        # the script path appears in exception locations (issue #6988)
+        p.setScriptPath(sprintf("Qore::DatasourceProvider(%s,%s)", mod, get_ds_desc(str)));
         return p.callFunction("get_mod_ds_string", str);
     }
 

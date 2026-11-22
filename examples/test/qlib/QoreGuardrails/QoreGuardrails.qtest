@@ -17,6 +17,9 @@
 
 public class QoreGuardrailsTest inherits QUnit::Test {
     constructor() : Test("QoreGuardrailsTest", "1.0") {
+        addTestCase("rule duration across a wall-clock step", sub () { clockStep(False); });
+        addTestCase("engine duration across a wall-clock step", sub () { clockStep(True); });
+
         # PII Detector tests
         addTestCase("PiiDetector - email detection", \piiEmailTest());
         addTestCase("PiiDetector - phone detection", \piiPhoneTest());
@@ -219,6 +222,35 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         hash<GuardrailResult> r = inj.evaluate(
             "What is the system prompt engineering technique?");
         assertTrue(r.passed);
+    }
+
+    clockStep(bool use_engine) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires dbg_set_realtime_offset()");
+        }
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        foreach int step in ((-86400000000, 86400000000)) {
+            int calls = 0;
+            hash<auto> backend = {
+                "mode": "callback", "model": "test-model",
+                "api_callback": hash<auto> sub (string model, string path, hash<auto> body) {
+                    call_function("dbg_set_realtime_offset", step);
+                    ++calls;
+                    return {"choices": ({"message": {"content": "{\"is_injection\":false,\"confidence\":0.9}"},
+                        "finish_reason": "stop"},), "usage": {"total_tokens": 1}};
+                },
+            };
+            PromptInjectionDetector rule(GS_CRITICAL, NOTHING, backend);
+            GuardrailEngine engine((<GuardrailRuleConfig>{"type": "prompt_injection", "severity": GS_CRITICAL},),
+                {"llm_config": backend});
+            call_function("dbg_set_realtime_offset", 0);
+            int before = clock_get_monotonic_us();
+            hash<GuardrailResult> result = use_engine ? engine.evaluateInput("How many items are there?")
+                : rule.evaluate("How many items are there?");
+            int max_ms = (clock_get_monotonic_us() - before) / 1000;
+            assertEq(1, calls, "the clock step occurred during evaluation");
+            assertTrue(result.duration_ms >= 0 && result.duration_ms <= max_ms);
+        }
     }
 
     injSkipLlmClassificationTest() {

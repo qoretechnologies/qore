@@ -56,7 +56,13 @@ public:
     //! Returns the error message if an error occurred
     DLLLOCAL const std::string& getErrorMessage() const { return error_message; }
 
+    //! Raises the error that occurred while reading as JSON-SAX-PARSE-ERROR, followed by the exception that the
+    //! stream raised, if any, which keeps its call stack and origin (a stream of sandboxed code; qore#7232)
+    DLLLOCAL void raiseReadError(ExceptionSink* xsink);
+
 private:
+    //! the exception that the stream's read() raised, kept to be raised with the parser's error
+    ExceptionSink stream_xsink;
     QoreObject* stream;
     const QoreEncoding* encoding;
     bool has_error;

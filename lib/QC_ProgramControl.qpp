@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_Program.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
@@ -188,9 +189,12 @@ auto v = pgm.callFunction("eval");
     @since %Qore 3.0
 */
 Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
-    if (parse_options & PO_SYSTEM_OPS) {
-        return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
-            "options that can only be set by the system", parse_options);
+    // the Program of another tenant is not copied in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "ProgramControl::createEvalProgram()")) {
+        return QoreValue();
+    }
+    if (qore_program_private::checkSystemParseOptions(parse_options, xsink)) {
+        return QoreValue();
     }
     // the namespace of this Program is copied when the new Program is created: the Program is held while it is
     // copied, so that its data cannot be cleared meanwhile, and its parse lock is held, so that no code is parsed in
@@ -257,6 +261,10 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
 /** see Qore::Program::getParseOptions "Program::getParseOptions()"
  */
 int ProgramControl::getParseOptions() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getParseOptions().getLo();
 }
 
@@ -264,6 +272,10 @@ int ProgramControl::getParseOptions() {
 /** see Qore::Program::getScriptDir "Program::getScriptDir()"
  */
 *string ProgramControl::getScriptDir() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getScriptDir();
 }
 
@@ -271,6 +283,10 @@ int ProgramControl::getParseOptions() {
 /** see Qore::Program::getScriptPath "Program::getScriptPath()"
  */
 *string ProgramControl::getScriptName() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getScriptName();
 }
 
@@ -278,6 +294,10 @@ int ProgramControl::getParseOptions() {
 /** see Qore::Program::getScriptPath "Program::getScriptPath()"
  */
 *string ProgramControl::getScriptPath() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getScriptPath();
 }
 
@@ -285,6 +305,10 @@ int ProgramControl::getParseOptions() {
 /** see Qore::Program::getTimeZone "Program::getTimeZone()"
  */
 TimeZone ProgramControl::getTimeZone() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return new QoreObject(QC_TIMEZONE, 0, new TimeZoneData(p->currentTZ()));
 }
 
@@ -297,6 +321,10 @@ TimeZone ProgramControl::getTimeZone() {
     returns \c EINVAL
  */
 bool ProgramControl::isDefined(string parse_define) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
         return false;
@@ -314,6 +342,10 @@ bool ProgramControl::isDefined(string parse_define) [flags=NAMED_ARGS] {
     returns \c EINVAL
  */
 auto ProgramControl::getDefine(string parse_define) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
         return QoreValue();
@@ -326,6 +358,10 @@ auto ProgramControl::getDefine(string parse_define) [flags=NAMED_ARGS] {
 /** see Qore::Program::getAllDefines "Program::getAllDefines()"
  */
 *hash<auto> ProgramControl::getAllDefines() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return qore_program_private::runTimeGetAllDefines(p);
 }
 
@@ -380,6 +416,10 @@ static list<ProgramControl> ProgramControl::getAllPrograms() [flags=RET_VALUE_ON
 /** see Qore::Program::getThreadList "Program::getThreadList()"
 */
 list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return p->getThreadList();
 }
 
@@ -399,6 +439,10 @@ list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
     @since %Qore 3.0
 */
 bool ProgramControl::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (tid <= 0 || tid > INT_MAX) {
       xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
       return false;
@@ -415,6 +459,10 @@ bool ProgramControl::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL] 
     returns \c EINVAL
  */
 bool ProgramControl::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name something else
     if (q_check_no_nul(function_name->c_str(), function_name->size())) {
         return false;
@@ -437,6 +485,10 @@ bool ProgramControl::existsFunction(string function_name) [flags=RET_VALUE_ONLY,
     returns \c EINVAL
  */
 auto ProgramControl::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink))
         return QoreValue();
     TempEncodingHelper t(variable_name, QCS_DEFAULT, xsink);
@@ -467,6 +519,10 @@ auto ProgramControl::getGlobalVariable(string variable_name, *reference<bool> fo
 /** see Qore::Program::getGlobalVars "Program::getGlobalVars()"
  */
 hash<auto> ProgramControl::getGlobalVars() [flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    return p->getGlobalVars();
@@ -482,6 +538,10 @@ hash<auto> ProgramControl::getGlobalVars() [flags=CONSTANT] {
     @throw UNKNOWN-VARIABLE the variable name contains a NUL character (since %Qore 3.0)
  */
 nothing ProgramControl::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
     if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
         return QoreValue();
@@ -495,6 +555,10 @@ nothing ProgramControl::setGlobalVarValue(string variable_name, auto value) [fla
 /** @param breakpoint the breakpoint to assign to this program
  */
 nothing ProgramControl::assignBreakpoint(Breakpoint[QoreBreakpoint] breakpoint) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    p->assignBreakpoint(*breakpoint, xsink);
@@ -504,6 +568,10 @@ nothing ProgramControl::assignBreakpoint(Breakpoint[QoreBreakpoint] breakpoint) 
 /**
  */
 nothing ProgramControl::deleteAllBreakpoints() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    p->deleteAllBreakpoints();
@@ -513,6 +581,10 @@ nothing ProgramControl::deleteAllBreakpoints() {
 /**
  */
 list<Breakpoint> ProgramControl::getBreakpoints() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink))
         return QoreValue();
     QoreBreakpointList_t bl;
@@ -540,6 +612,10 @@ hash<auto> h = pc.getTopLevelLocalVars();
     @since %Qore 3.0
 */
 hash<auto> ProgramControl::getTopLevelLocalVars() [dom=DEBUGGER] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink)) {
       return QoreValue();
    }
@@ -558,6 +634,10 @@ hash<auto> ProgramControl::getTopLevelLocalVars() [dom=DEBUGGER] {
       @ref Qore::ProgramControl::findFunctionStatementId "ProgramControl::findFunctionStatementId()"
 */
 hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool list_breakpoints = False) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    AbstractStatement* s = p->resolveStatementId(statement_id);
@@ -610,6 +690,10 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
    @since %Qore 3.0
 */
 list<int> ProgramControl::getStatementIds() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink)) {
       return QoreValue();
    }
@@ -631,6 +715,10 @@ list<int> ProgramControl::getStatementIds() {
     @throw PROGRAM-STATEMENT-ERROR the source label contains a NUL character (since %Qore 3.0)
 */
 int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the label is looked up as a C string, which would be cut at a NUL character and name another source
     if (q_check_no_nul(file->c_str(), file->size(), "source label", "source labels", "PROGRAM-STATEMENT-ERROR",
             xsink)) {
@@ -682,6 +770,10 @@ bp.assignStatement(ids[1]);
    @since %Qore 3.0
 */
 list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the label is looked up as a C string, which would be cut at a NUL character and name another source
     if (q_check_no_nul(file->c_str(), file->size(), "source label", "source labels", "PROGRAM-STATEMENT-ERROR",
             xsink)) {
@@ -722,6 +814,10 @@ hash<StepInTargetInfo> target = (select pc.getStepInTargets(statement_id), $1.na
    @since %Qore 3.0
 */
 list<hash<StepInTargetInfo>> ProgramControl::getStepInTargets(int statement_id) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink)) {
         return QoreValue();
     }
@@ -740,6 +836,10 @@ list<hash<StepInTargetInfo>> ProgramControl::getStepInTargets(int statement_id) 
     @throw PROGRAM-STATEMENT-ERROR the function name contains a NUL character (since %Qore 3.0)
 */
 int ProgramControl::findFunctionStatementId(string function_name, *list params) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-STATEMENT-ERROR", xsink)) {
         return QoreValue();
@@ -768,6 +868,10 @@ int ProgramControl::findFunctionStatementId(string function_name, *list params) 
     @throw PROGRAM-ERROR the function name contains a NUL character (since %Qore 3.0)
 */
 list<hash<auto>> ProgramControl::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-ERROR", xsink)) {
         return QoreValue();
@@ -792,6 +896,10 @@ list<hash<auto>> ProgramControl::findFunctionVariants(string function_name) [fla
     @since %Qore 0.8.13.3
 */
 hash<string, hash<string, int>> ProgramControl::getSourceLabels() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    return p->getSourceLabels(xsink);
@@ -808,6 +916,10 @@ hash<string, hash<string, int>> ProgramControl::getSourceLabels() {
     @since %Qore 0.8.13.3
 */
 hash<string, hash<string, int>> ProgramControl::getSourceFileNames() {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    return p->getSourceFileNames(xsink);

@@ -448,7 +448,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const qore_hash_private* right_hash = qore_hash_private::get(*rh);
         ConstHashIterator hi(lh);
         while (hi.next()) {
-            hm_hm_t::const_iterator found = right_hash->hm.find(hi.getKey());
+            hm_hm_t::const_iterator found = right_hash->findIter(hi.getKey());
             if (found == right_hash->hm.end()
                     || !softEqualImpl<Lexical, Native>(hi.get(), (*found->second)->val, xsink, policy)
                     || (xsink && *xsink)) return false;
@@ -467,13 +467,20 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
 
     // Preserve the existing LHS-only reference delegation. In particular a regular container compared to a
     // weak RHS container remains unequal, while a weak LHS delegates to its target's container comparison.
+    // the target is compared with a reference of its own, or as a new empty one if it was freed (qore#7198)
     if (lt == NT_WEAKREF_LIST) {
-        return rt == NT_LIST && softEqualImpl<Lexical, Native>(
-            QoreValue(l.get<const WeakListReferenceNode>()->get()), r, xsink, policy);
+        if (rt != NT_LIST) {
+            return false;
+        }
+        ReferenceHolder<QoreListNode> target(l.get<const WeakListReferenceNode>()->lock(), xsink);
+        return softEqualImpl<Lexical, Native>(QoreValue(*target), r, xsink, policy);
     }
     if (lt == NT_WEAKREF_HASH) {
-        return rt == NT_HASH && softEqualImpl<Lexical, Native>(
-            QoreValue(l.get<const WeakHashReferenceNode>()->get()), r, xsink, policy);
+        if (rt != NT_HASH) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> target(l.get<const WeakHashReferenceNode>()->lock(), xsink);
+        return softEqualImpl<Lexical, Native>(QoreValue(*target), r, xsink, policy);
     }
     if (lt == NT_REFERENCE) {
         ValueHolder value(ln->eval(xsink), xsink);

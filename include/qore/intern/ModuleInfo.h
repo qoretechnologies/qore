@@ -698,7 +698,12 @@ public:
     DLLLOCAL ~QoreModuleManager() {
     }
 
-    DLLLOCAL void init(bool se);
+    //! Initializes the module manager
+    /** @param se show module errors
+        @param lib_path the physical path of this libqore if the caller has resolved it (see qore_init()), else
+        nullptr; used to find the build tree of the library (qore#7030)
+    */
+    DLLLOCAL void init(bool se, const char* lib_path = nullptr);
     DLLLOCAL void delUser();
     DLLLOCAL void cleanup();
 
@@ -714,6 +719,9 @@ public:
     DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
         QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
         const QoreParseOptions* declared_po = nullptr);
+
+    //! Appends the command to the description of the exception that a module command raised (qore#6741)
+    DLLLOCAL static void appendModuleCmdErrorDesc(ExceptionSink& xsink, const QoreString& cmd);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -1246,6 +1254,12 @@ public:
     */
     DLLLOCAL bool hasUserModuleDependencyPath(const std::string& from, const std::string& to);
 
+#ifdef DEBUG
+    //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
+    //! that another thread runs; returns false on timeout (qore#7232)
+    DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+#endif
+
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
     /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
         mutex is released and reacquired while each child is loaded.  See
@@ -1353,6 +1367,10 @@ private:
         ModuleLoadState state = MLS_INITIALIZING;
         std::string err;                        // valid iff state == MLS_FAILED
         std::string desc;                       // valid iff state == MLS_FAILED
+        // true if code that is sandboxed or acts for sandboxed code raised the failure: the waiters raise it marked
+        // (qore#7232); valid iff state == MLS_FAILED
+        bool err_sandboxed = false;
+        qore_program_id_t err_pgm_id = 0;       // the ID of the sandboxed Program of the failure, or 0
         unsigned waiters = 0;                   // cross-thread waiters currently parked on this entry
 
         DLLLOCAL ModuleLoadEntry(int tid) : owner_tid(tid) {}
@@ -1381,6 +1399,10 @@ protected:
         see qore_module_manager_mutex_attr()
     */
     QoreThreadLock mutex{qore_module_manager_mutex_attr()};
+#ifdef DEBUG
+    //! signaled when a thread starts to wait for the load of a module in another thread (see dbgWaitLoadWaiters())
+    QoreCondition dbg_load_waiter_cond;
+#endif
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -1490,12 +1512,15 @@ protected:
         @param wsink the warning sink, if warnings can be raised in it; not the caller's exception sink, as a
         warning raised there would be an error
         @param warning_mask the warnings enabled in \a wsink
+        @param found_path the path where the module was found when the loader loads another file for it: the module
+        of the build of this library for a link into another build of its source tree (qore#7030); whether the
+        module is library code is decided by this path (see isTrustedModulePath())
     */
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
             QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             qore_binary_module_desc_t mod_desc = nullptr, bool source_available = false,
-            ExceptionSink* wsink = nullptr, int warning_mask = 0);
+            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr);
 
     //! Returns the first module request that can be loaded now, from the %try-module requests that failed
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module

@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EndedThreadProgramTidTest
+
+#! A Program reads the TID of a thread that has ended from its own record of the thread, not from the freed thread data (#7103)
+/** A Program keeps a record of each thread that entered it (ThreadProgramData) until its teardown clears the thread's
+    data, also after the thread has ended when the thread ends while the teardown runs, and the thread frees its own
+    data (ThreadData) when it ends.  ThreadProgramData::gettid() read the thread's TID from the thread's data: the
+    teardown (qore_program_private::clearProgramThreadData(), for its debug records) and the debugger functions that
+    look for a thread in a Program (DebugProgram::attachThread(), DebugProgram::breakProgramThread(),
+    DebugProgram::breakProgram()) read freed memory then.
+
+    EndedThreadProgramTid.q ends the thread deterministically while the Program still holds its record (see there),
+    and checks the TID that is read for it afterwards: with \c MALLOC_PERTURB_, glibc fills freed memory with another
+    value, so a read of the freed thread data does not give the thread's TID.  Other C libraries (musl) leave the
+    memory as it was, so the checks pass there also with the read of the freed memory; they run there anyway.
+*/
+class EndedThreadProgramTidTest inherits QUnit::Test {
+    public {
+        #! fills freed memory with 0xa5 bytes (glibc), so that a read of freed thread data gives another TID
+        const PerturbEnv = "MALLOC_PERTURB_=165";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+    }
+
+    constructor() : QUnit::Test("EndedThreadProgramTidTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/EndedThreadProgramTid.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the teardown reads the TID of an ended thread", \teardownTest(), (mode,));
+            addTestCase(mode + ": a debugger finds an ended thread by its TID", \debuggerTest(), (mode,));
+        }
+        set_return_value(main());
+    }
+
+    #! the teardown of the Program records the deletion of the ended thread's data with the thread's TID
+    teardownTest(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hold of the teardown at the deletion of a thread's data needs a debug build of the library");
+        }
+        assertEq("thread ended in the teardown\nteardown recorded the thread's TID: True\n", runCase(mode,
+            "teardown"));
+    }
+
+    #! DebugProgram::attachThread() finds the ended thread in the Program by its TID, also in release builds; a pause
+    #! of the Program and of the thread does not stop it (-3: the thread cannot be stopped in the Program); both read
+    #! the Program's record of the ended thread, which valgrind checks
+    debuggerTest(string mode) {
+        assertEq("thread ended in the teardown\nattachThread() before the thread ended: True\n"
+            "attachThread() after the thread ended: True\nbreakProgramThread() after the thread ended: -3\n",
+            runCase(mode, "debugger"));
+    }
+
+    private string runCase(string mode, string case_name) {
+        return ExecModeHarness::run(sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s %s",
+            PerturbEnv, libqore_dir, libqore_dir, qore_bin, mode, script, case_name), NativeCheck::Jit);
+    }
+}

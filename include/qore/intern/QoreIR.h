@@ -3414,6 +3414,15 @@ public:
         checked when the thread starts only when the expression is such a call (qore#5973).
     */
     QoreBackgroundHelperSelf helper_uses_self = static_cast<QoreBackgroundHelperSelf>(0);
+    //! Helper only: the index in \a helper_params of the callee of the expression, set by the lowering (qore#7087)
+    /** The parameter that holds the closure or call reference that the expression calls, or the object whose method
+        it calls; -2 (QBH_CHECK_IN_THREAD) for any other expression, whose callee the new thread computes (a call of a
+        function, a static method or a method of the object of the starting code, which may dispatch to an override, or
+        a callable that an operator, an index, a call or a global variable gives): the code that it calls is checked
+        when it is called; -1 (QBH_CALLEE_UNKNOWN), the default, for an instruction that does not record it
+        (serialized IR): every closure, call reference and object of the operands is checked when the thread starts
+    */
+    int helper_callee = -1;
 };
 
 //! @name Inline call-state cache publication
@@ -5293,6 +5302,16 @@ public:
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.
     std::unordered_set<const void*> ast_referenced_locals;
+
+    //! The locals of this function that its on_block_exit handlers reach only through the IR instructions of locals
+    /** Such a local can be IR-only: a handler that runs inline on a normal exit uses the function's own storage, the
+        IR interpreter's handler frame inherits the slots of the function and writes back those that it changes, and the
+        native code publishes the local on the runtime stack only while handlers run out of line (on an exception, a
+        thread_exit or a return from a handler) (#5951).  A local that a handler reaches through an AST expression, or
+        that a handler delegating a statement to the AST or without IR references, is in ast_referenced_locals instead.
+        Computed by computeIROnlyLocals().
+    */
+    std::unordered_set<const void*> handler_ir_locals;
 
     // AST-visible locals excluding structured COW stores and lvalue paths.
     // Fixed aggregate scalar replacement uses this narrower inventory to prove

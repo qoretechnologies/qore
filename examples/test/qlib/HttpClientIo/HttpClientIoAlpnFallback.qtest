@@ -385,32 +385,44 @@ class HttpClientIoAlpnFallbackTest inherits QUnit::Test {
         if (!mQuicPort) {
             testSkip("QUIC is not supported by this build");
         }
-        AltSvcTestManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{"accept_all_certs": True, "connect_timeout": 2s, "request_timeout": 5s});
-        mgr.seed(mH2Url, "h2", 60m);
-        mgr.advertise(mH2Url, sprintf("h3=\":%d\"", mQuicPort));
-        connectAndRequest(mgr, use_async);
-        assertEq("h3", mgr.cached(mH2Url), "ready QUIC on the alternate port wins the reprobe");
+        AltSvcTestManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{"accept_all_certs": True,
+            "connect_timeout": 10s, "request_timeout": 10s});
+        # the race takes the first candidate that is ready (H3 has a head start of 100 ms only), so the TCP origin of
+        # this case never completes its TLS handshake (a listener that accepts nothing): only the advertised QUIC
+        # endpoint can connect, and it wins whatever the timing, as a loaded host can delay a QUIC handshake past the
+        # head start (qore#7120)
+        Socket stalled();
+        stalled.bind("127.0.0.1:0");
+        stalled.listen();
+        on_exit stalled.close();
+        string url = "https://127.0.0.1:" + stalled.getSocketInfo().port;
+        mgr.seed(url, "h2", 60m);
+        mgr.advertise(url, sprintf("h3=\":%d\"", mQuicPort));
+        connectAndRequest(mgr, use_async, url);
+        assertEq("h3", mgr.cached(url), "ready QUIC on the alternate port wins the reprobe");
         mgr.disconnect();
+        # a previous H3 win (H3 cached, due for its re-probe) with an unreachable QUIC endpoint
+        mgr.seed(mH2Url, "h3", 0s);
         mgr.advertise(mH2Url, "h3=\":1\"");
-        connectAndRequest(mgr, use_async);
+        connectAndRequest(mgr, use_async, mH2Url);
         assertEq("h2", mgr.cached(mH2Url), "a previous H3 win cannot pin an unreachable QUIC endpoint");
     }
 
-    private connectAndRequest(AltSvcTestManager mgr, bool use_async) {
+    private connectAndRequest(AltSvcTestManager mgr, bool use_async, string url) {
         if (use_async) {
             *HttpClientIo::HttpClientConnection conn;
-            *EventNotifier n = mgr.acquireConnectionAsync(mH2Url, \conn);
-            date deadline = now_us() + 5s;
+            *EventNotifier n = mgr.acquireConnectionAsync(url, \conn);
+            int deadline = clock_get_monotonic_us() + 15000000;
             while (n) {
-                assertTrue(now_us() < deadline, "asynchronous race completes within its deadline");
+                assertTrue(clock_get_monotonic_us() < deadline, "asynchronous race completes within its deadline");
                 mgr.getController().waitForNotifier(n, 5s, 5s);
                 n.acknowledge();
                 delete n;
-                n = mgr.acquireConnectionAsync(mH2Url, \conn);
+                n = mgr.acquireConnectionAsync(url, \conn);
             }
             assertTrue(conn.isReady(), "only a ready connection wins");
         }
-        assertEq(200, mgr.request(mH2Url, "GET", "/simple").status_code);
+        assertEq(200, mgr.request(url, "GET", "/simple").status_code);
     }
 
     altSvcSyncPoolTest() {

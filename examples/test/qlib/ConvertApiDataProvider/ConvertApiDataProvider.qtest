@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -332,7 +333,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
     #! Sets up the ConvertAPI client for integration tests
     private setupConnection() {
-        apikey = m_options.apikey ?? ENV.CONVERTAPI_TOKEN;
+        apikey = LiveProvider::get("convertapi", "CONVERTAPI_TOKEN", m_options.apikey);
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API token provided (use -k option or CONVERTAPI_TOKEN env var)\n");
@@ -361,7 +362,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
     #! Creates a provider using the real client (integration tests only)
     private ConvertApiDataProvider::ConvertApiDataProvider createRealProvider() {
         if (!client) {
-            testSkip("No ConvertAPI token provided; set CONVERTAPI_TOKEN or use -k option");
+            testSkip(LiveProvider::enabled("convertapi") ?
+                "No ConvertAPI token provided; set CONVERTAPI_TOKEN or use -k option"
+                    : LiveProvider::skipReason("convertapi", "CONVERTAPI_TOKEN"));
         }
         return new ConvertApiDataProvider::ConvertApiDataProvider(client);
     }
@@ -941,9 +944,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                 handler.rate_limited = 0;
                 handler.retry_after = "1";
             }
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
-            assertTrue(now_us() - start < 15s);
+            assertTrue(microseconds(clock_get_monotonic_us()) - start < 15s);
             assertEq(2, handler.requests.size());
             assertEq(("convert/pdf/to/compress", "convert/pdf/to/compress"), (map $1.path, handler.requests));
         }

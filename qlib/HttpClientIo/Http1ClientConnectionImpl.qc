@@ -63,22 +63,32 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path)
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     Http1ClientConnection::validateMaxStreams(max_streams),
                     proxy_info) {
+        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
             client_cert ? True : False);
 
+        HttpClientCallerExemption exemption();
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path);
+            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path,
+            ssl_trust_store);
     }
 
     #! Enforces the HTTP/1.1 single-stream cap before the parent constructor runs.

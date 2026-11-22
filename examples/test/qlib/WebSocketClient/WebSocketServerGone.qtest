@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/2 and HTTP/3 (QUIC) that the server ends
+
+/*  WebSocketServerGone.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A WebSocket client over HTTP/2 or HTTP/3 learned that its connection was gone (the server stopped its listener,
+    which ends the connection) only when its next heartbeat found it (20 seconds by default), although the end of
+    the connection was known to the transport at once: the streams of the failed connection were completed with an
+    error, which queues the end of the stream for the client's reader, but nothing woke the reader (issue #6965).
+    A client that was disconnected meanwhile waited for the close handshake until its close timeout, so that a
+    cleanup of several clients took that long for each of them (the "SseEventSourcePool" test exceeded its limit
+    under load).  The clients' heartbeat is set far over the hang guard here, so that only a notice at the end of
+    the connection reports the close in time.
+
+    The disconnect() of such a client returns at once, whether it is called after the client reported the close or
+    right after the stop of the listener, before the client could report it: it does not wait for the close handshake
+    with the server that is gone until its timeout (issue #6983, fixed with issue #6965).  The clients' timeout is set
+    over the hang guard for these cases, so that a disconnect() that waits for it fails the check of the hang guard.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketServerGoneTest
+
+#! the number of clients: more than the clients that one close wait could serve in the time of a hang guard
+const Clients = 8;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! the heartbeat of the clients, in milliseconds: far over the hang guard
+const ClientHeartbeatMs = 600000;
+
+#! the I/O timeout of the clients whose disconnect() is checked, in milliseconds: over the hang guard, which a
+#! disconnect() that waits for it exceeds, and short enough that such a run still ends
+const ClientTimeoutMs = 60000;
+
+#! Reports the end of a connection on the server
+class EchoConnection inherits WebSocketConnection {
+    private {
+        Counter ended;
+    }
+
+    constructor(WebSocketHandler handler, Counter ended) : WebSocketConnection(handler) {
+        self.ended = ended;
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        ended.dec();
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    public {
+        #! counts down once per connection that ended
+        Counter ended(Clients);
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self, ended);
+    }
+}
+
+class WebSocketServerGoneTest inherits QUnit::Test {
+    constructor() : QUnit::Test("WebSocketServerGone", "1.0") {
+        addTestCase("HTTP/2: the clients of a stopped listener are told that the connection is gone",
+            sub () { testServerGone("2.0"); });
+        addTestCase("HTTP/3: the clients of a stopped listener are told that the connection is gone",
+            sub () { testServerGone("3.0"); });
+        foreach string ver in (("2.0", "3.0")) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string v = ver;
+            string name = "HTTP/" + v.substr(0, 1);
+            addTestCase(sprintf("%s: disconnect() after the close of a stopped listener returns at once", name),
+                sub () { testServerGone(v, "after the close"); });
+            addTestCase(sprintf("%s: disconnect() right after the stop of the listener returns at once", name),
+                sub () { testServerGone(v, "after the stop"); });
+        }
+        set_return_value(main());
+    }
+
+    #! stops the listener of the clients' connections
+    /** @param ver the HTTP version
+        @param disconnect_when if set, the clients are disconnected, \c "after the close" that they reported or
+        \c "after the stop" of the listener, before they could report it (issue #6983)
+    */
+    testServerGone(string ver, *string disconnect_when) {
+        EchoHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "max_handler_threads": Clients,
+        });
+        on_exit server.stop();
+        server.setHandler("ws", "/ws", NOTHING, handler);
+        hash<auto> info;
+        try {
+            info = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": ver == "2.0" ? "2.0" : "auto",
+                "enable_h3": ver == "3.0",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no listener for HTTP/%s: %s: %s", ver, ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+
+        Counter closed(Clients);
+        list<WebSocketClient> clients = ();
+        on_exit {
+            # the clients' cleanup: none of the disconnects waits for a close handshake with a server that is gone
+            foreach WebSocketClient wsc in (clients) {
+                try {
+                    wsc.disconnect();
+                } catch () {
+                }
+            }
+        }
+        for (int i = 0; i < Clients; ++i) {
+            Queue received();
+            WebSocketClient wsc(sub (*data msg) {
+                if (exists msg) {
+                    received.push(msg);
+                } else {
+                    closed.dec();
+                }
+            }, {
+                "url": sprintf("wss://localhost:%d/ws", info.port),
+                "http_version": ver,
+                "ssl_verify_cert": False,
+                "heartbeat": ClientHeartbeatMs,
+            } + (disconnect_when ? {"timeout": ClientTimeoutMs} : {}));
+            wsc.connect();
+            clients += wsc;
+            if ((ver == "2.0" && !wsc.isHttp2()) || (ver == "3.0" && !wsc.isHttp3())) {
+                testSkip(sprintf("HTTP/%s was not negotiated", ver));
+            }
+            wsc.send("msg-" + i);
+            assertEq("msg-" + i, received.get(HangGuard), sprintf("client %d got its echo", i));
+        }
+
+        # the stop ends the connections, which the clients are told: each reports the close at once, not at its
+        # heartbeat (ten minutes), so that a wait for it only fails at the hang guard if it is not
+        server.stopListenerID(info.id);
+        if (disconnect_when == "after the stop") {
+            checkDisconnect(clients, disconnect_when);
+        }
+        assertEq(0, closed.waitForZero(HangGuard), "every client reported the close of its connection");
+        assertEq(0, handler.ended.waitForZero(HangGuard), "every connection ended on the server");
+        if (disconnect_when == "after the close") {
+            checkDisconnect(clients, disconnect_when);
+        }
+    }
+
+    #! disconnects the clients of the stopped listener: none waits for its timeout (issue #6983)
+    /** The disconnects run in threads, one for each client, whose end only the hang guard bounds: no timing is
+        asserted; a disconnect() that waits for its timeout ends after it, so that the threads end after one timeout
+    */
+    private checkDisconnect(list<WebSocketClient> clients, string label) {
+        Counter done(clients.size());
+        foreach WebSocketClient wsc in (clients) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            WebSocketClient client = wsc;
+            background sub () {
+                on_exit done.dec();
+                client.disconnect();
+            }();
+        }
+        assertEq(0, done.waitForZero(HangGuard), label + ": the disconnects of the clients do not wait for their "
+            "timeout");
+    }
+}

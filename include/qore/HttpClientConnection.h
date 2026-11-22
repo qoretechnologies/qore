@@ -96,6 +96,7 @@ enum class HttpClientProtocol {
     @since %Qore 3.0
 */
 class HttpClientConnectionBase : public AbstractHttpPollConnectionPriv {
+    friend class qore_http_client_connection_base_ops;
 public:
     //! Returns the protocol (H1, H2, or H3).
     /** Default returns H1.  Subclasses override.
@@ -569,35 +570,7 @@ public:
     */
     DLLEXPORT HttpClientConnectionBase();
 
-    //! Checks that the network sandbox of the calling code allows it to use the connection
-    /** A connection is checked against the network sandbox of the code that opens it; a connection pool hands it to
-        later callers, whose code can run under another sandbox, so the pool calls this before it hands the
-        connection to a caller.  The connection's destinations are checked as a new connection to them would be,
-        with the sandbox as it is configured now.
-
-        @param sm the network sandbox of the calling code (see SandboxManager::callWithSystemPolicy() for trusted
-        code), or nullptr if it has none
-        @param xsink raises \c NETWORK-ACCESS-DENIED if the sandbox denies a destination of the connection
-
-        @return 0 if the calling code may use the connection: it has no sandbox, its sandbox allows every
-        destination of the connection, or the connection is still being made for code under the same sandbox, which
-        the connect checks itself; -1 if the sandbox denies a destination of the connection (an exception is raised);
-        1 if the sandbox cannot decide on the connection (no exception is raised): it is still being made for code
-        under another sandbox, or it leads to a destination that was not resolved, such as the destination of a
-        proxy connection made without a sandbox
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL int checkSandboxUse(QoreSandboxManager* sm, ExceptionSink* xsink) const;
-
-    //! Makes this connection one opened for the code that @a from was opened for
-    /** For a connection that takes over the socket of another one, such as the connection a negotiated protocol
-        hands over to, which can be created in another thread than the connection it takes over
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL void inheritOpener(const HttpClientConnectionBase& from);
-
+    
     //! Sets the pool key for O(1) eviction by the connection manager
     /** Called by the manager when inserting the connection into the pool, with the pool's lock held.
 

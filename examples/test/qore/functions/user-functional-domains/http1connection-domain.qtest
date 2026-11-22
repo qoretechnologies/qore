@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - an outbound TCP connection of a builtin class and the network policy of a sandbox
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class Http1ConnectionDomainTest
+
+#! Tests that code restricted from the NETWORK functional domain cannot use the Http1Connection class (qore#7105)
+/** Http1Connection connects to the host and port that its constructor is given, so it belongs to the NETWORK domain:
+    code restricted from it can neither name the class nor create an object of it dynamically, and no connection is
+    made; a sandbox's network policy applies to the connection of code that may use the class.
+*/
+class Http1ConnectionDomainTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! creates a connection dynamically and waits until it is connected
+        const Dynamic = "%modern
+string sub dyn(int port) {
+    try {
+        object c = create_object(\"Qore::Http1Connection\", \"127.0.0.1\", port);
+        c.waitForReady(5000);
+        c.close();
+        return \"connected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+        #! a listener that the connections are made to
+        Socket listener();
+        int port;
+    }
+
+    constructor() : QUnit::Test("Http1ConnectionDomain", "1.0", \ARGV) {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("code restricted from the network, " + m, sub () { testRestricted(m); });
+            addTestCase("a sandbox's network policy, " + m, sub () { testSandbox(m); });
+            addTestCase("unrestricted code, " + m, sub () { testUnrestricted(m); });
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        listener.close();
+    }
+
+    #! code restricted from the network can neither name the class nor create an object of it, and connects nowhere
+    private testRestricted(string mode) {
+        Program parse(PO_NEW_STYLE | PO_NO_NETWORK);
+        parse.setExecMode(Modes{mode});
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", "Http1Connection", \parse.parse(),
+            ("%modern\nnothing sub t() { Http1Connection c(\"127.0.0.1\", 1); }", "parse"), "parse, " + mode);
+
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(Dynamic, "dynamic");
+        assertRegex("^CREATE-OBJECT-ERROR: .*'Http1Connection' class", p.callFunction("dyn", port),
+            "create_object(), " + mode);
+        assertFalse(exists listener.accept(0), "no connection, " + mode);
+    }
+
+    #! a sandbox's network policy applies to the connection of code that may use the class
+    private testSandbox(string mode) {
+        SandboxManager sm();
+        sm.blockLocalhost();
+        Program p(PO_NEW_STYLE);
+        p.setExecMode(Modes{mode});
+        p.setSandboxManager(sm);
+        p.parse(Dynamic, "dynamic");
+        assertRegex("^NETWORK-ACCESS-DENIED", p.callFunction("dyn", port), "sandbox, " + mode);
+        assertFalse(exists listener.accept(0), "no connection, " + mode);
+    }
+
+    #! unrestricted code connects
+    private testUnrestricted(string mode) {
+        Program p(PO_NEW_STYLE);
+        p.setExecMode(Modes{mode});
+        p.parse(Dynamic, "dynamic");
+        assertEq("connected", p.callFunction("dyn", port), "unrestricted, " + mode);
+        *Socket s = listener.accept(5s);
+        assertTrue(exists s, "connection accepted, " + mode);
+        if (s) {
+            s.close();
+        }
+    }
+}

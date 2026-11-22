@@ -427,6 +427,10 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - the exception that a REST method raises is given to the client without its location in the server's code or
       its call stack unless debugging is enabled (see @ref restexceptions; issue #6780)
     - fixed logging sensitive data: request arguments dispatched to subclasses were logged without masking, and the
@@ -438,6 +442,13 @@ Content-Length: 16
       @ref RestHandler::RestHandler::isLogTraceEnabled() "RestHandler::isLogTraceEnabled()"; request arguments and
       bodies are masked and formatted for debug messages only if they will be logged
     - exception messages in REST debug and error log messages are masked
+    - added @ref RestHandler::RestHandler::responseSerializationRetry() "RestHandler::responseSerializationRetry()":
+      a response that it changes so that it can be serialized in a type that the client accepts is sent; before, the
+      client always received status 406 (Not Acceptable);
+      @ref RestHandler::RestHandler::responseSerializationError() "RestHandler::responseSerializationError()" is
+      unchanged since Qore 2.2.1 and is still called first with a copy of the response, but a 406 response no longer
+      always follows it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7250">issue 7250</a>)
 
     @section rh_1_6_7 RestHandler v1.6.7
     - fixed responses with headers whose values all have the same type, such as a literal
@@ -1073,7 +1084,7 @@ public namespace RestHandler {
                 if (ex.err == "METHOD-DOES-NOT-EXIST") {
                     bool found = (ex.desc.find(sn) != -1);
                     if (found) {
-                        if (cx.hdr."transfer-encoding" == "chunked") {
+                        if (http_get_field(cx.hdr, "transfer-encoding") == "chunked") {
                             *hash<auto> trailers;
                             *data body = rh.getMessageBody(s, cx.hdr, NOTHING, True, listener, \trailers);
                             # trailers received after the chunked request body
@@ -1380,11 +1391,11 @@ public namespace RestHandler {
                 return False;
             }
             # For Connect or DataStream content types, read body data incrementally
-            *string ct = hdr."content-type";
+            *string ct = http_get_field(hdr, "content-type");
             if (ct =~ /^application\/connect\+/) {
                 return True;
             }
-            if (hdr."datastream-content-type".val()) {
+            if (http_get_field(hdr, "datastream-content-type").val()) {
                 return True;
             }
             return False;
@@ -1602,7 +1613,7 @@ public namespace RestHandler {
             # for deserialization — the REST validator doesn't know how to parse Connect frames.
             # This is analogous to HTTP/1.x chunked streams where the body is not pre-read.
             *data stream_body;
-            if (b && hdr."content-type" =~ /^application\/connect\+/) {
+            if (b && http_get_field(hdr, "content-type") =~ /^application\/connect\+/) {
                 stream_body = b;
                 body = NOTHING;
             }
@@ -1723,8 +1734,8 @@ public namespace RestHandler {
 
             # make a hash of "accept" values
             hash<auto> aih;
-            if (hdr.accept) {
-                foreach string astr in (hdr.accept) {
+            if (auto accept = http_get_field(hdr, "accept")) {
+                foreach string astr in (accept) {
                     # a value that is not valid in its encoding (request data) names no media type; it is skipped, as the
                     # substitution below cannot remove its parameters (qore#6553)
                     if (!astr.isEncodingValid()) {
@@ -1815,40 +1826,36 @@ public namespace RestHandler {
                         if (isLogDebugEnabled()) {
                             logDebug("REST DBG: %s", maskData(get_exception_string(ex)));
                         }
-                        if (ex.err == "ACCEPT-ERROR") {
-                            # Allow subclasses to sanitize the response body and retry
-                            auto orig_body = rv.body;
-                            responseSerializationError(cx, aih, \rv);
-                            if (rv.body !== orig_body) {
-                                # Body was sanitized; retry serialization
-                                try {
-                                    res = validator.processResponse(hdr.method, req.path, rv."code", rv.body,
-                                        rv.hdr, aih."*/*" ? NOTHING : keys aih);
-                                } catch (hash<ExceptionInfo> ex2) {
-                                    if (isLogDebugEnabled()) {
-                                        logDebug("REST DBG retry failed: %s", maskData(get_exception_string(ex2)));
-                                    }
-                                    # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header
-                                    # field is present, and if the server cannot send a response which is acceptable
-                                    # according to the combined Accept field value, then the server SHOULD send a
-                                    # 406 (not acceptable) response.
-                                    return AbstractHttpRequestHandler::makeResponse(406, ex2.desc);
-                                }
-                            } else {
-                                # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
-                                # present, and if the server cannot send a response which is acceptable according to the
-                                # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
-                                return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                        if (ex.err != "ACCEPT-ERROR") {
+                            # add original resp to the exception (only if it was an error)
+                            if (rv."code" >= 400 && rv."code" < 600) {
+                                ex.desc += sprintf(" ... Original response: code: %d, body: %s, hdr: %s", rv."code",
+                                    getMaskedLogString(rv.body), getMaskedLogString(rv.hdr));
                             }
+                            rethrow ex.err, ex.desc;
                         }
-
-                        # add original resp to the exception (only if it was an error)
-                        if (rv."code" >= 400 && rv."code" < 600) {
-                            ex.desc += sprintf(" ... Original response: code: %d, body: %s, hdr: %s", rv."code",
-                                getMaskedLogString(rv.body), getMaskedLogString(rv.hdr));
+                        # notify subclasses with a copy of the response, as in Qore 2.2
+                        responseSerializationError(cx, aih, rv);
+                        # let subclasses change the response so that it can be serialized; a retry that succeeds is
+                        # sent (qore#7250)
+                        auto orig_body = rv.body;
+                        responseSerializationRetry(cx, aih, \rv);
+                        if (rv.body === orig_body) {
+                            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
+                            # present, and if the server cannot send a response which is acceptable according to the
+                            # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
+                            return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
                         }
-
-                        rethrow ex.err, ex.desc;
+                        try {
+                            res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
+                                aih."*/*" ? NOTHING : keys aih);
+                        } catch (hash<ExceptionInfo> ex2) {
+                            if (isLogDebugEnabled()) {
+                                logDebug("REST DBG retry failed: %s", maskData(get_exception_string(ex2)));
+                            }
+                            # see above: 406 (not acceptable)
+                            return AbstractHttpRequestHandler::makeResponse(406, ex2.desc);
+                        }
                     }
 
                     # TRACE (not DEBUG) because both rv.body and res.body can be multi-MB — e.g. a
@@ -2037,15 +2044,49 @@ public namespace RestHandler {
         requestDeserializationError(hash<auto> hdr, hash<auto> cx, string body) {
         }
 
-        #! Called when response serialization fails
-        /** Subclasses can override this method to sanitize the response body and allow retry.
-            If the body is modified, serialization will be retried with the new body.
+        #! Called when the response cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, with a copy of
+            the response; changes to \a rv have no effect, and a <tt>406 Not Acceptable</tt> response follows only if
+            the response is not made serializable by the retry hook.  It is called before
+            @ref RestHandler::RestHandler::responseSerializationRetry() "responseSerializationRetry()", which can
+            change the response so that it can be sent.
+
+            The default implementation does nothing.
 
             @param cx the call context hash
             @param aih the accepted content types from the client
-            @param rv reference to the response hash; modify rv.body to sanitize and retry
+            @param rv a copy of the response that could not be serialized
         */
-        responseSerializationError(hash<auto> cx, *hash<auto> aih, reference rv) {
+        responseSerializationError(hash<auto> cx, *hash<auto> aih, hash<auto> rv) {
+        }
+
+        #! Called to change a response that cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, after
+            @ref RestHandler::RestHandler::responseSerializationError() "responseSerializationError()"; subclasses
+            can override this method to change the response so that it can be sent.
+
+            If the body is changed, the response (with its code, headers and new body) is serialized again; when this
+            succeeds, the response is sent, otherwise (whatever the error) a <tt>406 Not Acceptable</tt> response is
+            sent.  If the body is not changed, a <tt>406 Not Acceptable</tt> response is sent, even if the code or
+            headers were changed.
+
+            For example, to send an error as a Server-Sent Events message to a client that accepts only
+            \c text/event-stream, set \c rv.hdr to <tt>{"Content-Type": "text/event-stream;charset=utf-8"}</tt> and
+            \c rv.body to the SSE message string; a new \c rv.hdr hash replaces all the headers of the response, so
+            copy any others that must be sent into it.
+
+            The default implementation does nothing.
+
+            @param cx the call context hash
+            @param aih the accepted content types from the client
+            @param rv reference to the response; change \c rv.body (and \c rv.code and \c rv.hdr if needed) to retry
+
+            @note an override must declare these parameter types: a method with another typed reference for \a rv
+            (such as <tt>reference&lt;hash&lt;auto&gt;&gt;</tt>) is a separate variant that is never called
+
+            @since RestHandler 1.6.8
+        */
+        responseSerializationRetry(hash<auto> cx, *hash<auto> aih, reference<hash<HttpHandlerResponseInfo>> rv) {
         }
 
         #! This method is called with informational log messages

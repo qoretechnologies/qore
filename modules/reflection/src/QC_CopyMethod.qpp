@@ -49,7 +49,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue CopyMethod_call_impl(LexicalSema
     }
 
     // we have to explictly test object compatibility here
-    if (check_call(obj, *m->m, xsink)) {
+    if (check_call(caller, obj, *m->m, xsink)) {
         return QoreValue();
     }
 

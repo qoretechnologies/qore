@@ -59,14 +59,14 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
 //! Socket poll operation object returned by Socket polling methods
 /** This class implements the polling logic for Sockets and the state machine behind it
 
-    private members:
-    - @ref Qore::Socket "Socket" sock: the Socket being polled
-    - @ref string_type "string" goal: the goal of the poll operation
+    The operation keeps the @ref Qore::Socket "Socket" being polled and the goal of the operation (returned by
+    getGoal()); no %Qore code can read or write them (since %Qore 3.0; before, they were private members, which a
+    subclass could read and write, qore#6839)
 
     @since %Qore 1.12
 */
 qclass SocketPollOperation [
-    private_members=string goal;
+    dom=NETWORK;
     arg=SocketPollOperationBase* op;
     vparent=SocketPollOperationBase<auto>
 ];
@@ -101,8 +101,8 @@ SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *
     poller->setSelf(self);
     self->setPrivate(CID_SOCKETPOLLOPERATION, poller.release());
     if (!*xsink) {
-        self->setValue("sock", obj_socket->objectRefSelf(), xsink);
-        self->setValue("goal", goal->stringRefSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", obj_socket->objectRefSelf(), xsink);
+        qore_poll_op_set_member(self, "goal", goal->stringRefSelf(), xsink);
     }
 }
 
@@ -110,6 +110,9 @@ SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *
 /** Destroys the object
  */
 SocketPollOperation::destructor() {
+    // the socket and the goal that the operation keeps with it are released with the object, as its members were
+    // (qore#6839)
+    qore_poll_op_release_members(self, op, xsink);
     // the controller that continues a submitted operation holds references to it; it cancels the operation, whose
     // state is released with its last reference (#6505)
     qore_socket_poll_op_object_deleted(op);

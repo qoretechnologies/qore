@@ -299,11 +299,18 @@ int64 cppapiuser_get_owned_probe_destroyed() {
 
 // records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
 // (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
-// command "fail" raises an exception instead, and the commands of cppapiuser_pending_probe_cmd() are not recorded
+// command "fail", or "fail" followed by a space and any text, raises an exception instead, "fail-utf8" followed by any
+// text raises one whose description is in UTF-8, and the commands of cppapiuser_pending_probe_cmd() are not recorded
 static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     assert(xsink);
-    if (cmd == "fail") {
+    if (cmd == "fail" || !strncmp(cmd.c_str(), "fail ", 5)) {
         xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
+        return;
+    }
+    // a description in UTF-8 whatever the default encoding, as a module that makes it from UTF-8 data (qore#6741)
+    if (!strncmp(cmd.c_str(), "fail-utf8", 9)) {
+        xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", new QoreStringNode("the command \"fail-utf8\" was issued "
+            "(\xc3\xa9)", QCS_UTF8));
         return;
     }
     if (!strncmp(cmd.c_str(), "owned-constant ", 15)) {

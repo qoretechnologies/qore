@@ -141,7 +141,9 @@ class OracleTest inherits SqlTestBase {
         } catch (hash<ExceptionInfo> ex) {
             if (m_options.verbose)
                 printf("%s: %s\n", ex.err, ex.desc);
-            # skip tests if we can't create the datasource
+            # without a datasource, the tests skip; a datasource string whose database cannot be connected to fails
+            # a test case of its own (qore#6934)
+            checkConnectFailure(ex);
         }
 
         if (ds) {

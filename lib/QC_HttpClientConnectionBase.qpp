@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
@@ -257,7 +258,7 @@ bool HttpClientConnectionBase::sandboxAllowsUse() [flags=RET_VALUE_ONLY] {
         return true;
     }
     ExceptionSink xs;
-    bool rv = !priv->checkSandboxUse(*sm, &xs);
+    bool rv = !qore_http_client_connection_base_ops(priv).checkSandboxUse(*sm, &xs);
     xs.clear();
     return rv;
 }
@@ -276,7 +277,7 @@ nothing HttpClientConnectionBase::checkSandboxUse() {
     if (!sm) {
         return QoreValue();
     }
-    if (priv->checkSandboxUse(*sm, xsink) > 0) {
+    if (qore_http_client_connection_base_ops(priv).checkSandboxUse(*sm, xsink) > 0) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the network sandbox of the calling code cannot decide on "
             "this connection: it was opened for code under another sandbox and is still being made, or it leads to "
             "a destination that was not resolved");

@@ -31,6 +31,8 @@
     information.
 */
 
+#include <optional>
+#include "qore/intern/QoreThreadScratch.h"
 #include <qore/Qore.h>
 #include <qore/QoreAbstractLoggerInterface.h>
 
@@ -177,70 +179,6 @@ private:
     std::string identity_hash;
 };
 
-class Http2SocketControllerPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL Http2SocketControllerPollOperation(AbstractPollState* poll_state, SocketSendPollState* send_state)
-            : poll_state(poll_state), send_state(send_state) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        poll_state.reset();
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (!poll_state) {
-            done = true;
-            return nullptr;
-        }
-
-        int rc = poll_state->continuePoll(xsink);
-        if (send_state) {
-            bytes_sent = send_state->getBytesSent();
-        }
-        if (!rc && !send_state) {
-            data = poll_state->takeOutput().get<BinaryNode>();
-        }
-        if (*xsink || rc <= 0) {
-            poll_state.reset();
-            if (!*xsink) {
-                done = true;
-            }
-            return nullptr;
-        }
-        return getSocketPollInfoHash(xsink, rc);
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const override {
-        if (send_state) {
-            return static_cast<int64>(bytes_sent);
-        }
-        return data ? data->refSelf() : QoreValue();
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        if (done) {
-            return send_state ? "sent" : "received";
-        }
-        return send_state ? "sending" : "receiving";
-    }
-
-    DLLLOCAL size_t getBytesSent() const {
-        return bytes_sent;
-    }
-
-private:
-    std::unique_ptr<AbstractPollState> poll_state;
-    SocketSendPollState* send_state = nullptr;
-    size_t bytes_sent = 0;
-    bool done = false;
-    SimpleRefHolder<BinaryNode> data;
-};
-
 static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreObject* sock_obj,
         Http2SocketControllerPollable* pollable, QoreObject* op_obj, int timeout_ms, const char* owner_name,
         ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
@@ -320,8 +258,8 @@ static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationB
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", (*sock_obj)->objectRefSelf(), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -335,18 +273,124 @@ static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationB
     return poller->getOutput();
 }
 
+static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
+        std::unique_ptr<SocketRecvSomePollState>& saved, int* poll_events, ExceptionSink* xsink) {
+    timed_out = false;
+
+    // The normal one-pass read stays on the stack. Keep its original TLS buffer only if
+    // the operation must be retried (e.g. a read that needs to write a handshake record).
+    std::optional<SocketRecvSomePollState> fresh;
+    if (!saved) {
+        fresh.emplace(xsink, sock, size);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+    SocketRecvSomePollState& state = saved ? *saved : *fresh;
+    // Reuse the transport buffer across ordinary reads on this I/O thread. A crossed TLS
+    // retry keeps its buffer in the saved operation, even if another connection runs first.
+    struct ReadScratch { std::unique_ptr<char[]> buffer; };
+    QoreThreadScratch<ReadScratch> scratch;
+    if (!saved && scratch) {
+        state.swapReadBuffer(scratch->buffer);
+    }
+    int rc = state.continuePoll(xsink);
+    if (scratch && !(rc > 0 && state.mustRetryTlsRead()) && !scratch->buffer) {
+        state.swapReadBuffer(scratch->buffer);
+    }
+    if (*xsink || rc < 0) {
+        saved.reset();
+        return nullptr;
+    }
+    if (rc > 0) {
+        if (state.mustRetryTlsRead()) {
+            if (!saved) {
+                saved.reset(new (std::nothrow) SocketRecvSomePollState(std::move(state)));
+                if (!saved) {
+                    xsink->outOfMemory();
+                    return nullptr;
+                }
+            }
+        } else {
+            saved.reset();
+        }
+        if (poll_events) {
+            *poll_events = rc;
+        }
+        timed_out = true;
+        return nullptr;
+    }
+    ValueHolder v(state.takeOutput(), xsink);
+    saved.reset();
+    if (v->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
+            v->getFullTypeName());
+        return nullptr;
+    }
+    return v.release().get<BinaryNode>();
+}
+
+// Both public synchronous callers and the persistent poll operation drive the same reader on
+// the socket's I/O thread. A zero-timeout call performs one pass, including when TLS needs
+// output to finish its read. A timed wait leaves that read available to the next caller.
+class Http2SocketControllerRead : public SocketPollOperationBase {
+public:
+    Http2SocketControllerRead(std::shared_ptr<Http2Session> session, qore_socket_private* sock,
+            std::unique_ptr<SocketRecvSomePollState>& saved, size_t size, bool single_pass)
+        : session(std::move(session)), sock(sock), saved(saved), size(size), single_pass(single_pass) {
+    }
+
+    bool goalReached() const override { return done; }
+
+    void abort(ExceptionSink*) override { done = true; }
+
+    QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+        bool waiting = false;
+        data = http2_socket_recv_some_on_io_thread(sock, size, waiting, saved, &events, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (waiting && !single_pass) {
+            return getSocketPollInfoHash(xsink, events);
+        }
+        if (!waiting) {
+            events = 0;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    QoreValue getOutput() const override {
+        if (events) {
+            return events;
+        }
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    const char* getStateImpl() const override { return done ? "received" : "receiving"; }
+
+private:
+    std::shared_ptr<Http2Session> session; // owns saved until the controller releases this operation
+    qore_socket_private* sock;
+    std::unique_ptr<SocketRecvSomePollState>& saved;
+    size_t size;
+    bool single_pass;
+    bool done = false;
+    int events = 0;
+    SimpleRefHolder<BinaryNode> data;
+};
+
 static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t size, int timeout_ms,
+        std::shared_ptr<Http2Session> session, std::unique_ptr<SocketRecvSomePollState>& saved, int* poll_events,
         bool& timed_out, ExceptionSink* xsink) {
     timed_out = false;
 
-    SocketRecvSomePollState* state = new SocketRecvSomePollState(xsink, sock, size);
-    if (*xsink) {
-        delete state;
-        return nullptr;
-    }
     QoreHashNode* ex = nullptr;
     ValueHolder result(http2_exec_poll(sock,
-        new Http2SocketControllerPollOperation(state, nullptr),
+        new Http2SocketControllerRead(std::move(session), sock, saved, size, !timeout_ms),
         timeout_ms, "receiveData", "received", xsink, &ex), xsink);
     ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
     if (*xsink) {
@@ -360,6 +404,13 @@ static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t
         http2_raise_poll_result_exception(*ex_holder, xsink);
         return nullptr;
     }
+    if (result->getType() == NT_INT) {
+        timed_out = true;
+        if (poll_events) {
+            *poll_events = result->getAsBigInt();
+        }
+        return new BinaryNode;
+    }
     if (result->isNothing()) {
         return new BinaryNode;
     }
@@ -371,33 +422,6 @@ static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t
     return result.release().get<BinaryNode>();
 }
 
-static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
-        ExceptionSink* xsink) {
-    timed_out = false;
-
-    SocketRecvSomePollState state(xsink, sock, size);
-    if (*xsink) {
-        return nullptr;
-    }
-    int rc = state.continuePoll(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (rc > 0) {
-        timed_out = true;
-        return new BinaryNode;
-    }
-    if (rc < 0) {
-        return nullptr;
-    }
-    ValueHolder v(state.takeOutput(), xsink);
-    if (v->getType() != NT_BINARY) {
-        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
-            v->getFullTypeName());
-        return nullptr;
-    }
-    return v.release().get<BinaryNode>();
-}
 
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
@@ -547,7 +571,10 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
         iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
         iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
         iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
-        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
+        // the limit that this side enforces on the header list that it receives (qore#6867)
+        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
+            local_settings.max_header_list_size == UINT32_MAX ? getMaxHeaderListSize()
+                : local_settings.max_header_list_size});
         // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
         if (local_settings.enable_connect_protocol) {
             iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
@@ -602,7 +629,8 @@ int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* x
     iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, settings.max_concurrent_streams});
     iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, settings.initial_window_size});
     iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, settings.max_frame_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, settings.max_header_list_size});
+    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
+        settings.max_header_list_size == UINT32_MAX ? getMaxHeaderListSize() : settings.max_header_list_size});
     // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
     if (settings.enable_connect_protocol) {
         iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, settings.enable_connect_protocol});
@@ -647,7 +675,7 @@ static const auto& forbidden_headers = getForbiddenHopByHopHeaders();
 template<typename HeaderRange>
 static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         std::vector<std::string>& lowered_names, const HeaderRange& headers,
-        bool skip_host) {
+        bool skip_host, bool response = false) {
     for (const auto& h : headers) {
         // Lowercase in-place
         std::string lname(h.first);
@@ -663,7 +691,8 @@ static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         if (skip_host && lname == "host") {
             continue;
         }
-        if (forbidden_headers.count(lname)) {
+        // a response does not send te either (qoretechnologies/qore#7212)
+        if (response ? isForbiddenResponseHeader(lname) : forbidden_headers.count(lname) > 0) {
             continue;
         }
         lowered_names.push_back(std::move(lname));
@@ -878,10 +907,29 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h2_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 template<typename HeaderRange>
 int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         const HeaderRange& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -904,18 +952,7 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
-
-    nghttp2_data_provider* data_prd = nullptr;
-    std::unique_ptr<DataProviderContext> provider_ctx;
-
-    if (body && body_len > 0) {
-        provider_ctx = std::make_unique<DataProviderContext>();
-        provider_ctx->h2 = this;
-        provider_ctx->provider.source.ptr = provider_ctx.get();
-        provider_ctx->provider.read_callback = dataProviderReadCallback;
-        data_prd = &provider_ctx->provider;
-    }
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
         stream_id, status_code, body_len, nva.size());
@@ -931,6 +968,28 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         return 0;
     }
 
+    // a malformed response is never sent (qoretechnologies/qore#7212)
+    QoreHttpResponseBodyRule rule(status_code, nullptr);
+    if (checkResponseLocked(stream_id, status_code, nva, body && body_len ? static_cast<int64>(body_len) : 0, rule,
+            xsink)) {
+        return -1;
+    }
+    // a response without content sends no body, as with HTTP/1.1
+    if (rule.noBody()) {
+        body_len = 0;
+    }
+
+    nghttp2_data_provider* data_prd = nullptr;
+    std::unique_ptr<DataProviderContext> provider_ctx;
+
+    if (body && body_len > 0) {
+        provider_ctx = std::make_unique<DataProviderContext>();
+        provider_ctx->h2 = this;
+        provider_ctx->provider.source.ptr = provider_ctx.get();
+        provider_ctx->provider.read_callback = dataProviderReadCallback;
+        data_prd = &provider_ctx->provider;
+    }
+
     if (body && body_len > 0) {
         pending_body_data[stream_id] = BodyData(body, body_len);
     }
@@ -941,6 +1000,10 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
             nghttp2_strerror(rv));
         return -1;
     }
+    // trailers can follow the response now (qoretechnologies/qore#7212)
+    if (Http2StreamInfo* rs = getStream(stream_id)) {
+        rs->response_submitted = true;
+    }
 
     if (provider_ctx) {
         pending_data_providers.emplace(stream_id, std::move(provider_ctx));
@@ -950,6 +1013,9 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -972,7 +1038,7 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     // Create a deferred data provider - body will be fed via sendStreamData()
     auto provider_ctx = std::make_unique<DataProviderContext>();
@@ -995,12 +1061,29 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         return 0;
     }
 
+    // a malformed response is never sent: the length of the streamed content is enforced by
+    // dataProviderReadCallback() (qoretechnologies/qore#7212)
+    QoreHttpResponseBodyRule rule(status_code, nullptr);
+    if (checkResponseLocked(stream_id, status_code, nva, -1, rule, xsink)) {
+        return -1;
+    }
+
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
         &provider_ctx->provider);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit streaming response: %s",
             nghttp2_strerror(rv));
         return -1;
+    }
+    if (rule.noBody() || rule.streamLength() >= 0) {
+        StreamedResponseRule& sr = streamed_response_rules[stream_id];
+        sr.no_body = rule.noBody();
+        sr.content_length = rule.streamLength();
+        sr.provided = 0;
+    }
+    // trailers can follow the response now (qoretechnologies/qore#7212)
+    if (Http2StreamInfo* rs = getStream(stream_id)) {
+        rs->response_submitted = true;
     }
 
     pending_data_providers.emplace(stream_id, std::move(provider_ctx));
@@ -1154,7 +1237,8 @@ size_t qore_http_stream_value_body_size(const QoreValue& v) {
         case NT_BINARY:
             return body.get<const BinaryNode>()->size();
         case NT_STRING:
-            return body.get<const QoreStringNode>()->size();
+            // the body can be an inline short string, which has no node (issue #7038)
+            return QoreStringDataHelper(body).size();
         default:
             return 0;
     }
@@ -1365,8 +1449,11 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         // only the debug log reads it
         [[maybe_unused]] size_t total_collected = 0;
         // set when collection stopped at the high-water mark with output left in nghttp2
-        bool capped = false;
-        while (true) {
+        const bool retrying = send_offset < send_buffer.size();
+        bool capped = retrying;
+        // SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER still requires the same bytes and length on a retry.
+        // Leave new output in nghttp2 until the TLS write has accepted its original buffer.
+        while (!retrying) {
             // nghttp2 serializes DATA only when it is asked for output: the output is taken only while the unwritten
             // part of the buffer is below the high-water mark, so that a peer that does not read (whatever window it
             // grants) leaves the rest in the streams' pending data, where its limits apply (issue #5819)
@@ -1409,7 +1496,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         response_end_streams_serialized.clear();
 
         // Compact send buffer when consumed prefix exceeds threshold
-        if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+        if (!retrying && send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
             send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
             send_buffer_base += send_offset;
             send_offset = 0;
@@ -1463,9 +1550,9 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                     // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
                     size_t real_io = 0;
                     printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                    rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
+                    rc = ssl->sendNonBlocking(xsink, "sendPendingData",
                         const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
-                        to_send, SslAction::WRITE, real_io);
+                        to_send, real_io, tls_awaiting_drain);
                     printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
                     if (*xsink) {
                         return -1;
@@ -1550,7 +1637,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
+int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink, int* poll_events) {
     // Fast-path bail-out when the owning socket is closing (or has
     // closed).  Without this check a caller racing Socket::close() can
     // enter the controller receive path and wait for the full timeout_ms
@@ -1558,6 +1645,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     // shutdown in qore_socket_private::prepareForClose() would make the
     // wait return errno=EPIPE almost immediately; skip the pointless
     // round-trip.
+    if (poll_events) {
+        *poll_events = 0;
+    }
     if (session_closed_.load(std::memory_order_acquire)) {
         return 1;  // connection closed — matches the EOF return value
     }
@@ -1580,8 +1670,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
 
     bool timed_out = false;
     SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
-        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, xsink)
-        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, timed_out, xsink));
+        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, io_read, poll_events, xsink)
+        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, shared_from_this(), io_read, poll_events,
+            timed_out, xsink));
     if (*xsink) {
         printd(5, "receiveData() error xsink=%d\n", (int)*xsink);
         if (http2DebugEnabled()) {
@@ -1592,6 +1683,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         return -1;
     }
     if (timed_out) {
+        if (poll_events && !*poll_events) {
+            *poll_events = SOCK_POLLIN;
+        }
         printd(5, "receiveData() timeout (no data)\n");
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
@@ -2794,6 +2888,8 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->close_frame_streams.erase(stream_id);
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
+    h2->stream_taken_total.erase(stream_id);
+    h2->streamed_response_rules.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2813,7 +2909,73 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     return 0;
 }
 
+int Http2Session::checkResponseLocked(int32_t stream_id, int status_code, const std::vector<nghttp2_nv>& nva,
+        int64 body_len, QoreHttpResponseBodyRule& rule, ExceptionSink* xsink) {
+    Http2StreamInfo* stream = getStream(stream_id);
+    // a second response on the stream would be a malformed message
+    if (stream && stream->response_submitted) {
+        xsink->raiseException("HTTP2-ERROR", "response already submitted for stream %d", stream_id);
+        return -1;
+    }
+    rule = QoreHttpResponseBodyRule(status_code, stream ? stream->method.c_str() : nullptr);
+    for (const nghttp2_nv& nv : nva) {
+        rule.add(reinterpret_cast<const char*>(nv.name), nv.namelen, reinterpret_cast<const char*>(nv.value),
+            nv.valuelen);
+    }
+    std::string err = rule.check(body_len);
+    if (!err.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "%s", err.c_str());
+        return -1;
+    }
+    return 0;
+}
+
 ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data) {
+    DataProviderContext* ctx = static_cast<DataProviderContext*>(source->ptr);
+    Http2Session* h2 = ctx ? ctx->h2 : static_cast<Http2Session*>(user_data);
+    auto rit = h2 ? h2->streamed_response_rules.find(stream_id) : decltype(h2->streamed_response_rules)::iterator();
+    if (!h2 || rit == h2->streamed_response_rules.end()) {
+        return dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+    }
+    ssize_t rv = dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+    if (rv < 0) {
+        return rv;
+    }
+    // the call does not change the map: the reference is valid
+    StreamedResponseRule& sr = rit->second;
+    // a response without content sends none of the data given for it (qoretechnologies/qore#7212): the data buffered
+    // for the stream is drained and dropped in this call, so that its end, if given, is reached without another
+    // call, which nothing would make after a deferral
+    if (sr.no_body) {
+        while (rv > 0 && !(*data_flags & NGHTTP2_DATA_FLAG_EOF)) {
+            rv = dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+            if (rv < 0) {
+                return rv;
+            }
+        }
+        if (*data_flags & NGHTTP2_DATA_FLAG_EOF) {
+            return 0;
+        }
+        // nothing more is buffered: the stream is resumed when more data or its end is given
+        return NGHTTP2_ERR_DEFERRED;
+    }
+    // content longer or shorter than declared would make the response malformed: the stream is reset with
+    // RST_STREAM (INTERNAL_ERROR) instead (qoretechnologies/qore#7212)
+    sr.provided += static_cast<uint64_t>(rv);
+    if (sr.provided > static_cast<uint64_t>(sr.content_length)
+            || ((*data_flags & NGHTTP2_DATA_FLAG_EOF) && sr.provided != static_cast<uint64_t>(sr.content_length))) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2: the streamed response on stream %d has %s content (%llu "
+            "bytes) than its content-length (%lld); the stream is reset", stream_id,
+            sr.provided > static_cast<uint64_t>(sr.content_length) ? "more" : "less",
+            (unsigned long long)sr.provided, (long long)sr.content_length);
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    return rv;
+}
+
+ssize_t Http2Session::dataProviderReadCallbackIntern(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data) {
     (void)session;
@@ -2879,12 +3041,20 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     }
 
     BodyData& bd = it->second;
+#ifdef DEBUG
+    // tests hold the buffered data back, as a peer that grants no flow-control credit does: it stays buffered, and
+    // the next send on the stream resumes the stream once the hold is released
+    if (qore_dbg_h2_stream_data_held(stream_id)) {
+        return NGHTTP2_ERR_DEFERRED;
+    }
+#endif
     size_t remaining = bd.data.size() - bd.offset;
     size_t to_copy = std::min(remaining, length);
 
     if (to_copy > 0) {
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
+        h2->stream_taken_total[stream_id] += to_copy;
     }
 
     // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
@@ -2963,6 +3133,11 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     return static_cast<ssize_t>(to_copy);
 }
 
+uint32_t Http2Session::getMaxHeaderListSize() const {
+    size_t max_size = sock ? sock->getMaxHeaderSize() : QORE_MAX_HEADER_SIZE;
+    return max_size > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(max_size);
+}
+
 int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame* frame,
         const uint8_t* name, size_t namelen, const uint8_t* value, size_t valuelen,
         uint8_t flags, void* user_data) {
@@ -2970,6 +3145,19 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
     Http2StreamInfo* stream = h2->getOrCreateStream(frame->hd.stream_id);
     if (!stream) {
         return 0;
+    }
+
+    // a header list larger than the limit of the socket is not kept: nghttp2 rejects the stream with RST_STREAM,
+    // and goes on decoding the header block, as the connection's header compression state needs it (qore#6867)
+    stream->header_list_size += namelen + valuelen + 32;
+    if (stream->header_list_size > h2->getMaxHeaderListSize()) {
+        if (!stream->header_list_too_large) {
+            stream->header_list_too_large = true;
+            // free what was kept of the header list
+            stream->headers.clear();
+            stream->trailers.clear();
+        }
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
 
     std::string header_name(reinterpret_cast<const char*>(name), namelen);
@@ -3049,6 +3237,10 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
             // For server: Create stream for incoming request
             // For client: Stream already exists for our request
             h2->getOrCreateStream(frame->hd.stream_id);
+        }
+        // the header list of each header block counts from zero (qore#6867)
+        if (Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id)) {
+            stream->header_list_size = 0;
         }
     }
 
@@ -3453,6 +3645,12 @@ int Http2Session::submitTrailers(int32_t stream_id,
             return -1;
         }
     } else {
+        // trailers before the response would be a header block without :status, which the client rejects: a server
+        // sends them only after the response (qoretechnologies/qore#7212)
+        if (is_server && (!stream || !stream->response_submitted)) {
+            xsink->raiseException("HTTP2-ERROR", "cannot send trailers on stream %d before its response", stream_id);
+            return -1;
+        }
         // No data provider — submit trailers directly (body already complete)
         // lowered_names keeps the lowercased header name strings alive while nghttp2_nv
         // pointers reference their .c_str() data; must outlive the nghttp2_submit_trailer call
@@ -3503,6 +3701,9 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
@@ -3517,6 +3718,11 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
+        return -1;
+    }
+    // a second response on the stream would be a malformed message (qoretechnologies/qore#7212)
+    if (stream->response_submitted) {
+        xsink->raiseException("HTTP2-ERROR", "response already submitted for stream %d", stream_id);
         return -1;
     }
 
@@ -3551,7 +3757,7 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         // RFC 7540 Section 8.1.2.2: Skip connection-specific headers (forbidden in HTTP/2)
         std::string lname = h.first;
         std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
-        if (forbidden_headers.count(lname)) {
+        if (isForbiddenResponseHeader(lname)) {
             continue;
         }
         // Store lowercase name
@@ -3562,6 +3768,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
             lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
+    }
+
+    // a 2xx response other than 204 opens the tunnel, and the client drops its content-length; any other response is
+    // checked as every response, so that it is never malformed (qoretechnologies/qore#7212; see
+    // QoreHttpResponseBodyRule)
+    const bool tunnel = status_code >= 200 && status_code < 300 && status_code != 204;
+    QoreHttpResponseBodyRule rule(status_code, "CONNECT");
+    if (!tunnel && checkResponseLocked(stream_id, status_code, nva, -1, rule, xsink)) {
+        return -1;
     }
 
     std::unique_ptr<DataProviderContext> provider_ctx = std::make_unique<DataProviderContext>();
@@ -3578,6 +3793,13 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));
         return -1;
+    }
+    stream->response_submitted = true;
+    if (!tunnel && (rule.noBody() || rule.streamLength() >= 0)) {
+        StreamedResponseRule& sr = streamed_response_rules[stream_id];
+        sr.no_body = rule.noBody();
+        sr.content_length = rule.streamLength();
+        sr.provided = 0;
     }
     if (http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: submitConnectResponse ok stream=%d\n", stream_id);
@@ -3637,6 +3859,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
         return (!pending || pending + refused <= lit->second) ? 0 : 1;
     }
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int64_t Http2Session::streamTakenBytes(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return -1;
+    }
+    auto it = stream_taken_total.find(stream_id);
+    int64_t taken = it == stream_taken_total.end() ? 0 : static_cast<int64_t>(it->second);
+#ifdef DEBUG
+    // tests simulate a peer that takes the data of a stream a little at a time
+    taken += qore_dbg_quic_simulated_stream_progress(stream_id);
+#endif
+    return taken;
 }
 
 int Http2Session::streamSendFlushed(int32_t stream_id) {

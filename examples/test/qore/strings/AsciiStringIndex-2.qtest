@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the native checks, the language checks and the counted loops run in child processes
+# test-platform: macos - threads that read one string at once publish its ASCII prefix cache with relaxed atomics
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+%include AsciiStringIndex.qc
+
+%exec-class AsciiStringIndexPart2
+
+#! runs part 2 of 3 of the cases of AsciiStringIndexBase: the checks of the language in all execution modes
+class AsciiStringIndexPart2 inherits AsciiStringIndexBase {
+    constructor() : AsciiStringIndexBase("AsciiStringIndexPart2", 2) {
+    }
+}

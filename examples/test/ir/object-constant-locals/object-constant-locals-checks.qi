@@ -64,18 +64,20 @@ hash<string, int> sub ocl_stdout(int n) {
     return {"entries": entries, "result": sum};
 }
 
+#! reads the value of a reference
+int sub ocl_touch(reference<int> r) {
+    return r;
+}
+
 #! a function that does keep a local on the runtime stack: shows that the counter reads this function's frame
-/** An on_exit handler reads its locals through the runtime stack (the analysis walks the handler's AST), so the local
-    that the handler reads stays there.  (An object local is no longer such a local: the IR keeps it in its own storage
-    and marks its object with a real reference, see QoreIRFunction::real_reference_locals.)
+/** A local that the function gives a reference to stays on the runtime stack, where the reference refers to it.  (A
+    local that only an on_exit handler reads is no longer such a local: it is IR-only, see
+    QoreIRFunction::handler_ir_locals, #5951; nor is an object local: the IR keeps it in its own storage and marks its
+    object with a real reference, see QoreIRFunction::real_reference_locals.)
 */
 hash<string, int> sub ocl_kept(int n) {
     int sum = n + 1;
-    on_exit {
-        if (sum < 0) {
-            stderr.printf("negative\n");
-        }
-    }
+    ocl_touch(\sum);
     stderr.printf("");
     int entries = 0;
     if (Option::HAVE_LIBRARY_DEBUGGING) {

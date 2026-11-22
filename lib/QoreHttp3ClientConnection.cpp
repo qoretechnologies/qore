@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -103,15 +104,21 @@ Http3ClientConnection::Http3ClientConnection(const char* target_host, int target
         QoreSSLCertificate* client_cert,
         QoreSSLPrivateKey* client_key,
         const std::string& ssl_ca_file,
-        const std::string& ssl_ca_path)
+        const std::string& ssl_ca_path,
+        QoreSSLTrustStore* ssl_trust_store)
     : HttpClientConnectionBase(target_host, target_port, /* ssl_required (always for H3) */ true),
       max_concurrent_streams_(max_concurrent_streams),
       ssl_verify_mode_(ssl_verify_mode),
       ssl_accept_all_certs_(ssl_accept_all_certs),
       ssl_ca_file_(ssl_ca_file),
       ssl_ca_path_(ssl_ca_path),
+      ssl_trust_store_(ssl_trust_store),
       client_cert_(client_cert),
       client_key_(client_key) {
+    // a reference of its own: the connection can outlive its manager
+    if (ssl_trust_store_) {
+        ssl_trust_store_->ref();
+    }
     if (client_cert_) {
         client_cert_->ref();
     }
@@ -138,6 +145,9 @@ Http3ClientConnection::Http3ClientConnection(const char* target_host, int target
 Http3ClientConnection::~Http3ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
+    if (ssl_trust_store_) {
+        ssl_trust_store_->deref();
+    }
     // the members are written under attempts_mu_, as readers that are not gated by the connection's state take the
     // poll operation under it; the objects are released after the lock
     QoreObject* poll_op_obj_to_deref;
@@ -220,6 +230,13 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     if (ssl_accept_all_certs_) {
         sock_priv_raw->acceptAllCertificates(true);
     }
+    if (ssl_trust_store_) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_trust_store_, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_ca_file_.empty() || !ssl_ca_path_.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty() ? nullptr : ssl_ca_file_.c_str(),
@@ -281,11 +298,11 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     inner_ptr->setSelf(*poll_obj_holder);
 
     // 6. Set QoreObject members.
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setValue("goal", new QoreStringNode("http3_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http3_client"), xsink);
     if (*xsink) {
         return -1;
     }

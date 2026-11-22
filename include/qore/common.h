@@ -151,6 +151,17 @@ enum ClassAccess : unsigned char {
     #define DLLEXPORT
     #define DLLLOCAL
   #endif
+  //! A function of libqore that is exported and that libqore's own code calls on its hot paths (#7006)
+  /** In libqore itself on ELF platforms, the symbol has protected visibility: it is exported, but libqore's own calls
+      bind to libqore's definition and can be inlined (a default-visibility symbol of a shared library can be
+      replaced by another definition at run time, so that every call goes through the PLT and none is inlined);
+      elsewhere (code that uses libqore, and platforms without protected visibility such as Mach-O) it is DLLEXPORT
+  */
+  #if defined(QORE_BUILDING_LIBQORE) && defined(HAVE_GCC_VISIBILITY) && defined(__ELF__)
+    #define DLLEXPORT_BOUND __attribute__ ((visibility("protected")))
+  #else
+    #define DLLEXPORT_BOUND DLLEXPORT
+  #endif
   #define QLLD "%lld"
   #define QLLX "%llx"
   #define QLLDx(a) "%" #a "lld"

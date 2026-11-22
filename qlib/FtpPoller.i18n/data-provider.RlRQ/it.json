@@ -24,8 +24,8 @@
           "message": "Un file viene caricato su un server FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "Reagisci ai file caricati su un server FTP; la configurazione dell'azione determina se l'evento contiene i dati del file stessi o un collegamento alla posizione del file nel filesystem locale. In ogni caso, l'evento indica che i dati del file sono già stati scaricati e sono disponibili localmente"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Reagisci ai file caricati su un server FTP; la configurazione dell'azione determina se l'evento contiene i dati del file stessi o un collegamento alla posizione del file nel filesystem locale. In ogni caso, l'evento indica che i dati del file sono già stati scaricati e sono disponibili localmente. Impostare remote_file_disposition su DELETE o MOVE per rimuovere il file remoto dopo l’elaborazione. Con NONE vale la regola seguente. Il gestore dell’evento deve spostare, rinominare o eliminare il file, altrimenti il file verrà consegnato di nuovo al controllo successivo."
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

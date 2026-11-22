@@ -46,6 +46,7 @@
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -77,6 +78,7 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
       ssl_required(ssl_required), proxy_tunnel(proxy_tunnel), proxy_ssl(proxy_ssl && proxy_tunnel),
       target_host(std::move(target_host)), target_port(target_port),
       connection_priv(conn_priv) {
+    credential_connection_id = my_socket_priv::getPriv(*sock)->takeHttpHandshakeCredentials(client_cert, client_pk);
     // sock and connect_op are ref'd by the caller; ownership transferred
     // connection_priv is a raw (unrefed) pointer to the C++ priv data;
     // the strong QoreObject ref (for DGC cycle detection) is held in the
@@ -538,8 +540,9 @@ void Http2ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
-    SocketPollOperationBase* op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj, false,
-        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal);
+    SocketPollOperationBase* op = qore_http_client_ssl_upgrade(xsink, sock_obj,
+        proxy_ssl ? SslUpgradeMode::Layered : SslUpgradeMode::Normal,
+        *client_cert, *client_pk, credential_connection_id);
     if (*xsink) {
         op->deref(xsink);
         return;
@@ -1307,10 +1310,23 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     }
 
     // Pure C++ error dispatch — no execValue()
+    std::vector<int32_t> failed_streams;
     for (auto& [sid, action] : actions_copy) {
         if (action) {
             action->executeError(err, desc, xsink);
             action->deref(xsink);
+            failed_streams.push_back(static_cast<int32_t>(std::strtol(sid.c_str(), nullptr, 10)));
+        }
+    }
+
+    // A stream that a listener reads (WebSocket/SSE over HTTP/2) gets the end of the stream as a sentinel in its queue:
+    // the listener is woken, as it is by the end of a stream that the peer ended (see handleReading()); otherwise it
+    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965)
+    // (the registrations are not checked: the connection's close has cleared them, and a stream without a listener
+    // only has its notification kept, on a connection that is gone)
+    for (int32_t sid32 : failed_streams) {
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
+            data_ready_streams.push_back(sid32);
         }
     }
 }
@@ -1359,7 +1375,7 @@ void Http2ClientPollOperationPriv::releaseStreamQueueInfos(std::vector<StreamQue
         }
         if (info.queue) {
             if (info.room) {
-                info.queue->removeRoomListener(info.room.get());
+                qore_queue_ops(info.queue).removeRoomListener(info.room.get());
             }
             info.queue->deref(xsink);
         }
@@ -1384,7 +1400,7 @@ int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQ
     assert(!info.pending);
     // the queue's own exceptions are not raised (see drainStreamQueuesLocked())
     ExceptionSink push_xsink;
-    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    QoreQueue::TryPushResult rc = qore_queue_ops(info.queue).tryPush(&push_xsink, data);
     push_xsink.clear();
     if (rc == QoreQueue::QTP_PUSHED) {
         return 0;
@@ -1394,10 +1410,10 @@ int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQ
         info.pending = data;
         if (!info.room) {
             info.room = makeStreamQueueRoomListener();
-            info.queue->addRoomListener(info.room);
+            qore_queue_ops(info.queue).addRoomListener(info.room);
             // room may have appeared before the listener was added: the next drain tries again
             ExceptionSink retry_xsink;
-            QoreQueue::TryPushResult rc2 = info.queue->tryPush(&retry_xsink, data);
+            QoreQueue::TryPushResult rc2 = qore_queue_ops(info.queue).tryPush(&retry_xsink, data);
             retry_xsink.clear();
             if (rc2 == QoreQueue::QTP_PUSHED) {
                 info.pending = nullptr;
@@ -1474,7 +1490,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                 // the old registration's room listener is removed from its queue; its pending data goes to the new
                 // registration (see below)
                 if (old.room) {
-                    old.queue->removeRoomListener(old.room.get());
+                    qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                 }
                 StreamQueueInfo rel;
                 rel.queue = old.queue != info.queue ? old.queue : nullptr;
@@ -1579,7 +1595,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                     info.pending = nullptr;
                 }
                 ExceptionSink push_xsink;
-                info.queue->tryPush(&push_xsink, QoreValue(), true);
+                qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
                 push_xsink.clear();
                 if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
                         == data_ready_streams.end()) {
@@ -1597,7 +1613,7 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
             // is full, after the stream's data; a queue that refuses it ends the registration all the same, and its
             // listener reads the error from it
             ExceptionSink push_xsink;
-            info.queue->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -1635,7 +1651,7 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
                     // released, and the old one's pending data and room listener with them
                     StreamQueueInfo& old = it->second;
                     if (old.room) {
-                        old.queue->removeRoomListener(old.room.get());
+                        qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                     }
                     StreamQueueInfo rel;
                     rel.queue = old.queue != info.queue ? old.queue : nullptr;
@@ -1670,7 +1686,7 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840);
         // the marker is pushed even if the queue is full, without waiting (issue #5859)
         ExceptionSink push_xsink;
-        info.queue->tryPush(&push_xsink, err_hash.release(), true);
+        qore_queue_ops(info.queue).tryPush(&push_xsink, err_hash.release(), true);
         push_xsink.clear();
         if (info.notifier) {
             info.notifier->notify();
@@ -2107,7 +2123,7 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
             it->second.pending = nullptr;
         }
         if (it->second.room) {
-            it->second.queue->removeRoomListener(it->second.room.get());
+            qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
             it->second.room.reset();
         }
     }
@@ -2180,8 +2196,8 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
     @since %Qore 3.0
 */
 qclass Http2ClientPollOperationBase [
-    private_members=object sock,string goal,auto data_save;
     ns=Qore;
+    dom=NETWORK;
     arg=Http2ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
@@ -2236,11 +2252,9 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP2CLIENTPOLLOPERATIONBASE,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP2CLIENTPOLLOPERATIONBASE,
-        new QoreStringNode("http2_client_multiplex"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http2_client_multiplex"), xsink);
 
     // Set self on the connect op so it can build SocketPollInfo hashes
     SocketConnectPollOperation* connect_ptr = connect_op.release();
@@ -2279,7 +2293,7 @@ Http2ClientPollOperationBase::destructor() {
 /** @return the goal string
 */
 string Http2ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -2525,6 +2539,7 @@ int Http2ClientPollOperationBase::submitRequest(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2586,6 +2601,7 @@ int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, strin
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2664,6 +2680,7 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2733,6 +2750,7 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
                 break;
             }
             case NT_STRING: {
+                // note: safe; qpp makes a node of an inline short string for a *data parameter
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
                 body_ptr = str->c_str();
                 body_len = str->size();
@@ -2966,5 +2984,5 @@ nothing Http2ClientPollOperationBase::installSseState(int stream_id,
 /** @return the socket
 */
 Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

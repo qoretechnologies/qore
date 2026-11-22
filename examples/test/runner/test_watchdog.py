@@ -15,6 +15,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 import errno
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
@@ -97,17 +98,57 @@ def session_processes(sid):
     return pids
 
 
+def wait_for_exit(pid, timeout=60):
+    """Waits until the given process has ended, for at most the time given: for its exit event (a pidfd on Linux, a
+    kqueue elsewhere), not for a time; only where neither exists is it checked every 50 ms.  A process that has ended
+    but has not been waited for (a zombie) has ended."""
+    if hasattr(os, "pidfd_open"):
+        try:
+            fd = os.pidfd_open(pid)
+        except ProcessLookupError:
+            return
+        except OSError as e:
+            if e.errno not in (errno.ENOSYS, errno.EPERM):
+                raise
+        else:
+            try:
+                select.select([fd], [], [], timeout)
+            finally:
+                os.close(fd)
+            return
+    elif hasattr(select, "kqueue"):
+        kq = select.kqueue()
+        try:
+            event = select.kevent(pid, filter=select.KQ_FILTER_PROC, flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                                  fflags=select.KQ_NOTE_EXIT)
+            try:
+                kq.control([event], 1, timeout)
+            except ProcessLookupError:
+                pass
+        finally:
+            kq.close()
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+
+
 def end_session(process):
     """Kills every process of the session of a command started with start_in_session() and waits for the command
 
     The session, not the command's process group: the runner runs its tests and its watchdog's reader under timeout,
     which puts each of them in a process group of its own.  The processes that a test of the run starts in a session of
-    their own are not in it; the runner ends them.
+    their own are not in it; the runner ends them.  Each process that is killed is waited for until it has ended (see
+    wait_for_exit()), and the session is listed again, until it has no process left (zombies are not listed), or
+    until a list is the same as the one before, whose processes did not end within the time of the waits.
     """
     killed = None
     while True:
         pids = set(session_processes(process.pid)) - {os.getpid()}
-        # a list that the kills did not change has only processes that end (their kill is delivered) or zombies
         if not pids or pids == killed:
             break
         for pid in pids:
@@ -115,6 +156,8 @@ def end_session(process):
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+        for pid in pids:
+            wait_for_exit(pid)
         killed = pids
     process.wait()
 
@@ -131,6 +174,35 @@ def run_in_session(args, timeout, capture_output=False, **kwargs):
             end_session(process)
             raise
     return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
+# the commit that the stand-in builds of the harness's trees name (see RunnerTree)
+STAND_IN_COMMIT = "6897" * 10
+
+
+# the first line of a stand-in qore that names STAND_IN_COMMIT for --version, as a build's qore does
+STAND_IN_VERSION = '[ "$1" = --version ] && { echo "  git hash: %s"; exit 0; }\n' % STAND_IN_COMMIT
+
+
+def stand_in_build(root, binaries, commit=STAND_IN_COMMIT):
+    """Makes the tree at root an archive of the commit of a stand-in build in binaries (#6897): run_tests.sh compares
+    the tree's .git-archive-revision with the commit that its qore names (see STAND_IN_VERSION), and the qcc that the
+    tests would use, here the stand-in next to qore, must come from the same build"""
+    (Path(root) / ".git-archive-revision").write_text(commit + "\n")
+    qcc = Path(binaries) / "qcc"
+    qcc.write_text("#!/bin/sh\necho 'qcc stand-in of commit %s'\n" % commit)
+    qcc.chmod(0o755)
+
+
+def build_commit():
+    """Returns the commit that the build in BUILD_DIR was made from (qore --version), or the stand-in commit without
+    one"""
+    if not HAVE_QORE:
+        return STAND_IN_COMMIT
+    result = subprocess.run([str(BUILD_DIR / "qore"), "--version"], capture_output=True, text=True,
+                            env=dict(os.environ, LD_LIBRARY_PATH=str(BUILD_DIR), DYLD_LIBRARY_PATH=str(BUILD_DIR)))
+    match = re.search(r"^\s*git hash:\s*([0-9a-f]{40,64})\s*$", result.stdout, re.M)
+    return match.group(1) if match else STAND_IN_COMMIT
 
 
 class RunnerTree:
@@ -153,9 +225,18 @@ class RunnerTree:
         (self.bin / "libqore.so").touch()
         # the modules of the qore tests: QUnit from the source of this tree (QORE_TEST_SOURCE_MODULES below)
         (self.root / "qlib").symlink_to(ROOT / "qlib")
-        # qore: runs the test file it is given with Python, in the same process
+        # The tree is an archive of the commit of its build (#6897): .git-archive-revision names it, and the stand-in
+        # qore and qcc name it as the commit of their build; a tree of the qore tests names the commit of the build
+        # whose qore runs them, whose qcc is next to it
+        self.commit = build_commit() if qore else STAND_IN_COMMIT
+        stand_in_build(self.root, self.bin, self.commit)
+        # qore: prints the commit for --version, and runs the test file it is given with Python, in the same process
         self.write_script("qore", f"""\
             #!/bin/sh
+            if [ "$1" = --version ]; then
+                echo "  git hash: {self.commit}"
+                exit 0
+            fi
             for arg in "$@"; do
                 case "$arg" in
                     *.qtest) exec '{sys.executable}' -B "$arg" ;;
@@ -588,6 +669,293 @@ class KilledRunnerTest(unittest.TestCase):
                         os.close(fd)
 
 
+# The driver of OrphanedWatchdogTest (arguments: the tree, the runner, the mode, and the seconds it waits for a report).
+# It runs a runner whose test blocks, kills the runner alone with SIGKILL, as a kill by process ID does (the runner's
+# trap, which stops the watchdog, does not run then), lets the test end, and then lets the time limit of the orphaned
+# watchdog pass: the tree's stand-in timeout reads it from the latch.  Modes 1 and 2 need a PID namespace of the
+# driver's own (Linux), where it is process 1, which the test is reparented to: it reaps the test, and a shell starts a
+# process that takes the test's ID (through ns_last_pid) before the limit passes, as the watchdog subshell of a test
+# of another run did (#6875).  In mode 2 that shell takes the runner's ID first, so that the process is a child of the
+# runner's ID, as when another runner has taken it.  The process ignores SIGABRT, so that a watchdog that signals it
+# sends it SIGKILL too.  Whatever happens, the driver releases the test and the latch when it ends.  Prints the result
+# as JSON.
+ORPHAN_DRIVER = r"""
+import fcntl
+import json
+import os
+import select
+import signal
+import subprocess
+import sys
+
+tree, runner_sh, mode, wait_secs = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+result = {"test_pid": None, "victim_pid": None, "victim_status": None, "left": False}
+
+
+def read_line(fd, what):
+    # Reads whole lines (a write of a pipe here is one line, and two writes may be read at once)
+    line = b""
+    while not line.endswith(b"\n"):
+        readable, _, _ = select.select([fd], [], [], wait_secs)
+        if not readable:
+            raise SystemExit("timed out waiting for " + what)
+        data = os.read(fd, 100)
+        if not data:
+            raise SystemExit("no " + what)
+        line += data
+    return line.decode()
+
+
+def wait_for_end(fd, what):
+    # Waits until no process holds the write end of the pipe or FIFO
+    while True:
+        readable, _, _ = select.select([fd], [], [], wait_secs)
+        if not readable:
+            raise SystemExit("timed out waiting for " + what)
+        if not os.read(fd, 100):
+            return
+
+
+def children(parent):
+    pids = []
+    for entry in os.listdir("/proc"):
+        if entry.isdigit():
+            try:
+                with open("/proc/%s/stat" % entry) as f:
+                    stat = f.read()
+            except OSError:
+                continue
+            if int(stat[stat.rindex(")") + 2:].split()[1]) == parent:
+                pids.append(int(entry))
+    return pids
+
+
+def set_next_pid(pid):
+    with open("/proc/sys/kernel/ns_last_pid", "w") as f:
+        f.write(str(pid - 1))
+
+
+def release(name, line):
+    # Writes the line to the FIFO if a process reads it
+    try:
+        fd = os.open(os.path.join(tree, name), os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return
+    try:
+        os.write(fd, line)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def run():
+    # the test reports its process ID through the ready pipe; every process of the run inherits the write end of the
+    # alive pipe, which is at its end once all of them have ended
+    ready_r, ready_w = os.pipe()
+    alive_r, alive_w = os.pipe()
+    write_ends = []
+    for fd in (ready_w, alive_w):
+        write_ends.append(fcntl.fcntl(fd, fcntl.F_DUPFD, 50))
+        os.close(fd)
+    # only the test opens the test-alive FIFO for writing: it is at its end once the test has ended
+    test_alive = os.open(os.path.join(tree, "test-alive"), os.O_RDONLY | os.O_NONBLOCK)
+    with open(os.path.join(tree, "runner.out"), "wb") as out:
+        runner = subprocess.Popen(["sh", runner_sh], cwd=tree, stdout=out, stderr=subprocess.STDOUT,
+                                  pass_fds=tuple(write_ends))
+    for fd in write_ends:
+        os.close(fd)
+    # the test reports its ID, and the watchdog that it has started its read (see the stand-in timeout), in either
+    # order
+    reports = []
+    while len(reports) < 2:
+        reports += read_line(ready_r, "the reports of the test and the watchdog").splitlines()
+    result["test_pid"] = test_pid = int([r for r in reports if r.startswith("running ")][0].split()[1])
+    watchdogs = [pid for pid in children(runner.pid) if pid != test_pid] if mode else []
+    # the runner is killed alone: its watchdog runs on, orphaned
+    os.kill(runner.pid, signal.SIGKILL)
+    runner.wait()
+    with open(os.path.join(tree, "hold"), "w") as f:
+        f.write("end\n")
+    fl = fcntl.fcntl(test_alive, fcntl.F_GETFL)
+    fcntl.fcntl(test_alive, fcntl.F_SETFL, fl & ~os.O_NONBLOCK)
+    wait_for_end(test_alive, "the end of the test")
+    shell = None
+    if mode:
+        # the test has been reparented to this process: once it is reaped, its ID is free
+        os.waitpid(test_pid, 0)
+        # the shell waits for "go" (its input), starts the process, which reports its ID (the shell's error output),
+        # and reports how the process ended (its output)
+        go_r, go_w = os.pipe()
+        status_r, status_w = os.pipe()
+        report_r, report_w = os.pipe()
+        if mode == 2:
+            set_next_pid(runner.pid)
+        victim = ("import os, signal; signal.signal(signal.SIGABRT, signal.SIG_IGN); "
+                  "os.write(2, ('ready %d\\n' % os.getpid()).encode()); signal.pause()")
+        shell = subprocess.Popen(["sh", "-c", 'read go; "$0" -c "$1" & v=$!; wait $v; echo "status $?"',
+                                  sys.executable, victim], stdin=go_r, stdout=status_w, stderr=report_w)
+        for fd in (go_r, status_w, report_w):
+            os.close(fd)
+        result["shell_pid"] = shell.pid
+        result["runner_pid"] = runner.pid
+        set_next_pid(test_pid)
+        os.write(go_w, b"go\n")
+        os.close(go_w)
+        result["victim_pid"] = victim_pid = int(read_line(report_r, "the report of the process").split()[1])
+    # the watchdog's time limit passes
+    with open(os.path.join(tree, "limit-latch"), "w") as f:
+        f.write("limit\n")
+    if mode:
+        # until the watchdog ends (the shell ends after the process)
+        while watchdogs:
+            pid, _ = os.waitpid(-1, 0)
+            if pid in watchdogs:
+                watchdogs.remove(pid)
+        # a process that the watchdog has sent SIGKILL may not have ended yet: SIGTERM ends one that is alive, and one
+        # that has been sent SIGKILL ends by that (the kernel sets its exit status when the signal is sent)
+        try:
+            os.kill(victim_pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        result["victim_status"] = int(read_line(status_r, "the status of the process").split()[1])
+        shell.wait()
+    # every process of the run ends
+    readable, _, _ = select.select([alive_r], [], [], wait_secs)
+    result["left"] = not readable or os.read(alive_r, 1) != b""
+
+
+try:
+    run()
+finally:
+    # a case that fails leaves nothing waiting: the test and the watchdog's stand-in timeout are released
+    release("hold", b"end\n")
+    release("limit-latch", b"limit\n")
+    with open(os.path.join(tree, "runner.out")) as f:
+        result["output"] = f.read()
+    print(json.dumps(result))
+"""
+
+
+def can_reuse_process_ids():
+    """Returns True if a process of the harness can choose the ID of the next process (ns_last_pid, as process 1 of a
+    PID namespace of its own in a user namespace of its own)"""
+    if not shutil.which("unshare") or not os.path.isdir("/proc/self/task"):
+        return False
+    try:
+        result = subprocess.run(["unshare", "-Urpf", "--mount-proc", "sh", "-c",
+                                 "echo 100 > /proc/sys/kernel/ns_last_pid && sh -c 'echo $$'"],
+                                capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "101"
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class OrphanedWatchdogTest(unittest.TestCase):
+    """The watchdog of a runner that has been killed signals only the test, never a process that has taken its ID
+
+    A runner killed with SIGKILL (a kill by process ID) does not stop its watchdog, which, at the test's time limit,
+    sent SIGABRT and SIGKILL to the test's process ID, though the test had ended long before: the process that had
+    taken the ID by then was killed, such as the watchdog subshell of a test of another run (#6875: it was reported as
+    "Killed: 9", and its run as a watchdog error with exit code 137).
+    """
+
+    TEST = """\
+        # test-timeout: 600
+        import os
+        alive = open(os.path.join(os.environ["TREE"], "test-alive"), "w")
+        os.write(50, ("running %d\\n" % os.getpid()).encode())
+        open(os.path.join(os.environ["TREE"], "hold")).read()
+        """
+
+    def run_orphan(self, mode, test=TEST, wait=120):
+        """Runs the driver in a session of its own, and returns its exit code and its result; every process of the
+        session has ended then, whatever the driver did (see end_session())"""
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            for name in ("hold", "test-alive", "limit-latch"):
+                os.mkfifo(tree.root / name)
+            real_timeout = shutil.which("timeout") or shutil.which("gtimeout")
+            # the watchdog's read of its event FIFO until the test's limit (600 s) reports that it has started (Python
+            # writes it: dash has no redirections of descriptors above 9) and ends when the case writes to the latch,
+            # and its wait for the test to end after SIGABRT (60 s) ends at once; anything else is timed as usual
+            tree.write_script("timeout", f"""\
+                #!/bin/sh
+                case "$1 $2 $3" in
+                    "600 sh -c")
+                        '{sys.executable}' -c 'import os; os.write(50, b"watching\\n")'
+                        read -r line < "$TREE/limit-latch"
+                        exit 124
+                        ;;
+                    "60 sh -c")
+                        exit 124
+                        ;;
+                esac
+                exec '{real_timeout}' "$@"
+                """)
+            tree.add_test("ends.qtest", test)
+            driver = tree.root / "driver.py"
+            driver.write_text(ORPHAN_DRIVER)
+            command = [sys.executable, "-B", str(driver), str(tree.root), str(RUN_TESTS), str(mode), str(wait)]
+            if mode:
+                command[:0] = ["unshare", "-Urpf", "--mount-proc"]
+            process = start_in_session(command, cwd=tree.root, env=tree.env(), stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True)
+            try:
+                stdout, stderr = process.communicate(timeout=300)
+            finally:
+                end_session(process)
+            self.assertEqual([], session_processes(process.pid), "a process of the case is left")
+            result = json.loads(stdout) if stdout.strip() else {"output": ""}
+            result["driver"] = stdout + stderr
+            return process.returncode, result
+
+    def run_and_check(self, mode):
+        rc, result = self.run_orphan(mode)
+        self.assertEqual(0, rc, result["driver"])
+        return result
+
+    def assert_nothing_sent(self, result):
+        output = result["output"]
+        self.assertNotRegex(output, r"SIG[A-Z0-9]+ sent")
+        self.assertIn("is no longer the test: nothing is sent to it", output)
+        self.assertFalse(result["left"], "a process of the run is left: " + output)
+
+    def test_an_orphaned_watchdog_does_not_signal_a_test_that_has_ended(self):
+        self.assert_nothing_sent(self.run_and_check(0))
+
+    def test_a_failing_case_leaves_no_process(self):
+        # the test ends without reporting, so the driver fails: the runner, its watchdog and its stand-in timeout,
+        # which waits for the latch, are ended all the same
+        rc, result = self.run_orphan(0, test="# test-timeout: 600\n", wait=5)
+        self.assertNotEqual(0, rc, result["driver"])
+        self.assertIn("timed out waiting for the reports of the test and the watchdog", result["driver"])
+
+    def assert_process_not_signalled(self, result):
+        self.assertEqual(result["test_pid"], result["victim_pid"],
+                         "the process did not get the test's ID: the case cannot check anything")
+        # 143: the case's own SIGTERM ended it
+        self.assertEqual(143, result["victim_status"], "the watchdog signalled the process that took the test's ID: "
+                         + result["output"])
+        self.assert_nothing_sent(result)
+
+    @unittest.skipUnless(can_reuse_process_ids(), "a process ID is chosen through ns_last_pid in a PID namespace of "
+                         "its own (Linux, unshare, user namespaces)")
+    def test_an_orphaned_watchdog_does_not_kill_a_process_that_took_the_test_s_id(self):
+        self.assert_process_not_signalled(self.run_and_check(1))
+
+    @unittest.skipUnless(can_reuse_process_ids(), "a process ID is chosen through ns_last_pid in a PID namespace of "
+                         "its own (Linux, unshare, user namespaces)")
+    def test_an_orphaned_watchdog_does_not_kill_a_child_of_a_shell_that_took_the_runner_s_id(self):
+        # the process is the child of the runner's process ID, as when another runner has taken it, so a check of the
+        # test's parent alone passes
+        result = self.run_and_check(2)
+        self.assertEqual(result["runner_pid"], result["shell_pid"],
+                         "the shell did not get the runner's ID: the case cannot check anything")
+        self.assert_process_not_signalled(result)
+
+
 class FailedFifoTest(unittest.TestCase):
     """A watchdog whose event FIFO fails reports it; it does not take it for the time limit"""
 
@@ -706,8 +1074,17 @@ def watchdog_functions():
     source = RUN_TESTS.read_text()
     functions = []
     names = ["read_test_event", "run_with_watchdog"]
+    # the watchdog prints the native call stacks of the test's other processes (#6888), with the functions that the
+    # runner has of these
+    names[:0] = [name for name in ("capture_descendant_stacks", "test_stack_processes", "process_command_line",
+                                   "process_ended", "runs_stack_tool", "stack_attach_refused", "stack_attach_failed",
+                                   "test_stack_process_check", "runs_stack_helper")
+                 if re.search(r"^" + name + r"\(\) \{", source, re.M)]
     if re.search(r"^exec_in_test_group\(\) \{", source, re.M):
         names[:0] = ["exec_in_test_group", "end_test_group"]
+    # the watchdog signals only the test (#6875)
+    if re.search(r"^test_is_shell_child\(\) \{", source, re.M):
+        names[:0] = ["test_is_shell_child", "test_has_mark"]
     for name in names:
         match = re.search(r"^" + name + r"\(\) \{\n.*?^\}\n", source, re.S | re.M)
         if match is None:
@@ -735,6 +1112,9 @@ class WatchdogReadTest(unittest.TestCase):
                 TEST_TIMEOUT_SIGNAL=ABRT
                 TEST_SIGNALS_ENABLED={signals_enabled}
                 TEST_EVENT_FIFO="$PWD/events"
+                RUNNER_SHELL_PID=$$
+                TEST_EVENT_DIR="$PWD"
+                TEST_PROCESS_MARK=watchdog-read-test.$$
                 """) + watchdog_functions() + textwrap.dedent(read_test_event) + textwrap.dedent(f"""\
                 run_with_watchdog {limit} {command}
                 echo "run_with_watchdog: $? WATCHDOG_TEST_EXIT=$WATCHDOG_TEST_EXIT" \\
@@ -778,6 +1158,8 @@ class WatchdogReadTest(unittest.TestCase):
         self.assertIn("the test exceeded its 30s limit", result.output)
         self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event", result.output)
         self.assertNotIn("test ran to its end", result.output)
+        # every function that the watchdog calls is there ("sh: 1: capture_descendant_stacks: not found")
+        self.assertNotRegex(result.output, r"(?m)(: not found|command not found)$")
         # the failed read makes the watchdog send SIGKILL right after the timeout signal, so the test ends with
         # whichever arrives first: SIGABRT (134) or, when its core dump has not finished, SIGKILL (137); either way it
         # does not run to its end

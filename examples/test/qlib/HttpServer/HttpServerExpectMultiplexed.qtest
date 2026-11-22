@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) requests with a request body
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerExpectMultiplexedTest
+
+#! the timeout of the client's requests: a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! Answers with the request's body
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "got " + (body ?? ""));
+    }
+}
+
+#! A request with Expect: 100-continue on HTTP/2 or HTTP/3 is answered without an HTTP/1.1 interim response (qore#7221)
+/** A multiplexed connection has no HTTP/1.1 100 Continue: the server sends none on the connection's shared socket, and
+    the request is answered
+*/
+class HttpServerExpectMultiplexedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Expect: 100-continue on multiplexed requests", "1.0", \ARGV) {
+        addTestCase("HTTP/2: Expect: 100-continue", \expectTest(), "2.0");
+        addTestCase("HTTP/3: Expect: 100-continue", \expectTest(), "3.0");
+        set_return_value(main());
+    }
+
+    expectTest(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("echo", "^echo", NOTHING, new EchoHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        HTTPClient hc = getClient(port, http_version);
+        on_exit hc.disconnect();
+        string r;
+        try {
+            r = hc.post("/echo", "body", {"Expect": "100-continue", "Content-Type": "text/plain"});
+        } catch (hash<ExceptionInfo> ex) {
+            r = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertEq("got body", r, "the request is answered");
+        # the listener goes on
+        HTTPClient other = getClient(port, http_version);
+        on_exit other.disconnect();
+        assertEq("got x", other.post("/echo", "x", {"Content-Type": "text/plain"}), "the listener serves another client");
+    }
+
+    #! Returns a client of the given HTTP version
+    private static HTTPClient getClient(int port, string http_version) {
+        return new HTTPClient({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+    }
+}

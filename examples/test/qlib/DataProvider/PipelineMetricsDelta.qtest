@@ -44,6 +44,47 @@ class DeltaPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
     }
 }
 
+#! submitData() holds the pipeline lock until next() returns False, so the worker dequeues after the clock step.
+class PipelineClockStepIterator inherits AbstractIterator {
+    private {
+        int step;
+        int index;
+    }
+    constructor(int step_us) { step = step_us; }
+    bool next() {
+        if (++index == 1) {
+            return True;
+        }
+        call_function("dbg_set_realtime_offset", step);
+        return False;
+    }
+    auto getValue() { return {"flush": False}; }
+    bool valid() { return index == 1; }
+}
+
+class PipelineClockStepProcessor inherits DeltaPassthroughProcessor {
+    private {
+        int step;
+        bool first;
+    }
+    constructor(int step_us, bool is_first) {
+        step = step_us;
+        first = is_first;
+    }
+    private submitImpl(code<nothing(auto)> enqueue, auto data) {
+        if (first || data.flush) {
+            call_function("dbg_set_realtime_offset", (first ? 2 : 4) * step);
+        }
+        enqueue(data);
+    }
+    private flushImpl(code enqueue) {
+        if (first) {
+            call_function("dbg_set_realtime_offset", 3 * step);
+            enqueue({"flush": True});
+        }
+    }
+}
+
 #! Metrics collector that retains the most recent snapshot passed to reportMetrics().
 #! Used to capture the snapshot delivered during waitDone() -> forceCallback().
 class CapturingMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
@@ -85,6 +126,12 @@ class CapturingMetricsCollector inherits DataProvider::AbstractPipelineMetricsCo
         shutdown_called = False;
         remove last_snapshot;
         all_snapshots = ();
+    }
+}
+
+class ClockStepMetricsCollector inherits CapturingMetricsCollector {
+    int getIntervalMs() {
+        return 86400000;
     }
 }
 
@@ -187,7 +234,9 @@ class SlowProcessor inherits DataProvider::AbstractDataProcessor {
 }
 
 public class PipelineMetricsDeltaTest inherits QUnit::Test {
-    constructor() : Test("PipelineMetricsDelta Test", "1.0") {
+    constructor() : Test("PipelineMetricsDelta Test", "1.0", \ARGV) {
+        addTestCase("durations across a backward clock step", sub() { clockStep(-86400000000); });
+        addTestCase("durations across a forward clock step", sub() { clockStep(86400000000); });
         addTestCase("first snapshot delta equals cumulative", \testFirstSnapshotDeltaEqualsCumulative());
         addTestCase("sequential snapshots are incremental", \testSequentialSnapshotsAreIncremental());
         addTestCase("delta throughput computation", \testDeltaThroughputComputation());
@@ -226,6 +275,31 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             \testQogFanOutFilterFieldRefSourceMetrics());
 
         set_return_value(main());
+    }
+
+    private clockStep(int step) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires dbg_set_realtime_offset()");
+        }
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        ClockStepMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "clock step", "metrics_collector": collector});
+        pipe.append(0, new PipelineClockStepProcessor(step, True));
+        pipe.append(0, new PipelineClockStepProcessor(step, False));
+        int before = clock_get_monotonic_us();
+        pipe.submitData(new PipelineClockStepIterator(step));
+        pipe.waitDone();
+        int bound = clock_get_monotonic_us() - before;
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(1, collector.all_snapshots.size(), "only the final callback is due");
+        assertTrue(info.duration.durationMicroseconds() >= 0 && info.duration.durationMicroseconds() <= bound);
+        assertTrue(step < 0 ? info.stop_time < info.start_time : info.stop_time > info.start_time);
+        foreach string id in (("0:0", "0:1")) {
+            hash<PipelineElementMetrics> em = collector.last_snapshot.element_metrics{id};
+            assertTrue(em.processing_time_us >= 0 && em.processing_time_us <= bound, id + " processing");
+            assertTrue(em.queue_wait_time_us >= 0 && em.queue_wait_time_us <= bound, id + " queue wait");
+            assertEq(2, em.records_output, id + " includes the flushed record");
+        }
     }
 
     #! Creates a GeneratorDataProvider record iterator producing the given number of records

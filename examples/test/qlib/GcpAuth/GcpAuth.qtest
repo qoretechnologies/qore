@@ -7,6 +7,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires FsUtil
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires HttpServerUtil
@@ -114,11 +116,59 @@ public class GcpAuthTest inherits QUnit::Test {
         addTestCase("quota project precedence and validation", \quotaProjectTest());
         addTestCase("invalid token responses do not leak secrets", \tokenValidationTest());
         addTestCase("unsupported and malformed ADC files fail safely", \invalidCredentialsTest());
+        addTestCase("the ADC file is taken from CLOUDSDK_CONFIG, and QORE_GCP_ADC_DISABLED turns it off",
+            \adcConfigDirTest());
 
         # These are required local fixtures: a setup failure must fail the suite.
         setup();
 
         set_return_value(main());
+    }
+
+    #! The ADC file of the gcloud configuration directory and the switch that turns the implicit credentials off
+    /** (qore#6972) The variables are set by the test, to a directory of its own; LiveProviderTest.qm sets
+        QORE_GCP_ADC_DISABLED when live Google calls are not enabled, so the test saves and restores it
+    */
+    private adcConfigDirTest() {
+        string dir = make_tmp_dir("gcp-adc-");
+        on_exit remove_tree(dir);
+        string adc = dir + "/application_default_credentials.json";
+        File f();
+        f.open2(adc, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write("{\"type\": \"authorized_user\"}");
+        f.close();
+        # live-provider-optin: saves the variables, which the test sets to its own directory, to restore them
+        hash<string, *string> saved = map {$1: getenv($1)}, ("CLOUDSDK_CONFIG", "QORE_GCP_ADC_DISABLED",
+            "GOOGLE_APPLICATION_CREDENTIALS", "HOME");
+        on_exit {
+            map exists $1.value ? setenv($1.key, $1.value) : unsetenv($1.key), saved.pairIterator();
+        }
+        unsetenv("GOOGLE_APPLICATION_CREDENTIALS");
+        unsetenv("QORE_GCP_ADC_DISABLED");
+        # the gcloud configuration directory of CLOUDSDK_CONFIG, as gcloud takes it
+        setenv("CLOUDSDK_CONFIG", dir);
+        assertEq(adc, GcpAuth::resolveCredentialLocation(NOTHING));
+        # else the one in the home directory
+        unsetenv("CLOUDSDK_CONFIG");
+        setenv("HOME", dir + "/no-such-home");
+        assertEq(NOTHING, GcpAuth::resolveCredentialLocation(NOTHING));
+        # turned off: neither the file nor the default metadata server
+        setenv("CLOUDSDK_CONFIG", dir);
+        foreach string v in (("1", "yes")) {
+            setenv("QORE_GCP_ADC_DISABLED", v);
+            assertTrue(GcpAuth::adcDisabled(), v);
+            assertEq(NOTHING, GcpAuth::resolveCredentialLocation(NOTHING), v);
+            assertThrows("GCP-AUTH-ERROR", "the default metadata server is not used: QORE_GCP_ADC_DISABLED is set",
+                \GcpAuth::getAccessTokenFromMetadataServer(),
+                (("cloud-platform",),));
+        }
+        # an explicit location is still used
+        assertEq(adc, GcpAuth::resolveCredentialLocation(adc));
+        foreach string v in (("", "0")) {
+            setenv("QORE_GCP_ADC_DISABLED", v);
+            assertFalse(GcpAuth::adcDisabled(), sprintf("%y", v));
+            assertEq(adc, GcpAuth::resolveCredentialLocation(NOTHING), sprintf("%y", v));
+        }
     }
 
     private setup() {
@@ -285,6 +335,7 @@ public class GcpAuthTest inherits QUnit::Test {
         # NOTHING + GOOGLE_APPLICATION_CREDENTIALS env var
         GcpAuth::clearTokenCache();
         token_handler.call_count = 0;
+        # live-provider-optin: saved to be restored after a case that sets a fake value
         *string saved_env = getenv("GOOGLE_APPLICATION_CREDENTIALS");
         on_exit {
             saved_env.val()

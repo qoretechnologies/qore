@@ -840,15 +840,14 @@ bool applyCaptureFailure(OnnxContentIdentityMode mode, OnnxContentIdentity& iden
     // best effort: report the failure as an unknown identity rather than failing the load
     std::string reason;
     if (*xsink) {
-        const QoreValue err = xsink->getExceptionErr();
-        const QoreValue desc = xsink->getExceptionDesc();
-        // the reason is copied with its length, so that it is not cut at a NUL character
-        if (desc.getType() == NT_STRING) {
-            const QoreStringNode* str = desc.get<const QoreStringNode>();
-            reason.assign(str->c_str(), str->size());
-        } else if (err.getType() == NT_STRING) {
-            const QoreStringNode* str = err.get<const QoreStringNode>();
-            reason.assign(str->c_str(), str->size());
+        // the values of an exception are read in either string representation; the reason is copied with its
+        // length, so that it is not cut at a NUL character
+        QoreStringDataHelper desc(xsink->getExceptionDesc());
+        QoreStringDataHelper err(xsink->getExceptionErr());
+        if (desc) {
+            reason.assign(desc.c_str(), desc.size());
+        } else if (err) {
+            reason.assign(err.c_str(), err.size());
         }
         xsink->clear();
     }

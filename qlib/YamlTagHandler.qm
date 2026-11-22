@@ -290,9 +290,20 @@ class GlobalTagRegistryHolder {
 /** The global registry is shared across the entire Qore process and provides
     a central place to register custom tag handlers.
 
+    The registry holds the handlers that trusted code registered for the whole process: code that is sandboxed or
+    acts for sandboxed code does not get it, as it would get the handler objects of the host and of other code
+    (qore#6749).
+
     @return the singleton YamlTagHandlerRegistry instance
+
+    @throw YAML-TAG-REGISTRATION-DENIED the calling code is sandboxed or acts for sandboxed code
 */
 public YamlTagHandlerRegistry sub globalTagRegistry() {
+    # the registry is process-wide and holds the host's handlers: not handed to sandboxed code (qore#6749)
+    if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        throw "YAML-TAG-REGISTRATION-DENIED", "sandboxed code cannot get the process-wide YAML tag handler registry, "
+            "which holds the handlers of other code";
+    }
     return GlobalTagRegistryHolder::get();
 }
 
@@ -313,7 +324,9 @@ register_yaml_tag_handler(new MyHandler());
     @see unregister_yaml_tag_handler()
 */
 public sub register_yaml_tag_handler(AbstractYamlTagHandler handler) {
-    globalTagRegistry().register(handler);
+    # the registry refuses sandboxed code itself (YAML-TAG-REGISTRATION-DENIED)
+    YamlTagHandlerRegistry registry = GlobalTagRegistryHolder::get();
+    registry.register(handler);
 }
 
 #! Unregisters a custom YAML tag handler from the global registry
@@ -322,14 +335,22 @@ public sub register_yaml_tag_handler(AbstractYamlTagHandler handler) {
     @throw YAML-TAG-ERROR if no handler registered for this prefix
 */
 public sub unregister_yaml_tag_handler(string tag_prefix) {
-    globalTagRegistry().unregister(tag_prefix);
+    # the registry refuses sandboxed code itself (YAML-TAG-REGISTRATION-DENIED)
+    YamlTagHandlerRegistry registry = GlobalTagRegistryHolder::get();
+    registry.unregister(tag_prefix);
 }
 
 #! Returns list of registered custom tag handler prefixes from the global registry
-/** @return list of tag prefix strings currently registered
+/** @return list of tag prefix strings currently registered; an empty list for code that is sandboxed or acts for
+    sandboxed code, which does not see the handlers that other code registered for the whole process (qore#6749)
 */
 public list<string> sub get_yaml_tag_handlers() {
-    return globalTagRegistry().getRegisteredPrefixes();
+    # the registry is process-wide and holds the host's handlers: not shown to sandboxed code (qore#6749)
+    if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        return ();
+    }
+    YamlTagHandlerRegistry registry = GlobalTagRegistryHolder::get();
+    return registry.getRegisteredPrefixes();
 }
 
 } # namespace YamlTagHandler

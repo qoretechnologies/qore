@@ -50,6 +50,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires HttpClientIo
+%requires HttpServerAsyncIo
 
 %exec-class HttpServerStopInRequestTest
 
@@ -217,6 +218,8 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
         addTestCase("a handler that stops its server", \stopInRequestTest());
         addTestCase("an inline request that stops its server", \inlineStopTest());
         addTestCase("an inline request that releases the last reference to its server", \inlineReleaseTest());
+        addTestCase("a server stopped in an inline request is released while the lingering close of the connection "
+            "completes", \inlineStopLingeringCloseTest());
         set_return_value(main());
     }
 
@@ -331,6 +334,78 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
             "the server's stop in the inline request's thread does not wait for that request");
         assertEq(request_tid, handler.done.get(HangTimeout), "the inline request continues after the destruction");
         assertEq(0, client_done.waitForZero(HangTimeout), "the client's request ends");
+    }
+
+    #! The program releases a server that an inline request stopped while the lingering close of the request's
+    #! connection is pending (qore#6967)
+    /** The pending operation of the lingering close must hold the server's I/O controller: the controller was
+        destroyed when the other operations that held it ended, and the completion of the lingering close then ran on
+        the deleted controller (OBJECT-ALREADY-DELETED), or, when it ran already, held the controller's lock while the
+        controller and its lock were deleted (LOCK-ERROR).  The controller is destroyed only after the completion.
+    */
+    inlineStopLingeringCloseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the test hooks of HttpAsyncSocketIoController");
+        }
+        # the completion of the lingering close and the destruction of this server's controller, in the order they
+        # happen; the hooks are called for every controller in the process
+        Queue events();
+        # the controller of the server, as a weak reference: the test must not hold the controller
+        *object ctrl;
+        # the setters exist only in a debug build of the library
+        call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetLingeringCloseHook",
+            sub (object c, string uh) {
+                if (c == ctrl) {
+                    events.push("lingering close completed");
+                }
+            });
+        call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetDestructorHook",
+            sub (object c) {
+                if (c == ctrl) {
+                    events.push("controller destroyed");
+                }
+            });
+        on_exit {
+            call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetLingeringCloseHook");
+            call_static_method("HttpServerAsyncIo::HttpAsyncSocketIoController", "dbgSetDestructorHook");
+        }
+
+        Socket client();
+        {
+            # the server is released when this block ends, while the lingering close of the connection is pending
+            Queue listener_stopped();
+            InlineHandler handler(True);
+            # the lingering close waits for the client
+            HttpServer server(<HttpServerOptionInfo>{
+                "drain_timeout": HangTimeout * 2,
+                "lingering_close_timeout": HangTimeout * 2,
+            });
+            int port = startInline(server, handler, listener_stopped);
+            ctrl := server.getHttpAsyncIo();
+            on_exit if (handler.release.getCount()) {
+                handler.release.dec();
+            }
+            client.connect("localhost:" + port, HangTimeout);
+            client.send("GET /inline HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+
+            int request_tid = handler.entered.get(HangTimeout);
+            handler.release.dec();
+            assertEq(request_tid, handler.done.get(HangTimeout), "the inline request stops its server");
+            assertEq(request_tid, listener_stopped.get(HangTimeout),
+                "the stop in the inline request stops the listener");
+            hash<auto> hdr = client.readHTTPHeader(HangTimeout);
+            assertEq(200, hdr.status_code, "the request is answered");
+            client.recv(hdr."content-length".toInt(), HangTimeout);
+        }
+        # the callbacks queued for the operations that ended are made, so that a controller that the pending lingering
+        # close does not hold is destroyed by now (one destroyed later is found by the order of the events below)
+        AsyncIoController::flushCallbacks();
+        assertEq(0, events.size(), "the controller is not destroyed while the lingering close of its connection is "
+            "pending");
+        # the client closes its connection: the lingering close completes, then the controller is destroyed
+        client.close();
+        assertEq("lingering close completed", events.get(HangTimeout), "the lingering close completes first");
+        assertEq("controller destroyed", events.get(HangTimeout), "the controller is destroyed after the completion");
     }
 
     #! Sets up the server for an inline handler; returns the port of its listener

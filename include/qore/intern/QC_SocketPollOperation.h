@@ -43,6 +43,7 @@
 #include "qore/OutputStream.h"
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 class QoreEventNotifier;
 
@@ -56,6 +57,11 @@ class QoreEventNotifier;
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
 //! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
 constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
+
+//! Creates the target TLS handshake of an HTTP operation, using credentials private to that operation.
+DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
+        QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
+        int64 credential_connection_id);
 
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -441,7 +447,7 @@ constexpr int SPS_ACCEPTING = 1;
 constexpr int SPS_ACCEPTING_SSL = 2;
 constexpr int SPS_ACCEPTED = 3;
 
-class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase {
+class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketAcceptPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
     }
@@ -1428,7 +1434,7 @@ private:
 
     @since %Qore 3.0
 */
-class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase {
+class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);
@@ -1904,7 +1910,8 @@ public:
                                            int64_t handshake_timeout_ns = 0,
                                            int64_t not_before_ns_abs = 0,
                                            bool bind_unbound = false,
-                                           std::vector<int> avoid_families = std::vector<int>());
+                                           std::vector<int> avoid_families = std::vector<int>(),
+                                           bool http_client = false);
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -1983,7 +1990,7 @@ public:
             // teardown below.  Matches the pattern used on the server
             // side (SocketQuicServerPollOperation::abort).
             if (quic_session) {
-                int fd = sock->priv->socket->getDescriptor();
+                int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
                 if (fd >= 0) {
                     uint8_t close_buf[1280];
                     ssize_t close_len = quic_session->writeConnectionClose(
@@ -2062,6 +2069,8 @@ private:
     DLLLOCAL int initializeResolved(ExceptionSink* xsink);
 
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    SimpleRefHolder<QoreSSLCertificate> client_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> client_pk;
     std::string host;
     std::string service;
     //! the session is set and released by the I/O thread (setSession(), resetSession()) and read by any thread
@@ -2232,7 +2241,7 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        int fd = sock->priv->socket->getDescriptor();
+        int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
         // Graceful QUIC shutdown (nginx pattern, see nginx-1.29.4
         // src/event/quic/ngx_event_quic.c:468-620):
         //   1. Send HTTP/3 GOAWAY on each session so clients stop opening

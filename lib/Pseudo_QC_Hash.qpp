@@ -400,6 +400,33 @@ bool <hash>::compareKeys(hash<auto> other_hash) [const;flags=RET_VALUE_ONLY,NAME
    return true;
 }
 
+//! Returns @ref True "True" if the argument is the same hash value as the current hash (identity, not equality)
+/** @par Example:
+    @code{.py}
+hash<auto> copy = h;
+# True: the copy refers to the same hash value until one of them is changed
+bool same = h.isSame(copy);
+    @endcode
+
+    Tests identity, not equality: the result is @ref True "True" only if both are the same hash value.  An
+    assignment of a hash, or a hash passed as an argument, refers to the same hash value until one of the values
+    that refer to it is changed, which then refers to a changed copy; two hashes with equal keys and values that are
+    not the same hash value give @ref False "False"; a constant hash value can be shared by the places in the code
+    that give it, and is then the same hash.  To compare the keys and values of two hashes, use the
+    @ref logical_equality_operator "logical equality operator (==)".
+
+    The test takes a constant time, whatever the size of the hashes, unlike a comparison of their keys and values.
+
+    @param other_hash the hash to test
+
+    @return @ref True "True" if the argument is the same hash value as the current hash, @ref False "False" if not
+
+    @since %Qore 3.0
+ */
+bool <hash>::isSame(hash<auto> other_hash) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return h == other_hash;
+}
+
 //! Returns @ref True since hashes can return a non-zero size
 /** @return @ref True since hashes can return a non-zero size
 

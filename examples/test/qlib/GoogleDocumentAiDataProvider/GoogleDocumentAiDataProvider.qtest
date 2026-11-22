@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -48,7 +49,7 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("GoogleDocumentAiDataProvider Test", "1.0",
             \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.GOOGLE_DOCUMENTAI_CONNECTION;
+        conn_name = LiveProvider::get("google", "GOOGLE_DOCUMENTAI_CONNECTION", m_options.conn);
 
         addTestCase("independent complete factory, app, and action inventory",
             \registrationTest());
@@ -65,7 +66,9 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
 
         # Opt in with a named connection or ADC project plus an existing processor.
         # Cost: three synthetic pages; never provisions resources or assumes free-tier eligibility.
-        if (conn_name || (ENV.QORE_DOCUMENTAI_LIVE_PROJECT && ENV.GOOGLE_DOCUMENTAI_PROCESSOR_ID)) {
+        if (conn_name || (
+            LiveProvider::get("google", "QORE_DOCUMENTAI_LIVE_PROJECT") &&
+                LiveProvider::get("google", "GOOGLE_DOCUMENTAI_PROCESSOR_ID"))) {
             addTestCase("live: ping + process-document",
                 \liveGoogleDocAiTest());
         }
@@ -197,14 +200,16 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         Cost: three synthetic pages on the selected processor.
     */
     private liveGoogleDocAiTest() {
-        *string processor_id = ENV.GOOGLE_DOCUMENTAI_PROCESSOR_ID;
+        *string processor_id = LiveProvider::get("google", "GOOGLE_DOCUMENTAI_PROCESSOR_ID");
         if (!processor_id.val()) {
             testSkip("GOOGLE_DOCUMENTAI_PROCESSOR_ID must identify an existing processor for the live test");
         }
 
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = conn_name ? get_connection(conn_name) : new GoogleDocumentAiRestConnection({
-            "name": "document-ai-live-verification", "opts": {"gcp_project_id": ENV.QORE_DOCUMENTAI_LIVE_PROJECT,
-                "gcp_region": ENV.QORE_DOCUMENTAI_LIVE_REGION ?? "us"}});
+            "name": "document-ai-live-verification", "opts": {"gcp_project_id":
+                LiveProvider::get("google", "QORE_DOCUMENTAI_LIVE_PROJECT"),
+                "gcp_region": LiveProvider::get("google", "QORE_DOCUMENTAI_LIVE_REGION") ?? "us"}});
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Google Document AI connection ping "
             "failed: %s", ping.info ?? "no info"));

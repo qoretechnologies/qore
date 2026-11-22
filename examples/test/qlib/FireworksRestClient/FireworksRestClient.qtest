@@ -8,6 +8,7 @@
 %requires json
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires QoreRagTypes
@@ -229,11 +230,11 @@ public class FireworksRestClientTest inherits QUnit::Test {
     #! Uses socket readiness to drive the connection's asynchronous ping without timing sleeps
     private drivePing(AbstractPollOperation op) {
         on_exit op.abort();
-        date deadline = now_us() + 15s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 15s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> info = op.continuePoll();
             if (info) {
-                timeout remaining = deadline - now_us();
+                timeout remaining = deadline - microseconds(clock_get_monotonic_us());
                 assertTrue(remaining > 0, "ping deadline");
                 assertTrue(exists Socket::poll((info,), remaining), "socket becomes ready");
             }
@@ -277,11 +278,14 @@ public class FireworksRestClientTest inherits QUnit::Test {
     }
 
     private livePingTest() {
-        if (!ENV.FIREWORKSAI_APIKEY) {
-            testSkip("set FIREWORKSAI_APIKEY for live authentication checks (no inference)");
+        if (!LiveProvider::get("fireworks", "FIREWORKSAI_APIKEY")) {
+            testSkip(LiveProvider::enabled("fireworks") ?
+                "set FIREWORKSAI_APIKEY for live authentication checks (no inference)"
+                    : LiveProvider::skipReason("fireworks", "FIREWORKSAI_APIKEY"));
         }
         FireworksRestClient::FireworksRestConnection conn("live", "test",
-            FireworksRestClient::FireworksRestConnection::DefaultUrl, {}, {"apikey": ENV.FIREWORKSAI_APIKEY});
+            FireworksRestClient::FireworksRestConnection::DefaultUrl, {}, {"apikey":
+                LiveProvider::get("fireworks", "FIREWORKSAI_APIKEY")});
         assertTrue(conn.ping(True).ok);
         drivePing(conn.startPollConnect());
         FireworksRestClient::FireworksRestConnection invalid("invalid", "test",

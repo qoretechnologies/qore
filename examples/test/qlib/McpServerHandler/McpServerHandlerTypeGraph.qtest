@@ -143,9 +143,9 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
     sharedSubtypeSchemaTest() {
         AbstractDataProviderType dag = getSharedSubtypeDag(Depth);
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         TypeGraphMcpServerHandler handler(getLogger(), dag, getCyclicType());
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertLt(MaxSchemaTime, elapsed, "building a tool input schema must not re-describe shared subtypes");
 
@@ -173,9 +173,9 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
     }
 
     cyclicSchemaTest() {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(3), getCyclicType());
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertLt(MaxSchemaTime, elapsed, "building a self-referencing tool input schema must terminate");
 

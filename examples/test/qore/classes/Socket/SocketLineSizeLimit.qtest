@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Socket::setMaxLineSize() (qore#6914): the readers that receive until a line terminator ("\n" or "\r\n") raise a
+    SOCKET-LINE-TOO-LARGE exception, and keep no more data in memory, when a peer sends a line larger than the limit,
+    whether it is one long line or never ends; a read until another pattern, such as the end of a multi-line message,
+    is not limited by it.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketLineSizeLimitTest
+
+class SocketLineSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the limit set in most tests
+        const Limit = 4096;
+
+        #! the default limit
+        const DefaultLimit = 1048576;
+    }
+
+    constructor() : Test("SocketLineSizeLimitTest", "1.0") {
+        addTestCase("line at and over the limit", \lineLimitTest());
+        addTestCase("line that never ends", \lineFloodTest());
+        addTestCase("lines of every terminator", \terminatorsTest());
+        addTestCase("a read until another pattern is not limited", \otherPatternTest());
+        addTestCase("default limit", \defaultLimitTest());
+        addTestCase("limit accessor", \limitAccessorTest());
+        set_return_value(main());
+    }
+
+    #! starts a peer that sends the data and keeps the connection open until done
+    private hash<auto> startPeer(string data) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 20s);
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                # the reader closes the connection when it stops reading: not an error of the test
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+
+    #! reads until the pattern with the poll operation; returns the exception, if any, or the data in "data"
+    private hash<auto> readUntil(string data, string pattern, int limit) {
+        hash<auto> peer = startPeer(data);
+        on_exit peer.done.dec();
+        Socket conn = peer.server.accept(5s);
+        if (limit) {
+            conn.setMaxLineSize(limit);
+        }
+        try {
+            AbstractPollOperation op = conn.startPollRecvUntilBytesString(pattern);
+            while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+                Socket::poll((pi,), 10s);
+            }
+            return {"data": op.getOutput()};
+        } catch (hash<ExceptionInfo> ex) {
+            return {"ex": ex};
+        }
+    }
+
+    private checkTooLarge(hash<auto> res, int limit, string msg) {
+        assertEq("SOCKET-LINE-TOO-LARGE", res.ex.err, msg);
+        assertRegex(sprintf("exceeds the maximum size of %d bytes", limit), res.ex.desc, msg);
+    }
+
+    lineLimitTest() {
+        # a line of exactly the limit (with its line end) is read; one byte more is not
+        string at = strmul("a", Limit - 2) + "\r\n";
+        string over = strmul("a", Limit - 1) + "\r\n";
+        hash<auto> res = readUntil(at + "next\r\n", "\r\n", Limit);
+        assertNothing(res.ex);
+        assertEq(at, res.data);
+        checkTooLarge(readUntil(over, "\r\n", Limit), Limit, "one over");
+        checkTooLarge(readUntil(strmul("a", Limit * 16) + "\r\n", "\r\n", Limit), Limit, "far over");
+    }
+
+    lineFloodTest() {
+        # no line end, much more than the limit
+        checkTooLarge(readUntil(strmul("a", 1024 * 1024), "\r\n", Limit), Limit, "no line end");
+        checkTooLarge(readUntil(strmul("a", 1024 * 1024), "\n", Limit), Limit, "no line end, LF");
+    }
+
+    terminatorsTest() {
+        string at = strmul("b", Limit - 1) + "\n";
+        assertEq(at, readUntil(at, "\n", Limit).data);
+        checkTooLarge(readUntil(strmul("b", Limit) + "\n", "\n", Limit), Limit, "LF one over");
+    }
+
+    otherPatternTest() {
+        # the end of a multi-line message, as of a POP3 message: not a line, so not limited by the line limit
+        string message = strmul("line of the message\r\n", Limit) + ".\r\n";
+        assertTrue(message.size() > Limit * 10);
+        hash<auto> res = readUntil(message, "\r\n.\r\n", Limit);
+        assertNothing(res.ex);
+        assertEq(message.size(), res.data.size());
+    }
+
+    defaultLimitTest() {
+        # without a limit set, the default applies
+        string at = strmul("a", DefaultLimit - 2) + "\r\n";
+        hash<auto> res = readUntil(at, "\r\n", 0);
+        assertNothing(res.ex);
+        assertEq(DefaultLimit, res.data.size());
+        checkTooLarge(readUntil(strmul("a", DefaultLimit - 1) + "\r\n", "\r\n", 0), DefaultLimit, "default");
+    }
+
+    limitAccessorTest() {
+        Socket s();
+        assertEq(DefaultLimit, s.getMaxLineSize());
+        s.setMaxLineSize(Limit);
+        assertEq(Limit, s.getMaxLineSize());
+        s.setMaxLineSize(0);
+        assertEq(DefaultLimit, s.getMaxLineSize());
+        assertThrows("INVALID-ARGUMENT", \s.setMaxLineSize(), -1);
+        assertEq(DefaultLimit, s.getMaxLineSize());
+    }
+}

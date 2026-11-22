@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires DataProvider
 %requires ConnectionProvider
@@ -1031,12 +1032,12 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
     }
 
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.GOOGLE_DRIVE_CONNECTION;
+        *string conn_name = LiveProvider::get("google", "GOOGLE_DRIVE_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set GOOGLE_DRIVE_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("google", "GOOGLE_DRIVE_CONNECTION", m_options.conn);
         if (conn.getType() != "gdrive") {
             throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"gdrive\"", conn_name,
                 conn.getType());

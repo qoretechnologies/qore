@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - signal handler delivery on the signal thread, which reuses its thread data for each handler
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SignalThreadModuleCacheTest
+
+#! The signal thread uses the cache of its local data of module Programs for every handler (qore#7025)
+/** The signal thread frees the thread data of each handler when the handler ends, which disables the cache for the
+    destructors that it runs, and then runs the next handler with the same data: the cache must be used again then.
+    The state is read with dbg_module_program_cache_enabled() (debug builds only) in each handler.
+*/
+class SignalThreadModuleCacheTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SignalThreadModuleCache", "1.0", \ARGV) {
+        addTestCase("the cache is used in every handler", \cacheTest());
+        set_return_value(main());
+    }
+
+    cacheTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is not available (disabled with -b or on this platform)");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_module_program_cache_enabled() is only built with DEBUG");
+        }
+        Queue q();
+        set_signal_handler(SIGUSR1, sub (int sig) {
+            q.push(call_function("dbg_module_program_cache_enabled"));
+        });
+        on_exit remove_signal_handler(SIGUSR1);
+        for (int i = 0; i < 3; ++i) {
+            kill(getpid(), SIGUSR1);
+            assertEq(True, q.get(30s), sprintf("handler %d: the cache of module Program data is used", i + 1));
+        }
+    }
+}

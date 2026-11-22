@@ -45,6 +45,7 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cassert>
 #include <cstdio>
@@ -218,6 +219,7 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     if (references.load() > 10000000 || references.load() <= 0){
         if (type == NT_STRING) {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s) (val=\"%s\")\n",
+                    // note: safe; this is the string node itself, not a value
                     this, references.load(), getTypeName(), ((QoreStringNode*)this)->getBuffer());
         } else {
             printd(0, "AbstractQoreNode::deref() WARNING, node %p references: %d (type: %s)\n", this,
@@ -273,6 +275,8 @@ static inline int eval_check_stack(const AbstractQoreNode& node, ExceptionSink* 
     of a recursion through it (e.g. a method call evaluated from the IR interpreter), and this rarely taken path would
     otherwise make it larger (issue #5852)
 */
+// \a needs_deref tells whether \a rv is owned, and then whether the object returned is; the list or hash of a weak
+// reference is always returned owned, which the caller records before the call (see weak_eval_needs_deref())
 static QORE_INTERN_NOINLINE QoreValue eval_resolve_weakref(QoreValue rv, bool needs_deref, ExceptionSink* xsink) {
     switch (rv.getType()) {
         case NT_WEAKREF: {
@@ -284,19 +288,18 @@ static QORE_INTERN_NOINLINE QoreValue eval_resolve_weakref(QoreValue rv, bool ne
             return o;
         }
 
+        // a list or hash is read with a new reference, or as a new empty one if it was freed (qore#7198)
         case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
+            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->lock();
             if (needs_deref) {
-                h->ref();
                 rv.discard(xsink);
             }
             return h;
         }
 
         case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
+            QoreListNode* l = rv.get<WeakListReferenceNode>()->lock();
             if (needs_deref) {
-                l->ref();
                 rv.discard(xsink);
             }
             return l;
@@ -304,6 +307,12 @@ static QORE_INTERN_NOINLINE QoreValue eval_resolve_weakref(QoreValue rv, bool ne
     }
     assert(false);
     return rv;
+}
+
+// Returns whether the value that eval_resolve_weakref() returns for \a rv of type \a t is owned: the list or hash of a
+// weak reference always is (qore#7198); set by the caller before the call, which stays a tail call
+static inline bool weak_eval_needs_deref(qore_type_t t, bool needs_deref) {
+    return needs_deref || t != NT_WEAKREF;
 }
 
 QoreValue AbstractQoreNode::eval(ExceptionSink* xsink) const {
@@ -336,28 +345,32 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
 
     qore_type_t t = rv.getType();
     if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
-        return eval_resolve_weakref(rv, needs_deref, xsink);
+        bool rv_owned = needs_deref;
+        needs_deref = weak_eval_needs_deref(t, rv_owned);
+        return eval_resolve_weakref(rv, rv_owned, xsink);
     }
     return rv;
 }
 
-QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    if (!needs_eval_flag) {
+QoreValue qore_abstract_node_ops::evalImpl(AbstractQoreNode* b, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {
+    if (!b->needs_eval_flag) {
         needs_deref = false;
-        return this;
+        return b;
     }
 
-    if (eval_check_stack(*this, xsink)) {
+    if (eval_check_stack(*b, xsink)) {
         needs_deref = false;
         return QoreValue();
     }
 
     needs_deref = true;
-    QoreValue rv = evalImpl(rc, needs_deref, xsink);
+    QoreValue rv = b->evalImpl(rc, needs_deref, xsink);
 
     qore_type_t t = rv.getType();
     if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
-        return eval_resolve_weakref(rv, needs_deref, xsink);
+        bool rv_owned = needs_deref;
+        needs_deref = weak_eval_needs_deref(t, rv_owned);
+        return eval_resolve_weakref(rv, rv_owned, xsink);
     }
     return rv;
 }

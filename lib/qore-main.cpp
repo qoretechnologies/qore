@@ -44,6 +44,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_stdio.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cerrno>
@@ -156,12 +157,16 @@ static std::string qore_canonicalize_path(const char* path) {
     return std::string(path);
 }
 
-static bool qore_check_duplicate_libqore() {
+//! Returns true if more than one libqore is loaded
+/** @param self_path set to the canonical path of this libqore, which the module manager uses (see
+    QoreModuleManager::init()): dladdr() is costly with glibc, which reads every dynamic symbol of the library
+*/
+static bool qore_check_duplicate_libqore(std::string& self_path) {
     std::set<std::string> paths;
 
     Dl_info info;
     if (dladdr((void*)&qore_check_duplicate_libqore, &info) && info.dli_fname) {
-        std::string self_path = qore_canonicalize_path(info.dli_fname);
+        self_path = qore_canonicalize_path(info.dli_fname);
         if (!self_path.empty()) {
             paths.insert(self_path);
         }
@@ -215,12 +220,16 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 
     qore_license = license;
     qore_library_options = n_qore_library_options;
+    // a value that is not valid is reported now, at the start of the process (qore#7027)
+    qore_init_module_cleanup_timeout();
 
+    // the canonical path of this libqore, for the module manager
+    std::string libqore_path;
 #if defined(DARWIN) || defined(__linux__)
     static bool duplicate_checked = false;
     if (!duplicate_checked) {
         duplicate_checked = true;
-        if (qore_check_duplicate_libqore()) {
+        if (qore_check_duplicate_libqore(libqore_path)) {
             _exit(1);
         }
     }
@@ -324,7 +333,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     }
 
     qore_string_init();
-    QoreHttpClientObject::static_init();
+    qore_http_client_object_ops::static_init();
 
     // initialize random number generator
     if (!(qore_library_options & QLO_DO_NOT_SEED_RNG)) {
@@ -346,7 +355,9 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     init_qore_threads();
 
     // initialize charset encoding support
-    QEM.init(def_charset);
+    qore_encoding_manager_ops(QEM).init(def_charset);
+    // ARGV and QORE_ARGV are made before the default encoding is set (qore#7045)
+    qore_tag_argv_encoding();
 
     // init character maps
     init_charmaps();
@@ -357,7 +368,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     init_qore_types();
 
     // init module subsystem
-    QMM.init(show_module_errors);
+    QMM.init(show_module_errors, libqore_path.empty() ? nullptr : libqore_path.c_str());
 
 #ifdef HAVE_SIGNAL_HANDLING
     // init signals
@@ -406,6 +417,9 @@ void qore_cleanup() {
     // would otherwise run forever, run first, unless they have run already (see ~QoreProgramHelper())
     qore_run_exit_hooks(nullptr);
     qore_counter_ops(thread_counter).waitForZero();
+
+    // the process-end callbacks of the modules run before anything is torn down (qore#7191)
+    qore_run_process_end_callbacks(QPE_CLEANUP);
 
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
@@ -475,7 +489,10 @@ void qore_cleanup() {
     // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
     // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
     // cleared as usual
-    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    // so are they when a Program was left to a foreign thread before (the Program of the script, whose teardown at the
+    // end of the process stopped waiting for the foreign threads in it: qore#6904), as its code can use them
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+        || qore_program_private::hasLeftPrograms();
     if (!modules_left) {
         qore_release_module_program_pins();
 

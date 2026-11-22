@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires DataProvider
 %requires FsUtil
@@ -2606,12 +2607,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         return url;
     }
 
+    #! the key of the SGLang server, only when QORE_TEST_LIVE_PROVIDERS enables live sglang calls
     private *string getSglangTestApiKey() {
-        *string api_key = ENV.QORE_TEST_SGLANG_API_KEY;
-        if (!api_key.val()) {
-            api_key = ENV.QORE_BENCH_SGLANG_API_KEY;
-        }
-        return api_key;
+        return LiveProvider::get("sglang", "QORE_TEST_SGLANG_API_KEY")
+            ?? LiveProvider::get("sglang", "QORE_BENCH_SGLANG_API_KEY");
     }
 
     private string getSglangTestModel() {
@@ -2670,8 +2669,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 
     private bool skipSglangFixture() {
         if (!getSglangTestUrl().val() || !getSglangTestApiKey().val()) {
-            testSkip("SGLang extraction check requires QORE_TEST_SGLANG_URL and "
-                "QORE_TEST_SGLANG_API_KEY, or QORE_BENCH_SGLANG_URL and "
+            testSkip("SGLang extraction check requires " + LiveProvider::OptInVar + "=sglang (or 1) and "
+                "QORE_TEST_SGLANG_URL and QORE_TEST_SGLANG_API_KEY, or QORE_BENCH_SGLANG_URL and "
                 "QORE_BENCH_SGLANG_API_KEY");
             return True;
         }

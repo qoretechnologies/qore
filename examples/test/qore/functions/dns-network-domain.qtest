@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the name-resolution functions are in the NETWORK functional domain as well as in EXTERNAL_INFO (qore#7133): a name
+# lookup sends queries over the network, which can carry data out of the process, so code that may not use the
+# network (PO_NO_NETWORK) cannot call them, neither by name in code (refused at parse time) nor by a name given at run
+# time; code restricted from EXTERNAL_INFO still cannot call them, and code that may use both can;
+# SandboxManager::checkNetworkConnect(), which resolves names, is in the NETWORK domain too, but module code that serves
+# restricted code still calls it
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/dns-network-domain"
+%requires QUnit
+# loaded by the test, so that the restricted Program imports it
+%requires NetCheck
+
+%exec-class DnsNetworkDomainTest
+
+class DnsNetworkDomainTest inherits QUnit::Test {
+    public {
+        #! a call of each name-resolution function in code, by its name
+        const Calls = {
+            "gethostbyname": "gethostbyname(\"localhost\")",
+            "gethostbyname_long": "gethostbyname_long(\"localhost\")",
+            "gethostbyaddr": "gethostbyaddr(\"127.0.0.1\")",
+            "gethostbyaddr_long": "gethostbyaddr_long(\"127.0.0.1\")",
+            "getaddrinfo": "getaddrinfo(\"localhost\")",
+            "getaddrinfo_async": "getaddrinfo_async(\"localhost\")",
+            "getnameinfo_async": "getnameinfo_async(\"127.0.0.1\")",
+        };
+
+        #! the argument of each function for a call by a name given at run time
+        const Args = {
+            "gethostbyname": "localhost",
+            "gethostbyname_long": "localhost",
+            "gethostbyaddr": "127.0.0.1",
+            "gethostbyaddr_long": "127.0.0.1",
+            "getaddrinfo": "localhost",
+            "getaddrinfo_async": "localhost",
+            "getnameinfo_async": "127.0.0.1",
+        };
+    }
+
+    constructor() : QUnit::Test("DnsNetworkDomainTest", "1.0") {
+        addTestCase("parse", \parseTest());
+        addTestCase("runtime", \runtimeTest());
+        addTestCase("external info", \externalInfoTest());
+        addTestCase("unrestricted", \unrestrictedTest());
+        addTestCase("checkNetworkConnect", \checkNetworkConnectTest());
+        set_return_value(main());
+    }
+
+    #! the error of parsing a call of a function in a new Program with \a po, or "parsed"
+    private static string parseErr(int po, string call) {
+        Program p(po);
+        try {
+            p.parse(sprintf("auto sub f() { return %s; }", call), "probe");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    parseTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            assertEq("PARSE-EXCEPTION", parseErr(PO_MODERN | PO_NO_NETWORK, i.value), i.key);
+        }
+    }
+
+    runtimeTest() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.parse("auto sub f(string name, string arg) { return call_function(name, arg); }", "probe");
+        foreach hash<auto> i in (Args.pairIterator()) {
+            string err;
+            try {
+                p.callFunction("f", i.key, i.value);
+                err = "called";
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq("INVALID-FUNCTION-ACCESS", err, i.key);
+        }
+    }
+
+    externalInfoTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            assertEq("PARSE-EXCEPTION", parseErr(PO_MODERN | PO_NO_EXTERNAL_INFO, i.value), i.key);
+        }
+    }
+
+    unrestrictedTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            assertEq("parsed", parseErr(PO_MODERN, i.value), i.key);
+        }
+        # the functions still resolve names for code that may use the network (localhost may resolve to either family
+        # first)
+        assertTrue(inlist(gethostbyname("localhost"), ("127.0.0.1", "::1")), "localhost resolves");
+    }
+
+    #! SandboxManager::checkNetworkConnect(), which resolves the host when a policy applies, is in the NETWORK domain:
+    #! code restricted from the network cannot call it, but module code that serves such code still can (with the
+    #! module's own restrictions), as it can connect for it
+    checkNetworkConnectTest() {
+        assertEq("PARSE-EXCEPTION", parseErr(PO_MODERN | PO_NO_NETWORK,
+            "SandboxManager::checkNetworkConnect(\"qore-test-7133.invalid\", 80)"), "direct call");
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("NetCheck");
+        p.parse("string sub f(string host) { return NetCheck::check(host, 80); }", "probe");
+        # no policy applies, so nothing is checked or resolved (a name under .invalid never resolves)
+        assertEq("allowed", p.callFunction("f", "qore-test-7133.invalid"), "through a module");
+        # a sandboxed caller: the module's own network options apply to its code, and the caller's policy is checked
+        # (addresses, so nothing is resolved)
+        {
+            Program sp(PO_MODERN | PO_NO_NETWORK);
+            SandboxManager sm();
+            sm.addNetworkAllowedIPRange("192.0.2.0/24");
+            sp.setSandboxManager(sm);
+            sp.loadModule("NetCheck");
+            sp.parse("string sub f(string host) { return NetCheck::check(host, 80); }", "probe");
+            assertEq("NETWORK-ACCESS-DENIED", sp.callFunction("f", "127.0.0.1"), "sandboxed, denied address");
+            assertEq("allowed", sp.callFunction("f", "192.0.2.1"), "sandboxed, allowed address");
+        }
+        # code that may use the network calls it directly
+        assertEq("parsed", parseErr(PO_MODERN, "SandboxManager::checkNetworkConnect(\"qore-test-7133.invalid\", 80)"));
+        assertEq(NOTHING, SandboxManager::checkNetworkConnect("qore-test-7133.invalid", 80));
+    }
+}

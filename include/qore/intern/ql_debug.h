@@ -117,6 +117,12 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_
 typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
 
+//! called by QoreListNode::derefImpl() and QoreHashNode::derefImpl() when the free of a list or hash that has weak
+//! holders starts, before its entries are freed; called with no lock held; \a type_name is "list" or "hash"; set by
+//! dbg_hold_container_free() (qore#7198)
+typedef void (*qore_dbg_container_free_hook_t)(const char* type_name);
+DLLLOCAL extern std::atomic<qore_dbg_container_free_hook_t> qore_dbg_container_free_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -164,6 +170,20 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+
+//! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
+DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
+
+//! Returns the number of objects in the async I/O controller's registry of submitted poll operations without a C++
+//! poll operation (those implemented in Qore)
+DLLLOCAL size_t qore_dbg_registered_qore_ops();
+
+//! Returns True if dbg_http3_client_hide_error() makes the HTTP/3 client poll operations report no error
+DLLLOCAL bool qore_dbg_h3_client_error_hidden();
+
+//! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
+//! stream for this read of the count (0 when no progress is simulated for the stream)
+DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
 //! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
 //! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
@@ -392,7 +412,10 @@ DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
 
 //! The query options of the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
 struct QoreDbgCaresQueryOptions {
-    //! the timeout of the first try of a query
+    //! the timeout of the first try of a query; c-ares (1.32 and later) caps it with its maximum timeout, which the
+    //! channels are given as the greater of this timeout and c-ares's default maximum (5 s), and it takes a timeout
+    //! from the latency of a server once it has a few answers from it (five times the average latency, at least
+    //! 250 ms; qore#7119)
     int timeout_ms = 1000;
     //! the tries of a query
     int tries = 3;
@@ -409,6 +432,47 @@ struct QoreDbgCaresQueryOptions {
 //! Sets the query options of the c-ares channels made from now on that ask the servers of
 //! qore_dbg_cares_set_servers(); returns the previous options
 DLLLOCAL QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts);
+
+//! A synchronous transport for the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
+/** While set, each UDP socket that such a channel makes is one end of a Unix-domain datagram socketpair, and the other
+    end is given to @ref peer, which owns it from then on: a query is at the other end when c-ares's send returns, and
+    an answer written there can be read by c-ares at once, on every platform (UDP over the loopback interface is
+    delivered by an input thread on macOS, and a delivery delayed beyond the timeout of a query made a lookup of a
+    test time out; qore#7119).  c-ares sees the address that it connected the socket to as the peer of the socket.
+*/
+struct QoreDbgCaresLocalTransport {
+    //! called with the other end of each socketpair; it must not throw
+    void (*peer)(int fd, void* arg) = nullptr;
+    //! the argument of @ref peer
+    void* arg = nullptr;
+};
+
+//! Sets the transport of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers()
+/** @param transport the transport; one with no @ref QoreDbgCaresLocalTransport::peer "peer" for UDP sockets
+
+    @return the previous setting
+*/
+DLLLOCAL QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport);
+
+//! Sets the longest wait of a thread that reaches an end point of the process while the process-end callbacks run on
+//! another thread (qore#7191)
+DLLLOCAL void qore_dbg_process_end_set_wait_ms(int64 ms);
+
+//! Waits until the process-end callbacks have started to run, at most \a timeout_ms; returns true if they have
+DLLLOCAL bool qore_dbg_process_end_wait_started(int64 timeout_ms);
+
+//! Waits until a thread waits for the process-end callbacks that run, at most \a timeout_ms; returns true if one does
+DLLLOCAL bool qore_dbg_process_end_wait_waiter(int64 timeout_ms);
+
+//! A registry of process-end callbacks for the unit tests, with its own process ID and wait bound; see
+//! qore_register_process_end_callback()
+DLLLOCAL void* qore_dbg_process_end_cbs_new(int64 wait_ms);
+DLLLOCAL void qore_dbg_process_end_cbs_delete(void* cbs);
+DLLLOCAL int64 qore_dbg_process_end_cbs_add(void* cbs, qore_process_end_callback_t cb, void* arg, pid_t pid);
+DLLLOCAL int qore_dbg_process_end_cbs_remove(void* cbs, int64 id);
+DLLLOCAL bool qore_dbg_process_end_cbs_run(void* cbs, qore_process_end_e reason, pid_t pid);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_started(void* cbs, int64 timeout_ms);
+DLLLOCAL bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms);
 
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file

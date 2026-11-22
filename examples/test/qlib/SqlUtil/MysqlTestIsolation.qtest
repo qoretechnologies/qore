@@ -41,7 +41,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
                 Datasource connstr_ds(connstr);
                 connstr_ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                skip_reason = TestRun::getConnectFailureReason("no DB connection", ex);
             }
         }
         addTestCase("a non-MySQL connection has no run database", \notMysql());
@@ -64,7 +64,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
 
     private checkSkip() {
         if (skip_reason) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 
@@ -157,10 +157,10 @@ class MysqlTestIsolationTest inherits QUnit::Test {
             ds.commit();
             holder.exec("insert into `" + db + "`.t values (1)");
         }
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         list<string> dropped = MysqlRunDatabase::dropLeftovers(connstr);
         assertFalse(inlist(db, dropped));
-        assertLt(60s, now_us() - start, "the drop is not waited for long");
+        assertLt(60s, microseconds(clock_get_monotonic_us()) - start, "the drop is not waited for long");
         assertEq(1, ds.selectRow("select count(*) as c from information_schema.schemata where schema_name = %v",
             db).c);
     }

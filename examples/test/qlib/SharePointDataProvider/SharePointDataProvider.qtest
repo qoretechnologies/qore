@@ -1068,6 +1068,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
             testSkip("no connection specified; use -c <connection_name>");
             return;
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         return get_connection(conn_name);
     }
 

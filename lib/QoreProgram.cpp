@@ -34,6 +34,7 @@
 #include <qore/Restrictions.h>
 #include <qore/QoreCounter.h>
 #include <qore/QoreSandboxManager.h>
+#include <qore/ParseOptionMap.h>
 #include <chrono>
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/QoreSignal.h"
@@ -72,6 +73,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <string>
 #include <set>
@@ -1092,8 +1094,6 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
-    // a Program that a trusted build creates does not identify the code that the build serves (qore#6852)
-    created_in_trusted_build = qore_thread_in_trusted_build();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -1106,6 +1106,17 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         qore_caller_sandbox_refs(all, policy);
         ReferenceHolder<QoreSandboxManager> creator_sm(all, nullptr);
         ReferenceHolder<QoreSandboxManager> creator_policy(policy, nullptr);
+        // code that the sandboxes of different tenants govern together belongs to no tenant, and a Program that it
+        // created would keep their composite for good: the Program is not created (the caller deletes it; qore#7009);
+        // a Program created without an exception sink (a module's) keeps the composite, which every isolation
+        // decision treats as mixed
+        if (xsink && creator_sm) {
+            std::string domain;
+            if (QoreSandboxComposition::foldIsolationDomain(*creator_sm, domain) < 0) {
+                xsink->raiseException("SANDBOX-ISOLATION-ERROR", "code that the sandboxes of more than one isolation "
+                    "domain govern together cannot create a Program");
+            }
+        }
         if (creator_sm || creator_policy) {
             try {
                 addCreatorSandbox(*creator_sm, *creator_policy);
@@ -2375,6 +2386,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     // the parent's options are read once, so that the test and the steps below use the same value (issue #6078); the
     // creator's checks read them already, and the child inherits that value, not one that changed meanwhile (#6176)
     QoreParseOptions p_po = p_parse_options ? *p_parse_options : p_pgm->priv->pwo.parse_options.load();
+    // PO_IN_MODULE marks the Program of a user module: a Program that the module's code creates is not module code,
+    // so it does not inherit the mark, or the caller walk would look past it as module code (qore#7067)
+    p_po &= ~QoreParseOptions(PO_IN_MODULE);
     // if children inherit restrictions, then set all child restrictions
     if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
@@ -2748,7 +2762,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             waitForAllThreadsToTerminateIntern();
             // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
             // that it uses is not destroyed (see leaveForeignThreads())
-            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
+            leave = foreignThreadsLeftIntern() && !ptid
                 && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
             if (leave) {
                 // the Program is kept allocated for the thread
@@ -2756,7 +2770,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             } else if (!ptid) {
                 // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
                 // final, and is made before any of the Program's data is destroyed
-                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
+                foreign_teardown_tid = foreignThreadsLeftIntern() || foreign_wait_deadline_us ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -4684,8 +4698,8 @@ void ThreadLocalProgramData::dbgClearTermination(ExceptionSink& xsink) {
     if (!pgm || !pgm->priv->debugger_terminating) {
         return;
     }
-    QoreValue err = xsink.getExceptionErr();
-    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(xsink.getExceptionErr()) == "THREAD-CANCELLED") {
         printd(5, "ThreadLocalProgramData::dbgClearTermination() this: %p, tid: %d\n", this, q_gettid());
         xsink.clear();
     }
@@ -5461,6 +5475,33 @@ int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* p
     return checkModernConflict(inherited, po, true, label.c_str(), xsink);
 }
 
+int qore_program_private::raiseLockedOptions(const QoreParseOptions& requested, ExceptionSink* xsink) {
+    QoreStringNode* desc = new QoreStringNode("parse options have been locked on this program object; requested:");
+    for (unsigned i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(uint64_t(1) << i);
+        if (requested.getLo() & bit) {
+            auto it = pomaps.pomap.find(bit);
+            const char* name = it == pomaps.pomap.end() ? ParseOptionMap::find_name(QoreParseOptions(bit))
+                : it->second;
+            if (name) {
+                desc->sprintf(" %s", name);
+            } else {
+                desc->sprintf(" bit %u", i);
+            }
+        }
+        if (requested.getHi() & bit) {
+            const char* name = ParseOptionMap::find_name(QoreParseOptions(0, bit));
+            if (name) {
+                desc->sprintf(" %s", name);
+            } else {
+                desc->sprintf(" bit %u", i + 64);
+            }
+        }
+    }
+    xsink->raiseException("OPTIONS-LOCKED", desc);
+    return -1;
+}
+
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
     priv->setParseOptions(po, xsink);
 }
@@ -5671,6 +5712,11 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
 }
 
 QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
+    // the top-level code of a Program that may not control threads is not run by the expression of the background
+    // operator itself (qore#7087)
+    if (qore_check_background_direct_entry(this, false, xsink)) {
+        return QoreValue();
+    }
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
@@ -5730,7 +5776,7 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
 
 template <bool LexicalInvocation>
 QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
-        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy, bool given_args) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -5763,6 +5809,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const
     } else {
         fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
     }
+    // a list that the caller gives is a temporary list of evaluated values that the call takes over (qore#6052)
+    if (given_args && args) {
+        fc->setTmpArgs();
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
@@ -5778,6 +5828,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
     return callFunctionImpl<true>(name, args, xsink, policy);
+}
+
+QoreValue qore_program_private::callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink) {
+    return callFunctionImpl<false>(name, args, xsink, {}, true);
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {

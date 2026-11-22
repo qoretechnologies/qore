@@ -128,7 +128,7 @@ class TestRunIsolationTest inherits QUnit::Test {
 
     private masking() {
         string pw = "Secret-pw-9";
-        # a datasource string that cannot be parsed (its port is not a number), as quoted in a message
+        # a datasource string that cannot be parsed (its port is not a number)
         string bad = "mysql:user/" + pw + "@db%host:12x";
         string msg;
         *hash<auto> config;
@@ -138,11 +138,13 @@ class TestRunIsolationTest inherits QUnit::Test {
             msg = ex.desc;
         }
         assertNothing(config, "the datasource string cannot be parsed");
-        assertNeq(-1, msg.find(pw), "the message quotes the password");
+        # Qore's message does not quote the string (qore#6961); a message of other code, such as a driver's, can
+        assertEq(-1, msg.find(pw), "Qore's message does not quote the password");
+        msg = sprintf("invalid characters present in port number in '%s'", bad);
         assertEq(-1, TestRun::maskSecrets(msg, bad).find(pw));
         # without the datasource string: the "user/password@" form
         assertEq(-1, TestRun::maskSecrets(msg).find(pw));
-        assertEq("x 'pgsql:u/****@db' and u/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
+        assertEq("x 'pgsql:****/****@db' and ****/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
         # a password with an "@" is masked whole when its datasource string is given
         string at = "oracle:scott/a@b" + pw + "@orcl";
         assertEq(-1, TestRun::maskSecrets("error in " + at, at).find(pw));
@@ -247,7 +249,7 @@ class TestRunIsolationTest inherits QUnit::Test {
             "}\n"
             "h.pgsql = PgsqlRunSchema::setup(\"pgsql:u/p@db%%localhost:1\", \"x\");\n"
             "h.pgsql_jdbc = PgsqlRunSchema::setup(\"jdbc:u/p@db{url=postgresql://localhost:1/db}\", \"x\");\n"
-            "h.pgoptions = getenv(\"PGOPTIONS\");\n"
+            "h.pgoptions = getenv(\"PGOPTIONS\");\n" # live-provider-optin: PGOPTIONS of the local PostgreSQL client
             "h.mysql = MysqlRunDatabase::getConnectionString(\"mysql:u/p@db%%localhost:1\", \"x\");\n"
             "h.mssql = MssqlRunDatabase::getConnectionString(\"freetds:u/p@db%%localhost:1\", \"x\");\n"
             "h.mssql_jdbc = MssqlRunDatabase::getConnectionString(\"jdbc:u/p@db{url=sqlserver://localhost:1}\", "

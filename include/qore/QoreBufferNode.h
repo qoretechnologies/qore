@@ -215,9 +215,6 @@ private:
         DLLLOCAL AlignedByteBuffer& operator=(const AlignedByteBuffer& old);
         DLLLOCAL ~AlignedByteBuffer();
 
-        DLLLOCAL void resize(size_t n_size, bool clear = false);
-        DLLLOCAL void clear();
-
         DLLLOCAL uint8_t* data() {
             return ptr;
         }
@@ -231,6 +228,8 @@ private:
         }
 
     private:
+        friend class qore_aligned_byte_buffer_ops;
+
         uint8_t* ptr = nullptr;
         size_t len = 0;
     };
@@ -710,6 +709,7 @@ protected:
 
 private:
     friend class qore_buffer_node_private;
+    friend class qore_aligned_byte_buffer_ops;
 
     QoreBufferElementType element_type;
     bool nullable_elements;

@@ -57,7 +57,7 @@ for (int i = 0; i < 5; i++) {
 
 # Test 1: Sequential requests (stress the polling loop)
 report("\nTest 1: 20 sequential requests\n");
-date start1 = now_us();
+date start1 = microseconds(clock_get_monotonic_us());
 int success1 = 0;
 int error1 = 0;
 
@@ -74,7 +74,7 @@ for (int i = 0; i < 20; i++) {
     }
 }
 
-date elapsed1 = now_us() - start1;
+date elapsed1 = microseconds(clock_get_monotonic_us()) - start1;
 float seconds1 = get_duration_microseconds(elapsed1).toFloat() / 1000000.0;
 if (seconds1 <= 0.0) {
     seconds1 = 0.000001;
@@ -84,7 +84,7 @@ report("  Completed: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
 
 # Test 2: Concurrent requests (multiple threads polling simultaneously)
 report("\nTest 2: 10 concurrent requests\n");
-date start2 = now_us();
+date start2 = microseconds(clock_get_monotonic_us());
 Counter done(10);
 int success2 = 0;
 int error2 = 0;
@@ -110,7 +110,7 @@ for (int i = 0; i < 10; i++) {
 }
 
 done.waitForZero();
-date elapsed2 = now_us() - start2;
+date elapsed2 = microseconds(clock_get_monotonic_us()) - start2;
 float seconds2 = get_duration_microseconds(elapsed2).toFloat() / 1000000.0;
 report("  Completed: %d success, %d errors in %.3f seconds\n",
        success2, error2, seconds2);

@@ -273,7 +273,7 @@ class BoundedTransactionTest inherits QUnit::Test {
         on_exit { holder.rollback(); holder.close(); }
         holder.execRaw("lock table " + f.name + " in access exclusive mode");
         f.table.beginOfflineRewriteTransaction(100);
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         *hash<ExceptionInfo> failure;
         try { f.table.update({"value": 22}, {"id": 1}); }
         catch (hash<ExceptionInfo> ex) { failure = ex; }
@@ -281,7 +281,8 @@ class BoundedTransactionTest inherits QUnit::Test {
         holder.rollback();
         assertEq("DBI:PGSQL:ERROR", failure.err);
         assertEq("55P03", failure.arg.alterr);
-        assertTrue(now_us() - start < 10s, "the lock wait, not an unbounded wait, ends the blocked statement");
+        assertTrue(microseconds(clock_get_monotonic_us() - start) < 10s,
+            "the lock wait, not an unbounded wait, ends the blocked statement");
 
         # Stricter session settings remain effective for every deadline.  The statement timeout leaves the ordinary
         # statements of the check a margin on a loaded server, and is still shorter than the statement it cancels.

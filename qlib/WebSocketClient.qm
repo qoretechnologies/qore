@@ -354,6 +354,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - new @ref WebSocketClient::WebSocketClientWithSerialization::sendDataOnConnection() "sendDataOnConnection()" sends
+      a message only if the client's connection is the one with the given ID, so a message that belongs to one
+      connection (a heartbeat) and was held across a reconnect is dropped instead of being sent on the new connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
     - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
@@ -385,9 +389,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
-    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code or the
+      code that calls it has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an
+      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - \c WebSocketConnectionObject::getImpl() is declared to return a
       @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
       @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
@@ -1435,8 +1440,7 @@ public const MESSAGE_WS_PONG = "pong";
     Program objects with the following parse options set:
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
-      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()";
-      it is required only when the module is loaded by its path, where the declaration does not apply
+      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()"
 */
 public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper {
     public {
@@ -1460,6 +1464,25 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! Reconnect retry delay
         const ReconnectDelay = 2s;
+    }
+
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The client creates its connection manager when it connects, and again after a detach or a fallback from
+            HTTP/2 or HTTP/3 to HTTP/1.1: the code that created the client decides, so a client that the host creates
+            and lends to restricted code connects for it, only to the target that it had when it was created (the proof
+            is bound to it); nothing if the creator could not create a manager, whose client is then refused when it
+            connects (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+        #! HttpClientIo connection manager for fully async H2/H3 connections
+        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
+            lifecycle, protocol negotiation, and async I/O controller registration.  Not visible to subclasses: a
+            manager created for a client that trusted code lent is a capability of the client's target (qore#7262)
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
     }
 
     private {
@@ -1711,12 +1734,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         *Socket async_wake_socket;
 
-        #! HttpClientIo connection manager for fully async H2/H3 connections
-        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
-            lifecycle, protocol negotiation, and async I/O controller registration.
-            @since WebSocketClient 2.4
-        */
-        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
         /** Provides async sendData()/readData() for bidirectional WebSocket
@@ -1840,7 +1857,18 @@ WebSocketClient ws(\event(), {
         plus the following keys; its \c timeout option (default: 15 seconds) also bounds the close handshake: a
         close started by the client waits for the server's close frame, as RFC 6455 section 5.5.1 requires, at most
         this time, and the connection then ends with the close code 1006 and the reason
-        <tt>"close handshake timed out"</tt>
+        <tt>"close handshake timed out"</tt>.  The \c timeout option also bounds the connection of a connect, over
+        HTTP/1.1, HTTP/2 and HTTP/3 alike, including the retries of its connection: each attempt to connect ends at
+        the \c connect_timeout (default: 30 seconds), a connection that could not be established is retried up to
+        \c max_request_retries times (default: 3), and when the \c timeout runs out first, the connect fails with
+        \c HTTPCLIENT-TIMEOUT, which names the target and gives the error of the attempt before the last, if any.
+        Without \c connect_timeout, the default \c timeout therefore ends the first attempt, and a server that does
+        not answer is not retried; when a connect should fail over to a new attempt in its time, set
+        \c connect_timeout below <tt>timeout / (max_request_retries + 1)</tt>, so that every attempt fits in it (the
+        \c connect_timeout is also the time that a connect waits for another connect or disconnect in progress; see
+        @ref websocketclient_lifecycle).  The timeout bounds the connection, not the handshake on it: the answer to an
+        HTTP/2 or HTTP/3 extended CONNECT is waited for at most the \c timeout once it was sent, and the HTTP/1.1
+        Upgrade that the \c "auto" mode then falls back to has a time (and retries) of its own
         - \c asyncapi: the path or URL to an AsyncAPI schema file for message validation; only used if
           \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
         - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
@@ -1850,6 +1878,8 @@ WebSocketClient ws(\event(), {
         - \c extensions: a list of @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" instances
           to offer to the server (e.g., @ref WebSocketUtil::PerMessageDeflateExtension for compression)
         - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c max_request_retries: the number of times that a connect retries a connection that could not be
+          established, all within the \c timeout (default: 3; 0 disables the retries)
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
@@ -1859,9 +1889,7 @@ WebSocketClient ws(\event(), {
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object for message validation;
           overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
-            loaded by its path
+            current thread's execution to another thread (default value: @ref Qore::thread_yield())
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -3547,6 +3575,9 @@ ws.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(opts.url, {"proxy": opts.proxy});
         if (opts.reconnect) {
             reconnect = True;
         }
@@ -3576,12 +3607,6 @@ ws.setEventQueue();
             }
             yield = remove http_opts.yield;
         }
-%ifdef PO_NO_PROCESS_CONTROL
-        else {
-            raiseError("option hash to WebSocketClient::constructor() missing 'yield' key giving the thread yield "
-                "closure/call reference which is required when PO_NO_PROCESS_CONTROL is in effect");
-        }
-%endif
 
         if (exists http_opts.start_thread) {
             if (!http_opts.start_thread.callp()) {
@@ -3593,12 +3618,6 @@ ws.setEventQueue();
             # the capability of the code that the host runs (qorus#867)
             start_thread = cap;
         }
-%ifdef PO_NO_THREAD_CONTROL
-        else {
-            raiseError("option hash to WebSocketClient::constructor() missing 'start_thread' key giving the a "
-                "closure/call reference to start new threads which is required when PO_NO_THREAD_CONTROL is in effect");
-        }
-%endif
 
         if (http_opts.hasKey("raw_callback")) {
             if (!http_opts.raw_callback.callp()) {
@@ -5094,11 +5113,7 @@ ws.setEventQueue();
             body();
         };
         try {
-%ifdef PO_NO_THREAD_CONTROL
-            return start_thread(run);
-%else
             return (use_start_thread && start_thread) ? start_thread(run) : background run();
-%endif
         } catch (hash<ExceptionInfo> ex) {
             # the caller keeps and releases the action: a thread that the hook started anyway cannot take it over
             if (handoff) {
@@ -5480,7 +5495,7 @@ ws.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("WebSocketClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("WebSocketClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
                     vsprintf(message, args));
             }
@@ -5731,7 +5746,10 @@ ws.setEventQueue();
     */
     private ensureHcioMgr(*string force_protocol) {
         if (!hcio_mgr) {
-            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
+            # the code that created the client decides (qore#7262)
+            hcio_mgr = creator_proof
+                ? new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol), creator_proof)
+                : new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
         }
     }
 
@@ -5748,6 +5766,12 @@ ws.setEventQueue();
         ensureHcioMgr();
 
         int retries = 0;
+        # the timeout option bounds the connection of the connect as a whole, as for an HTTP/1.1 connect
+        # (HttpClientConnectionManager::acquireAndStartStreaming()): the acquisition of each attempt's connection and
+        # the wait for it to become ready share one deadline, and no attempt starts once it has passed (qore#6850)
+        *int deadline = timeout_ms > 0 ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING;
+        # the connection error of the last attempt that was retried, which a timeout of the connect then reports
+        *hash<ExceptionInfo> retried_error;
         while (True) {
             # not after the destructor began, also not as a retry; the destructor shuts the manager down, which ends
             # the acquisition
@@ -5759,7 +5783,34 @@ ws.setEventQueue();
             # Acquire a stream — the manager negotiates the best protocol via
             # ALPN (H1/H2) and Alt-Svc (H3). We use the same stream for the
             # WS handshake — no probe-and-discard.
-            HttpClientIo::HttpClientStreamHandle stream = hcio_mgr.acquireStream(http_opts.url);
+            HttpClientIo::HttpClientStreamHandle stream;
+            try {
+                stream = hcio_mgr.acquireStream(http_opts.url, NOTHING, getConnectTimeLeft(deadline));
+            } catch (hash<ExceptionInfo> ex) {
+                if (handshake_canceled) {
+                    rethrow;
+                }
+                # the deadline ended the acquisition: final, with the error of an attempt retried before it
+                if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                    if (retried_error) {
+                        throwRetriedConnectTimeout(ex, retried_error);
+                    }
+                    rethrow;
+                }
+                # a connection that could not be established is retried on a fresh one while there is time, as an
+                # HTTP/1.1 connect retries it
+                if (retries < getHcioMaxConnectRetries() && !connectDeadlinePassed(deadline)
+                        && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                    ++retries;
+                    logInfo("WebSocket connection error (%s: %s); retrying on a fresh connection (%d/%d)",
+                        ex.err, ex.desc, retries, getHcioMaxConnectRetries());
+                    retried_error = ex;
+                    continue;
+                }
+                rethrow;
+            }
+            # the waits for the connection to become ready end at the deadline too
+            stream.setRequestDeadline(deadline, timeout_ms);
 
             if (stream instanceof HttpClientIo::Http1ClientStreamHandle) {
                 logDebug("HCIO auto: negotiated H1, using Upgrade handshake");
@@ -5774,6 +5825,17 @@ ws.setEventQueue();
                 # the destructor canceled the handshake: neither retried nor taken for a server that cannot tunnel
                 # WebSocket
                 if (handshake_canceled) {
+                    rethrow;
+                }
+                # the deadline bounds the connection: a connection that was not ready by then ends the connect, without
+                # a retry or a fallback (the stream's flag decides, not the clock: a wait can end up to a clock tick
+                # before the deadline); once the CONNECT has been sent, the connection was established, and the
+                # handshake's answer (also a timeout, which the read of the response has a time of its own for) is
+                # handled as before: an HTTP/1.1 fallback gets a time of its own
+                if (stream.requestDeadlineExpired() || (!stream.isSubmitted() && connectDeadlinePassed(deadline))) {
+                    if (ex.err == "HTTPCLIENT-TIMEOUT" && retried_error) {
+                        throwRetriedConnectTimeout(ex, retried_error);
+                    }
                     rethrow;
                 }
                 # A connection that died while it was still being established (e.g. a
@@ -5801,6 +5863,7 @@ ws.setEventQueue();
                     # connection at checkout and creates a fresh one
                     remove hcio_stream;
                     remove hcio_frame_queue;
+                    retried_error = ex;
                     continue;
                 }
                 # The HTTP connection itself negotiated fine, but the RFC 8441/9220
@@ -5821,12 +5884,49 @@ ws.setEventQueue();
                     is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc);
                 # discard the failed H2/H3 stream and manager so the H1 path opens a
                 # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
+                # in the time that is left if the connection was not established (qore#6850), else with a time of its
+                # own, as the read of the CONNECT's response had
+                *int fallback_deadline = stream.isSubmitted() ? NOTHING : deadline;
                 remove hcio_stream;
                 remove hcio_frame_queue;
                 remove hcio_mgr;
-                return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+                return connectHttp1WebSocketViaHcio(hdr, \info, reconnect, fallback_deadline);
             }
         }
+    }
+
+    #! Returns the time left until the deadline of a connect, for an acquisition of its connection
+    /** @param deadline the deadline of the connect on the monotonic clock, in microseconds, if any
+
+        @return the milliseconds left, rounded up and at least 1 (an acquisition with 0 would not be bounded), or
+        @ref nothing without a deadline
+
+        @since WebSocketClient 2.5
+    */
+    private static *int getConnectTimeLeft(*int deadline) {
+        if (!deadline) {
+            return;
+        }
+        int left_us = deadline - clock_get_monotonic_us();
+        return left_us > 0 ? (left_us + 999) / 1000 : 1;
+    }
+
+    #! Returns @ref True if the deadline of a connect has passed
+    /** @since WebSocketClient 2.5
+    */
+    private static bool connectDeadlinePassed(*int deadline) {
+        return deadline && clock_get_monotonic_us() >= deadline;
+    }
+
+    #! Raises the timeout of a connect with the error of the attempt retried before it (qore#6849, #6850)
+    /** @param ex the timeout
+        @param retried_error the error of the attempt before the one that the timeout ended
+
+        @since WebSocketClient 2.5
+    */
+    private static throwRetriedConnectTimeout(hash<ExceptionInfo> ex, hash<ExceptionInfo> retried_error) {
+        throw ex.err, HttpClientIo::HttpClientConnectionManager::getRetriedTimeoutDesc(ex.desc, retried_error),
+            HttpClientIo::HttpClientConnectionManager::getRetriedTimeoutArg(ex.arg, retried_error);
     }
 
     #! Returns the number of times the WebSocket CONNECT handshake retries a dead connection
@@ -6041,7 +6141,7 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private hash<auto> connectHttp1WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
-            *bool reconnect) {
+            *bool reconnect, *int deadline) {
         http2_websocket = False;
         http3_websocket = False;
         logDebug("Using HttpClientIo for HTTP/1.1 WebSocket handshake (101 Upgrade)");
@@ -6081,7 +6181,9 @@ ws.setEventQueue();
         checkHandshakeCanceled(hcio_mgr);
         {
             on_exit clearHandshakeMgr();
-            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False);
+            # a fallback from an HTTP/2 or HTTP/3 connect has the time left of the connect (qore#6850)
+            hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr, False, NOTHING,
+                deadline);
         }
 
         # Read the 101 response headers from the Channel
@@ -6173,9 +6275,7 @@ class MyObserver inherits Observer {
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
-            loaded by its path
+            current thread's execution to another thread (default value: @ref Qore::thread_yield())
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -6220,6 +6320,44 @@ class MyObserver inherits Observer {
         hash<auto> headers = {};
         validateOutgoingMessage(\value, \headers);
         send(serializeData(value));
+    }
+
+    #! Sends string data over the web socket only if the client's connection is the one with the given ID
+    /** A message that belongs to one connection (a heartbeat, a keep-alive, an acknowledgement of what that connection
+        received) must not be sent on another: sendData() sends on the client's connection at the time it is called,
+        which after a reconnect is a new one, so a message that was prepared (or held) for the old connection would
+        be taken by the new connection's peer as that connection's own.  The connection is taken once, after the
+        message was validated and serialized, so a reconnect that happens before it is taken makes the message be
+        dropped, not sent on the new connection.
+
+        @param cid the ID of the connection that the message belongs to (see
+        @ref getCurrentConnectionId())
+        @param value The value to serialize and send over the WebSocket
+
+        @return True if the message was sent on the connection with the ID; False if the client's connection is not
+        that one (it was closed or replaced), or the client has none; the message was not sent then
+
+        @throw WEBSOCKET-CLOSING-ERROR the close handshake of the connection started (see @ref send())
+
+        @since WebSocketClient 2.5
+    */
+    bool sendDataOnConnection(int cid, auto value) {
+        hash<auto> headers = {};
+        validateOutgoingMessage(\value, \headers);
+        string str = serializeData(value);
+        *WscConnection c = conn;
+        if (!c || c.cid != cid) {
+            logDebug("not sending a message of the connection %d: the client's connection is %d", cid,
+                c ? c.cid : -1);
+            return False;
+        }
+        *object po = c.op;
+        if (!po) {
+            return False;
+        }
+        po.sendText(str);
+        wakeAsyncIo();
+        return True;
     }
 
     #! Returns the data serialization value (\c "none", \c "json", or \c "yaml")
@@ -6301,7 +6439,7 @@ class MyObserver inherits Observer {
             # EVENT_WS_ERROR, data-processing errors would otherwise be silently dropped if the
             # logger has no appender, and the caller would see an unexplained timeout (e.g.,
             # parse_json failure on a non-JSON payload when serialization is "json").
-            if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
                     serialization, ex.err, ex.desc, buf_summary);
             }
@@ -6331,7 +6469,7 @@ class MyObserver inherits Observer {
                 });
                 # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
                 # and the logger may have no appender
-                if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
                     stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
                         ex.err, ex.desc);
                 }
@@ -6469,7 +6607,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
             : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(
-                WebSocketPingPollOperation::getHttpOptions(http_opts), logger),
+                WebSocketPingPollOperation::getHttpOptions(http_opts), logger,
+                WebSocketPingPollOperation::getHttpUrl(base_url)),
                 WebSocketPingPollOperation::getHttpUrl(base_url), "GET",
                 HttpClientIoPollOperation::getRequestHeaders(WebSocketPingPollOperation::getHttpUrl(base_url),
                     http_opts, headers),
@@ -6591,6 +6730,11 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     - \c "yield": a closure to yield current thread execution
 */
 public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("WebSocketClient",
@@ -6908,7 +7052,11 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "Connect Timeout",
                 "short_desc": "Connect timeout in milliseconds",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Connection timeout to use in milliseconds",
+                "desc": "Connection timeout to use in milliseconds for each attempt to connect (default: 30 "
+                    "seconds); a failed attempt is retried up to 3 times, all within the I/O `timeout`, which also "
+                    "bounds the connect.\n\n"
+                    "Without this option, the default `timeout` ends the first attempt, so a server that does not "
+                    "answer is not retried; to let a connect fail over to a new attempt, set it below `timeout / 4`.",
             },
             "data": <DataProviderOptionInfo>{
                 "display_name": "Data Serialization",
@@ -7010,7 +7158,8 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "I/O Timeout",
                 "short_desc": "Maximum time a single I/O operation can take in milliseconds",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Maximum time a single I/O operation can take in milliseconds",
+                "desc": "Maximum time a single I/O operation can take in milliseconds; it also bounds a connect, "
+                    "including the retries of its connection (see `connect_timeout`)",
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "Authorization Token",
@@ -8319,6 +8468,8 @@ public class WebSocketClientHcioPollOp {
             @since WebSocketClient 2.5
         */
         bool error_close = False;
+        #! True once a refused re-arm of the heartbeat timer at the end of the process has been logged
+        bool heartbeat_shutdown_logged = False;
 
         #! The close code and reason of the error that the client closed the connection for (see startErrorClose());
         #! reported when the close ends; protected by @ref heartbeat_mutex
@@ -8452,9 +8603,34 @@ public class WebSocketClientHcioPollOp {
     }
 
     #! Marks the adapter as started — enables on_poll_complete delivery
+    /** The frames that arrived before the start (with the handshake) are delivered as later frames are: a
+        notification is made for them on a worker of the async I/O controller, so that their delivery does not wait for
+        the client's initial drain, which the connecting thread makes only after other work (issue #7123); whichever of
+        the two runs first delivers them, as both drain the queue with @ref process_mutex held.  No notification is
+        made when no frame arrived (issue #6154).
+    */
     start() {
         started = True;
         rescheduleHeartbeatTimer();
+        if (!msg_queue.empty()) {
+            # the task references the operation, so that it stays valid until the task has run; a connection that
+            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
+            WebSocketClientHcioPollOp op = self;
+            try {
+                Qore::AsyncIoController::submitTask(task: sub () {
+                    try {
+                        op.notifyIo();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the operation was deleted explicitly meanwhile: its client tore the connection down
+                        if (ex.err != "OBJECT-ALREADY-DELETED") {
+                            rethrow;
+                        }
+                    }
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                # the controller is stopping: the client's initial drain delivers the frames
+            }
+        }
     }
 
     #! Drains any frames already dispatched before the adapter was fully wired up
@@ -8835,7 +9011,7 @@ public class WebSocketClientHcioPollOp {
             }
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
+            logCloseTimerError(timer_err, "");
         }
         try {
             # the stream's frame state records that the client sends its close frame, so that it sends no second one
@@ -8923,8 +9099,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
-                timer_err.desc);
+            logCloseTimerError(timer_err, "; the connection is closed at once");
         }
         # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown that did not send the
         # client's close), nothing would end the close: the connection is closed now
@@ -9171,6 +9346,16 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
+    #! logs that the close timer cannot be armed; at the debug level at the end of the process, when the work of the
+    #! module cleanup cannot add timers after its deadline (see @ref Qore::AsyncIoController::submit())
+    private logCloseTimerError(hash<ExceptionInfo> ex, string what) {
+        if (ex.err == "ASYNC-IO-SHUTDOWN-ERROR") {
+            logDebug("cannot arm the close timer at the end of the process: %s: %s%s", ex.err, ex.desc, what);
+        } else {
+            logError("cannot arm the close timer: %s: %s%s", ex.err, ex.desc, what);
+        }
+    }
+
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
         last_recv_activity_ms = clock_get_monotonic_us() / 1000;
@@ -9217,9 +9402,24 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection goes on without
+            # its heartbeat
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            # the idle timeout, which shares the timer, ends with it; logged once, as every frame that the connection
+            # receives re-arms the timer
+            if (!heartbeat_shutdown_logged) {
+                heartbeat_shutdown_logged = True;
+                logDebug("heartbeat timer not re-armed at the end of the process: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

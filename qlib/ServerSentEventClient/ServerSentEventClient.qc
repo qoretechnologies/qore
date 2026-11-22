@@ -57,8 +57,7 @@ public const EVENT_SSE_CONNECTED = "sse-connected-event";
     Program objects with the following parse options set:
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
-      @ref ServerSentEventClient::ServerSentEventClient::constructor() "ServerSentEventClient::constructor()";
-      it is required only when the module is loaded by its path, where the declaration does not apply
+      @ref ServerSentEventClient::ServerSentEventClient::constructor() "ServerSentEventClient::constructor()"
 */
 public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper,
         DataProvider::DelayedObservable {
@@ -182,9 +181,7 @@ ServerSentEventClient sse(\event(), {
         - \c logger: an optional @ref Qore::Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: \c thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
-            loaded by its path
+            current thread's execution to another thread (default value: \c thread_yield())
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
           deserialized event data
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic
@@ -464,11 +461,7 @@ sse.connect();
             # complete.
             Counter started(1);
             code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started, connected);
-%ifdef PO_NO_THREAD_CONTROL
-            updateTid(start_thread(fn));
-%else
             updateTid(start_thread ? start_thread(fn) : background fn());
-%endif
             started.waitForZero();
         }
 
@@ -671,12 +664,6 @@ sse.setEventQueue();
             }
             yield = opts.yield;
         }
-%ifdef PO_NO_PROCESS_CONTROL
-        else {
-            raiseError("ServerSentEventClient::constructor() options are missing the 'yield' key giving the thread "
-                "yield closure/call reference which is required when PO_NO_PROCESS_CONTROL is in effect");
-        }
-%endif
 
         if (exists opts.start_thread) {
             if (!opts.start_thread.callp()) {
@@ -688,13 +675,6 @@ sse.setEventQueue();
             # the capability of the code that the host runs (qorus#867)
             start_thread = cap;
         }
-%ifdef PO_NO_THREAD_CONTROL
-        else {
-            raiseError("option hash to ServerSentEventClient::constructor() missing 'start_thread' key giving the a "
-                "closure/call reference to start new threads which is required when PO_NO_THREAD_CONTROL is in "
-                "effect");
-        }
-%endif
 
         # set serialization option, if any
         serialization = getString(opts, "data", True, DataSerializationSupport.firstKey());
@@ -924,11 +904,7 @@ sse.setEventQueue();
         }
 
         if (!hc.isDataAvailable(50ms)) {
-%ifdef PO_NO_PROCESS_CONTROL
-            yield();
-%else
             yield ? yield() : Qore::thread_yield();
-%endif
             return 0;
         }
         # the client decodes the stream, including chunked transfer encoding and the content encoding, keeping the
@@ -1100,11 +1076,7 @@ sse.setEventQueue();
     private startReconnect() {
         code<nothing()> fn = ServerSentEventClient::makeReconnectClosure(self);
         int tid;
-%ifdef PO_NO_THREAD_CONTROL
-        tid = start_thread(fn);
-%else
         tid = start_thread ? start_thread(fn) : background fn();
-%endif
         logInfo("Disconnected sse connection; starting reconnect in TID %d", tid);
     }
 
@@ -1210,7 +1182,7 @@ sse.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("ServerSentEventClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("ServerSentEventClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
                     vsprintf(message, args));
             }

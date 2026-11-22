@@ -19,6 +19,7 @@
 %requires FreetdsSqlUtil
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
+%requires ./TestRunIsolation.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -187,7 +188,7 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
     #! checks the table comments on a database
     private checkDriver(string driver) {
         if (!dsh{driver}) {
-            testSkip(skip{driver});
+            TestRun::skipOrFail(skip{driver});
         }
         Datasource ds = dsh{driver};
         on_exit {
@@ -254,7 +255,7 @@ class SqlUtilTableCommentsTest inherits QUnit::Test {
     #! Firebird: the driver has no table comments, which are ignored, not refused
     firebirdTest() {
         if (!dsh.jdbc) {
-            testSkip(skip.jdbc);
+            TestRun::skipOrFail(skip.jdbc);
         }
         Datasource ds = dsh.jdbc;
         on_exit {

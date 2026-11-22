@@ -34,6 +34,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <cstdlib>
 
@@ -104,14 +105,20 @@ void qore_es_private::insert(QoreException *e) {
     } else {
         tail->next = e;
     }
+    // A rethrow brings the whole caught chain. A subsequent exception must be
+    // appended after its last node or the remaining exceptions are orphaned.
+    for (;;) {
+        if (!externally_managed) {
+            ++count;
+            inc_active_exceptions(1);
+        }
+        if (!e->next) {
+            break;
+        }
+        e = e->next;
+    }
     tail = e;
     pending = true;
-
-    // increment exception counts
-    if (!externally_managed) {
-        ++count;
-        inc_active_exceptions(1);
-    }
 }
 
 ExceptionSink::ExceptionSink() : priv(new qore_es_private) {
@@ -252,11 +259,48 @@ const QoreValue ExceptionSink::getExceptionArg() {
     return priv->head ? priv->head->arg : QoreValue();
 }
 
+// appends text to the description of an exception in the encoding of the description (qore#6741): text that the
+// description's encoding cannot represent makes the description UTF-8, which represents both
+static void qore_append_exception_description(QoreException& ex, const QoreString& text) {
+    QoreStringNodeValueHelper old_desc(ex.desc);
+    QoreStringNodeHolder desc(old_desc->copy());
+    if (text.getEncoding() == desc->getEncoding()) {
+        desc->concat(text.c_str(), text.size());
+    } else {
+        ExceptionSink xsink;
+        desc->concat(&text, &xsink);
+        if (xsink) {
+            xsink.clear();
+            desc = old_desc->convertEncoding(QCS_UTF8, &xsink);
+            if (*desc) {
+                desc->concat(&text, &xsink);
+            }
+            if (!*desc || xsink) {
+                // text that is not valid in its encoding is left out
+                xsink.clear();
+                return;
+            }
+        }
+    }
+    ex.desc.discard(nullptr);
+    ex.desc = desc.release();
+}
+
+int qore_exception_sink_ops::appendLastDescription(const QoreString& text) {
+    QoreException* ex = getException();
+    if (!ex || ex->desc.getType() != NT_STRING) {
+        return -1;
+    }
+    qore_append_exception_description(*ex, text);
+    return 0;
+}
+
 int ExceptionSink::appendLastDescription(const char* fmt, ...) {
     if (!priv->head || priv->head->desc.getType() != NT_STRING) {
         return -1;
     }
 
+    // the text is formatted in the default encoding
     SimpleRefHolder<QoreStringNode> new_desc(new QoreStringNode);
 
     va_list args;
@@ -270,11 +314,7 @@ int ExceptionSink::appendLastDescription(const char* fmt, ...) {
         }
     }
 
-    QoreStringNodeValueHelper old_desc(priv->head->desc);
-    QoreStringNodeHolder desc(old_desc->copy());
-    desc->concat(new_desc->c_str(), new_desc->size());
-    priv->head->desc.discard(nullptr);
-    priv->head->desc = desc.release();
+    qore_append_exception_description(*priv->head, *new_desc);
     return 0;
 }
 
@@ -494,6 +534,326 @@ static void write_report(const QoreString& out) {
     }
 }
 
+//! the origin scope of the current thread (see QoreExceptionOriginScope)
+static thread_local const QoreExceptionOriginScope* qore_exception_origin_scope = nullptr;
+
+QoreExceptionOriginScope::QoreExceptionOriginScope(bool origin_sandboxed, qore_program_id_t origin_pgm_id)
+        : pgm_id(origin_pgm_id), active(origin_sandboxed) {
+    if (active) {
+        previous = qore_exception_origin_scope;
+        qore_exception_origin_scope = this;
+    }
+}
+
+QoreExceptionOriginScope::~QoreExceptionOriginScope() {
+    if (active) {
+        qore_exception_origin_scope = previous;
+    }
+}
+
+const QoreExceptionOriginScope* QoreExceptionOriginScope::current() {
+    return qore_exception_origin_scope;
+}
+
+bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id) {
+    if (const QoreExceptionOriginScope* scope = qore_exception_origin_scope) {
+        if (pgm_id) {
+            *pgm_id = scope->pgm_id;
+        }
+        return true;
+    }
+    return qore_caller_is_sandboxed(pgm_id);
+}
+
+//! the mark of the first exception of the chain that code that is sandboxed or acts for sandboxed code raised
+static bool qore_exception_chain_mark(const QoreException* e, QoreString& mark) {
+    for (; e; e = e->next) {
+        if (e->isSandboxed()) {
+            mark.clear();
+            if (e->sandboxed_pgm_id > 0) {
+                mark.sprintf("[caller Program " QLLD "] ", (int64)e->sandboxed_pgm_id);
+            } else {
+                mark.concat("[caller Program unknown] ");
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+void qore_mark_last_exception_sandboxed(ExceptionSink& xsink, qore_program_id_t pgm_id) {
+    QoreException* e = qore_exception_sink_ops(xsink).getException();
+    if (!e) {
+        return;
+    }
+    while (e->next) {
+        e = e->next;
+    }
+    e->sandboxed = true;
+    e->sandboxed_pgm_id = pgm_id;
+}
+
+void qore_log_exception_text(ExceptionSink& xsink, QoreString& mark, QoreString& err, QoreString& desc) {
+    qore_exception_sandboxed_mark(xsink, mark);
+    QoreStringValueHelper err_str(xsink.getExceptionErr());
+    QoreStringValueHelper desc_str(xsink.getExceptionDesc());
+    if (err_str->empty()) {
+        err.concat('?');
+    } else {
+        qore_append_escaped_report_text(err, *err_str);
+    }
+    if (desc_str->empty()) {
+        desc.concat('?');
+    } else {
+        qore_append_escaped_report_text(desc, *desc_str);
+    }
+}
+
+bool qore_exception_sandboxed_origin(const ExceptionSink& xsink, qore_program_id_t& pgm_id) {
+    for (const QoreException* e = qore_exception_sink_ops(const_cast<ExceptionSink&>(xsink)).getException(); e;
+            e = e->next) {
+        if (e->isSandboxed()) {
+            pgm_id = e->sandboxed_pgm_id;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool qore_exception_sandboxed_mark(const ExceptionSink& xsink, QoreString& mark) {
+    return qore_exception_chain_mark(qore_exception_sink_ops(const_cast<ExceptionSink&>(xsink)).getException(), mark);
+}
+
+//! appends the escape of code point \a cp and returns true, or returns false if it is not escaped
+//! with \a line_only, only the characters that can end or rewrite the line are escaped (not backslash or tab)
+static bool qore_report_escape_code_point(QoreString& out, unsigned cp, bool line_only = false) {
+    switch (cp) {
+        case '\n': out.concat("\\n"); return true;
+        case '\r': out.concat("\\r"); return true;
+        case '\t':
+            if (line_only) {
+                return false;
+            }
+            out.concat("\\t");
+            return true;
+        case '\\':
+            if (line_only) {
+                return false;
+            }
+            out.concat("\\\\");
+            return true;
+        default:
+            break;
+    }
+    if (cp < 0x20 || cp == 0x7f) {
+        out.sprintf("\\x%02x", cp);
+        return true;
+    }
+    // C1 controls (NEL, CSI, ...), the line and paragraph separators, and the bidirectional formatting characters
+    if ((cp >= 0x80 && cp <= 0x9f) || cp == 0x2028 || cp == 0x2029 || cp == 0x061c || cp == 0x200e || cp == 0x200f
+            || (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069)) {
+        out.sprintf("\\u{%04x}", cp);
+        return true;
+    }
+    return false;
+}
+
+//! appends UTF-8 text escaped; the bytes of invalid UTF-8 are escaped as \xNN
+static void qore_append_escaped_utf8(QoreString& out, const char* text, size_t len, bool line_only = false,
+        bool double_percent = false) {
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(text);
+    size_t i = 0;
+    while (i < len) {
+        unsigned c = s[i];
+        unsigned cp;
+        size_t n;
+        if (c < 0x80) {
+            cp = c;
+            n = 1;
+        } else if (c >= 0xc2 && c <= 0xdf) {
+            cp = c & 0x1f;
+            n = 2;
+        } else if (c >= 0xe0 && c <= 0xef) {
+            cp = c & 0x0f;
+            n = 3;
+        } else if (c >= 0xf0 && c <= 0xf4) {
+            cp = c & 0x07;
+            n = 4;
+        } else {
+            out.sprintf("\\x%02x", c);
+            ++i;
+            continue;
+        }
+        bool ok = i + n <= len;
+        for (size_t k = 1; ok && k < n; ++k) {
+            if ((s[i + k] & 0xc0) != 0x80) {
+                ok = false;
+            } else {
+                cp = (cp << 6) | (s[i + k] & 0x3f);
+            }
+        }
+        // overlong forms, surrogates and code points past U+10FFFF are not valid UTF-8
+        if (ok && ((n == 3 && cp < 0x800) || (n == 4 && (cp < 0x10000 || cp > 0x10ffff))
+                || (cp >= 0xd800 && cp <= 0xdfff))) {
+            ok = false;
+        }
+        if (!ok) {
+            out.sprintf("\\x%02x", c);
+            ++i;
+            continue;
+        }
+        if (double_percent && cp == '%') {
+            out.concat("%%");
+        } else if (!qore_report_escape_code_point(out, cp, line_only)) {
+            out.concat(text + i, n);
+        }
+        i += n;
+    }
+}
+
+void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent) {
+    qore_append_escaped_utf8(out, text, len, true, double_percent);
+}
+
+void qore_append_escaped_report_text(QoreString& out, const char* text) {
+    if (text) {
+        qore_append_escaped_utf8(out, text, strlen(text));
+    }
+}
+
+void qore_append_escaped_report_text(QoreString& out, const QoreString* text) {
+    if (!text) {
+        return;
+    }
+    const QoreEncoding* enc = text->getEncoding();
+    if (enc == QCS_UTF8 || enc == QCS_USASCII) {
+        qore_append_escaped_utf8(out, text->c_str(), text->size());
+        return;
+    }
+    ExceptionSink xsink;
+    TempEncodingHelper utf8(text, QCS_UTF8, &xsink);
+    if (xsink || !utf8) {
+        // text that cannot be converted: its bytes that are not ASCII are escaped
+        xsink.clear();
+        const unsigned char* s = reinterpret_cast<const unsigned char*>(text->c_str());
+        for (size_t i = 0, e = text->size(); i < e; ++i) {
+            if (s[i] >= 0x80 || !qore_report_escape_code_point(out, s[i])) {
+                if (s[i] >= 0x80) {
+                    out.sprintf("\\x%02x", (unsigned)s[i]);
+                } else {
+                    out.concat((char)s[i]);
+                }
+            }
+        }
+        return;
+    }
+    qore_append_escaped_utf8(out, utf8->c_str(), utf8->size());
+}
+
+//! writes the report of an exception chain that code that is sandboxed or acts for sandboxed code raised (qore#7139)
+/** Each line starts with \a mark, and the text of the code's choosing (the error, description and argument, the names
+    of functions, files, sources and languages) is escaped, so that it stays on its marked line and cannot pass for
+    the host's own output
+*/
+static void qore_write_sandboxed_report(const QoreException* e, const QoreString& mark, const QoreString& now) {
+    ExceptionSink xsink;
+    QoreString out;
+    auto value = [&] (QoreString& line, const QoreValue v) {
+        if (v.getType() == NT_STRING) {
+            // also a short string, which has no node
+            QoreStringValueHelper str(v);
+            qore_append_escaped_report_text(line, *str);
+        } else {
+            QoreNodeAsStringHelper str(v, FMT_NORMAL, &xsink);
+            qore_append_escaped_report_text(line, *str);
+        }
+    };
+    auto location = [&] (QoreString& line, const char* func, const char* file, int64 start_line, int64 end_line,
+            const char* source, int64 offset) {
+        if (func) {
+            line.concat(" in ");
+            qore_append_escaped_report_text(line, func);
+            line.concat("()");
+        }
+        line.concat(" at ");
+        if (file && *file) {
+            qore_append_escaped_report_text(line, file);
+            line.concat(':');
+        } else {
+            line.concat("line ");
+        }
+        line.sprintf(QLLD, start_line);
+        if (end_line != start_line) {
+            line.sprintf("-" QLLD, end_line);
+        }
+        if (source && *source) {
+            line.concat(" (source ");
+            qore_append_escaped_report_text(line, source);
+            line.sprintf(":" QLLD ")", start_line + offset);
+        }
+    };
+    unsigned ecnt = 0;
+    for (; e; e = e->next) {
+        QoreString line(mark);
+        line.sprintf("unhandled QORE %s exception thrown in TID %d at %s", e->type == CT_USER ? "User" : "System",
+            q_gettid(), now.c_str());
+        location(line, nullptr, e->file.c_str(), e->start_line, e->end_line, e->source.c_str(), e->offset);
+        out.concat(line.c_str(), line.size());
+        out.concat('\n');
+
+        line = mark;
+        if (e->err.isNothing()) {
+            line.concat("EXCEPTION");
+        } else {
+            value(line, e->err);
+        }
+        if (!e->desc.isNothing()) {
+            line.concat(": ");
+            value(line, e->desc);
+        }
+        if (!e->arg.isNothing()) {
+            line.concat(", arg: ");
+            value(line, e->arg);
+        }
+        out.concat(line.c_str(), line.size());
+        out.concat('\n');
+
+        const QoreListNode* cs = e->callStack;
+        if (cs->size()) {
+            out.concat(mark.c_str(), mark.size());
+            out.concat("call stack:\n");
+            for (size_t i = 0; i < cs->size(); ++i) {
+                const QoreHashNode* h = cs->retrieveEntry(i).get<const QoreHashNode>();
+                line = mark;
+                line.sprintf(" %2d: ", (int)(cs->size() - i));
+                QoreStringValueHelper type(h->getKeyValue("type"));
+                if (!strcmp(type->c_str(), "new-thread")) {
+                    line.concat("*thread start*");
+                } else {
+                    QoreStringValueHelper func(h->getKeyValue("function"));
+                    QoreStringValueHelper file(h->getKeyValue("file"));
+                    QoreStringValueHelper source(h->getKeyValue("source"));
+                    location(line, func->c_str(), file->c_str(), h->getKeyValue("line").getAsBigInt(),
+                        h->getKeyValue("endline").getAsBigInt(), source->c_str(),
+                        h->getKeyValue("offset").getAsBigInt());
+                }
+                out.concat(line.c_str(), line.size());
+                out.concat('\n');
+            }
+        }
+        if (e->next) {
+            if (++ecnt == Q_MAX_EXCEPTIONS) {
+                out.concat(mark.c_str(), mark.size());
+                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+                break;
+            }
+            out.concat(mark.c_str(), mark.size());
+            out.concat("chained exception:\n");
+        }
+    }
+    write_report(out);
+}
+
 // static member function
 void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
     ExceptionSink xsink;
@@ -509,6 +869,15 @@ void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
         DateTime now;
         now.setNow();
         now.format(nstr, "YYYY-MM-DD HH:mm:SS.xx Dy Z (z)");
+    }
+
+    // the exceptions of code that is sandboxed or acts for sandboxed code are reported marked (qore#7139)
+    {
+        QoreString mark;
+        if (qore_exception_chain_mark(e, mark)) {
+            qore_write_sandboxed_report(e, mark, nstr);
+            return;
+        }
     }
 
     unsigned ecnt = 0;
@@ -745,6 +1114,41 @@ void qore_exception_sink_ops::defaultWarningHandler(QoreException* e) {
     ExceptionSink xsink;
     // the report is written whole (write_report()), as that of an exception
     QoreString out;
+
+    // the warnings of the parse of code that is sandboxed or acts for sandboxed code are reported marked, with the text
+    // of its choosing escaped (qore#7139)
+    {
+        QoreString mark;
+        if (qore_exception_chain_mark(e, mark)) {
+            for (; e; e = e->next) {
+                QoreString line(mark);
+                line.concat("warning encountered at ");
+                if (!e->file.empty()) {
+                    qore_append_escaped_report_text(line, e->file.c_str());
+                    line.concat(':');
+                } else {
+                    line.concat("line ");
+                }
+                line.sprintf("%d", e->start_line);
+                if (!e->source.empty()) {
+                    line.concat(" (source ");
+                    qore_append_escaped_report_text(line, e->source.c_str());
+                    line.sprintf(":%d)", e->start_line + e->offset);
+                }
+                line.concat('\n');
+                line.concat(mark.c_str(), mark.size());
+                QoreStringValueHelper err(e->err);
+                QoreStringValueHelper desc(e->desc);
+                qore_append_escaped_report_text(line, *err);
+                line.concat(": ");
+                qore_append_escaped_report_text(line, *desc);
+                line.concat('\n');
+                out.concat(line.c_str(), line.size());
+            }
+            write_report(out);
+            return;
+        }
+    }
 
     while (e) {
         out.sprintf("warning encountered at ");

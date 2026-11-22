@@ -40,6 +40,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_websocket.h"
+#include "qore/intern/SocketPollEventsOps.h"
 
 /** @cond INTERNAL */
 
@@ -128,12 +129,12 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 return nullptr;
             }
         }
-        QoreHashNode* send_info = send_op->continuePoll(xsink);
+        int send_events = qore_socket_poll_events_ops::continuePollEvents(send_op, xsink);
         if (*xsink) {
             setError(xsink);
             return nullptr;
         }
-        if (!send_info) {
+        if (!send_events) {
             // Send complete or failed
             if (send_op->goalReached()) {
                 releaseSendOp(xsink);
@@ -144,15 +145,14 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 return nullptr;
             }
         } else {
-            // Send needs more I/O
-            send_info->deref(xsink);
-            poll_events |= SOCK_POLLOUT;
+            // TLS can require the opposite direction to finish this operation.
+            poll_events |= send_events;
         }
     }
 
     // --- Phase 2: Drive active recv operation ---
     if (recv_op) {
-        QoreHashNode* recv_info = recv_op->continuePoll(xsink);
+        int recv_events = qore_socket_poll_events_ops::continuePollEvents(recv_op, xsink);
         if (*xsink) {
             releaseRecvOp(xsink);
             // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
@@ -162,7 +162,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 setConnectionLost();
                 return nullptr;
             }
-        } else if (!recv_info) {
+        } else if (!recv_events) {
             // Recv complete — process the data
             if (recv_op->goalReached()) {
                 QoreValue output = recv_op->getOutput();
@@ -204,9 +204,8 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 return nullptr;
             }
         } else {
-            // Recv needs more I/O
-            recv_info->deref(xsink);
-            poll_events |= SOCK_POLLIN;
+            // TLS can require the opposite direction to finish this operation.
+            poll_events |= recv_events;
         }
     }
 
@@ -289,11 +288,11 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             // Try to complete the send inline — for small messages on
             // localhost, the kernel buffer has space and send() completes
             // immediately.  This eliminates one poll cycle per echo.
-            QoreHashNode* send_info = send_op->continuePoll(xsink);
+            int send_events = qore_socket_poll_events_ops::continuePollEvents(send_op, xsink);
             if (*xsink) {
                 releaseSendOp(xsink);
                 xsink->clear();
-            } else if (!send_info) {
+            } else if (!send_events) {
                 if (send_op->goalReached()) {
                     releaseSendOp(xsink);
                     // Send complete — no POLLOUT needed
@@ -301,9 +300,8 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                     releaseSendOp(xsink);
                 }
             } else {
-                // Send needs more I/O — register for POLLOUT
-                send_info->deref(xsink);
-                poll_events |= SOCK_POLLOUT;
+                // TLS can require the opposite direction to finish this operation.
+                poll_events |= send_events;
             }
         }
     }
@@ -321,13 +319,8 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         return nullptr;
     }
 
-    // Poll for incoming data. Skip in CLOSING state to prevent busy-loop
-    // from the TCP FIN, except while a close the server started waits for the client's close frame. The
-    // wakeSocket mechanism handles the closing handshake, and the CLOSED transition cleans up the cache entry.
-    if (ws_state != WsState::CLOSING || waitsForPeerClose()) {
-        poll_events |= SOCK_POLLIN;
-    }
-
+    // An active receive reported its own TLS readiness above. A new receive subscribed
+    // to input when it started. Adding POLLIN here would wake a read that needs POLLOUT.
     QoreHashNode* result = getSocketPollInfoHash(xsink, poll_events);
     // Add poll timeout for send timeout or heartbeat interval
     if (result) {
@@ -1162,7 +1155,7 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass HttpWebSocketPollOperationBase [
-    private_members=object sock,string goal,object recv_queue,object send_queue;
+    internal_members=object recv_queue,object send_queue;
     ns=Qore;
     arg=HttpWebSocketPollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
@@ -1182,10 +1175,9 @@ HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] socket) [fl
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTPWEBSOCKETPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTPWEBSOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("websocket"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("websocket"), xsink);
 
     // Create recv and send queues (unlimited)
     Queue* recv_q = new Queue(-1);
@@ -1229,7 +1221,7 @@ HttpWebSocketPollOperationBase::copy() {
 /** @return "websocket"
 */
 string HttpWebSocketPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1459,7 +1451,7 @@ string HttpWebSocketPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
 /** @return the Socket object
 */
 Socket HttpWebSocketPollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Queues a pre-encoded raw WebSocket frame for sending
@@ -1489,6 +1481,13 @@ nothing HttpWebSocketPollOperationBase::sendRawFrame(binary frame_data) [flags=N
     @param callback the callback, or @ref nothing to clear
 */
 nothing HttpWebSocketPollOperationBase::setFrameCallback(*code callback) [flags=NAMED_ARGS] {
+    // the callback runs on the controller's workers, outside the sandbox of the code that sets it: code that may
+    // not control threads cannot give its own code to any operation, also one that its host lends it; module code
+    // gives its own callbacks to the operations that it creates (qore#7056)
+    if (callback && qore_check_thread_callable(callback, QDOM_THREAD_CONTROL,
+            "HttpWebSocketPollOperationBase::setFrameCallback()", xsink)) {
+        return QoreValue();
+    }
     ResolvedCallReferenceNode* callback_ptr = nullptr;
     if (callback) {
         callback_ptr = callback->refRefSelf();

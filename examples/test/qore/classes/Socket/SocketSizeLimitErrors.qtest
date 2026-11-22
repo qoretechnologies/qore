@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketSizeLimitErrorsTest
+
+#! the errors for a negative size limit show the value that was given (qore#7089)
+/** The values are 64-bit integers; they were printed with a 32-bit format, which shows another value for a value that
+    does not fit in 32 bits.
+*/
+class SocketSizeLimitErrorsTest inherits QUnit::Test {
+    public {
+        #! a negative value that does not fit in 32 bits
+        const Value = -5000000000;
+    }
+
+    constructor() : QUnit::Test("socket size limit errors", "1.0", \ARGV) {
+        addTestCase("Socket::setMaxHeaderSize()", \headerTest());
+        addTestCase("Socket::setMaxLineSize()", \lineTest());
+        addTestCase("PollPipeline::addRecvUntilBytes()", \pipelineTest());
+        set_return_value(main());
+    }
+
+    headerTest() {
+        Socket s();
+        assertThrows("INVALID-ARGUMENT", "maximum header size cannot be negative \\(" + Value + "\\)",
+            \s.setMaxHeaderSize(), Value);
+    }
+
+    lineTest() {
+        Socket s();
+        assertThrows("INVALID-ARGUMENT", "maximum line size cannot be negative \\(" + Value + "\\)",
+            \s.setMaxLineSize(), Value);
+    }
+
+    pipelineTest() {
+        PollPipeline p("test");
+        assertThrows("PIPELINE-ADD-ERROR", "maximum size cannot be negative \\(" + Value + "\\)",
+            \p.addRecvUntilBytes(), ("x", True, Value));
+    }
+}

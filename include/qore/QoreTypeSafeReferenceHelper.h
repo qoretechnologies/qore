@@ -82,8 +82,9 @@ public:
     DLLEXPORT int reset(const ReferenceNode* ref, ExceptionSink* xsink);
 
     //! returns true if the reference is valid, false if not
-    /** Returns false after a failed binding or after removeHashObjKey() invokes a native member gate or accessor.
-        After a native removal, use reset() before accessing a value again, or close() when finished.
+    /** Returns false after a failed binding, after removeHashObjKey() invokes a native member gate or accessor, or
+        after it removes a member of an object that the reference reaches through a member of the object itself.
+        After such a removal, use reset() before accessing a value again, or close() when finished.
     */
     DLLEXPORT operator bool() const;
 
@@ -208,8 +209,11 @@ public:
         @note A removal through a native member gate or accessor invalidates this helper and releases its locks
         before calling the module: the callback may replace or remove the parent lvalue. Afterwards operator bool()
         and isLocked() return false; call reset(ref, xsink) before further value access, or close() when finished.
-        The parent is not reacquired automatically, and the callback's changes are preserved. Ordinary hash keys
-        and ordinary Qore members do not invalidate the helper.
+        The parent is not reacquired automatically, and the callback's changes are preserved.  The removal of a
+        member of an object that the reference reaches through a member of the object itself (the reference is
+        \c t.o and \c t.o is \c t) invalidates the helper in the same way: its lock is the object's lock, which
+        the removal takes itself.  Ordinary hash keys and the other ordinary Qore members do not invalidate the
+        helper.
     */
     DLLEXPORT QoreValue removeHashObjKey(const char* key);
 

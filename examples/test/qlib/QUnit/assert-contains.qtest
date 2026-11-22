@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AssertContainsTest
+
+#! assertContains() and assertNContains(): a list has an element, a hash a key, a string a substring (issue 3374)
+class AssertContainsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AssertContains", "1.0", \ARGV) {
+        addTestCase("lists", \lists());
+        addTestCase("hashes", \hashes());
+        addTestCase("strings", \strings());
+        addTestCase("other values", \others());
+        set_return_value(main());
+    }
+
+    lists() {
+        assertContains("abc", ("x", "abc"), "a string element");
+        assertContains(1, (1, 2), "an int element");
+        assertContains((1, 2), ("x", (1, 2)), "a list element");
+        assertNContains("ab", ("x", "abc"), "a list does not contain a substring of an element");
+        # the comparison is hard, as with assertEq()
+        assertNContains("1", (1, 2), "a string is not an int");
+        assertNContains(1.0, (1, 2), "a float is not an int");
+        assertNContains(1, (), "an empty list");
+        checkFails(sub () { assertContains("y", ("x",)); }, "[\"x\"] does not contain \"y\"");
+        checkFails(sub () { assertNContains("x", ("x",)); }, "[\"x\"] contains \"x\"");
+    }
+
+    hashes() {
+        assertContains("key", {"key": 1}, "a key");
+        assertNContains("other", {"key": 1}, "another key");
+        assertNContains("1", {"key": 1}, "a value is not a key");
+        checkFails(sub () { assertContains(1, {"1": 1}); }, "the key of a hash is a string, not 1");
+    }
+
+    strings() {
+        assertContains("ell", "hello", "a substring");
+        assertContains("", "hello", "the empty substring");
+        assertNContains("x", "hello", "another substring");
+        checkFails(sub () { assertContains(1, "x1"); }, "the substring of a string is a string, not 1");
+    }
+
+    others() {
+        checkFails(sub () { assertContains(1, 1); }, "assertContains() and assertNContains() take a list, a hash or a "
+            "string, not 1");
+        checkFails(sub () { assertNContains(1, NOTHING); }, "assertContains() and assertNContains() take a list, a hash "
+            "or a string, not null");
+    }
+
+    #! the assertion fails with the reason
+    private checkFails(code assertion, string reason) {
+        try {
+            assertion();
+            assertTrue(False, "the assertion fails: " + reason);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST-EXCEPTION", ex.err);
+            assertEq(reason, ex.desc);
+        }
+    }
+}

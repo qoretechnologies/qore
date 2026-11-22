@@ -160,7 +160,7 @@ class WebSocketPerfTest inherits QUnit::Test {
 
     #! Compute elapsed milliseconds from a start timestamp
     private float elapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000.0;
+        return (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
     }
 
     #! Print latency statistics if verbose
@@ -212,7 +212,7 @@ class WebSocketPerfTest inherits QUnit::Test {
             if (!exists msg) {
                 return;
             }
-            date recv_time = now_us();
+            date recv_time = microseconds(clock_get_monotonic_us());
             string key;
             if (msg.typeCode() == NT_STRING) {
                 key = msg;
@@ -234,20 +234,20 @@ class WebSocketPerfTest inherits QUnit::Test {
 
         WebSocketClient wsc = createWsClient(cb);
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < msg_count; ++i) {
             string payload;
             if (i % 2 == 0) {
                 payload = sprintf("text-msg-%d", i);
                 m.lock();
                 on_exit m.unlock();
-                send_times{payload} = now_us();
+                send_times{payload} = microseconds(clock_get_monotonic_us());
                 wsc.send(payload);
             } else {
                 payload = sprintf("bin-msg-%d", i);
                 m.lock();
                 on_exit m.unlock();
-                send_times{payload} = now_us();
+                send_times{payload} = microseconds(clock_get_monotonic_us());
                 wsc.send(binary(payload));
             }
         }
@@ -322,12 +322,12 @@ class WebSocketPerfTest inherits QUnit::Test {
             background sub() {
                 on_exit senders_done.dec();
                 try {
-                    date client_start = now_us();
+                    date client_start = microseconds(clock_get_monotonic_us());
                     for (int i = 0; i < msgs_per_client; ++i) {
                         clients[client_id].send(sprintf("client-%d-msg-%d", client_id, i));
                     }
                     msg_counters[client_id].waitForZero(30s);
-                    float lat = (now_us() - client_start).durationMicroseconds() / 1000.0;
+                    float lat = (microseconds(clock_get_monotonic_us()) - client_start).durationMicroseconds() / 1000.0;
                     stats_m.lock();
                     on_exit stats_m.unlock();
                     all_latencies += lat;
@@ -385,7 +385,7 @@ class WebSocketPerfTest inherits QUnit::Test {
 
             WebSocketClient wsc = createWsClient(cb);
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             wsc.send(sent_payload);
             done.waitForZero(30s);
             float ms = elapsedMs(start);
@@ -438,16 +438,16 @@ class WebSocketPerfTest inherits QUnit::Test {
 
         WebSocketClient wsc = createWsClient(cb);
 
-        date deadline = now_us() + seconds(duration_secs);
+        date deadline = microseconds(clock_get_monotonic_us()) + seconds(duration_secs);
 
         for (int t = 0; t < num_senders; ++t) {
             int thread_id = t;
             background sub() {
                 on_exit senders_done.dec();
                 int my_sent = 0;
-                while (now_us() < deadline) {
+                while (microseconds(clock_get_monotonic_us()) < deadline) {
                     # Backpressure: wait if too far ahead of receiver
-                    while (now_us() < deadline) {
+                    while (microseconds(clock_get_monotonic_us()) < deadline) {
                         stats_m.lock();
                         int outstanding = total_sent - total_received;
                         stats_m.unlock();
@@ -456,7 +456,7 @@ class WebSocketPerfTest inherits QUnit::Test {
                         }
                         sleep(5ms);
                     }
-                    if (now_us() >= deadline) {
+                    if (microseconds(clock_get_monotonic_us()) >= deadline) {
                         break;
                     }
                     try {
@@ -475,8 +475,8 @@ class WebSocketPerfTest inherits QUnit::Test {
         senders_done.waitForZero(seconds(duration_secs + 30));
 
         # Wait for echoes to arrive
-        date echo_deadline = now_us() + 30s;
-        while (now_us() < echo_deadline) {
+        date echo_deadline = microseconds(clock_get_monotonic_us()) + 30s;
+        while (microseconds(clock_get_monotonic_us()) < echo_deadline) {
             stats_m.lock();
             int rcvd = total_received;
             stats_m.unlock();
@@ -539,7 +539,7 @@ class WebSocketPerfTest inherits QUnit::Test {
         int msgs_per_thread = msg_count / 2;
         Counter senders_done(2);
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int t = 0; t < 2; ++t) {
             int thread_id = t;
             background sub() {

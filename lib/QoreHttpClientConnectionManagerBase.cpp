@@ -34,7 +34,10 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreFuture.h>
+#include <qore/QoreSSLCertificate.h>
+#include <qore/QoreSSLPrivateKey.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
@@ -50,6 +53,8 @@
 #include <cstring>
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -76,6 +81,16 @@ static void raise_new_connection_error(HttpClientConnectionBase* conn, Exception
 HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& opts,
         ExceptionSink* xsink)
     : opts_(opts) {
+    // A pending operation can keep its manager alive after the client has been released.
+    if (opts_.client_cert) {
+        opts_.client_cert->ref();
+    }
+    if (opts_.client_key) {
+        opts_.client_key->ref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->ref();
+    }
     // Validate options
     if (opts_.max_connections_per_host < 0) {
         xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
@@ -158,6 +173,15 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
     ExceptionSink xsink;
     closeAll(&xsink);
     xsink.clear();
+    if (opts_.client_cert) {
+        opts_.client_cert->deref();
+    }
+    if (opts_.client_key) {
+        opts_.client_key->deref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->deref();
+    }
     // a connection whose back-pointer is still set can call onConnectionClosed() on this manager after it has been
     // destroyed: every connection that the manager releases has its back-pointer cleared first
     assert(!attached_connections_.load(std::memory_order_acquire));
@@ -167,14 +191,14 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
 // Pool key + helpers
 // ============================================================
 
-std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port, bool ssl) const {
+std::string qore_http_manager_ops::poolKeyImpl(HttpClientConnectionManagerBase* b, const char* host, int port, bool ssl) {
     const char* scheme = ssl ? "https" : "http";
     char buf[512];
-    if (proxy_info_) {
+    if (b->proxy_info_) {
         // Proxied: include the proxy in the key so the same target
         // reached through different proxies gets distinct entries.
-        snprintf(buf, sizeof(buf), "%s://%s:%d|%s://%s:%d", proxy_info_->ssl ? "https" : "http",
-            proxy_info_->host.c_str(), proxy_info_->port, scheme, host, port);
+        snprintf(buf, sizeof(buf), "%s://%s:%d|%s://%s:%d", b->proxy_info_->ssl ? "https" : "http",
+            b->proxy_info_->host.c_str(), b->proxy_info_->port, scheme, host, port);
     } else {
         snprintf(buf, sizeof(buf), "%s://%s:%d", scheme, host, port);
     }
@@ -216,7 +240,7 @@ struct HttpClientConnectionManagerBase::SandboxScan {
             return true;
         }
         ExceptionSink xs;
-        if (!conn->checkSandboxUse(policy, &xs)) {
+        if (!qore_http_client_connection_base_ops(conn).checkSandboxUse(policy, &xs)) {
             allowed = true;
             return true;
         }
@@ -230,10 +254,9 @@ struct HttpClientConnectionManagerBase::SandboxScan {
     }
 };
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
-        const std::string& key, bool streaming_send, SandboxScan& scan, bool check_age) {
-    auto it = pool_.find(key);
-    if (it == pool_.end()) {
+HttpClientConnectionBase* qore_http_manager_ops::findReusableLockedImpl(HttpClientConnectionManagerBase* b, const std::string& key, bool streaming_send, HttpClientConnectionManagerBase::SandboxScan& scan, bool check_age) {
+    auto it = b->pool_.find(key);
+    if (it == b->pool_.end()) {
         return nullptr;
     }
 
@@ -243,7 +266,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     // a connection that has reached max_age is not reused: the checkout's slow path evicts it (evictDeadLocked()),
     // which applies the same condition, and then scans without the check; ages are measured on the monotonic clock
     // (#6150)
-    int64_t max_age_us = check_age && opts_.max_age_ms > 0 ? (int64_t)opts_.max_age_ms * 1000LL : -1;
+    int64_t max_age_us = check_age && b->opts_.max_age_ms > 0 ? (int64_t)b->opts_.max_age_ms * 1000LL : -1;
     int64_t now_us = max_age_us > 0 ? q_get_monotonic_us() : 0;
     auto too_old = [max_age_us, now_us](HttpClientConnectionBase* conn) -> bool {
         return max_age_us > 0 && conn->getActiveStreamCount() == 0 && (now_us - conn->getCreatedUs()) >= max_age_us;
@@ -261,7 +284,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     // none — the second pass is a no-op.  The extra traversal is O(n)
     // per pool key with small constants and skipped entirely for
     // non-NEGOTIATE managers.
-    if (opts_.protocol == HttpClientProtocol::NEGOTIATE) {
+    if (b->opts_.protocol == HttpClientProtocol::NEGOTIATE) {
         // Pass 1: prefer H2.
         for (HttpClientConnectionBase* conn : it->second) {
             if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
@@ -317,19 +340,17 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     return nullptr;
 }
 
-void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
-        std::vector<HttpClientConnectionBase*>* out_to_close,
-        std::vector<HttpClientConnectionBase*>* out_to_deref) {
-    auto it = pool_.find(key);
-    if (it == pool_.end()) {
+void qore_http_manager_ops::evictDeadLockedImpl(HttpClientConnectionManagerBase* b, const std::string& key, std::vector<HttpClientConnectionBase*>* out_to_close, std::vector<HttpClientConnectionBase*>* out_to_deref) {
+    auto it = b->pool_.find(key);
+    if (it == b->pool_.end()) {
         return;
     }
     auto& conns = it->second;
 
     // Compute the max-age cutoff once.  Skipped entirely if max_age_ms == 0
     // (default).
-    int64_t max_age_us = opts_.max_age_ms > 0
-        ? (int64_t)opts_.max_age_ms * 1000LL : -1;
+    int64_t max_age_us = b->opts_.max_age_ms > 0
+        ? (int64_t)b->opts_.max_age_ms * 1000LL : -1;
     int64_t now_us = 0;
     if (max_age_us > 0) {
         // the creation times of the connections are on the monotonic clock (#6150)
@@ -368,12 +389,11 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
     }
     conns.erase(write_it, conns.end());
     if (conns.empty()) {
-        pool_.erase(it);
+        b->pool_.erase(it);
     }
 }
 
-void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
-        HttpClientConnectionBase* conn) {
+void qore_http_manager_ops::closeAndDerefAfterLockDropImpl(HttpClientConnectionManagerBase* b, HttpClientConnectionBase* conn) {
     if (!conn) {
         return;
     }
@@ -387,7 +407,7 @@ void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
     xs.clear();
 }
 
-void HttpClientConnectionManagerBase::detachAndDeref(HttpClientConnectionBase* conn, ExceptionSink* xsink) {
+void qore_http_manager_ops::detachAndDerefImpl(HttpClientConnectionManagerBase* b, HttpClientConnectionBase* conn, ExceptionSink* xsink) {
     if (!conn) {
         return;
     }
@@ -403,7 +423,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionRef(
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/false, xsink);
+    return qore_http_manager_ops(this).acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/false, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSendRef(
@@ -413,7 +433,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForS
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/true, xsink);
+    return qore_http_manager_ops(this).acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/true, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsyncRef(
@@ -422,12 +442,11 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsyn
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/false, /*streaming_send=*/false, xsink);
+    return qore_http_manager_ops(this).acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/false, /*streaming_send=*/false, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionChecked(const char* scheme,
-        const char* host, int port, bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
-    HttpClientConnectionBase* conn = acquireConnectionImpl(scheme, host, port, wait_for_ready, streaming_send, xsink);
+HttpClientConnectionBase* qore_http_manager_ops::acquireConnectionCheckedImpl(HttpClientConnectionManagerBase* b, const char* scheme, const char* host, int port, bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = qore_http_manager_ops(b).acquireConnectionImpl(scheme, host, port, wait_for_ready, streaming_send, xsink);
     // a connection is returned only without an exception, so that a caller that checks for either does not leak its
     // reference and the stream slot reserved for it (with the streaming-send slot, for a streaming-send acquire)
     if (conn && *xsink) {
@@ -440,36 +459,34 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionChec
     return conn;
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
-        const char* scheme, const char* host, int port,
-        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
+HttpClientConnectionBase* qore_http_manager_ops::acquireConnectionImplImpl(HttpClientConnectionManagerBase* b, const char* scheme, const char* host, int port, bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
     // Drain close notifications on this application thread.  The I/O-thread
     // callback only queues notifications and never waits for pool_lock_.
-    processClosedConnections(xsink);
+    qore_http_manager_ops(b).processClosedConnections(xsink);
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
 
-    std::string key = poolKey(host, port, ssl_required);
+    std::string key = qore_http_manager_ops(b).poolKey(host, port, ssl_required);
 
     // the network sandbox of the calling code, which every pooled connection handed to it must be allowed by
     SimpleRefHolder<QoreSandboxManager> policy(qore_socket_ref_policy_sandbox_manager());
 
     while (true) {
         // the sandbox's decisions on the pooled connections
-        SandboxScan scan(*policy);
+        HttpClientConnectionManagerBase::SandboxScan scan(*policy);
 
         // 1. Read-lock pool scan for a reusable connection.
         HttpClientConnectionBase* live;
         {
-            std::shared_lock<std::shared_mutex> rl(pool_lock_);
-            if (shutdown_) {
+            std::shared_lock<std::shared_mutex> rl(b->pool_lock_);
+            if (b->shutdown_) {
                 xsink->raiseException("HTTPCLIENT-SHUTDOWN",
                     "connection manager is shutting down");
                 return nullptr;
             }
-            live = findReusableLocked(key, streaming_send, scan);
+            live = qore_http_manager_ops(b).findReusableLocked(key, streaming_send, scan);
             // the caller's reference is taken while the pool holds the connection: a close of the client's
             // connections can release the pool's reference as soon as the lock is released (qore#6303)
             if (live) {
@@ -488,8 +505,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // thread sets `creating_[key]`, others wait on `create_cond_`
         // up to connect_timeout.  On timeout, the waiter takes over.
         {
-            std::unique_lock<std::mutex> cl(create_lock_);
-            if (creating_.count(key)) {
+            std::unique_lock<std::mutex> cl(b->create_lock_);
+            if (b->creating_.count(key)) {
                 SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
                     wait_for_ready ? "acquireConnection" : "acquireConnectionAsync", xsink);
                 if (*xsink) {
@@ -497,9 +514,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 }
 
                 auto deadline = std::chrono::steady_clock::now()
-                    + std::chrono::milliseconds(opts_.connect_timeout_ms);
-                bool became_free = create_cond_.wait_until(cl, deadline,
-                    [this, &key]() { return creating_.count(key) == 0; });
+                    + std::chrono::milliseconds(b->opts_.connect_timeout_ms);
+                bool became_free = b->create_cond_.wait_until(cl, deadline,
+                    [b, &key]() { return b->creating_.count(key) == 0; });
                 if (became_free) {
                     // Another thread finished creating — loop back and
                     // try the pool scan again.
@@ -507,7 +524,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 }
                 // Timeout — take over creation.  Fall through.
             }
-            creating_.insert(key);
+            b->creating_.insert(key);
         }
 
         // RAII to clear creating_ on any exit path.  scope_guard
@@ -520,7 +537,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 mgr->creating_.erase(key);
                 mgr->create_cond_.notify_all();
             }
-        } cg{this, key};
+        } cg{b, key};
 
         // 3. Recheck pool under write lock + capacity check.  Another
         // thread may have added a usable connection between our scan
@@ -538,43 +555,43 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             std::vector<HttpClientConnectionBase*>* to_deref;
             ~EvictionDrainGuard() {
                 for (auto* c : *to_close) {
-                    mgr->closeAndDerefAfterLockDrop(c);
+                    qore_http_manager_ops(mgr).closeAndDerefAfterLockDrop(c);
                 }
                 ExceptionSink xs;
                 // a connection is marked closed before its close notification is sent, so the notification of a
                 // closed connection evicted here can still be to come
                 for (auto* c : *to_deref) {
-                    mgr->detachAndDeref(c, &xs);
+                    qore_http_manager_ops(mgr).detachAndDeref(c, &xs);
                     xs.clear();
                 }
             }
-        } drain_guard{this, &max_age_evicted, &closed_evicted};
+        } drain_guard{b, &max_age_evicted, &closed_evicted};
 
         HttpClientConnectionBase* live_to_return = nullptr;
         {
-            std::unique_lock<std::shared_mutex> wl(pool_lock_);
-            if (shutdown_) {
+            std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
+            if (b->shutdown_) {
                 xsink->raiseException("HTTPCLIENT-SHUTDOWN",
                     "connection manager is shutting down");
                 return nullptr;  // drain_guard fires
             }
             // Pass the out-vector so max-age-expired conns are collected
             // for close-after-lock-drop instead of being kept in the pool.
-            evictDeadLocked(key, &max_age_evicted, &closed_evicted);
+            qore_http_manager_ops(b).evictDeadLocked(key, &max_age_evicted, &closed_evicted);
             scan.reset();
             // the connections that have reached max_age were evicted just now: one that was kept, as it was busy,
             // can be reused, as it counts against max_connections_per_host
-            live_to_return = findReusableLocked(key, streaming_send, scan, false);
+            live_to_return = qore_http_manager_ops(b).findReusableLocked(key, streaming_send, scan, false);
             // the caller's reference, taken under the pool lock as above
             if (live_to_return) {
                 live_to_return->ref();
             }
 
             // Capacity check
-            if (!live_to_return && opts_.max_connections_per_host) {
-                auto it = pool_.find(key);
-                int count = (it == pool_.end()) ? 0 : (int)it->second.size();
-                if (count >= opts_.max_connections_per_host) {
+            if (!live_to_return && b->opts_.max_connections_per_host) {
+                auto it = b->pool_.find(key);
+                int count = (it == b->pool_.end()) ? 0 : (int)it->second.size();
+                if (count >= b->opts_.max_connections_per_host) {
                     // when the sandbox of the calling code allows none of the connections, its denial is the reason
                     // that the caller gets none; otherwise the connections it may use are busy
                     if (!scan.allowed && scan.refused) {
@@ -584,7 +601,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                             "cannot use the %d connections to %s, which were opened for code under another sandbox "
                             "and are still being made or lead to destinations it cannot decide on, and no further "
                             "connection can be opened (the limit is %d)", count, key.c_str(),
-                            opts_.max_connections_per_host);
+                            b->opts_.max_connections_per_host);
                     } else {
                         xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
                             "all %d connections to %s have reached the "
@@ -602,7 +619,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // does DNS resolution + controller submission, both of which
         // can block.
         ReferenceHolder<HttpClientConnectionBase> conn(
-            createConnection(key, host, port, ssl_required, xsink,
+            b->createConnection(key, host, port, ssl_required, xsink,
                 wait_for_ready), xsink);
         if (*xsink || !conn) {
             return nullptr;
@@ -634,8 +651,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         bool reserved;
         bool closed = false;
         {
-            std::unique_lock<std::shared_mutex> wl(pool_lock_);
-            if (shutdown_) {
+            std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
+            if (b->shutdown_) {
                 wl.unlock();
                 ExceptionSink shutdown_xs;
                 conn_raw->setManager(nullptr);
@@ -652,14 +669,14 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             if ((!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) || !conn_raw->setPoolKey(key)) {
                 closed = true;
             } else {
-                pool_[key].push_back(conn_raw);
+                b->pool_[key].push_back(conn_raw);
                 // the pool takes the creator's reference; the caller's is taken under the pool lock as above
                 conn_raw->ref();
                 // Record the observed protocol in the sticky bitmask — see
                 // hasEverObservedProtocol() docs for the race this guards
                 // against (H2 eviction between response arrival and the
                 // test's isHttp2Active() check).
-                observed_protocols_.fetch_or(
+                b->observed_protocols_.fetch_or(
                     1u << static_cast<unsigned>(conn_raw->getProtocol()),
                     std::memory_order_release);
             }
@@ -672,9 +689,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 HttpClientConnectionBase* conn;
                 ExceptionSink* xsink;
                 ~DetachingReleaser() {
-                    mgr->detachAndDeref(conn, xsink);
+                    qore_http_manager_ops(mgr).detachAndDeref(conn, xsink);
                 }
-            } closed_releaser{this, conn_raw, xsink};
+            } closed_releaser{b, conn_raw, xsink};
             raise_new_connection_error(conn_raw, xsink);
             return nullptr;
         }
@@ -701,7 +718,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 // createConnection (H1 only in P3)
 // ============================================================
 
-bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
+bool qore_http_manager_ops::isIdempotentMethod(const char* method) {
     for (const char* m : {"GET", "HEAD", "PUT", "DELETE", "OPTIONS", "TRACE"}) {
         if (!strcasecmp(method, m)) {
             return true;
@@ -710,21 +727,17 @@ bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
     return false;
 }
 
-bool HttpClientConnectionManagerBase::isCancelPending() {
+bool qore_http_manager_ops::isCancelPending() {
     return qore_check_cancel(nullptr, "HTTP request");
 }
 
-bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
-    QoreValue err = xsink.getExceptionErr();
-    if (err.getType() != NT_STRING) {
-        return false;
-    }
-    const char* e = err.get<const QoreStringNode>()->c_str();
-    return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
-        || !strcmp(e, "SOCKET-CLOSED");
+bool qore_http_manager_ops::isConnectionClosedError(ExceptionSink& xsink) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper e(xsink.getExceptionErr());
+    return e == "HTTP1-CONNECTION-CLOSED" || e == "HTTP2-CONNECTION-CLOSED" || e == "SOCKET-CLOSED";
 }
 
-bool HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(ExceptionSink& xsink) {
+bool qore_http_manager_ops::replaceErrorWithPendingCancel(ExceptionSink& xsink) {
     if (!xsink) {
         return false;
     }
@@ -746,6 +759,7 @@ static Http1SslConfig get_ssl_config(const HttpClientConnectionManagerBase::Opti
     ssl_cfg.key = opts.client_key;
     ssl_cfg.ca_file = opts.ssl_ca_file;
     ssl_cfg.ca_path = opts.ssl_ca_path;
+    ssl_cfg.trust_store = opts.ssl_trust_store;
     return ssl_cfg;
 }
 
@@ -853,7 +867,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this,
                 opts_.ssl_verify_mode, opts_.accept_all_certs,
-                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path);
+                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path, opts_.ssl_trust_store);
             break;
         case HttpClientProtocol::NEGOTIATE:
         negotiate_case: {
@@ -949,7 +963,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                         adopted_priv, host, port,
                         opts_.max_streams_per_connection, xsink, this, connect_timeout_us, connect_deadline_us);
                     if (conn) {
-                        conn->inheritOpener(**h1);
+                        qore_http_client_connection_base_ops(conn).inheritOpener(**h1);
                     }
                     // Fall through: any xsink raised here is handled by
                     // the post-switch error block, and the holder will
@@ -1083,7 +1097,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 
     // Push the per-connection options; a negotiating connection gets them again as a concrete connection in
     // finalizeAsyncConnection()
-    applyConnectionOptions(*conn);
+    qore_http_manager_ops(this).applyConnectionOptions(*conn);
 
     // Transfer ownership of the strong ref to the caller.
     return conn.release();
@@ -1129,12 +1143,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
     }
 
     // the negotiating connection did not keep the per-connection options
-    applyConnectionOptions(*concrete);
+    qore_http_manager_ops(this).applyConnectionOptions(*concrete);
 
-    return swapNegotiatedConnection(neg, concrete.release(), reserve_stream, xsink);
+    return qore_http_manager_ops(this).swapNegotiatedConnection(neg, concrete.release(), reserve_stream, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnection(HttpClientConnectionBase* neg,
+HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(HttpClientConnectionManagerBase* b, HttpClientConnectionBase* neg,
         HttpClientConnectionBase* concrete_conn, bool reserve_stream, ExceptionSink* xsink) {
     ReferenceHolder<HttpClientConnectionBase> concrete(concrete_conn, xsink);
 #ifdef DEBUG
@@ -1150,9 +1164,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnect
     // true if the transitional connection was removed from the pool here, as the concrete one has closed already
     bool neg_evicted = false;
     {
-        std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        auto it = pool_.find(key);
-        if (it != pool_.end()) {
+        std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
+        auto it = b->pool_.find(key);
+        if (it != b->pool_.end()) {
             for (auto cit = it->second.begin(); cit != it->second.end(); ++cit) {
                 if (*cit == neg) {
                     if (concrete_raw->setPoolKey(key)) {
@@ -1164,7 +1178,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnect
                         // notification would remove it, and the transitional entry is defunct
                         it->second.erase(cit);
                         if (it->second.empty()) {
-                            pool_.erase(it);
+                            b->pool_.erase(it);
                         }
                         neg_evicted = true;
                     }
@@ -1173,7 +1187,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnect
             }
         }
         if (swapped) {
-            observed_protocols_.fetch_or(
+            b->observed_protocols_.fetch_or(
                 1u << static_cast<unsigned>(concrete_raw->getProtocol()),
                 std::memory_order_release);
             if (reserve_stream) {
@@ -1223,7 +1237,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnect
     return concrete_raw;
 }
 
-void HttpClientConnectionManagerBase::applyConnectionOptions(HttpClientConnectionBase* conn) {
+void qore_http_manager_ops::applyConnectionOptionsImpl(HttpClientConnectionManagerBase* b, HttpClientConnectionBase* conn) {
     // Push the configured idle timeout into the protocol's poll-op
     // proactive-close machinery.  Mirrors the Qore-side wiring at
     // qlib/HttpClientIo/HttpClientConnectionManager.qc:1684-1689.
@@ -1231,14 +1245,14 @@ void HttpClientConnectionManagerBase::applyConnectionOptions(HttpClientConnectio
     // H3 uses ngtcp2's own idle/keepalive timers and inherits the
     // base no-op.  Safe to call before or after wait_for_ready — the
     // hook is idempotent and a no-op while the poll op is unbuilt.
-    if (opts_.idle_timeout_ms > 0) {
-        conn->setIdleTimeoutHook((int64_t)opts_.idle_timeout_ms * 1000LL);
+    if (b->opts_.idle_timeout_ms > 0) {
+        conn->setIdleTimeoutHook((int64_t)b->opts_.idle_timeout_ms * 1000LL);
     }
-    if (opts_.max_response_body_size > 0) {
-        conn->setMaxResponseBodySizeHook(opts_.max_response_body_size);
+    if (b->opts_.max_response_body_size > 0) {
+        conn->setMaxResponseBodySizeHook(b->opts_.max_response_body_size);
     }
-    if (opts_.assumed_encoding) {
-        conn->setAssumedEncodingHook(opts_.assumed_encoding);
+    if (b->opts_.assumed_encoding) {
+        conn->setAssumedEncodingHook(b->opts_.assumed_encoding);
     }
 }
 
@@ -1418,7 +1432,7 @@ int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int po
 }
 
 int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int port, bool ssl) const {
-    std::string key = poolKey(host, port, ssl);
+    std::string key = qore_http_manager_ops(this).poolKey(host, port, ssl);
     std::shared_lock<std::shared_mutex> rl(pool_lock_);
     auto it = pool_.find(key);
     return (it == pool_.end()) ? 0 : (int)it->second.size();
@@ -1428,11 +1442,11 @@ int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int po
 // processClosedConnections — drain I/O-thread close notifications
 // ============================================================
 
-void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xsink) {
-    std::vector<ClosedConnectionNotification> closed;
+void qore_http_manager_ops::processClosedConnectionsImpl(HttpClientConnectionManagerBase* b, ExceptionSink* xsink) {
+    std::vector<HttpClientConnectionManagerBase::ClosedConnectionNotification> closed;
     {
-        std::lock_guard<std::mutex> cl(closed_lock_);
-        closed.swap(closed_connections_);
+        std::lock_guard<std::mutex> cl(b->closed_lock_);
+        closed.swap(b->closed_connections_);
     }
     if (closed.empty()) {
         return;
@@ -1440,10 +1454,10 @@ void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xs
 
     std::vector<HttpClientConnectionBase*> to_deref;
     {
-        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
         for (const auto& notification : closed) {
-            auto it = pool_.find(notification.key);
-            if (it == pool_.end()) {
+            auto it = b->pool_.find(notification.key);
+            if (it == b->pool_.end()) {
                 continue;
             }
             auto& conns = it->second;
@@ -1452,7 +1466,7 @@ void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xs
                     to_deref.push_back(notification.conn);
                     conns.erase(cit);
                     if (conns.empty()) {
-                        pool_.erase(it);
+                        b->pool_.erase(it);
                     }
                     break;
                 }
@@ -1460,7 +1474,7 @@ void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xs
         }
     }
     for (auto* conn : to_deref) {
-        detachAndDeref(conn, xsink);
+        qore_http_manager_ops(b).detachAndDeref(conn, xsink);
     }
 }
 
@@ -1508,10 +1522,10 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     // before a response is received; a connection that has served a request can be closed by the peer while it
     // waits in the pool, which is only detected when the next request is sent, so such a request is repeated
     // once on a new connection
-    bool can_retry = isIdempotentMethod(method);
+    bool can_retry = qore_http_manager_ops(this).isIdempotentMethod(method);
     for (int attempt = 0; ; ++attempt) {
         bool retry = false;
-        QoreHashNode* rv = requestOnce(method, scheme, host, port, path, headers, body, body_len, timeout_ms,
+        QoreHashNode* rv = qore_http_manager_ops(this).requestOnce(method, scheme, host, port, path, headers, body, body_len, timeout_ms,
             xsink, event_sink, can_retry && !attempt ? &retry : nullptr);
         if (!retry) {
             return rv;
@@ -1521,11 +1535,8 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     }
 }
 
-QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
-        const char* scheme, const char* host, int port, const char* path,
-        const QoreHashNode* headers, const void* body, size_t body_len,
-        int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry) {
-    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
+QoreHashNode* qore_http_manager_ops::requestOnceImpl(HttpClientConnectionManagerBase* b, const char* method, const char* scheme, const char* host, int port, const char* path, const QoreHashNode* headers, const void* body, size_t body_len, int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry) {
+    HttpClientConnectionBase* conn = b->acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
@@ -1549,7 +1560,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     if (!submit_result || *xsink) {
         // submitRequest failed — release the reservation we made via
         // acquireConnection's tryReserveStream.
-        releaseConnection(conn);
+        b->releaseConnection(conn);
         // A connection that refused the request because it is closed must not
         // stay in the pool: the next checkout would find it, fail the same way
         // and report this connection's stored error as that request's failure.
@@ -1562,7 +1573,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
         if (closed) {
             ExceptionSink evict_xsink;
-            closeAndEvict(conn, &evict_xsink);
+            b->closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed by the peer while it waited in the pool
             if (retry && !cancelled) {
@@ -1581,14 +1592,14 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     if (future_v.getType() != NT_OBJECT) {
         xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
             "submitRequest result missing 'future' key");
-        abandonRequest(conn, stream_id);
-        releaseConnection(conn);
+        b->abandonRequest(conn, stream_id);
+        b->releaseConnection(conn);
         return nullptr;
     }
     QoreObject* future_obj = const_cast<QoreObject*>(future_v.get<const QoreObject>());
     future_obj->ref();
 
-    int effective_timeout = timeout_ms > 0 ? timeout_ms : opts_.request_timeout_ms;
+    int effective_timeout = timeout_ms > 0 ? timeout_ms : b->opts_.request_timeout_ms;
     QoreValue result = q_future_get_blocking(future_obj,
         effective_timeout, xsink);
     future_obj->deref(xsink);
@@ -1601,7 +1612,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // stays in the pool, with the peer still serving an exchange nobody
         // will read.  Abandon it here, while the caller's exception is
         // pending and before the connection reference goes out of scope.
-        abandonRequest(conn, stream_id);
+        b->abandonRequest(conn, stream_id);
         result.discard(xsink);
         bool closed = isConnectionClosedError(*xsink);
         // a cancellation of this thread that ended the request first (the code that it ends closes the transport,
@@ -1612,7 +1623,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
             // a reused connection that was closed by the peer is not used again, and the request is repeated
             if (retry) {
                 ExceptionSink evict_xsink;
-                closeAndEvict(conn, &evict_xsink);
+                b->closeAndEvict(conn, &evict_xsink);
                 evict_xsink.clear();
                 if (!cancelled) {
                     *retry = true;
@@ -1667,7 +1678,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     if (!rv->getKeyValue("status_message").getType()) {
         int code = (int)rv->getKeyValue("status_code").getAsBigInt();
         if (code > 0) {
-            const char* msg = QoreHttpClientObject::getHttpStatusMessage(code);
+            const char* msg = qore_http_client_object_ops::getHttpStatusMessage(code);
             rv->setKeyValue("status_message",
                 new QoreStringNode(msg), xsink);
         }
@@ -1706,10 +1717,10 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
     // section 9.2.2).  The close of a pooled connection becomes visible to the pool only when it has been marked
     // closed, which can happen between the checkout of the connection and the submit, without an error of its own
     // when the connection was ended by an idle timeout.
-    bool can_retry = isIdempotentMethod(method);
+    bool can_retry = qore_http_manager_ops(this).isIdempotentMethod(method);
     for (int attempt = 0; ; ++attempt) {
         bool retry = false;
-        int64_t rv = requestStreamingOnce(method, scheme, host, port, path, headers, body, body_len, channel_out,
+        int64_t rv = qore_http_manager_ops(this).requestStreamingOnce(method, scheme, host, port, path, headers, body, body_len, channel_out,
             xsink, event_sink, reused, can_retry && !attempt ? &retry : nullptr, conn_out);
         if (!retry) {
             // a request that has been repeated is not repeated again by the caller
@@ -1723,11 +1734,8 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
     }
 }
 
-int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method, const char* scheme,
-        const char* host, int port, const char* path, const QoreHashNode* headers, const void* body,
-        size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink,
-        bool* reused, bool* retry, HttpClientConnectionBase** conn_out) {
-    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
+int64_t qore_http_manager_ops::requestStreamingOnceImpl(HttpClientConnectionManagerBase* b, const char* method, const char* scheme, const char* host, int port, const char* path, const QoreHashNode* headers, const void* body, size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* reused, bool* retry, HttpClientConnectionBase** conn_out) {
+    HttpClientConnectionBase* conn = b->acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
     }
@@ -1746,7 +1754,7 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
         body, body_len, channel_out, xsink, event_sink);
     if (*xsink || stream_id < 0) {
-        releaseConnection(conn);
+        b->releaseConnection(conn);
         // As in requestOnce(): a connection that refused the request because it is closed must not stay in the
         // pool.  The protocol poll operation publishes its closed error before its callback marks the pooled
         // connection closed, so a submit in that window fails while the connection still looks reusable; without
@@ -1757,7 +1765,7 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
         if (closed) {
             ExceptionSink evict_xsink;
-            closeAndEvict(conn, &evict_xsink);
+            b->closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed while it waited in the pool, with or without an error of its own
             if (retry && !cancelled) {
@@ -1774,7 +1782,7 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
     // calls releaseStreamReservation on success (matching the non-streaming
     // request() path).  The connection itself stays in the pool; the
     // active stream count tracks in-flight work independently.
-    releaseConnection(conn);
+    b->releaseConnection(conn);
     // the caller abandons the request on the connection if it stops reading the response before it ends
     if (conn_out) {
         conn->ref();

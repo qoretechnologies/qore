@@ -151,6 +151,39 @@ public:
             | (unsafe_receiver ? QTI_CTP_UNSAFE_RECEIVER : 0)), std::memory_order_relaxed);
     }
 
+    //! Returns true if the walk that references the declarations of the type is known to find none (issue #6126)
+    /** Set when the declarations of the type are referenced (QoreExternalTypeDeclRefs, QoreTypeDeclRefs) and the walk
+        of the type finds none, under the type lock (the walk follows the element types of containers, the type
+        arguments of parameterized classes, wildcard bounds and the signatures of typed code, but not the target of a
+        reference type nor more than 64 levels); the declarations that a type names are fixed when the type is made
+        (an orphaned pointer is repointed to a tombstone declaration of the same kind only), so the walk of such a type
+        never finds one, and the references of the type are made without the lock and without a walk; a type is marked
+        also when its walk stopped at the depth limit, as a later walk stops at the same types and finds none, as
+        before.  A debug build checks every mark that it relies on with a walk of the type
+    */
+    DLLLOCAL bool namesNoDeclarations() const {
+        return names_no_decl_cache.load(std::memory_order_relaxed) == 1;
+    }
+
+    DLLLOCAL void setNamesNoDeclarations() const {
+        names_no_decl_cache.store(1, std::memory_order_relaxed);
+    }
+
+    //! Returns the index of the or-nothing type of a builtin type registered by init_qore_types(), else 0
+    /** Read by get_or_nothing_type() instead of a map lookup: the substitution of an or-nothing type parameter (*T)
+        makes the or-nothing type of its argument (issue #6126); an index of a table in lib/QoreTypeInfo.cpp, so that
+        the type is not made larger by it
+    */
+    DLLLOCAL unsigned getBuiltinOrNothingIndex() const {
+        return builtin_or_nothing_index;
+    }
+
+    //! Sets the index of the or-nothing type of a builtin type; only called by init_qore_types(), before other
+    //! threads run
+    DLLLOCAL void setBuiltinOrNothingIndex(uint16_t index) const {
+        builtin_or_nothing_index = index;
+    }
+
     //! a parameterized class type whose type arguments name user declarations: a call with it as its receiver holds
     //! types read through it (contains_type_parameter_cache, with unsafe_receiver; issue #6419)
     static constexpr signed char QTI_CTP_UNSAFE_RECEIVER = 4;
@@ -213,6 +246,21 @@ public:
     */
     DLLLOCAL bool isComplexCode() const {
         return complex_code;
+    }
+
+    //! Returns true if this is a type parameter (QoreTypeParameterTypeInfo, ex: \c T or \c *T)
+    /** A flag that the constructors of QoreTypeParameterTypeInfo set, so that the substitution of type parameters,
+        which classifies every type that it visits, does not need a dynamic_cast (issue #6126)
+    */
+    DLLLOCAL bool isTypeParameter() const {
+        return type_parameter;
+    }
+
+    //! Returns true if this is a union type (QoreUnionTypeInfo)
+    /** A flag that the constructor of QoreUnionTypeInfo sets, for the same reason as isTypeParameter() (issue #6126)
+    */
+    DLLLOCAL bool isUnion() const {
+        return union_type;
     }
 
     //! Returns false if this is a typed callable type and \a n is a closure or call reference that it does not accept
@@ -1671,6 +1719,10 @@ protected:
     bool aot_deferred_placeholder = false;
     //! true for a typed callable type (QoreComplexCodeTypeInfo) only; see isComplexCode()
     bool complex_code = false;
+    //! true for a type parameter (QoreTypeParameterTypeInfo) only; see isTypeParameter()
+    bool type_parameter = false;
+    //! true for a union type (QoreUnionTypeInfo) only; see isUnion()
+    bool union_type = false;
 
 private:
     const q_accept_vec_t accept_vec;
@@ -1681,6 +1733,11 @@ private:
     //! for a complex list type: whether its element type takes NOTHING: -1 = not known yet; see
     //! listElementTakesNothing()
     mutable std::atomic<signed char> list_elem_takes_nothing_cache {-1};
+    //! 1 if the walk of the declarations of the type is known to find none, otherwise 0 (not known yet or finds
+    //! one); see namesNoDeclarations()
+    mutable std::atomic<signed char> names_no_decl_cache {0};
+    //! for a builtin type: the index of its or-nothing type + 1, otherwise 0; see getBuiltinOrNothingIndex()
+    mutable uint16_t builtin_or_nothing_index = 0;
     //! for a complex list type: its list<*T> type; see getOrNothingListType()
     mutable std::atomic<const QoreTypeInfo*> or_nothing_list_cache {nullptr};
 };
@@ -1799,6 +1856,44 @@ typedef std::vector<QoreOrphanablePtr<const QoreTypeInfo>> orphanable_type_vec_t
 //! A read-only view of an orphanable_type_vec_t
 typedef QoreOrphanablePtrVecView<const QoreTypeInfo> orphanable_type_vec_view_t;
 
+//! The type_vec_t of a derived type that the deprecated reflection functions return a pointer to (issue #6936)
+/** qore_type_get_type_arguments(const QoreTypeInfo*) and qore_type_get_code_param_types(const QoreTypeInfo*) return a
+    pointer to a vector that lives as long as the type, as they did before the types of a derived type could be
+    orphaned (issue #6419); a derived type lives until library cleanup.  The derived type keeps its types in an
+    orphanable_type_vec_t, which is no type_vec_t, so the vector is a copy, made on the first call and kept with the
+    type.  When the types are orphaned, the orphaner stores their tombstones to the copy as well (refresh()) before
+    the retirement epoch is taken, so that the copy never names the type of a freed declaration; a caller that reads
+    an element while it is repointed reads either pointer, as the library's own reads of the orphanable vector do (the
+    library's store is atomic; the caller's read is a plain load of an aligned pointer, which old callers make).
+    Both are made under the complex type lock, so a copy made while the types are orphaned has their tombstones.
+*/
+class QoreLegacyTypeVec {
+public:
+    DLLLOCAL QoreLegacyTypeVec() = default;
+
+    DLLLOCAL QoreLegacyTypeVec(const QoreLegacyTypeVec&) = delete;
+    DLLLOCAL QoreLegacyTypeVec& operator=(const QoreLegacyTypeVec&) = delete;
+
+    DLLLOCAL ~QoreLegacyTypeVec() {
+        delete vec.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the copy of \a src, which is made on the first call
+    DLLLOCAL const type_vec_t* get(const orphanable_type_vec_t& src) const {
+        const type_vec_t* rv = vec.load(std::memory_order_acquire);
+        return rv ? rv : make(src);
+    }
+
+    //! Stores the current elements of \a src to the copy, if made; called after the elements are orphaned
+    DLLLOCAL void refresh(const orphanable_type_vec_t& src) const;
+
+private:
+    //! the copy; never resized once published
+    mutable std::atomic<type_vec_t*> vec{nullptr};
+
+    DLLLOCAL const type_vec_t* make(const orphanable_type_vec_t& src) const;
+};
+
 class QoreParameterizedClassTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreParameterizedClassTypeInfo(const QoreClass* qc,
@@ -1817,6 +1912,18 @@ public:
     //! Returns the type arguments; each is read with an acquire load, as it can be orphaned (issue #6419)
     DLLLOCAL orphanable_type_vec_view_t getTypeArgs() const {
         return orphanable_type_vec_view_t(type_args);
+    }
+
+    //! Returns the type arguments in a vector that lives as long as the type (see QoreLegacyTypeVec)
+    /** For the deprecated qore_type_get_type_arguments(const QoreTypeInfo*) (issue #6936)
+    */
+    DLLLOCAL const type_vec_t* getLegacyTypeArgs() const {
+        return legacy_type_args.get(type_args);
+    }
+
+    //! Stores the orphaned type arguments to the vector of getLegacyTypeArgs(), if it was made (issue #6936)
+    DLLLOCAL void refreshLegacyTypeArgs() const {
+        legacy_type_args.refresh(type_args);
     }
 
     DLLLOCAL size_t getArgCount() const {
@@ -1840,6 +1947,8 @@ protected:
     QoreOrphanablePtr<const QoreClass> base_class;
     //! the type arguments; orphaned when a declaration that one is the type of is retired (issue #6419)
     orphanable_type_vec_t type_args;
+    //! the copy of the type arguments for the deprecated reflection function (issue #6936)
+    QoreLegacyTypeVec legacy_type_args;
     bool or_nothing;
     std::string pname;
 
@@ -4770,6 +4879,7 @@ public:
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
             members(qore_orphanable_vec(members)) {
+        union_type = true;
     }
 
     //! records the member types that a value of the type is accepted as, given the value types of the members
@@ -4910,7 +5020,11 @@ DLLLOCAL bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParam
 // type_vec_t is defined in include/qore/common.h.
 
 //! Returns type-parameter metadata when the type info is symbolic
-DLLLOCAL const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti);
+/** Classified with the type's flag, not a dynamic_cast (issue #6126)
+*/
+DLLLOCAL inline const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
+    return ti && ti->isTypeParameter() ? static_cast<const QoreTypeParameterTypeInfo*>(ti) : nullptr;
+}
 
 //! Returns symbolic hashdecl type-parameter type info
 DLLLOCAL const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* owner, size_t index,
@@ -5154,6 +5268,18 @@ public:
         return orphanable_type_vec_view_t(paramTypes);
     }
 
+    //! Returns the parameter types in a vector that lives as long as the type (see QoreLegacyTypeVec)
+    /** For the deprecated qore_type_get_code_param_types(const QoreTypeInfo*) (issue #6936)
+    */
+    DLLLOCAL const type_vec_t* getLegacyParamTypes() const {
+        return legacyParamTypes.get(paramTypes);
+    }
+
+    //! Stores the orphaned parameter types to the vector of getLegacyParamTypes(), if it was made (issue #6936)
+    DLLLOCAL void refreshLegacyParamTypes() const {
+        legacyParamTypes.refresh(paramTypes);
+    }
+
     //! Returns true if this callable accepts variable arguments
     DLLLOCAL bool hasVarArgs() const {
         return varargs;
@@ -5184,6 +5310,8 @@ protected:
     QoreOrphanablePtr<const QoreTypeInfo> returnType;
     //! parameter types; orphaned when a declaration that one is the type of is retired (issue #6419)
     orphanable_type_vec_t paramTypes;
+    //! the copy of the parameter types for the deprecated reflection function (issue #6936)
+    QoreLegacyTypeVec legacyParamTypes;
     bool varargs;                    //!< true if accepts variable arguments
     bool orNothing;                  //!< true if accepts NOTHING
     QoreString pname;                //!< path name for type

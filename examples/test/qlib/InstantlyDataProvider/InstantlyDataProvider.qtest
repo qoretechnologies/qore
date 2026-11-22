@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -205,13 +206,13 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Instantly client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.INSTANTLY_CONNECTION;
+        *string conn_name = LiveProvider::get("instantly", "INSTANTLY_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("instantly", "INSTANTLY_CONNECTION", m_options.conn);
             client = conn.getAsync();
             return;
         }
-        *string apikey = ENV.INSTANTLY_API_KEY;
+        *string apikey = LiveProvider::get("instantly", "INSTANTLY_API_KEY");
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -c option or INSTANTLY_API_KEY/"
@@ -624,7 +625,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             InstantlyRestClient::InstantlyRestConnection conn({
                 "name": "test",
                 "desc": "test",
-                "opts": {"apikey": ENV.INSTANTLY_API_KEY},
+                "opts": {"apikey": LiveProvider::get("instantly", "INSTANTLY_API_KEY")},
             }, {"monitor": False});
             hash<PingInfo> ping_info = conn.ping(True);
             assertTrue(ping_info.ok, "connection ping succeeded");

@@ -34,6 +34,7 @@
 #ifdef DEBUG
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 #endif
 
 #include <cassert>
@@ -164,46 +165,42 @@ void AutoVLock::del() {
     assert(!o);
 }
 
-void AutoVLock::clear() {
-    if (lock.isSet()) {
-        lock.clear();
-        if (o) {
-            o = nullptr;
+void qore_auto_vlock_ops::clearImpl(AutoVLock* b) {
+    if (b->lock.isSet()) {
+        b->lock.clear();
+        if (b->o) {
+            b->o = nullptr;
         }
     }
-    assert(!o);
+    assert(!b->o);
 }
 
-void AutoVLock::set(QoreVarRWLock* n_m) {
-    assert(!lock.isSet());
-    lock.set(n_m);
+void qore_auto_vlock_ops::setImpl(AutoVLock* b, QoreVarRWLock* n_rwl) {
+    assert(!b->lock.isSet());
+    b->lock.set(n_rwl);
 }
 
-void AutoVLock::set(QoreObject* n_o, QoreVarRWLock* n_m) {
-    assert(!lock.isSet());
-    o = n_o;
-    lock.set(n_m);
+void qore_auto_vlock_ops::setImpl(AutoVLock* b, QoreObject* n_o, QoreVarRWLock* n_rwl) {
+    assert(!b->lock.isSet());
+    b->o = n_o;
+    b->lock.set(n_rwl);
 }
 
-QoreVarRWLock* AutoVLock::getRWL() const {
-    return lock.getRWL();
+QoreObject* qore_auto_vlock_ops::getObjectImpl(AutoVLock* b) {
+    return b->o;
 }
 
-QoreObject* AutoVLock::getObject() const {
-    return o;
-}
-
-void AutoVLock::addMemberNotification(QoreObject* obj, const char* member) {
+void qore_auto_vlock_ops::addMemberNotificationImpl(AutoVLock* b, QoreObject* obj, const char* member) {
     // ignore member notifications for updates made within the class
     if (obj == runtime_get_stack_object() || !qore_object_ops(obj).hasMemberNotification()) {
         return;
     }
 
-    if (!priv) {
-        priv = new qore_avl_private;
+    if (!b->priv) {
+        b->priv = new qore_avl_private;
     }
 
-    priv->add(obj, member);
+    b->priv->add(obj, member);
 }
 
 VLock::VLock(int tid) : waiting_on(nullptr), tid(tid) {

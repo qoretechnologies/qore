@@ -14,6 +14,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -98,7 +99,7 @@ class PgsqlMaterializedViewRefreshTest inherits QUnit::Test {
 
     private Datasource getDs() {
         if (!ds) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
         return ds;
     }

@@ -35,6 +35,11 @@ public namespace ServerSentEventClient {
     - \c "yield": a closure to yield current thread execution
 */
 public class ServerSentEventConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ServerSentEventClient",
@@ -397,7 +402,8 @@ public class SseConnectPollOperation inherits ConnectionProvider::HttpClientIoPo
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger,
             string sse_method = "GET", *data sse_body)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), base_url,
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
+                base_url,
                 sse_method,
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts,
                     SseConnectPollOperation::getSseHeaders(headers, sse_body)),

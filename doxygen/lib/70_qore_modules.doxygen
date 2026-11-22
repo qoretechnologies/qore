@@ -462,6 +462,56 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
     enum declarations of deleted Programs that were not freed when the library cleanup ended (N must be 0 unless a value
     or a Program held at static scope references them).
 
+    @subsection module_process_end Cleanup When the Process Ends
+
+    A module's \c del function runs only when qore_cleanup() deletes the module.  The process can end without it:
+    \c exit() with no other thread running ends it with C \c exit(), and \c exit() on the signal handler thread or
+    while other threads run ends it with \c _Exit(), which runs no \c atexit() handler and no static destructor.  A
+    module that has to clean up something outside the process when the process ends, such as temporary files or
+    directories, registers a process-end callback with qore_register_process_end_callback()
+    (@ref QORE_HAS_PROCESS_END_CALLBACKS), which runs once per process, at the first of these points that the process
+    reaches, with the reason:
+    - #QPE_CLEANUP: qore_cleanup() starts its teardown (the end of the script, or a host that embeds the library calls
+      it), after the exit hooks have run and the %Qore threads have ended, before anything is torn down: all modules
+      are loaded, and a module can end what it still has in progress (such as an operation on a foreign thread) before
+      the library is torn down
+    - #QPE_EXIT: \c exit() with no other application thread running, before C \c exit()
+    - #QPE_QUICK_EXIT: \c exit() on the signal handler thread or while other threads run, before \c _Exit(): other
+      threads can still run and hold any lock, so the callback must not wait for a lock that another thread can hold
+      (it can use a try-lock) and should only do what it can with its own data, such as removing files with system
+      calls
+
+    The callbacks run in the reverse order of their registration, on the thread that reached the point.  A callback
+    must not throw, run %Qore code, start threads or call \c exit(), and must end in a bounded time: a thread that
+    reaches one of the points while the callbacks run on another thread waits for them at most 10 seconds, and then
+    goes on with its own end of the process.  qore_deregister_process_end_callback() never waits, so it can be called
+    in the \c del function with any lock held.  A child process created with \c fork() does not run its parent's
+    callbacks.  The fatal ends of the process (a signal that ends it with its default action, \c SIGKILL, a crash)
+    run no callback.
+
+    @code{.cpp}
+    static int64_t my_process_end_id = 0;
+
+    static void my_process_end(qore_process_end_e reason, void* arg) {
+        // remove the module's temporary files; for QPE_QUICK_EXIT, with a try-lock only
+    }
+
+    static QoreStringNode* mymodule_module_init() {
+    #ifdef QORE_HAS_PROCESS_END_CALLBACKS
+        my_process_end_id = qore_register_process_end_callback(my_process_end, nullptr);
+    #endif
+        return nullptr;
+    }
+
+    static void mymodule_module_delete() {
+    #ifdef QORE_HAS_PROCESS_END_CALLBACKS
+        if (my_process_end_id > 0) {
+            qore_deregister_process_end_callback(my_process_end_id);
+        }
+    #endif
+    }
+    @endcode
+
     @subsection module_thread_exit Thread Cleanup Functions and Thread-Local Destructors
 
     A thread that %Qore starts (a \c background thread, a thread of q_start_thread(), a \c ThreadPool worker) runs
@@ -589,7 +639,8 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
       copies already made are released, without \c init() having been called on them; an exception raised in
       \c doDeref() is reported to the code that deletes the Program.  The callbacks must raise their errors in the
       sink and never let a C++ exception escape.  A \c copy() that returns \c nullptr without an exception still
-      means that the child does not inherit the data.
+      means that the child does not inherit the data.  A module that also builds with older %Qore versions uses
+      the class when \c _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX is defined.
     - A C++ exception (\c AbstractException) that the callbacks of a class derived from
       AbstractQoreProgramExternalData alone let escape is converted to a %Qore exception as a safety net; a failed
       \c copy() then fails the creation of the child as well.  Before %Qore 3.0, such an exception escaped the

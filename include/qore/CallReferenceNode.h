@@ -131,6 +131,7 @@ class LexicalSemanticPolicy;
 
 //! base class for resolved call references
 class ResolvedCallReferenceNode : public AbstractCallReferenceNode {
+    friend class qore_resolved_call_reference_node_ops;
 public:
     //! public exported constructor function
     DLLEXPORT ResolvedCallReferenceNode();
@@ -163,10 +164,6 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT QoreValue invoke(const QoreListNode* args, ExceptionSink* xsink) const;
-
-    //! Internal invocation by a parsed operation with an immutable compatibility policy.
-    DLLLOCAL QoreValue invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
-            const LexicalSemanticPolicy& policy) const;
 
     //! returns a pointer to the QoreProgram object associated with this reference (can be nullptr)
     /** this function is not exported in the library's public interface

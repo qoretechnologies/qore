@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -140,8 +141,8 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Unleashed client for integration tests
     private setupConnection() {
-        *string api_id = m_options.api_id ?? ENV.UNLEASHED_API_ID;
-        *string apikey = m_options.apikey ?? ENV.UNLEASHED_API_KEY;
+        *string api_id = LiveProvider::get("unleashed", "UNLEASHED_API_ID", m_options.api_id);
+        *string apikey = LiveProvider::get("unleashed", "UNLEASHED_API_KEY", m_options.apikey);
         if (!api_id || !apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -i and -k options or UNLEASHED_API_ID "

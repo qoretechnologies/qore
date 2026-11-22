@@ -74,7 +74,8 @@ class SkippingTest inherits QUnit::Test {
         string cmd;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
-            if (ENV{var}) {
+            if (ENV{var}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
                 cmd += sprintf("%s='%s' ", var, ENV{var});
             }
         }

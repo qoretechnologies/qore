@@ -215,6 +215,27 @@ if (state == HttpClientConnectionState::Draining) {
 }
     @endcode
 
+    @section httpclientio_caller_domains Restricted Callers
+
+    The connections and poll operations of the module connect to the hosts that their caller gives and read the CA
+    certificate locations that it gives (\c ssl_ca_file, \c ssl_ca_path), so code restricted from these functional
+    domains cannot create them:
+    - the connections (@ref HttpClientIo::Http1ClientConnection "Http1ClientConnection",
+      @ref HttpClientIo::Http2ClientConnection "Http2ClientConnection",
+      @ref HttpClientIo::Http3ClientConnection "Http3ClientConnection") and poll operations
+      (@ref HttpClientIo::Http1ClientPollOperation "Http1ClientPollOperation",
+      @ref HttpClientIo::Http2ClientPollOperation "Http2ClientPollOperation",
+      @ref HttpClientIo::Http3ClientPollOperation "Http3ClientPollOperation") refuse code restricted from
+      \c NETWORK, and from \c FILESYSTEM if CA certificate locations are given, when they are created: the refusal
+      is made at run time (\c PERMISSION-DENIED), not when the code is parsed
+    - the connection manager (@ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"), which
+      creates its connections with the exemption of its own creations, refuses the same code when it is created, also
+      when a client of another module (a REST, JSON-RPC or Connect client, for example) creates one for its caller
+
+    A connection manager that trusted code creates and gives to restricted code is a capability: it creates the
+    connections that the restricted code asks for, with the options that its creator gave.  Code that runs while it
+    creates one (such as a logger that the restricted code created) cannot create a connection itself.
+
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
@@ -567,6 +588,24 @@ public namespace HttpClientIo {
         string password = "";
     }
 
+    #! TLS credentials supplied for handshakes at the configured origins
+    public hashdecl HttpClientOriginTlsCredentials {
+        #! An HTTP(S) URL whose scheme, host and effective port identify the origin
+        string url;
+
+        #! Additional origins fixed by the credential owner
+        *list<string> additional_origins;
+
+        #! File-backed connection credentials require filesystem access when copying a REST client sharing the transport
+        bool file_backed = False;
+
+        #! The certificate to use at these origins
+        *SSLCertificate cert;
+
+        #! The private key to use at this origin
+        *SSLPrivateKey key;
+    }
+
     #! Unified connection manager options
     public hashdecl HttpClientConnectionManagerOptions {
         #! Maximum connections per host
@@ -675,6 +714,14 @@ public namespace HttpClientIo {
         */
         *string ssl_ca_path;
 
+        #! An in-memory trust store that server certificates are verified against
+        /** if set, server certificates are verified against its CA certificates, which were read when it was created,
+            instead of \c ssl_ca_file, \c ssl_ca_path and the default CA certificates of the system, on every protocol;
+            it implies \c ssl_verify_mode @ref Qore::SSL_VERIFY_PEER "SSL_VERIFY_PEER" unless a verification mode is
+            given; see @ref Qore::SSLTrustStore "SSLTrustStore" (since %Qore 3.0, qoretechnologies/qore#7248)
+        */
+        *SSLTrustStore ssl_trust_store;
+
         #! Logger for connection manager
         *LoggerInterface logger;
 
@@ -738,8 +785,8 @@ public namespace HttpClientIo {
             With an \c https proxy URL (an HTTPS proxy), the connection to the proxy uses TLS: plain HTTP requests are
             sent to the proxy over TLS, and the TLS connection to an HTTPS target server is carried by the TLS
             connection to the proxy.  The proxy's certificate is verified against the proxy's host name with the same
-            options as a target server's certificate (\c ssl_verify_mode, \c ssl_ca_file, \c ssl_ca_path, and
-            \c accept_all_certs); the client certificate is sent only to the target server.  The TLS connection to a
+            options as a target server's certificate (\c ssl_verify_mode, \c ssl_trust_store, \c ssl_ca_file,
+            \c ssl_ca_path, and \c accept_all_certs); the client certificate is sent only to the target server.  The TLS connection to a
             target server through a proxy tunnel is made for the target's host name, which is sent with SNI and
             verified in the server's certificate.  Proxy URL schemes other than \c http and \c https raise an
             \c HTTPCLIENT-OPTION-ERROR exception.
@@ -764,6 +811,12 @@ public namespace HttpClientIo {
 
         #! private key of the client certificate for mutual TLS (mTLS)
         *SSLPrivateKey client_pk;
+
+        #! Origin to which connection-owned TLS credentials are bound
+        /** When set, attempts to acquire a connection to a different origin raise
+            \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR before network I/O.
+        */
+        *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
 
         #! Enable automatic cookie handling (default: True)
         /** When True, the connection manager automatically processes Set-Cookie
@@ -923,6 +976,23 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
             return;
         }
         return proxy =~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// ? proxy : "http://" + proxy;
+    }
+
+    #! Creates the TLS socket for an HTTP client operation with the ownership of each supplied credential
+    Socket sub http_client_tls_socket(hash<auto> url_info, *SSLCertificate cert, *SSLPrivateKey key) {
+        # An ordinary target may be a UrlInfo hashdecl without credential metadata.
+        bool bound_cert = cert && url_info.hasKey("bound_tls_cert") && url_info.bound_tls_cert;
+        bool bound_key = key && url_info.hasKey("bound_tls_key") && url_info.bound_tls_key;
+        Socket sock = bound_cert || bound_key
+            ? Socket::forHttpClientHandshake(bound_cert ? cert : NOTHING, bound_key ? key : NOTHING)
+            : new Socket();
+        if (cert && !bound_cert) {
+            sock.setCertificate(cert);
+        }
+        if (key && !bound_key) {
+            sock.setPrivateKey(key);
+        }
+        return sock;
     }
 
     #! Returns True if the host is matched by the given no_proxy value (see get_proxy_url_from_environment())

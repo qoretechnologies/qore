@@ -100,7 +100,9 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> h = c.readHTTPHeader(Timeout);
         int len = (h."content-length" ?? 0).toInt();
         string rbody = len && !head ? c.recv(len, Timeout) : "";
-        return {"code": h.status_code, "body": rbody, "hdr": h};
+        # the header fields of the response: the hash of the header also gives them under "headers" (qore#6761),
+        # where the date, which differs by nature, would not be left out of the comparisons
+        return {"code": h.status_code, "body": rbody, "hdr": h.headers};
     }
 
     private Socket connect() {

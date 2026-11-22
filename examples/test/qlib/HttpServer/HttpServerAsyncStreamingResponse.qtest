@@ -495,9 +495,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         on_exit client.disconnect();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<auto> resp = client.send(NOTHING, "GET", "/large");
-        mLargeTransferTime = now_us() - start;
+        mLargeTransferTime = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(200, resp.status_code, "H1 large stream response status");
         binary resp_body;

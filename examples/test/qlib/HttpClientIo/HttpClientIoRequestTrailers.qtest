@@ -310,9 +310,9 @@ public class HttpClientIoRequestTrailersTest inherits QUnit::Test {
             sh.sendData(part, $# == (parts.size() - 1));
         }
         string rv;
-        date deadline = now_us() + 30s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 30s;
         while (True) {
-            if (now_us() > deadline) {
+            if (microseconds(clock_get_monotonic_us()) > deadline) {
                 fail(sprintf("%s: timed out reading the response", proto));
             }
             auto chunk = sh.readData(5s);

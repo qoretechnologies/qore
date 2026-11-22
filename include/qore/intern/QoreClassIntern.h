@@ -36,7 +36,9 @@
 #include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/QoreTypeOwner.h"
+#include "qore/intern/QoreKeyCompare.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
@@ -109,6 +111,27 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 
 // forward reference to private class implementation
 class qore_class_private;
+
+//! returns the methods of a method map in the order in which they were declared (issue #7169)
+/** The iteration order of the map itself is not defined: see qore_method_private::decl_seq
+*/
+DLLLOCAL std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m);
+
+//! the class context given for a method call that has none, unlike nullptr, with which the call takes the class context
+//! of the code that makes it (see CodeEvaluationHelper::findVariantImpl())
+/** A call reference created with no class context passes it, so that a call of it selects only the public variants of
+    its method wherever it is called.  It is never dereferenced: the functions that take a class context for a method
+    call convert it to nullptr with qore_given_class_ctx() where they use the class context
+*/
+DLLLOCAL inline const qore_class_private* qore_no_class_ctx() {
+    return reinterpret_cast<const qore_class_private*>(static_cast<uintptr_t>(1));
+}
+
+//! returns the class context given for a method call, or nullptr for qore_no_class_ctx()
+DLLLOCAL inline const qore_class_private* qore_given_class_ctx(const qore_class_private* cctx) {
+    return cctx == qore_no_class_ctx() ? nullptr : cctx;
+}
+
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 
@@ -250,6 +273,15 @@ struct AbstractMethodMap : amap_t {
     }
 
     DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
+
+    //! drops the abstract variants inherited from the parent classes that none of them has pending any more
+    /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
+        parseResolveAbstract()): the variants of the parent classes are merged to the class before that
+        (qore_class_private::parseInitPartialIntern()), so that a variant that a parent class implements itself, with
+        a variant of one of its own parent classes, would stay pending in the class and be implemented again there, by
+        the first concrete variant of its whole hierarchy (qore#7206)
+    */
+    DLLLOCAL void parseDropResolvedInParents(const qore_class_private& qc, const BCList& scl);
 
     // runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
     DLLLOCAL void runtimeInit(qore_class_private& qc, BCList* scl);
@@ -1292,11 +1324,12 @@ protected:
     LexicalSemanticPolicy initializer_policy;
     bool instance_initializer = false;
 
-    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old) : typeInfo(old.typeInfo),
+    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old, bool copy_initializer = true) : typeInfo(old.typeInfo),
             initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
             initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
-            exp(old.exp.refSelf()),
-            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+            exp(copy_initializer ? old.exp.refSelf() : QoreValue()),
+            loc(old.loc), parseTypeInfo(copy_initializer && old.parseTypeInfo
+                ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
             decl_pwo(old.decl_pwo), has_decl_po(old.has_decl_po) {
     }
 
@@ -1418,8 +1451,10 @@ public:
     }
 
 protected:
-    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
-            : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {
+    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access,
+            bool copy_initializer = true)
+            : QoreMemberInfoBase(old, copy_initializer), access(old.access >= n_access ? old.access : n_access),
+            init(old.init) {
     }
 
     bool init = false;
@@ -1502,10 +1537,10 @@ public:
     // copy to a new class - same member, new class
     DLLLOCAL QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls);
 
-    DLLLOCAL ~QoreMemberInfo() {
-        delete cls_context_map;
-        delete member_info_list;
-    }
+    QoreMemberInfo(const QoreMemberInfo&) = delete;
+    QoreMemberInfo& operator=(const QoreMemberInfo&) = delete;
+
+    DLLLOCAL ~QoreMemberInfo();
 
     DLLLOCAL void setDeclaringClass(const qore_class_private* qc) {
         assert(!decl_cls);
@@ -1526,6 +1561,11 @@ public:
     // returns the class where the member was declared
     DLLLOCAL const qore_class_private* getClass() const {
         return decl_cls;
+    }
+
+    //! returns the number that gives the order in which the member was declared
+    DLLLOCAL uint64_t getDeclSeq() const {
+        return decl_seq;
     }
 
     // returns the last class where the member is accessible
@@ -1668,6 +1708,15 @@ private:
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
     member_info_list_t* member_info_list = nullptr;
+    // the order in which the member was declared: a class lists the members that it inherits before its own, so the
+    // list does not give the order; a copy has the number of the member that it is a copy of (issue #7180)
+    uint64_t decl_seq = qore_next_decl_seq();
+
+    // During parseInit(), the declaration and copies waiting for its initializer form a circular list.
+    // A member removed during inheritance resolution can unlink itself without extending its lifetime.
+    mutable QoreMemberInfo* pending_init_next = nullptr;
+    DLLLOCAL void deferInitializerCopy(const QoreMemberInfo& old);
+    DLLLOCAL void finishInitializer(bool resolved);
 
     // local flag
     bool is_local,
@@ -2036,10 +2085,24 @@ protected:
     }
 };
 
+//! A member of a QoreMemberMapBase: its name, its info and the length of its name (qore#7194)
+template <typename T>
+struct QoreMemberListElement {
+    //! the name, owned by the map
+    char* first;
+    //! the info, owned by the map
+    T* second;
+    //! the length of the name, so that a lookup compares the names without strcmp() (qore#7194)
+    size_t len;
+
+    DLLLOCAL QoreMemberListElement(char* first, T* second) : first(first), second(second), len(strlen(first)) {
+    }
+};
+
 template <typename T>
 class QoreMemberMapBase {
 public:
-    typedef std::pair<char*, T*> member_list_element_t;
+    typedef QoreMemberListElement<T> member_list_element_t;
     //typedef std::deque<member_list_element_t> member_list_t;
     typedef std::list<member_list_element_t> member_list_t;
     typedef typename member_list_t::iterator iterator;
@@ -2060,17 +2123,28 @@ public:
         return (bool)find(name);
     }
 
-    DLLLOCAL T* find(const char* name) const {
+    //! returns the member with the name \a name, or nullptr
+    /** Not inline: the paths of a member access, which are inlined, use find(const char*, size_t); the other callers
+        share this copy, so that the inline comparison of the names is not copied into each of them (qore#7194)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE T* find(const char* name) const {
+        return find(name, strlen(name));
+    }
+
+    //! returns the member with the name \a name of \a len bytes, or nullptr
+    DLLLOCAL T* find(const char* name, size_t len) const {
+        assert(strlen(name) == len);
         typename member_list_t::const_iterator i =
-            std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {QORE_CLASS_HIERARCHY_STEP(); return !strcmp(e.first, name); });
+            std::find_if(member_list.begin(), member_list.end(), [name, len](const member_list_element_t& e)
+                -> bool {QORE_CLASS_HIERARCHY_STEP(); return qore_key_equal(e.first, e.len, name, len); });
         return i == member_list.end() ? nullptr : i->second;
     }
 
     DLLLOCAL T* replace(const char* name, T* info) {
+        size_t len = strlen(name);
         typename member_list_t::iterator i =
-            std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {return !strcmp(e.first, name); });
+            std::find_if(member_list.begin(), member_list.end(), [name, len](const member_list_element_t& e)
+                -> bool {return qore_key_equal(e.first, e.len, name, len); });
         assert(i != member_list.end());
         T* rv = i->second;
         i->second = info;
@@ -2085,7 +2159,7 @@ public:
         assert(name);
         assert(info);
         assert(!inList(name));
-        member_list.push_back(std::make_pair(name, info));
+        member_list.emplace_back(name, info);
     }
 
     DLLLOCAL void addNoCheck(std::pair<char*, T*> pair) {
@@ -2139,15 +2213,23 @@ public:
     }
 
     //! Returns the member with the given name, or nullptr
+    /** Not inline: the paths of a member access, which are inlined, use find(const char*, size_t); the other callers
+        share this copy, so that the inline search is not copied into each of them (qore#7194)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreMemberInfo* find(const char* name) const {
+        return find(name, strlen(name));
+    }
+
+    //! Returns the member with the name \a name of \a len bytes, or nullptr
     /** Small, so that it is inlined as the linear search was: the lookup of the index, which is larger, is a call
         (an inlined hash table lookup made the callers call find() instead, which cost each write of a member of a
         small class about 20 instructions)
     */
-    DLLLOCAL QoreMemberInfo* find(const char* name) const {
+    DLLLOCAL QoreMemberInfo* find(const char* name, size_t len) const {
         if (const MemberIndex* idx = index.load(std::memory_order_acquire)) {
-            return findIndexed(*idx, name);
+            return findIndexed(*idx, name, len);
         }
-        return base_t::find(name);
+        return base_t::find(name, len);
     }
 
     DLLLOCAL bool inList(const char* name) const {
@@ -2207,7 +2289,7 @@ public:
         assert(info);
         assert(!inList(name));
         assertChangeAllowed();
-        member_list.insert(member_list.begin(), std::make_pair(name, info));
+        member_list.emplace(member_list.begin(), name, info);
         if (num_front != (size_t)-1) {
             ++num_front;
         }
@@ -2278,10 +2360,17 @@ public:
 #endif
 
 private:
-    typedef std::unordered_map<std::string_view, QoreMemberInfo*> MemberIndex;
+    //! compares the names of the index inline (qore#7194)
+    struct MemberIndexEq {
+        DLLLOCAL bool operator()(std::string_view a, std::string_view b) const {
+            return qore_key_equal(a.data(), a.size(), b.data(), b.size());
+        }
+    };
+    typedef std::unordered_map<std::string_view, QoreMemberInfo*, std::hash<std::string_view>, MemberIndexEq>
+        MemberIndex;
 
-    //! Returns the member with the given name in the index, or nullptr
-    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name);
+    //! Returns the member with the name \a name of \a len bytes in the index, or nullptr
+    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name, size_t len);
 
     //! the index of a frozen map with at least IndexThreshold members, or nullptr
     std::atomic<const MemberIndex*> index{nullptr};
@@ -2332,7 +2421,7 @@ private:
         }
         idx->reserve(member_list.size() * 2);
         for (auto& i : member_list) {
-            idx->emplace(std::string_view(i.first), i.second);
+            idx->emplace(std::string_view(i.first, i.len), i.second);
         }
     }
 
@@ -2354,7 +2443,7 @@ private:
             idx = new MemberIndex;
             idx->reserve(member_list.size());
             for (auto& i : member_list) {
-                idx->emplace(std::string_view(i.first), i.second);
+                idx->emplace(std::string_view(i.first, i.len), i.second);
             }
         }
         const MemberIndex* old = index.exchange(idx, std::memory_order_acq_rel);
@@ -2670,8 +2759,14 @@ public:
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
+    //! as getClass(const qore_class_private&, ...), with the identity of the classes for private access
+    //! (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    //! as inHierarchy(), with the identity of the classes (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
     // inaccessible methods are ignored
@@ -2724,6 +2819,9 @@ public:
         It does not change once set: the hierarchy of a class does not change after it has been initialized.
     */
     bool diamond_free = false;
+    //! false if no class of the hierarchy inherits a parent class with private or private:internal access; set with
+    //! sml_complete (true, conservatively, for a hierarchy not known to be complete; qore#6798)
+    bool private_edge = true;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2733,7 +2831,7 @@ public:
     }
 
     DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
-            diamond_free(old.diamond_free) {
+            diamond_free(old.diamond_free), private_edge(old.private_edge) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2812,8 +2910,14 @@ public:
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
 
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
+    //! as getClass(const qore_class_private&, ...), with the identity of the classes for private access
+    //! (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const;
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
     DLLLOCAL bool inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const;
+    //! as inHierarchy(), with the identity of the classes (qore_class_private::sameClass(); qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
 
     DLLLOCAL void addNewAncestors(QoreMethod* m);
     DLLLOCAL void addAncestors(QoreMethod* m);
@@ -3168,6 +3272,17 @@ public:
         serializes its setting.
     */
     std::atomic<bool> reachable{false};
+    //! the cached result of runtimeAllMembersPublic(): -1 if not determined yet, otherwise 0 or 1; beside the flag above,
+    //! in its padding, so that the size of the class's data does not change (#7048)
+    mutable std::atomic<int8_t> runtime_all_members_public{-1};
+    //! the cache of runtimeGetContextStorageMembers(): a chain of nodes, one for each class context; nodes are only added
+    //! and are deleted with the class (#7180)
+    mutable std::atomic<struct ContextStorageNode*> context_storage_head{nullptr};
+    //! the cache of the method that code of a class context calls in place of a method found by a run-time lookup in
+    //! this class (the object's class) in a hierarchy with a diamond (see runtime_find_context_override()): a chain of
+    //! nodes, one for each class context and method found; nodes are only added, and are deleted with the methods of
+    //! the class (qore#6798)
+    mutable std::atomic<struct ContextOverrideNode*> context_override_head{nullptr};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3178,6 +3293,15 @@ public:
             return nullptr;
         }
         const QoreMemberInfo* mi = members.find(mem);
+        return mi && mi->getAccessors() ? mi : nullptr;
+    }
+
+    //! as findAccessorMember() for the member name \a mem of \a len bytes
+    DLLLOCAL const QoreMemberInfo* findAccessorMember(const char* mem, size_t len) const {
+        if (!has_member_accessors) {
+            return nullptr;
+        }
+        const QoreMemberInfo* mi = members.find(mem, len);
         return mi && mi->getAccessors() ? mi : nullptr;
     }
 
@@ -3240,6 +3364,12 @@ public:
 
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;
+
+    //! 1 if the class is SocketPollOperation or a subclass of it, 0 if not, -1 if not determined yet (qore#6839)
+    /** the objects of these classes keep the socket and goal of their operation with the operation; set when first
+        needed, by any thread, with the same value
+    */
+    mutable std::atomic<signed char> socket_poll_op_class{-1};
 
     qore_classid_t classID,          // class ID
         methodID;                    // for subclasses of builtin classes that will not have their own private data,
@@ -3418,6 +3548,10 @@ public:
         hierarchy only the record of the walk.
     */
     mutable std::atomic<bool> multi_path{false};
+
+    //! the cached result of runtimeOverridesPrivateParentMethod(): -1 if not computed yet
+    mutable std::atomic<int8_t> overrides_private_parent_method{-1};
+
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under dataLock()
@@ -3970,6 +4104,53 @@ public:
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 
+    //! Returns true if the class hierarchy declares no member that is non-public for code outside it and no
+    //! private:internal member; cached once the class can get no more members (#7048)
+    /** This covers the members that the class and its parents declare: a caller must also check that the object holds
+        no internal data, as a child class's method can store its private:internal members on an object of this class
+    */
+    DLLLOCAL bool runtimeAllMembersPublic() const {
+        int8_t cached = runtime_all_members_public.load(std::memory_order_acquire);
+        return cached >= 0 ? cached : runtimeFindAllMembersPublic();
+    }
+
+    //! determines the result of runtimeAllMembersPublic() and caches it if the class can get no more members
+    DLLLOCAL bool runtimeFindAllMembersPublic() const;
+
+    //! a member that a class context has a storage of in the internal data of an object of this class (qore#7180)
+    struct ContextStorageMember {
+        //! the member's name, owned by the member map of a class of the hierarchy
+        const char* key;
+        //! the class whose internal data of an object holds the member's value
+        const qore_class_private* storage;
+    };
+
+    typedef std::vector<ContextStorageMember> context_storage_list_t;
+
+    //! returns the declared members that a class context has a storage of in the internal data of an object of this
+    //! class, in the order of their declaration (qore#7180)
+    /** this = the object's class; \a storage_ctx must be this class or a class that it inherits, so that it lives as
+        long as this class does.  A member is listed if the class context can use it on an object of this class and
+        its value is not held in the object's data hash: whether the object holds a value in that storage is for the
+        caller to check.
+
+        The list is built once for each class context, when no member can be added to the hierarchy of the class any
+        more, and then read without a lock; before that it is built in \a tmp at each call.
+
+        @param storage_ctx the class context
+        @param tmp the list built when the result cannot be cached
+        @return the list, valid as long as \a tmp and this class
+    */
+    DLLLOCAL const context_storage_list_t& runtimeGetContextStorageMembers(const qore_class_private* storage_ctx,
+            context_storage_list_t& tmp) const;
+
+    //! builds the list of runtimeGetContextStorageMembers()
+    DLLLOCAL void runtimeBuildContextStorageMembers(const qore_class_private* storage_ctx,
+            context_storage_list_t& out) const;
+
+    //! returns true if the members of the hierarchy of the class cannot change any more
+    DLLLOCAL bool runtimeHierarchyMembersFinal() const;
+
     DLLLOCAL void parseImportMembers(qore_class_private& qc, ClassAccess access);
 
     DLLLOCAL bool parseHasMemberGate() const {
@@ -4116,9 +4297,13 @@ public:
         // (issue #6640)
         // a class on the private:internal path to the member has the storage of the member in the objects of this
         // class and uses it on them, as at run time (issue #6800)
+        // a private:internal member declared in this class is used only by the class itself and by the classes on the
+        // private:internal path that have its storage (getClassContext() above): a subclass that reads it through
+        // a variable of this class's type is refused as it is through a variable of its own type (issue #7258)
         if ((access > Public) && !parseHasMemberGate() && !omi->getClassContext(parse_get_class_priv())
                 && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access)
-                    || !parseCheckPrivateMemberAccess(qc, access))) {
+                    || !parseCheckPrivateMemberAccess(qc, access)
+                    || (access == Internal && omi->local() && qc == this))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
@@ -4253,6 +4438,23 @@ public:
         return info ? info->getClassContext(class_ctx) : nullptr;
     }
 
+#ifdef DEBUG
+    //! returns true if an access to the member in the class context would miss a system class's internal member
+    /** this = the object's class; true if every declaration of the member is private:internal, the member is
+        declared by a system class, and the class context cannot reach it: such an access goes to the object's main
+        data, so C++ code that accesses a private:internal member of a system class by name must give the declaring
+        class (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
+        QoreObject::setInternalMemberValue()); used by the debug assertions of the accesses without a class, which
+        also check that the main data does not hold the name, as a member written from outside the class can
+        (qore#6839)
+    */
+    DLLLOCAL bool runtimeMissesInternalOnlyMember(const char* mem, const qore_class_private* class_ctx) const {
+        const QoreMemberInfo* info = members.find(mem);
+        return info && (info->access == Internal || info->access == Inaccessible) && info->getClass()
+            && info->getClass()->sys && !info->getClassContext(class_ctx);
+    }
+#endif
+
     DLLLOCAL bool runtimeIsMemberInternal(const char* mem) const {
         QoreMemberInfo* info = members.find(mem);
         return info && info->isLocalInternal() ? true : false;
@@ -4270,9 +4472,15 @@ public:
     //! inline in the paths of a member access whatever the size of their translation units (issue #6760)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem,
             const qore_class_private* class_ctx) const {
+        return runtimeGetMemberInfo(mem, strlen(mem), class_ctx);
+    }
+
+    //! as runtimeGetMemberInfo() for the member name \a mem of \a len bytes
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem, size_t len,
+            const qore_class_private* class_ctx) const {
         QoreMemberInfo* info;
         if (class_ctx) {
-            info = class_ctx->members.find(mem);
+            info = class_ctx->members.find(mem, len);
             if (info && info->isLocalInternal()) {
                 return info;
             }
@@ -4281,7 +4489,7 @@ public:
         }
 
         if (class_ctx != this) {
-            info = members.find(mem);
+            info = members.find(mem, len);
         }
 
         if (info && info->access == Inaccessible && !info->getClassContext(class_ctx)) {
@@ -4431,7 +4639,11 @@ public:
         return scl ? scl->parseFindVar(vname, qc, access, toplevel) : nullptr;
     }
 
-    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& l_mi, const QoreMemberInfo& b_mi) const;
+    //! Checks that the declarations \a b_mi and \a l_mi of a member of the hierarchy of the class \a cname can be
+    //! combined; raises a parse exception if not, as for every two declarations but those of two system classes
+    //! (qore#6772)
+    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
+            const QoreMemberInfo& l_mi, const char* cname) const;
 
     DLLLOCAL int checkExistingVarMember(const char* dname, const QoreMemberInfoBaseAccess* mi, const QoreMemberInfoBaseAccess* omi, const qore_class_private* qc, ClassAccess oaccess, bool var = false) const;
 
@@ -4978,7 +5190,33 @@ public:
         if (!p) {
             return nullptr;
         }
-        if (p == ::getProgram()) {
+        // the current Program is read only for a class that has a source Program
+        return getSourceProgramForCallImpl(p, ::getProgram(), referenced, deleted);
+    }
+
+    //! The same, for a caller that has the Program that the thread runs in (\a current), as read from its thread data
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCall(const QoreProgram* current,
+            bool& referenced, bool* deleted = nullptr) const {
+        referenced = false;
+        QoreProgram* p = spgm.load();
+        if (!p) {
+            return nullptr;
+        }
+        return getSourceProgramForCallImpl(p, current, referenced, deleted);
+    }
+
+    //! Returns true if \a current, the Program that the thread runs in, is the source Program of the class
+    /** Then getSourceProgramForCall() returns it without a reference: the fast call paths of methods test this inline
+        before they call anything else (qore#7079)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool isSourceProgram(const QoreProgram* current) const {
+        return current && spgm.load() == current;
+    }
+
+    //! the part of getSourceProgramForCall() for a class with the source Program \a p
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCallImpl(QoreProgram* p,
+            const QoreProgram* current, bool& referenced, bool* deleted) const {
+        if (p == current) {
             return p;
         }
         // a module's Program stays allocated while any code can run (module lifetime): entering it fails once its
@@ -5069,6 +5307,42 @@ public:
 
     //! computes and caches the result of getMemberInitCode()
     DLLLOCAL int8_t computeMemberInitCode() const;
+
+    //! returns true if code of this class may call another method than a private method of one of its parent classes
+    //! (qore#6798)
+    /** True if, for a private method of one of its parent classes, the method of the name that code of this class calls
+        on an object of this class is another one (it overrides the private method), or if the hierarchy of the class is
+        not known completely; the run-time lookups from the class context of the class then skip such a private method
+        when an earlier parent class of the object's class reaches it first.  Computed once, at run time, when the
+        hierarchy of the class is known completely: it does not change then; the conservative answer for a hierarchy
+        not known completely is not cached
+    */
+    DLLLOCAL bool runtimeOverridesPrivateParentMethod() const {
+        int8_t rv = overrides_private_parent_method.load(std::memory_order_relaxed);
+        return rv < 0 ? computeOverridesPrivateParentMethod() : rv;
+    }
+
+    //! computes and caches the result of runtimeOverridesPrivateParentMethod()
+    DLLLOCAL QORE_INTERN_NOINLINE bool computeOverridesPrivateParentMethod() const;
+
+    //! returns the method that code of the class context calls in place of the public method \a w that a run-time
+    //! lookup in this class (the object's class) found with public access, or \a w (qore#6798)
+    /** A public method of one of the context's parent classes that the lookup reached first through private
+        inheritance, which a caller outside the class hierarchy does not call and which the context's own hierarchy
+        overrides, is not called; only possible in a hierarchy with a diamond and a private inheritance edge, which
+        this checks first (the lookup with a class context finds such a method with public access when a public path
+        reaches its class as well)
+    */
+    DLLLOCAL const QoreMethod* runtimeCheckPublicContextOverride(const char* nme, const QoreMethod* w,
+            ClassAccess& access, const qore_class_private* class_ctx) const {
+        return (w && class_ctx && scl && !scl->diamond_free && scl->private_edge && !isClassContext(class_ctx))
+            ? runtimeFindPublicContextOverride(nme, w, access, class_ctx)
+            : w;
+    }
+
+    //! see runtimeCheckPublicContextOverride()
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* runtimeFindPublicContextOverride(const char* nme,
+            const QoreMethod* w, ClassAccess& access, const qore_class_private* class_ctx) const;
 
     //! sets multi_path in each base class that the class's hierarchy reaches through more than one path (qore#6513)
     /** Called once for the class, by computeMemberInitCode(), before its first object's constructors run
@@ -5316,6 +5590,31 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
 
+    //! calls the method of the name of an object for builtin code called by code of a class (call_object_method())
+    /** As evalMethod() without a class context, except that when that finds no method of the name, a public method
+        that the class context of the caller reaches through a \c private:internal parent class of its own, which
+        only the code of the class context can follow, is called as a call of it in the caller's code calls it
+        (qore#6859), without a class context, so only its public variants can be called.  A method that is not
+        public is not called through it, nor a method reached through a \c private (hierarchy) edge, which raises
+        \c BASE-CLASS-IS-PRIVATE as before: that edge is also visible to the code of the base classes of the object's
+        class, whose dispatchers can take a method name from their input
+
+        @param caller_ctx the class context of the caller, which may access the private declarations of this class
+    */
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodFromCallerImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(QoreObject* self, const char* nme, const QoreListNode* args,
+            const qore_class_private* caller_ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
     //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
     //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
     //! (issue #5882)
@@ -5359,7 +5658,8 @@ public:
     DLLLOCAL const QoreMethod* doRuntimeMethodAccess(const QoreMethod* m, ClassAccess& access, ClassAccess ma, const qore_class_private* class_ctx) const {
         assert(m);
 
-        if (ma >= Internal && (!class_ctx || !equal(*class_ctx)))
+        // a private:internal method only for its own class, by identity (qore#7036)
+        if (ma >= Internal && (!class_ctx || !sameClass(*class_ctx)))
             m = nullptr;
         else if (access < ma)
             access = ma;
@@ -5390,9 +5690,24 @@ public:
     */
     DLLLOCAL const QoreMethod* parseCheckContextCallableMethod(const char* nme, const QoreMethod* m,
             const qore_class_private* class_ctx, bool is_static) {
-        return parseContextMayNotCall(m, class_ctx) ? parseFindContextCallableMethod(nme, m, class_ctx, is_static)
+        if (parseContextMayNotCall(m, class_ctx)) {
+            return parseFindContextCallableMethod(nme, m, class_ctx, is_static);
+        }
+        // a public method found through private inheritance in a hierarchy with a diamond (qore#6798)
+        return (m && class_ctx && scl && !scl->diamond_free && !isClassContext(class_ctx))
+            ? parseFindContextPublicOverride(nme, m, class_ctx, is_static)
             : m;
     }
+
+    //! returns the method that code of the class context calls in place of the public method \a m found by a
+    //! parse-time lookup through private inheritance, or \a m (qore#6798)
+    /** A public method of one of the context's parent classes that the class context's own hierarchy overrides, and
+        which a caller outside the class hierarchy does not call (the lookup through the public paths finds another
+        method or none), is skipped as a private method that it overrides; not inlined: called only for a lookup in
+        a hierarchy with a diamond from the class context of another class
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* parseFindContextPublicOverride(const char* nme,
+            const QoreMethod* m, const qore_class_private* class_ctx, bool is_static);
 
     //! returns true if \a m is a private method of another class than the class context, which the class context
     //! may not be able to call (see parseContextCannotCall())
@@ -5561,6 +5876,19 @@ public:
 
     DLLLOCAL bool runtimeHasCallableMethod(const char* m, int mask) const;
 
+    //! returns the static method of the name that code of the class context \a class_ctx calls, as a static method
+    //! call in that code finds it (qore#7207)
+    /** A caller without a class context (\a class_ctx is nullptr: code outside the class hierarchy) calls the first
+        public static method of the name reached through public edges, so that an inaccessible private method of a
+        parent class is skipped for the method of a later parent class (qore#6704); if it cannot call any, an exception
+        is raised.  Code of a class context calls the method that it can call (qore#6759), or else the method found
+        first, whose call then raises the error of the variants.
+
+        @return the method, or nullptr if the class has no static method of the name or if an exception was raised
+    */
+    DLLLOCAL const QoreMethod* runtimeFindCallableStaticMethod(const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL void execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL void execBaseClassDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -5661,7 +5989,10 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
     //! finds the given class anywhere in the hierarchy regardless of access permissions or location
-    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()).  For the parse-time checks of a hierarchy
+        (a class that inherits itself, a duplicate base class), which compare the classes with equal(): they only raise
+        parse errors, never give access
+    */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
         if (equal(qc)) {
             return cls;
@@ -5680,6 +6011,11 @@ public:
         return getClassIntern(qc, n_access, true);
     }
 
+    //! returns this class or the class of its hierarchy that is \a qc as a type (equal()), if any
+    /** For the type compatibility of an object with a class (casts, the class of the object of a call of a base
+        class's method, the receiver of a call reference): classes of different Programs with the same name and
+        signature are the same type.  The checks that give private access use getAccessClassIntern() (qore#7036)
+    */
     DLLLOCAL const QoreClass* getClassIntern(const qore_class_private& qc, ClassAccess& n_access,
             bool toplevel) const {
         if (equal(qc)) {
@@ -5697,6 +6033,25 @@ public:
 #endif
 
         return scl ? scl->getClass(qc, n_access, toplevel) : nullptr;
+    }
+
+    //! returns this class or the class of its hierarchy that is \a qc for private access, if any (qore#7036)
+    /** As getClassIntern(const qore_class_private&, ...), but the classes are compared with sameClass(), never by
+        their name and signature: used by the checks that give private access (runtimeCheckPrivateClassAccess(),
+        parseCheckPrivateClassAccess() and the checks of the class context of a member)
+    */
+    DLLLOCAL const QoreClass* getAccessClassIntern(const qore_class_private& qc, ClassAccess& n_access,
+            bool toplevel) const {
+        if (sameClass(qc)) {
+            return cls;
+        }
+        return scl ? scl->getAccessClass(qc, n_access, toplevel) : nullptr;
+    }
+
+    //! as getClass(const qore_class_private&, ClassAccess&), for private access (getAccessClassIntern())
+    DLLLOCAL const QoreClass* getAccessClass(const qore_class_private& qc, ClassAccess& n_access) const {
+        n_access = Public;
+        return getAccessClassIntern(qc, n_access, true);
     }
 
     DLLLOCAL const QoreClass* parseGetClassIntern(const qore_class_private& qc, ClassAccess& n_access,
@@ -5718,6 +6073,7 @@ public:
         return scl ? scl->parseGetClass(qc, n_access, toplevel) : nullptr;
     }
 
+    //! returns true if \a qc is a type of this class's hierarchy, through any edge (equal(); see getClassIntern())
     DLLLOCAL bool inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
         if (equal(qc)) {
             return cls;
@@ -5733,6 +6089,60 @@ public:
 
         return scl ? scl->inHierarchyStrict(qc, n_access) : false;
     }
+
+    //! returns true if \a qc is this class or a class of its hierarchy, through any edge, by identity (sameClass();
+    //! qore#7036)
+    DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+        if (sameClass(qc)) {
+            return true;
+        }
+
+        return scl ? scl->inAccessHierarchy(qc, n_access) : false;
+    }
+
+    //! returns the class of a method in the hierarchy of the class of an object that the method is bound to, or
+    //! nullptr if the object's class is not or does not inherit the method's class (qore#7036)
+    /** A method of a class runs on an object only if the object's class is the method's class or inherits it, by
+        identity (getAccessClassIntern()): the method's code has the private access of its class to the object, which
+        another class with the same name and signature must not get.  For the calls of a method named with its class
+        (a call reference of a method of the object, a qualified call of a method of a base class, a background call)
+
+        A class that the object's class reaches only through a \c private:internal parent class of a class of its
+        hierarchy is the method's class for the code of that class (\a class_ctx), which calls the methods of its
+        \c private:internal parent classes on the objects of its subclasses directly (qore#6859); see
+        getContextBoundMethodClass()
+
+        @param obj_cls the class of the object
+        @param mcls the class of the method
+        @param priv set to true if the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method, if any
+    */
+    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv,
+            const qore_class_private* class_ctx = nullptr) {
+        ClassAccess access = Public;
+        const QoreClass* rv = obj_cls.priv->getAccessClassIntern(*mcls.priv, access, true);
+        if (!rv && class_ctx) {
+            return getContextBoundMethodClass(obj_cls, mcls, priv, *class_ctx);
+        }
+        priv = access > Public;
+        return rv;
+    }
+
+    //! returns the class of a method that the code of the class context binds to an object through a
+    //! \c private:internal parent class of the class context, or nullptr if there is none (qore#6859)
+    /** The class context must be the object's class or a class of its hierarchy, by identity (getAccessClassIntern();
+        qore#7036), and the method's class a class of the hierarchy of the class context, which reaches its own
+        \c private:internal parent classes, as the run-time method lookups follow the \c private:internal edges of
+        the class context only (InternalEdgeCutForContext).  Not inlined: called only when the method's class is not
+        a class of the object's hierarchy otherwise
+
+        @param obj_cls the class of the object
+        @param mcls the class of the method
+        @param priv set to true: the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method
+    */
+    DLLLOCAL static QORE_INTERN_NOINLINE const QoreClass* getContextBoundMethodClass(const QoreClass& obj_cls,
+            const QoreClass& mcls, bool& priv, const qore_class_private& class_ctx);
 
 #ifdef DEBUG_SKIP
     DLLLOCAL void parseShowHash() const {
@@ -5775,6 +6185,13 @@ public:
         return a == b || (a && b && a->priv->classID == b->priv->classID);
     }
 
+    //! Returns true if \a qc is this class, a copy of its declaration or a class with the same name and signature
+    /** The type compatibility of classes (the class of a value for a declared type, casts and the calls of a base
+        class's methods on an object): the same declaration loaded in two Programs (an included source parsed by each
+        of them, for example) is the same type.  Never used to give private access, which a class with the name and
+        the signature of another class (a look-alike, which any code that sees the declaration of the class can
+        declare) must not get: see sameClass() (qore#7036)
+    */
     DLLLOCAL bool equal(const qore_class_private& qc) const {
         if (&qc == this) {
             return true;
@@ -5795,6 +6212,32 @@ public:
         return false;
     }
 
+    //! Returns true if \a qc is this class for private access: this class, a copy of its declaration or a class
+    //! related to it by injection (qore#7036)
+    /** A copy of the declaration (a class imported into another Program with Program::importClass(), also for
+        injection) has the class ID of its source; an injected class and the class that it replaces (injectedClass)
+        are related by Program::importClass() with injection, which needs PO_ALLOW_INJECTION in the target Program.
+        Unlike equal(), two classes with the same name and signature are not the same class here, so that a class
+        cannot get the private access of another class by declaring its name and its declarations
+    */
+    DLLLOCAL bool sameClass(const qore_class_private& qc) const {
+        if (&qc == this || qc.classID == classID) {
+            return true;
+        }
+
+        // a class is never injected in place of itself (also not by a damaged AOT image)
+        if (injectedClass && injectedClass != this && injectedClass->sameClass(qc)) {
+            return true;
+        }
+
+        if (qc.injectedClass && qc.injectedClass != &qc && sameClass(*qc.injectedClass)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    //! as equal(), at parse time: the type compatibility of classes, never private access (see sameClass())
     DLLLOCAL bool parseEqual(const qore_class_private& qc) const {
         if (&qc == this)
             return true;
@@ -5839,6 +6282,7 @@ public:
         return parseCheckHierarchyIntern(n_cls, access, true);
     }
 
+    // the class as a type (parseEqual()): the receiver of the static call of a generic class; not private access
     DLLLOCAL bool parseCheckHierarchyIntern(const QoreClass* n_cls, ClassAccess& access, bool toplevel) const {
         if (parseEqual(*n_cls->priv))
             return true;
@@ -6432,10 +6876,26 @@ public:
     const QoreClass* parent_class;
     MethodFunctionBase* func;
     bool static_flag, all_user;
+    //! the order in which the method was declared; the methods of a class are enumerated in this order (issue #7169)
+    /** The method maps of a class are hash maps, whose iteration order depends on the number of times that the
+        class was copied (a copy inserts the methods in the order of the map that it copies), so the order of a
+        class that was copied once more is another one, as is that of a class that is compiled.  A method that is
+        copied keeps the sequence of the method that it is copied from.
+    */
+    uint64_t decl_seq;
 
     DLLLOCAL qore_method_private(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
-            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true) {
+            : parent_class(n_parent_class), func(n_func), static_flag(n_static), all_user(true),
+            decl_seq(nextDeclSeq()) {
         assert(parent_class == n_func->getClass());
+    }
+
+    //! returns the next declaration sequence number
+    DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! returns the declaration sequence number of the method
+    DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {
+        return m.priv->decl_seq;
     }
 
     DLLLOCAL ~qore_method_private() {

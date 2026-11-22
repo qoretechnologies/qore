@@ -93,6 +93,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
     }
 
     private string requireEnv(string name) {
+        # live-provider-optin: the local KDC and proxy containers that run-restclientio-auth-proxy-integration.sh starts
         *string value = getenv(name);
         if (!value || value == "") {
             testSkip(sprintf("environment variable %s is not set", name));
@@ -105,6 +106,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
     }
 
     private timeout testTimeout() {
+        # live-provider-optin: the local KDC and proxy containers that run-restclientio-auth-proxy-integration.sh starts
         *string value = getenv("QORE_KRB5_AUTH_PROXY_TEST_TIMEOUT");
         return value && value != "" ? seconds(value.toInt()) : 30s;
     }

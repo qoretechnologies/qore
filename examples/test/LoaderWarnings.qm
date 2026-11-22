@@ -40,6 +40,9 @@ module LoaderWarnings {
       modules than those of the build that compiled the AOT modules
     - <tt>warning: binary module '...' for feature '...' failed to load; loading source module '...' instead: ...</tt>,
       when the AOT module cannot be loaded
+    - <tt>warning: N AOT modules were loaded from their source because modules that they were compiled against are
+      missing: '...' (...); ...</tt>, once for a module load, for the AOT modules that cannot be loaded because a module
+      that they were compiled against is missing (qore#7004)
 
     A module loaded by a \c %%requires directive of a script that \c qore runs reports these warnings as parse warnings
     of the script, which \c qore writes with the location of the directive, with the warning code in place of
@@ -61,7 +64,8 @@ public namespace LoaderWarnings {
     */
     public bool sub is_loader_warning(string line) {
         return line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): AOT module '.*' for feature '.*' is out of date: /
-            || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): binary module '.*' for feature '.*' failed to load; loading source module '.*' /;
+            || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): binary module '.*' for feature '.*' failed to load; loading source module '.*' /
+            || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): [0-9]+ AOT modules? (was|were) loaded from (its|their) source because /;
     }
 
     #! separates the module loader warnings from the other lines of the output of a child process

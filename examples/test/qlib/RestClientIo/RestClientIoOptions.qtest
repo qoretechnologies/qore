@@ -259,10 +259,10 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
         # and a call-local timeout shorter than the client's still ends the request
         RestClientIo patient({"url": url, "data": "json", "timeout": 10s});
         on_exit patient.close();
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         assertThrows("HTTPCLIENT-TIMEOUT", \patient.restDoRequestWithTimeout(), ("GET", "/slow", NOTHING, NOTHING,
             300));
-        assertLt(1400ms, now_us() - start);
+        assertLt(1400ms, microseconds(clock_get_monotonic_us()) - start);
     }
 
     testSchemes() {

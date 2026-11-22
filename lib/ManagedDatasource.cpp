@@ -116,9 +116,12 @@ void ManagedDatasource::cleanup(ExceptionSink *xsink) {
     // prepared statement does when it is bound, with or without a transaction in progress; with no
     // transaction there is nothing to roll back and nothing to report, only the lock to release
     if (isInTransaction()) {
-        xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s:%s@%s: TID %d terminated while in a " \
-            "transaction; transaction will be automatically rolled back and the lock released", getDriverName(),
-            getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid());
+        // the user name, the password and the database name are masked (qore#6961)
+        QoreString desc;
+        q_ds_append_masked(desc, *this);
+        xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s: TID %d terminated while in a " \
+            "transaction; transaction will be automatically rolled back and the lock released", desc.c_str(),
+            q_gettid());
         Datasource::rollback(xsink);
         setTransactionStatus(false);
     }
@@ -134,14 +137,16 @@ void ManagedDatasource::destructor(ExceptionSink* xsink) {
     if (lock_tid == q_gettid() || lock_tid == -1)
         // closeUnlocked will throw an exception if a transaction is in progress (and release the transaction lock if held)
         closeUnlocked(xsink);
-    else
+    else {
         // the connection is held by another thread, so it cannot be closed here, and that thread's
         // resource - which is registered in its thread resource list and not reachable from this one
         // - is left holding the last reference to this datasource.  Its thread-exit purge closes the
         // connection and frees the datasource; see ThreadResourceList::purge()
-        xsink->raiseException("DATASOURCE-ERROR", "%s:%s@%s: TID %d deleted Datasource while TID %d is holding the " \
-            "transaction lock", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid(),
-            lock_tid);
+        QoreString desc;
+        q_ds_append_masked(desc, *this);
+        xsink->raiseException("DATASOURCE-ERROR", "%s: TID %d deleted Datasource while TID %d is holding the " \
+            "transaction lock", desc.c_str(), q_gettid(), lock_tid);
+    }
 }
 
 void ManagedDatasource::deref(ExceptionSink *xsink) {
@@ -230,12 +235,12 @@ int ManagedDatasource::grabLock(ExceptionSink *xsink) {
             // Timeout; the connection values in use are read with ds_lock held, as the thread that holds the
             // connection changes them with it held (qore#6142)
             assert(dbgHoldsDsLock());
-            const char *un = getUsername();
-            const char *db = getDBName();
-            xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource '%s@%s' after waiting %d millisecond%s on transaction lock held by TID %d",
-                                    getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(),
-                                    q_gettid(), un ? un : "<n/a>", db ? db : "<n/a>", tl_timeout_ms,
-                                    tl_timeout_ms == 1 ? "" : "s", lockTid());
+            // the user name, the password and the database name are masked (qore#6961)
+            QoreString desc;
+            q_ds_append_masked(desc, *this);
+            xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s: TID %d timed out on the datasource after "
+                "waiting %d millisecond%s on transaction lock held by TID %d", desc.c_str(), q_gettid(), tl_timeout_ms,
+                tl_timeout_ms == 1 ? "" : "s", lockTid());
         }
         // rc == -2 means interrupt, exception already raised by checkIOInterrupt
         return -1;
@@ -545,7 +550,7 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
         return -1;
     }
 
-    //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s:%s@%s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), isOpen(), isInTransaction());
+    //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), isOpen(), isInTransaction());
 
     // the thread resource is registered whenever this thread acquires the connection, which a
     // prepared statement does when it is bound, with or without a transaction in progress.  It
@@ -563,7 +568,10 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
         if (in_transaction) {
             if (!wasConnectionAborted()) {
                 // FIXME: check for statement
-                xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s:%s@%s: Datasource closed while in a transaction; transaction will be automatically rolled back and the lock released", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str());
+                // the user name, the password and the database name are masked (qore#6961)
+                QoreString desc;
+                q_ds_append_masked(desc, *this);
+                xsink->raiseException("DATASOURCE-TRANSACTION-EXCEPTION", "%s: Datasource closed while in a transaction; transaction will be automatically rolled back and the lock released", desc.c_str());
                 Datasource::rollback(xsink);
             }
             setTransactionStatus(false);
@@ -684,6 +692,11 @@ QoreStringNode *ManagedDatasource::getPendingHostName() const {
 int ManagedDatasource::getPendingPort() const {
    DsLocker al(*this);
    return Datasource::getPendingPort();
+}
+
+void ManagedDatasource::appendMaskedPendingDesc(QoreString& str) const {
+    DsLocker al(*this);
+    q_ds_append_masked_pending(str, *this);
 }
 
 int ManagedDatasource::getPort() const {

@@ -37,6 +37,7 @@
 #include "qore/intern/QoreRegexBase.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/StaticClassVarRefNode.h"
@@ -54,6 +55,7 @@
 #include "qore/intern/QC_LoggerInterfaceBase.h"
 #include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_Program.h"
@@ -117,6 +119,7 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 
 namespace {
@@ -1232,6 +1235,8 @@ void QoreNamespace::addConstant(const char* cname, QoreValue val) {
 }
 
 void QoreNamespace::addConstant(const char* cname, QoreValue val, const QoreTypeInfo* typeInfo) {
+    // an object of a builtin constant is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(val);
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(rns);
@@ -1681,6 +1686,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // add system object types
     qns.addSystemClass(initTimeZoneClass(qns));
     qns.addSystemClass(initSSLCertificateClass(qns));
+    qns.addSystemClass(initSSLTrustStoreClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     // FastCell and HttpFastRoutes must be before Socket, which takes HttpFastRoutes in Socket::setHttpFastRoutes()
     qns.addSystemClass(initFastCellClass(qns));
@@ -4246,6 +4252,14 @@ const QoreTypeInfo* TypedefEntry::parseResolve(const char* name, int& err) {
             flag = false;
         }
     } resolving_guard(resolving);
+    // the typedef names only what the names in its type refer to where it is declared, also when it is first used in
+    // generic code: the type parameters of the generic function, closure, hashdecl or class being parsed are not
+    // visible, and the type is cached for every later use (qore#7136)
+    DeclarationTypeParamScopeHelper type_param_scope;
+    std::optional<QoreParseClassHelper> class_scope;
+    if (qore_ns_private* decl_ns = parse_ns ? parse_ns : parse_get_ns()) {
+        class_scope.emplace(nullptr, decl_ns);
+    }
     const QoreTypeInfo* rv;
     if (parse_ns) {
         // a name in the type refers to what it refers to in the namespace that declares the typedef

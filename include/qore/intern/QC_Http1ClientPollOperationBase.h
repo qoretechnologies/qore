@@ -484,6 +484,10 @@ private:
 
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
+    // Credentials for the target TLS handshake belong to this operation, not to its publicly accessible socket.
+    SimpleRefHolder<QoreSSLCertificate> client_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> client_pk;
+    int64 credential_connection_id = -1;
 
     //! Connection state (atomic for lock-free reads from app threads)
     std::atomic<H1State> h1_state{H1State::CONNECTING};
@@ -529,6 +533,10 @@ private:
     // --- Request sub-state (I/O thread only, no lock needed) ---
 
     std::atomic<ReqState> req_state {ReqState::IDLE};
+
+    //! The size in bytes of the part of the trailer section of the response that was read, which counts against the
+    //! maximum header size of the socket (I/O thread only; qore#6867)
+    size_t trailer_bytes = 0;
 
     //! Request-body send sub-state for full-duplex streaming (I/O thread only)
     SendState send_state = SendState::INACTIVE;

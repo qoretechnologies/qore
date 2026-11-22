@@ -24,9 +24,9 @@ public class ConvertEncodingTest inherits QUnit::Test {
         # converting to UTF-16 doubles the size of ASCII text; this took tens of seconds per megabyte when the
         # conversion restarted every time the target grew by a fixed block
         string text = strmul("y", 4 * 1024 * 1024);
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         string utf16 = convert_encoding(text, "UTF-16LE");
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertEq(8 * 1024 * 1024, utf16.size());
         assertLt(5s, elapsed, "4 MiB converts in well under 5 seconds");
         assertEq(text, convert_encoding(utf16, "UTF-8"));

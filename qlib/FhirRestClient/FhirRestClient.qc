@@ -1107,7 +1107,7 @@ hash<auto> oauth2_options = FhirRestClient::FhirRestClient::makeSmartBackendOAut
             }
         }
 
-        string ct = arg."content-type" ?? arg.headers."content-type" ?? "";
+        string ct = arg.headers."content-type" ?? arg."content-type" ?? "";
         if (ct =~ /^application\/(fhir\+)?json/i) {
             # the body could not be decoded by the REST client; try the raw body or the error description
             *string raw_body = arg.body.typeCode() == NT_STRING ? arg.body : NOTHING;
@@ -1231,9 +1231,14 @@ public class FhirRestClient inherits RestClient::RestClient, FhirRestClientBase 
 
     #! Normalizes FHIR JSON response content for RestClient deserialization
     private static normalizeFhirJsonContentType(reference<hash<auto>> resp) {
-        string ct = resp."content-type" ?? "";
+        string ct = (resp.headers ?? resp)."content-type" ?? "";
         if (ct =~ /^application\/fhir\+json/i) {
-            resp."content-type" = MimeTypeJson;
+            if (exists resp.headers) {
+                resp.headers."content-type" = MimeTypeJson;
+            }
+            if (resp.hasKey("content-type")) {
+                resp."content-type" = MimeTypeJson;
+            }
         }
     }
 

@@ -97,10 +97,12 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
         assertEq(("string", "auto"), t.dtypes()[0..1], "key column types");
         assertEq(4, t.numRows(), "rows");
         # numbers match by their exact values at any precision (qore#6107): 0.1 and 0.1 widened to the maximum
-        # precision match, 0.1 at a higher precision does not; 1e-1000 (more than 4096 bits) matches itself widened
+        # precision match, 0.1 computed at another precision does not; 1e-1000 (more than 4096 bits) matches itself
+        # widened.  Zeros at the end of a decimal string do not change its precision (qore#6976), so the other
+        # precision is that of an operation: 1n / 10n has the 128 bits of its operands, 0.1n those of its digits
         number zmax = number("0." + strmul("0", 1700));
         number a = 0.1n;
-        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number hi = 1n / 10n;
         number tn = number("1e-1000");
         DataFrame::DataFrame numl({"k": (c'z', a, tn, -0n)});
         DataFrame::DataFrame numr({"k": (c'y', a + zmax, hi, tn + zmax, 0n), "b": (1, 2, 4, 8, 16)});

@@ -38,6 +38,18 @@
 #include <optional>
 #include <unordered_set>
 
+// returns the value of a size threshold from the environment, or the default if it is not set or not a positive
+// number; read once for each setting (qore#7086)
+static size_t qore_ir_outline_threshold(const char* name, size_t fallback) {
+    QoreEnvironmentValue value_holder(name);
+    const char* value = value_holder.c_str();
+    if (!value || !*value) {
+        return fallback;
+    }
+    long long parsed = atoll(value);
+    return parsed > 0 ? static_cast<size_t>(parsed) : fallback;
+}
+
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
     return ++count % 100 == 0 && qore_check_cancel(nullptr, operation);
 }
@@ -1591,7 +1603,7 @@ static bool qore_ir_is_non_overridable_method_call(const QoreIRInstruction& inst
     if (qc->isFinal()) {
         return true;
     }
-    if (q_env_is_set("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
         return false;
     }
     const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
@@ -1949,7 +1961,7 @@ bool qore_ir_compute_function_effect_summaries(
             }
         }
         const bool propagate_phi_param_effects =
-            !q_env_is_set("QORE_DISABLE_AOT_PHI_PARAM_EFFECTS");
+            !QORE_ENV_IS_SET("QORE_DISABLE_AOT_PHI_PARAM_EFFECTS");
         if (propagate_phi_param_effects) {
             std::unordered_map<uint32_t,
                 std::vector<const QoreIRPhiInstruction*>> phi_users;
@@ -3339,7 +3351,7 @@ static bool qore_ir_is_read_only_query(const QoreIRFunction& func, const QoreIRI
                 func, inst.operands[0]);
     }
     if (inst.opcode == QoreIROpcode::HashKeyAccessInt) {
-        return !q_env_is_set("QORE_DISABLE_IR_HASH_PROJECTION_LICM")
+        return !QORE_ENV_IS_SET("QORE_DISABLE_IR_HASH_PROJECTION_LICM")
             && inst.operands.size() == 1
             && (qore_ir_is_assigned_boxed_hash(func, inst.operands[0])
                 || (qore_ir_is_boxed_hash(func, inst.operands[0])
@@ -3391,7 +3403,7 @@ static bool qore_ir_is_hoistable_read_only_query(
 
 static bool qore_ir_preserves_read_only_pseudo_facts(
         const QoreIRFunction& func, const QoreIRInstruction& inst) {
-    return !q_env_is_set(
+    return !QORE_ENV_IS_SET(
             "QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION")
         && inst.opcode == QoreIROpcode::DotEvalMethodDirect
         && qore_ir_is_read_only_query(func, inst, false);
@@ -3714,13 +3726,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         QoreIRFunction& func, const QoreIRControlFlowGraph& cfg, size_t& check_count) {
     QoreIRFixedAggregateScalarizationStats stats;
     const bool enable_lists =
-        !q_env_is_set("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT");
     const bool enable_hashes =
-        !q_env_is_set("QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT");
     const bool enable_mutations =
-        !q_env_is_set("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT");
     const bool enable_return_materialization =
-        !q_env_is_set("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION");
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -4005,9 +4017,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             continue;
         }
         const bool cross_block = hash_candidate
-            ? !q_env_is_set(
+            ? !QORE_ENV_IS_SET(
                 "QORE_DISABLE_IR_CROSS_BLOCK_FIXED_HASH_SCALAR_REPLACEMENT")
-            : !q_env_is_set(
+            : !QORE_ENV_IS_SET(
                 "QORE_DISABLE_IR_CROSS_BLOCK_FIXED_LIST_SCALAR_REPLACEMENT");
         QoreIRValueRepresentation expected_representation =
             QoreIRValueRepresentation::Boxed;
@@ -4016,11 +4028,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             && !hashdecl_type
             && !deferred_hashdecl_type
             && element_type == autoTypeInfo
-            && !q_env_is_set(
+            && !QORE_ENV_IS_SET(
                 "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_SCALAR_REPLACEMENT");
         const bool field_sensitive_aggregate_projection =
             field_sensitive_hash
-            && !q_env_is_set(
+            && !QORE_ENV_IS_SET(
                 "QORE_DISABLE_IR_FIELD_SENSITIVE_HASH_AGGREGATE_PROJECTION");
         if (!hashdecl_type && !deferred_hashdecl_type) {
             if (element_type == bigIntTypeInfo) {
@@ -4320,9 +4332,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 continue;
             }
         } else if (hashdecl_type) {
-            if (q_env_is_set("QORE_DISABLE_IR_HASHDECL_KEY_PROOF")
-                    || q_env_is_set("QORE_DISABLE_IR_HASHDECL_VALUE_PROOF")
-                    || q_env_is_set("QORE_DISABLE_IR_HASHDECL_LAYOUT_PROOF")) {
+            if (QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_KEY_PROOF")
+                    || QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_VALUE_PROOF")
+                    || QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_LAYOUT_PROOF")) {
                 continue;
             }
             auto make_uses = uses.find(make->result.id);
@@ -6512,7 +6524,7 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
 //! @param fold_context selects the flag contract to require and the evaluation program
 static size_t qore_ir_fold_pure_builtin_calls(QoreIRFunction& func, size_t& check_count,
         const QoreIRFoldContext& fold_context) {
-    if (q_env_is_set("QORE_DISABLE_IR_PURE_CALL_FOLD")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_PURE_CALL_FOLD")) {
         return 0;
     }
     // repeat so that a call whose arguments become literals through an earlier fold is also folded
@@ -6531,7 +6543,7 @@ static size_t qore_ir_fold_pure_builtin_calls(QoreIRFunction& func, size_t& chec
 
 static size_t qore_ir_fold_scalar_list_queries(QoreIRFunction& func,
         size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_SCALAR_LIST_QUERY_FOLDING")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_SCALAR_LIST_QUERY_FOLDING")) {
         return 0;
     }
 
@@ -6838,7 +6850,7 @@ static bool qore_ir_is_hoistable_total_call(const QoreIRInstruction& inst) {
 */
 static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_REDUNDANT_PHI_ELISION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_REDUNDANT_PHI_ELISION")) {
         return 0;
     }
     std::unordered_map<uint32_t, size_t> definition_blocks;
@@ -7160,14 +7172,14 @@ static bool qore_ir_pure_call_cse_candidate(const QoreIRInstruction* inst,
 }
 
 static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_PURE_CALL_CSE")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_PURE_CALL_CSE")) {
         return 0;
     }
     QoreIRScalarUses uses;
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
         return 0;
     }
-    const bool number_loads = !q_env_is_set("QORE_DISABLE_IR_PURE_CALL_CSE_LOAD_NUMBERING");
+    const bool number_loads = !QORE_ENV_IS_SET("QORE_DISABLE_IR_PURE_CALL_CSE_LOAD_NUMBERING");
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_set<const QoreIRInstruction*> eliminated;
     for (const auto& block : func.blocks) {
@@ -7434,7 +7446,7 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
 /** Exceptional and debugger-control-flow targets are part of reachability even
     though the ordinary CFG intentionally models normal terminator edges only. */
 static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
-    if (func.blocks.empty() || q_env_is_set("QORE_DISABLE_IR_UNREACHABLE_BLOCKS")) {
+    if (func.blocks.empty() || QORE_ENV_IS_SET("QORE_DISABLE_IR_UNREACHABLE_BLOCKS")) {
         return 0;
     }
 
@@ -7724,27 +7736,25 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         func.blocks.size(), std::numeric_limits<size_t>::max());
     std::unordered_set<const LocalVar*> written_locals;
     const bool cross_block =
-        !q_env_is_set("QORE_DISABLE_IR_CROSS_BLOCK_CSE");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_CROSS_BLOCK_CSE");
     bool dominance_cse = cross_block
-        && !q_env_is_set("QORE_DISABLE_IR_DOMINANCE_CSE");
+        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_DOMINANCE_CSE");
     if (dominance_cse) {
-        QoreEnvironmentValue outline_holder("QORE_AOT_OUTLINE_FN");
-        const char* outline = outline_holder.c_str();
-        bool outline_enabled =
-            !outline || !*outline || strcmp(outline, "0");
-        auto outline_threshold = [](const char* name, size_t fallback) {
-            QoreEnvironmentValue value_holder(name);
-            const char* value = value_holder.c_str();
-            if (!value || !*value) {
-                return fallback;
-            }
-            long long parsed = atoll(value);
-            return parsed > 0 ? static_cast<size_t>(parsed) : fallback;
-        };
-        size_t min_blocks =
-            outline_threshold("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
-        size_t min_instructions =
-            outline_threshold("QORE_AOT_OUTLINE_FN_MIN_INSTS", 3000);
+        // read once: this runs for each function that the optimizer processes (qore#7086)
+        static constinit QoreLazyValue<bool> outline_enabled_setting([]() -> bool {
+            QoreEnvironmentValue outline_holder("QORE_AOT_OUTLINE_FN");
+            const char* outline = outline_holder.c_str();
+            return !outline || !*outline || strcmp(outline, "0");
+        });
+        bool outline_enabled = outline_enabled_setting.get();
+        static constinit QoreLazyValue<size_t> min_blocks_setting([]() -> size_t {
+            return qore_ir_outline_threshold("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
+        });
+        static constinit QoreLazyValue<size_t> min_instructions_setting([]() -> size_t {
+            return qore_ir_outline_threshold("QORE_AOT_OUTLINE_FN_MIN_INSTS", 3000);
+        });
+        size_t min_blocks = min_blocks_setting.get();
+        size_t min_instructions = min_instructions_setting.get();
         // the paths of a debugger's flow requests at step events do not count (#6201)
         size_t block_count = 0;
         for (const auto& block : func.blocks) {
@@ -8094,7 +8104,7 @@ static bool qore_ir_is_hoistable_load(const QoreIRFunction& func, const QoreIRIn
     boolean load is total during function execution and has no reference-counted payload whose lifetime could
     change when moved to the loop preheader. */
 static bool qore_ir_is_hoistable_external_bool_constant_load(const QoreIRInstruction& inst) {
-    if (q_env_is_set("QORE_DISABLE_IR_EXTERNAL_BOOL_CONST_LICM")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_EXTERNAL_BOOL_CONST_LICM")
             || inst.opcode != QoreIROpcode::LoadConstant) {
         return false;
     }
@@ -8121,7 +8131,7 @@ static bool qore_ir_is_hoistable_query_load(
 
 static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& inst,
         uint32_t value_id) {
-    if (!q_env_is_set("QORE_DISABLE_IR_BORROWED_STRING_PSEUDO_READS")
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_STRING_PSEUDO_READS")
             && (qore_ir_is_read_only_string_use(
                     inst, QoreIRValue(value_id))
                 || qore_ir_is_borrow_safe_string_pseudo_use(
@@ -8727,7 +8737,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         bool invalidated = false;
         auto is_read_only_string_candidate =
             [&](const QoreIRInstruction* inst) {
-                if (q_env_is_set(
+                if (QORE_ENV_IS_SET(
                         "QORE_DISABLE_IR_BORROWED_STRING_PSEUDO_READS")
                         || QoreTypeInfo::parseReturns(
                         element_type, NT_STRING) != QTI_IDENT) {
@@ -8913,7 +8923,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 }
                 QoreIROpcode candidate_opcode = specialized_opcode;
                 if (representation == QoreIRValueRepresentation::Boxed
-                        && !q_env_is_set("QORE_DISABLE_IR_BOUNDED_BOXED_DIRECT_READS")) {
+                        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_BOUNDED_BOXED_DIRECT_READS")) {
                     auto use_it = uses.find(inst.result.id);
                     bool borrowed_uses = use_it != uses.end() && !use_it->second.empty();
                     if (borrowed_uses) {
@@ -8953,7 +8963,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
             }
         }
         if (loop_specializations && list_size_inst && list_size_load_inst
-                && !q_env_is_set("QORE_DISABLE_IR_BOUNDED_LIST_SIZE_HOIST")) {
+                && !QORE_ENV_IS_SET("QORE_DISABLE_IR_BOUNDED_LIST_SIZE_HOIST")) {
             auto move_to_preheader = [&](QoreIRInstruction* target) {
                 std::unique_ptr<QoreIRInstruction> moved;
                 for (size_t block_id : loop.blocks) {
@@ -9252,7 +9262,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         size_t& check_count,
         const QoreIRParamNoEscapeQuery* param_noescape = nullptr,
         bool enable_in_place = true) {
-    bool enable_borrowed_load = !q_env_is_set("QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD");
+    bool enable_borrowed_load = !QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> closure_values;
     std::unordered_set<LocalVar*> candidate_locals;
@@ -9284,8 +9294,11 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
                 if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure) {
                     local_cow_candidates.insert(local_inst->local);
+                    // a local that a handler references can be given any value by the handler when it runs out of
+                    // line, on an exception path that the dataflow does not see (#5951)
                     if (func.ir_only_locals.count(
-                            reinterpret_cast<const void*>(local_inst->local))) {
+                            reinterpret_cast<const void*>(local_inst->local))
+                            && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                         candidate_locals.insert(local_inst->local);
                     }
                     if (inst->opcode == QoreIROpcode::StoreLocal
@@ -9575,7 +9588,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     // test/debug knob: leave paired loads owned so the interpreter exercises
     // its runtime-uniqueness CoW fallback instead of the borrowed fast path
     bool enable_borrowed_load =
-        !q_env_is_set("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
     using InstructionPosition = std::pair<size_t, size_t>;
@@ -9602,7 +9615,9 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure
                         && local_inst->local->getTypeInfo() == stringTypeInfo
                         && func.ir_only_locals.count(
-                            reinterpret_cast<const void*>(local_inst->local))) {
+                            reinterpret_cast<const void*>(local_inst->local))
+                        // a handler that runs out of line can give a local that it references any value (#5951)
+                        && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                     candidate_locals.insert(local_inst->local);
                 }
             }
@@ -9911,12 +9926,12 @@ struct QoreIRNativeLocalPromotionStats {
 
 static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_NATIVE_LOCAL_SSA") || func.blocks.empty()
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_NATIVE_LOCAL_SSA") || func.blocks.empty()
             || func.ir_only_locals.empty() || func.has_opaque_ast_local_access) {
         return {};
     }
     const bool eliminate_stores_enabled =
-        !q_env_is_set("QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION");
 
     // Exception handlers are not represented by normal CFG predecessors. Keep
     // promotion on normal control flow so every PHI edge is exact: no handler
@@ -10588,7 +10603,7 @@ static bool qore_ir_value_is_proven_assigned(
 
 static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_LOCAL_VALUE_FACTS")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_LOCAL_VALUE_FACTS")
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
     }
@@ -10710,7 +10725,7 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
             || inst->opcode == QoreIROpcode::CallClosureDirect
-            || (!q_env_is_set(
+            || (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
                 && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
                     || inst->opcode
@@ -11047,7 +11062,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
             || inst->opcode == QoreIROpcode::CallClosureDirect
-            || (!q_env_is_set(
+            || (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
                 && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
                     || inst->opcode
@@ -11202,7 +11217,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
 bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         const QoreIRInstruction* definition, const QoreTypeInfo* target_type) {
     if (!definition
-            || q_env_is_set("QORE_DISABLE_IR_COMPLEX_HASH_PRECHECK")) {
+            || QORE_ENV_IS_SET("QORE_DISABLE_IR_COMPLEX_HASH_PRECHECK")) {
         return false;
     }
     target_type = func.specializeType(target_type);
@@ -11286,7 +11301,7 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
 bool qore_ir_hashdecl_literal_keys_prechecked(
         const QoreIRInstruction* initializer, const TypedHashDecl* target) {
     if (!initializer || !target
-            || q_env_is_set("QORE_DISABLE_IR_HASHDECL_KEY_PROOF")
+            || QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_KEY_PROOF")
             || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
         return false;
     }
@@ -11312,7 +11327,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
         const QoreIRInstruction* initializer, const TypedHashDecl* target,
         bool operands_native_and_assigned) {
     if (!initializer || !target
-            || q_env_is_set("QORE_DISABLE_IR_HASHDECL_VALUE_PROOF")
+            || QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_VALUE_PROOF")
             || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
         return false;
     }
@@ -11355,7 +11370,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
         if (!QoreTypeInfo::hasType(member_type)
                 || !QoreTypeInfo::hasType(value_type)
                 || !QoreTypeInfo::acceptsInputUnchecked(member_type, value_type)) {
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: hashdecl literal value mismatch for '%s': "
                     "member='%s' value='%s'\n",
@@ -11372,7 +11387,7 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
 bool qore_ir_hashdecl_literal_layout_prechecked(
         const QoreIRInstruction* initializer, const TypedHashDecl* target) {
     if (!initializer || !target
-            || q_env_is_set("QORE_DISABLE_IR_HASHDECL_LAYOUT_PROOF")
+            || QORE_ENV_IS_SET("QORE_DISABLE_IR_HASHDECL_LAYOUT_PROOF")
             || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
         return false;
     }
@@ -11392,7 +11407,7 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
         QoreIRFunction& func, const QoreIRControlFlowGraph& cfg,
         size_t& check_count) {
     QoreIRDenseListStats stats;
-    if (q_env_is_set("QORE_DISABLE_IR_LIST_DENSITY")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_DENSITY")
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return stats;
     }
@@ -11487,7 +11502,7 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             || inst->opcode == QoreIROpcode::CallMethodDirect
             || inst->opcode == QoreIROpcode::InvokeMethodDirect
             || inst->opcode == QoreIROpcode::CallClosureDirect
-            || (!q_env_is_set(
+            || (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION")
                 && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
                     || inst->opcode
@@ -11969,7 +11984,7 @@ static bool qore_ir_is_removable_constant_definition(const QoreIRInstruction& in
     @return the number of instructions replaced
 */
 static size_t qore_ir_load_read_only_constant_containers(QoreIRFunction& func, size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_IR_CONSTANT_CONTAINER_LOAD")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_CONSTANT_CONTAINER_LOAD")) {
         return 0;
     }
     bool have_candidate = false;
@@ -12766,7 +12781,7 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func) {
 static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
-    if (q_env_is_set("QORE_DISABLE_IR_OPT")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_OPT")) {
         if (stats) {
             *stats = local_stats;
         }
@@ -12828,9 +12843,9 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
     bool enable_in_place_list_push =
-        !q_env_is_set("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH");
     bool enable_in_place_string_append =
-        !q_env_is_set("QORE_DISABLE_IR_IN_PLACE_STRING_APPEND");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_IN_PLACE_STRING_APPEND");
     bool has_list_push = false;
     bool has_string_append = false;
     for (const QoreIRBasicBlock* block : cfg.blocks) {
@@ -12876,12 +12891,12 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
         }
         return;
     }
-    if (!q_env_is_set("QORE_DISABLE_IR_BOUNDED_TYPED_LIST_READS")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_BOUNDED_TYPED_LIST_READS")) {
         local_stats.bounded_typed_list_reads = qore_ir_specialize_bounded_typed_list_reads(
             func, cfg, loops, uses, local_stats.bounded_boxed_direct_reads, check_count);
     }
     std::unordered_set<const QoreIRInstruction*> dead_element_releases;
-    if (!q_env_is_set("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
         local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
             cfg, loops, uses, dead_element_releases, check_count);
     }
@@ -12894,12 +12909,12 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
             qore_ir_mark_in_place_string_appends(
                 func, cfg, uses, check_count);
     }
-    if (!enable_licm || q_env_is_set("QORE_DISABLE_IR_LICM")) {
+    if (!enable_licm || QORE_ENV_IS_SET("QORE_DISABLE_IR_LICM")) {
         loops.clear();
     }
     local_stats.loops_analyzed = loops.size();
     const bool enable_query_licm =
-        !q_env_is_set("QORE_DISABLE_IR_QUERY_LICM");
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_QUERY_LICM");
 
     for (const QoreIRNaturalLoop& loop : loops) {
         if (qore_ir_analysis_cancelled(check_count, "IR loop-invariant code motion")) {
@@ -12942,7 +12957,7 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
                         && !qore_ir_is_hoistable_read_only_query(
                             func, *inst)) {
                     loop_may_invalidate_query_loads = true;
-                    if (q_env_is_set("QORE_DISABLE_IR_ONLY_LICM_ACROSS_CALLS")) {
+                    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_ONLY_LICM_ACROSS_CALLS")) {
                         loop_may_invalidate_loads = true;
                     }
                 }
@@ -13090,7 +13105,7 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
         }
     }
 
-    if (!q_env_is_set("QORE_DISABLE_IR_CSE")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_CSE")) {
         // Scalar definitions from a normal path are not available when control reaches a catch
         // handler through an exceptional edge.  Other optimization passes intentionally use the
         // normal-flow CFG, so build an exception-aware graph specifically for cross-block CSE.
@@ -13132,7 +13147,7 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
             qore_ir_eliminate_common_pure_calls(func, check_count);
     }
 
-    if (!q_env_is_set("QORE_DISABLE_IR_CONST_FOLD")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_CONST_FOLD")) {
         local_stats.constant_branches_folded = qore_ir_fold_constant_branches(func);
     }
     local_stats.unreachable_blocks_pruned = qore_ir_prune_unreachable_blocks(func);
@@ -13168,7 +13183,7 @@ size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
         return 0;
     }
     return qore_ir_mark_local_list_pushes(func, cfg, uses, check_count,
-        &param_noescape, !q_env_is_set("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH"));
+        &param_noescape, !QORE_ENV_IS_SET("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH"));
 }
 
 size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
@@ -13540,7 +13555,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         *borrowed_projections = 0;
     }
     const bool enable_borrowed_projections =
-        !q_env_is_set("QORE_DISABLE_AOT_BORROWED_AGGREGATE_PROJECTION");
+        !QORE_ENV_IS_SET("QORE_DISABLE_AOT_BORROWED_AGGREGATE_PROJECTION");
     if (!get_projection) {
         return 0;
     }
@@ -13707,7 +13722,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         return 0;
     }
     bool enable_native_scalar_projection =
-        !q_env_is_set("QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION");
+        !QORE_ENV_IS_SET("QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION");
 
     struct Projection {
         QoreIRInstruction* call = nullptr;
@@ -16432,8 +16447,8 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
         *exception_edges_elided = 0;
     }
     bool optional_scalar_specialization =
-        !q_env_is_set("QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION");
-    bool late_exception_edge_elision = !q_env_is_set(
+        !QORE_ENV_IS_SET("QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION");
+    bool late_exception_edge_elision = !QORE_ENV_IS_SET(
         "QORE_DISABLE_AOT_LATE_EXCEPTION_EDGE_ELISION");
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
@@ -17591,7 +17606,7 @@ size_t qore_ir_specialize_proven_collection_operations(
 size_t qore_ir_fuse_collection_producer_consumers(QoreIRFunction& func,
         const QoreIRCollectionProducerQuery& is_supported) {
     if (!is_supported
-            || q_env_is_set("QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION")) {
+            || QORE_ENV_IS_SET("QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION")) {
         return 0;
     }
     size_t check_count = 0;
@@ -19550,7 +19565,7 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
             if (consumer_block_id == block_id) {
                 return side_effect_free_interval(producer, consumer);
             }
-            if (q_env_is_set(
+            if (QORE_ENV_IS_SET(
                     "QORE_DISABLE_AOT_STRING_TRANSFORM_CFG_FUSION")
                     || consumer_block_id >= func.blocks.size()) {
                 return false;

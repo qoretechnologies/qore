@@ -21,6 +21,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -179,7 +180,11 @@ public class PgsqlIdentifierQuotingTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("live disposable database required");
         }
-        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        # the check of the connection is closed: the connection that the test uses is opened after the run's schema
+        # is set up, which sets the search_path of the connections opened after it
+        Datasource ds = TestRun::openOrFail("QORE_DB_CONNSTR_PGSQL");
+        ds.close();
+        return ds;
     }
 
     liveRoundTrip() {

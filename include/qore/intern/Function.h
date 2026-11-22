@@ -241,7 +241,7 @@ public:
     }
 
     // adds a description of the given default argument to the signature string
-    DLLLOCAL static void addDefaultArgument(std::string& str, QoreValue arg);
+    DLLEXPORT static void addDefaultArgument(std::string& str, QoreValue arg);
 
     DLLLOCAL const char* getName(unsigned i) const {
         return i < names.size() ? names[i].c_str() : 0;
@@ -892,10 +892,12 @@ public:
     //! Evaluates defaults (ARG_DEF) and checks supplied values (ARG_OTHER) using a compile-time pass selection.
     /** The saved list receives original values before conversion, for retrying another overload; it is allocated
         only when a value needs conversion. Separate passes keep default evaluation out of the supplied-value check.
+        A default value is evaluated in the context of the code that declared it, never in the caller's: @p variant
+        gives the class of a method (qore#7066).
     */
     template <int ArgType, typename FilterPolicy>
     DLLLOCAL int prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractFunctionSignature* sig,
-            bool is_copy, QoreObject* self,
+            const AbstractQoreFunctionVariant* variant, bool is_copy, QoreObject* self,
             std::unique_ptr<std::vector<std::pair<unsigned, QoreValue>>>* saved, FilterPolicy policy);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -2342,13 +2344,26 @@ protected:
 public:
     DLLLOCAL static QoreProgram* getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh);
 
+    //! returns the Program that the call runs in, or nullptr if the call is refused (qore#7087)
+    /** A call that the expression of the background operator makes itself, of code of a Program that may not control
+        threads, is refused (qore_check_background_direct_entry(): the call's frame, which the CodeEvaluationHelper
+        pushed, is the current frame) and does not enter the Program; a call without a CodeEvaluationHelper (a
+        destructor) is not checked: it runs where the last reference of its object is released
+    */
+    DLLLOCAL static QoreProgram* getCheckedExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh,
+            ExceptionSink* xsink) {
+        return ceh && qore_check_background_direct_entry(uvb->pgm, true, xsink) ? nullptr
+            : getExecutionProgram(uvb, ceh);
+    }
+
     DLLLOCAL UserVariantExecHelper(const UserVariantBase* n_uvb, CodeEvaluationHelper* ceh, ExceptionSink* n_xsink) :
-            ProgramThreadCountContextHelper(n_xsink, getExecutionProgram(n_uvb, ceh), true),
+            ProgramThreadCountContextHelper(n_xsink, getCheckedExecutionProgram(n_uvb, ceh, n_xsink), true),
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink))
+        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
+        }
     }
 
     DLLLOCAL ~UserVariantExecHelper();
@@ -3525,6 +3540,10 @@ public:
     DLLLOCAL ClassAccess getAccess() const {
         return access;
     }
+
+    //! returns true if the method inherits a public variant of an ancestor through a public path that none of its
+    //! own variants overrides (qore#7074); defined in QoreClass.cpp
+    DLLLOCAL bool hasInheritedPublicVariant() const;
 
     DLLLOCAL virtual const QoreClass* getClass() const {
         return qc;

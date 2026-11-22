@@ -1,0 +1,287 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires yaml
+
+%exec-class NumberDecimalStringPrecisionTest
+
+#! numbers of the same decimal value parsed from different strings compare equal and have the same precision (qore#6976)
+/** The precision of a number parsed from a decimal string depends only on its value: a number literal, number() of
+    a string with a sign, leading zeros, zeros at the end of the significand or an exponent, a value read from a
+    decimal128 column (whose string has the zeros of the scale) and a value deserialized from a string are the same
+    number.  Numbers from decimal strings still print as the decimal value they were parsed from (qore#6824).
+*/
+class NumberDecimalStringPrecisionTest inherits QUnit::Test {
+    public {
+        #! number literals and the shortest decimal string of their value
+        const Literals = (
+            (123.4567890123456789n, "123.4567890123456789"),
+            (123.45678901234567890n, "123.4567890123456789"),
+            (123.456789012345678900000000n, "123.4567890123456789"),
+            (0123.4567890123456789n, "123.4567890123456789"),
+            (1.234567890123456789e2n, "123.4567890123456789"),
+            (1.2345678901234567890000e2n, "123.4567890123456789"),
+            (1234567890123456789e-16n, "123.4567890123456789"),
+            (12345678901234567890000e-20n, "123.4567890123456789"),
+            (0.00001234567890123456789e7n, "123.4567890123456789"),
+            (1234567890123456789012n, "1234567890123456789012"),
+            (1234567890123456789012.000n, "1234567890123456789012"),
+            (1.234567890123456789012e21n, "1234567890123456789012"),
+            (567890123456789.0123456789n, "567890123456789.0123456789"),
+            (567890123456789.01234567890000n, "567890123456789.0123456789"),
+            (5.678901234567890123456789e14n, "567890123456789.0123456789"),
+            (12345678901234567890.1234567890123n, "12345678901234567890.1234567890123"),
+            (12345678901234567890.12345678901230n, "12345678901234567890.1234567890123"),
+            (1.23456789012345678901234567890123e19n, "12345678901234567890.1234567890123"),
+            (0.000000123456789012345678901234n, "0.000000123456789012345678901234"),
+            (0.0000001234567890123456789012340000n, "0.000000123456789012345678901234"),
+            (1.23456789012345678901234e-7n, "0.000000123456789012345678901234"),
+            (120n, "120"),
+            (120.0n, "120"),
+            (1.2e2n, "120"),
+            (12e1n, "120"),
+            (1e40n, "10000000000000000000000000000000000000000"),
+            (10000000000000000000000000000000000000000n, "10000000000000000000000000000000000000000"),
+            (1.0e40n, "10000000000000000000000000000000000000000"),
+            (1e-30n, "0.000000000000000000000000000001"),
+            (0.000000000000000000000000000001n, "0.000000000000000000000000000001"),
+            (100e-32n, "0.000000000000000000000000000001"),
+            (0n, "0"),
+            (0.000n, "0"),
+        );
+    }
+
+    private {
+        #! the state of the deterministic digit generator
+        int seed = 6976;
+    }
+
+    constructor() : QUnit::Test("NumberDecimalStringPrecision", "1.0", \ARGV) {
+        addTestCase("literals", \literals());
+        addTestCase("negative literals", \negativeLiterals());
+        addTestCase("forms of the same value from 1 to 40 digits", \forms());
+        addTestCase("decimal128 reads", \decimal128Reads());
+        addTestCase("deserialization", \deserialization());
+        addTestCase("printing", \printing());
+        addTestCase("arithmetic and rounding", \arithmetic());
+        set_return_value(main());
+    }
+
+    literals() {
+        foreach list<auto> l in (Literals) {
+            number lit = l[0];
+            string v = l[1];
+            foreach string s in (variants(v)) {
+                number n = number(s);
+                assertTrue(lit == n, sprintf("literal %s == number(%y)", v, s));
+                assertEq(lit.prec(), n.prec(), sprintf("literal %s prec == number(%y).prec()", v, s));
+            }
+            softnumber sn = v + (v =~ /\./ ? "000" : "");
+            assertTrue(lit == sn, sprintf("literal %s == softnumber", v));
+            assertEq(lit.prec(), sn.prec(), sprintf("literal %s prec == softnumber prec", v));
+            # all the literals of the same value are the same number
+            foreach list<auto> l2 in (Literals) {
+                if (l2[1] == v) {
+                    assertTrue(lit == l2[0], sprintf("literal %y == literal %y", l[1], l2[1]));
+                    assertEq(lit.prec(), l2[0].prec(), sprintf("literal %y prec == literal %y prec", l[1], l2[1]));
+                }
+            }
+        }
+        # the case of the issue
+        assertTrue(123.4567890123456789n == number("123.45678901234567890"));
+        assertEq(123.4567890123456789n.prec(), number("123.45678901234567890").prec());
+        assertEq(130, 123.4567890123456789n.prec());
+    }
+
+    negativeLiterals() {
+        assertTrue(-123.4567890123456789n == number("-123.45678901234567890"));
+        assertEq((-123.4567890123456789n).prec(), number("-123.45678901234567890").prec());
+        assertTrue(-567890123456789.0123456789n == number("-5.6789012345678901234567890e14"));
+        assertEq((-567890123456789.0123456789n).prec(), number("-5.6789012345678901234567890e14").prec());
+        assertTrue(-1.2e2n == number("-120.000"));
+        assertEq((-1.2e2n).prec(), number("-120.000").prec());
+    }
+
+    #! the decimal strings of values of 1 to 40 significant digits, in every form, are the same number
+    forms() {
+        for (int digits = 1; digits <= 40; ++digits) {
+            for (int i = 0; i < 12; ++i) {
+                string sig = randomSignificand(digits);
+                # the position of the decimal point: from before the first digit to after the last
+                int point = randomInt(digits + 1);
+                string v = point == digits
+                    ? sig
+                    : (point ? sig.substr(0, point) : "0") + "." + sig.substr(point);
+                number base = number(v);
+                string label = sprintf("%d digits: %s", digits, v);
+                # it prints as its value
+                assertEq(v, string(base), label + " string()");
+                # the precision is that of the significant digits
+                assertEq(max(128, ((digits + 20) * 3322 + 999) / 1000), base.prec(), label + " prec()");
+                list<string> strings = variants(v) + (
+                    # the scientific form
+                    sig[0] + (digits > 1 ? "." + sig.substr(1) : "") + "e" + (point - 1),
+                    sig[0] + "." + sig.substr(1) + "000e" + (point - 1),
+                    # the integer significand
+                    sig + "e" + (point - digits),
+                    sig + "00e" + (point - digits - 2),
+                );
+                foreach string s in (strings) {
+                    number n = number(s);
+                    assertTrue(base == n, label + sprintf(" == number(%y)", s));
+                    assertEq(base.prec(), n.prec(), label + sprintf(" prec == number(%y).prec()", s));
+                    # the same string with a minus sign is the negative number
+                    if (s[0] == "+") {
+                        continue;
+                    }
+                    number neg = number("-" + s);
+                    assertTrue(-base == neg, label + sprintf(" -n == number(%y)", "-" + s));
+                    assertEq(base.prec(), neg.prec(), label + sprintf(" prec == number(%y).prec()", "-" + s));
+                }
+                # number literals parsed at run time
+                foreach string s in ((v, v + (point == digits ? ".000" : "000"), strings[strings.size() - 4])) {
+                    number lit = parseLiteral(s + "n");
+                    assertTrue(base == lit, label + sprintf(" == %sn", s));
+                    assertEq(base.prec(), lit.prec(), label + sprintf(" prec == %sn prec", s));
+                }
+            }
+        }
+    }
+
+    #! a number read from a decimal128 element is the number of its value; the string read has the zeros of the scale
+    decimal128Reads() {
+        list<list<auto>> values = (
+            (123.4567890123456789n, "123.4567890123456789"),
+            (-567890123456789.0123456789n, "-567890123456789.0123456789"),
+            (1234567890123456789012n, "1234567890123456789012"),
+            (0.000000123456789012345678901234n, "0.000000123456789012345678901234"),
+            (120n, "120"),
+            (1.5n, "1.5"),
+        );
+        foreach int scale in (0, 10, 18, 24, 30) {
+            list<number> fit = ();
+            foreach list<auto> l in (values) {
+                *string frac = (l[1] =~ x/\.([0-9]+)$/)[0];
+                string int_part = (l[1] =~ x/^-?([0-9]+)/)[0];
+                if ((frac.size() ?? 0) <= scale && int_part.size() + scale <= 38) {
+                    fit += l[0];
+                }
+            }
+            if (!fit) {
+                continue;
+            }
+            ColumnarResult r = ColumnarResult::fromColumnHash({"n": fit},
+                {"n": {"native_type": "numeric", "precision": 38, "scale": scale}});
+            auto col = r.getColumn("n");
+            list<auto> read = col.toList();
+            foreach number n in (fit) {
+                string label = sprintf("scale %d: %s", scale, n.toStringRoundTrip());
+                assertTrue(n == read[$#], label + " toList()");
+                assertEq(n.prec(), read[$#].prec(), label + " toList() prec");
+                assertTrue(n == col[$#], label + " element");
+                assertEq(n.prec(), col[$#].prec(), label + " element prec");
+                assertTrue(n == r.toRows()[$#].n, label + " toRows()");
+            }
+        }
+    }
+
+    #! numbers deserialized from strings
+    deserialization() {
+        # a JSON integer outside the range of an int is a number
+        assertTrue(123456789012345678901234567890n == parse_json("123456789012345678901234567890"));
+        assertEq(123456789012345678901234567890n.prec(), parse_json("123456789012345678901234567890").prec());
+        # YAML numbers
+        foreach string s in ("123.45678901234567890n", "1.234567890123456789e2n", "123.4567890123456789n") {
+            number n = parse_yaml(s);
+            assertTrue(123.4567890123456789n == n, s);
+            assertEq(123.4567890123456789n.prec(), n.prec(), s + " prec");
+        }
+        number n = parse_yaml(make_yaml(123.4567890123456789n));
+        assertTrue(123.4567890123456789n == n);
+        assertEq(123.4567890123456789n.prec(), n.prec());
+        n = Serializable::deserialize(Serializable::serialize(123.45678901234567890n));
+        assertTrue(123.4567890123456789n == n);
+        assertEq(123.4567890123456789n.prec(), n.prec());
+    }
+
+    #! numbers from decimal strings print as the value (qore#6824)
+    printing() {
+        assertEq("-567890123456789.0123456789", string(-567890123456789.0123456789n));
+        assertEq("-567890123456789.0123456789", string(number("-567890123456789.01234567890000000")));
+        assertEq("-567890123456789.0123456789", number("-567890123456789.01234567890000000").toStringRoundTrip());
+        assertEq("123.4567890123456789", string(number("123.45678901234567890")));
+        assertEq("123.4567890123456789", number("123.45678901234567890").toStringRoundTrip());
+        foreach list<auto> l in (Literals) {
+            assertEq(l[1], string(l[0]), l[1]);
+        }
+        # the display rounding removes a run of more than 16 0 digits; the round-trip string is the value
+        number n = number("1.00000000000000000001" + strmul("0", 20));
+        assertEq("1", string(n));
+        assertEq("1.00000000000000000001", n.toStringRoundTrip());
+    }
+
+    #! values that are computed exactly, or rounded at the precision of a number of the same value
+    arithmetic() {
+        assertTrue(1n + 0.5n == 1.5n);
+        assertTrue(0.25n * 4n == 1.000n);
+        assertTrue(number("1.50") - 0.5n == 1n);
+        # round() rounds to the precision of its argument; a value of up to 18 digits has 128 bits, as the literal
+        assertTrue(round(123.456789012345n, 4) == 123.4568n);
+        assertTrue(round(123.45678901234500n, 4) == number("123.45680"));
+        assertTrue(round(number("123.456789012345000000"), 4) == 123.4568n);
+    }
+
+    #! returns the strings of the same value as a plain decimal string @a v: with zeros and signs added
+    private static list<string> variants(string v) {
+        return (
+            v,
+            v + (v =~ /\./ ? "000" : ".000"),
+            v + (v =~ /\./ ? "0" : ".0"),
+            "000" + v,
+            "+" + v,
+            "+00" + v + (v =~ /\./ ? "00" : ""),
+            v + "e0",
+            v + "E+0",
+            v + (v =~ /\./ ? "0000e-0" : ".0000e-0"),
+        );
+    }
+
+    #! returns a significand of @a digits digits that starts and ends with a nonzero digit and has no run of 0 or 9
+    #! digits that the display rounding of numbers would remove
+    private string randomSignificand(int digits) {
+        string sig = "";
+        for (int i = 0; i < digits; ++i) {
+            int d = randomInt(10);
+            if (!d && (!i || i == digits - 1)) {
+                d = 1 + randomInt(9);
+            }
+            sig += string(d);
+        }
+        sig =~ s/0{10,}/01/g;
+        sig =~ s/9{10,}/91/g;
+        # the substitutions shorten the string; the digit count does not matter for runs that do not happen
+        while (sig.size() < digits) {
+            sig += string(1 + randomInt(8));
+        }
+        return sig;
+    }
+
+    #! returns a deterministic number from 0 to @a n - 1
+    private int randomInt(int n) {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return (seed / 65536) % n;
+    }
+
+    #! returns the number of a number literal parsed at run time
+    private static number parseLiteral(string lit) {
+        Program p(PO_NEW_STYLE);
+        p.parse("number sub get() { return " + lit + "; }", "literal");
+        return p.callFunction("get");
+    }
+}
