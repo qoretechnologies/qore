@@ -5083,9 +5083,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # or doResponse() because those capture to async_response_out, which would
                     # replace the eventual main response and never reach the client.
                     if (resp."code" == 100) {
-                        if (cx."header-info".http2) {
-                            # HTTP/2: no 100-continue mechanism; the body is already being sent
-                            # by the client on the stream — nothing to do
+                        # the server's header information of the request: the handler's code got a copy of the
+                        # request context
+                        if (cx."header-info".http2 || cx."header-info".http3) {
+                            # HTTP/2 and HTTP/3: no HTTP/1.1 100-continue; the body is already being sent by the
+                            # client on the stream, and the connection's socket is shared — nothing to do
+                            # (qore#7221)
                         } else {
                             # HTTP/1.x: handler thread owns socket exclusively (removed
                             # from I/O controller at header dispatch). sendIntern handles
@@ -5462,12 +5465,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 "hdr": {"Content-Type": "text/plain", "Connection": "close"},
             };
         }
-        # a protocol upgrade (101) exists in HTTP/1.x only: on a multiplexed connection (HTTP/2 or HTTP/3, decided by
-        # the transport) the server's upgrade path would act on the connection's shared socket, so a handler's 101
-        # response is answered with an error before anything is sent for it (qore#7212)
-        if (rv."code" == 101 && (s.isQuic() || s.isHttp2())) {
+        # a protocol upgrade (101) exists in HTTP/1.x only: on a multiplexed connection (HTTP/2 or HTTP/3) the
+        # server's upgrade path would act on the connection's shared socket, so a handler's 101 response is answered
+        # with an error before anything is sent for it (qore#7212); decided by the transport and by the server's
+        # header information of the request, any of which refuses it, so that the refusal does not depend on one
+        # check alone (Socket::isHttp2() reports False if the connection's TLS state cannot be queried)
+        if (rv."code" == 101 && (s.isQuic() || cx."header-info".http2 || cx."header-info".http3 || s.isHttp2())) {
             string err = sprintf("101 Switching Protocols returned from handler %y for an HTTP/%s request; a "
-                "protocol upgrade exists in HTTP/1.x only", cx.handler_name, s.isQuic() ? "3" : "2");
+                "protocol upgrade exists in HTTP/1.x only", cx.handler_name,
+                (s.isQuic() || cx."header-info".http3) ? "3" : "2");
             listener.logError("cid %d: %s", cx.id, err);
             logViaHandlerIfPossible(handler, cx.id, err);
             rv = <HttpResponseInfo>{
