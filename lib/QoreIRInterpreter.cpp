@@ -10850,7 +10850,8 @@ static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFun
 */
 static QORE_IR_COLD_NOINLINE void qore_ir_take_parent_ir_only_slots(std::vector<QoreValue>& parent_cache,
         uint32_t parent_slot_count, const std::vector<bool>& handler_own_slot, IRLocalSlotCache& slots,
-        std::vector<uint8_t>& locals_ir_only, std::vector<bool>& parent_slot_dirty, ExceptionSink* xsink) {
+        std::vector<uint8_t>& locals_ir_only, std::vector<bool>& locals_instantiated,
+        std::vector<bool>& parent_slot_dirty, ExceptionSink* xsink) {
     IRCallFramePool& pool = TlFramePool::get();
     IRCallFrame* parent = nullptr;
     for (size_t i = pool.top; i; --i) {
@@ -10872,6 +10873,13 @@ static QORE_IR_COLD_NOINLINE void qore_ir_take_parent_ir_only_slots(std::vector<
         }
         locals_ir_only[i] = 1;
         slots.takeOver(i, parent_cache[i], parent->locals_slot_cache.isRealSlot(i), xsink);
+        // an IR-only local lives in its slot, whatever its value: a slot that holds NOTHING is the value NOTHING, not
+        // a local that does not exist yet, which the load of the local would look for on the runtime stack, where the
+        // handler would not find it (the handler's frame marked the slot as instantiated only for a value, see the
+        // inheritance of the parent's slots)
+        if (i < locals_instantiated.size()) {
+            locals_instantiated[i] = true;
+        }
         // written back whether or not the handler assigns it
         parent_slot_dirty[i] = true;
     }
@@ -11727,7 +11735,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // a handler takes over the slots of its function's IR-only locals, which the write-back gives back (#5951)
     if (func.parent_slot_count && parent_slot_cache) {
         qore_ir_take_parent_ir_only_slots(*parent_slot_cache, func.parent_slot_count, handler_own_slot,
-            locals_slot_cache, locals_ir_only, parent_slot_dirty, xsink);
+            locals_slot_cache, locals_ir_only, locals_instantiated, parent_slot_dirty, xsink);
     }
 
     // Locals owned by this function.  Used by ensureLocalInstantiated() to
