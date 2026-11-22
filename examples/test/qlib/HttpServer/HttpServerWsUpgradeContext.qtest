@@ -11,15 +11,37 @@
 %requires HttpServerUtil
 %requires WebSocketHandler
 %requires WebSocketClient
+%requires Logger
 
 %exec-class HttpServerWsUpgradeContextTest
 
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! Reports the server's end of a WebSocket connection, which logs the stop of the connection's handler
+class EndAppender inherits LoggerAppenderWithLayout {
+    private {
+        Queue ended;
+    }
+
+    constructor(Queue ended) : LoggerAppenderWithLayout("end", new LoggerLayoutPattern("%m")) {
+        self.ended = ended;
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /dedicated socket [^ ]+: stopped dedicated socket handler/) {
+            ended.push(True);
+        }
+    }
+}
+
 #! The request context of the socket handler of a WebSocket upgrade concerns its own connection only (qore#7200)
 /** A sandboxed WebSocket handler gets no server object in the context of its connection, and its connection works:
-    the server registers it with its async I/O through the code that it gives the handler
+    the server registers it with its async I/O through the code that it gives the handler.
+
+    The code with which the handler makes the server hold itself for the end of the connection (\c ws_end_hold,
+    issue #7188) returns nothing, and no value in the context is the server; a handler that calls it at once holds the
+    server only until the server's end of the connection has run
 */
 class HttpServerWsUpgradeContextTest inherits QUnit::Test {
     public {
@@ -57,6 +79,32 @@ class TenantWsConnection inherits WebSocketConnection {
     }
 }
 
+# true if the value is, or contains in a hash or a list, the server object
+bool sub has_server(auto v, int depth = 0) {
+    if (depth > 16) {
+        return False;
+    }
+    switch (v.typeCode()) {
+        case NT_OBJECT:
+            return v instanceof HttpServer::HttpServer;
+        case NT_HASH:
+            foreach auto e in (v.iterator()) {
+                if (has_server(e, depth + 1)) {
+                    return True;
+                }
+            }
+            return False;
+        case NT_LIST:
+            foreach auto e in (v) {
+                if (has_server(e, depth + 1)) {
+                    return True;
+                }
+            }
+            return False;
+    }
+    return False;
+}
+
 class TenantWsHandler inherits WebSocketHandler {
     private {
         Queue to_host;
@@ -69,6 +117,9 @@ class TenantWsHandler inherits WebSocketHandler {
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         to_host.push(sprintf(\"controller=%y target=%y\", exists cx.\"header-info\".async_io_controller,
             exists cx.\"header-info\".async_target));
+        # the server's hold for the end of the connection, taken at once: it gives nothing to the handler
+        auto hold_rv = cx.\"header-info\".ws_end_hold ? cx.\"header-info\".ws_end_hold() : \"none\";
+        to_host.push(sprintf(\"server=%y hold=%y\", has_server(cx) || has_server(hdr), hold_rv));
         return new TenantWsConnection(self, cx.\"header-info\".ws_register);
     }
 }
@@ -81,6 +132,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host) {
 
     constructor() : QUnit::Test("WebSocket upgrade context", "1.0", \ARGV) {
         addTestCase("a WebSocket handler gets no server object, and its connection works", \contextTest());
+        addTestCase("a WebSocket handler holds the server only until the end of its connection", \holdBoundTest());
         set_return_value(main());
     }
 
@@ -114,6 +166,8 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host) {
         wsc.connect();
         on_exit wsc.disconnect();
         assertEq("controller=False target=False", to_host.get(HangGuard), "the handler gets no server object");
+        assertEq("server=False hold=null", to_host.get(HangGuard), "no value of the context is the server, and the "
+            "server's hold gives nothing to the handler");
         # the connection is registered with the server's async I/O
         wsc.send("hello");
         assertEq("echo hello", msgs.get(HangGuard), "the connection works");
@@ -122,5 +176,54 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host) {
         assertEq("again WEBSOCKET-REGISTER-ERROR", msgs.get(HangGuard), "a later registration is refused");
         wsc.send("still");
         assertEq("echo still", msgs.get(HangGuard), "the connection still works");
+    }
+
+    #! the hold that the handler takes at once ends with the server's end of the connection (issue #7188)
+    /** The server is released by the test once the server's end of the connection has logged the stop of the
+        connection's handler: it is destroyed then, as no hold of the handler keeps it; a hold that did not end would
+        keep it, and the check fails at the hang guard
+    */
+    holdBoundTest() {
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        tenant.setSandboxManager(sm);
+        Queue to_host();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_handler", to_host);
+
+        # the server's end of the connection logs the stop of the connection's handler
+        Queue ended();
+        Logger logger("ws-hold", LoggerLevel::getLevelInfo());
+        EndAppender appender(ended);
+        appender.open();
+        logger.addAppender(appender);
+
+        Counter stopped(1);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        server.setHandler("ws", "^ws", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "logger": logger,
+            "stopc": sub (string name) {
+                stopped.dec();
+            },
+        }).port;
+        server.waitForAsyncIo();
+
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("ws://localhost:%d/ws", port),
+            "timeout": HangGuard,
+        });
+        wsc.connect();
+        assertEq("controller=False target=False", to_host.get(HangGuard));
+        assertEq("server=False hold=null", to_host.get(HangGuard), "the handler took the server's hold");
+        wsc.disconnect();
+        assertTrue(ended.get(HangGuard), "the server's end of the connection ran");
+        # the last reference of the test: the server's hold, which ends with the server's end of the connection (it
+        # logs the stop of the handler before it releases the hold), does not keep the server any longer
+        remove server;
+        assertEq(0, stopped.waitForZero(HangGuard), "the server is destroyed once its end of the connection has run");
     }
 }

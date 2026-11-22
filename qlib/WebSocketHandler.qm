@@ -3371,6 +3371,8 @@ handler.setCloseTimeout(2s);
             # the end of the connection: this handler's cleanup, then the server's (the code that the server gives
             # in the connection's header-info as ws_end), which ran when this method returned while it waited
             *code<nothing()> server_end = cx."header-info".ws_end;
+            # holds the server for the whole end of the connection (issue #7188)
+            *code<nothing()> server_hold = cx."header-info".ws_end_hold;
             *code<nothing()> accept_end = cx."header-info".ws_accept_end;
             if (!server_end || !accept_end) {
                 # a server that does not give its end of the connection ends the connection when this method
@@ -3400,7 +3402,7 @@ handler.setCloseTimeout(2s);
             *WebSocketConnection end_wsc = wsc;
             code<nothing()> end = sub () {
                 on_exit releaseEndedConnection(\end_wsc);
-                endAsyncConnection(end_op, end_wsc, cid, lid, server_end);
+                endAsyncConnection(end_op, end_wsc, cid, lid, server_end, server_hold);
             };
             # from here on the poll op ends the connection; called at once if it has ended already
             deferred = True;
@@ -3430,6 +3432,8 @@ handler.setCloseTimeout(2s);
         # the server's end of the stream, which this handler runs when the stream ends, and the code that runs it on a
         # thread of the server's handler pool: no thread then waits for the stream (qore#5752)
         *code<nothing()> server_end = cx."header-info".ws_end;
+        # holds the server for the whole end of the stream (issue #7188)
+        *code<nothing()> server_hold = cx."header-info".ws_end_hold;
         *code<nothing(code<nothing()>)> submit_end = cx."header-info".ws_submit;
         *code<nothing()> accept_end = cx."header-info".ws_accept_end;
         Counter stream_done(1);
@@ -3473,7 +3477,7 @@ handler.setCloseTimeout(2s);
             *WebSocketConnection end_wsc = wsc;
             code<nothing()> end = sub () {
                 on_exit releaseEndedConnection(\end_wsc);
-                endAsyncConnection(NOTHING, end_wsc, cid, lid, server_end);
+                endAsyncConnection(NOTHING, end_wsc, cid, lid, server_end, server_hold);
             };
             deferred = True;
             accept_end();
@@ -3521,9 +3525,21 @@ handler.setCloseTimeout(2s);
         @param cid the connection ID
         @param lid the listener ID
         @param server_end the server's end of the connection, if any
+        @param server_hold the server's code that holds it until its end of the connection has run (\c ws_end_hold in
+        the connection's header-info), so that it is not destroyed in this handler's part of the end, while it still
+        counts the connection (issue #7188)
     */
     private endAsyncConnection(*HttpWebSocketPollOperationBase ws_poll_op, WebSocketConnection wsc,
-            string cid, string lid, *code<nothing()> server_end) {
+            string cid, string lid, *code<nothing()> server_end, *code<nothing()> server_hold) {
+        # the server holds itself until its end of the connection (server_end) has run
+        if (server_hold) {
+            try {
+                server_hold();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception holding the server for the end of a WebSocket connection: %s",
+                    get_exception_string(ex));
+            }
+        }
         try {
             if (ws_poll_op) {
                 # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
