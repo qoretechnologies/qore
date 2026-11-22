@@ -1472,6 +1472,16 @@ public:
 
     DLLLOCAL void saveTempRef(QoreValue& n);
 
+    //! Keeps the container that a weak assignment assigned in place of a copy that the lvalue's type made of it
+    /** @param weak_source the container assigned, with a reference that this function takes
+        @param n the value converted to the lvalue's type: the container assigned, if the type only strips its type
+        @param desc the description of the lvalue in the exception raised
+
+        @return 0, or -1 if the type converts the container to another one (an exception is raised then), as a weak
+        reference would designate a copy that only it holds (qore#7237)
+    */
+    DLLLOCAL int keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue& n, const char* desc);
+
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
 
     //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
@@ -1871,6 +1881,20 @@ struct lvinfo {
     taken its own reference
 */
 DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
+
+//! Decides what a weak assignment of the list or hash \a source designates after the lvalue's type converted it to
+//! \a converted (qore#7237)
+/** @param source the container assigned, or a weak reference to it
+    @param converted the value that the lvalue's type converted it to
+    @param desc the description of the lvalue in the exception raised
+    @param xsink the exception sink, which must not be null
+
+    @return 0 if the type kept the value, 1 if it only stripped the container's type (the weak reference designates
+    the container assigned, in place of the copy), or -1 if it converted it to another value, which only the weak
+    reference would hold (an exception is raised)
+*/
+DLLLOCAL int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, const char* desc,
+        ExceptionSink* xsink);
 
 //! returns true if the value is a weak or opaque reference to an object, hash or list
 /** These are the representations that hold their target indirectly, so that a store which built

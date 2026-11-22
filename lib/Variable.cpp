@@ -3515,6 +3515,75 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
     }
 }
 
+//! Returns true if \a v is a list or hash without a complex type of its own: a plain list or hash, or one of \c auto
+static bool qore_weak_assign_is_plain_container(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_LIST: {
+            const QoreTypeInfo* ti = v.get<const QoreListNode>()->getTypeInfo();
+            return ti == listTypeInfo || ti == autoListTypeInfo;
+        }
+        case NT_HASH: {
+            const QoreTypeInfo* ti = v.get<const QoreHashNode>()->getTypeInfo();
+            return ti == hashTypeInfo || ti == autoHashTypeInfo;
+        }
+        default:
+            return false;
+    }
+}
+
+//! Returns the container that the weak assignment of \a source assigns: the target of a weak reference, borrowed
+static QoreValue qore_weak_assign_source_container(const QoreValue& source) {
+    switch (source.getType()) {
+        case NT_WEAKREF_LIST:
+            return QoreValue(reinterpret_cast<const WeakListReferenceNode*>(source.getInternalNode())->borrow());
+        case NT_WEAKREF_HASH:
+            return QoreValue(reinterpret_cast<const WeakHashReferenceNode*>(source.getInternalNode())->borrow());
+        default:
+            return source;
+    }
+}
+
+int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, const char* desc,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    assert(source.getType() == NT_LIST || source.getType() == NT_HASH || source.getType() == NT_WEAKREF_LIST
+        || source.getType() == NT_WEAKREF_HASH);
+    if (converted.getInternalNode() == source.getInternalNode()) {
+        return 0;
+    }
+    // the container that a weak reference designates is compared, which a type converts as it converts the reference
+    QoreValue container = qore_weak_assign_source_container(source);
+    if (converted.getInternalNode() == container.getInternalNode()) {
+        return 0;
+    }
+    // a type that only strips the container's type (an untyped lvalue, list, hash, any, a list or hash of auto!):
+    // the container assigned is kept, as its own type accepts what it holds, and a change of it is read through the
+    // weak reference
+    if (converted.getType() == container.getType() && qore_weak_assign_is_plain_container(converted)) {
+        return 1;
+    }
+    // a type that converts the container to another (ex: to another element type, or a hash to a softlist): the weak
+    // reference would designate the converted copy, which nothing else holds
+    xsink->raiseException("RUNTIME-TYPE-ERROR", "%s: a weak assignment (:=) of a value of type '%s' converts the "
+        "container assigned to a new value of type '%s', which only the weak reference would hold; assign a container "
+        "of the lvalue's type, or make a normal assignment (=)", desc, container.getFullTypeName(),
+        converted.getFullTypeName());
+    return -1;
+}
+
+int LValueHelper::keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue& n, const char* desc) {
+    int rc = qore_weak_assignment_conversion(weak_source, n, desc, vl.xsink);
+    if (rc > 0) {
+        // the copy is released as it is held, and the container assigned takes its place with the reference kept
+        saveTemp(n);
+        n = weak_source;
+    } else {
+        saveTemp(weak_source);
+    }
+    weak_source.clear();
+    return rc < 0 ? -1 : 0;
+}
+
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
     return assignImpl<false>(n, desc, check_types, mode, {});
 }
@@ -3540,6 +3609,23 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
     //    this, desc, typeInfo, QoreTypeInfo::getName(typeInfo), check_types, n.getFullTypeName(), n.getType(), val,
     //    qv);
+    // a weak reference designates the container assigned, which a conversion by the lvalue's type must not replace
+    // with a copy that only the weak reference would hold (qore#7237): a reference of its own is kept to compare it;
+    // a weak reference assigned as it is (a store of the IR interpreter) is kept to compare the container that it
+    // designates
+    QoreValue weak_source;
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        switch (n.getType()) {
+            case NT_LIST:
+            case NT_HASH:
+            case NT_WEAKREF_LIST:
+            case NT_WEAKREF_HASH:
+                weak_source = n.refSelf();
+                break;
+            default:
+                break;
+        }
+    }
     if (check_types) {
         // check type for assignment
         if constexpr (Native) {
@@ -3552,6 +3638,9 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
+            if (weak_source.hasNode()) {
+                saveTemp(weak_source);
+            }
             saveTempRef(n);
             // the containers navigated to reach the target must not keep the entries created for this assignment
             rollbackVivification();
@@ -3562,6 +3651,8 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     if (lvid_set && n.getType() == NT_REFERENCE
         && (lvid_set->find(lvalue_ref::get(reinterpret_cast<const ReferenceNode*>(n.getInternalNode()))->lvalue_id)
             != lvid_set->end())) {
+        // a reference is never a container assigned weakly
+        assert(!weak_source.hasNode());
         saveTempRef(n);
         int rc = doRecursiveException();
         // as for a rejected type, the containers navigated to reach the target keep no entry for this assignment
@@ -3572,6 +3663,16 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
     // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
+
+    if (weak_source.hasNode() && (*vl.xsink || keepWeakAssignmentContainer(weak_source, n, desc))) [[unlikely]] {
+        if (weak_source.hasNode()) {
+            saveTemp(weak_source);
+        }
+        saveTemp(n);
+        n.clear();
+        rollbackVivification();
+        return -1;
+    }
 
     // process weak assignment
     // the value replaced by its weak or opaque form is released through the temporary list as it is held, as the

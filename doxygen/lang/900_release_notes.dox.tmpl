@@ -2790,6 +2790,10 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
+    - a @ref weak_assignment_operator "weak assignment" of a typed hash or list to an lvalue that strips the container's
+      type (ex: an element of an untyped list) designates the container assigned, not a copy that read as empty after
+      the statement; a type that converts it to another container raises an exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>)
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
