@@ -1352,6 +1352,12 @@ void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* 
     }
 }
 
+QoreValue qore_object_private::takeMemberValue(QoreHashNode* odata, const char* key, bool declared, bool& exists) {
+    return declared
+        ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists)
+        : odata->priv->takeKeyValueIfExists(key, this, exists);
+}
+
 QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
         bool for_delete, bool* exists) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
@@ -1372,7 +1378,8 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
     }
     const qore_class_private* member_class_ctx = nullptr;
-    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
+    bool declared;
+    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti, &declared)) {
         return QoreValue();
     }
 
@@ -1400,9 +1407,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
         // a missing member is not created: an empty key would let a later write skip the checks of a new member
-        // (qore#6749), and it would show in the keys of the object
+        // (qore#6749), and it would show in the keys of the object; the key of a member that is not declared is
+        // removed (qore#7179)
         bool found;
-        rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
+        rv = takeMemberValue(odata, key, declared, exists ? *exists : found);
         if (!needs_scan(rv)) {
             return rv;
         }
@@ -1464,7 +1472,8 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     const QoreTypeInfo* mti = nullptr;
 
     const qore_class_private* member_class_ctx = nullptr;
-    if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti)) {
+    bool declared;
+    if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti, &declared)) {
         return QoreValue();
     }
 
@@ -1495,9 +1504,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
     // a missing member is not created: an empty key would let a later write skip the checks of a new member
-    // (qore#6749), and it would show in the keys of the object
+    // (qore#6749), and it would show in the keys of the object; the key of a member that is not declared is removed
+    // (qore#7179)
     bool found;
-    QoreValue rv = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists ? *exists : found);
+    QoreValue rv = takeMemberValue(odata, key, declared, exists ? *exists : found);
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
@@ -1594,7 +1604,8 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
         const QoreTypeInfo* mti = nullptr;
         const qore_class_private* member_class_ctx = nullptr;
-        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti)) {
+        bool declared;
+        if (checkMemberAccessGetTypeInfo(lvh.vl.xsink, key, class_ctx, member_class_ctx, mti, &declared)) {
             return;
         }
 
@@ -1610,9 +1621,10 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
             odata = data;
         }
 
-        // issue #4122: do not return values that are not set in the object
+        // issue #4122: do not return values that are not set in the object; the key of a member that is not declared
+        // is removed (qore#7179)
         bool exists;
-        QoreValue n = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists);
+        QoreValue n = takeMemberValue(odata, key, declared, exists);
 
         if (!exists) {
             continue;

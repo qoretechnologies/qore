@@ -1296,6 +1296,12 @@
     serialization for all callers (see @ref Qore::HTTPClient::constructor()). Opening credential files in other
     clients or copies requires filesystem access.
 
+    @par Removing an Undeclared Object Member Removes Its Key
+    The @ref remove "remove" and @ref delete "delete" operators remove the key of an object member that its class
+    does not declare, as for a hash, so that @ref keys "keys", @ref elements "elements" and the object iterators no
+    longer report it; a declared member keeps its slot with no value (see @ref remove_object_members;
+    <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
