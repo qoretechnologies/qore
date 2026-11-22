@@ -3442,6 +3442,10 @@ protected:
 
     DLLLOCAL void replaceAbstractVariantIntern(MethodVariantBase* variant);
 
+    //! returns the access of a variant of the method: the more restrictive of its own and of the abstract variant of
+    //! the method that it implements, if any (qore#7277)
+    DLLLOCAL ClassAccess getImplementedVariantAccess(const MethodVariantBase* v) const;
+
 public:
     DLLLOCAL MethodFunctionBase(const char* nme, const QoreClass* n_qc, bool n_is_static) : QoreFunction(nme),
         qc(n_qc), is_static(n_is_static), has_final(false), access(Internal) {

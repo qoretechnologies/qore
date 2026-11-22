@@ -1,9 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# an abstract method that a concrete method of a parent class implements has the access of that method, also when the
-# parent class is inherited with private or private:internal access, or when the method is a private method of another
-# parent class, and the class has a method for it in qcc executables as in the interpreter (qore#7277); the test
+# an abstract method that a concrete method of a parent class implements has the more restrictive access of its
+# declaration and of that method, also when the parent class is inherited with private or private:internal access, or
+# when the method is a private method of another parent class, and the class has a method for it in qcc executables
+# as in the interpreter (qore#7277); the test
 # compares the output of each execution mode and of qcc executables with probe.expected
 
 %modern
@@ -118,6 +119,46 @@ class B5 inherits P5, I5 {
     static string u(auto o) { return o.m(); }
 }
 
+# 6: a private or private:internal abstract method that a public method of a class inherited with private or
+# private:internal access implements keeps the access of its declaration (the more restrictive one); Q6 is the
+# control, which implements it with a private method of its own
+class P6 {
+    string m() { return "P6::m"; }
+    static string u(auto o) { return o.m(); }
+}
+class A6 inherits private P6 {
+    private abstract string m();
+    static string u(auto o) { return o.m(); }
+}
+class S6 inherits A6 {
+    static string u(auto o) { return o.m(); }
+    static string r(auto o) { code c = \o.m(); return c(); }
+}
+class B6 inherits private:internal P6 {
+    private abstract string m();
+    static string u(auto o) { return o.m(); }
+}
+class SB6 inherits B6 {
+    static string u(auto o) { return o.m(); }
+}
+class C6 inherits private P6 {
+    private:internal abstract string m();
+    static string u(auto o) { return o.m(); }
+}
+class SC6 inherits C6 {
+    static string u(auto o) { return o.m(); }
+}
+class D6 inherits private:internal P6 {
+    private:internal abstract string m();
+    static string u(auto o) { return o.m(); }
+}
+class SD6 inherits D6 {
+    static string u(auto o) { return o.m(); }
+}
+class Q6 inherits private P6 {
+    private string m() { return "Q6::m"; }
+}
+
 A1 a1();
 S1 s1();
 check("1 A1 outside", auto sub () { return a1.m(); });
@@ -192,3 +233,28 @@ check("5 B5 outside untyped", auto sub () { return Calls::u(b5); });
 check("5 B5 P5 code", auto sub () { return P5::u(b5); });
 check("5 B5 I5 code", auto sub () { return I5::u(b5); });
 check("5 B5 B5 code", auto sub () { return B5::u(b5); });
+
+foreach list<auto> l in ((new A6(), new S6(), \A6::u(), \S6::u()), (new B6(), new SB6(), \B6::u(), \SB6::u()),
+        (new C6(), new SC6(), \C6::u(), \SC6::u()), (new D6(), new SD6(), \D6::u(), \SD6::u())) {
+    object x = l[0];
+    object s = l[1];
+    code own = l[2];
+    code sub_code = l[3];
+    string cx = x.className();
+    string cs = s.className();
+    check(sprintf("6 %s outside", cx), auto sub () { return x.m(); });
+    check(sprintf("6 %s outside untyped", cx), auto sub () { return Calls::u(x); });
+    check(sprintf("6 %s outside ref", cx), auto sub () { return Calls::r(x); });
+    check(sprintf("6 %s outside com", cx), auto sub () { return Calls::c(x); });
+    check(sprintf("6 %s P6 code", cx), auto sub () { return P6::u(x); });
+    check(sprintf("6 %s own code", cx), auto sub () { return own(x); });
+    check(sprintf("6 %s outside untyped", cs), auto sub () { return Calls::u(s); });
+    check(sprintf("6 %s outside ref", cs), auto sub () { return Calls::r(s); });
+    check(sprintf("6 %s outside com", cs), auto sub () { return Calls::c(s); });
+    check(sprintf("6 %s parent code", cs), auto sub () { return own(s); });
+    check(sprintf("6 %s subclass code", cs), auto sub () { return sub_code(s); });
+}
+check("6 S6 subclass code ref", auto sub () { return S6::r(new S6()); });
+Q6 q6();
+check("6 Q6 outside untyped", auto sub () { return Calls::u(q6); });
+check("6 Q6 outside com", auto sub () { return Calls::c(q6); });

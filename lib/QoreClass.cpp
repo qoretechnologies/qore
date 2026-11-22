@@ -11528,11 +11528,9 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
             pending_save.push_back(*i);
             vlist.erase(i);
             vlist.push_back(variant);
-            // the method has a concrete variant now that the code of other classes can call: a call does not skip it
-            // as an abstract method, also when the abstract variant that it replaces was its only variant; a
-            // private:internal variant of another class can only be called from that class, so a lookup still
-            // continues past the method, as before it was implemented (qore#7277)
-            if (is_abstract && variant->getAccess() != Internal) {
+            // the method has a concrete variant now: a call does not skip it as an abstract method, also when the
+            // abstract variant that it replaces was its only variant (qore#7277)
+            if (is_abstract) {
                 is_abstract = false;
             }
             //printd(5, "MethodFunctionBase::replaceAbstractVariantIntern() this: %p replacing %p ::%s%s in vlist\n",
@@ -11548,16 +11546,34 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
     }
 }
 
+ClassAccess MethodFunctionBase::getImplementedVariantAccess(const MethodVariantBase* v) const {
+    ClassAccess va = v->getAccess();
+    if (pending_save.empty() || v->isAbstract()) {
+        return va;
+    }
+    bool relaxed_match = qore_class_private::get(*getClass())->ahm.relaxed_match;
+    AbstractFunctionSignature& sig = *(const_cast<MethodVariantBase*>(v)->getSignature());
+    for (const AbstractQoreFunctionVariant* i : pending_save) {
+        const MethodVariantBase* av = METHVB_const(i);
+        if (av->isAbstract() && va < av->getAccess() && av->isSignatureIdentical(sig, relaxed_match)) {
+            va = av->getAccess();
+        }
+    }
+    return va;
+}
+
 void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
     replaceAbstractVariantIntern(variant);
 
     // the method has the access of its least restrictive variant, now without the abstract variant replaced: a public
     // abstract method that only a private variant of a parent class implements is private, as a method that the class
-    // implements with a private variant of its own (qore#7206)
+    // implements with a private variant of its own (qore#7206); a variant that implements an abstract variant of the
+    // method has the more restrictive of both accesses, so that a private abstract method that a public variant of a
+    // privately inherited class implements stays private (qore#7277)
     ClassAccess ma = variant->getAccess();
     access = Internal;
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
-        ClassAccess va = METHVB_const(*i)->getAccess();
+        ClassAccess va = getImplementedVariantAccess(METHVB_const(*i));
         if (access > va) {
             access = va;
         }
@@ -11566,7 +11582,10 @@ void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
     if (!has_final && variant->isFinal()) {
         has_final = true;
     }
-    if (!has_private_internal_variants && ma == Internal) {
+    // a private:internal variant of a parent class is not a private:internal variant of the method's own class: the
+    // code of the class does not call the method first for it (runtimeFindCommittedMethodForEval()), as it cannot call
+    // the variant (qore#7277)
+    if (!has_private_internal_variants && ma == Internal && variant->getClass() == getClass()) {
         has_private_internal_variants = true;
     }
 }

@@ -51,12 +51,59 @@
 4 A4 A4 code: "P4::m"
 5 A5 outside untyped: METHOD-DOES-NOT-EXIST
 5 A5 P5 code: "P5::m"
-5 A5 A5 code: RUNTIME-OVERLOAD-ERROR
+5 A5 A5 code: METHOD-IS-PRIVATE
 5 C5 outside untyped: METHOD-DOES-NOT-EXIST
 5 C5 P5 code: "P5::m"
-5 C5 A5 code: RUNTIME-OVERLOAD-ERROR
+5 C5 A5 code: METHOD-IS-PRIVATE
 5 C5 C5 code: METHOD-DOES-NOT-EXIST
 5 B5 outside untyped: RUNTIME-OVERLOAD-ERROR
 5 B5 P5 code: "P5::m"
 5 B5 I5 code: RUNTIME-OVERLOAD-ERROR
 5 B5 B5 code: METHOD-IS-PRIVATE
+6 A6 outside: METHOD-IS-PRIVATE
+6 A6 outside untyped: METHOD-IS-PRIVATE
+6 A6 outside ref: ILLEGAL-CALL-REFERENCE
+6 A6 outside com: METHOD-IS-PRIVATE
+6 A6 P6 code: "P6::m"
+6 A6 own code: "P6::m"
+6 S6 outside untyped: METHOD-IS-PRIVATE
+6 S6 outside ref: ILLEGAL-CALL-REFERENCE
+6 S6 outside com: METHOD-IS-PRIVATE
+6 S6 parent code: "P6::m"
+6 S6 subclass code: "P6::m"
+6 B6 outside: METHOD-IS-PRIVATE
+6 B6 outside untyped: METHOD-IS-PRIVATE
+6 B6 outside ref: ILLEGAL-CALL-REFERENCE
+6 B6 outside com: METHOD-IS-PRIVATE
+6 B6 P6 code: "P6::m"
+6 B6 own code: "P6::m"
+6 SB6 outside untyped: METHOD-IS-PRIVATE
+6 SB6 outside ref: ILLEGAL-CALL-REFERENCE
+6 SB6 outside com: METHOD-IS-PRIVATE
+6 SB6 parent code: "P6::m"
+6 SB6 subclass code: "P6::m"
+6 C6 outside: BASE-CLASS-IS-PRIVATE
+6 C6 outside untyped: BASE-CLASS-IS-PRIVATE
+6 C6 outside ref: ILLEGAL-CALL-REFERENCE
+6 C6 outside com: BASE-CLASS-IS-PRIVATE
+6 C6 P6 code: "P6::m"
+6 C6 own code: "P6::m"
+6 SC6 outside untyped: BASE-CLASS-IS-PRIVATE
+6 SC6 outside ref: ILLEGAL-CALL-REFERENCE
+6 SC6 outside com: BASE-CLASS-IS-PRIVATE
+6 SC6 parent code: "P6::m"
+6 SC6 subclass code: "P6::m"
+6 D6 outside: METHOD-DOES-NOT-EXIST
+6 D6 outside untyped: METHOD-DOES-NOT-EXIST
+6 D6 outside ref: OBJECT-METHOD-REFERENCE-ERROR
+6 D6 outside com: METHOD-DOES-NOT-EXIST
+6 D6 P6 code: METHOD-DOES-NOT-EXIST
+6 D6 own code: "P6::m"
+6 SD6 outside untyped: METHOD-DOES-NOT-EXIST
+6 SD6 outside ref: OBJECT-METHOD-REFERENCE-ERROR
+6 SD6 outside com: METHOD-DOES-NOT-EXIST
+6 SD6 parent code: "P6::m"
+6 SD6 subclass code: METHOD-DOES-NOT-EXIST
+6 S6 subclass code ref: "P6::m"
+6 Q6 outside untyped: METHOD-IS-PRIVATE
+6 Q6 outside com: METHOD-IS-PRIVATE

@@ -532,19 +532,23 @@ X1 x1();
 x1.m();       # "C1::m": P1::m() is private
 x1.viaB();    # "P1::m": B1's code can call P1::m()
     @endcode
-    This also applies when the class inherits the parent class with @ref private_inheritance "private" or
-    <tt><b>private:internal</b></tt> access: the method is a method of the class with the access of the variants that
-    implement it, not of the inheritance, as a method that the class implements with a method of its own; a public
-    abstract method that a public method of a class inherited with <tt><b>private:internal</b></tt> access implements
-    is public, also for code outside the class hierarchy and for the code of the parent class and of subclasses (since
-    %Qore 3.0).  A <tt><b>private:internal</b></tt> variant of a parent class also implements an abstract variant, but
-    it can only be called from its own class (see @ref private_methods), so that a call from the code of any other
-    class raises an exception:
+    Each variant that implements an abstract variant has the more restrictive of its own access and of the access of
+    the abstract declaration.  This also applies when the class that declares the abstract method inherits the
+    implementing class with @ref private_inheritance "private" or <tt><b>private:internal</b></tt> access: the method
+    is a method of that class, declared by its abstract declaration, as a method that it implements with a method of
+    its own, so a public abstract method that a public method of a privately inherited class implements is public, as
+    the class declares it (the inherited class itself stays private: an object of the class is not an instance of it),
+    and a private or <tt><b>private:internal</b></tt> abstract method implemented in the same way is private or
+    <tt><b>private:internal</b></tt> (since %Qore 3.0).  A <tt><b>private:internal</b></tt> variant of a parent class
+    also implements an abstract variant, but it can only be called from its own class (see @ref private_methods), so
+    that a call from the code of any other class raises an exception:
     @code{.py}
 class P2 { string m() { return "P2::m"; } }
-class A2 inherits private:internal P2 { abstract string m(); }  # P2::m() implements m() for A2: it is public
+class A2 inherits private:internal P2 { abstract string m(); }          # public: P2::m() implements it for A2
+class B2 inherits private:internal P2 { private abstract string m(); }  # private, also implemented by P2::m()
 
 (new A2()).m();   # "P2::m"
+(new B2()).m();   # METHOD-IS-PRIVATE
     @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
