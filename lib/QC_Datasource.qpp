@@ -2277,6 +2277,10 @@ int Datasource::transactionTid() [flags=CONSTANT] {
     - \c "sensitive": @ref True if the driver declares the value of the option sensitive (a credential, or a
       connection string or URL that can embed one); such a value is masked where %Qore shows the options of a
       datasource (since %Qore 3.0)
+    - \c "showable": @ref True if the value of the option can be shown where %Qore shows the options of a
+      datasource: the driver registers the option with option flags, not sensitive, and its name names no credential
+      (see @ref datasource_mask_options); \c "sensitive": @ref False alone does not mean that the value can be shown,
+      as an option registered without option flags is masked as undeclared (since %Qore 3.0)
     - \c "value": the current value of the option
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread

@@ -61,6 +61,10 @@ struct DbiOptInfo {
 };
 typedef std::map<const char*, DbiOptInfo, ltcstrcase> dbi_opt_map_t;
 
+//! returns true if the name of a DBI option can name a credential or a connection string or URL that can embed one
+//! (qore#7070); the value of such an option is never shown in a masked form of a datasource
+DLLLOCAL bool q_dbi_option_name_is_sensitive(const char* key);
+
 struct dbi_driver_stmt {
     q_dbi_stmt_prepare_t prepare = nullptr;
     q_dbi_stmt_prepare_raw_t prepare_raw = nullptr;
@@ -536,6 +540,7 @@ struct qore_dbi_private {
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
             h->setKeyValue("sensitive", i->second.isSensitive(), 0);
+            h->setKeyValue("showable", isShowable(i->first, i->second), 0);
             h->setKeyValue("value", f.opt.get(ds, i->first), 0);
 
             rv->setKeyValue(i->first, h, 0);
@@ -551,6 +556,7 @@ struct qore_dbi_private {
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
             h->setKeyValue("sensitive", i->second.isSensitive(), 0);
+            h->setKeyValue("showable", isShowable(i->first, i->second), 0);
 
             rv->setKeyValue(i->first, h, 0);
         }
@@ -566,7 +572,15 @@ struct qore_dbi_private {
     */
     DLLLOCAL bool isOptionShowable(const char* opt) const {
         dbi_opt_map_t::const_iterator i = omap.find(opt);
-        return i != omap.end() && i->second.declared && !i->second.isSensitive();
+        return i != omap.end() && isShowable(opt, i->second);
+    }
+
+    //! returns true if the value of an option with the given name and information can be shown (qore#7070)
+    /** The option must be registered with option flags, not sensitive, and its name must name no credential (see
+        q_dbi_option_name_is_sensitive()); the value itself must still be one that can be shown
+    */
+    DLLLOCAL static bool isShowable(const char* name, const DbiOptInfo& info) {
+        return info.declared && !info.isSensitive() && !q_dbi_option_name_is_sensitive(name);
     }
 
     DLLLOCAL static qore_dbi_private* get(const DBIDriver& d) {

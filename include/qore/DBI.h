@@ -739,6 +739,9 @@ public:
         - \c "type": a string giving the data type restriction for the option
         - \c "sensitive": @ref True if the driver declares the option's value sensitive with @ref QDBI_OPT_SENSITIVE
           (since %Qore 3.0)
+        - \c "showable": @ref True if the value of the option can be shown in the masked forms of a datasource: the
+          option is registered with option flags, not sensitive, and its name names no credential; an option registered
+          without option flags gives \c "sensitive": @ref False and \c "showable": @ref False (since %Qore 3.0)
 
         The caller owns the reference count for the hash returned
     */

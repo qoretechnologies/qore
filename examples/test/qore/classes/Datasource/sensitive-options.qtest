@@ -121,8 +121,28 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         assertEq("dbitest:****/****@db{stream-chunk=****,rows=5}", mask_datasource(h, {"show_db": True,
             "show_options": True}));
         assertEq({"stream-chunk": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
-        # the option information gives it as not sensitive, as the driver does not declare it sensitive
-        assertFalse(dbi_get_driver_options("dbitest"){"stream-chunk"}.sensitive);
+        # the option information gives it as not sensitive, as the driver does not declare it sensitive, and as not
+        # showable: "sensitive": False does not mean that the value can be shown
+        hash<auto> info = dbi_get_driver_options("dbitest");
+        assertFalse(info{"stream-chunk"}.sensitive);
+        assertEq(False, info{"stream-chunk"}.showable);
+        # "showable" is True only for an option registered with option flags, not sensitive, whose name names no
+        # credential
+        assertEq(True, info.rows.showable);
+        assertEq(True, info.fault.showable);
+        assertEq(False, info.secret.showable);
+        assertEq(False, info.api_token.showable);
+        assertEq(False, info{"future-flag"}.showable);
+        foreach hash<auto> i in (info.pairIterator()) {
+            assertEq(Type::Boolean, i.value.showable.type(), i.key);
+        }
+        # the option information of an open Datasource gives it too
+        Datasource ds({"type": "dbitest", "db": "test"});
+        ds.open();
+        on_exit ds.close();
+        hash<auto> dsi = ds.getOptionHash();
+        assertEq(True, dsi.rows.showable);
+        assertEq(False, dsi{"stream-chunk"}.showable);
     }
 
     credentialNames() {

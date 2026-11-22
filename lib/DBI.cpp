@@ -941,7 +941,7 @@ static QoreStringNode* q_ds_shown_option_value(const QoreValue v);
 // returns true if the name of an option can name a credential or a connection string or URL that can embed one: it
 // has one of the words below, without case, anywhere in it; the value of such an option is masked whatever the
 // driver declares (defense in depth against an option declared not sensitive by mistake; qore#7070)
-static bool q_dbi_option_name_is_sensitive(const char* key) {
+bool q_dbi_option_name_is_sensitive(const char* key) {
     static const char* words[] = {"pass", "pwd", "secret", "token", "key", "cred", "conn", "url", "dsn", "auth"};
     for (const char* p = key; *p; ++p) {
         for (const char* w : words) {
@@ -956,11 +956,11 @@ static bool q_dbi_option_name_is_sensitive(const char* key) {
 // the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
 // the options of a db:// connection's information and ping results, mask_datasource_options()): returns the value
 // to show as a string, or nullptr if the value is masked: if the driver is not loaded (\a dd is nullptr), if the
-// option cannot be shown (see qore_dbi_private::isOptionShowable()), if its name can name a credential (see
+// option cannot be shown (see qore_dbi_private::isOptionShowable(): also if its name can name a credential, see
 // q_dbi_option_name_is_sensitive()), or if the value cannot be shown in a datasource
 // string (see q_ds_shown_option_value()) (qore#7070)
 static QoreStringNode* q_dbi_shown_option(const qore_dbi_private* dd, const char* key, const QoreValue v) {
-    if (!dd || !dd->isOptionShowable(key) || q_dbi_option_name_is_sensitive(key)) {
+    if (!dd || !dd->isOptionShowable(key)) {
         return nullptr;
     }
     return q_ds_shown_option_value(v);
