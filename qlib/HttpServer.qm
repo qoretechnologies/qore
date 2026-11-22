@@ -303,6 +303,13 @@ log("started listener on %s", lh.desc);
       handler of an HTTP/2 or HTTP/3 request does, and code that is not sandboxed aborts the connection with
       @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
       <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
+    - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
+      (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
+      parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
+      the whole body both as the constructor's argument and in one part; a body larger than
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" is no longer read before the request
+      is dispatched, so that the memory that a streamed body needs is bounded
+      (<a href="https://github.com/qoretechnologies/qore/issues/7308">issue 7308</a>)
     - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
       "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
       it was skipped; an error that it raises is logged with the listener's logger
@@ -4649,12 +4656,32 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     */
     private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
-            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            bool want_body_reader, hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
         # the fields of the request that its body is read and decoded by (qore#6851)
         auto content_type = http_get_field(hdr, "content-type");
         auto content_encoding = http_get_field(hdr, "content-encoding");
         auto req_content_length = http_get_field(hdr, "content-length");
+        if (want_body_reader) {
+            # an HTTP/1.x body with a Content-Length that the stream handler reads in parts (qore#7308): a body that
+            # exceeds the maximum size is refused before any of it is read (one that the server read before the
+            # request was dispatched too, as for a body given whole), and the handler gets the parts from a reader,
+            # which gives the bytes read before the dispatch first, in the same parts as those read from the socket
+            int content_length = http_parse_content_length(req_content_length);
+            if (max_body > 0 && content_length > max_body) {
+                string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                    content_length, max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # the server keeps no copy of the bytes read before the dispatch: each byte reaches the handler once
+            *binary buffered = remove cx."header-info".body;
+            cx."header-info".body_reader = new Http1BodyReader(s, content_length, buffered, max_body);
+            return {"body": NOTHING};
+        }
         if (cx."header-info".body_streaming && !want_streaming) {
             # Handler doesn't support streaming — buffer body on handler thread
             # for backward compatibility (body was previously read by I/O thread)
@@ -5201,10 +5228,22 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler
                 && handler.wantsBodyStreaming(cx, hdr);
 
+            # an HTTP/1.x body with a Content-Length that a stream handler wants as a stream (qore#7308): decided
+            # here, on the handler thread, also for a body that the server read before the request was dispatched,
+            # so that the handler gets the body in the same parts whatever its size; a handler that is not a stream
+            # handler has no way to read the parts, and always gets the body whole
+            bool want_body_reader = !is_multiplexed
+                && !want_streaming
+                && handler
+                && handler.stream
+                && !http_get_field(hdr, "transfer-encoding")
+                && http_parse_content_length(http_get_field(hdr, "content-length")) > 0
+                && handler.wantsBodyStreaming(cx, hdr);
+
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
             *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
-                want_streaming, info, \async_response_out);
+                want_streaming, want_body_reader, info, \async_response_out);
             if (!body_info) {
                 return;
             }
@@ -5348,6 +5387,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     } else if (!cx.persistent && !rv.close) {
                         cx.persistent = True;
                     }
+                }
+            }
+
+            # an HTTP/1.x body that the stream handler did not read completely (because it stopped reading, or the
+            # request was refused before it was called): the bytes that remain cannot be told apart from the next
+            # request, so the connection is closed after the response (qore#7308)
+            if (want_body_reader && cast<Http1BodyReader>(cx."header-info".body_reader).getRemaining()) {
+                cx.close = True;
+                # a response header that a stream request has already set
+                if (rv.hdr.Connection) {
+                    rv.hdr.Connection = "close";
                 }
             }
 

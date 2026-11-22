@@ -1,0 +1,548 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HTTP/1.x request bodies with a Content-Length given to stream handlers (qore#7308):
+    - a stream handler that wants the body as a stream gets it in binary parts of at most BodyStreamPartSize bytes,
+      with no constructor body and each byte once, whether the server read the body before the dispatch (at most
+      DefaultBodyStreamThreshold bytes) or reads it from the socket
+    - a large streamed body reaches the handler before the client has sent all of it
+    - a stream handler that does not want a stream, a plain handler, and a REST action get the body whole
+    - chunked bodies, Expect: 100-continue, the maximum request body size, and a handler that stops reading
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestHandler
+%requires json
+
+%exec-class HttpServerContentLengthStreamTest
+
+#! what a stream request received
+hashdecl StreamRecord {
+    #! the type of the body given to the constructor
+    string ctor_type;
+    #! the body given to the constructor, if any
+    auto ctor_body;
+    #! the type of each part given to recv()
+    list<string> part_types = ();
+    #! the size of each part given to recv()
+    list<int> part_sizes = ();
+    #! the parts given to recv(), concatenated
+    binary data = binary();
+    #! the number of times that the request was told that the body ended
+    int eod = 0;
+    #! True if cx."header-info" still had the bytes that the server read before the dispatch
+    bool header_info_body;
+}
+
+#! records what it receives and gives the record to its handler when the response is made
+class RecordingRequest inherits AbstractStreamRequest {
+    private {
+        RecordingHandler rhandler;
+        hash<StreamRecord> rec;
+        #! stop reading after the first part
+        bool stop;
+        bool stopped = False;
+    }
+
+    constructor(HttpListenerInterface listener, RecordingHandler handler, Socket s, hash<auto> cx, hash<auto> hdr,
+            auto body, bool stop) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        rhandler = handler;
+        self.stop = stop;
+        rec = <StreamRecord>{
+            "ctor_type": body.type(),
+            "ctor_body": body,
+            "header_info_body": exists cx."header-info".body,
+        };
+    }
+
+    bool hasRecvError() {
+        return stopped;
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.hasKey("data")) {
+            rec.part_types += v.data.type();
+            rec.part_sizes += v.data.size();
+            if (v.data.typeCode() == NT_BINARY) {
+                rec.data += v.data;
+            } else {
+                rec.data += binary(v.data);
+            }
+            if (rec.part_sizes.size() == 1) {
+                rhandler.first_part.push(True);
+            }
+            if (stop) {
+                stopped = True;
+            }
+        } else if (v.hasKey("hdr")) {
+            ++rec.eod;
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        rhandler.records.push(rec);
+        return {"code": 200, "body": sprintf("received %d bytes", rec.data.size())};
+    }
+}
+
+#! a stream handler that records what its requests receive
+class RecordingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the record of each request whose response was made
+        Queue records();
+        #! signaled when a request gets its first part
+        Queue first_part();
+    }
+
+    private {
+        #! True if the handler wants the body as a stream
+        bool want_stream;
+        #! True if the requests stop reading after the first part
+        bool stop;
+    }
+
+    constructor(bool want_stream, bool stop = False, *AbstractAuthenticator auth)
+            : AbstractHttpRequestHandler(auth, True) {
+        self.want_stream = want_stream;
+        self.stop = stop;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return want_stream;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new RecordingRequest(listener, self, s, cx, hdr, body, stop);
+    }
+}
+
+#! refuses every request
+class DenyAuthenticator inherits AbstractAuthenticator {
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr, reference<hash> cx) {
+        return <HttpResponseInfo>{"code": 403, "body": "denied"};
+    }
+}
+
+#! a handler that is not a stream handler, and that says it wants the body as a stream
+class PlainHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "plain", {
+            "X-Body-Type": body.type(),
+            "X-Body-Size": body.size(),
+        });
+    }
+}
+
+#! returns the type and size of the deserialized body of a REST request
+class SizeRestClass inherits AbstractRestClass {
+    string name() {
+        return "size";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {
+            "type": cx.body.type(),
+            "size": cx.body.s.size(),
+        });
+    }
+}
+
+class HttpServerContentLengthStreamTest inherits QUnit::Test {
+    private {
+        const Timeout = 30s;
+
+        #! the maximum request body size of the server whose limit makes the server read the body before the dispatch
+        const SmallLimit = 100000;
+        #! the maximum request body size of the server whose limit makes the server read the body on the handler thread
+        const LargeLimit = 2 * 1024 * 1024;
+
+        HttpServer server;
+        HttpServer small_limit_server;
+        HttpServer large_limit_server;
+
+        RecordingHandler stream_handler(True);
+        RecordingHandler whole_handler(False);
+        RecordingHandler stop_handler(True, True);
+        RecordingHandler denied_handler(True, False, new DenyAuthenticator());
+
+        RecordingHandler small_stream_handler(True);
+        RecordingHandler small_whole_handler(False);
+        RecordingHandler large_stream_handler(True);
+        RecordingHandler large_whole_handler(False);
+
+        int port;
+        int small_port;
+        int large_port;
+    }
+
+    constructor() : Test("HttpServerContentLengthStreamTest", "1.0") {
+        addTestCase("same parts under and over the threshold", \samePartsTest());
+        addTestCase("large body streams before it is complete", \streamsBeforeCompleteTest());
+        addTestCase("stream handler that wants the body whole", \wholeTest());
+        addTestCase("plain handler gets the body whole", \plainTest());
+        addTestCase("REST action gets the deserialized body", \restTest());
+        addTestCase("chunked body still streams", \chunkedTest());
+        addTestCase("Expect: 100-continue", \expectTest());
+        addTestCase("maximum request body size, body read before the dispatch", \smallLimitTest());
+        addTestCase("maximum request body size, body read on the handler thread", \largeLimitTest());
+        addTestCase("handler that stops reading", \stopTest());
+        addTestCase("request refused before the handler reads", \deniedTest());
+        addTestCase("keep-alive after streamed bodies", \keepAliveTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("cl-stream", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        server.setHandler("stream", "^stream", NOTHING, stream_handler);
+        server.setHandler("whole", "^whole", NOTHING, whole_handler);
+        server.setHandler("stop", "^stop", NOTHING, stop_handler);
+        server.setHandler("denied", "^denied", NOTHING, denied_handler);
+        server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        RestHandler rest();
+        rest.addClass(new SizeRestClass());
+        server.setHandler("rest", "^size", NOTHING, rest);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        small_limit_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "max_request_body_size": SmallLimit,
+        });
+        small_limit_server.setHandler("stream", "^stream", NOTHING, small_stream_handler);
+        small_limit_server.setHandler("whole", "^whole", NOTHING, small_whole_handler);
+        small_limit_server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        small_port = small_limit_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        large_limit_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "max_request_body_size": LargeLimit,
+        });
+        large_limit_server.setHandler("stream", "^stream", NOTHING, large_stream_handler);
+        large_limit_server.setHandler("whole", "^whole", NOTHING, large_whole_handler);
+        large_limit_server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        large_port = large_limit_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        server.stop();
+        small_limit_server.stop();
+        large_limit_server.stop();
+    }
+
+    #! a body of the given size whose bytes differ, so that a byte given twice or out of order is seen
+    static binary makeBody(int size) {
+        string pattern;
+        for (int i = 0; i < 251; ++i) {
+            pattern += chr(ord("a") + (i % 26));
+        }
+        string str = strmul(pattern, size / pattern.size() + 1);
+        return binary(str.substr(0, size));
+    }
+
+    #! the part sizes of a streamed body of the given size
+    static list<int> expectedParts(int size) {
+        list<int> rv = ();
+        while (size > 0) {
+            int part = size > BodyStreamPartSize ? BodyStreamPartSize : size;
+            rv += part;
+            size -= part;
+        }
+        return rv;
+    }
+
+    static Socket connect(int port) {
+        Socket s();
+        s.connect("localhost:" + port, Timeout);
+        return s;
+    }
+
+    static sendHead(Socket s, string path, int content_length, *hash<auto> hdrs, string ct = "text/plain") {
+        string head = sprintf("POST %s HTTP/1.1\r\nHost: localhost\r\nContent-Type: %s\r\nContent-Length: %d\r\n",
+            path, ct, content_length);
+        map head += sprintf("%s: %s\r\n", $1.key, $1.value), hdrs.pairIterator();
+        s.send(head + "\r\n");
+    }
+
+    static hash<auto> readResponse(Socket s) {
+        hash<auto> rh = s.readHTTPHeader(Timeout);
+        int cl = int(rh."content-length");
+        if (cl > 0) {
+            rh.body = s.recvBinary(cl, Timeout);
+        }
+        return rh;
+    }
+
+    static hash<auto> post(int port, string path, binary body, string ct = "text/plain") {
+        Socket s = HttpServerContentLengthStreamTest::connect(port);
+        on_exit s.close();
+        HttpServerContentLengthStreamTest::sendHead(s, path, body.size(), NOTHING, ct);
+        s.send(body);
+        return HttpServerContentLengthStreamTest::readResponse(s);
+    }
+
+    #! checks that a record is that of a streamed body
+    private checkStreamed(hash<StreamRecord> rec, binary body, string label) {
+        assertEq("nothing", rec.ctor_type, label + ": constructor body");
+        assertFalse(rec.header_info_body, label + ": no pre-read body left in the context");
+        assertEq((map "binary", rec.part_sizes), rec.part_types, label + ": binary parts");
+        assertEq(HttpServerContentLengthStreamTest::expectedParts(body.size()), rec.part_sizes,
+            label + ": part sizes");
+        assertTrue(rec.data == body, label + ": each byte once, in order");
+        assertEq(1, rec.eod, label + ": end of body");
+    }
+
+    #! checks that a record is that of a body given whole
+    private checkWhole(hash<StreamRecord> rec, binary body, string label) {
+        # text/plain is decoded to a string, given in the constructor and once in recv()
+        assertEq("string", rec.ctor_type, label + ": constructor body");
+        assertTrue(binary(rec.ctor_body) == body, label + ": constructor body bytes");
+        assertEq(("string",), rec.part_types, label + ": one part");
+        assertEq((body.size(),), rec.part_sizes, label + ": part size");
+        assertTrue(rec.data == body, label + ": part bytes");
+        assertEq(1, rec.eod, label + ": end of body");
+    }
+
+    samePartsTest() {
+        # the most important check: the same handler gets the same parts for a body just under or at the threshold,
+        # which the server reads before the dispatch, and one just over it, which is read from the socket
+        foreach int size in ((DefaultBodyStreamThreshold - 1, DefaultBodyStreamThreshold,
+                DefaultBodyStreamThreshold + 1, 1, BodyStreamPartSize, BodyStreamPartSize + 1)) {
+            binary body = makeBody(size);
+            hash<auto> resp = post(port, "/stream", body);
+            assertEq(200, resp.status_code, "size " + size);
+            checkStreamed(stream_handler.records.get(Timeout), body, "size " + size);
+        }
+    }
+
+    streamsBeforeCompleteTest() {
+        # a body well over the threshold reaches the handler before the client has sent all of it: the server holds
+        # no more than a part of it at a time
+        int size = 4 * DefaultBodyStreamThreshold;
+        binary body = makeBody(size);
+        # the signals of the earlier requests
+        stream_handler.first_part.clear();
+        Socket s = connect(port);
+        on_exit s.close();
+        sendHead(s, "/stream", size);
+        int half = size / 2;
+        s.send(body.substr(0, half));
+        # the client sends the rest only after the handler has its first part
+        assertTrue(stream_handler.first_part.get(Timeout), "first part before the body is complete");
+        s.send(body.substr(half));
+        hash<auto> resp = readResponse(s);
+        assertEq(200, resp.status_code);
+        checkStreamed(stream_handler.records.get(Timeout), body, "4 MiB");
+    }
+
+    wholeTest() {
+        # a stream handler that does not want a stream gets the body whole (decoded, in the constructor and once in
+        # recv()), whether it was read before the dispatch or on the handler thread
+        foreach int size in ((1000, DefaultBodyStreamThreshold, DefaultBodyStreamThreshold + 1)) {
+            binary body = makeBody(size);
+            hash<auto> resp = post(port, "/whole", body);
+            assertEq(200, resp.status_code, "size " + size);
+            checkWhole(whole_handler.records.get(Timeout), body, "size " + size);
+        }
+    }
+
+    plainTest() {
+        # a handler that is not a stream handler cannot read parts: it gets the body whole even though it says it
+        # wants a stream
+        foreach int size in ((1000, DefaultBodyStreamThreshold + 1)) {
+            hash<auto> resp = post(port, "/plain", makeBody(size));
+            assertEq(200, resp.status_code, "size " + size);
+            assertEq("string", resp."x-body-type", "size " + size);
+            assertEq(size, int(resp."x-body-size"), "size " + size);
+        }
+    }
+
+    restTest() {
+        # a REST action gets the whole body deserialized, under and over the threshold
+        foreach int size in ((1000, 2 * DefaultBodyStreamThreshold)) {
+            string json = make_json({"s": strmul("x", size)});
+            hash<auto> resp = post(port, "/size", binary(json), "application/json");
+            assertEq(200, resp.status_code, "size " + size);
+            assertEq({"type": "hash", "size": size}, parse_json(resp.body.toString()), "size " + size);
+        }
+    }
+
+    chunkedTest() {
+        # a chunked body is given chunk by chunk, as before
+        Socket s = connect(port);
+        on_exit s.close();
+        s.send("POST /stream HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n");
+        list<binary> chunks = (makeBody(10), makeBody(100000), makeBody(3));
+        foreach binary chunk in (chunks) {
+            s.send(sprintf("%x\r\n", chunk.size()));
+            s.send(chunk);
+            s.send("\r\n");
+        }
+        s.send("0\r\n\r\n");
+        hash<auto> resp = readResponse(s);
+        assertEq(200, resp.status_code);
+        hash<StreamRecord> rec = stream_handler.records.get(Timeout);
+        assertEq("nothing", rec.ctor_type);
+        assertEq((10, 100000, 3), rec.part_sizes);
+        assertTrue(rec.data == chunks[0] + chunks[1] + chunks[2]);
+        assertEq(1, rec.eod);
+    }
+
+    expectTest() {
+        # a request with Expect: 100-continue is dispatched on its headers, and the handler gets the same parts or
+        # the same whole body as without it
+        foreach int size in ((1000, DefaultBodyStreamThreshold + 1)) {
+            foreach string path in (("/stream", "/whole")) {
+                binary body = makeBody(size);
+                Socket s = connect(port);
+                on_exit s.close();
+                sendHead(s, path, size, {"Expect": "100-continue"});
+                hash<auto> cont = s.readHTTPHeader(Timeout);
+                assertEq(100, cont.status_code, path + " size " + size);
+                s.send(body);
+                hash<auto> resp = readResponse(s);
+                assertEq(200, resp.status_code, path + " size " + size);
+                if (path == "/stream") {
+                    checkStreamed(stream_handler.records.get(Timeout), body, "expect " + path + " size " + size);
+                } else {
+                    checkWhole(whole_handler.records.get(Timeout), body, "expect " + path + " size " + size);
+                }
+            }
+        }
+    }
+
+    smallLimitTest() {
+        # a limit under the threshold: the body is read before the dispatch; one at the limit is accepted, one past
+        # it refused, for a streamed and a whole body
+        binary at_limit = makeBody(SmallLimit);
+        hash<auto> resp = post(small_port, "/stream", at_limit);
+        assertEq(200, resp.status_code);
+        checkStreamed(small_stream_handler.records.get(Timeout), at_limit, "stream at limit");
+        resp = post(small_port, "/whole", at_limit);
+        assertEq(200, resp.status_code);
+        checkWhole(small_whole_handler.records.get(Timeout), at_limit, "whole at limit");
+        resp = post(small_port, "/plain", at_limit);
+        assertEq(200, resp.status_code);
+
+        foreach string path in (("/stream", "/whole", "/plain")) {
+            resp = post(small_port, path, makeBody(SmallLimit + 1));
+            assertEq(413, resp.status_code, path + " past the limit");
+        }
+        assertEq(0, small_stream_handler.records.size());
+        assertEq(0, small_whole_handler.records.size());
+    }
+
+    largeLimitTest() {
+        # a limit over the threshold: the body is read on the handler thread; one at the limit is accepted, and one
+        # past it is refused before any of it is read: the client sends only the request head
+        binary at_limit = makeBody(LargeLimit);
+        hash<auto> resp = post(large_port, "/stream", at_limit);
+        assertEq(200, resp.status_code);
+        checkStreamed(large_stream_handler.records.get(Timeout), at_limit, "stream at limit");
+        resp = post(large_port, "/whole", at_limit);
+        assertEq(200, resp.status_code);
+        checkWhole(large_whole_handler.records.get(Timeout), at_limit, "whole at limit");
+        resp = post(large_port, "/plain", at_limit);
+        assertEq(200, resp.status_code);
+
+        foreach string path in (("/stream", "/whole", "/plain")) {
+            Socket s = connect(large_port);
+            on_exit s.close();
+            sendHead(s, path, LargeLimit + 1);
+            resp = readResponse(s);
+            assertEq(413, resp.status_code, path + " past the limit");
+            assertEq("close", resp.connection, path + " past the limit");
+        }
+        assertEq(0, large_stream_handler.records.size());
+        assertEq(0, large_whole_handler.records.size());
+    }
+
+    stopTest() {
+        # a handler that stops reading leaves the rest of the body unread: the connection is closed after the
+        # response, under and over the threshold
+        foreach int size in ((BodyStreamPartSize * 3, DefaultBodyStreamThreshold + 1)) {
+            binary body = makeBody(size);
+            Socket s = connect(port);
+            on_exit s.close();
+            sendHead(s, "/stop", size);
+            s.send(body.substr(0, BodyStreamPartSize));
+            hash<auto> resp;
+            if (size <= DefaultBodyStreamThreshold) {
+                # the server reads a small body before the dispatch
+                s.send(body.substr(BodyStreamPartSize));
+            }
+            resp = readResponse(s);
+            assertEq(200, resp.status_code, "size " + size);
+            assertEq("close", resp.connection, "size " + size);
+            hash<StreamRecord> rec = stop_handler.records.get(Timeout);
+            assertEq((BodyStreamPartSize,), rec.part_sizes, "size " + size);
+            assertEq(1, rec.eod, "size " + size);
+        }
+    }
+
+    deniedTest() {
+        # a request refused before the handler reads its body is answered without the body, which the server does
+        # not wait for, and the connection is closed, as the body that may follow cannot be told from a request
+        Socket s = connect(port);
+        on_exit s.close();
+        sendHead(s, "/denied", 2 * DefaultBodyStreamThreshold);
+        hash<auto> resp = readResponse(s);
+        assertEq(403, resp.status_code);
+        assertEq("close", resp.connection);
+        assertEq(0, denied_handler.records.size());
+    }
+
+    keepAliveTest() {
+        # streamed bodies read on the handler thread and before the dispatch leave the connection at the next request
+        Socket s = connect(port);
+        on_exit s.close();
+        foreach int size in ((DefaultBodyStreamThreshold + 1, 1000, 2 * DefaultBodyStreamThreshold, 5)) {
+            binary body = makeBody(size);
+            sendHead(s, "/stream", size);
+            s.send(body);
+            hash<auto> resp = readResponse(s);
+            assertEq(200, resp.status_code, "size " + size);
+            assertNeq("close", resp.connection, "size " + size);
+            checkStreamed(stream_handler.records.get(Timeout), body, "keep-alive size " + size);
+        }
+    }
+}
