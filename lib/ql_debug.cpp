@@ -19235,18 +19235,17 @@ static QoreValue f_dbg_socket_has_async_io_owner(const QoreListNode* params, Run
     has deferred the operation's cancellation; 1, an I/O thread waits before it runs a cancellation deferred until the
     result of the operation's step that no caller waits for, until the pause is ended; 2, an I/O thread waits after a
     socket cancel has started to wait for an operation's step, until the pause is ended; 3, the caller of the
-    cancellation waits before it cancels the operations handed back to it, until the pause is ended (qore#6703).  With
-    @a pause
+    cancellation waits before it cancels the operations handed back to it, until the pause is ended; 4, a stopping I/O
+    thread waits before its last command drain; 5, the caller of the cancellation waits after it has sent its commands;
+    6, an I/O thread waits before it drains its commands; 7 does not pause, and records that stop() waits for a
+    cancellation in progress (qore#6703).  With @a pause
     false, the pause is ended (or cancelled if not taken yet), and the function returns True if a thread took it.
     A test must end the pauses that it requests (also when it fails), or the thread waits until the process exits.
 */
 static QoreValue f_dbg_async_io_pause_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int64 point = get_param_value(params, 0).getAsBigInt();
-    if (point != AsyncIoControllerPriv::DBG_CANCEL_STEP_BEFORE_ENTRY
-            && point != AsyncIoControllerPriv::DBG_CANCEL_DEFERRED_RESULT
-            && point != AsyncIoControllerPriv::DBG_CANCEL_SOCKET_BARRIER
-            && point != AsyncIoControllerPriv::DBG_CANCEL_BEFORE_HANDED_BACK) {
+    if (point < 0 || point >= AsyncIoControllerPriv::DBG_CANCEL_POINT_COUNT) {
         xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
         return QoreValue();
     }
@@ -19258,10 +19257,7 @@ static QoreValue f_dbg_async_io_pause_cancel_point(const QoreListNode* params, R
 static QoreValue f_dbg_async_io_wait_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int64 point = get_param_value(params, 0).getAsBigInt();
-    if (point != AsyncIoControllerPriv::DBG_CANCEL_STEP_BEFORE_ENTRY
-            && point != AsyncIoControllerPriv::DBG_CANCEL_DEFERRED_RESULT
-            && point != AsyncIoControllerPriv::DBG_CANCEL_SOCKET_BARRIER
-            && point != AsyncIoControllerPriv::DBG_CANCEL_BEFORE_HANDED_BACK) {
+    if (point < 0 || point >= AsyncIoControllerPriv::DBG_CANCEL_POINT_COUNT) {
         xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
         return QoreValue();
     }
@@ -27998,6 +27994,27 @@ static QoreValue f_dbg_poll_op_release_program(const QoreListNode* params, Runti
     return rv;
 }
 
+//! Debug-only: stops the global async I/O controller, as the end of the process does
+static QoreValue f_dbg_async_io_stop(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(qore_get_async_io_controller_if_exists(), xsink);
+    if (ctrl) {
+        ctrl->stop(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: returns the number of times that the async I/O controller has called the abort() of an operation
+static QoreValue f_dbg_async_io_abort_calls(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgAbortCalls();
+}
+
+//! Debug-only: parks the release of each object that the code returns while their Program is marked, then releases them
+static QoreValue f_dbg_async_io_park_program_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgParkProgramReleasesTest(
+        get_param_value(params, 0).get<const ResolvedCallReferenceNode>(), xsink);
+}
+
 //! releases the release item of a reference to the object while its Program is marked as being destroyed
 static QoreValue f_dbg_async_io_park_program_release(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -30536,6 +30553,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_stop", f_dbg_async_io_stop, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_abort_calls", f_dbg_async_io_abort_calls, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_park_program_releases", f_dbg_async_io_park_program_releases, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, autoHashTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "make");
     qns.addBuiltinVariant("dbg_async_io_park_program_release", f_dbg_async_io_park_program_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
     qns.addBuiltinVariant("dbg_poll_op_release_last_off_thread", f_dbg_poll_op_release_last_off_thread,

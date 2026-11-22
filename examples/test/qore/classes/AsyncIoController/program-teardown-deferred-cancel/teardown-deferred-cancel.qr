@@ -125,6 +125,7 @@ Socket client();
 *Socket accepted;
 Counter gate(1);
 AbstractPollableIoObjectBase target;
+int abort_calls = call_function("dbg_async_io_abort_calls");
 if (use_socket) {
     listener.bindINET("127.0.0.1", 0, True);
     listener.listen();
@@ -177,5 +178,9 @@ AsyncIoController::cancelByOwner("teardown-deferred-cancel-barrier");
 AsyncIoController::flushCallbacks();
 if (barrier) {
     printf("socket cancel returned: %y\n", !cancel_done.waitForZero(20s));
+}
+if (ARGV[0] == "native") {
+    # the builtin abort() runs once, on the I/O thread at the hand-back, and not again in the caller's cancellation
+    printf("native abort calls: %d\n", call_function("dbg_async_io_abort_calls") - abort_calls);
 }
 printf("done\n");

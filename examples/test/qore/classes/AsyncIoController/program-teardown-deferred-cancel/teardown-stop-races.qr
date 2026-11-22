@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# forces the races between the cancellation of a Program's operations and the stop of the async I/O controller
+# (qore#6703) with debug hooks; the argument selects the race:
+# - quit-batch: the cancellation's command follows the Quit command in one batch of the I/O thread
+# - exit-drain: the cancellation's command is found in the I/O thread's last command drain
+# - stop: stop() is called while the cancellation is running the operation's abort()
+# needs QORE_IO_THREADS=1: a pause of an I/O thread is taken by one thread, which must be the one with the operation
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+    abort() {
+        printf(\"abort on the deleting thread: %y\\n\", gettid() == deleter);
+        flush();
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *EventNotifier notifier;
+our int deleter;
+
+sub set_deleter(int tid) {
+    deleter = tid;
+}
+
+sub start() {
+    notifier = new EventNotifier();
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new Op(),
+        \"owner\": \"teardown-stop-races\",
+        \"to\": -1s,
+    });
+}
+";
+
+const Step = 0;
+const HandedBack = 3;
+const ExitDrain = 4;
+const ProgramSent = 5;
+const CommandDrain = 6;
+const StopWaits = 7;
+
+sub pause(int point, bool on) {
+    call_function("dbg_async_io_pause_cancel_point", point, on);
+}
+
+bool sub reached(int point) {
+    return call_function("dbg_async_io_wait_cancel_point", point, 30s);
+}
+
+string race = ARGV[0];
+pause(Step, True);
+on_exit {
+    foreach int point in ((Step, HandedBack, ExitDrain, ProgramSent, CommandDrain, StopWaits)) {
+        pause(point, False);
+    }
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-stop-races");
+p.callFunction("start");
+printf("step paused: %y\n", reached(Step));
+
+Counter threads(2);
+code stop_controller = sub () {
+    on_exit threads.dec();
+    call_function("dbg_async_io_stop");
+};
+code delete_program = sub () {
+    on_exit threads.dec();
+    p.callFunction("set_deleter", gettid());
+    delete p;
+};
+
+pause(HandedBack, True);
+switch (race) {
+    case "quit-batch": {
+        # the operation's cancellation waits for its step, and the I/O thread sees both commands in one batch
+        AsyncIoController::cancelByOwner("teardown-stop-races");
+        AsyncIoController::waitForProcessing(30s);
+        pause(CommandDrain, True);
+        background stop_controller();
+        reached(CommandDrain);
+        pause(ProgramSent, True);
+        background delete_program();
+        reached(ProgramSent);
+        pause(ProgramSent, False);
+        pause(CommandDrain, False);
+        break;
+    }
+    case "exit-drain": {
+        AsyncIoController::cancelByOwner("teardown-stop-races");
+        AsyncIoController::waitForProcessing(30s);
+        pause(ExitDrain, True);
+        background stop_controller();
+        reached(ExitDrain);
+        pause(ProgramSent, True);
+        background delete_program();
+        reached(ProgramSent);
+        pause(ProgramSent, False);
+        pause(ExitDrain, False);
+        break;
+    }
+    case "stop": {
+        background delete_program();
+        break;
+    }
+}
+# the operation reaches the caller of the cancellation, which waits here before it runs abort()
+printf("handed back: %y\n", reached(HandedBack));
+if (race == "stop") {
+    pause(StopWaits, True);
+    background stop_controller();
+    printf("stop waits: %y\n", reached(StopWaits));
+} else {
+    # the worker of the step, which the commands that the I/O thread did not process do not release
+    pause(Step, False);
+}
+pause(HandedBack, False);
+printf("threads ended: %y\n", !threads.waitForZero(30s));
+printf("done\n");

@@ -46,10 +46,21 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
 
         const ExpectedNative = "step paused: True\nsocket claimed: True\nsocket cancel waits: True\n"
             "socket claimed: False\n"
-            "socket cancel returned: True\ndone\n";
+            "socket cancel returned: True\nnative abort calls: 1\ndone\n";
 
         const ExpectedAbortException = "operations waiting: True\nabort: active exception: False\n"
             "abort: active exception: False\ndone\n";
+
+        const ExpectedRaces = {
+            "quit-batch": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
+                "threads ended: True\ndone\n",
+            "exit-drain": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
+                "threads ended: True\ndone\n",
+            "stop": "step paused: True\nhanded back: True\nstop waits: True\nabort on the deleting thread: True\n"
+                "threads ended: True\ndone\n",
+        };
+
+        const ExpectedParked = "next release: active exception: False\nraised: RELEASE-ERROR\ndone\n";
 
         const ExpectedLongStep = "step started: True\nabort: step running: False\nonComplete: canceled: True\n"
             "result received: True\ndone\n";
@@ -61,6 +72,8 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
             \testBarrier());
         addTestCase("the exception of a canceled operation's release is not active in the next abort()",
             \testAbortException());
+        addTestCase("the cancellation of a Program races with the stop of the controller", \testRaces());
+        addTestCase("the exception of a parked release is not active in the next release", \testParked());
         addTestCase("an operation canceled during a step longer than the I/O thread's idle grace period",
             \testLongStep());
         set_return_value(main());
@@ -117,6 +130,36 @@ class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
             r = ExecModeHarness::run_command(sprintf("%s --enable-debug --exec-mode=%s %s/teardown-abort-exception.qr "
                 "2>&1 >/dev/null", qore_bin, mode, dir));
             assertEq(2, r.out.split("RELEASE-ERROR:").size() - 1, sprintf("%s: reported exceptions: %y", mode, r.out));
+        }
+    }
+
+    #! a cancellation whose command follows Quit, or is found in the last drain, still gets the operation handed back,
+    #! and stop() waits for a cancellation in progress
+    testRaces() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        foreach string race in (keys ExpectedRaces) {
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("QORE_IO_THREADS=1 %s "
+                    "--enable-debug --exec-mode=%s %s/teardown-stop-races.qr %s", qore_bin, mode, dir, race));
+                string label = sprintf("%s %s", mode, race);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(ExpectedRaces{race}, r.out, label);
+            }
+        }
+    }
+
+    #! each parked release runs without the exception of the one before it, which reaches the caller
+    testParked() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/teardown-parked-exception.qr", qore_bin, mode, dir));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(ExpectedParked, r.out, mode);
         }
     }
 

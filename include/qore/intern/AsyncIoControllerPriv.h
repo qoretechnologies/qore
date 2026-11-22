@@ -2678,6 +2678,16 @@ public:
         DBG_CANCEL_SOCKET_BARRIER = 2,
         //! the caller of cancelByProgram() waits before it cancels the operations handed back to it
         DBG_CANCEL_BEFORE_HANDED_BACK = 3,
+        //! a stopping I/O thread waits before its last drain of the command queue
+        DBG_CANCEL_BEFORE_EXIT_DRAIN = 4,
+        //! the caller of cancelByProgram() waits after it has sent its commands to the I/O threads
+        DBG_CANCEL_PROGRAM_SENT = 5,
+        //! an I/O thread waits before it drains its command queue, so that commands sent meanwhile form one batch
+        DBG_CANCEL_BEFORE_COMMAND_DRAIN = 6,
+        //! not a pause: stop() has begun to wait for a cancelByProgram() call in progress
+        DBG_CANCEL_STOP_WAITS = 7,
+        //! the number of points
+        DBG_CANCEL_POINT_COUNT = 8,
     };
 
     //! Debug-only: requests a pause at the given point of the cancellation of a Program's operations, or ends it
@@ -2698,6 +2708,17 @@ public:
 
     //! Debug-only: ends the pause taken at the given point, if any
     DLLLOCAL static void dbgEndCancelPause(int point);
+
+    //! Debug-only: records that a requested point was reached, without pausing; for a thread that holds a lock
+    DLLLOCAL static void dbgNoteCancelPoint(int point);
+
+    //! Debug-only: returns the number of calls of callAbort() in this process
+    DLLLOCAL static int64 dbgAbortCalls();
+
+    //! Debug-only: parks the release of each object that \a make returns, drops the caller's references, and releases
+    //! them by ending the mark of their Program
+    DLLLOCAL static QoreHashNode* dbgParkProgramReleasesTest(const ResolvedCallReferenceNode* make,
+            ExceptionSink* xsink);
 
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer

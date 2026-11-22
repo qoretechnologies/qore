@@ -1732,17 +1732,8 @@ struct AsyncIoDebugCancelPause {
 
     //! Returns the state of the given point, which is never destroyed (see AsyncIoDebugHeldReleases::get())
     static AsyncIoDebugCancelPause& get(int point) {
-        static AsyncIoDebugCancelPause* step = new AsyncIoDebugCancelPause;
-        static AsyncIoDebugCancelPause* deferred = new AsyncIoDebugCancelPause;
-        static AsyncIoDebugCancelPause* barrier = new AsyncIoDebugCancelPause;
-        static AsyncIoDebugCancelPause* handed_back = new AsyncIoDebugCancelPause;
-        if (point == AsyncIoControllerPriv::DBG_CANCEL_SOCKET_BARRIER) {
-            return *barrier;
-        }
-        if (point == AsyncIoControllerPriv::DBG_CANCEL_BEFORE_HANDED_BACK) {
-            return *handed_back;
-        }
-        return point == AsyncIoControllerPriv::DBG_CANCEL_DEFERRED_RESULT ? *deferred : *step;
+        static AsyncIoDebugCancelPause* states = new AsyncIoDebugCancelPause[AsyncIoControllerPriv::DBG_CANCEL_POINT_COUNT];
+        return states[point];
     }
 };
 }
@@ -1789,6 +1780,26 @@ void AsyncIoControllerPriv::dbgTakeCancelPause(int point) {
     while (state.paused) {
         state.cond.wait(state.lock);
     }
+}
+
+void AsyncIoControllerPriv::dbgNoteCancelPoint(int point) {
+    AsyncIoDebugCancelPause& state = AsyncIoDebugCancelPause::get(point);
+    if (!state.requested.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(state.lock);
+    if (state.requested.load(std::memory_order_relaxed)) {
+        state.requested.store(false, std::memory_order_relaxed);
+        state.taken = true;
+        state.cond.broadcast();
+    }
+}
+
+//! the calls of callAbort() in this process; see dbgAbortCalls()
+static std::atomic<int64> dbg_abort_calls{0};
+
+int64 AsyncIoControllerPriv::dbgAbortCalls() {
+    return dbg_abort_calls.load(std::memory_order_acquire);
 }
 
 void AsyncIoControllerPriv::dbgEndCancelPause(int point) {
@@ -2942,6 +2953,48 @@ size_t QoreCallDispatcher::dbgParkedReleases(QoreProgram* pgm) {
     AutoLocker al(m);
     auto i = parked_program_releases.find(pgm);
     return i == parked_program_releases.end() ? 0 : i->second.size();
+}
+
+QoreHashNode* AsyncIoControllerPriv::dbgParkProgramReleasesTest(const ResolvedCallReferenceNode* make,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(qore_get_async_io_controller_if_exists(), xsink);
+    if (!ctrl) {
+        xsink->raiseException("DBG-ERROR", "no async I/O controller");
+        return nullptr;
+    }
+    ctrl->ensureCallDispatcher();
+    QoreCallDispatcher* cd = ctrl->call_dispatcher.load(std::memory_order_acquire);
+    QoreProgram* pgm = nullptr;
+    int64 parked = 0;
+    {
+        // the objects' last references are those of the release items once this ends
+        ValueHolder objects(make->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        const QoreListNode* l = objects->getType() == NT_LIST ? objects->get<const QoreListNode>() : nullptr;
+        if (!l || l->empty() || l->retrieveEntry(0).getType() != NT_OBJECT) {
+            xsink->raiseException("DBG-ERROR", "the code must return a list of objects");
+            return nullptr;
+        }
+        pgm = l->retrieveEntry(0).get<const QoreObject>()->getProgram();
+        cd->markProgramShuttingDown(pgm, xsink);
+        for (size_t i = 0; i < l->size(); ++i) {
+            QoreObject* obj = const_cast<QoreObject*>(l->retrieveEntry(i).get<const QoreObject>());
+            std::unique_ptr<AsyncIoDeferredRelease> refs(new AsyncIoDeferredRelease);
+            obj->ref();
+            refs->sock_obj = obj;
+            cd->dispatchReleaseAsync(refs.release());
+        }
+        parked = cd->dbgParkedReleases(pgm);
+    }
+    cd->clearProgramShuttingDown(pgm, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("parked", parked, xsink);
+    return rv.release();
 }
 
 QoreHashNode* AsyncIoControllerPriv::dbgParkProgramReleaseTest(QoreObject* obj, ExceptionSink* xsink) {
@@ -6571,6 +6624,10 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             for (auto* tp : live_targets) {
                 tp->notifier->notify();
             }
+#ifdef DEBUG
+            // a test orders this call's commands against the commands of a stopping thread
+            dbgTakeCancelPause(DBG_CANCEL_PROGRAM_SENT);
+#endif
             // Wait for all live I/O threads to complete the command
             {
                 AutoLocker al(m);
@@ -7021,6 +7078,11 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
             const int own_cancels = qore_async_io_own_program_cancels(this);
             program_cancels_in_stop += own_cancels;
             program_cancels_cond.broadcast();
+#ifdef DEBUG
+            if (active_program_cancels > program_cancels_in_stop) {
+                dbgNoteCancelPoint(DBG_CANCEL_STOP_WAITS);
+            }
+#endif
             while (active_program_cancels > program_cancels_in_stop) {
                 program_cancels_cond.wait(m);
             }
@@ -9436,6 +9498,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 #endif
     }
 
+#ifdef DEBUG
+    // a test sends a command that this thread finds in its last drain
+    dbgTakeCancelPause(DBG_CANCEL_BEFORE_EXIT_DRAIN);
+#endif
+
     // Stop accepting new commands before draining
     t.running.store(false, std::memory_order_release);
 
@@ -9818,6 +9885,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
     // Batch drain all pending commands from the MPSC queue.
     // The outer loop handles commands that arrive during acknowledge.
     while (true) {
+#ifdef DEBUG
+        // a test sends several commands that this thread then drains as one batch
+        dbgTakeCancelPause(DBG_CANCEL_BEFORE_COMMAND_DRAIN);
+#endif
         std::vector<Command> batch;
         {
             AutoLocker al(m);
@@ -12546,6 +12617,9 @@ void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,
 }
 
 void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink) {
+#ifdef DEBUG
+    dbg_abort_calls.fetch_add(1, std::memory_order_acq_rel);
+#endif
     ValueHolder rv(spop_obj->evalMethod("abort", nullptr, xsink), xsink);
     if (*xsink) {
         xsink->clear();
