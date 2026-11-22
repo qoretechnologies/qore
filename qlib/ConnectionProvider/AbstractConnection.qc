@@ -114,11 +114,27 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
             It is set to @ref True "True" by a successful ping (@ref handlePingSuccess(), called by @ref ping() and by
             connection monitoring) and by a successful connection made with @ref get() with \a connect
-            @ref True "True", and to @ref False "False" by a failed ping (@ref handlePingFailed()), also one that
-            throws its error.  An object acquired with \a connect @ref False "False" or with @ref getAsync() does not
-            change it, as it does not prove that the connection can be made (async objects connect on demand), and
-            neither does a connection that cannot be made with @ref get(), which sets @ref status to its error only.
-            A connection object restored by deserialization or copied keeps the value of the object it was made from.
+            @ref True "True", unless the last ping failed, and to @ref False "False" by a failed ping
+            (@ref handlePingFailed()), also one that throws its error.  It is not changed by:
+            - an object acquired with \a connect @ref False "False" or with @ref getAsync(), which does not prove that
+              the connection can be made (async objects connect on demand): a connection that is used only through
+              such objects, including the data providers that use them (the REST connections' data providers, for
+              example), stays not up until it is pinged
+              (<a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a> tracks marking it up
+              on the first successful request of an async client)
+            - a connection that cannot be made with @ref get() or @ref getAsync(), which sets @ref status to its error
+              only (issue #4852)
+            - an automatic ping (@ref PF_AUTOMATIC_PING) skipped because the connection disables automatic pings
+            - a successful connection made with @ref get() after a failed ping: a connection that a ping found down
+              comes up with a successful ping, whose transition a monitor handles
+
+            What a ping checks depends on the connection class (its \c pingImpl() method): by default it makes a connection
+            with @ref get(), and connection classes check more, such as a request to the server.
+
+            A connection object restored by deserialization or copied keeps the state of the object it was made from,
+            except that a connection serialized with the status \c "not checked" is restored as not up (one
+            serialized before %ConnectionProvider 3.1 has \c up @ref True "True" with that status).  The state is
+            changed and read under a lock, so @ref up and @ref status are consistent in @ref getInfo().
 
             @since %ConnectionProvider 3.1 a connection that was never checked is not up (it was up before)
         */
@@ -316,6 +332,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             caller
         */
         transient DataProvider::DataProviderSandboxCheck sandbox_check();
+
+        #! Serializes the changes of the connection's state (@ref up and @ref status) and their reads (issue #7236)
+        transient Mutex state_lock();
+
+        #! @ref True "True" while the last ping failed: then only a successful ping marks the connection up again
+        /** A connection made with get() marks only a connection that no failed ping marked down up, so that a
+            connection that a monitor saw go down comes up through a ping and its transition handling (issue #7236)
+        */
+        bool down_by_ping;
 
         #! The functional domains that the code that created the connection is restricted from (qore#6981)
         /** Set when the connection is created, also when it is deserialized: code restricted from the domains that
@@ -624,11 +649,16 @@ conn.checkSandboxAccess(True);
         @return a @ref PingInfo hash
 
         A successful ping marks the connection up (@ref handlePingSuccess()), and a failed ping marks it down
-        (@ref handlePingFailed()), also when @ref PF_THROW_EXCEPTION is set and the error is thrown; see @ref up
+        (@ref handlePingFailed()), also when @ref PF_THROW_EXCEPTION is set and the error is thrown; see @ref up.
+
+        An automatic ping (@ref PF_AUTOMATIC_PING) of a connection whose automatic pings are disabled (the
+        \c disable_automatic_pings option) checks nothing: it leaves @ref up, @ref status and @ref last_check as they
+        are and returns \c ok @ref True "True" with \c ping_info <tt>{"skipped": True}</tt>
 
         @since
         - %ConnectionProvider 2.0
-        - %ConnectionProvider 3.1 a failed ping marks the connection down also when its error is thrown
+        - %ConnectionProvider 3.1 a failed ping marks the connection down also when its error is thrown, and a
+          skipped automatic ping does not mark it up
     */
     hash<PingInfo> ping(int ping_flags = 0) {
         # before the ping: a refused caller does not change the status of the connection for its other users
@@ -644,12 +674,25 @@ conn.checkSandboxAccess(True);
         rv.opts = getSafeOptions(rv.opts);
         rv.url = safe_url;
 
-        last_check = now_us();
+        # issue #7236: an automatic ping of a connection whose automatic pings are disabled checks nothing, so it
+        # leaves the state of the connection (up, status and last_check) as it is
+        if ((ping_flags & PF_AUTOMATIC_PING) && disable_automatic_pings) {
+            return rv += {
+                "ok": True,
+                "time": 0s,
+                "info": "automatic pings are disabled; the connection was not checked",
+                "ping_info": {"skipped": True},
+            };
+        }
+
+        date start = now_us();
+        last_check = start;
 
         try {
             return pingIntern(rv);
         } catch (hash<ExceptionInfo> ex) {
-            date delta = now_us() - last_check;
+            # the start of the ping, not last_check, which a connection made by the ping sets as well
+            date delta = now_us() - start;
             # issue #7236: a failed ping marks the connection down, also when the error is thrown; a connection made
             # by the ping before it failed has marked it up
             handlePingFailed(delta, ex);
@@ -690,9 +733,7 @@ conn.checkSandboxAccess(True);
     #! performs the ping by executing get(); returns a @ref PingInfo hash
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
-        if (!(rv.ping_flags & PF_AUTOMATIC_PING) || !disable_automatic_pings) {
-            pingImpl();
-        }
+        pingImpl();
         date delta = now_us() - start;
         handlePingSuccess(delta);
         return rv += {
@@ -725,8 +766,14 @@ conn.checkSandboxAccess(True);
         serializable information about the connection, see @ref getInfoAsData()
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
-        hash<ConnectionInfo> h = cast<hash<ConnectionInfo>>(self{
-            "name", "display_name", "short_desc", "desc", "url", "monitor", "last_check", "updated", "status", "up",
+        # issue #7236: up and status are read together
+        hash<auto> state;
+        {
+            AutoLock al(state_lock);
+            state = self{"status", "up"};
+        }
+        hash<ConnectionInfo> h = cast<hash<ConnectionInfo>>(state + self{
+            "name", "display_name", "short_desc", "desc", "url", "monitor", "last_check", "updated",
             "loopback", "enabled", "locked", "supports_customization", "customization_status",
             "customization_timestamp", "debug_data", "tags", "children_can_support_apis",
             "children_can_support_records", "children_can_support_observers", "children_can_support_messages",
@@ -905,8 +952,8 @@ conn.checkSandboxAccess(True);
     /** calls @ref getImpl() to actually acquire the connection object
 
         With \a connect @ref True "True", a connection that is made marks the connection up (@ref up is set to
-        @ref True "True" and @ref status to \c "OK"), and one that cannot be made sets @ref status to its error
-        without marking the connection down
+        @ref True "True" and @ref status to \c "OK") unless the last ping failed, and one that cannot be made sets
+        @ref status to its error without marking the connection down; see @ref up
 
         @since %ConnectionProvider 3.1 a connection that is made marks the connection up
     */
@@ -933,7 +980,7 @@ conn.checkSandboxAccess(True);
             handleConnected();
             return o;
         } catch (hash<ExceptionInfo> ex) {
-            status = sprintf("%s: %s", ex.err, ex.desc);
+            setErrorStatus(ex);
             rethrow;
         }
     }
@@ -979,7 +1026,7 @@ conn.checkSandboxAccess(True);
             return o;
         } catch (hash<ExceptionInfo> ex) {
             last_check = now_us();
-            status = sprintf("%s: %s", ex.err, ex.desc);
+            setErrorStatus(ex);
             rethrow;
         }
     }
@@ -1176,8 +1223,7 @@ conn.checkSandboxAccess(True);
         @param delta the duration of the ping
     */
     handlePingSuccess(date delta) {
-        up = True;
-        status = "OK";
+        setState(True, "OK", False);
     }
 
     #! Handles a failed ping operation on the connection
@@ -1187,8 +1233,7 @@ conn.checkSandboxAccess(True);
         @param ex the exception that the ping raised
     */
     handlePingFailed(date delta, hash<ExceptionInfo> ex) {
-        up = False;
-        status = sprintf("%s: %s", ex.err, ex.desc);
+        setState(False, sprintf("%s: %s", ex.err, ex.desc), True);
     }
 
     #! Handles a failed ping operation on the connection
@@ -1198,8 +1243,7 @@ conn.checkSandboxAccess(True);
         @param err the error string
     */
     handlePingFailed(date delta, string err) {
-        up = False;
-        status = err;
+        setState(False, err, True);
     }
 
     #! Returns a ConnectionOptionInfo hash from a DataProviderOptionInfo hash
@@ -1255,15 +1299,40 @@ conn.checkSandboxAccess(True);
         return regex_subst(url, "^" + scheme, targ);
     }
 
-    #! Marks the connection up after a connection was made successfully with get()
+    #! Marks the connection up after a connection was made successfully with get(), unless a failed ping marked it down
     /** Sets @ref up to @ref True "True" and @ref status to \c "OK", as a successful ping does, but without calling
-        @ref handlePingSuccess(), which handles pings only
+        @ref handlePingSuccess(), which handles pings only.  A connection that the last ping found down is left down:
+        the transition to up is the business of the pings, which a monitor handles (only a ping changes the status of
+        a connection that was checked by a ping, as for issue #4852)
 
         @since %ConnectionProvider 3.1
     */
     private:internal handleConnected() {
-        up = True;
-        status = "OK";
+        AutoLock al(state_lock);
+        if (!down_by_ping) {
+            up = True;
+            status = "OK";
+        }
+    }
+
+    #! Sets the state of the connection atomically
+    /** @param up the new value of @ref up
+        @param status the new value of @ref status
+        @param down_by_ping if the state is set by a failed ping
+
+        @since %ConnectionProvider 3.1
+    */
+    private:internal setState(bool up, string status, bool down_by_ping) {
+        AutoLock al(state_lock);
+        self.up = up;
+        self.status = status;
+        self.down_by_ping = down_by_ping;
+    }
+
+    #! Sets the status of the connection after an error, without changing @ref up
+    private:internal setErrorStatus(hash<ExceptionInfo> ex) {
+        AutoLock al(state_lock);
+        status = sprintf("%s: %s", ex.err, ex.desc);
     }
 
     #! Starts customization for the object
@@ -1583,14 +1652,20 @@ scheme://user:pass@hostname:port/path
     private:internal deserializeMembers(hash<auto> members) {
         transient_info = {};
         sandbox_check = new DataProvider::DataProviderSandboxCheck();
+        state_lock = new Mutex();
         creator_restrictions = AbstractConnection::getCreatorRestrictions();
         checkCreation(members.name);
         # the transient and internal members are the deserializing process's own, never the serialized data's
         self += members - TransientMembers;
+        # issue #7236: a connection that was never checked is not up; a connection serialized before
+        # ConnectionProvider 3.1 has up True with the status "not checked"
+        if (status == "not checked") {
+            up = False;
+        }
     }
 
     #! The members that deserializeMembers() assigns itself
-    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions");
+    const TransientMembers = ("transient_info", "sandbox_check", "state_lock", "creator_restrictions");
 
     #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
     const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);
