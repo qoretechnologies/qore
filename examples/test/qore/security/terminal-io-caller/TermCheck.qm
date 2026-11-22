@@ -19,6 +19,27 @@ public bool sub allowed() {
     return SandboxManager::isTerminalIoAllowed();
 }
 
+#! a module object that runs the code that it is given; one that restricted code creates records its restrictions
+public class Runner {
+    private:internal {
+        code c;
+    }
+
+    constructor(code c) {
+        self.c = c;
+    }
+
+    #! runs the code; returns "ran" or the error
+    string run() {
+        try {
+            c();
+            return "ran";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
 #! uses a builtin that uses the terminal for the caller, with no check of its own; returns "used" or the error
 public string sub use(string how) {
     try {

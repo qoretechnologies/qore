@@ -2124,6 +2124,14 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
 
+//! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
+/** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
+    stack that is not a module's is trusted host code (a Program that is not sandboxed and whose options allow terminal
+    I/O), the provenance of objects and callbacks that restricted code created does not apply, so that the output
+    that the host chose (its loggers, its own code called from such an object) is written
+*/
+DLLLOCAL bool qore_caller_restricts_terminal_io();
+
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
 /** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if

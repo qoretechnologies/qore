@@ -103,8 +103,9 @@
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
-    also in library code, and the standard modules (also a host's logger) leave their terminal output out for it; see
-    @ref sandbox_terminal_io (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
+    also in library code, and the standard modules (also a host's logger, for the lines that library code writes for
+    such a caller) leave their terminal output out for it; see @ref sandbox_terminal_io
+    (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
 
     @par Code of a Program That May Not Control Threads Is Not Run in Other Threads
     The APIs that run code in another thread refuse a closure, call reference or object authored by code that may not

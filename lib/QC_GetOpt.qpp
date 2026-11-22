@@ -144,7 +144,7 @@ static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv,
 
     // the message is written to the terminal: for code that is restricted from terminal I/O, also when library code
     // parses for it, the error is raised as by parse2() instead (qore#7140)
-    if (qore_caller_restricts_domain(QDOM_TERMINAL_IO)
+    if (qore_caller_restricts_terminal_io()
             || (runtime_get_parse_options().getLo() & PO_NO_TERMINAL_IO)) {
         QoreStringNodeValueHelper err(l->retrieveEntry(0));
         return xsink->raiseException("GETOPT-ERROR", err.getReferencedValue());

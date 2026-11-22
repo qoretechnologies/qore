@@ -32,10 +32,11 @@ class TerminalIoCallerTest inherits QUnit::Test {
             "restricted-builtin-print", "restricted-builtin-stdout", "restricted-builtin-stderr",
             "restricted-builtin-stream", "restricted-builtin-streamwriter", "restricted-builtin-window",
             "restricted-getopt", "restricted-own-writers", "restricted-host-logger", "restricted-host-stream-logger",
+            "restricted-object-host-code", "restricted-object-own-code",
             "sandboxed-direct",
             "sandboxed-module");
         #! the only terminal output of the worker before its results: the host's own logger lines
-        const HostOutput = "host logger line\nhost stream logger line\n";
+        const HostOutput = "host logger line\nhost stream logger line\nhost code under a restricted object\n";
     }
 
     private {

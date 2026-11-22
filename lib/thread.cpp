@@ -7620,6 +7620,51 @@ bool qore_caller_restricts_domain(int64 domain) {
     return qore_get_calling_code_restrictions(td).hasAny(dom);
 }
 
+//! returns the nearest Program on the call stack that is not a module's, as qore_get_caller_domain_restrictions()
+//! walks to it, or nullptr if there is none (only module code is on the stack, or the walk stops at the barrier of
+//! the initialization of library code, or of a trusted build)
+static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib) {
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && (!mib || mib->build || td->current_pgm_ctx != mib->ctx || pgm != mib->pgm)) {
+        if (!qore_program_is_module_inline(pgm)) {
+            return pgm;
+        }
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            return nullptr;
+        }
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return old_pgm;
+        }
+    }
+    if (!mib && td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
+        return td->call_program_context;
+    }
+    return nullptr;
+}
+
+bool qore_caller_restricts_terminal_io() {
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return false;
+    }
+    // the terminal is the host's: when trusted host code (a Program that is not sandboxed and may use the terminal) is
+    // the nearest code that is not a module's, the output is the host's choice, also under an object or callback that
+    // restricted code created, whose provenance does not apply then; the restrictions of the modules on the way still
+    // do; otherwise the caller is checked as for any domain, provenance included (qore#7140)
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    const QoreProgram* host = qore_get_nearest_non_module_program(td, mib);
+    if (host && !qore_program_is_sandboxed(host)
+            && !qore_program_private::getParseOptions(*host).hasAny(QoreParseOptions(PO_NO_TERMINAL_IO))) {
+        return qore_get_caller_domain_restrictions(td, mib).hasAny(QoreParseOptions(PO_NO_TERMINAL_IO));
+    }
+    return qore_caller_restricts_domain(QDOM_TERMINAL_IO);
+}
+
 int64 qore_caller_denied_user_domains(int64 domain) {
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
     ThreadData* td = thread_data.get();

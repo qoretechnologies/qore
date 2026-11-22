@@ -2442,7 +2442,7 @@ int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
     assert(xsink);
     // a module is a capability, but the terminal is not lent to code that is restricted from it: library code that
     // serves such code writes nothing to the process's terminal for it (qore#7140)
-    if (!qore_caller_restricts_domain(QDOM_TERMINAL_IO)) {
+    if (!qore_caller_restricts_terminal_io()) {
         return 0;
     }
     xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
