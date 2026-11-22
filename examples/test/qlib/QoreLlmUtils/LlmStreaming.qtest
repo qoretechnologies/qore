@@ -377,6 +377,10 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Mistral: strict JSON projection retains reasoning", \mistralReasoningStrictTest());
         addTestCase("DeepSeek: reasoning-only frames and native history", \deepseekReasoningTest());
         addTestCase("DeepSeek: rejected strict output retains billable usage", \deepseekRejectedUsageTest());
+        addTestCase("Facade cancellation before the first response byte", \facadeWaiting());
+        addTestCase("Facade cancellation after the first chunk", \facadeMidstream());
+        addTestCase("Facade cancellation in an application callback", \facadeCallback());
+        addTestCase("Facade cancellation type and discovery", \facadeValidation());
         addTestCase("Cancel: a stream in flight is closed at once", \cancelInFlightStreamTest());
         addTestCase("Cancel: a stream awaiting its response is closed at once", \cancelStreamSetupTest());
         addTestCase("Cancel: silent and partial-event streams close without a callback", \cancelSilentStreamTest());
@@ -1429,6 +1433,98 @@ public class LlmStreamingTest inherits QUnit::Test {
         return new LlmBackend(<LlmBackendConfig>{"mode": "mistral",
             "url": "http://localhost:" + port, "protocol": "h1",
             "api_key": "test-key", "model": "mistral-medium-3-5", "max_retries": 0});
+    }
+
+    private facadeWaiting() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            foreach bool stream in ((False, True)) {
+                facadeWaitingFor(mode, stream);
+            }
+        }
+    }
+
+    private facadeWaitingFor(string mode, bool stream) {
+        server.script(<FakeReply>{"hold_headers": True});
+        LlmBackend llm = backendFor(mode);
+        LlmCancellation token();
+        hash<auto> request = {"messages": userMessage("hi"), "cancellation": token, "timeout_ms": 120000};
+        Counter done(1);
+        background cancelOnSignal(token, server.request_queue, done);
+        on_exit {
+            server.request_queue.push(False);
+            done.waitForZero();
+        }
+        int events = 0;
+        assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+            if (stream) {
+                llm.chatCompletionsStream(request, sub (hash<auto> chunk) { ++events; });
+            } else {
+                llm.chatCompletions(request);
+            }
+        });
+        assertTrue(server.client_closed.get(30s), "the transport closed while the mock withheld its headers");
+        assertEq(0, events);
+        assertEq(1, server.requests.size());
+        assertFalse(server.requests[0].body.hasKey("cancellation"));
+        assertTrue(request.cancellation === token);
+    }
+
+    private facadeMidstream() {
+        hash<FakeReply> reply = firstEventReply("http");
+        reply.await_close = True;
+        server.script(reply);
+        LlmBackend llm = openAiBackend();
+        LlmCancellation token();
+        list<string> deltas = ();
+        assertThrows("LLM-CANCELLED", "first token delivered", sub () {
+            llm.chatCompletionsStream({"messages": userMessage("hi"), "cancellation": token, "timeout_ms": 120000},
+                sub (hash<auto> chunk) {
+                    deltas += chunk.choices[0].delta.content;
+                    token.cancel("first token delivered");
+                });
+        });
+        assertEq(("first",), deltas);
+        assertTrue(server.client_closed.get(30s));
+        assertFalse(server.requests[0].body.hasKey("cancellation"));
+    }
+
+    private facadeCallback() {
+        LlmCancellation token();
+        Queue started();
+        Queue closed();
+        Counter done(1);
+        background cancelOnSignal(token, started, done);
+        on_exit {
+            started.push(False);
+            done.waitForZero();
+        }
+        hash<auto> wire;
+        LlmBackend backend(<LlmBackendConfig>{"mode": "callback", "model": "mock",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                wire = body;
+                int id = token.addHandler(sub () { closed.push(True); });
+                on_exit token.removeHandler(id);
+                started.push(True);
+                closed.get(30s);
+                throw "MOCK-TRANSPORT-CLOSED", "the application transport was interrupted";
+            }});
+        assertThrows("LLM-CANCELLED", "stopped by the user", \backend.chatCompletions(),
+            {"messages": userMessage("hi"), "cancellation": token});
+        assertEq("hi", wire.messages[0].content);
+        assertFalse(wire.hasKey("cancellation"));
+    }
+
+    private facadeValidation() {
+        assertTrue(inlist("cancellation", LlmBackend::SupportedFacadeControls));
+        LlmBackend llm = openAiBackend();
+        server.script(());
+        foreach auto invalid in ((False, "stop", {}, NULL, NOTHING, new Queue())) {
+            hash<auto> body = {"messages": userMessage("hi"), "cancellation": invalid};
+            assertThrows("LLM-REQUEST-ERROR", "cancellation", \llm.chatCompletions(), body);
+            assertThrows("LLM-REQUEST-ERROR", "cancellation", \llm.chatCompletionsStream(),
+                (body, sub (hash<auto> chunk) {}));
+        }
+        assertEq(0, server.requests.size());
     }
 
     cancelInFlightStreamTest() {

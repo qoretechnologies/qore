@@ -1348,6 +1348,11 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             return withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableEncodedRawRequest("POST", path, binary(make_json(body)),
+                        {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, getRequestTimeoutMs(opts),
+                        getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
                     {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, getRequestTimeoutMs(opts));
             }, opts);

@@ -662,7 +662,7 @@ public class LlmBackend {
     public {
         #! Caller-owned controls consumed by the OpenAI-compatible facade, never sent to a provider
         /** Callers can inspect this contract before relying on a control to bound billed work. */
-        const SupportedFacadeControls = ("max_retries", "tool_repair_enabled", "stream_progress");
+        const SupportedFacadeControls = ("max_retries", "tool_repair_enabled", "stream_progress", "cancellation");
     }
     private {
         #! Minimum visible-output budget for a schema-constrained forced-tool retry
@@ -1104,6 +1104,9 @@ if (resp.stop_reason == "tool_use") {
 
         @param body OpenAI-compatible chat-completions request
 
+        @note Pass an @ref LlmCancellation object as \c cancellation to stop this call from another thread.
+            Cancellation raises \c LLM-CANCELLED. The token stays local to this request and its repairs.
+
         @note The optional \c max_retries field is a provider-neutral Qore
             facade extension. It is consumed as a per-call transport retry
             override and is never forwarded in the provider-native wire body.
@@ -1129,6 +1132,7 @@ if (resp.stop_reason == "tool_use") {
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed
+        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation
         @throw LLM-REQUEST-ERROR \c tool_repair_enabled is present and is not a boolean
     */
     hash<auto> chatCompletions(hash<auto> body) {
@@ -1185,6 +1189,9 @@ if (resp.stop_reason == "tool_use") {
         OpenAI-compatible final response.
 
         @param body OpenAI-compatible chat-completions request
+
+        @note Pass an @ref LlmCancellation object as \c cancellation to stop this call from another thread.
+            Cancellation raises \c LLM-CANCELLED. The token stays local to this request and its repairs.
         @param delta_cb callback receiving OpenAI-compatible stream chunks
 
         @note Set the optional boolean \c tool_repair_enabled to \c False when the caller owns the budget for
@@ -1210,6 +1217,7 @@ if (resp.stop_reason == "tool_use") {
         @return accumulated OpenAI-compatible final response
 
         @throw LLM-ERROR the backend call failed
+        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation
         @throw LLM-REQUEST-ERROR \c tool_repair_enabled or \c stream_progress is present and is not a boolean
     */
     hash<auto> chatCompletionsStream(hash<auto> body,
@@ -1369,6 +1377,13 @@ if (resp.stop_reason == "tool_use") {
     #! Parses an OpenAI-compatible request for provider-native dispatch
     private hash<auto> parseOpenAiChatCompletionsRequest(hash<auto> body) {
         hash<LlmRequestOptions> options_h = <LlmRequestOptions>{};
+        if (body.hasKey("cancellation")) {
+            if (!(body.cancellation instanceof LlmCancellation)) {
+                throw "LLM-REQUEST-ERROR", "cancellation must be an LlmCancellation";
+            }
+            options_h.cancellation = body.cancellation;
+            remove body.cancellation;
+        }
         if (body.model.val()) {
             options_h.model = body.model;
         }
