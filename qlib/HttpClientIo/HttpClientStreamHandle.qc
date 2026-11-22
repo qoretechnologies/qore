@@ -126,6 +126,13 @@ public class HttpClientStreamHandle {
         #! True if a pending stream reservation is held on the connection
         bool reservation_held = False;
 
+        #! True while a thread submits a request on this stream
+        /** Set under @ref lock when a submission starts and cleared when it ends, whatever its result; while it is
+            set, @ref cancel() leaves the reservation and the request to the submitting thread (see
+            @ref endSubmission() and @ref recordSubmittedStream())
+        */
+        bool submitting = False;
+
         #! True if this stream's connection was reused from the pool (not freshly created)
         bool connection_reused = False;
 
@@ -577,6 +584,23 @@ public class HttpClientStreamHandle {
         return state == HttpClientStreamState::Cancelled;
     }
 
+    #! Ends a submission started on this stream
+    /** Called when a submission ends, whatever its result.  A stream cancelled during a submission that recorded no
+        stream ID (the submission failed or was refused) has its reservation released here, as @ref cancel() left it to
+        the submitting thread.
+    */
+    private endSubmission() {
+        bool release;
+        {
+            AutoLock al(lock);
+            submitting = False;
+            release = state == HttpClientStreamState::Cancelled && !exists stream_id;
+        }
+        if (release) {
+            releaseReservationIfHeld();
+        }
+    }
+
     #! Cancels a request whose stream was cancelled while the request was submitted
     /** @see recordSubmittedStream()
     */
@@ -743,6 +767,7 @@ public class HttpClientStreamHandle {
         @return the response hash with status_code, headers, body
 
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails
+        @throw HTTPCLIENT-CANCELLED the stream was cancelled (see @ref cancel())
         @throw HTTPCLIENT-TIMEOUT if the request times out, also while it waits for its connection to become ready
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the maximum response body size, as
         received or as decoded
@@ -814,7 +839,10 @@ public class HttpClientStreamHandle {
             # the request is being submitted: a cancel from now on leaves the reservation and the request to this
             # thread (see cancel())
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Submit request — returns {stream_id, future}
         # The Future is resolved by C++ PromiseAction on the I/O thread
@@ -830,13 +858,15 @@ public class HttpClientStreamHandle {
                     state = HttpClientStreamState::Pending;
                 }
             }
+            # the connection leaves the reservation of a request that it did not take to the caller
+            releaseReservationIfHeld();
             rethrow;
         }
         bool cancelled = recordSubmittedStream(submit_result.stream_id);
         Future f = submit_result.future;
         reservation_held = False;
         if (cancelled) {
-            # the Future is rejected with a cancellation error, which is raised below
+            # the Future is rejected with the protocol's cancellation error, raised below as HTTPCLIENT-CANCELLED
             cancelSubmittedRequest();
         }
 
@@ -850,7 +880,9 @@ public class HttpClientStreamHandle {
             return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding, decode_text,
                 decode_content);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "HTTPCLIENT-CANCELLED") {
+            # a cancelled request is rejected with the cancellation error of the connection's protocol
+            # (HTTP1-CANCELLED etc), which is raised as HTTPCLIENT-CANCELLED
+            if (ex.err =~ /^HTTP(CLIENT|[123])-CANCELLED$/) {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
             }
             # Let connection errors and the errors of requests that the server refused propagate unwrapped so the
@@ -904,7 +936,10 @@ public class HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Wait for connection to become ready if not already.  The
         # connect_timeout contract is enforced by the transport's own
@@ -988,7 +1023,10 @@ public class HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # The caller must ensure the connection is ready before calling this method.
         # submitAsyncWithNotifier() must never block (waitForReady() would deadlock
@@ -1064,7 +1102,10 @@ public class HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         if (!conn.isReady()) {
             {
@@ -1132,7 +1173,10 @@ public class HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Wait for connection to become ready if not already.  The
         # connect_timeout contract is enforced by the transport's own
@@ -1217,7 +1261,7 @@ public class HttpClientStreamHandle {
     */
     cancel() {
         *int sid;
-        bool submitting;
+        bool left_to_submitter;
         {
             AutoLock al(lock);
             if (state == HttpClientStreamState::Complete
@@ -1225,13 +1269,13 @@ public class HttpClientStreamHandle {
                     || state == HttpClientStreamState::Error) {
                 return;
             }
-            # an open stream without a stream ID is being submitted in another thread
-            submitting = state == HttpClientStreamState::Open && !exists stream_id;
+            # a stream whose request is being submitted, and has no stream ID yet, is left to the submitting thread
+            left_to_submitter = submitting && !exists stream_id;
             state = HttpClientStreamState::Cancelled;
             sid = stream_id;
         }
 
-        if (submitting) {
+        if (left_to_submitter) {
             # the submitting thread finds the stream cancelled: it releases the reservation if it has not sent the
             # request yet, and otherwise cancels the request once it has its stream ID (see recordSubmittedStream())
             return;

@@ -238,10 +238,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
             request_body_streaming = body_streaming;
             data_channel = new Channel(-1);
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
@@ -340,8 +343,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         Queue queue();
 

@@ -525,6 +525,17 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     private startNotifierPoll() {
         # Pin @c m across this method: see @ref sse_lock_pin
         Mutex m_pin = m;
+        # stopEvents() can run in another thread after the caller's check of the stop flag: it cancels the stream
+        # and reports that the observable closed, so the observable then does not report that it connected
+        bool stopped_before;
+        {
+            AutoLock al(m);
+            stopped_before = stop;
+        }
+        if (stopped_before) {
+            notifyClosed();
+            return;
+        }
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
         bool stopped_reentrantly;

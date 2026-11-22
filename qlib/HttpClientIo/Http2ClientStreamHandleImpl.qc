@@ -153,10 +153,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
             request_body_streaming = body_streaming;
             data_channel = new Channel(-1);
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
@@ -223,6 +226,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 request_body_streaming = False;
                 delete data_channel;
             }
+            releaseReservationIfHeld();
             if (notifier) {
                 checkSubmissionRefused(ex);
             }
@@ -249,8 +253,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         Queue queue();
 
@@ -297,6 +304,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 }
                 streaming = False;
             }
+            releaseReservationIfHeld();
             rethrow;
         }
         if (cancelled) {

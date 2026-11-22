@@ -36,6 +36,27 @@ class StartHookObservable inherits HttpClientStreamingIo::SseObservable {
     }
 }
 
+#! A client that runs a hook once, when its connection manager is next asked for
+/** The startup operation asks for the connection manager just before it acquires the stream of its request.
+*/
+class ManagerHookClient inherits RestClientIo {
+    public {
+        *code<nothing()> on_get_manager;
+    }
+
+    constructor(hash<auto> opts) : RestClientIo(opts) {
+    }
+
+    HttpClientIo::HttpClientConnectionManager getConnectionManager() {
+        if (on_get_manager) {
+            code<nothing()> hook = on_get_manager;
+            remove on_get_manager;
+            hook();
+        }
+        return RestClientIo::getConnectionManager();
+    }
+}
+
 #! A startup operation that reports when the async I/O controller has completed it
 class SignalingStartOperation inherits RestClientIoSseObservableStartOperation {
     public {
@@ -244,6 +265,8 @@ class RestClientIoSseStartCancelTest inherits QUnit::Test {
             \testStopDuringSubmission());
         addTestCase("an SSE startup stopped while start() submits its request on a ready connection ends the request, "
             "and start() returns", \testStopDuringSynchronousSubmission());
+        addTestCase("an SSE startup stopped before it acquires the stream of its request sends no request",
+            \testStopBeforeAcquire());
         set_return_value(main());
     }
 
@@ -392,5 +415,42 @@ class RestClientIoSseStartCancelTest inherits QUnit::Test {
         assertEq(tid, hook_tid, "the request is submitted in start()");
         checkRequestEnded(server, client);
         assertEq((), recorder.get(), "a startup stopped before the response delivers no event");
+    }
+
+    #! Stops the startup in start() just before it acquires the stream of its request, on a ready connection
+    testStopBeforeAcquire() {
+        ProbeServer server();
+        on_exit server.stop();
+
+        string url = "http://127.0.0.1:" + server.port;
+        ManagerHookClient client({"url": url, "timeout": 3600000});
+        on_exit client.close();
+        HttpClientIo::HttpClientConnection conn;
+        {
+            HttpClientIo::HttpClientStreamHandle warm_up = client.getConnectionManager().acquireStream(url);
+            conn = warm_up.getConnection();
+            assertEq(204, warm_up.request("GET", "/warm-up").status_code);
+        }
+
+        StartHookObservable obs(client.getConnectionManager(), url);
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        SignalingStartOperation op(client, obs);
+        int tid = gettid();
+        *int hook_tid;
+        client.on_get_manager = sub () {
+            hook_tid = gettid();
+            stop(obs, op);
+        };
+        op.start();
+        waitForStartup(op, tid, hook_tid);
+
+        assertEq(tid, hook_tid, "the startup acquires its stream in start()");
+        assertEq(0, conn.getPendingStreamCount(), "no stream of the stopped startup is left reserved");
+        # the request sent afterwards is the first one on the connection after the warm-up
+        assertEq(204, client.getConnectionManager().acquireStream(url).request("GET", "/after").status_code);
+        assertEq({"conn": 1, "path": "/warm-up"}, server.requests.get(60s));
+        assertEq({"conn": 1, "path": "/after"}, server.requests.get(60s), "the stopped startup sent no request");
+        assertEq((), recorder.get(), "a stopped startup delivers no event");
     }
 }

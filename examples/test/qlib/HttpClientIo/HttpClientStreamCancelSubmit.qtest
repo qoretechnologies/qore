@@ -76,6 +76,29 @@ class AcquireHookManager inherits HttpClientConnectionManager {
     }
 }
 
+#! An observable that runs a hook once, just before it starts its notifier poll
+/** startNotifierPoll() runs after the observable's own check of its stop flag, so a hook that stops the observable
+    there stops it in the window between that check and the notification of EVENT_SSE_CONNECTED.
+*/
+class NotifierPollHookObservable inherits HttpClientStreamingIo::SseObservable {
+    public {
+        *code<nothing()> before_poll;
+    }
+
+    constructor(HttpClientConnectionManager mgr, string url) : HttpClientStreamingIo::SseObservable(mgr, url, "POST",
+            "/held", NOTHING, binary("body")) {
+    }
+
+    private startNotifierPoll() {
+        if (before_poll) {
+            code<nothing()> hook = before_poll;
+            remove before_poll;
+            hook();
+        }
+        HttpClientStreamingIo::SseObservable::startNotifierPoll();
+    }
+}
+
 #! Records the events an observable delivers
 class EventRecorder inherits DataProvider::Observer {
     private {
@@ -221,6 +244,18 @@ class HttpClientStreamCancelSubmitTest inherits QUnit::Test {
             \testStartStreaming());
         addTestCase("a stream cancelled while startSseStreaming() submits its request ends the request",
             \testStartSseStreaming());
+        addTestCase("a stream cancelled while request() submits its request raises HTTPCLIENT-CANCELLED and ends "
+            "the request", \testRequest());
+        addTestCase("a stream cancelled while submitAsyncNonBlocking() submits its request ends the request",
+            \testSubmitAsyncNonBlocking());
+        addTestCase("a stream cancelled from another thread while its request is submitted ends the request",
+            \testCancelFromAnotherThread());
+        addTestCase("a stream cancelled after a start that failed before submission releases its reservation",
+            \testCancelAfterFailedStart());
+        addTestCase("a stream cancelled while request() fails to submit its request releases its reservation",
+            \testCancelDuringFailedRequestSubmission());
+        addTestCase("an SSE observable stopped just before it reports that it connected reports only that it closed",
+            \testObservableStoppedBeforeConnected());
         addTestCase("an SSE observable stopped before its stream is recorded sends no request",
             \testObservableStoppedAfterAcquire());
         addTestCase("an SSE observable stopped while its request is submitted ends the request",
@@ -384,6 +419,131 @@ class HttpClientStreamCancelSubmitTest inherits QUnit::Test {
         EventRecorder recorder();
         obs.registerObserver(recorder);
         logger.arm("starting SSE streaming request:", sub () { obs.stopEvents(); });
+        obs.observersReady();
+
+        assertEq((HttpClientStreamingIo::EVENT_SSE_CLOSED,), recorder.get(),
+            "a stopped observable reports only that it closed");
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    testRequest() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        # logged by the connection just before it submits the request
+        logger.arm("submitting request: ", sub () { stream.cancel(); });
+        assertThrows("HTTPCLIENT-CANCELLED", "request was cancelled", \stream.request(),
+            ("POST", "/held", {"Content-Type": "text/plain"}, "body"));
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    testSubmitAsyncNonBlocking() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        # the non-blocking variant needs a ready connection
+        assertTrue(stream.getConnection().waitForReady(60s));
+        logger.arm("submitting async request \\(non-blocking\\):", sub () { stream.cancel(); });
+        hash<auto> result = stream.submitAsyncNonBlocking("POST", "/held", {"Content-Type": "text/plain"}, "body");
+        assertFutureCancelled(result.future);
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    #! Cancels the stream from another thread while the submitting thread waits at the hook
+    testCancelFromAnotherThread() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        Counter go(1);
+        Counter cancelled(1);
+        background sub () {
+            on_exit cancelled.dec();
+            if (!go.waitForZero(60s)) {
+                stream.cancel();
+            }
+        }();
+        # the submitting thread waits until the other thread has cancelled the stream
+        logger.arm("submitting async request:", sub () {
+            go.dec();
+            cancelled.waitForZero(60s);
+        });
+        on_exit {
+            # the cancelling thread ends even if the hook did not run
+            if (go.getCount()) {
+                go.dec();
+            }
+            cancelled.waitForZero(60s);
+        }
+        hash<auto> result = stream.submitAsync("POST", "/held", {"Content-Type": "text/plain"}, "body");
+        assertEq(0, cancelled.getCount(), "the other thread cancelled the stream during the submission");
+        assertFutureCancelled(result.future);
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    #! A start that fails before it submits its request leaves the stream to a later cancel(), which releases the
+    #! stream's reservation
+    testCancelAfterFailedStart() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        HttpClientConnection conn = stream.getConnection();
+        assertTrue(conn.waitForReady(60s));
+        assertEq(1, conn.getPendingStreamCount(), "the stream holds a reservation");
+        # the start fails after the stream was opened and before the request is submitted
+        logger.arm("starting SSE streaming request:", sub () { throw "TEST-ERROR", "the start fails"; });
+        assertThrows("TEST-ERROR", \stream.startSseStreaming(), ("GET", "/held"));
+        stream.cancel();
+        assertEq(0, conn.getPendingStreamCount(), "cancel() releases the reservation of the stream");
+        checkRequestEnded(server, mgr, "/held");
+    }
+
+    #! request() fails to submit its request after the stream was cancelled; the reservation is released
+    testCancelDuringFailedRequestSubmission() {
+        ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        HttpClientConnection conn = stream.getConnection();
+        assertTrue(conn.waitForReady(60s));
+        # the connection's submission fails after the stream was cancelled
+        logger.arm("submitting request: ", sub () {
+            stream.cancel();
+            throw "TEST-ERROR", "the submission fails";
+        });
+        assertThrows("TEST-ERROR", \stream.request(), ("POST", "/held", NOTHING, "body"));
+        assertEq(0, conn.getPendingStreamCount(), "the reservation of the cancelled stream is released");
+    }
+
+    #! Stops an observable after its stream was started, before it reports that it connected
+    testObservableStoppedBeforeConnected() {
+        ProbeServer server();
+        on_exit server.stop();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        NotifierPollHookObservable obs(mgr, "http://127.0.0.1:" + server.port);
+        EventRecorder recorder();
+        obs.registerObserver(recorder);
+        obs.before_poll = sub () { obs.stopEvents(); };
         obs.observersReady();
 
         assertEq((HttpClientStreamingIo::EVENT_SSE_CLOSED,), recorder.get(),

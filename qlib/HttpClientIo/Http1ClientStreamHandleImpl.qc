@@ -140,7 +140,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Create unbounded channel for data delivery
         data_channel = new Channel(-1);
@@ -239,7 +242,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         Queue queue();
         streaming = True;
