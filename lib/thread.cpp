@@ -4963,6 +4963,98 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     qore_type_retirement_exit_scan(td);
 }
 
+//! Sets the call Program context \a pgm of the frame of a method or a closure if the thread does not have it already
+/** @return true if the call Program context was changed, in which case \a old_call_pgm is the caller's
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_switch_method_call_program_context(ThreadData* td, QoreProgram* pgm,
+        QoreProgram*& old_call_pgm) {
+    // the frame has the call Program context of its caller already, as for a call within a class's Program
+    if (!pgm || td->call_program_context == pgm) {
+        return false;
+    }
+    old_call_pgm = td->call_program_context;
+    td->call_program_context = pgm;
+    return true;
+}
+
+//! The part of qore_set_method_call_program_context() for a class whose source Program is not the current Program
+/** The class's source Program, which is referenced unless it has module lifetime (see
+    qore_class_private::getSourceProgramForCall()), or else the Program of the object
+*/
+static QORE_INTERN_NOINLINE bool qore_set_method_call_program_context_other(ThreadData* td,
+        const qore_class_private* c, QoreObject* obj, QoreProgram*& old_call_pgm, QoreProgram*& referenced_class_pgm) {
+    bool referenced = false;
+    QoreProgram* pgm = c ? c->getSourceProgramForCall(td->current_pgm, referenced) : nullptr;
+    if (referenced) {
+        referenced_class_pgm = pgm;
+    }
+    if (!pgm && obj) {
+        pgm = obj->getProgram();
+    }
+    return qore_switch_method_call_program_context(td, pgm, old_call_pgm);
+}
+
+//! Sets the call Program context of the frame of a method or a closure as CodeContextHelperBase::init() does (qore#7079)
+/** The source Program of the class \a c, which is kept for the frame unless the thread runs in it already, or else the
+    Program of the object \a obj; nothing is written if the thread has that context already.  The current Program is
+    read from \a td, and the usual case (the class's source Program is the current Program) is tested inline, so that
+    the fast call paths make no other call for it.
+
+    @param old_call_pgm set to the caller's call Program context if it was changed
+    @param referenced_class_pgm set to the class's source Program if a reference to it was taken
+
+    @return true if the call Program context was changed
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_set_method_call_program_context(ThreadData* td, const qore_class_private* c,
+        QoreObject* obj, QoreProgram*& old_call_pgm, QoreProgram*& referenced_class_pgm) {
+    if (c && c->isSourceProgram(td->current_pgm)) {
+        return qore_switch_method_call_program_context(td, td->current_pgm, old_call_pgm);
+    }
+    return qore_set_method_call_program_context_other(td, c, obj, old_call_pgm, referenced_class_pgm);
+}
+
+//! Releases the reference to the class's source Program that qore_set_method_call_program_context() took
+static QORE_INTERN_NOINLINE void qore_release_method_call_program(QoreProgram* referenced_class_pgm,
+        ExceptionSink* xsink) {
+    // released once the frame no longer refers to it
+    if (xsink) {
+        referenced_class_pgm->deref(xsink);
+    } else {
+        // a path without an exception sink: an exception of the release is reported by the local sink
+        ExceptionSink xs;
+        referenced_class_pgm->deref(&xs);
+    }
+}
+
+//! Restores the call Program context that qore_set_method_call_program_context() changed and releases the reference
+//! that it took, if any
+static QORE_INTERN_ALWAYS_INLINE void qore_restore_method_call_program_context(ThreadData* td, bool switched,
+        QoreProgram* old_call_pgm, QoreProgram* referenced_class_pgm, ExceptionSink* xsink) {
+    if (switched) {
+        td->call_program_context = old_call_pgm;
+    }
+    if (referenced_class_pgm) {
+        qore_release_method_call_program(referenced_class_pgm, xsink);
+    }
+}
+
+CalleeProgramContextHelper::CalleeProgramContextHelper(void* thread_data_ptr, const qore_class_private* cls,
+        ExceptionSink* xsink) : CalleeContextHelper(thread_data_ptr, cls), call_pgm_xsink(xsink) {
+    call_pgm_switched = qore_set_method_call_program_context(td, cls, nullptr, old_call_pgm, referenced_class_pgm);
+    call_pgm_restore = call_pgm_switched || referenced_class_pgm;
+}
+
+CalleeProgramContextHelper::CalleeProgramContextHelper(QoreListNode* argv, ExceptionSink* xsink,
+        const qore_class_private* cls) : CalleeContextHelper(argv, xsink, cls), call_pgm_xsink(xsink) {
+    call_pgm_switched = qore_set_method_call_program_context(td, cls, nullptr, old_call_pgm, referenced_class_pgm);
+    call_pgm_restore = call_pgm_switched || referenced_class_pgm;
+}
+
+void CalleeProgramContextHelper::restoreCallProgramContext() {
+    qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm,
+        call_pgm_xsink);
+}
+
 CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
         : td(static_cast<ThreadData*>(thread_data_ptr)) {
     assert(td && td == thread_data.get());
@@ -5021,8 +5113,8 @@ void CalleeContextHelper::restoreArgv() {
     td->current_implicit_arg = old_argv;
 }
 
-ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
-    ThreadData* td  = thread_data.get();
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c)
+        : td(thread_data.get()) {
     old_obj = td->current_obj;
     old_class = td->current_class;
     td->current_obj = obj;
@@ -5035,8 +5127,28 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     do_rc_update = true;
 }
 
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
+        QoreSetCallProgramContext, ExceptionSink* xsink) : td(thread_data.get()), call_pgm_xsink(xsink) {
+    // as the constructor without the call Program context, in one call
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    td->current_obj = obj;
+    td->current_class = c;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    old_rc_class = rc.getClass();
+    rc.setObject(obj);
+    rc.setClass(c);
+    do_rc_update = true;
+    call_pgm_switched = qore_set_method_call_program_context(td, c, obj, old_call_pgm, referenced_class_pgm);
+}
+
 ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
-    ThreadData* td  = thread_data.get();
+    // the call Program context is restored first, as the frame's helper for it was destroyed first
+    if (call_pgm_switched || referenced_class_pgm) {
+        qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm,
+            call_pgm_xsink);
+    }
     td->current_obj = old_obj;
     td->current_class = old_class;
     if (do_rc_update) {
@@ -5234,47 +5346,6 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
         do_program_context = true;
     } else {
         do_program_context = false;
-    }
-}
-
-MethodCallProgramContextHelper::MethodCallProgramContextHelper(const qore_class_private* c, QoreObject* obj,
-        ExceptionSink* xsink) : xsink(xsink) {
-    // as CodeContextHelperBase::init(): the class's source Program, which is kept for the frame unless the thread runs
-    // in it already, or else the Program of the object
-    bool referenced = false;
-    QoreProgram* pgm = c ? c->getSourceProgramForCall(referenced) : nullptr;
-    if (referenced) {
-        referenced_class_pgm = pgm;
-    }
-    if (!pgm && obj) {
-        pgm = obj->getProgram();
-    }
-    if (!pgm) {
-        return;
-    }
-    ThreadData* t = thread_data.get();
-    // the frame has the call Program context of its caller already, as for a call within a class's Program
-    if (t->call_program_context == pgm) {
-        return;
-    }
-    td = t;
-    old_call_program_context = t->call_program_context;
-    t->call_program_context = pgm;
-}
-
-MethodCallProgramContextHelper::~MethodCallProgramContextHelper() {
-    if (td) {
-        td->call_program_context = old_call_program_context;
-    }
-    // released once the frame no longer refers to it
-    if (referenced_class_pgm) {
-        if (xsink) {
-            referenced_class_pgm->deref(xsink);
-        } else {
-            // a path without an exception sink: an exception of the release is reported by the local sink
-            ExceptionSink xs;
-            referenced_class_pgm->deref(&xs);
-        }
     }
 }
 

@@ -6895,9 +6895,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         ? inst->variant : getSingleInterpreterMethodVariant(method);
     const qore_class_private* method_ctx = eval_variant
         ? METHV_const(eval_variant)->getClassPriv() : qore_class_private::get(*method->getClass());
-    ObjectSubstitutionHelper osh(self, method_ctx);
-    // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(method_ctx, self, xsink);
+    // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+    ObjectSubstitutionHelper osh(self, method_ctx, QoreSetCallProgramContext(), xsink);
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
 
@@ -7248,11 +7247,9 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         // the parameters are bound in the caller's object and class context; the body of a static method runs
         // without an object in the class of its variant, as a call of the method does (UserVariantBase::eval()), and
         // so is the check of its return value, before the parameters are released
-        CalleeContextHelper method_context(thread_data,
-            METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv());
-        // the call Program context of the method's frame, as a call of the method sets it (qore#7079)
-        MethodCallProgramContextHelper mpch(METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv(), nullptr,
-            xsink);
+        // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
+        CalleeProgramContextHelper method_context(thread_data,
+            METHV_const(uvb->getAbstractFunctionVariant())->getClassPriv(), xsink);
         ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
             nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
             nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
@@ -7567,18 +7564,18 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         // the captured object is checked where the closure uses it (self, its members and its methods), as with
         // AST and JIT execution: a closure that does not use the object can be called after it was destroyed
         closure_self_ctx.emplace(self);
-        object_ctx.emplace(self, cb->getClassCtx());
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        object_ctx.emplace(self, cb->getClassCtx(), QoreSetCallProgramContext(), xsink);
     }
     // A closure without a captured object runs without an object in the class context it was created in, as with AST
     // and JIT execution (see execClosureDirect() in JITRuntime.cpp): a closure created in a static method keeps the
     // lexical class context of the method, which gives it access to the class's private members (such as a private
     // constructor), and one created outside a class has no class context, whatever its caller's
-    std::optional<CalleeContextHelper> closure_context;
+    std::optional<CalleeProgramContextHelper> closure_context;
     if (!self) {
-        closure_context.emplace(get_thread_data_for_native_calls(), cb->getClassCtx());
+        // the call Program context of the closure's frame is set as a call of the closure sets it (qore#7079)
+        closure_context.emplace(get_thread_data_for_native_calls(), cb->getClassCtx(), xsink);
     }
-    // the call Program context of the closure's frame, as a call of the closure sets it (qore#7079)
-    MethodCallProgramContextHelper mpch(cb->getClassCtx(), self, xsink);
 
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
