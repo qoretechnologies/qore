@@ -110,6 +110,17 @@ class DefaultCharsetTest inherits QUnit::Test {
             "binary(ARGV[0]).toHex(), ARGV[0].isEncodingValid());' \"$(printf '\\303\\251')\" 2>&1", libqore_dir,
             libqore_dir, qore_bin);
         assertEq("UTF-8 UTF-8 c3a9 True", backquote(cmd), "UTF-8");
+
+        # short arguments (a string of up to 6 bytes can be held inline, with no string node: issue #7038), in ARGV
+        # and in QORE_ARGV ("-b"): every string is tagged with the default encoding and keeps its bytes; the child
+        # prints ARGV, the encodings of the strings of ARGV and QORE_ARGV, and whether QORE_ARGV has "-b"
+        foreach list<string> c in ((("ISO-8859-1", "--charset=ISO-8859-1"), ("UTF-8", ""))) {
+            cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE LANG=C LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "-b %s -e 'printf(\"%%y %%y %%y\", ARGV, keys (map {$1.encoding(): True}, ARGV + QORE_ARGV), "
+                "inlist(\"-b\", QORE_ARGV));' a bc def 2>&1", libqore_dir, libqore_dir, qore_bin, c[1]);
+            assertEq(sprintf("[\"a\", \"bc\", \"def\"] [\"%s\"] True", c[0]), backquote(cmd),
+                c[0] + ": short arguments");
+        }
     }
 
     #! the encodings that are refused as the default encoding, given with --charset and with QORE_CHARSET
