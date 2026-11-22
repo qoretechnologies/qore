@@ -430,9 +430,8 @@ static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConf
                 rel.c_str());
             return QoreValue();
         }
-        // the path of the module that the search found there
-        std::string found = std::string(dir_val.get<const QoreStringNode>()->c_str()) + "/" + rel;
-        trusted = QMM.isTrustedModulePath(found.c_str(), &load_path);
+        QoreModuleFoundIn found_in{dir_val.get<const QoreStringNode>()->c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path->c_str(), &load_path, &found_in);
     } else {
         trusted = QMM.isTrustedModulePath(path->c_str(), &load_path);
     }
