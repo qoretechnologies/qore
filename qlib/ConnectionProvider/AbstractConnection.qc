@@ -102,10 +102,27 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         *date last_check;
 
         #! status string; in case of a connection error this string will be the error string
+        /** \c "not checked" until the connection is checked by a ping or a connection is made with it; then \c "OK"
+            or the error string of the last failed check
+        */
         string status = "not checked";
 
-        #! connection status flag; set by monitoring or explicit pings/connections
-        bool up = True;
+        #! connection status flag: @ref True "True" only when the connection has been proven to be up
+        /** A connection is not up until it is proven to be up: this flag is @ref False "False" for a connection that
+            has never been checked (then @ref status is \c "not checked" and @ref last_check is @ref nothing, so a
+            reader can tell a connection that was never checked from one that is down).
+
+            It is set to @ref True "True" by a successful ping (@ref handlePingSuccess(), called by @ref ping() and by
+            connection monitoring) and by a successful connection made with @ref get() with \a connect
+            @ref True "True", and to @ref False "False" by a failed ping (@ref handlePingFailed()), also one that
+            throws its error.  An object acquired with \a connect @ref False "False" or with @ref getAsync() does not
+            change it, as it does not prove that the connection can be made (async objects connect on demand), and
+            neither does a connection that cannot be made with @ref get(), which sets @ref status to its error only.
+            A connection object restored by deserialization or copied keeps the value of the object it was made from.
+
+            @since %ConnectionProvider 3.1 a connection that was never checked is not up (it was up before)
+        */
+        bool up = False;
 
         #! monitoring flag
         bool monitor;
@@ -606,7 +623,12 @@ conn.checkSandboxAccess(True);
 
         @return a @ref PingInfo hash
 
-        @since %ConnectionProvider 2.0
+        A successful ping marks the connection up (@ref handlePingSuccess()), and a failed ping marks it down
+        (@ref handlePingFailed()), also when @ref PF_THROW_EXCEPTION is set and the error is thrown; see @ref up
+
+        @since
+        - %ConnectionProvider 2.0
+        - %ConnectionProvider 3.1 a failed ping marks the connection down also when its error is thrown
     */
     hash<PingInfo> ping(int ping_flags = 0) {
         # before the ping: a refused caller does not change the status of the connection for its other users
@@ -624,15 +646,16 @@ conn.checkSandboxAccess(True);
 
         last_check = now_us();
 
-        if (ping_flags & PF_THROW_EXCEPTION) {
-            return pingIntern(rv);
-        }
-
         try {
             return pingIntern(rv);
         } catch (hash<ExceptionInfo> ex) {
             date delta = now_us() - last_check;
+            # issue #7236: a failed ping marks the connection down, also when the error is thrown; a connection made
+            # by the ping before it failed has marked it up
             handlePingFailed(delta, ex);
+            if (ping_flags & PF_THROW_EXCEPTION) {
+                rethrow;
+            }
             return rv += {
                 "ok": False,
                 "time": delta,
@@ -880,6 +903,12 @@ conn.checkSandboxAccess(True);
 
     #! returns the underlying connection object
     /** calls @ref getImpl() to actually acquire the connection object
+
+        With \a connect @ref True "True", a connection that is made marks the connection up (@ref up is set to
+        @ref True "True" and @ref status to \c "OK"), and one that cannot be made sets @ref status to its error
+        without marking the connection down
+
+        @since %ConnectionProvider 3.1 a connection that is made marks the connection up
     */
     object get(bool connect = True, *hash<auto> rtopts) {
         # the common path is one call: only a sandboxed caller is checked
@@ -895,11 +924,13 @@ conn.checkSandboxAccess(True);
         on_exit
             last_check = now_us();
 
-        # issue #4852: do not change the connection status based on whether or not a connection can be made
+        # issue #4852: a connection that cannot be made does not mark the connection down; only a failed ping does
 
         try {
             object o = getImpl(True, rtopts);
             postProcess(o);
+            # issue #7236: a connection made with the connection proves that it is up
+            handleConnected();
             return o;
         } catch (hash<ExceptionInfo> ex) {
             status = sprintf("%s: %s", ex.err, ex.desc);
@@ -939,14 +970,15 @@ conn.checkSandboxAccess(True);
             return o;
         }
 
-        on_exit
-            last_check = now_us();
-
         try {
             object o = getAsyncImpl(True, rtopts);
             postProcess(o);
+            # issue #7236: an async object does not prove that the connection is up, as async objects connect on
+            # demand (getAsyncImpl() of the HTTP, REST and FTP connections ignores "connect"), so it is no check of
+            # the connection and changes neither its state nor last_check
             return o;
         } catch (hash<ExceptionInfo> ex) {
+            last_check = now_us();
             status = sprintf("%s: %s", ex.err, ex.desc);
             rethrow;
         }
@@ -1139,18 +1171,32 @@ conn.checkSandboxAccess(True);
     }
 
     #! Handles a successful ping operation on the connection
+    /** Marks the connection up: sets @ref up to @ref True "True" and @ref status to \c "OK"
+
+        @param delta the duration of the ping
+    */
     handlePingSuccess(date delta) {
         up = True;
         status = "OK";
     }
 
     #! Handles a failed ping operation on the connection
+    /** Marks the connection down: sets @ref up to @ref False "False" and @ref status to the error
+
+        @param delta the duration of the ping
+        @param ex the exception that the ping raised
+    */
     handlePingFailed(date delta, hash<ExceptionInfo> ex) {
         up = False;
         status = sprintf("%s: %s", ex.err, ex.desc);
     }
 
     #! Handles a failed ping operation on the connection
+    /** Marks the connection down: sets @ref up to @ref False "False" and @ref status to \a err
+
+        @param delta the duration of the ping
+        @param err the error string
+    */
     handlePingFailed(date delta, string err) {
         up = False;
         status = err;
@@ -1207,6 +1253,17 @@ conn.checkSandboxAccess(True);
         }
         string targ = "http" + (ssl ? "s" : "");
         return regex_subst(url, "^" + scheme, targ);
+    }
+
+    #! Marks the connection up after a connection was made successfully with get()
+    /** Sets @ref up to @ref True "True" and @ref status to \c "OK", as a successful ping does, but without calling
+        @ref handlePingSuccess(), which handles pings only
+
+        @since %ConnectionProvider 3.1
+    */
+    private:internal handleConnected() {
+        up = True;
+        status = "OK";
     }
 
     #! Starts customization for the object

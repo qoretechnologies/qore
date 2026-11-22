@@ -472,7 +472,8 @@ public class ConnectionProviderTest inherits QUnit::Test {
         # Test single ping success
         {
             HttpConnection hc("test-success", "test", url);
-            assertTrue(hc.getInfo().up);
+            # never checked: not up (issue #7236)
+            assertFalse(hc.getInfo().up);
             TestPollingConnectionMonitor pcm();
             on_exit delete pcm;
             pcm.add(hc);

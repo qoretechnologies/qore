@@ -223,9 +223,12 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                 Socket::poll((info,), info.poll_timeout_ms ?? 1000);
             }
         }
+        date delta = now_us() - start;
+        # issue #7236: a successful ping marks the connection up
+        handlePingSuccess(delta);
         return rv += {
             "ok": True,
-            "time": now_us() - start,
+            "time": delta,
             "info": "OK",
         };
     }
