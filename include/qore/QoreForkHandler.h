@@ -230,6 +230,13 @@ DLLEXPORT bool qore_fork_child_exits_quickly();
     \c _exit() if such a compilation still runs, as its static objects, which the compilation uses, would be destroyed
     under it by \c exit().
 
+    If the module cleanup of qore_cleanup() stopped waiting for work that it handed over to other threads (once the
+    grace period after its deadline had passed: \c QORE_MODULE_CLEANUP_HANDOVER_GRACE), those threads can still run in
+    the library, which qore_cleanup() then leaves allocated; this function then also ends the process with
+    \c _exit(), as the static objects of the library, which those threads use, would be destroyed under them by
+    \c exit().  A program that embeds the library and ends without this function must then not let \c exit() run
+    while those threads run.
+
     @param rc the exit status of the process
 
     @since %Qore 3.0

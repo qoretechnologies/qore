@@ -532,11 +532,15 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)outside: handle 0, release: False\n", out, "outside of work of the cleanup: " + out);
         assertRegex("(^|\n)handle taken: True\n", out, "in work of the cleanup: " + out);
         if (handover == "twice") {
-            assertRegex("(^|\n)first release: True\nsecond release: False\n", out, "released once: " + out);
+            # (the warnings of the cleanup, on stderr, can come in between)
+            assertRegex("(^|\n)first release: True\n(?:warning: [^\n]*\n)*second release: False\n", out,
+                "released once: " + out);
             assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
             assertRegex("(^|\n)later module data deleted\n", out, "the cleanup goes on with the next module: " + out);
         } else if (handover == "drop") {
-            assertRegex("(^|\n)release: True\ncode discarded\n", out, "the code is discarded: " + out);
+            # (the warnings of the cleanup, on stderr, can come in between)
+            assertRegex("(^|\n)release: True\n(?:warning: [^\n]*\n)*code discarded\n", out, "the code is discarded: "
+                + out);
             assertNRegex("the discarded code ran", out, "the discarded code does not run: " + out);
             # the handle of the discarded code is released with it: the cleanup neither waits for it nor reports it
             assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
