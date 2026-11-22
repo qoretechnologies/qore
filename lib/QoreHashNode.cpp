@@ -34,6 +34,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
@@ -1046,6 +1047,12 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
     if (priv->weakRefs.hasHolders()) [[unlikely]] {
         priv->weak_hold = true;
         ref();
+#ifdef DEBUG
+        // the free of a hash that has weak holders starts; see dbg_hold_container_free()
+        if (qore_dbg_container_free_hook_t hook = qore_dbg_container_free_hook.load()) {
+            hook("hash");
+        }
+#endif
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
