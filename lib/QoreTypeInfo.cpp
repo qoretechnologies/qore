@@ -6307,6 +6307,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
                 if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
+                    // a variable of the reference's type whose value the assignment below would leave as it is is
+                    // not read and assigned (qore#7264); -1: the exception that resolving the reference raises, as
+                    // for the error described below
+                    if (qore_reference_binding_keeps_value(r, uTi(), xsink)) {
+                        ok = true;
+                        break;
+                    }
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the
