@@ -28251,9 +28251,13 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
         // after all module types/functions have been parsed.
-        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        // the module is parsed as the module loader parses a module file (QoreModuleManager::loadUserModuleFromPath()):
+        // with the warning mask of a module load and the warnings raised as errors, in the parse and in the commit, so
+        // that a module that qcc compiles also loads from source (qore#7314)
+        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink,
+            &xsink, QP_WARN_MODULES);
         if (!xsink.isException()) {
-            qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+            qpgm->parseCommit(&xsink, &xsink, QP_WARN_MODULES);
         }
         // the module's parse options are checked as they are at the end of its source; the module header's
         // restrictions ended with the header, and closing the module context leaves the options as they are
@@ -28719,7 +28723,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
-        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+        // the files of the module are parsed as the module loader parses a separated module
+        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
+        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
+            QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -28778,7 +28786,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink, file_warn_mask);
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &xsink,
+                    file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -32698,8 +32707,11 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
-        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink,
-            QP_WARN_DEFAULT);
+        // the files of the module are parsed as the module loader parses a separated module
+        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
+        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
+            QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -32768,7 +32780,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
                 continue;
             }
-            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink,
+            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &xsink,
                 file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
@@ -33284,8 +33296,11 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        // the files of the module are parsed as the module loader parses a separated module
+        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
+        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+            &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33336,7 +33351,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
-                    &xsink, &wsink, file_warn_mask);
+                    &xsink, &xsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -33865,8 +33880,11 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        // the files of the module are parsed as the module loader parses a separated module
+        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
+        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+            &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33917,7 +33935,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
-                    &xsink, &wsink, file_warn_mask);
+                    &xsink, &xsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)

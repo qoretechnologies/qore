@@ -2662,6 +2662,9 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
+      diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
+      issue #7314)
     - fixed a crash when the members of a deleted object are merged into another object with the
       @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
       merge into a deleted object also when there is nothing to merge
