@@ -1264,6 +1264,11 @@ private:
 
     DLLLOCAL int doConnect(ExceptionSink* xsink);
 
+    //! Raises SOCKET-CLOSED and returns true if the socket was closed since the connection gave it its descriptor
+    /** @param fd the descriptor of the caller's hold (IoUseHelper), taken before the call
+    */
+    DLLLOCAL bool closedSinceStart(int fd, ExceptionSink* xsink);
+
     // returns 0 = connected, 1 = try again, -1 = error
     DLLLOCAL int checkConnection(ExceptionSink* xsink);
 };
@@ -5353,6 +5358,11 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_fail_held_attempt;
 /** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt;
+
+//! Debug builds: if set, called by the check of a UNIX socket connection with the descriptor that it uses
+/** For the C++ unit tests of a close of the socket by another thread while the check uses it (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0

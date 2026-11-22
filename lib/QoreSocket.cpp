@@ -9841,6 +9841,7 @@ std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
 std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
 std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
+std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
 
 //! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
 static void qore_socket_dbg_before_adopt(int where) {
@@ -10022,10 +10023,27 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
+bool SocketConnectUnixPollState::closedSinceStart(int fd, ExceptionSink* xsink) {
+    uint32_t gen;
+    if (fd == QORE_INVALID_SOCKET || sock->getDescriptorGeneration(gen) != fd || gen != sock_gen) {
+        qore_socket_raise_canceled("connect", xsink);
+        return true;
+    }
+    return false;
+}
+
 int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    qore_socket_private::IoUseHelper io_use(*sock);
+    int fd = io_use.getDescriptor();
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    int rc = 0;
     while (true) {
-        if (!::connect(sock->sock, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
-            return 0;
+        if (!::connect(fd, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
+            break;
         }
 
         // try again if we were interrupted by a signal
@@ -10034,12 +10052,16 @@ int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
         }
 
         if (errno != EINPROGRESS && errno != EAGAIN) {
-            return -1;
+            rc = -1;
         }
 
         break;
     }
-    return 0;
+    // a close during connect() fails the connection as closed, not with the error that the close caused
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    return rc;
 }
 
 // returns 0 = connected, 1 = try again, -1 = error
@@ -10051,9 +10073,28 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
     // When continuePoll() reaches this immediately after EINPROGRESS, the
     // SO_ERROR / zero-byte send checks still report "try again" without
     // running a second raw poll/select wait inside the poll operation.
-    int rc = qore_socket_check_connect_ready(sock->sock);
-    if (rc) {
-        return rc;
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    {
+        qore_socket_private::IoUseHelper io_use(*sock);
+        int fd = io_use.getDescriptor();
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+#ifdef DEBUG
+        // a test closes the socket here, as another thread can
+        if (void (*hook)(int) = qore_dbg_unix_connect_before_check.load(std::memory_order_acquire)) {
+            hook(fd);
+        }
+#endif
+        int rc = qore_socket_check_connect_ready(fd);
+        // a close during the check fails the connection as closed, not with the error that the close caused
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+        if (rc) {
+            return rc;
+        }
     }
 
     // connected successfully within the timeout period
