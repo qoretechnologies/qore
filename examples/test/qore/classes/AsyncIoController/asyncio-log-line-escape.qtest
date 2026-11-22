@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../TestInterpreter.qm
 
 %exec-class AsyncIoLogLineEscapeTest
 
@@ -95,7 +96,9 @@ AsyncIoController::cancelByOwner(owner);
         f.close();
         string err = tmp.path + "/trace.err";
         int rc;
-        backquote(sprintf("QORE_ASYNC_IO_TRACE=1 %s -b %s 2>%s", QORE_ARGV[0], script, err), \rc);
+        # the interpreter, not the running executable: a qcc executable of this test is not one
+        backquote(sprintf("QORE_ASYNC_IO_TRACE=1 %s -b %s 2>%s", TestInterpreter::qore_interpreter(), script, err),
+            \rc);
         list<string> lines = (ReadOnlyFile::readTextFile(err) ?? "").split("\n");
         # the child must succeed whether or not the build traces
         assertEq(0, rc, "exit code: " + lines.join("\n"));
