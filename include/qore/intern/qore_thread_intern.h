@@ -642,6 +642,20 @@ DLLLOCAL QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_progr
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
     ExceptionSink* xsink, const QoreClass* cls = nullptr);
 
+//! Returns the application Program that library module code runs for, or nullptr
+/** Walks from the captured caller (a library module Program) through the contexts of library module code only, as
+    qore_reflection_has_module_caller() does, and returns the first non-module Program: the code that the module
+    chain runs for.  The Program is taken from the thread's call chain only.
+
+    Fails closed, returning nullptr: if the caller is not library module code (see qore_program_is_library_module()),
+    if a module initialization barrier (QoreModuleInitSandboxBarrierHelper) is active or could not be recorded, if a
+    module lifecycle barrier (QoreModuleLifecycleBarrierHelper) is reached first or could not be recorded, if module
+    code that is not library code is reached first, if no such Program is on the call chain (a thread that module
+    code started), or if the walk is canceled (reported in xsink).
+*/
+DLLLOCAL const QoreProgram* qore_reflection_get_module_application_program(const QoreProgram* caller,
+    ExceptionSink* xsink);
+
 //! returns the effective parse options of the Program running on the current thread
 /** These are the parse options of the current Program with the active runtime parse options override applied: the
     restrictions of the code a call is made for, without the options of the statement making the call (a module
@@ -1017,6 +1031,8 @@ public:
 private:
     bool pushed = false;
     bool record_failed = false;
+    //! true if the barrier of library code could not be recorded for lack of memory (counted on the thread)
+    bool unrecorded = false;
 };
 
 //! Marks module code that runs for no application: a module's init or del closure

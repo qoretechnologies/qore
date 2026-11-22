@@ -348,6 +348,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
         #   child processes that set their own --exec-mode and as qcc executables
+        # - reflection-typed-hash-module-caller (#7154): its script runs in child processes that set their own
+        #   execution modes and as a qcc executable, as a module is initialized once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -417,6 +419,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
+                                 "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest",
                                  "examples/test/qore/classes/member-access-private-internal.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
