@@ -24,8 +24,8 @@
           "message": "Eine Datei wird auf einen FTP-Server hochgeladen"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "Auf Dateien reagieren, die auf einen FTP-Server hochgeladen wurden; die Aktionskonfiguration bestimmt, ob das Ereignis die Dateidaten selbst oder einen Link zum Speicherort der Datei im lokalen Dateisystem enthält. In jedem Fall zeigt das Ereignis an, dass die Dateidaten bereits heruntergeladen wurden und lokal verfügbar sind"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Auf Dateien reagieren, die auf einen FTP-Server hochgeladen wurden; die Aktionskonfiguration bestimmt, ob das Ereignis die Dateidaten selbst oder einen Link zum Speicherort der Datei im lokalen Dateisystem enthält. In jedem Fall zeigt das Ereignis an, dass die Dateidaten bereits heruntergeladen wurden und lokal verfügbar sind. Mit remote_file_disposition auf DELETE oder MOVE wird die entfernte Datei nach der Verarbeitung aus dem Verzeichnis entfernt. Bei NONE gilt Folgendes. Der Ereignishandler muss die Datei verschieben, umbenennen oder löschen, sonst wird sie bei der nächsten Abfrage erneut zugestellt."
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

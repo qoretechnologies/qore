@@ -482,9 +482,6 @@ public class DataProvider {
         #! Global options
         static int options = 0;
 
-        #! Global logger
-        static *LoggerInterface logger;
-
         #! The hooks that the host gives modules, by module (setModuleHostHooks())
         static hash<string, hash<auto>> module_host_hooks;
 
@@ -498,12 +495,14 @@ public class DataProvider {
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
         tenants and for trusted code
 
+        @note the messages that the module produces for any caller, also for sandboxed code, go to this logger
+
         @since DataProvider 3.0
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
-        DataProvider::logger = logger;
+        DataProviderGlobalLogger::logger = logger;
     }
 
     #! Sets the hooks that the host gives a module, before the module is loaded
@@ -566,12 +565,23 @@ DataProvider::setModuleHostHooks("TypeScriptActionInterface", {
     }
 
     #! Returns the global data provider logger
-    /** @return the global data provider logger
+    /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
+        get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
+        directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
+        such code still go to the logger
+
+        @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
+        is sandboxed or acts for sandboxed code
 
         @since DataProvider 3.0
+        @since DataProvider 3.12 sandboxed code does not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
-        return logger;
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return DataProviderGlobalLogger::logger;
     }
 
     #! Adds the given global data provider options
@@ -2486,6 +2496,18 @@ if (action.data_provider_info) {
     }
 }
 
+#! The process-wide logger of the DataProvider module (not public: only the module's own code uses it)
+/** Set by trusted code with DataProvider::setGlobalLogger(); the module's own code logs the messages that it produces
+    for every caller here, also when it serves sandboxed code, so that they reach the logger that the host configured,
+    while DataProvider::getGlobalLogger() does not hand the logger to sandboxed code (qore#6746)
+*/
+class DataProviderGlobalLogger {
+    public {
+        #! the logger, if any
+        static *LoggerInterface logger;
+    }
+}
+
 #! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)
 /** The public APIs that load every known factory module declare the \c PROCESS_CONTROL domain
     (DataProvider::registerKnownFactories()); a lookup that loads them for its caller, as DataProvider::getFactory()
@@ -2525,7 +2547,8 @@ class DataProviderModuleLoader {
 
     #! Try to load the given module; see DataProvider::tryLoad()
     static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
-        *LoggerInterface logger = DataProvider::getGlobalLogger();
+        # read directly: the messages of the module go to the host's logger also for sandboxed callers
+        *LoggerInterface logger = DataProviderGlobalLogger::logger;
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);

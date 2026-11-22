@@ -72,6 +72,11 @@ public namespace ConnectionProvider {
     \c RestConnection, \c RestClient, or \c RestClientIo for Kerberos/SPNEGO HTTP Negotiate authentication.
 */
 public class HttpConnection inherits AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! HTTP Negotiate delegation modes
         const list<hash<AllowedValueInfo>> NegotiateDelegationModeAllowedValues = (

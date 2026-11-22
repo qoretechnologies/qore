@@ -2575,6 +2575,10 @@ public:
         }
     }
 
+    //! Close during teardown of the owning object; a pending pollable holds its own reference to this state.
+    DLLLOCAL void closeForTeardown(bool sole_owner);
+    DLLLOCAL void cleanup(ExceptionSink* xsink, bool sole_owner);
+
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
     }

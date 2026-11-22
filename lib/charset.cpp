@@ -33,6 +33,7 @@
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreUtf8.h"
 #include "qore/intern/QoreUtf16.h"
 #include "qore/intern/QoreMiscMembersOps.h"
@@ -647,6 +648,13 @@ static bool validateEncoding(const char* encoding) {
       a locale with such an encoding (ex: ja_JP.SJIS)
 */
 void qore_encoding_manager_ops::init(const char* def) {
+    // ends the process for a default encoding that cannot be used; ARGV and QORE_ARGV are made before the library is
+    // initialized, and exit() does not release them (qore#7000)
+    auto refuse = []() {
+        qore_release_argv();
+        exit(1);
+    };
+
     // returns the encoding for a valid name that is compatible with ASCII, otherwise prints an error
     auto get_default = [](const char* name, const char* source) -> const QoreEncoding* {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);
@@ -664,11 +672,11 @@ void qore_encoding_manager_ops::init(const char* def) {
         if (!validateEncoding(def)) {
             fprintf(stderr, "qore: error: invalid character encoding '%s'\n", def);
             fprintf(stderr, "Use 'qore --show-charsets' to list known encodings\n");
-            exit(1);
+            refuse();
         }
         QCS_DEFAULT = get_default(def, "--charset");
         if (!QCS_DEFAULT) {
-            exit(1);
+            refuse();
         }
         return;
     }
@@ -679,7 +687,7 @@ void qore_encoding_manager_ops::init(const char* def) {
         if (validateEncoding(estr)) {
             QCS_DEFAULT = get_default(estr, "QORE_CHARSET");
             if (!QCS_DEFAULT) {
-                exit(1);
+                refuse();
             }
         } else {
             fprintf(stderr, "qore: warning: invalid encoding '%s' in QORE_CHARSET, using UTF-8\n", estr);

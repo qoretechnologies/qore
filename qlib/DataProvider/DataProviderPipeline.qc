@@ -317,7 +317,7 @@ class PipelineQueue {
         int flush_waiting = 0;
 
         #! Data queue
-        #! When metrics are enabled, entries are hashes with "data" and "enqueue_time" keys;
+        #! When metrics are enabled, entries are hashes with "data" and "enqueue_mono_us" keys;
         #! otherwise entries are raw data values.
         list<auto> queue;
 
@@ -534,7 +534,7 @@ class PipelineQueue {
         # Enqueue data; when metrics are enabled, wrap in a hash with the enqueue timestamp
         # so dequeue can compute queue wait time from the same entry (no parallel list to desync)
         if (has_metrics) {
-            push queue, {"data": qdata, "enqueue_time": now_us()};
+            push queue, {"data": qdata, "enqueue_mono_us": clock_get_monotonic_us()};
             # Track queue depth and backpressure locally — flushed in flushMetricsBatch()
             # to avoid acquiring metrics_lock on every record
             int depth = queue.lsize();
@@ -800,9 +800,9 @@ class PipelineQueue {
             auto qdata;
             processing = True;
             if (has_metrics) {
-                # Unwrap the {data, enqueue_time} envelope
+                # Unwrap the {data, enqueue_mono_us} envelope
                 qdata = qentry.data;
-                record_queue_wait_us = (now_us() - qentry.enqueue_time).durationMicroseconds();
+                record_queue_wait_us = clock_get_monotonic_us() - qentry.enqueue_mono_us;
             } else {
                 qdata = qentry;
             }
@@ -844,9 +844,9 @@ class PipelineQueue {
                     if (elem instanceof AbstractDataProcessor) {
                         AbstractDataProcessor processor = cast<AbstractDataProcessor>(elem);
                         # Measure per-element processing time
-                        *date elem_start;
+                        int elem_start_us;
                         if (has_metrics) {
-                            elem_start = now_us();
+                            elem_start_us = clock_get_monotonic_us();
                         }
 
                         foreach auto data_elem in (data_recs) {
@@ -860,7 +860,7 @@ class PipelineQueue {
                         if (has_metrics) {
                             # Accumulate actual per-element processing time
                             acc_processing_us[elem_index] +=
-                                (now_us() - elem_start).durationMicroseconds();
+                                clock_get_monotonic_us() - elem_start_us;
 
                             int elem_in_count = countShapedRecords(data_recs);
                             int elem_out_count = countShapedRecords(new_recs);
@@ -979,16 +979,16 @@ class PipelineQueue {
             foreach auto elem in (elems) {
                 if (elem instanceof AbstractDataProcessor) {
                     # Measure flush processing time (conditional)
-                    *date start_time;
+                    int start_us;
                     if (mc) {
-                        start_time = now_us();
+                        start_us = clock_get_monotonic_us();
                     }
                     *list<auto> flush_results = elem.flushAndCollect();
                     int processing_us = 0;
                     *date end_time;
                     if (mc) {
+                        processing_us = clock_get_monotonic_us() - start_us;
                         end_time = now_us();
-                        processing_us = (end_time - start_time).durationMicroseconds();
                     }
 
                     if (!flush_results) {
@@ -1026,13 +1026,13 @@ class PipelineQueue {
 
                                 # Measure processing time (conditional)
                                 if (mc) {
-                                    start_time = now_us();
+                                    start_us = clock_get_monotonic_us();
                                 }
                                 softlist<auto> new_elem_recs = processShapedData(elem2, data_elem);
                                 processing_us = 0;
                                 if (mc) {
+                                    processing_us = clock_get_monotonic_us() - start_us;
                                     end_time = now_us();
-                                    processing_us = (end_time - start_time).durationMicroseconds();
                                 }
 
                                 new_recs += new_elem_recs;
@@ -1119,7 +1119,7 @@ public class PipelineMetricsCollector {
         int collection_start_mono_us;
 
         #! Last callback invocation time
-        *date last_callback_time;
+        *int last_callback_mono_us;
 
         #! Records processed since last callback
         int records_since_callback = 0;
@@ -1562,32 +1562,19 @@ public class PipelineMetricsCollector {
         collector.reportMetrics() outside the lock with the returned snapshot.
     */
     private *hash<PipelineMetricsSnapshot> maybeGetSnapshot(int ri, int ims) {
-        bool should_invoke = False;
-        *date now;
-
-        # Check record interval threshold first (no timestamp needed)
-        if (ri > 0 && records_since_callback >= ri) {
-            should_invoke = True;
-        } else if (ims > 0) {
-            # Only call now_us() when checking time-based thresholds
-            now = now_us();
-            # Check time interval threshold
-            if (last_callback_time) {
-                if ((now - last_callback_time).durationMilliseconds() >= ims) {
-                    should_invoke = True;
-                }
-            } else if ((now - collection_start).durationMilliseconds() >= ims) {
-                should_invoke = True;
+        *int now_mono_us;
+        if (!(ri > 0 && records_since_callback >= ri)) {
+            if (ims <= 0) {
+                return NOTHING;
+            }
+            now_mono_us = clock_get_monotonic_us();
+            if ((now_mono_us - (last_callback_mono_us ?? collection_start_mono_us)) / 1000 < ims) {
+                return NOTHING;
             }
         }
-
-        if (should_invoke) {
-            # Reuse 'now' from the time-check branch when available; only call now_us()
-            # when the snapshot was triggered by the record-count threshold alone.
-            last_callback_time = now ?? now_us();
-            records_since_callback = 0;
-            return getSnapshotIntern();
-        }
+        last_callback_mono_us = now_mono_us ?? clock_get_monotonic_us();
+        records_since_callback = 0;
+        return getSnapshotIntern();
     }
 
     #! Forces a metrics report with the current metrics
@@ -1602,7 +1589,7 @@ public class PipelineMetricsCollector {
                 return;
             }
             snapshot = getSnapshotIntern();
-            last_callback_time = now_us();
+            last_callback_mono_us = clock_get_monotonic_us();
             records_since_callback = 0;
         }
         try {
@@ -1666,7 +1653,7 @@ public class PipelineMetricsCollector {
 
             # Reset callback tracking
             records_since_callback = 0;
-            remove last_callback_time;
+            remove last_callback_mono_us;
 
             # Reset collection start time (both wall-clock and monotonic baselines)
             collection_start = now_us();
@@ -1915,6 +1902,10 @@ public class DataProviderPipeline {
 
         #! run stop time (set in waitDone())
         date stop_time;
+
+        # Monotonic readings for elapsed time.
+        *int start_mono_us;
+        *int stop_mono_us;
 
         #! Record count
         int record_count = 0;
@@ -2247,6 +2238,7 @@ public class DataProviderPipeline {
 
         # set the stop time
         stop_time = now_us();
+        stop_mono_us = clock_get_monotonic_us();
 
         # Send final metrics and shut down collector
         if (metrics_collector) {
@@ -2256,7 +2248,7 @@ public class DataProviderPipeline {
 
         logInfo("completed processing %d pipeline%s; status %y errors: %d processing time: %y records processed: %d",
             pmap.size(), pmap.size() == 1 ? "" : "s", error_list ? "ERROR" : "COMPLETE", error_list.size(),
-            stop_time - start_time, record_count);
+            microseconds(stop_mono_us - start_mono_us), record_count);
 
         # throw any exceptions
         throwPipelineException();
@@ -2297,6 +2289,7 @@ public class DataProviderPipeline {
         pmap."0".waitDone();
 
         stop_time = now_us();
+        stop_mono_us = clock_get_monotonic_us();
 
         # Send final metrics and shut down collector
         if (metrics_collector) {
@@ -2316,7 +2309,9 @@ public class DataProviderPipeline {
     #! Returns pipeline info
     /** @return pipeline info; see @ref PipelineInfo for more information
 
-        @note record count and performance intormation is only valid after the pipeline has completed processing
+        The duration and throughput use elapsed time measured by the monotonic clock.
+
+        @note record count and performance information are only valid after the pipeline has completed processing
     */
     hash<PipelineInfo> getInfo() {
         string status;
@@ -2328,8 +2323,8 @@ public class DataProviderPipeline {
             status = PS_IDLE;
         }
 
-        date effective_stop_time = stop_time ?? now_us();
-        date duration = effective_stop_time - (start_time ?? effective_stop_time);
+        *int start_us = start_mono_us;
+        date duration = microseconds(exists start_us ? (stop_mono_us ?? clock_get_monotonic_us()) - start_us : 0);
         float duration_secs = duration.durationSecondsFloat();
         float recs_per_sec = duration_secs ? (record_count / duration_secs) : 0.0;
 
@@ -2524,10 +2519,12 @@ public class DataProviderPipeline {
 
         if (start_time) {
             remove start_time;
+            remove start_mono_us;
         }
 
         if (stop_time) {
             remove stop_time;
+            remove stop_mono_us;
         }
 
         if (stop_flag) {
@@ -2575,6 +2572,7 @@ public class DataProviderPipeline {
             }
 
             remove stop_time;
+            remove stop_mono_us;
             locked = True;
 
             # Set cached flags on all queues to avoid per-record overhead
@@ -2605,6 +2603,7 @@ public class DataProviderPipeline {
             if (!start_time) {
                 logInfo("started processing %d queue%s", pmap.size(), pmap.size() == 1 ? "" : "s");
                 start_time = now_us();
+                start_mono_us = clock_get_monotonic_us();
             }
         }
     }

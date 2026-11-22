@@ -27,6 +27,11 @@ public namespace MongoDbDataProvider {
 /** Provides connection support for MongoDB servers using the mongodb:// URL scheme.
 */
 public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection scheme information
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MongoDbDataProvider",

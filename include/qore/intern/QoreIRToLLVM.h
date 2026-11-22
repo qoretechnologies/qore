@@ -483,6 +483,8 @@ private:
     // Pointer values vary with allocator layout, even for identical source and prefix mappings.
     using LocalAllocaMap = llvm::MapVector<const void*, LocalCacheSlot>;
     LocalAllocaMap local_allocas;
+    // One-time initialization of these slots, after the native entry check has admitted the call.
+    llvm::BasicBlock* locals_entry = nullptr;
 
     //! Loads the boxed value of a local variable from its cache as the program reads it
     /** The value of an IR-only variable of a foreach loop that holds a weak reference is its target, borrowed from

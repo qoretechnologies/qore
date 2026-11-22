@@ -1292,11 +1292,12 @@ protected:
     LexicalSemanticPolicy initializer_policy;
     bool instance_initializer = false;
 
-    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old) : typeInfo(old.typeInfo),
+    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old, bool copy_initializer = true) : typeInfo(old.typeInfo),
             initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
             initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
-            exp(old.exp.refSelf()),
-            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+            exp(copy_initializer ? old.exp.refSelf() : QoreValue()),
+            loc(old.loc), parseTypeInfo(copy_initializer && old.parseTypeInfo
+                ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
             decl_pwo(old.decl_pwo), has_decl_po(old.has_decl_po) {
     }
 
@@ -1418,8 +1419,10 @@ public:
     }
 
 protected:
-    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
-            : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {
+    DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access,
+            bool copy_initializer = true)
+            : QoreMemberInfoBase(old, copy_initializer), access(old.access >= n_access ? old.access : n_access),
+            init(old.init) {
     }
 
     bool init = false;
@@ -1502,10 +1505,10 @@ public:
     // copy to a new class - same member, new class
     DLLLOCAL QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls);
 
-    DLLLOCAL ~QoreMemberInfo() {
-        delete cls_context_map;
-        delete member_info_list;
-    }
+    QoreMemberInfo(const QoreMemberInfo&) = delete;
+    QoreMemberInfo& operator=(const QoreMemberInfo&) = delete;
+
+    DLLLOCAL ~QoreMemberInfo();
 
     DLLLOCAL void setDeclaringClass(const qore_class_private* qc) {
         assert(!decl_cls);
@@ -1668,6 +1671,12 @@ private:
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
     member_info_list_t* member_info_list = nullptr;
+
+    // During parseInit(), the declaration and copies waiting for its initializer form a circular list.
+    // A member removed during inheritance resolution can unlink itself without extending its lifetime.
+    mutable QoreMemberInfo* pending_init_next = nullptr;
+    DLLLOCAL void deferInitializerCopy(const QoreMemberInfo& old);
+    DLLLOCAL void finishInitializer(bool resolved);
 
     // local flag
     bool is_local,
@@ -5007,7 +5016,33 @@ public:
         if (!p) {
             return nullptr;
         }
-        if (p == ::getProgram()) {
+        // the current Program is read only for a class that has a source Program
+        return getSourceProgramForCallImpl(p, ::getProgram(), referenced, deleted);
+    }
+
+    //! The same, for a caller that has the Program that the thread runs in (\a current), as read from its thread data
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCall(const QoreProgram* current,
+            bool& referenced, bool* deleted = nullptr) const {
+        referenced = false;
+        QoreProgram* p = spgm.load();
+        if (!p) {
+            return nullptr;
+        }
+        return getSourceProgramForCallImpl(p, current, referenced, deleted);
+    }
+
+    //! Returns true if \a current, the Program that the thread runs in, is the source Program of the class
+    /** Then getSourceProgramForCall() returns it without a reference: the fast call paths of methods test this inline
+        before they call anything else (qore#7079)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool isSourceProgram(const QoreProgram* current) const {
+        return current && spgm.load() == current;
+    }
+
+    //! the part of getSourceProgramForCall() for a class with the source Program \a p
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreProgram* getSourceProgramForCallImpl(QoreProgram* p,
+            const QoreProgram* current, bool& referenced, bool* deleted) const {
+        if (p == current) {
             return p;
         }
         // a module's Program stays allocated while any code can run (module lifetime): entering it fails once its

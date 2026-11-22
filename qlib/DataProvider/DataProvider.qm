@@ -1842,6 +1842,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
       (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
       (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
+    - @ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns
+      @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the process-wide
+      logger that the host set; the messages that the module produces for such code still go to that logger
+      (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

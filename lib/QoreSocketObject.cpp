@@ -4812,7 +4812,7 @@ QoreSocketObject::~QoreSocketObject() {
 
 void QoreSocketObject::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        priv->socket->cleanup(xsink);
+        priv->socket->priv->cleanup(xsink, true);
         delete this;
     }
 }
@@ -4820,7 +4820,7 @@ void QoreSocketObject::deref(ExceptionSink* xsink) {
 void QoreSocketObject::deref() {
     if (ROdereference()) {
         ExceptionSink xsink;
-        priv->socket->cleanup(&xsink);
+        priv->socket->priv->cleanup(&xsink, true);
         delete this;
     }
 }
@@ -4901,7 +4901,7 @@ void QoreSocketObject::invalidate(ExceptionSink* xsink) {
         AutoLocker al(priv->m);
         priv->invalidate();
     }
-    priv->socket->cleanup(xsink);
+    priv->socket->priv->cleanup(xsink, is_unique());
 }
 
 AbstractPollState* QoreSocketObject::startConnect(ExceptionSink* xsink, const char* name) {

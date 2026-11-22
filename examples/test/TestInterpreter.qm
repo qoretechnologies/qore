@@ -228,7 +228,12 @@ public namespace TestInterpreter {
     }
 
     #! returns qcc: the one configured in the environment, the one next to the interpreter, or the one in the PATH
-    /** @return the path of qcc, or NOTHING if none is found
+    /** An interpreter in a build directory (one with \c CMakeCache.txt) takes only the qcc of its build: a qcc found
+        in the \c PATH (an installed one) links the programs that it compiles to its own libqore, which they then load
+        instead of the build's (on macOS, where the dynamic loader finds libqore through the path that qcc records in
+        the program, issue #7029).
+
+        @return the path of qcc, or NOTHING if none is found
     */
     public *string sub qcc_compiler() {
         guard_recursion();
@@ -239,9 +244,13 @@ public namespace TestInterpreter {
         }
         string qore = qore_interpreter();
         if (qore =~ /\//) {
-            string next = dirname(qore) + "/qcc";
+            string dir = dirname(qore);
+            string next = dir + "/qcc";
             if (is_file(next)) {
                 return next;
+            }
+            if (is_file(dir + "/CMakeCache.txt")) {
+                return NOTHING;
             }
         }
         *string found = trim(`command -v qcc 2>/dev/null`);

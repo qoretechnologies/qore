@@ -366,12 +366,22 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges the members of the object that the current class context can use into \a hash
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
             LexicalSemanticPolicy policy) const;
 
-    template <bool Lexical>
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical, bool Lock>
     DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
             LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL void mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -475,6 +485,19 @@ public:
         }
         member_class_ctx = info->getClassContext(class_ctx);
         return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
+    }
+
+    //! raises OBJECT-ALREADY-DELETED and returns true if the object is deleted
+    /** takes the object's read lock unless \a vl holds the object's lock: the lvalue is then a member of the object
+        itself, whose lock this thread holds for writing
+    */
+    DLLLOCAL bool raiseIfDeleted(const AutoVLock& vl, ExceptionSink* xsink) const {
+        QoreSafeVarRWReadLocker sl(rml, qore_auto_vlock_ops(&vl).getRWL() != &rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return true;
+        }
+        return false;
     }
 
     // must be called in the object read lock
@@ -749,7 +772,12 @@ public:
         return true;
     }
 
+    //! merges the members of the object that the current class context can use into \a hash
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
+
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
 
     DLLLOCAL bool checkData(qore_classid_t key) {
         if (!privateData) {

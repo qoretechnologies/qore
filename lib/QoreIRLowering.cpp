@@ -3280,7 +3280,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!element_type) {
             element_type = QoreTypeInfo::getReturnComplexListOrNothing(list_type);
         }
-        bool direct_typed_list = !q_env_is_set("QORE_DISABLE_IR_TYPED_FOREACH")
+        bool direct_typed_list = !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_FOREACH")
             && foreach_var && foreach_var->getType() != VT_IMMEDIATE
             && !QoreTypeInfo::isReference(foreach_var_type)
             && ((element_type == bigIntTypeInfo && foreach_var_type == bigIntTypeInfo)
@@ -3553,7 +3553,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         virtual_implicit.runtime = false;
         int saved_ast_count = ast_delegate_count;
         bool analyze_implicit_element =
-            !q_env_is_set("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
+            !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
         auto count_implicit_element_observers = [&]() {
             size_t observers = 0;
             size_t check_count = 0;
@@ -5459,7 +5459,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // whole function / top-level block.
         int compiled_count = compileBlockHandlerIRs(block_level_handlers, builder.getFunction(), error);
         if (compiled_count < 0) {
-            if (q_env_is_set("QORE_DEBUG_HANDLERS")) {
+            if (QORE_ENV_IS_SET("QORE_DEBUG_HANDLERS")) {
                 fprintf(stderr, "Block-level handler IR compilation failed: %s\n", error.c_str());
             }
             return false;
@@ -6791,7 +6791,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // handlers (so we surface every error in one pass) then report -1.
         std::string handler_error;
         if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
-            if (q_env_is_set("QORE_IR_TRACE_OBE_FALLBACK")) {
+            if (QORE_ENV_IS_SET("QORE_IR_TRACE_OBE_FALLBACK")) {
                 const QoreProgramLocation* loc = handler.code ? handler.code->loc : nullptr;
                 fprintf(stderr, "[obe-compile-fail:block] %s:%d: %s\n",
                     loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
@@ -6957,7 +6957,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // runtime assert in executeHandlerBody forbids AST fallback mid-IR.
         std::string handler_error;
         if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
-            if (q_env_is_set("QORE_IR_TRACE_OBE_FALLBACK")) {
+            if (QORE_ENV_IS_SET("QORE_IR_TRACE_OBE_FALLBACK")) {
                 const QoreProgramLocation* loc = handler.code ? handler.code->loc : nullptr;
                 fprintf(stderr, "[obe-compile-fail] %s:%d: %s\n",
                     loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
@@ -10899,7 +10899,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     if (!assign) {
         return QoreIRValue();
     }
-    if (q_env_is_set("QORE_AOT_TRACE_LOWER_ASSIGN")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_TRACE_LOWER_ASSIGN")) {
         fprintf(stderr, "[aot-trace] lowerAssignment file=%s line=%d\n",
             assign->loc ? assign->loc->getFile() : "?",
             assign->loc ? assign->loc->start_line : 0);
@@ -11352,7 +11352,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingFloat(left_analysis)
             && isNeverNothingFloat(right_analysis))) {
         opcode = QoreIROpcode::AddAssignFloat;
-    } else if (!q_env_is_set("QORE_DISABLE_IR_STRING_APPEND_COW")
+    } else if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_STRING_APPEND_COW")
             && isLocalNonClosureVar(left_var)
             && left_var->getTypeInfo() == stringTypeInfo) {
         // a value of any type is appended to a string local as the AST interpreter appends it: NOTHING and NULL
@@ -11432,7 +11432,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         }
     }
     QoreValue right_expr(op->getRight());
-    if (!q_env_is_set("QORE_DISABLE_IR_FUSED_MINUS_EQUALS")
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_MINUS_EQUALS")
             && force_int && isLocalNonClosureVar(left_var)
             && !QoreTypeInfo::isReference(left_var->getTypeInfo())
             && right_expr.getType() == NT_INT) {
@@ -11730,7 +11730,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     QoreIROpcode opcode = QoreIROpcode::MulAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    bool assigned_int_local = !q_env_is_set(
+    bool assigned_int_local = !QORE_ENV_IS_SET(
             "QORE_DISABLE_IR_ASSIGNED_COMPOUND_SPECIALIZATION")
         && parse_context && left_var->getType() == VT_LOCAL && left_var->ref.id
         && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
@@ -14209,7 +14209,7 @@ QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const Laz
 }
 
 bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperator& src) {
-    if (q_env_is_set("QORE_DISABLE_IR_FOREACH_SOURCE_ITERATOR")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_SOURCE_ITERATOR")) {
         return false;
     }
     const AbstractQoreNode* node = list.getInternalNode();
@@ -14305,7 +14305,7 @@ QoreIRValue QoreIRLowering::lowerForeachSourceIterator(const ForeachSourceOperat
 }
 
 bool QoreIRLowering::useSelectorSegmentLoop(const LazySelectorSource& src) const {
-    if (!src || q_env_is_set("QORE_DISABLE_IR_SELECTOR_SEGMENT_LOOP")) {
+    if (!src || QORE_ENV_IS_SET("QORE_DISABLE_IR_SELECTOR_SEGMENT_LOOP")) {
         return false;
     }
     // a list whose values hold no reference: native code reads each value from the list, which the iterator keeps,
@@ -14605,7 +14605,7 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
                 }
                 bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type);
                 auto* hka_inst = typed_hash
-                    && !q_env_is_set("QORE_DISABLE_IR_TYPED_HASH_KEY_ACCESS")
+                    && !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_HASH_KEY_ACCESS")
                     ? builder.createHashKeyAccessHash(key_str, !assigned_hash, op->loc)
                     : builder.createHashKeyAccess(key_str, op->loc);
                 hka_inst->operands = operands;
@@ -16070,7 +16070,7 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     // input at this site reveals the file + line of the triggering
     // expression instead of a bare SIGSEGV.  Gated on
     // QORE_AOT_TRACE_LOWER_PARSELIST.
-    if (node && q_env_is_set("QORE_AOT_TRACE_LOWER_PARSELIST")) {
+    if (node && QORE_ENV_IS_SET("QORE_AOT_TRACE_LOWER_PARSELIST")) {
         fprintf(stderr, "[aot-trace] lowerParseList node=%p type=%d\n",
             (const void*)node, (int)expr.getType());
         fflush(stderr);
@@ -16197,7 +16197,7 @@ static bool qore_ir_method_target_is_final(const QoreClass* qc,
     if (qc && qc->isFinal()) {
         return true;
     }
-    if (q_env_is_set("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
         return false;
     }
     const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
@@ -16291,8 +16291,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         }
     }
     if (m && m->isPseudo() && m->getName() && !strcmp(m->getName(), "join")
-            && !q_env_is_set("QORE_DISABLE_IR_LIST_STRING_JOIN_METHOD")
-            && !q_env_is_set("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+            && !QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_STRING_JOIN_METHOD")
+            && !QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
         const QoreMethod* method = m->getMethod();
         QoreValue separator_expr;
         QoreParseAnalysis base_analysis;
@@ -16316,7 +16316,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 || separator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
             && QoreTypeInfo::isType(selectAnalysisType(separator_analysis), NT_STRING);
         if (base_ok && separator_ok) {
-            if (!q_env_is_set("QORE_DISABLE_IR_METHOD_IDENTITY_MAP_STRING_JOIN")
+            if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_METHOD_IDENTITY_MAP_STRING_JOIN")
                     && !separator_expr.hasEffect() && !expressionCanThrow(separator_expr)) {
                 const auto* map = dynamic_cast<const QoreMapOperatorNode*>(base_expr.getInternalNode());
                 const QoreValue* map_expr = map ? &map->getMapExpression() : nullptr;
@@ -16350,7 +16350,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     return result;
                 }
             }
-            if (!q_env_is_set("QORE_DISABLE_IR_LIST_INT_SPRINTF_JOIN")
+            if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_INT_SPRINTF_JOIN")
                     && separator_expr.getType() == NT_STRING && separator_expr.isValue()) {
                 QoreStringValueHelper separator_value(separator_expr);
                 const auto* map = separator_value->getEncoding() == QCS_DEFAULT
@@ -16405,7 +16405,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     return result;
                 }
             }
-            if (!q_env_is_set("QORE_DISABLE_IR_METHOD_PIPELINE_STRING_JOIN")
+            if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_METHOD_PIPELINE_STRING_JOIN")
                     && separator_expr.getType() == NT_STRING && separator_expr.isValue()) {
                 QoreStringValueHelper separator_value(separator_expr);
                 std::vector<LazyPipelineStage> source_stages;
@@ -16738,7 +16738,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             // bound to the arguments directly (try_dispatch_method_fast()).
             if (!m->isPseudo() && (!method || !qc || !variant || !method_func
                     || (generic_class_target
-                        && q_env_is_set(
+                        && QORE_ENV_IS_SET(
                             "QORE_DISABLE_IR_GENERIC_OBJECT_METHOD_TARGET"))
                     || (method_func->numVariants() != 1 && variant->isUser())
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
@@ -18312,8 +18312,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                 const qore_list_private* args_priv = args ? qore_list_private::get(args) : nullptr;
                 bool positional_eval_order = !args_priv || !args_priv->hasCallArgEvalMap();
                 if (positional_eval_order
-                        && !q_env_is_set("QORE_DISABLE_IR_IDENTITY_MAP_STRING_JOIN")
-                        && !q_env_is_set("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+                        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_IDENTITY_MAP_STRING_JOIN")
+                        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
                     std::vector<LazyPipelineStage> source_stages;
                     QoreValue base_source;
                     if (!collectLazyPipelineStages(positional_args[1], base_source, source_stages, error)) {
@@ -18348,7 +18348,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                         return result;
                     }
                 }
-                if (!q_env_is_set("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+                if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
                     std::vector<QoreIRValue> operands;
                     if (!lowerCallArgs(parse_args, args, operands, error)) {
                         return QoreIRValue();
@@ -18364,7 +18364,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     if (func_name && !strcmp(func_name, "sprintf") && !call->hasExplicitTypeArgs()
-            && !q_env_is_set("QORE_DISABLE_IR_FIXED_SPRINTF_INT")) {
+            && !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_SPRINTF_INT")) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         const FunctionEntry* fe = call->getFunctionEntry();
         std::string namespace_path;
@@ -18648,7 +18648,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     if (call->hasExplicitTypeArgs()
-            && q_env_is_set("QORE_DISABLE_IR_DIRECT_GENERIC_FUNCTION_CALLS")) {
+            && QORE_ENV_IS_SET("QORE_DISABLE_IR_DIRECT_GENERIC_FUNCTION_CALLS")) {
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
     }
 
@@ -18754,7 +18754,7 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
         QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error,
         has_ref_args);
     if (result.isValid()
-            && !q_env_is_set(
+            && !QORE_ENV_IS_SET(
                 "QORE_DISABLE_IR_NATIVE_CALLREF_IMPLICIT_CONTEXT")) {
         // CallClosureDirect evaluates the target and arguments through IR.
         // Any nested AST delegation has its own count and still forces the
@@ -18923,7 +18923,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     if ((call->hasExplicitTypeArgs() || call->getReceiverTypeInfo())
-            && q_env_is_set("QORE_DISABLE_IR_DIRECT_GENERIC_STATIC_CALLS")) {
+            && QORE_ENV_IS_SET("QORE_DISABLE_IR_DIRECT_GENERIC_STATIC_CALLS")) {
         return finish_call(lowerExprOpOrInvoke(
             QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error));
     }
@@ -19391,7 +19391,7 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, std::str
             // the untyped variant builds a list<auto>, as the AST interpreter builds the result of a map whose
             // expression has no parse type; a typed result (ex: union<int, float> for a *float key + 1, qore#5663)
             // is built by the generic map lowering with the element type of the AST's result
-            if (!q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")
+            if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")
                     && (!QoreTypeInfo::hasType(rtype) || rtype == autoTypeInfo)) {
                 key_name = k;
                 constant_val = right;
@@ -19505,7 +19505,7 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
         const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
 
         std::string key;
-        if (!q_env_is_set("QORE_DISABLE_SELECT_HASH_KEY_POSITIVE_INT")
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_SELECT_HASH_KEY_POSITIVE_INT")
                 && hash_key && getImplicitHashKeyAccess(left, key) && qore_ir_is_zero_constant(right)) {
             *hash_key = std::move(key);
             result_type = gt_op->getTypeInfo();
@@ -20536,7 +20536,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
             return QoreIRValue();
         }
         bool specialized_map_fold = false;
-        if (!q_env_is_set("QORE_DISABLE_IR_SPECIALIZED_MAP_FOLD_PRECEDENCE")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_SPECIALIZED_MAP_FOLD_PRECEDENCE")) {
             const auto* inner_map = dynamic_cast<const QoreMapOperatorNode*>(
                 foldl->getRight().getInternalNode());
             if (inner_map) {
@@ -20561,7 +20561,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
                     || map_opcode == QoreIROpcode::MapSquareFloat;
                 bool offset = map_opcode == QoreIROpcode::MapOffsetInt
                     || map_opcode == QoreIROpcode::MapOffsetFloat;
-                bool offset_enabled = !q_env_is_set("QORE_DISABLE_IR_FUSED_SUM_OFFSET");
+                bool offset_enabled = !QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_SUM_OFFSET");
                 specialized_map_fold = exact_list_source
                     && ((sum && (scale || square || (offset && offset_enabled))) || (product && scale));
             }
@@ -20579,7 +20579,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
         }
     }
 
-    if (!q_env_is_set("QORE_DISABLE_IR_FOLDL_STRING_JOIN")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_FOLDL_STRING_JOIN")) {
         const QoreTypeInfo* source_type = getExprTypeInfo(foldl->getRight());
         const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(source_type);
         QoreValue separator;
@@ -20672,7 +20672,7 @@ QoreIRValue QoreIRLowering::lowerFoldlImpl(const QoreValue& expr, std::string& e
                     fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumSquareFloat
                                            : QoreIROpcode::FusedMapFoldlSumSquareInt;
                     needs_constant = false;
-                } else if (!q_env_is_set("QORE_DISABLE_IR_FUSED_SUM_OFFSET")
+                } else if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_SUM_OFFSET")
                         && (map_opcode == QoreIROpcode::MapOffsetInt
                             || map_opcode == QoreIROpcode::MapOffsetFloat)) {
                     fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumOffsetFloat
@@ -20785,7 +20785,7 @@ QoreIRValue QoreIRLowering::lowerFoldrImpl(const QoreValue& expr, std::string& e
     const QoreTypeInfo* source_type = getExprTypeInfo(foldr->getRight());
     const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(source_type);
     QoreValue string_join_separator;
-    bool string_join = !q_env_is_set("QORE_DISABLE_IR_FOLDR_STRING_JOIN")
+    bool string_join = !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOLDR_STRING_JOIN")
         && element_type
         && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT
         && analyzeStringJoinFoldPattern(foldr->getLeft(), string_join_separator);
@@ -21478,7 +21478,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     bool invariant_typed_scalar = need_result && use_direct_index && invariant_map_local
         && !invariant_map_local->closureUse()
         && !QoreTypeInfo::isReference(invariant_map_local->parseGetTypeInfo())
-        && !q_env_is_set("QORE_DISABLE_IR_INVARIANT_TYPED_MAP_FILL")
+        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_INVARIANT_TYPED_MAP_FILL")
         && (qore_ir_returns_plain(builder.getFunction(), expTypeInfo, NT_INT)
             || qore_ir_returns_plain(builder.getFunction(), expTypeInfo, NT_FLOAT));
 
@@ -21598,7 +21598,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // store, which takes its own reference before the next element is read.
         const auto* arg = dynamic_cast<const QoreImplicitArgumentNode*>(map->getLeft().getInternalNode());
         bool borrow_element = need_result && !needs_context && arg && !arg->getOffset()
-            && !q_env_is_set("QORE_DISABLE_IR_BORROWED_LIST_READS");
+            && !QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_LIST_READS");
         QoreIRValue element_val;
         if (elem_is_int) {
             element_val = builder.createListGetInt(input_list, index_val, map->loc)->result;
@@ -22074,7 +22074,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         }
     }
     bool use_typed_scalar_construction = (elem_is_int || elem_is_float || elem_is_bool)
-        && !q_env_is_set("QORE_DISABLE_IR_TYPED_SELECT_CONSTRUCTION");
+        && !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_SELECT_CONSTRUCTION");
 
     // Evaluate the input list (left operand of select)
     QoreIRValue input_list = lowerExpression(select->getLeft(), error);
@@ -22861,7 +22861,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         && qore_ir_returns_plain(builder.getFunction(), element_type, NT_INT);
     bool elem_is_float = element_type
         && qore_ir_returns_plain(builder.getFunction(), element_type, NT_FLOAT);
-    bool use_direct_index = !q_env_is_set("QORE_DISABLE_IR_TYPED_FOLDR_DIRECT_INDEX")
+    bool use_direct_index = !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_FOLDR_DIRECT_INDEX")
         && (elem_is_int || elem_is_float);
 
     if (use_direct_index) {
@@ -23787,7 +23787,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue result_hash = q_env_is_set("QORE_DISABLE_IR_SIZED_HASH_MAP_RESULT")
+        QoreIRValue result_hash = QORE_ENV_IS_SET("QORE_DISABLE_IR_SIZED_HASH_MAP_RESULT")
             ? withExceptionTarget(builder.createMakeHash({}, hm->loc, hash_result_type))->result
             : withExceptionTarget(builder.createSizedHash(list_size, hm->loc, hash_result_type))->result;
         QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, hm->loc)->result : QoreIRValue();
@@ -24556,7 +24556,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     // the stage runs with the element as the implicit argument list also at run time when it needs it, decided before
     // it is lowered, so that its exception edges restore it (qore#5680); its value is used by the next stage, so it
     // is kept when its temporaries are released
-    if (q_env_is_set("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT") || qore_ir_body_needs_implicit_context(stage_expr, 1)) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT") || qore_ir_body_needs_implicit_context(stage_expr, 1)) {
         return lowerWithImplicitContext(element, index, stage_loc, nullptr, error,
             [&]() { return lowerElementExpression(stage_expr, stage_loc, error); });
     }
@@ -24632,10 +24632,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
     }
     if (filtered_string_join_pipeline
-            && q_env_is_set("QORE_DISABLE_IR_FUSED_FILTERED_STRING_JOIN")) {
+            && QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_FILTERED_STRING_JOIN")) {
         supported_string_join_pipeline = false;
     }
-    if (root_foldl && !q_env_is_set("QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN")
+    if (root_foldl && !QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN")
             && root.list_element_type
             && QoreTypeInfo::parseReturns(root.list_element_type, NT_STRING) == QTI_IDENT
             && supported_string_join_pipeline) {
@@ -25075,7 +25075,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         // A map has no cancellation count of its own. Its index is needed only by the expression or its
         // runtime implicit context. Other stages use their counts to filter, stop or check cancellation.
-        if (stages[i].kind == LazyPipelineStage::Map && !q_env_is_set("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT")
+        if (stages[i].kind == LazyPipelineStage::Map && !QORE_ENV_IS_SET("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT")
                 && !qore_ir_body_needs_implicit_context(*stages[i].primary, 1,
                     QoreIRImplicitContextQuery::ElementIndex)) {
             stage_phis.push_back(nullptr);

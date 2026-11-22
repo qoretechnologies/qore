@@ -41,6 +41,11 @@ public namespace RedisDataProvider {
     - \c rediss://localhost - TLS connection to localhost
 */
 public class RedisConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("RedisDataProvider",

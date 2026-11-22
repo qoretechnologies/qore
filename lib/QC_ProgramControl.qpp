@@ -193,9 +193,8 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     if (qore_sandbox_check_program_isolation(p, xsink, "ProgramControl::createEvalProgram()")) {
         return QoreValue();
     }
-    if (parse_options & PO_SYSTEM_OPS) {
-        return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
-            "options that can only be set by the system", parse_options);
+    if (qore_program_private::checkSystemParseOptions(parse_options, xsink)) {
+        return QoreValue();
     }
     // the namespace of this Program is copied when the new Program is created: the Program is held while it is
     // copied, so that its data cannot be cleared meanwhile, and its parse lock is held, so that no code is parsed in

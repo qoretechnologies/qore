@@ -175,17 +175,17 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
         if (!llm) {
             if (getFailClosed() || fail_uncertain) {
                 hash<GuardrailResult> result = makeFailResult(
                     "task policy classification unavailable without LLM",
                     NOTHING, {"reason_code": "classifier-unavailable"});
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
             hash<GuardrailResult> result = makePassResult();
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
@@ -198,7 +198,7 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
                     sprintf("request is outside allowed task policy: %s",
                         classified.reason ?? classified.reason_code ?? "blocked"),
                     NOTHING, makeMetadata(classified));
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
             if (classified.confidence < min_confidence && fail_uncertain) {
@@ -208,7 +208,7 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
                         classified.confidence * 100, min_confidence * 100),
                     NOTHING, makeMetadata(classified)
                         + {"reason_code": "classification-uncertain"});
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -217,13 +217,13 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
                     sprintf("task policy classification unavailable: %s",
                         ex.desc), NOTHING, {"reason_code": "classifier-error",
                         "error_type": ex.err});
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
         }
 
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 

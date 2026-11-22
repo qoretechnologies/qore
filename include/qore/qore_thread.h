@@ -425,12 +425,22 @@ DLLEXPORT int q_get_unique_thread_local_data_key();
 //! saves thread-local data
 /** can only be called in a registered %Qore thread
 
+    @note a destructor that is still registered when the thread ends runs when the thread's data is deleted, after
+    the thread has left every Program and its Program data has been freed: it must release only native resources,
+    not %Qore values whose release can run %Qore code (an object of a user class, a closure, or a container that
+    holds one), as entering their Program then crashes the process; no thread-end hook runs early enough to release
+    them, so a module that stores such values releases them itself while the thread still runs %Qore code, with
+    q_remove_thread_local_data() or q_swap_thread_local_data() (a destructor that these or this function run for a
+    replaced value runs in the caller's context, where it can) (qore#7024)
+
     @since %Qore 0.9.5
 */
 DLLEXPORT void q_save_thread_local_data(int key, void* data, q_thread_local_destructor destructor = nullptr);
 
 //! swaps thread-local data
 /** can only be called in a registered %Qore thread
+
+    @note the destructor is subject to the same constraint as that of q_save_thread_local_data()
 
     @since %Qore 0.9.5
 */

@@ -2735,9 +2735,21 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns the global data provider logger
-    /** @return the global data provider logger
+    /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
+        get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
+        directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
+        such code, also those of log(), still go to the logger
+
+        @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
+        is sandboxed or acts for sandboxed code
+
+        @since ProviderIndexUtil 1.2 sandboxed code does not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
         return logger;
     }
 

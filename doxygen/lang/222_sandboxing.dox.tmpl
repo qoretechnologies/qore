@@ -531,6 +531,23 @@ authenticate();
     (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
     change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
 
+    The same applies to the other objects and settings that the library or a module keeps once for the whole process
+    and that serve every caller, such as loggers, sessions and defaults (as a separate copy per isolation domain is not
+    available yet):
+    - code that is sandboxed or acts for sandboxed code cannot replace or change them
+      (\c SANDBOX-REGISTRATION-ERROR): the default stack size of new threads
+      (@ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()"), the allocation tracking session
+      (@ref Qore::start_alloc_tracking() "start_alloc_tracking()" and
+      @ref Qore::stop_alloc_tracking() "stop_alloc_tracking()", whose data covers every caller) and the start time of
+      the relative time of the \c logger_bin module (\c LoggerEvent::setStartTime())
+    - it does not get the loggers that the host set: the global loggers of the \c DataProvider and
+      \c ProviderIndexUtil modules (\c getGlobalLogger()) return @ref nothing "NOTHING" for it, as if none were set
+    - a setting that holds no data of any caller can still be read, such as the default thread stack size and the
+      start time of relative logger time
+    - the messages that the library and the modules produce while they serve sandboxed code go to a logger that the
+      caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
+      not logged; never to a logger of another tenant
+
     @since %Qore 3.0
 
     @subsection sandbox_isolation_domains Isolation Domains (Tenants)
@@ -718,6 +735,10 @@ authenticate();
     source module is next to it is loaded as the source module, which runs under the sandbox of the loading code.  A
     module statically linked into a program built with \c qcc is part of that program's own native code and needs no
     such decision.
+
+    When library code accepts a module path at run time, the restrictions of its caller apply through nested library
+    calls and when loading into a different %Program. Host-controlled module directories remain the way to provide
+    native dependencies to restricted callers.
 
     What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
     the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the

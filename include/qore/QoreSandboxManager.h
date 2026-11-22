@@ -1198,7 +1198,14 @@ DLLEXPORT int qore_check_process_wide_registration(const char* what, ExceptionSi
     call.  Code runs as its own Program's code: a closure or call reference that a Program created runs that Program's
     code wherever it is called, so library code that it calls sees that Program as its caller.
 
+    A module's Program is a module's from its creation, also while the module is initialized: the initialization of a
+    module that a Program loads by its own path serves that Program.  The initialization of library code (a module
+    from a trusted module directory, see QoreModuleManager::isTrustedModulePath(), not one that a sandboxed Program
+    loads into a container of its own) creates state that the whole
+    process shares, whoever loads it first, so the code that loads it is not its caller, which would own that state.
+
     The caller is unknown, and the function fails, where the code that the running code serves cannot be identified:
+    - the initialization of library code, and the threads and tasks that it starts, whoever loads it (qore#7077)
     - code that a trusted build (SandboxManager::createTrustedBuildCall()) created or runs
     - work that started on a thread that no code submitted (an I/O callback, a signal handler), when no Program that
       is not a module's runs in it
@@ -1218,9 +1225,7 @@ DLLEXPORT int qore_get_caller_program_id(qore_program_id_t& id);
 //! Returns the caller Program: the Program whose code called the running code (qore#6852)
 /** See qore_get_caller_program_id() for the caller Program and when it is unknown
 
-    @return the caller Program, which is not referenced and is valid during the call only, or nullptr if it is unknown;
-    it can also be nullptr when the caller is known by its ID only (the initialization of a module that a Program that
-    has ended loaded); qore_get_caller_program_id() returns the ID then
+    @return the caller Program, which is not referenced and is valid during the call only, or nullptr if it is unknown
 
     @since %Qore 3.0
 */

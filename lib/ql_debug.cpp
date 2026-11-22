@@ -379,12 +379,23 @@ static QoreValue f_dbg_get_ns_info(const QoreListNode* params, RuntimeConfig& rc
 
 //! Returns the live generic specializations, concrete generic hashdecl declarations and the types registered by
 //! the generic caches (issue #5765)
+//! Returns the number of lookups of single environment variables by the library so far (qore#7086)
+static QoreValue f_dbg_environment_lookups(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_env_lookup_count.load(std::memory_order_relaxed));
+}
+
 static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("specializations", qore_live_generic_specializations.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("hashdecls", qore_live_parameterized_hashdecls.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("registered_types", static_cast<int64>(qore_generic_cache_registered_type_count()), xsink);
     return h.release();
+}
+
+//! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
+static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_thread_module_program_cache_enabled();
 }
 
 //! Returns the number of class, hashdecl and enum declarations kept after they were destroyed because derived types
@@ -3841,6 +3852,198 @@ static void ut_program_family_thread_data(UnitTestCounters& c) {
     t.h2->deref(&xsink);
     UT_ASSERT(c, !xsink, "freeing the data raises no exception");
     xsink.clear();
+}
+
+//! externalDelete() of an object whose deletion has started (qore#7071): it removes the private data that the caller
+//! has deleted, and starts no second deletion
+/** An explicit deletion (QoreObject::doDelete()) marks the object with the deleting thread's TID while the destructor
+    runs and the object's data is released, and the deletion after the last dereference sets in_destructor as well;
+    a module that has deleted the object's private data then (externalDelete()) must leave the deletion to the
+    running one, which must not release the deleted private data
+*/
+static void ut_external_delete_during_deletion_case(UnitTestCounters& c, bool in_destructor, const char* what) {
+    ExceptionSink xsink;
+    QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+    // a weak reference keeps the object allocated, so the test can see its state
+    obj->tRef();
+    qore_object_private* p = qore_object_private::get(*obj);
+    // the module's own reference to the private data, which it releases as it deletes it
+    AbstractPrivateData* pd = obj->getReferencedPrivateData(CID_COUNTER, &xsink);
+    UT_ASSERT(c, pd, (std::string(what) + ": the object has private data").c_str());
+    int tid = q_gettid();
+    // marked as the deletion marks it before its destructor runs
+    {
+        QoreAutoVarRWWriteLocker al(p->rml);
+        p->status = tid;
+        p->in_destructor = in_destructor;
+    }
+    obj->externalDelete(CID_COUNTER, &xsink);
+    int status;
+    bool has_data;
+    {
+        QoreAutoVarRWReadLocker al(p->rml);
+        status = p->status;
+        has_data = p->privateData && p->privateData->checkData(CID_COUNTER);
+    }
+    std::string m(what);
+    UT_ASSERT(c, status == tid, (m + ": externalDelete() starts no second deletion").c_str());
+    UT_ASSERT(c, !has_data, (m + ": the deleted private data is removed from the object").c_str());
+    UT_ASSERT(c, !xsink, (m + ": externalDelete() raises no exception").c_str());
+    xsink.clear();
+    if (has_data) {
+        // without the fix: removed here, so that the deletion below does not release the data that is freed below
+        QoreAutoVarRWWriteLocker al(p->rml);
+        p->privateData->getAndClearPtr(CID_COUNTER);
+    }
+    // the module deletes its private data: its own reference and the object's, which externalDelete() took over
+    if (pd) {
+        pd->deref(&xsink);
+        pd->deref(&xsink);
+    }
+    if (status == tid) {
+        // the running deletion continues: the destructor and the release of the object's data
+        {
+            QoreAutoVarRWWriteLocker al(p->rml);
+            p->in_destructor = false;
+        }
+        p->doDeleteIntern(&xsink);
+        UT_ASSERT(c, !obj->isValid(), (m + ": the running deletion deletes the object").c_str());
+        UT_ASSERT(c, !xsink, (m + ": the deletion raises no exception").c_str());
+        xsink.clear();
+    }
+    obj->deref(&xsink);
+    xsink.clear();
+    obj->tDeref();
+}
+
+static void ut_external_delete_during_deletion(UnitTestCounters& c) {
+    ut_external_delete_during_deletion_case(c, false, "explicit deletion");
+    ut_external_delete_during_deletion_case(c, true, "deletion in the destructor");
+}
+
+//! the data that q_save_thread_local_data() replaces for a key (qore#7075)
+static int ut_tld_save_data[3];
+//! the number of times the destructor of each data ran
+static int ut_tld_save_destroyed[3];
+//! the key that the re-entrant destructor saves data for, or -1
+static int ut_tld_save_reenter_key = -1;
+
+static void ut_tld_save_destructor(void* data) {
+    ++ut_tld_save_destroyed[static_cast<int*>(data) - ut_tld_save_data];
+}
+
+//! a destructor that saves data for its own key once, as a module's destructor can
+static void ut_tld_save_reentrant_destructor(void* data) {
+    ut_tld_save_destructor(data);
+    int key = ut_tld_save_reenter_key;
+    if (key >= 0) {
+        ut_tld_save_reenter_key = -1;
+        q_save_thread_local_data(key, &ut_tld_save_data[2], ut_tld_save_destructor);
+    }
+}
+
+//! saving data for a key that has data replaces it: the old data's destructor runs once, and the new data and its
+//! destructor are stored (qore#7075)
+//! no Program API sets or clears a system parse option (PO_SYSTEM_OPS) of a Program that has it (qore#7109)
+/** A Program that module code creates does not inherit PO_IN_MODULE (qore#7067), so no Program that Qore code can
+    reach has the option: this test makes one as the module manager does, and checks that the setter, the clearing
+    method and the replacement refuse to change the option, and that a replacement that keeps it is allowed.
+*/
+static void ut_program_system_option_changes(UnitTestCounters& c) {
+    // the PROGRAM-OPTION-ERROR exception of a sink, cleared
+    auto option_error = [](ExceptionSink& xsink) -> bool {
+        bool rc = false;
+        if (xsink.isException()) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            rc = !strcmp(err->c_str(), "PROGRAM-OPTION-ERROR");
+        }
+        xsink.clear();
+        return rc;
+    };
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(QoreParseOptions(PO_NEW_STYLE | PO_IN_MODULE));
+    // Program::replaceParseOptions() also requires the calling Program to have PO_NO_CHILD_PO_RESTRICTIONS: the checks
+    // run in a host Program that has it, so that they do not depend on how the script that calls run_unit_tests() was
+    // parsed (a %modern script does not have it), and test the refusal of the system option itself
+    QoreProgram* host = new QoreProgram(QoreParseOptions(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS));
+    {
+        ProgramThreadCountContextHelper tch(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "system options: the host Program is entered");
+        xsink.clear();
+        const QoreParseOptions before = qore_program_private::readParseOptions(*pgm);
+        UT_ASSERT(c, before.hasAny(QoreParseOptions(PO_IN_MODULE)), "system options: the Program has PO_IN_MODULE");
+
+        pgm->disableParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: disableParseOptions() refuses to clear PO_IN_MODULE");
+        pgm->replaceParseOptions(before & ~QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: replaceParseOptions() refuses to clear PO_IN_MODULE");
+        pgm->setParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+        UT_ASSERT(c, option_error(xsink), "system options: setParseOptions() refuses PO_IN_MODULE");
+        UT_ASSERT(c, qore_program_private::readParseOptions(*pgm) == before,
+            "system options: the refused changes leave the options as they were");
+
+        // a replacement that keeps the option as the Program has it is allowed
+        pgm->replaceParseOptions(before | QoreParseOptions(PO_NO_NETWORK), &xsink);
+        UT_ASSERT(c, !xsink, "system options: a replacement that keeps PO_IN_MODULE is allowed");
+        xsink.clear();
+        UT_ASSERT(c, qore_program_private::readParseOptions(*pgm)
+            == (before | QoreParseOptions(PO_NO_NETWORK)), "system options: the replacement keeps PO_IN_MODULE");
+    }
+
+    pgm->deref(&xsink);
+    UT_ASSERT(c, !xsink, "system options: the Program's teardown raises no exception");
+    xsink.clear();
+    host->deref(&xsink);
+    UT_ASSERT(c, !xsink, "system options: the host Program's teardown raises no exception");
+    xsink.clear();
+}
+
+static void ut_tld_save_existing_key(UnitTestCounters& c) {
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = 0;
+    int key = q_get_unique_thread_local_data_key();
+    q_save_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_destructor);
+    q_save_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor);
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "q_save_thread_local_data(): the replaced data's destructor runs");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[1],
+        "q_save_thread_local_data(): the new data is stored");
+    q_user_tld data(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data, true), "q_remove_thread_local_data(): the key has data");
+    UT_ASSERT(c, data.data == &ut_tld_save_data[1], "q_remove_thread_local_data(): it is the new data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "the replaced data's destructor does not run again");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "the new data's destructor runs when it is removed");
+
+    // the destructor of the replaced data saves data for its key again: it runs after the new data is stored
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = ut_tld_save_destroyed[2] = 0;
+    key = q_get_unique_thread_local_data_key();
+    q_save_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_reentrant_destructor);
+    ut_tld_save_reenter_key = key;
+    q_save_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor);
+    ut_tld_save_reenter_key = -1;
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "re-entrant: the replaced data's destructor runs once");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "re-entrant: the data replaced by the destructor is destroyed");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[2],
+        "re-entrant: the data saved by the destructor is stored");
+    q_user_tld data2(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data2, true), "re-entrant: the key has data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[2], "re-entrant: the last data's destructor runs when it is removed");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[0], "re-entrant: no destructor runs twice");
+
+    // q_swap_thread_local_data() returns the old data, runs its destructor only if asked, and stores the new data
+    ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = ut_tld_save_destroyed[2] = 0;
+    key = q_get_unique_thread_local_data_key();
+    UT_ASSERT(c, !q_swap_thread_local_data(key, &ut_tld_save_data[0], ut_tld_save_destructor),
+        "swap: a key without data has no old data");
+    UT_ASSERT(c, q_swap_thread_local_data(key, &ut_tld_save_data[1], ut_tld_save_destructor, false)
+        == &ut_tld_save_data[0], "swap: the old data is returned");
+    UT_ASSERT_EQ(c, 0, ut_tld_save_destroyed[0], "swap: the old data's destructor is not run when not asked");
+    UT_ASSERT(c, q_swap_thread_local_data(key, &ut_tld_save_data[2], ut_tld_save_destructor, true)
+        == &ut_tld_save_data[1], "swap: the replaced data is returned");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "swap: the replaced data's destructor runs when asked");
+    UT_ASSERT(c, q_get_thread_local_data(key) == &ut_tld_save_data[2], "swap: the new data is stored");
+    q_user_tld data3(nullptr, nullptr);
+    UT_ASSERT_EQ(c, 0, q_remove_thread_local_data(key, data3, true), "swap: the key has data");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[2], "swap: the last data's destructor runs when it is removed");
+    UT_ASSERT_EQ(c, 1, ut_tld_save_destroyed[1], "swap: no destructor runs twice");
 }
 
 static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
@@ -22872,6 +23075,9 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_external_delete_during_deletion(c);
+    ut_tld_save_existing_key(c);
+    ut_program_system_option_changes(c);
     ut_library_names_encoding(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -23311,6 +23517,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_external_delete_during_deletion(c);
+    ut_tld_save_existing_key(c);
+    ut_program_system_option_changes(c);
     ut_library_names_encoding(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -28582,9 +28791,188 @@ static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! A counted string sentinel whose initializer copies the member descriptor and then resolves to a scalar.
+class DbgMemberInitializer : public QoreStringNode {
+public:
+    DbgMemberInitializer(QoreMemberInfo& source, std::optional<QoreMemberInfo>& child,
+            std::optional<QoreMemberInfo>& leaf, bool resolve)
+            : source(source), child(child), leaf(leaf), resolve(resolve) {
+    }
+
+    bool copies_saw_sentinel = false;
+
+private:
+    QoreMemberInfo& source;
+    std::optional<QoreMemberInfo>& child;
+    std::optional<QoreMemberInfo>& leaf;
+    const bool resolve;
+
+    int parseInit(QoreValue& value, QoreParseContext& parse_context) override {
+        child.emplace(source, nullptr);
+        {
+            QoreMemberInfo intermediate(*child, nullptr);
+            leaf.emplace(intermediate, nullptr);
+            copies_saw_sentinel = child->exp.getInternalNode() == this || leaf->exp.getInternalNode() == this;
+        }
+        value.discard(nullptr);
+        value = static_cast<int64>(42);
+        parse_context.typeInfo = bigIntTypeInfo;
+        return resolve ? 0 : -1;
+    }
+};
+
+//! Observes the initializer held by descriptors copied during parse initialization without using a recursive expression.
+static QoreValue f_dbg_inherited_member_initializer(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // The sentinel outlives every descriptor, even if a copy still holds the original string.
+    ReferenceHolder<DbgMemberInitializer> sentinel(xsink);
+    QoreMemberInfo source(&loc_builtin, bigIntTypeInfo);
+    std::optional<QoreMemberInfo> child;
+    std::optional<QoreMemberInfo> leaf;
+    sentinel = new DbgMemberInitializer(source, child, leaf, HARD_QORE_VALUE_BOOL(params, 0));
+    source.exp = QoreValue(*sentinel).refSelf();
+    LocalVar selfid("self", objectTypeInfo);
+    int parse_result = source.parseInit("member", selfid);
+    auto finished = [](const QoreMemberInfo& member) {
+        return member.exp.getType() == NT_INT && member.exp.getAsBigInt() == 42
+            && member.getInitializerTypeInfo() == bigIntTypeInfo;
+    };
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("parsed", !parse_result, xsink);
+    result->setKeyValue("exposed", sentinel->copies_saw_sentinel, xsink);
+    result->setKeyValue("source", finished(source), xsink);
+    result->setKeyValue("child", child && finished(*child), xsink);
+    result->setKeyValue("leaf", leaf && finished(*leaf), xsink);
+    result->setKeyValue("copies_empty", child && leaf && child->exp.isNothing() && leaf->exp.isNothing(), xsink);
+    return result.release();
+}
+
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
+}
+
+//! Observes native-load policy in library code, across a destination switch and during trusted module initialization.
+//! The probe takes no pathname and opens no file.
+static QoreValue f_dbg_nested_native_load_policy(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* caller_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> caller(static_cast<QoreProgram*>(caller_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!caller) {
+        return QoreValue();
+    }
+    const QoreObject* target_obj = get_param_value(params, 1).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> target(static_cast<QoreProgram*>(target_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!target) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreProgram> outer(new QoreProgram(PO_IN_MODULE), xsink);
+    ReferenceHolder<QoreProgram> inner(new QoreProgram(PO_IN_MODULE), xsink);
+    qore_program_private::get(**outer)->library_module = true;
+    qore_program_private::get(**inner)->library_module = true;
+
+    bool nested;
+    bool switched;
+    bool initializing;
+    bool after_init;
+    {
+        ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ProgramThreadCountContextHelper outer_frame(xsink, *outer, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        {
+            ProgramThreadCountContextHelper inner_frame(xsink, *inner, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            nested = qore_caller_may_load_native_code();
+            // The same scope and destination switch as QoreModuleManager::runTimeLoadModule().
+            QoreCallerSandboxHelper issuer(*target, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ProgramRuntimeParseContextHelper destination(xsink, *target);
+            if (*xsink) {
+                return QoreValue();
+            }
+            switched = qore_caller_may_load_native_code();
+        }
+        {
+            QoreModuleInitSandboxBarrierHelper barrier(true);
+            if (barrier.failed()) {
+                xsink->outOfMemory();
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper module_init(xsink, *inner, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            initializing = qore_caller_may_load_native_code();
+        }
+        after_init = qore_caller_may_load_native_code();
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("nested", nested, xsink);
+    result->setKeyValue("destination", switched, xsink);
+    result->setKeyValue("initializing", initializing, xsink);
+    result->setKeyValue("after_init", after_init, xsink);
+    result->setKeyValue("restored", qore_caller_may_load_native_code(), xsink);
+    return result.release();
+}
+
+//! Observes a live policy change of a test-owned sandbox while two library initializers are active.
+static QoreValue f_dbg_native_load_init_revocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreSandboxManager> manager(new QoreSandboxManager, nullptr);
+    manager->setUncontrolledApiPolicy(true);
+    ReferenceHolder<QoreProgram> caller(new QoreProgram(QoreParseOptions(PO_DEFAULT)), xsink);
+    caller->setSandboxManager(*manager);
+    ReferenceHolder<QoreProgram> outer(new QoreProgram(PO_IN_MODULE), xsink);
+    ReferenceHolder<QoreProgram> inner(new QoreProgram(PO_IN_MODULE), xsink);
+    qore_program_private::get(**outer)->library_module = true;
+    qore_program_private::get(**inner)->library_module = true;
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        {
+            QoreModuleInitSandboxBarrierHelper outer_barrier(true);
+            if (outer_barrier.failed()) {
+                xsink->outOfMemory();
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper outer_frame(xsink, *outer, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            result->setKeyValue("outer_before", qore_caller_may_load_native_code(), xsink);
+            {
+                QoreModuleInitSandboxBarrierHelper inner_barrier(true);
+                if (inner_barrier.failed()) {
+                    xsink->outOfMemory();
+                    return QoreValue();
+                }
+                ProgramThreadCountContextHelper inner_frame(xsink, *inner, true);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                result->setKeyValue("inner_before", qore_caller_may_load_native_code(), xsink);
+                manager->setUncontrolledApiPolicy(false);
+                result->setKeyValue("inner_after", qore_caller_may_load_native_code(), xsink);
+            }
+            result->setKeyValue("outer_after", qore_caller_may_load_native_code(), xsink);
+        }
+        result->setKeyValue("caller_after", qore_caller_may_load_native_code(), xsink);
+    }
+    result->setKeyValue("host_after", qore_caller_may_load_native_code(), xsink);
+    return result.release();
 }
 
 //! Returns the number of call budget frames of the current thread
@@ -28678,6 +29066,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_generic_cache_counts", f_dbg_generic_cache_counts, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
@@ -28750,6 +29142,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_native_load_init_revocation", f_dbg_native_load_init_revocation, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_nested_native_load_policy", f_dbg_nested_native_load_policy, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
+        QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_inherited_member_initializer", f_dbg_inherited_member_initializer, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "resolve");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

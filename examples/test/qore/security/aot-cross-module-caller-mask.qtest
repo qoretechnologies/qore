@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native calls between AOT-compiled modules (dylibs) and their call stack frames, child qore
+# test-exec-mode: children - every check runs in child processes that set their own --exec-mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AotCrossModuleCallerMaskTest
+
+#! Tests that a library function sees the restrictions of an AOT-compiled module that calls it (qore#7101)
+/** A function of a module compiled with qcc calls a function of another compiled module through the native fast entry
+    of the callee, which pushed no call stack frame: Program::getCallerCapabilityMask(1) in the library function
+    then read the frame of the code that called the restricted module, and the module's restrictions
+    (%no-process-control here) were not seen.  The library and the restricted module are in a directory of the module
+    path of the child process, compiled with the in-tree qcc and from source, and the child runs in each execution mode;
+    every way that the restricted module calls the library must show its restriction.  Of these ways, the function
+    calls (function, method and plain) use the callee's native fast entry when the modules are compiled; the static
+    method, object method and call reference calls go through the runtime path, which pushes the frame of the call
+    before it enters the callee's Program.
+
+    An unrestricted compiled module also calls the restricted one, which calls the library (a chain of three compiled
+    modules): the Program of the caller that the call gives the frame of the callee must not leak to a later frame, so
+    the library sees the restriction there too.  The compiled modules run once more with the native fast entries
+    disabled (QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1), which takes the runtime path for every call: the results are
+    the same, and the difference between the two runs is the fast entry that the test exercises.
+*/
+class AotCrossModuleCallerMaskTest inherits QUnit::Test {
+    public {
+        #! the library: reports the parse options of its caller
+        const MaskLib = "%modern
+module MaskLib {
+    version = \"1.0\";
+    desc = \"caller capability mask probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace MaskLib {
+public int sub callerMask() {
+    return Program::getCallerCapabilityMask(1);
+}
+
+public class Probe {
+    static int callerMask() {
+        return Program::getCallerCapabilityMask(1);
+    }
+
+    int objMask() {
+        return Program::getCallerCapabilityMask(1);
+    }
+}
+}
+";
+
+        #! the module restricted by its parse options, which calls the library in each way
+        const RestrictedProbe = "%modern
+%requires MaskLib
+%no-process-control
+
+module RestrictedProbe {
+    version = \"1.0\";
+    desc = \"caller capability mask probe, restricted\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace RestrictedProbe {
+public class R {
+    int viaFunction() {
+        return MaskLib::callerMask();
+    }
+
+    int viaStatic() {
+        return MaskLib::Probe::callerMask();
+    }
+
+    int viaObject() {
+        MaskLib::Probe p();
+        return p.objMask();
+    }
+
+    int viaCallRef() {
+        code c = \\MaskLib::callerMask();
+        return c();
+    }
+
+    int viaMethod() {
+        return helper();
+    }
+
+    private int helper() {
+        return MaskLib::callerMask();
+    }
+}
+
+public int sub viaPlainFunction() {
+    return MaskLib::callerMask();
+}
+}
+";
+
+        #! an unrestricted module that calls the restricted module, which calls the library
+        const UnrestrictedCaller = "%modern
+%requires RestrictedProbe
+
+module UnrestrictedCaller {
+    version = \"1.0\";
+    desc = \"caller capability mask probe, unrestricted caller\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace UnrestrictedCaller {
+public int sub chain() {
+    return RestrictedProbe::viaPlainFunction();
+}
+}
+";
+
+        #! the unrestricted code that calls the restricted module; repeated, so that cached fast entries are used
+        const Host = "%modern
+%requires MaskLib
+%requires RestrictedProbe
+%requires UnrestrictedCaller
+
+RestrictedProbe::R r();
+for (int i = 0; i < 3; ++i) {
+    printf(\"%d function=%y static=%y object=%y callref=%y method=%y plain=%y\\n\", i,
+        boolean(r.viaFunction() & PO_NO_PROCESS_CONTROL), boolean(r.viaStatic() & PO_NO_PROCESS_CONTROL),
+        boolean(r.viaObject() & PO_NO_PROCESS_CONTROL), boolean(r.viaCallRef() & PO_NO_PROCESS_CONTROL),
+        boolean(r.viaMethod() & PO_NO_PROCESS_CONTROL),
+        boolean(RestrictedProbe::viaPlainFunction() & PO_NO_PROCESS_CONTROL));
+    printf(\"%d chain=%y\\n\", i, boolean(UnrestrictedCaller::chain() & PO_NO_PROCESS_CONTROL));
+}
+# the library called directly by the unrestricted code sees no restriction
+printf(\"direct=%y\\n\", boolean(MaskLib::callerMask() & PO_NO_PROCESS_CONTROL));
+";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        TmpDir tmp("qore-aot-cross-module-caller-mask-");
+    }
+
+    constructor() : QUnit::Test("AOT cross-module caller capability mask", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        foreach string d in (("source", "aot")) {
+            mkdir(tmp.path + DirSep + d);
+        }
+        write(tmp.path + DirSep + "source" + DirSep + "MaskLib.qm", MaskLib);
+        write(tmp.path + DirSep + "source" + DirSep + "RestrictedProbe.qm", RestrictedProbe);
+        write(tmp.path + DirSep + "source" + DirSep + "UnrestrictedCaller.qm", UnrestrictedCaller);
+        write(tmp.path + DirSep + "host.q", Host);
+
+        foreach string mode in (Modes) {
+            string m = mode;
+            addTestCase("modules from source, " + m, sub () { check("source", m); });
+        }
+        addTestCase("AOT modules", \aotTest());
+        set_return_value(main());
+    }
+
+    private aotTest() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        string aot = tmp.path + DirSep + "aot";
+        string mod_path = aot + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        foreach hash<auto> i in ({"MaskLib": MaskLib, "RestrictedProbe": RestrictedProbe,
+                "UnrestrictedCaller": UnrestrictedCaller}.pairIterator()) {
+            string src = tmp.path + DirSep + i.key + ".qm";
+            write(src, i.value);
+            string qmod = aot + DirSep + i.key + ".qmod";
+            string out = backquote(sprintf("%s QORE_MODULE_DIR='%s' '%s' --module -o '%s' '%s' 2>&1", env, mod_path,
+                qcc_bin, qmod, src));
+            assertTrue(is_file(qmod), out);
+        }
+        foreach string mode in (Modes) {
+            check("aot", mode);
+            # the runtime path for every call
+            check("aot", mode, "QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1");
+        }
+    }
+
+    #! Runs the host with the modules in the given directory and checks that every way of calling sees the restriction
+    private check(string dir, string mode, string extra_env = "") {
+        string mod_path = tmp.path + DirSep + dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string output = tmp.path + DirSep + "output.txt";
+        int rc = system(sprintf("%s %s QORE_MODULE_DIR='%s' '%s' --exec-mode=%s '%s' > '%s' 2>&1", env, extra_env,
+            mod_path, qore_bin, mode, tmp.path + DirSep + "host.q", output));
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        string expected = "";
+        for (int i = 0; i < 3; ++i) {
+            expected += sprintf("%d function=True static=True object=True callref=True method=True plain=True\n", i);
+            expected += sprintf("%d chain=True\n", i);
+        }
+        expected += "direct=False\n";
+        assertEq(expected, out, sprintf("%s, %s%s", dir, mode, extra_env ? ", " + extra_env : ""));
+    }
+
+    #! Writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+}

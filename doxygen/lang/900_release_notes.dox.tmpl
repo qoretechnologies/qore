@@ -101,6 +101,10 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional Domains for Standard Module Sources
+    Restricted Programs now get a parse error when explicitly loading standard module sources outside the
+    process-wide module path if the source needs a denied @ref function_domains "functional domain".
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
@@ -1693,6 +1697,11 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par Process-Wide Singletons Refuse Sandboxed Code
+    Sandboxed code cannot change the process-wide default thread stack size or logger start time, and does not get
+    the global loggers of the data provider modules; see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>).
+
     @par The Caller Program of Library Code
     Library code can identify the %Program whose code it serves, also through other module code, threads and thread
     pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and
@@ -2642,6 +2651,37 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
+      module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
+    - code restricted from the functional domain of a qlib connection cannot create it (see @ref connectionprovider_3_1),
+      and the connection, poll operation and connection manager classes of @ref httpclientiointro "HttpClientIo"
+      refuse such code (see @ref httpclientio_caller_domains)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>)
+    - @ref filelocationhandlerintro "FileLocationHandler" refuses a caller restricted from the functional domain of a
+      location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
+      locations); see @ref filelocationhandler_v3_0
+      (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - fixed a crash when the members of a deleted object are merged into another object with the
+      @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
+      merge into a deleted object also when there is nothing to merge
+      (<a href="https://github.com/qoretechnologies/qore/issues/7055">issue 7055</a>)
+    - a method whose own variants are @ref private_methods "private" can be called from outside the class hierarchy
+      with a public variant that it inherits (see @ref inheritance), also by a call resolved at run time and in the IR
+      execution modes, which raised \c METHOD-IS-PRIVATE
+      (<a href="https://github.com/qoretechnologies/qore/issues/7074">issue 7074</a>)
+    - Fixed a crash during %Program teardown when resolving a class constant also initialized a subclass that
+      inherited the same @ref member_initialization "member initializer" (issue
+      <a href="https://github.com/qoretechnologies/qore/issues/7076">#7076</a>).
+
+    - @ref Qore::Program::replaceParseOptions() refuses changes to system-owned parse options
+    - @c DataProviderPipeline::getInfo() uses the @ref Qore::clock_get_monotonic_us() "monotonic clock" to report
+      elapsed time correctly across system clock changes
+
+    - fixed a deadlock of the @ref plus_equals_operator "+=" and @ref minus_equals_operator "-=" operators and of the
+      @ref remove "remove" and @ref delete "delete" operators on a member of an object reached through a member of the
+      object itself, as in <tt>t.o = t; t.o += {"a": 2};</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/7107">issue 7107</a>)
     - private access is given only to the class itself, a copy of its declaration or a class injected in its place;
       a class with only the same name and declarations as another class had the other class's private and
       \c private:internal access to its objects (see @ref private_access_class_identity;

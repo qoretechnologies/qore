@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ConnectionProvider
+%requires RestClient
+%requires SmtpClient
+%requires Pop3Client
+%requires ImapClient
+%requires TelnetClient
+%requires RedisDataProvider
+%requires MemcachedDataProvider
+%requires ServerSentEventClient
+%requires MllpUtil
+%requires WebSocketClient
+%requires ConnectDataProvider
+%requires DataStreamClientIo
+%requires MongoDbDataProvider
+
+%exec-class ConnectionCreatorDomainsTest
+
+#! Tests that code restricted from the functional domains of a connection cannot create it (qore#6981, qore#7052)
+/** A connection builds its client in its module's code, when get() or getAsync() is called, so a connection that code
+    restricted from the network created handed that code a live client.  Code restricted from the domains that a
+    connection's clients use cannot create the connection, by any constructor or by deserialization; a connection that
+    the host created gives its clients to the code that the host gives it to.
+*/
+class ConnectionCreatorDomainsTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the class, the URL scheme and the method that gives a client of each connection
+        const Connections = {
+            "RestConnection get": ("RestClient::RestConnection", "http", "get"),
+            "RestConnection getAsync": ("RestClient::RestConnection", "http", "getAsync"),
+            "HttpConnection get": ("ConnectionProvider::HttpConnection", "http", "get"),
+            "HttpConnection getAsync": ("ConnectionProvider::HttpConnection", "http", "getAsync"),
+            "SmtpConnection get": ("SmtpClient::SmtpConnection", "smtp", "get"),
+            "Pop3Connection get": ("Pop3Client::Pop3Connection", "pop3", "get"),
+            "ImapConnection get": ("ImapClient::ImapConnection", "imap", "get"),
+            "TelnetConnection get": ("TelnetClient::TelnetConnection", "telnet", "get"),
+            "RedisConnection get": ("RedisDataProvider::RedisConnection", "redis", "get"),
+            "MemcachedConnection get": ("MemcachedDataProvider::MemcachedConnection", "memcached", "get"),
+            "ServerSentEventConnection get": ("ServerSentEventClient::ServerSentEventConnection", "sse", "get"),
+            "MllpConnection get": ("MllpUtil::MllpConnection", "mllp", "get"),
+            "FtpConnection getAsync": ("ConnectionProvider::FtpConnection", "ftp", "getAsync"),
+            "WebSocketConnectionObject get": ("WebSocketClient::WebSocketConnectionObject", "ws", "get"),
+            "ConnectConnection get": ("ConnectDataProvider::ConnectConnection", "connect", "get"),
+            "DataStreamConnectionIo get": ("DataStreamClient::DataStreamConnectionIo", "dsio", "get"),
+            "MongoDbConnection get": ("MongoDbDataProvider::MongoDbConnection", "mongodb", "get"),
+        };
+
+        #! the connections whose client is, or creates, an HttpClientIo connection manager
+        const ManagerClients = {
+            "RestConnection getAsync": True,
+            "HttpConnection getAsync": True,
+            "ConnectConnection get": True,
+            "DataStreamConnectionIo get": True,
+        };
+
+        #! the connections whose creator is checked: those that restricted code creates give no client
+        const Checked = keys Connections;
+
+        #! the classes of the connections that have a constructor that takes a configuration hash
+        const HashConfig = ("RestConnection get", "HttpConnection get", "SmtpConnection get", "FtpConnection getAsync",
+            "MongoDbConnection get", "DataStreamConnectionIo get");
+    }
+
+    constructor() : QUnit::Test("ConnectionCreatorDomains", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("connections that the host lends, " + m, sub () { testLent(m); });
+            addTestCase("connections that restricted code creates, " + m, sub () { testRestrictedCreator(m); });
+            addTestCase("the domains of a connection class, " + m, sub () { testDomainOverride(m); });
+            addTestCase("a file system connection, " + m, sub () { testFilesystem(m); });
+            addTestCase("a connection class that does not declare its domains, " + m, sub () { testUndeclared(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! a connection that the host created gives its clients to restricted code, except the clients that are or create
+    #! HttpClientIo connection managers
+    private testLent(string mode) {
+        int port = get_free_port();
+        Program p = getProgram(mode);
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            object c = create_object(i.value[0], "c", "d", getUrl(i.value[1], port),
+                {"monitor": False});
+            string rv = p.callFunction("client", c, i.value[2]);
+            # a client that is or creates an HttpClientIo connection manager is created for the calling code, which
+            # cannot create a manager if it is restricted from the network (qore#6981)
+            if (ManagerClients{i.key}) {
+                assertRegex("^PERMISSION-DENIED: the calling code may not create an HTTP client connection manager",
+                    rv, sprintf("%s, %s", i.key, mode));
+                continue;
+            }
+            # the client is given, or it is created and fails to connect to the port where nothing listens (a client
+            # that connects when it is created): either way it is not refused for its domain
+            assertRegex("^(client|[A-Z0-9-]+: .*(refused|connect))", rv, sprintf("%s, %s", i.key, mode));
+            assertFalse(rv =~ /^(PERMISSION-DENIED|INVALID-FUNCTION-ACCESS)/,
+                sprintf("%s not refused, %s", i.key, mode));
+        }
+    }
+
+    #! code restricted from a connection's domain cannot create the connection, nor deserialize it
+    private testRestrictedCreator(string mode) {
+        int port = get_free_port();
+        Program p = getProgram(mode);
+        foreach string key in (Checked) {
+            list<string> i = Connections{key};
+            # the connection cannot be created, so no client path exists
+            assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                "connection \"c\"", p.callFunction("make", i[0], getUrl(i[1], port)),
+                sprintf("%s, %s", key, mode));
+            # also by the constructor that takes a configuration hash
+            if (HashConfig.contains(key)) {
+                assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                    "connection \"c\"", p.callFunction("make_hash", i[0], getUrl(i[1], port)),
+                    sprintf("%s from a configuration, %s", key, mode));
+            }
+            # nor deserialized from a connection that the host serialized
+            object c = create_object(i[0], "c", "d", getUrl(i[1], port), {"monitor": False});
+            binary data = c.serialize();
+            assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                "connection \"c\"", p.callFunction("deserialize", data), sprintf("%s deserialized, %s", key, mode));
+            # the host deserializes it
+            assertEq(i[0].split("::").last(), Serializable::deserialize(data).className(),
+                sprintf("%s deserialized by the host, %s", key, mode));
+        }
+        # nor can a subclass that the restricted code declares be created
+        Program sp(PO_NEW_STYLE | PO_NO_NETWORK);
+        sp.setExecMode(Modes{mode});
+        sp.parse("%modern\n%requires RestClient\nclass X inherits RestClient::RestConnection {\n"
+            "    constructor(string url) : RestConnection(\"x\", \"d\", url, {\"monitor\": False}) {}\n"
+            "    object client() { return getImpl(False); }\n}\n"
+            "string sub t(string url) { try { X x(url); x.client(); return \"client\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "subclass");
+        assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+            "connection \"x\"", sp.callFunction("t", getUrl("http", port)), "subclass, " + mode);
+    }
+
+    #! a subclass that restricted code declares cannot change the domains of a connection class
+    private testDomainOverride(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        string result;
+        try {
+            p.parse("%modern\n%requires RestClient\nclass X inherits RestClient::RestConnection {\n"
+                "    private int getConnectionDomainsImpl() { return 0; }\n}\n", "override");
+            result = "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            result = ex.err + ": " + ex.desc;
+        }
+        assertRegex("^PARSE-EXCEPTION: .*getConnectionDomainsImpl", result, "override, " + mode);
+    }
+
+    #! code restricted from the file system cannot create a file system connection
+    private testFilesystem(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires ConnectionProvider\nstring sub t() { try { new FilesystemConnection(\"c\", "
+            "\"d\", \"file:///tmp\", {\"monitor\": False}); return \"created\"; } catch (hash<ExceptionInfo> ex) "
+            "{ return ex.err + \": \" + ex.desc; } }", "filesystem");
+        assertRegex("^PERMISSION-DENIED: code restricted from the FILESYSTEM functional domain cannot create "
+            "connection \"c\"", p.callFunction("t"), "file system connection, " + mode);
+    }
+
+    #! code restricted from any I/O domain cannot create a connection of a class that does not declare its domains
+    private testUndeclared(string mode) {
+        string src = "%modern\n%requires ConnectionProvider\n"
+            "class U inherits AbstractConnectionWithInfo {\n"
+            "    constructor() : AbstractConnectionWithInfo(\"u\", \"d\", \"x://h\", {\"monitor\": False}) {}\n"
+            "    string getType() { return \"x\"; }\n"
+            "    private object getImpl(bool connect = True, *hash<auto> rtopts) { return new Mutex(); }\n"
+            "    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {\n"
+            "        return <ConnectionSchemeInfo>{\"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", "
+            "\"cls\": Class::getClass(self), \"schemes\": {\"x\": True}};\n"
+            "    }\n"
+            "}\n"
+            "class N inherits U {\n"
+            "    private int getConnectionDomainsImpl() { return 0; }\n"
+            "}\n"
+            "string sub t(string cls) { try { create_object(cls); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }";
+        # each domain that the code is restricted from refuses the class, as its clients may use any of them
+        foreach hash<auto> i in ({"NETWORK": PO_NO_NETWORK, "FILESYSTEM": PO_NO_FILESYSTEM,
+                "DATABASE": PO_NO_DATABASE}.pairIterator()) {
+            Program p(PO_NEW_STYLE | i.value);
+            p.setExecMode(Modes{mode});
+            p.parse(src, "undeclared");
+            assertRegex("^PERMISSION-DENIED: code restricted from the " + i.key + " functional domain cannot create "
+                "connection \"u\"", p.callFunction("t", "U"), sprintf("undeclared, %s, %s", i.key, mode));
+            # a class that declares that its clients use no domain is created
+            assertEq("created", p.callFunction("t", "N"), sprintf("no domain, %s, %s", i.key, mode));
+        }
+        # unrestricted code creates a connection of a class that does not declare its domains
+        Program u(PO_NEW_STYLE);
+        u.setExecMode(Modes{mode});
+        u.parse(src, "undeclared");
+        assertEq("created", u.callFunction("t", "U"), "unrestricted, " + mode);
+    }
+
+    #! returns the URL of a connection; POP3 and IMAP connections need credentials
+    private static string getUrl(string scheme, int port) {
+        return sprintf("%s://%s127.0.0.1:%d", scheme, (scheme == "pop3" || scheme == "imap") ? "u:p@" : "", port);
+    }
+
+    private Program getProgram(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n%requires SmtpClient\n"
+            "%requires Pop3Client\n%requires ImapClient\n%requires TelnetClient\n%requires RedisDataProvider\n"
+            "%requires MemcachedDataProvider\n%requires ServerSentEventClient\n%requires MllpUtil\n"
+            "%requires WebSocketClient\n%requires ConnectDataProvider\n%requires DataStreamClientIo\n"
+            "%requires MongoDbDataProvider\n"
+            "string sub make_hash(string cls, string url) { try { create_object(cls, {\"name\": \"c\", \"desc\": "
+            "\"d\", \"url\": url}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err + \": \" + ex.desc; } }\n"
+            "string sub make(string cls, string url) { try { create_object(cls, \"c\", \"d\", url, "
+            "{\"monitor\": False}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err + \": \" + ex.desc; } }\n"
+            "string sub deserialize(binary data) { try { Serializable::deserialize(data); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+            "string sub client(object c, string method) { try { call_object_method(c, method, False); "
+            "return \"client\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "conn");
+        return p;
+    }
+}

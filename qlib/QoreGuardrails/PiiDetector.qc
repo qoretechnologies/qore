@@ -327,7 +327,7 @@ public class PiiDetector inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
         list<hash<auto>> findings = ();
 
         if (enabled_types{PII_EMAIL}) {
@@ -384,7 +384,7 @@ public class PiiDetector inherits AbstractGuardrailRule {
 
         if (!findings) {
             hash<GuardrailResult> result = makePassResult();
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
@@ -418,7 +418,7 @@ public class PiiDetector inherits AbstractGuardrailRule {
             "violations": violations,
             "modified_text": modified,
             "rules_evaluated": 1,
-            "duration_ms": getElapsedMs(start),
+            "duration_ms": getElapsedMs(start_us),
         };
     }
 

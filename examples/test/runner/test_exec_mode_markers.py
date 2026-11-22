@@ -28,11 +28,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
 TESTS = ROOT / "examples/test"
 
 MARKER = re.compile(r"(?m)^# test-exec-mode: (?P<kind>\S+) - (?P<why>\S.*)$")
@@ -338,6 +341,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   without an execution mode
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
         #   without an execution mode
+        # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
         # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
@@ -346,6 +350,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
@@ -366,6 +371,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
+                                 "examples/test/qore/security/method-call-program-context.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
@@ -417,6 +423,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
+                                 "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
@@ -434,6 +441,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
+                                 "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
@@ -565,9 +573,10 @@ class RunnerExclusionTest(unittest.TestCase):
             (binaries / "libqore.so").touch()
             log = root / "ran"
             qore = binaries / "qore"
-            qore.write_text('#!/bin/sh\nfor a in "$@"; do case "$a" in *.qtest) basename "$a" >> "$RAN_LOG";; esac; '
-                            'done\nexit 0\n')
+            qore.write_text('#!/bin/sh\n' + STAND_IN_VERSION + 'for a in "$@"; do case "$a" in *.qtest) basename "$a" '
+                            '>> "$RAN_LOG";; esac; done\nexit 0\n')
             qore.chmod(0o755)
+            stand_in_build(root, binaries)
             env = {
                 "PATH": os.defpath,
                 "CI": "1",

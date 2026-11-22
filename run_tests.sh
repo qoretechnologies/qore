@@ -29,16 +29,30 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
   echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
   echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
-  echo "                           memory.events.  Where perl or setsid is available, the test runs in a process"
-  echo "                           group of its own, and the processes left in it are killed once the test has"
-  echo "                           ended, as they are when a signal ends the run; otherwise the test is signalled"
-  echo "                           alone.  In a run from a terminal, the test is then a background process group:"
-  echo "                           with 'stty tostop', or if it changes the terminal's attributes, it is stopped"
-  echo "                           by SIGTTOU."
+  echo "                           memory.events.  Before any signal, the native call stacks of all threads of"
+  echo "                           every other process of the test (those that descend from it, and those it"
+  echo "                           started that were adopted: with its mark on Linux, in its process group"
+  echo "                           elsewhere) are printed, each with its process ID and command line (gdb or"
+  echo "                           eu-stack on Linux, sample or lldb on macOS; see QORE_TEST_STACK_TOOLS).  Where"
+  echo "                           perl or setsid is available, the test runs in a process group of its own, and"
+  echo "                           the processes left in it are killed once the test"
+  echo "                           has ended, as they are when a signal ends the run; otherwise the test is"
+  echo "                           signalled alone.  In a run from a terminal, the test is then a background"
+  echo "                           process group: with 'stty tostop', or if it changes the terminal's attributes,"
+  echo "                           it is stopped by SIGTTOU."
   echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
   echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
+  echo "  QORE_TEST_STACK_TOOLS    The tools that capture the native call stacks of the test's other"
+  echo "                           processes, tried in order until one succeeds (default: 'gdb eu-stack' on"
+  echo "                           Linux, 'sample lldb' on macOS); another command is run as '<command> <pid>'."
+  echo "  QORE_TEST_STACK_CAPTURE_WAIT"
+  echo "                           Seconds a capture of one process may take before it is killed (default: 30;"
+  echo "                           a whole number, at least 1)."
+  echo "  QORE_TEST_STACK_CAPTURE_TOTAL"
+  echo "                           Seconds all the captures of a test may take together (default: 120; a whole"
+  echo "                           number, at least 1)."
   echo "  QORE_TEST_INTERRUPT_WAIT Seconds a test may take to end after a signal ends the run (default: 10); it is"
   echo "                           killed then."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
@@ -63,8 +77,28 @@ print_usage () {
   echo "  QORE_TEST_PLATFORM_SUBSET"
   echo "                           Set to 'macos' to run only the tests that declare '# test-platform: macos - <why>'"
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
+  echo "  QCC                      The qcc that the tests use (also QORE_QCC, QORE_QCC_EXECUTABLE; default: the"
+  echo "                           build's, and the one in the PATH for the tests that find none there).  On macOS,"
+  echo "                           a run with a build refuses a qore or a qcc that loads a libqore other than the"
+  echo "                           build's, or that cannot be checked (not a Mach-O program) (#7029)."
+  echo "  QORE_LIBDIR              The directory of the build's libqore, if set: qcc links the tests' programs with"
+  echo "                           the libqore there; the run refuses another directory (#7029)."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_TEST_ALLOW_BUILD_MISMATCH"
+  echo "                           Set to '1' to run the tests although the build does not match the tree; the run"
+  echo "                           says so.  Before anything runs, the commit that the build was made from (qore"
+  echo "                           --version's git hash) must be in the tree's repository, and the files the build is"
+  echo "                           made from (lib/, include/, qlib/, modules/, cmake/, the C and C++ sources and CMake"
+  echo "                           files) must not differ from it, unless the build, configured from this tree, is"
+  echo "                           newer than them; changes to tests are allowed.  A tree without git needs"
+  echo "                           .git-archive-revision naming the build's commit.  The qcc and the .qmod files the"
+  echo "                           tests use must come from the same build.  Otherwise the run ends with a MISMATCH"
+  echo "                           error naming both commits and the first files that differ.  The files' times"
+  echo "                           do not show a configure without a build, a removed file that was not built"
+  echo "                           since, or an include/ header that a module was built with but libqore was not;"
+  echo "                           ccache's hard_link or file_clone can make a built change look older (see the"
+  echo "                           comment of check_build() in run_tests.sh)."
   echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
   echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
   echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
@@ -573,10 +607,33 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+if [ ! -f "$LIBQORE" ]; then
+    # a libqore that is not there cannot be compared with the one that the programs of the tests load (#7029)
+    echo "ERROR: the libqore of the run ($LIBQORE, LIBQORE_BINARY) does not exist; set LIBQORE_BINARY to the build's" \
+        "libqore. Exiting." >&2
+    exit 1
+fi
+
 export QORE_BINARY="$QORE"
 export LIBQORE_BINARY="$LIBQORE"
 
 QORE_DIR=`dirname "$QORE"`
+# QORE_LIBDIR is where qcc takes libqore from for the programs that it links, and the directory that it records in them
+# (before the libqore that it loaded; lib/QoreAOT.cpp getLibqoreDir()), and where the tests look for qcc: one that names
+# another directory (an installation) makes the tests' programs load another libqore (#7029)
+if [ -n "$QORE_LIBDIR" ] \
+        && [ "$(cd "$QORE_LIBDIR" 2>/dev/null && pwd -P)" != "$(cd "$(dirname "$LIBQORE")" && pwd -P)" ]; then
+    echo "ERROR: QORE_LIBDIR ($QORE_LIBDIR) is not the directory of the libqore of the run ($LIBQORE): the programs" \
+        "that qcc compiles in the tests would load the libqore in QORE_LIBDIR (#7029); unset it or set it to the" \
+        "build's directory. Exiting." >&2
+    exit 1
+fi
+if [ -n "$QORE_LIBDIR" ]; then
+    # absolute: qcc records the directory in the programs that it links as it is given, and a relative one would be
+    # taken from the directory that a program runs in (#7029)
+    QORE_LIBDIR=`cd "$QORE_LIBDIR" && pwd -P`
+    export QORE_LIBDIR
+fi
 QORE_BUILD_DIR="$QORE_DIR"
 if [ -n "$QORE_LIBDIR" ] && [ -d "$QORE_LIBDIR" ]; then
     QORE_BUILD_DIR="$QORE_LIBDIR"
@@ -617,6 +674,777 @@ fi
 if [ -n "$BUILD_QMOD_DIR" ]; then
     BUILD_QMOD_DIR=`cd "$BUILD_QMOD_DIR" && pwd -P`
 fi
+
+# The timeout command (see the time limit of a test below): gtimeout on macOS (GNU coreutils) where there is no timeout
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=gtimeout
+else
+    TIMEOUT_CMD=""
+fi
+
+# The build must match the tree (qore#6897): the tests and the qlib sources of one tree run with the qore, libqore, qcc
+# and .qmod files of another build produced failures that looked like anything but a mismatch.  Before any test runs
+# (check_build(), once the library path of the tests is set up, so that each program finds the libqore that it finds
+# for the tests), the commit that the build was made from (the "git hash" of qore --version, run through the qore that
+# the tests use) is compared with the tree:
+# - in a git working tree, the commit must be in the tree's repository, and the files that the build is made from
+#   (BUILD_INPUT_PATHSPECS: libqore, the programs, the modules and the CMake files; not the tests, the documentation or
+#   the scripts) must not differ between that commit and the working tree.  When the build was configured from this
+#   very tree (its CMakeCache.txt names it), a file that differs is accepted if what the tests use that the build makes
+#   from it is newer than it (build_references()): the build then has it (an uncommitted change that was built, or a
+#   commit made after the build), while a file changed after the build (an edit or a checkout that was not built) is
+#   not.  A file that the build makes nothing from that the tests use (a source under examples/ that a test compiles
+#   when it runs, a file of a binary module that CMake does not build here, a module in qlib that has no .qmod, which
+#   is loaded from its source, a file that is not a source) is not compared, and neither is a file that is gone.  A
+#   new file that git does not know of is not seen.  The times tell what a build has only as far as the build writes
+#   what the tests use again, so these cases are not seen, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs one that is
+#   refused wrongly:
+#   - a configure that is not followed by a build hides a change of a CMake file (CMakeCache.txt is written), and a
+#     source of lib/ that a CMake file adds is in no depfile until a build compiles it (see read_libqore_sources());
+#   - a file removed from libqore, a module in qlib, a binary module or the test programs and not built since;
+#   - a header of include/ counts as built when anything that includes such headers was built after it (libqore, qcc,
+#     qore, a binary module), so an old libqore is accepted when a module that includes the header was built again;
+#     a header that an example module includes too is not compared with the example module;
+#   - a source of a test program is compared with each object compiled from it, also that of a helper target that was
+#     built once and that a normal build does not make again, which is then refused until that target is built;
+#   - an object file that ccache made a hard link or a clone of (hard_link, file_clone) has the time of the cached
+#     object, which may be older than a change that was built, so that the change is refused.
+# - in a tree without git (an archive), .git-archive-revision must name the commit (an archive that git makes has
+#   it, see .gitattributes), and it must be the build's;
+# - the qcc programs that the tests use (tests_qccs(): QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the build's qcc, or the one
+#   in the PATH) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
+#   and the build that each qlib/*.qmod symlink points into) must come from the same build: the qore next to each of
+#   them must be the qore used or name the same commit.
+# A mismatch ends the run with a MISMATCH error naming both commits and the first paths that differ, unless
+# QORE_TEST_ALLOW_BUILD_MISMATCH=1, with which the run goes on and says so.  Each program and git command it runs is
+# limited to BUILD_CHECK_WAIT seconds by the timeout command (a libqore that hangs in its initialization cannot hold up
+# the run), and git never fetches (GIT_NO_LAZY_FETCH: a partial clone would fetch a missing object from the network).
+
+# The files that the build is made from, as git pathspecs from the root of the tree (decided from the inputs of
+# CMakeLists.txt): not the tests and the documentation of the binary modules; under examples/, the C and C++ sources and
+# CMake files, of which only those that the build compiles count (see build_references())
+BUILD_INPUT_PATHSPECS="lib include qlib modules cmake CMakeLists.txt :(glob)*.cpp :(glob)*.c :(glob)*.h :(glob)*.in
+:(glob)examples/**/*.cpp :(glob)examples/**/*.cc :(glob)examples/**/*.c :(glob)examples/**/*.h :(glob)examples/**/*.hpp
+:(glob)examples/**/*.qpp :(glob)examples/**/CMakeLists.txt :(glob)examples/**/*.cmake :(exclude,glob)modules/*/test/**
+:(exclude,glob)modules/*/docs/**"
+BUILD_CHECK_WAIT=${QORE_TEST_BUILD_CHECK_WAIT:-60}
+
+# Runs the given command, limited to BUILD_CHECK_WAIT seconds where there is a timeout command
+run_build_check() {
+    if [ -n "$TIMEOUT_CMD" ]; then
+        $TIMEOUT_CMD -s KILL $BUILD_CHECK_WAIT "$@"
+    else
+        "$@"
+    fi
+}
+
+# Prints the commit that the given qore was built from (its --version's "git hash", which libqore holds), or nothing
+# if it names none.  The qore that the tests use runs with their library path.  Another qore (the second argument is
+# 1: the one next to a qcc or to .qmod files) runs with the libqore next to it first in the library path, if it has one,
+# as its build's tests would, or else without LD_LIBRARY_PATH, so that it loads the libqore that its own loader finds
+# (an installed one): with the tests' path, which comes before its RUNPATH on Linux, it would load the build's libqore
+# and name the build's commit.  It runs in a subshell, so that the shell's own LD_LIBRARY_PATH is left as it is.
+build_git_hash() {
+    (
+        if [ "$2" = 1 ]; then
+            hash_dir=`dirname "$1"`
+            if [ -f "$hash_dir/libqore.so" ] || [ -f "$hash_dir/libqore.dylib" ]; then
+                LD_LIBRARY_PATH="$hash_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                export LD_LIBRARY_PATH
+            else
+                unset LD_LIBRARY_PATH
+            fi
+        fi
+        run_build_check "$1" --version 2>/dev/null
+    ) | sed -n 's/^[	 ]*git hash:[	 ]*\([0-9a-f]\{40,64\}\)[	 ]*$/\1/p' | head -1
+}
+
+# Runs git in the tree; safe.directory: a tree that another user owns (a CI job's checkout) is read all the same.
+# The commands read the build's commit and its files only, which a shallow clone of that commit has (see
+# examples/test/runner/test_ci_shallow_clone.py).
+tree_git() {
+    # env: "VAR=value function" would leave the variable set (and exported) in bash
+    run_build_check env GIT_NO_LAZY_FETCH=1 git -c safe.directory='*' -C "$QORE_SOURCE_DIR" "$@"
+}
+
+# Prints the physical path of the given directory, or nothing
+physical_dir() {
+    (cd "$1" 2>/dev/null && pwd -P)
+}
+
+# Prints the physical path of the given file (its directories and its own symbolic links resolved), or nothing
+physical_file() {
+    (
+        file_name=$1
+        while :; do
+            cd "`dirname "$file_name"`" 2>/dev/null || exit 1
+            file_name=`basename "$file_name"`
+            if [ ! -L "$file_name" ]; then
+                break
+            fi
+            file_name=`readlink "$file_name"`
+        done
+        echo "`pwd -P`/$file_name"
+    )
+}
+
+# Prints the qcc programs that the tests use, one per line: each one that QCC, QORE_QCC or QORE_QCC_EXECUTABLE names
+# (tests read different ones of them), the build's qcc in the directories that the tests look in (QORE_LIBDIR, which
+# must be the directory of the build's libqore, and next to qore: examples/test/TestInterpreter.qm and the tests that
+# look for qcc themselves), and the one in the PATH, which a test that finds none in the variable that it reads and in
+# the directory that it looks in takes
+tests_qccs() {
+    for qcc_candidate in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE"; do
+        if [ -n "$qcc_candidate" ]; then
+            case "$qcc_candidate" in
+                */*) echo "$qcc_candidate" ;;
+                *) command -v "$qcc_candidate" 2>/dev/null ;;
+            esac
+        fi
+    done
+    for qcc_dir in "${QORE_LIBDIR:-$QORE_DIR}" "$QORE_DIR"; do
+        if [ -f "$qcc_dir/qcc" ]; then
+            echo "$qcc_dir/qcc"
+        fi
+    done
+    if [ ! -f "${QORE_LIBDIR:-$QORE_DIR}/qcc" ] || [ ! -f "$QORE_DIR/qcc" ]; then
+        command -v qcc 2>/dev/null
+    fi
+}
+
+# Returns 0 if the given file is a Mach-O program (thin or universal)
+is_macho() {
+    case "`od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n'`" in
+        cffaedfe|cefaedfe|feedfacf|feedface|cafebabe|bebafeca) return 0 ;;
+    esac
+    return 1
+}
+
+# Prints the paths, symbolic links resolved, of the libqore images that the loader reports for the given program
+# (macOS), run with --version within BUILD_CHECK_WAIT seconds.  env sets DYLD_PRINT_LIBRARIES for the program itself,
+# after the timeout command, which macOS may protect (/usr/bin/timeout), so that it is not removed
+loaded_libqore() {
+    run_build_check env DYLD_PRINT_LIBRARIES=1 "$1" --version 2>&1 >/dev/null </dev/null \
+        | sed -n 's/^dyld[^ ]* \(<[^>]*> \)\{0,1\}\(\/.*\/libqore\.[^/]*dylib\)$/\2/p' \
+        | while IFS= read -r loaded_lib; do
+            physical_file "$loaded_lib" || echo "$loaded_lib"
+        done
+}
+
+# Ends the run unless the given program (a description, then the program) is a Mach-O program that loads the build's
+# libqore (EXPECTED_LIBQORE) and no other (#7029)
+check_loaded_libqore() {
+    if [ ! -f "$2" ] || ! is_macho "$2"; then
+        echo "ERROR: $1 is not a Mach-O program: the libqore that it loads cannot be checked; the tests could run on" \
+            "another libqore (#7029). Exiting." >&2
+        exit 1
+    fi
+    check_loaded=`loaded_libqore "$2"`
+    if [ -z "$check_loaded" ]; then
+        echo "ERROR: $1 reports no libqore (DYLD_PRINT_LIBRARIES): the libqore that it loads cannot be checked; the" \
+            "tests could run on another libqore (#7029). Exiting." >&2
+        exit 1
+    fi
+    while IFS= read -r check_lib; do
+        if [ "$check_lib" != "$EXPECTED_LIBQORE" ]; then
+            echo "ERROR: $1 loads $check_lib, not the libqore of the run ($LIBQORE, $EXPECTED_LIBQORE); the tests" \
+                "would run on another libqore (#7029).$3 Exiting." >&2
+            exit 1
+        fi
+    done <<CHECK_LOADED_EOF
+$check_loaded
+CHECK_LOADED_EOF
+}
+
+BUILD_MISMATCH=""
+# Adds a line to the description of the mismatch
+build_mismatch() {
+    BUILD_MISMATCH="$BUILD_MISMATCH  $*
+"
+}
+
+# Checks that the qore next to the given file (qcc, or a .qmod directory: the first argument names it) is the build's,
+# or names the build's commit
+check_companion_build() {
+    companion_dir=`physical_dir "$2"`
+    if [ -n "$companion_dir" ] && [ "$companion_dir" = "$QORE_BUILD_DIR" ]; then
+        return
+    fi
+    if [ -n "$companion_dir" ] && [ -x "$companion_dir/qore" ]; then
+        companion_hash=`build_git_hash "$companion_dir/qore" 1`
+        if [ "$companion_hash" = "$BUILD_HASH" ]; then
+            return
+        fi
+        build_mismatch "$1: from the build in $companion_dir, made from commit ${companion_hash:-unknown}, not" \
+            "$BUILD_HASH"
+        return
+    fi
+    build_mismatch "$1: from $2, which has no qore that names its commit: they cannot be told to be the build's"
+}
+
+# Adds each of the given files that exists to BUILD_REFS, one per line (a pattern of the shell that matches nothing
+# stays as it is, and does not exist)
+add_build_refs() {
+    for build_ref in "$@"; do
+        if [ -e "$build_ref" ]; then
+            case "
+$BUILD_REFS" in
+                *"
+$build_ref
+"*) ;;
+                *) BUILD_REFS="$BUILD_REFS$build_ref
+" ;;
+            esac
+        fi
+    done
+}
+
+# Adds to BUILD_REFS the object files that the build compiled from the given source file under examples/ (CMake writes
+# them in the build directory of the source's CMake directory, as <that directory>/CMakeFiles/<target>.dir/<source>.o,
+# so each directory that contains the source is tried), or, with a second argument, those compiled from the sources of
+# the given directory itself (not of its subdirectories)
+add_build_objects() {
+    object_prefix=""
+    object_rest=$1
+    while :; do
+        object_dir=$QORE_BUILD_DIR/${object_prefix:+$object_prefix/}CMakeFiles
+        if [ -z "$2" ]; then
+            add_build_refs "$object_dir/"*.dir/"$object_rest.o"
+        elif [ -n "$object_rest" ]; then
+            add_build_refs "$object_dir/"*.dir/"$object_rest"/*.o
+        else
+            add_build_refs "$object_dir/"*.dir/*.o
+            return
+        fi
+        case "$object_rest" in
+            */*)
+                object_prefix=${object_prefix:+$object_prefix/}${object_rest%%/*}
+                object_rest=${object_rest#*/}
+                ;;
+            *)
+                if [ -z "$2" ]; then
+                    return
+                fi
+                object_prefix=${object_prefix:+$object_prefix/}$object_rest
+                object_rest=""
+                ;;
+        esac
+    done
+}
+
+# Adds to BUILD_REFS the object files of the targets of the given directory under examples/ (an example module, built
+# by add_subdirectory()): those in its build directory, in its target directories up to two levels deep
+add_module_objects() {
+    object_dir=$QORE_BUILD_DIR/$1/CMakeFiles
+    add_build_refs "$object_dir/"*.dir/*.o "$object_dir/"*.dir/*/*.o "$object_dir/"*.dir/*/*/*.o
+}
+
+# Prints the directory of the example module of the given file under examples/: the nearest directory, from the file's
+# own up to examples/, whose CMakeLists.txt defines a target; nothing if there is none
+example_module_dir() {
+    module_dir=${1%/*}
+    while [ "$module_dir" != examples ] && [ -n "$module_dir" ]; do
+        if [ -f "$QORE_SOURCE_DIR/$module_dir/CMakeLists.txt" ] \
+                && grep -Eq '^[	 ]*(add_library|add_executable|qore_binary_module|qore_external_binary_module)[	 ]*\(' \
+                "$QORE_SOURCE_DIR/$module_dir/CMakeLists.txt" 2>/dev/null; then
+            echo "$module_dir"
+            return
+        fi
+        case "$module_dir" in
+            */*) module_dir=${module_dir%/*} ;;
+            *) return ;;
+        esac
+    done
+}
+
+# Prints the .qmod that the tests load for the given module in qlib, in either layout (qlib/<name>.qmod for a module
+# in one file, qlib/<name>/<name>.qmod for a separated one; see cmake/QoreMacros.cmake): the build's, or the one that
+# qlib links to; nothing if there is none (the module is loaded from its source)
+qlib_module_qmod() {
+    for qmod in "$BUILD_QMOD_DIR/$1.qmod" "$BUILD_QMOD_DIR/$1/$1.qmod" "$QORE_SOURCE_DIR/qlib/$1.qmod" \
+            "$QORE_SOURCE_DIR/qlib/$1/$1.qmod"; do
+        case "$qmod" in
+            /*) ;;
+            *) continue ;;
+        esac
+        if [ -e "$qmod" ]; then
+            echo "$qmod"
+            return
+        fi
+    done
+}
+
+# Sets LIBQORE_SOURCES to the C and C++ sources of lib/ (relative to the tree, one per line, between newlines) that
+# the compiler read for libqore, from the depfiles that it wrote next to libqore's objects (<build>/CMakeFiles/
+# libqore.dir/**/*.o.d), and LIBQORE_DEPFILES to 1; a source can be in libqore without an object of its own: the single
+# compilation unit, which is the default, includes most of them, and in a build with an object for each source, a few
+# are included by another one (the handlers of the expression registries).  Only CMake's Makefile generators leave the
+# depfiles there (CMakeCache.txt's CMAKE_GENERATOR): Ninja keeps the dependencies in .ninja_deps and removes the
+# depfiles of what it compiles, so that those left are a former Makefile build's.  Where there are none, where they
+# name no source of lib/, or where they cannot be read within the time limit, LIBQORE_DEPFILES is 0, and every source
+# is compared.  A depfile's paths escape a space ("\ "), "#" ("\#") and "$" ("$$"), and continue on the next line after
+# a "\"; "x/../" and "./" are removed from a path.  They start with the source directory that CMake was configured
+# with (build_source) or with the tree's physical path.  The file names are listed and the files read by one command
+# each, each limited in time, so that nothing is left running when a file system stalls.
+read_libqore_sources() {
+    LIBQORE_SOURCES_READ=1
+    LIBQORE_DEPFILES=0
+    LIBQORE_SOURCES=""
+    if ! run_build_check grep -q '^CMAKE_GENERATOR:INTERNAL=.*Makefiles[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null; then
+        return
+    fi
+    depfile_list=`mktemp "${TMPDIR:-/tmp}/qore-build-depfiles.XXXXXX"` || return
+    BUILD_CHECK_FILES="$BUILD_CHECK_FILES $depfile_list"
+    if ! run_build_check find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' > "$depfile_list" 2>/dev/null \
+            || [ ! -s "$depfile_list" ]; then
+        rm -f "$depfile_list"
+        return
+    fi
+    # $(...): backslashes in the program are not taken by the shell, as in `...`
+    libqore_sources=$(run_build_check env QORE_DEP_PREFIX_A="${build_source%/}/" QORE_DEP_PREFIX_B="$QORE_SOURCE_DIR/" \
+        awk 'function add(t,   a, b) {
+            # only a C or C++ source (most are headers)
+            if (t !~ /\.(c|cc|cpp)$/) {
+                return
+            }
+            # "x/../" and "./" are removed
+            while (sub(/\/\.\//, "/", t)) {
+            }
+            while (sub(/\/[^\/]+\/\.\.\//, "/", t)) {
+            }
+            a = ENVIRON["QORE_DEP_PREFIX_A"]
+            b = ENVIRON["QORE_DEP_PREFIX_B"]
+            if (a != "/" && index(t, a) == 1) {
+                t = substr(t, length(a) + 1)
+            } else if (index(t, b) == 1) {
+                t = substr(t, length(b) + 1)
+            } else {
+                return
+            }
+            if (t ~ /^lib\/.*\.(c|cc|cpp)$/ && !(t in seen)) {
+                seen[t] = 1
+                print t
+            }
+        }
+        BEGIN {
+            # a read that fails (a depfile that cannot be read, or that is removed while it is read) ends the read with
+            # an error, so that every source is compared
+            while ((list_rc = (getline file < ARGV[1])) > 0) {
+                # a line ends a token: one that continues ends with a "\" after a space
+                while ((line_rc = (getline line < file)) > 0) {
+                    if (substr(line, length(line), 1) == "\\") {
+                        line = substr(line, 1, length(line) - 1)
+                    }
+                    if (index(line, "\\") == 0 && index(line, "$$") == 0) {
+                        n = split(line, tokens, /[ \t]+/)
+                        for (i = 1; i <= n; ++i) {
+                            if (tokens[i] != "") {
+                                add(tokens[i])
+                            }
+                        }
+                        continue
+                    }
+                    token = ""
+                    n = length(line)
+                    for (i = 1; i <= n; ++i) {
+                        c = substr(line, i, 1)
+                        d = substr(line, i + 1, 1)
+                        if (c == "\\" && (d == " " || d == "#" || d == "\\")) {
+                            token = token d
+                            ++i
+                        } else if (c == "$" && d == "$") {
+                            token = token "$"
+                            ++i
+                        } else if (c == " " || c == "\t") {
+                            if (token != "") {
+                                add(token)
+                            }
+                            token = ""
+                        } else {
+                            token = token c
+                        }
+                    }
+                    if (token != "") {
+                        add(token)
+                    }
+                }
+                if (line_rc < 0) {
+                    exit 1
+                }
+                close(file)
+            }
+            if (list_rc < 0) {
+                exit 1
+            }
+            exit
+        }' "$depfile_list" 2>/dev/null)
+    depfile_rc=$?
+    rm -f "$depfile_list"
+    if [ $depfile_rc -ne 0 ] || [ -z "$libqore_sources" ]; then
+        return
+    fi
+    LIBQORE_SOURCES="
+$libqore_sources
+"
+    LIBQORE_DEPFILES=1
+}
+
+# Sets BUILD_REFS to the files that the tests use that the build makes from the given changed file (relative to the
+# tree), one per line, whose times tell whether the build has the change (see above), or to nothing if the tests use
+# nothing that the build makes from it.  BUILD_REFS_ANY is 1 if the build has the change when the file is older than
+# any of them, and 0 if it must be older than all.  Each is found with the shell's own commands, so that a diff of many
+# files costs little.  Only a file of a kind that a target compiles is compared, and only with what the tests use,
+# never with an object of a helper target that a normal build does not make again (such as one that compiles libqore's
+# sources once more), which would keep a file refused for good:
+# - a CMake file: CMakeCache.txt, which CMake writes when it configures the build again; under examples/, only one in
+#   a directory that CMake has processed;
+# - a source of a module in qlib (.qm, .qc; not its other files, which the .qmod does not hold): the module's .qmod
+#   (see qlib_module_qmod()), or nothing (it is loaded from its source);
+# - a source of libqore (lib/: C, C++, qpp, bison, flex, assembler and headers): libqore, but nothing for a C or C++
+#   source that the compiler did not read for libqore in a build of this tree (a file of another platform, or a
+#   program's own; see read_libqore_sources());
+# - a header of include/: any of libqore, qcc, qore and the binary modules' files (BUILD_REFS_ANY): a header that only
+#   modules include is in a module that was built again, not in libqore;
+# - a source of a binary module (modules/<name>/: C, C++, qpp, headers, Qore): the module's file, or nothing if the
+#   build has not built it;
+# - a C or C++ source at the root of the tree: the program it is part of (qcc, qr, qore);
+# - a file under examples/: the objects compiled from it (a test program's source: a helper target's object, if one was
+#   built once, is compared too), or, for a header or a qpp file, the objects compiled from the sources of its own
+#   directory and those of its example module's targets (see example_module_dir()), never of a directory above; or
+#   nothing (a source that a test compiles when it runs, which CMake does not compile).
+build_references() {
+    BUILD_REFS=""
+    BUILD_REFS_ANY=0
+    case "$1" in
+        examples/*/CMakeLists.txt|examples/*.cmake)
+            # only one that CMake has processed (a build directory of its own): a test compiles some fixtures with a
+            # CMakeLists.txt of their own when it runs
+            if [ -d "$QORE_BUILD_DIR/${1%/*}/CMakeFiles" ]; then
+                add_build_refs "$QORE_BUILD_DIR/CMakeCache.txt"
+            fi
+            ;;
+        CMakeLists.txt|*/CMakeLists.txt|*.cmake|cmake/*|*.in)
+            add_build_refs "$QORE_BUILD_DIR/CMakeCache.txt"
+            ;;
+        qlib/*.qm|qlib/*.qc)
+            ref_module=${1#qlib/}
+            ref_module=${ref_module%%/*}
+            ref_module=${ref_module%.qm}
+            ref_module=${ref_module%.qc}
+            ref_qmod=`qlib_module_qmod "$ref_module"`
+            if [ -n "$ref_qmod" ]; then
+                add_build_refs "$ref_qmod"
+            fi
+            ;;
+        lib/*.c|lib/*.cc|lib/*.cpp)
+            # in a build of this tree, a source that the compiler did not read for libqore is not in it; another
+            # tree's build is compared for every source
+            if [ "$same_tree" = 1 ]; then
+                if [ $LIBQORE_SOURCES_READ -eq 0 ]; then
+                    read_libqore_sources
+                fi
+                if [ $LIBQORE_DEPFILES -eq 1 ]; then
+                    case "$LIBQORE_SOURCES" in
+                        *"
+$1
+"*) ;;
+                        *) return ;;
+                    esac
+                fi
+            fi
+            add_build_refs "$LIBQORE"
+            ;;
+        lib/*.h|lib/*.hpp|lib/*.qpp|lib/*.ypp|lib/*.lpp|lib/*.y|lib/*.l|lib/*.s|lib/*.S|lib/*.inc)
+            add_build_refs "$LIBQORE"
+            ;;
+        include/*)
+            BUILD_REFS_ANY=1
+            add_build_refs "$LIBQORE" "$QORE_BUILD_DIR/qcc" "$QORE_BUILD_DIR/qore" "$QORE_BUILD_DIR/modules/"*/*.qmod
+            ;;
+        modules/*.c|modules/*.cc|modules/*.cpp|modules/*.h|modules/*.hpp|modules/*.qpp|modules/*.qm|modules/*.qc)
+            ref_module=${1#modules/}
+            ref_module=${ref_module%%/*}
+            add_build_refs "$QORE_BUILD_DIR/modules/$ref_module/"*.qmod
+            ;;
+        examples/*)
+            add_build_objects "$1"
+            case "$1" in
+                *.h|*.hpp|*.qpp)
+                    if [ -z "$BUILD_REFS" ]; then
+                        BUILD_REFS_ANY=1
+                        add_build_objects "${1%/*}" directory
+                        ref_module_dir=`example_module_dir "$1"`
+                        if [ -n "$ref_module_dir" ]; then
+                            add_module_objects "$ref_module_dir"
+                        fi
+                    fi
+                    ;;
+            esac
+            ;;
+        qcc-main.cpp) add_build_refs "$QORE_BUILD_DIR/qcc" ;;
+        qr-*.cpp) add_build_refs "$QORE_BUILD_DIR/qr" ;;
+        *-single-compilation-unit.cpp) ;;
+        *.c|*.cc|*.cpp|*.h)
+            add_build_refs "$QORE_BUILD_DIR/qore"
+            if [ -z "$BUILD_REFS" ]; then
+                add_build_refs "$LIBQORE"
+            fi
+            ;;
+    esac
+}
+
+# Returns 0 if the build has the change of the given file by the times of the
+# files in BUILD_REFS (see build_references())
+build_has_change() {
+    build_newer=0
+    build_older=0
+    while IFS= read -r build_ref; do
+        if [ -z "$build_ref" ]; then
+            continue
+        fi
+        if [ "$1" -nt "$build_ref" ]; then
+            build_newer=1
+        else
+            build_older=1
+        fi
+    done <<BUILD_REFS_EOF
+$BUILD_REFS
+BUILD_REFS_EOF
+    if [ $BUILD_REFS_ANY -eq 1 ]; then
+        [ $build_older -eq 1 ]
+    else
+        [ $build_newer -eq 0 ]
+    fi
+}
+
+check_build_matches_tree() {
+    BUILD_HASH=`build_git_hash "$QORE"`
+    BUILD_TREE_HASH=""
+    if [ -z "$BUILD_HASH" ]; then
+        build_mismatch "the build ($QORE) does not name the commit it was made from (qore --version shows no git hash)"
+        return
+    fi
+    if [ -e "$QORE_SOURCE_DIR/.git" ]; then
+        if ! command -v git > /dev/null 2>&1; then
+            build_mismatch "the tree is a git working tree, but git is not installed to compare it with the build"
+            return
+        fi
+        BUILD_TREE_HASH=`tree_git rev-parse --verify -q "HEAD^{commit}" 2>/dev/null`
+        if ! tree_git cat-file -e "$BUILD_HASH^{commit}" 2>/dev/null; then
+            build_mismatch "the build's commit $BUILD_HASH is not in the tree's repository (the tree is at" \
+                "${BUILD_TREE_HASH:-an unknown commit})"
+            return
+        fi
+        # set -f: the pathspecs are not file name patterns for the shell; git's messages (a warning on a diff that
+        # works) are no file names: they are shown only if the diff fails
+        build_errors=`mktemp "${TMPDIR:-/tmp}/qore-build-check.XXXXXX"` || build_errors=/dev/null
+        if [ "$build_errors" != /dev/null ]; then
+            BUILD_CHECK_FILES="$BUILD_CHECK_FILES $build_errors"
+        fi
+        set -f
+        build_changes=`tree_git diff --name-only --no-renames "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>"$build_errors"`
+        build_diff_rc=$?
+        set +f
+        build_diff_errors=`cat "$build_errors" 2>/dev/null`
+        if [ "$build_errors" != /dev/null ]; then
+            rm -f "$build_errors"
+        fi
+        if [ $build_diff_rc -ne 0 ]; then
+            build_mismatch "the tree cannot be compared with the build's commit $BUILD_HASH: $build_diff_errors"
+            return
+        fi
+        if [ -z "$build_changes" ]; then
+            return
+        fi
+        # a build configured from this tree: the files that it is newer than are in it
+        build_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null`
+        same_tree=0
+        LIBQORE_SOURCES_READ=0
+        if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
+            same_tree=1
+        fi
+        stale=""
+        stale_count=0
+        while IFS= read -r path; do
+            if [ -z "$path" ]; then
+                continue
+            fi
+            # A file that is gone, in a build of this tree, is not compared (a directory's time is no build's: an
+            # editor's file changes it).  Another build that has a file that the tree no longer has differs, if the
+            # tests use what it makes from it.
+            file=$QORE_SOURCE_DIR/$path
+            if [ ! -e "$file" ] && [ $same_tree -eq 1 ]; then
+                continue
+            fi
+            build_references "$path"
+            if [ -z "$BUILD_REFS" ]; then
+                continue
+            fi
+            if [ $same_tree -eq 1 ] && build_has_change "$file"; then
+                continue
+            fi
+            stale_count=$((stale_count + 1))
+            stale="$stale    $path
+"
+            # the first ten are enough to tell
+            if [ $stale_count -ge 10 ]; then
+                stale_count="10 or more"
+                break
+            fi
+        done <<BUILD_CHANGES_EOF
+$build_changes
+BUILD_CHANGES_EOF
+        if [ -n "$stale" ]; then
+            if [ $same_tree -eq 1 ]; then
+                build_mismatch "$stale_count file(s) of the build changed since the build was made (from commit" \
+                    "$BUILD_HASH; the tree is at $BUILD_TREE_HASH); the first of them:"
+            else
+                build_mismatch "$stale_count file(s) of the build differ between the build's commit $BUILD_HASH" \
+                    "and the tree (at $BUILD_TREE_HASH), and the build was not made from this tree; the first of them:"
+            fi
+            BUILD_MISMATCH="$BUILD_MISMATCH$stale"
+        fi
+    else
+        marker=`grep -v '^#' "$QORE_SOURCE_DIR/.git-archive-revision" 2>/dev/null | head -1 | tr -d ' \t\r'`
+        case "$marker" in
+            *[!0-9a-f]*|"")
+                build_mismatch "the tree has no git repository and no .git-archive-revision naming the commit it was" \
+                    "made from (an archive that git makes has it), so it cannot be compared with the build's commit" \
+                    "$BUILD_HASH"
+                ;;
+            *)
+                BUILD_TREE_HASH=$marker
+                if [ "$marker" != "$BUILD_HASH" ]; then
+                    build_mismatch "the tree was made from commit $marker (.git-archive-revision), the build from" \
+                        "$BUILD_HASH"
+                fi
+                ;;
+        esac
+    fi
+}
+
+# Prints the physical path of the given file, with the links that lead to it resolved (at most 32), or nothing if it
+# does not exist; ls prints a link's target after "->" (BusyBox's readlink takes one file)
+link_physical_file() {
+    (
+        file_path=$1
+        file_links=0
+        while [ -L "$file_path" ] && [ $file_links -lt 32 ]; do
+            file_target=`ls -ld "$file_path" 2>/dev/null`
+            file_target=${file_target##* -> }
+            case "$file_target" in
+                /*) file_path=$file_target ;;
+                *) file_path=${file_path%/*}/$file_target ;;
+            esac
+            file_links=$((file_links + 1))
+        done
+        if [ -e "$file_path" ] && cd -P "${file_path%/*}" 2>/dev/null; then
+            echo "$PWD/${file_path##*/}"
+        fi
+    )
+}
+
+# Checks the qcc and the .qmod files that the tests use (see above).  The links of qlib are checked as the module loader
+# uses them (qore#7030, lib/ModuleManager.cpp qore_own_build_qmod()): when the directory of the run's libqore has a
+# CMakeCache.txt (a regular file) whose CMAKE_HOME_DIRECTORY's qlib is this tree's qlib (both physically), the loader
+# does not load a link of this tree's qlib to the module at the same path in a qlib-qmod directory (qlib/<name>.qmod to
+# <dir>/qlib-qmod/<name>.qmod, qlib/<name>/<name>.qmod to <dir>/qlib-qmod/<name>/<name>.qmod), whichever build that is:
+# it loads libqore's own build's module instead, or none, so such a link is not checked.  Otherwise (the libqore of
+# another tree's build, a libqore without CMakeCache.txt next to it, such as an installed one or one in a directory of
+# each configuration, build/Release/) the loader follows every link, and every link is checked.
+check_build_parts() {
+    if [ -z "$BUILD_HASH" ]; then
+        return
+    fi
+    tests_qcc_list=`tests_qccs`
+    if [ -n "$tests_qcc_list" ]; then
+        while IFS= read -r test_qcc; do
+            check_companion_build "the qcc that the tests use ($test_qcc)" "`dirname "$test_qcc"`"
+        done <<TESTS_QCC_EOF
+$tests_qcc_list
+TESTS_QCC_EOF
+    fi
+    if [ -n "$BUILD_QMOD_DIR" ]; then
+        check_companion_build "the .qmod files in $BUILD_QMOD_DIR" "`dirname "$BUILD_QMOD_DIR"`"
+    fi
+    # whether the loader replaces the links of this tree's qlib (see above): by the directory of the file of the run's
+    # libqore (LIBQORE_BINARY may be a link into another directory)
+    loader_replaces_links=0
+    libqore_build=`link_physical_file "$LIBQORE"`
+    libqore_build=${libqore_build%/*}
+    if [ -n "$libqore_build" ] && [ -f "$libqore_build/CMakeCache.txt" ]; then
+        libqore_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' \
+            "$libqore_build/CMakeCache.txt" 2>/dev/null | head -1`
+        if [ -n "$libqore_source" ] \
+                && [ "`physical_dir "$libqore_source/qlib"`" = "`physical_dir "$QORE_SOURCE_DIR/qlib"`" ]; then
+            loader_replaces_links=1
+        fi
+    fi
+    # The builds that the links to .qmod files in the tree's qlib (at any depth, as the loader finds them) lead to, each
+    # once: ls prints each link and its target, after "->" (BusyBox's readlink takes one file).  A link's target is
+    # taken as the loader takes it: the physical path of the file that the link resolves to, or, if that does not
+    # exist, the link's own target, relative to the link's directory.  A link of this tree's qlib, qlib/<path>, to
+    # <dir>/qlib-qmod/<path> is not checked when the loader replaces it (see above), also not one into the run's own
+    # build, whose modules are checked as the build's (BUILD_QMOD_DIR).  The build of any other link is the directory
+    # above its target's qlib-qmod, or above the target's directory.  The cd commands run in the pipeline's subshell,
+    # which leaves the runner's directory as it is, and cost no process for each link.
+    qmod_link_dirs=`find "$QORE_SOURCE_DIR/qlib" -name '*.qmod' -type l -exec ls -ld {} + 2>/dev/null \
+        | while IFS= read -r qmod_line; do
+            qmod_link=${qmod_line% -> *}
+            qmod_link=$QORE_SOURCE_DIR/qlib/${qmod_link#*"$QORE_SOURCE_DIR/qlib/"}
+            qmod_target=${qmod_line##* -> }
+            qmod_rel=${qmod_link#"$QORE_SOURCE_DIR/qlib/"}
+            qmod_dir=${qmod_link%/*}
+            case "$qmod_target" in
+                /*) qmod_full=$qmod_target ;;
+                *) qmod_full=$qmod_dir/$qmod_target ;;
+            esac
+            qmod_resolved=$(link_physical_file "$qmod_full")
+            if [ -n "$qmod_resolved" ]; then
+                qmod_full=$qmod_resolved
+            fi
+            if [ $loader_replaces_links -eq 1 ]; then
+                case "$qmod_full" in
+                    */qlib-qmod/"$qmod_rel") continue ;;
+                esac
+            fi
+            case "$qmod_full" in
+                */qlib-qmod/*) echo "${qmod_full%%/qlib-qmod/*}" ;;
+                *) echo "${qmod_full%/*/*}" ;;
+            esac
+        done | sort -u`
+    if [ -n "$qmod_link_dirs" ]; then
+        while IFS= read -r qmod_build; do
+            check_companion_build "the qlib .qmod links into $qmod_build" "$qmod_build"
+        done <<QMOD_LINKS_EOF
+$qmod_link_dirs
+QMOD_LINKS_EOF
+    fi
+}
+
+# Checks that the build matches the tree (see above); ends the run on a mismatch, unless it is allowed
+check_build() {
+    check_build_matches_tree
+    check_build_parts
+    if [ -z "$BUILD_MISMATCH" ]; then
+        return
+    fi
+    echo "*** MISMATCH: the build does not match the tree: the tests would run with a build made from other" \
+        "sources (build: $QORE, commit ${BUILD_HASH:-unknown}; tree: $QORE_SOURCE_DIR, commit" \
+        "${BUILD_TREE_HASH:-unknown}):"
+    printf '%s' "$BUILD_MISMATCH"
+    if [ "$QORE_TEST_ALLOW_BUILD_MISMATCH" = 1 ]; then
+        echo "*** the tests run all the same: QORE_TEST_ALLOW_BUILD_MISMATCH=1 ***"
+    else
+        echo "*** rebuild, or test the tree the build was made from; QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs the tests" \
+            "all the same. Exiting. ***"
+        exit 1
+    fi
+}
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
 TEST_MODULE_DIRS=""
@@ -724,6 +1552,47 @@ else
             esac
             ;;
     esac
+fi
+
+# the build must match the tree, before anything runs: with the library path that the tests get (see above)
+# the check's temporary files (see read_libqore_sources() and check_build_matches_tree()) are removed if a signal ends
+# the run during the check, which comes before the runner's own traps are set
+BUILD_CHECK_FILES=""
+# the run is ended by the signal itself, so that its caller sees why (see runner_signaled())
+for build_check_signal in HUP INT TERM; do
+    trap "rm -f \$BUILD_CHECK_FILES; trap - $build_check_signal; kill -$build_check_signal \$\$" $build_check_signal
+done
+check_build
+trap - HUP INT TERM
+
+# The children of the tests run the interpreter of the run (QORE_BINARY): QORE_BIN, which TestInterpreter.qm takes
+# first, is for a test run without this script, and one left in the environment would run another qore (#7029)
+unset QORE_BIN
+
+# On macOS the dynamic loader ignores LD_LIBRARY_PATH: a program finds libqore through the directories recorded in it
+# (LC_RPATH), and a program that qcc compiles records the directory of the libqore that qcc loaded (or QORE_LIBDIR,
+# checked above).  DYLD_LIBRARY_PATH would not help, as macOS removes it from the environment of a protected program
+# (/bin/sh, /usr/bin/env, perl), which its children then do not get.  So the qore and the qcc that the tests use must
+# load the build's libqore by themselves: one from a build directory copied from another tree loads the other tree's,
+# and a qcc from another build or installation (QCC in the environment, or the one in the PATH that the tests take
+# when the build has none) compiles programs that load its own.  A run with a build refuses them (#7029), and a qore or
+# qcc that the loader cannot be asked about (a script, or a program that does not report the libqore it loads).  A
+# libqore that is not a Mach-O library (it exists, see above) is a stand-in that no program can load (the runner's
+# checkers), and is not checked.
+if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ] && is_macho "$LIBQORE"; then
+    EXPECTED_LIBQORE=`physical_file "$LIBQORE" || echo "$LIBQORE"`
+    check_loaded_libqore "the qore of the run ($QORE)" "$QORE"
+    tests_qcc_hint=" Build the build's qcc (cmake --build <build> --target qcc), or name a qcc that loads the"\
+" build's libqore in QCC, QORE_QCC and QORE_QCC_EXECUTABLE and put it first in the PATH."
+    tests_qcc_list=`tests_qccs`
+    if [ -n "$tests_qcc_list" ]; then
+        while IFS= read -r check_qcc; do
+            check_loaded_libqore "the qcc that the tests use ($check_qcc)" "$check_qcc" "$tests_qcc_hint"
+        done <<TESTS_QCC_EOF
+$tests_qcc_list
+TESTS_QCC_EOF
+    fi
+    unset tests_qcc_list tests_qcc_hint check_qcc
 fi
 
 # Enable core dumps for crash diagnostics
@@ -1168,13 +2037,7 @@ fi
 # test that hangs is still reported quickly.
 # Use gtimeout on macOS (GNU coreutils), timeout on Linux.
 TEST_TIMEOUT=${TEST_TIMEOUT:-300}
-if command -v timeout >/dev/null 2>&1; then
-    TIMEOUT_CMD=timeout
-elif command -v gtimeout >/dev/null 2>&1; then
-    TIMEOUT_CMD=gtimeout
-else
-    TIMEOUT_CMD=""
-fi
+# (TIMEOUT_CMD is set above, before the build is checked)
 
 # GNU timeout aborts a test that exceeds its time limit, so the test dumps core and the stacks of its threads
 # show where it hangs; BusyBox timeout (Alpine) keeps SIGTERM, as the exit code of an abort there would be
@@ -1219,7 +2082,15 @@ test_has_mark() {
     if [ -r /proc/self/environ ]; then
         tr '\0' '\n' < /proc/$1/environ 2>/dev/null | grep -qx "QORE_TEST_PROCESS_MARK=$2"
     else
-        ps -E -ww -o command= -p $1 2>/dev/null | grep -q "QORE_TEST_PROCESS_MARK=$2\( \|$\)"
+        # ps -E prints the environment after the arguments: they are removed first, so that a process whose arguments
+        # name the mark (the "env QORE_TEST_PROCESS_MARK=..." that starts a test) does not count.  If the process
+        # executes another program between the two calls, its arguments are not removed, and are searched too.
+        mark_args=`ps -ww -o command= -p $1 2>/dev/null`
+        mark_all=`ps -E -ww -o command= -p $1 2>/dev/null`
+        case " ${mark_all#"$mark_args"} " in
+            *" QORE_TEST_PROCESS_MARK=$2 "*) return 0 ;;
+        esac
+        return 1
     fi
 }
 
@@ -1458,7 +2329,8 @@ TEST_EVENT_TMP=${TMPDIR:-/tmp}
 TEST_EVENT_DIR=$(mktemp -d "${TEST_EVENT_TMP%/}/qore-test-events.XXXXXX") || exit 1
 TEST_EVENT_FIFO="$TEST_EVENT_DIR/events"
 
-# A test that exceeds its time limit is first sent SIGUSR1 when the signal cannot end it (see run_with_watchdog()):
+# A test that exceeds its time limit first has the native call stacks of its other processes printed (see
+# capture_descendant_stacks() below), and is then sent SIGUSR1 when the signal cannot end it (see run_with_watchdog()):
 # a QUnit test then prints the call stacks of all its threads and reports it through the event FIFO.  Once it has
 # reported it, has ended, or QORE_TEST_STACK_DUMP_WAIT seconds (default 30) have passed, it is aborted (SIGABRT), so
 # that it dumps core, and sent SIGKILL 60 seconds later.  A test that SIGUSR1 would end, without a core dump and
@@ -1476,6 +2348,468 @@ for opt in $QORE_TEST_OPTS; do
         -b|--disable-signals) TEST_SIGNALS_ENABLED=0 ;;
     esac
 done
+
+# Before a test that exceeds its time limit is sent any signal, the native call stacks of all threads of every process
+# of the test (test_stack_processes()) are printed where its output goes, each labelled with the process's ID and
+# command line (qore#6888): the test's own process has its Qore call stacks (SIGUSR1) and its core, but a hang in a
+# program that the test started showed only as a timeout.  The tools are tried in the order of QORE_TEST_STACK_TOOLS
+# (default: gdb, then eu-stack, on Linux; sample, then lldb, on macOS), the next one when one is not installed or
+# fails; gdb, eu-stack, lldb and sample are run with the options that print every thread's stack, any other command as
+# "<command> <pid>".  In a CI job, gdb and eu-stack run as root through the job's helper
+# (QORE_TEST_STACK_CAPTURE_HELPER; see examples/test/docker_test/ci-stack-capture.sh, which describes what it
+# accepts); if it does not read its request, the tool runs as the runner's user.  A capture can change what the process
+# does next: a debugger's attach stops it and resumes it, which ends some of its blocking system calls with EINTR
+# (lldb: read(); gdb and eu-stack on Linux: epoll_wait() and sigtimedwait(), for example), while sample reads the
+# threads of a suspended task, which is why it comes first on macOS.
+#
+# Each capture is ended with SIGKILL by the timeout command after QORE_TEST_STACK_CAPTURE_WAIT seconds (default 30),
+# and the captures together take at most QORE_TEST_STACK_CAPTURE_TOTAL seconds (default 120; the checks before each
+# capture, each limited to TEST_STACK_SCAN_WAIT seconds, count against it as well, except before the first one), so a
+# debugger that hangs cannot hold up the run; a tool that is missing, fails or is ended for its time is reported, as
+# is each process left without its stacks.  Every read of /proc that the scan of the test's processes makes is limited
+# to TEST_STACK_SCAN_WAIT seconds too: a read of a process's environment or command line waits while the process holds
+# the lock of its memory map, as one stuck in a page fault (D state, a hung NFS or FUSE file) does.  A debugger that is
+# killed while attached can leave its target stopped (T): the test's process group is killed after the test (and, on
+# Linux, every process with the test's mark), but on macOS a stopped process that left the group is not (as any
+# process that leaves it; see exec_in_test_group()).  A debugger that cannot attach prints why.  An attach that the
+# system refuses (ptrace's EPERM on Linux: yama's ptrace_scope lets a process that does not have CAP_SYS_PTRACE, such
+# as a test run as an ordinary user, attach only to its own descendants, and the watchdog's debugger is not an ancestor
+# of the test's processes; lldb's refusal on macOS) is reported in one line, and the test's other processes and tools
+# are not tried (see stack_attach_refused()); the test is then signalled as without the captures.  The watchdog reads
+# no event while it captures, so a run interrupted meanwhile ends its test once the captures have ended (see
+# runner_signaled()).
+TEST_STACK_CAPTURE_WAIT=${QORE_TEST_STACK_CAPTURE_WAIT:-30}
+TEST_STACK_CAPTURE_TOTAL=${QORE_TEST_STACK_CAPTURE_TOTAL:-120}
+# both are whole numbers of seconds, 1 to 999999999: shell arithmetic on anything else (2m, 1.5) is an error that ended
+# the watchdog, which then never ended the test, and the timeout command takes 0 for no limit
+if ! stack_number=`expr "x$TEST_STACK_CAPTURE_WAIT" : 'x0*\([1-9][0-9]\{0,8\}\)$'`; then
+    echo "run_tests.sh: QORE_TEST_STACK_CAPTURE_WAIT=$TEST_STACK_CAPTURE_WAIT is not a whole number of" \
+        "seconds from 1 to 999999999: 30 is used" >&2
+    stack_number=30
+fi
+TEST_STACK_CAPTURE_WAIT=$stack_number
+if ! stack_number=`expr "x$TEST_STACK_CAPTURE_TOTAL" : 'x0*\([1-9][0-9]\{0,8\}\)$'`; then
+    echo "run_tests.sh: QORE_TEST_STACK_CAPTURE_TOTAL=$TEST_STACK_CAPTURE_TOTAL is not a whole number of" \
+        "seconds from 1 to 999999999: 120 is used" >&2
+    stack_number=120
+fi
+TEST_STACK_CAPTURE_TOTAL=$stack_number
+# the limit of each scan of the processes of a test and of each read of a process's command line (see above)
+TEST_STACK_SCAN_WAIT=10
+if [ -n "$QORE_TEST_STACK_TOOLS" ]; then
+    TEST_STACK_TOOLS=$QORE_TEST_STACK_TOOLS
+elif [ "`uname -s`" = Darwin ]; then
+    TEST_STACK_TOOLS="sample lldb"
+else
+    TEST_STACK_TOOLS="gdb eu-stack"
+fi
+
+# Prints the IDs of the processes of the given test process, in ascending order, without the test's own: those that
+# descend from it, those in its process group (it leads one; see exec_in_test_group()), and on Linux those with the
+# test's QORE_TEST_PROCESS_MARK in their environment (see find_test_survivors()): the last two find a process that a
+# process of the test started and that was adopted by another process after its parent ended (a server started with
+# "&" by a shell that the test ran), with an environment of its own (env -i) or out of the group (setsid).  Always the
+# machine's processes, never QORE_TEST_PROC.  Each scan is limited (see above); one that does not end in time, and on
+# macOS a test that does not lead its group, are reported on standard error.
+test_stack_processes() {
+    if [ -r /proc/self/stat ]; then
+        # the process ID, parent and group are the 1st, 4th and 5th fields of /proc/<pid>/stat; the 2nd is the command
+        # name in parentheses, which may contain either, so the fields are counted after its last ")"
+        {
+            $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT awk -v stack_root=$1 'BEGIN {
+                for (i = 1; i < ARGC; ++i) {
+                    f = ARGV[i]
+                    if ((getline line < f) > 0) {
+                        last = 0
+                        while ((j = index(substr(line, last + 1), ")")) > 0) {
+                            last += j
+                        }
+                        split(substr(line, last + 2), field, " ")
+                        pid = f
+                        sub(/^\/proc\//, "", pid)
+                        sub(/\/stat$/, "", pid)
+                        parent[pid] = field[2]
+                        group[pid] = field[3]
+                    }
+                    close(f)
+                }
+                found[stack_root] = 1
+                do {
+                    added = 0
+                    for (p in parent) {
+                        if (!(p in found) && (parent[p] in found)) {
+                            found[p] = 1
+                            added = 1
+                        }
+                    }
+                } while (added)
+                for (p in found) {
+                    print p
+                }
+                for (p in group) {
+                    if (group[p] == stack_root) {
+                        print p
+                    }
+                }
+                exit
+            }' /proc/[0-9]*/stat 2>/dev/null
+            case $? in
+                124|137)
+                    echo "*** the scan of the processes of test $1 (/proc/*/stat) did not end within" \
+                        "${TEST_STACK_SCAN_WAIT}s ***" >&2
+                    ;;
+            esac
+            if [ -n "$TEST_PROCESS_MARK" ]; then
+                $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT awk \
+                        -v stack_mark="QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK" 'BEGIN {
+                    RS = "\0"
+                    for (i = 1; i < ARGC; ++i) {
+                        f = ARGV[i]
+                        while ((getline e < f) > 0) {
+                            if (e == stack_mark) {
+                                sub(/^\/proc\//, "", f)
+                                sub(/\/environ$/, "", f)
+                                print f
+                                fflush()
+                                break
+                            }
+                        }
+                        close(f)
+                    }
+                    exit
+                }' /proc/[0-9]*/environ 2>/dev/null
+                case $? in
+                    124|137)
+                        echo "*** the scan of the processes of test $1 with its mark (/proc/*/environ) did not end" \
+                            "within ${TEST_STACK_SCAN_WAIT}s: a process that holds the lock of its memory map (D" \
+                            "state) blocks it; the processes found until then are captured ***" >&2
+                        ;;
+                esac
+            fi
+        }
+    else
+        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -A -o pid= -o ppid= -o pgid= 2>/dev/null | awk -v root=$1 '
+            { parent[$1] = $2; group[$1] = $3 }
+            END {
+                found[root] = 1
+                do {
+                    added = 0
+                    for (p in parent) {
+                        if (!(p in found) && (parent[p] in found)) {
+                            found[p] = 1
+                            added = 1
+                        }
+                    }
+                } while (added)
+                for (p in found) {
+                    print p
+                }
+                # the test leads its group: the group is the test
+                if (group[root] == root) {
+                    for (p in group) {
+                        if (group[p] == root) {
+                            print p
+                        }
+                    }
+                } else if (root in group) {
+                    printf "*** test %s does not lead a process group: the processes it started that another process" \
+                        " adopted are not found ***\n", root > "/dev/stderr"
+                }
+            }'
+    fi | awk -v root=$1 '$1 != root && $1 ~ /^[0-9]+$/' | sort -un
+}
+
+# Returns 0 if the given process (the second argument) is still a process of the given test process (see
+# test_stack_processes()), checked just before it is captured: its process ID may have been taken by another process
+# since the scan, which narrows the window in which that is possible to the instant between the check and the attach.
+# The check is limited (see above), and a process whose check does not end in time is taken for none of the test's.
+test_stack_process_check() {
+    if [ -r /proc/self/stat ]; then
+        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT awk -v stack_check=$2 -v root=$1 \
+                -v mark="${TEST_PROCESS_MARK:+QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK}" 'BEGIN {
+            # its group, then its parent and theirs (see test_stack_processes())
+            p = stack_check
+            for (n = 0; n < 100000 && p > 1; ++n) {
+                f = "/proc/" p "/stat"
+                if ((getline line < f) <= 0) {
+                    break
+                }
+                close(f)
+                last = 0
+                while ((j = index(substr(line, last + 1), ")")) > 0) {
+                    last += j
+                }
+                split(substr(line, last + 2), field, " ")
+                if ((n == 0 && field[3] == root) || field[2] == root) {
+                    exit 0
+                }
+                p = field[2]
+            }
+            if (mark != "") {
+                RS = "\0"
+                f = "/proc/" stack_check "/environ"
+                while ((getline e < f) > 0) {
+                    if (e == mark) {
+                        exit 0
+                    }
+                }
+            }
+            exit 1
+        }' 2>/dev/null
+    else
+        case "
+`test_stack_processes $1 2>/dev/null`
+" in
+            *"
+$2
+"*) return 0 ;;
+        esac
+        return 1
+    fi
+}
+
+# Prints the command line of the given process (empty if it has none, has ended, or cannot be read in time); /proc on
+# Linux, where BusyBox ps has no -p
+process_command_line() {
+    if [ -r /proc/self/cmdline ]; then
+        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat /proc/$1/cmdline 2>/dev/null | tr '\0' ' ' | sed 's/ $//'
+    else
+        $TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -ww -o command= -p $1 2>/dev/null
+    fi
+}
+
+# Returns 0 if the given process has ended: it is gone, or a zombie (or dead) that its parent has not reaped yet, to
+# which a debugger cannot attach either (gdb then prints the same notice as for a refused attach).  On Linux, a
+# process whose main thread has ended while its other threads run shows that thread as a zombie: it has not ended if
+# it has another thread (the 20th field of its stat, the 18th after the command name).
+process_ended() {
+    if [ -r /proc/self/stat ]; then
+        # the file is an argument, so that its open is limited too; the state follows the command name, which is in
+        # parentheses and may contain either
+        stack_stat=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT cat /proc/$1/stat 2>/dev/null`
+        stack_state=${stack_stat##*) }
+        stack_threads=`printf '%s\n' "$stack_state" | awk '{ print $18 }'`
+        stack_state=${stack_state%% *}
+        if [ "$stack_state" = Z ] && [ "${stack_threads:-1}" -gt 1 ] 2>/dev/null; then
+            return 1
+        fi
+    else
+        stack_state=`$TIMEOUT_CMD -s KILL $TEST_STACK_SCAN_WAIT ps -o stat= -p $1 2>/dev/null`
+        stack_state=`printf '%s' "$stack_state" | tr -d ' '`
+    fi
+    case "$stack_state" in
+        ''|Z*|X*|x*) return 0 ;;
+    esac
+    return 1
+}
+
+# Runs gdb or eu-stack (the first argument) on the given process with the given time limit in seconds through the CI
+# job's helper (see above), as root; prints its output, and returns the tool's exit code, 126 if the helper refused the
+# request, 137 if it did not answer in time, or 125 if it did not read the request (the tool is then run as the
+# runner's user).  The answer comes through a FIFO in the runner's own directory, which the helper opens as the
+# runner's user.
+runs_stack_helper() {
+    # the helper takes a limit of at most 300 s (see ci-stack-capture.sh)
+    if [ $3 -gt 300 ]; then
+        set -- $1 $2 300
+    fi
+    stack_reply="${TEST_EVENT_DIR:-${TMPDIR:-/tmp}}/stack-reply.$$"
+    rm -f "$stack_reply" "$stack_reply.out"
+    if ! mkfifo -m 600 "$stack_reply" 2>/dev/null; then
+        echo "*** the FIFO for the answer of the stack capture helper cannot be made: $stack_reply ***"
+        return 125
+    fi
+    # one line, which a FIFO takes whole; the helper holds its FIFO open, so the open blocks only if it has ended
+    if ! $TIMEOUT_CMD -s KILL 5 sh -c 'printf "%s\n" "$2" > "$1"' sh "$QORE_TEST_STACK_CAPTURE_HELPER" \
+            "$2 $3 $TEST_PROCESS_MARK $1 $stack_reply" 2>/dev/null; then
+        rm -f "$stack_reply"
+        echo "*** the stack capture helper ($QORE_TEST_STACK_CAPTURE_HELPER) does not read its requests: $1 runs" \
+            "as the runner's user ***"
+        return 125
+    fi
+    $TIMEOUT_CMD -s KILL $(($3 + 30)) cat "$stack_reply" > "$stack_reply.out" 2>/dev/null
+    rm -f "$stack_reply"
+    grep -v '^qore-stack-capture-status: ' "$stack_reply.out" 2>/dev/null
+    stack_status=`sed -n 's/^qore-stack-capture-status: \([0-9][0-9]*\)$/\1/p' "$stack_reply.out" 2>/dev/null | \
+        tail -1`
+    rm -f "$stack_reply.out"
+    if [ -z "$stack_status" ]; then
+        echo "*** the stack capture helper did not answer within $(($3 + 30))s ***"
+        return 137
+    fi
+    return $stack_status
+}
+
+# Runs the given stack tool on the given process with the given time limit in seconds (see above); its exit code
+runs_stack_tool() {
+    case "$1" in
+        gdb|eu-stack)
+            if [ -n "$QORE_TEST_STACK_CAPTURE_HELPER" ] && [ -p "$QORE_TEST_STACK_CAPTURE_HELPER" ]; then
+                runs_stack_helper "$@"
+                stack_helper_rc=$?
+                if [ $stack_helper_rc -ne 125 ]; then
+                    return $stack_helper_rc
+                fi
+            fi
+            ;;
+    esac
+    case "$1" in
+        gdb)
+            DEBUGINFOD_URLS= $TIMEOUT_CMD -s KILL $3 gdb -nx -batch -iex "set debuginfod enabled off" -p $2 \
+                -ex "thread apply all bt"
+            ;;
+        eu-stack) DEBUGINFOD_URLS= $TIMEOUT_CMD -s KILL $3 eu-stack -p $2 ;;
+        lldb) $TIMEOUT_CMD -s KILL $3 lldb --no-lldbinit --batch -p $2 -o "thread backtrace all" -o detach ;;
+        sample) $TIMEOUT_CMD -s KILL $3 sample $2 1 -file /dev/stdout ;;
+        *) $TIMEOUT_CMD -s KILL $3 "$1" $2 ;;
+    esac
+}
+
+# Returns 0 if the given output of a stack tool shows that the system refused to let it attach, whatever the tool's
+# exit code (gdb 17 prints "Could not attach to process.  ..." and "ptrace: <error>." and exits with 0): on Linux,
+# gdb's "ptrace: " and "Could not attach to process" lines, eu-stack's error for its attach, or the CI job's helper's
+# "ptrace restricted" refusal (see runs_stack_helper()); on macOS, lldb's "error: attach failed: ... Not allowed to
+# attach to process".  The patterns are anchored at the start of a line, so that a stack does not match them.  A
+# process that has ended gives the same lines ("ptrace: No such process."): the caller checks that first.
+stack_attach_failed() {
+    if [ -r /proc/self/stat ]; then
+        grep -q -E '^(ptrace: |Could not attach to process|eu-stack: .*(Operation not permitted|Permission denied))' \
+            "$1" 2>/dev/null \
+            || grep -q '^qore-stack-capture: refused: ptrace restricted' "$1" 2>/dev/null
+    else
+        grep -q -E '^error: attach failed: .*Not allowed to attach to process' "$1" 2>/dev/null
+    fi
+}
+
+# Prints why the system refused to let a stack tool attach to the given process, in one line, with the processes given
+# after it, which are not captured (see above): on Linux, yama's ptrace_scope, or the container's seccomp profile or
+# capabilities, decide for every process alike; on macOS, the system decides for the debugger (developer tools access)
+# and for the process (a system binary, or one built with the hardened runtime)
+stack_attach_refused() {
+    stack_refused_pid=$1
+    shift
+    if [ -r /proc/self/stat ]; then
+        stack_scope=`cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null`
+        case "$stack_scope" in
+            1)
+                stack_why="without CAP_SYS_PTRACE a process may attach only to its own descendants, and the"
+                stack_why="$stack_why watchdog's debugger is not an ancestor of the test's processes"
+                ;;
+            2) stack_why="only a process with CAP_SYS_PTRACE may attach" ;;
+            3) stack_why="no process may attach" ;;
+            *) stack_why="the container's seccomp profile or missing CAP_SYS_PTRACE forbid the attach" ;;
+        esac
+        echo "*** ptrace restricted: yama ptrace_scope=${stack_scope:-unset}, no stacks captured (processes $*):" \
+            "$stack_why ***"
+    else
+        echo "*** ptrace restricted: the system does not allow lldb to attach to process $stack_refused_pid, no" \
+            "stacks captured (processes $*): it allows a debugger to attach only with developer tools access" \
+            "(DevToolsSecurity), and never to a system binary or a program built with the hardened runtime ***"
+    fi
+}
+
+# Prints the native call stacks of every process of the given test process (see above).  It cannot fail the watchdog,
+# and returns only once every capture has ended.
+capture_descendant_stacks() {
+    if [ -z "$TIMEOUT_CMD" ]; then
+        return 0
+    fi
+    # each tool's output goes through a file in the runner's own directory, so that a refused attach can be explained;
+    # the scan's reports go through it too, as its output is the list
+    stack_out="${TEST_EVENT_DIR:-${TMPDIR:-/tmp}}/stacks.$$"
+    stack_pids=`test_stack_processes $1 2> "$stack_out"`
+    cat "$stack_out" 2>/dev/null
+    if [ -z "$stack_pids" ]; then
+        rm -f "$stack_out"
+        return 0
+    fi
+    stack_tools=""
+    for tool in $TEST_STACK_TOOLS; do
+        if command -v "$tool" > /dev/null 2>&1; then
+            stack_tools="$stack_tools $tool"
+        fi
+    done
+    if [ -z "$stack_tools" ]; then
+        echo "*** the native call stacks of the processes of test $1 cannot be captured: none of the tools" \
+            "($TEST_STACK_TOOLS) is installed ***"
+    fi
+    # the first capture has the whole of the total time (up to the limit of one), taken with the same clock reading as
+    # the end of the total, so that a second that begins in between does not shorten it
+    stack_now=`date +%s`
+    stack_end=$((stack_now + TEST_STACK_CAPTURE_TOTAL))
+    stack_secs=$TEST_STACK_CAPTURE_TOTAL
+    stack_refused=0
+    for pid in $stack_pids; do
+        printf '%s\n' "*** native call stacks of process $pid (a process of test $1): `process_command_line $pid` ***"
+        if process_ended $pid; then
+            echo "*** process $pid has ended ***"
+            stack_secs=""
+            continue
+        fi
+        stack_done=0
+        for tool in $stack_tools; do
+            if [ -z "$stack_secs" ]; then
+                stack_secs=$((stack_end - `date +%s`))
+            fi
+            if [ $stack_secs -gt $TEST_STACK_CAPTURE_WAIT ]; then
+                stack_secs=$TEST_STACK_CAPTURE_WAIT
+            fi
+            if [ $stack_secs -le 0 ]; then
+                echo "*** process $pid: not captured, as the captures have taken their ${TEST_STACK_CAPTURE_TOTAL}s" \
+                    "(QORE_TEST_STACK_CAPTURE_TOTAL) ***"
+                stack_done=1
+                break
+            fi
+            # the list is as old as the captures before (see test_stack_process_check())
+            if ! test_stack_process_check $1 $pid; then
+                echo "*** process $pid is no longer found among the processes of the test ***"
+                stack_done=1
+                break
+            fi
+            # the tool has no terminal input and not the watchdog's event FIFO (descriptor 4)
+            runs_stack_tool $tool $pid $stack_secs < /dev/null > "$stack_out" 2>&1 4>&-
+            stack_rc=$?
+            cat "$stack_out" 2>/dev/null
+            stack_limit=$stack_secs
+            stack_secs=""
+            case $stack_rc in
+                124|137)
+                    echo "*** process $pid: $tool did not end within ${stack_limit}s and was killed ***"
+                    stack_done=1
+                    break
+                    ;;
+            esac
+            # An attach that the system refuses, whatever the tool's exit code, is refused for the other processes and
+            # tools too: one line says so, and no other is tried, so a test whose stacks cannot be read does not report
+            # it for each of them.  A process that ended meanwhile gives the same notice, and is reported as ended.
+            if stack_attach_failed "$stack_out"; then
+                if process_ended $pid; then
+                    echo "*** process $pid has ended ***"
+                    stack_done=1
+                    break
+                fi
+                stack_attach_refused $pid `printf '%s\n' $stack_pids | awk -v pid=$pid '$1 == pid { found = 1 } found'`
+                stack_refused=1
+                break
+            fi
+            if [ $stack_rc -eq 0 ]; then
+                stack_done=1
+                break
+            fi
+            echo "*** process $pid: $tool failed (exit code $stack_rc) ***"
+        done
+        stack_secs=""
+        if [ $stack_refused -eq 1 ]; then
+            break
+        fi
+        if [ $stack_done -eq 0 ] && [ -n "$stack_tools" ]; then
+            echo "*** process $pid: no tool could capture its call stacks ***"
+        fi
+    done
+    rm -f "$stack_out"
+    echo "*** end of the native call stacks of the processes of test $1 ***"
+    return 0
+}
 
 # The events that the watchdog of a test reads from the event FIFO, one per line:
 # - "handler <pid>": QUnit has installed its SIGUSR1 handler, which prints the call stacks of the test's threads, in
@@ -1726,6 +3060,47 @@ event $1
             return 0
         }
 
+        # The watchdog's own process ID (a subshell's $$ is the runner's), for watchdog_check_test(): its parent is the
+        # runner's shell while that shell runs; "sh -c" is its child, as a command substitution would run it in one more
+        # subshell
+        watchdog_self=""
+        if sh -c 'echo $PPID' > "$TEST_EVENT_DIR/watchdog-self" 2>/dev/null; then
+            read -r watchdog_self < "$TEST_EVENT_DIR/watchdog-self"
+        fi
+        rm -f "$TEST_EVENT_DIR/watchdog-self"
+
+        # Returns 0 if test_pid is still the test's process: while the runner's shell runs (it is still the watchdog's
+        # parent), its child that it has not waited for (test_is_shell_child()); and always a process with the test's
+        # QORE_TEST_PROCESS_MARK (test_has_mark()).  A shell that is killed with SIGKILL (a kill by process ID) runs no
+        # trap, so nothing stops its watchdog (see runner_signaled()) or tells it that the test has ended; at the
+        # test's time limit, the test's process ID may then be another process's, which must not be signalled
+        # (qore#6875: the watchdog subshell of a test of another run was killed with SIGKILL).  Once that shell has
+        # ended, its process ID may be another shell's too, whose child may have the test's ID: only the mark counts
+        # then.  So an orphaned test that hangs is still ended, unless its process shows no environment (macOS shows
+        # none of a system binary, ps -E: a test that is a shell script, for example), which is then left running.
+        # Otherwise this prints that nothing is sent, and the watchdog ends.  The runner's shell may wait for the test
+        # between the check and the signal (it then writes "exit"): the ID would have to be taken by another process in
+        # that instant.
+        watchdog_check_test() {
+            if [ -n "$watchdog_self" ] && test_is_shell_child $watchdog_self && test_is_shell_child $test_pid; then
+                return 0
+            fi
+            if test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
+                return 0
+            fi
+            echo "*** process $test_pid is no longer the test: nothing is sent to it ***"
+            exit $status
+        }
+
+        # Sends the given signal to the test, after the message given, if any, once watchdog_check_test() has passed
+        watchdog_signal() {
+            watchdog_check_test
+            if [ -n "$2" ]; then
+                echo "$2"
+            fi
+            kill -$1 $test_pid 2>/dev/null
+        }
+
         watchdog_wait $limit exit
         # the test has ended, or the read failed before the time limit: the test is not ended for that (an
         # interrupted run stops the watchdog with "exit" too, in this phase or any later one; see runner_signaled())
@@ -1733,25 +3108,29 @@ event $1
             exit $status
         fi
         status=$((status | 1))
+        # the message printed with the timeout signal, if it is not sent after SIGUSR1
+        timeout_message=""
+        watchdog_check_test
         print_test_threads "at its time limit"
+        capture_descendant_stacks $test_pid
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
-            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
-                "disabled) ***"
+            timeout_message="*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is \
+disabled) ***"
         elif usr1_cannot_end_test; then
-            echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
-            kill -USR1 $test_pid 2>/dev/null
+            watchdog_signal USR1 \
+                "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
             if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
                 exit $status
             fi
             # again after the wait for the call stacks, so that the CPU time each thread used meanwhile shows
             print_test_threads "before SIG$TEST_TIMEOUT_SIGNAL"
         else
-            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it does not" \
-                "handle SIGUSR1, which would end it without its call stacks or a core dump ***"
+            timeout_message="*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it \
+does not handle SIGUSR1, which would end it without its call stacks or a core dump ***"
         fi
-        kill -$TEST_TIMEOUT_SIGNAL $test_pid 2>/dev/null
+        watchdog_signal $TEST_TIMEOUT_SIGNAL "$timeout_message"
         if ! watchdog_wait 60 exit; then
-            kill -KILL $test_pid 2>/dev/null
+            watchdog_signal KILL
         fi
         exit $status
     ) &

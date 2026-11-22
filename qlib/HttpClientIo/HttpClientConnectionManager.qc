@@ -423,12 +423,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     private:internal {
         #! Lock for manager id allocation.
         static Mutex manager_id_lock();
+
+        #! Set when the code that created the manager passed its caller check (qore#6981)
+        /** Only a manager whose creator passed checkCreator() grants its connections the exemption of its own
+            creations (see HttpClientCallerExemption)
+        */
+        bool creator_checked;
     }
 
     #! Creates a new connection manager with the given options
     /** @param opts configuration options including protocol selection
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given (qore#6981)
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
+        HttpClientConnectionManager::checkCreator(opts);
+        creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
         self.logger = self.opts.logger;
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
@@ -560,6 +571,36 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Copying is not supported
     private copy() {
         throw "COPY-ERROR", "HttpClientConnectionManager objects cannot be copied";
+    }
+
+    #! Refuses a manager to code restricted from the functional domains of its connections (qore#6981)
+    /** A manager creates its connections with the exemption of its own creations (see HttpClientCallerExemption), so
+        the code that creates it decides: code restricted from \c NETWORK cannot create one, nor can code restricted
+        from \c FILESYSTEM create one with CA certificate locations, which its connections read
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given
+    */
+    private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
+                "restricted from the NETWORK functional domain";
+        }
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
+                "certificate locations, as it is restricted from the FILESYSTEM functional domain";
+        }
+    }
+
+    #! Grants the exemption of the manager's own creations, if its creator passed its caller check (qore#6981)
+    /** @throw PERMISSION-DENIED the creator of the manager did not pass its caller check
+    */
+    private:internal HttpClientCallerExemption getExemption() {
+        if (!creator_checked) {
+            throw "PERMISSION-DENIED", "the HTTP client connection manager was not created by code that passed its "
+                "caller check, so it does not create connections";
+        }
+        return new HttpClientCallerExemption();
     }
 
     #! Destructor - closes all connections
@@ -2839,6 +2880,38 @@ printf("%d connection(s) migrated\n", migrated);
         h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
+    #! Internal: creates an HTTP/1.1 connection with the exemption of the manager's own creations (qore#6981)
+    /** The caller evaluates everything that the connection is given (such as the proxy authorization, which can run
+        code of the manager's creator), so no other code runs while the exemption is held; see
+        HttpClientCallerExemption
+    */
+    private:internal Http1ClientConnection newHttp1Connection(hash<auto> url_info, *hash<auto> proxy_info) {
+        HttpClientCallerExemption exemption = getExemption();
+        return new Http1ClientConnection(url_info, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
+            opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+    }
+
+    #! Internal: creates an HTTP/2 connection with the exemption of the manager's own creations (qore#6981)
+    /** See newHttp1Connection()
+    */
+    private:internal Http2ClientConnection newHttp2Connection(hash<auto> url_info, *hash<auto> proxy_info,
+            bool offer_http11) {
+        HttpClientCallerExemption exemption = getExemption();
+        return new Http2ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
+            opts.ssl_verify_mode, opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk,
+            opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
+    }
+
+    #! Internal: creates an HTTP/3 connection with the exemption of the manager's own creations (qore#6981)
+    /** See newHttp1Connection()
+    */
+    private:internal Http3ClientConnection newHttp3Connection(hash<auto> url_info, *list<int> avoid_families) {
+        HttpClientCallerExemption exemption = getExemption();
+        return new Http3ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
+            opts.ssl_verify_mode, opts.accept_all_certs, opts.client_cert, opts.client_pk, opts.ssl_ca_file,
+            opts.ssl_ca_path, NOTHING, avoid_families);
+    }
+
     #! Internal: creates a connection for an explicitly selected or cached protocol
     /** Automatic H3 connections use the happy-eyeballs race. Constructing an
         H3 poll operation alone does not prove that QUIC can complete a handshake.
@@ -2847,27 +2920,20 @@ printf("%d connection(s) migrated\n", migrated);
         if (protocol == "h1") {
             log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
-            HttpClientConnection conn = new Http1ClientConnection(url_info, opts.connect_timeout, logger,
-                1, opts.ssl_verify_mode, opts.accept_all_certs, getConnectionProxyInfo(url_info),
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            HttpClientConnection conn = newHttp1Connection(url_info, getConnectionProxyInfo(url_info));
             applyTcpUserTimeout(conn);
             return conn;
         }
 
         if (protocol == "h3") {
             hash<auto> h3_url_info = prepareH3Probe(url_info, key);
-            return new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
-                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                NOTHING, getH3AvoidedFamilies(key));
+            return newHttp3Connection(h3_url_info, getH3AvoidedFamilies(key));
         }
 
         # Create H2 connection
         log(LoggerLevel::DEBUG, "creating new HTTP/2 connection to %s%s", key,
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
-        HttpClientConnection h2 = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
-            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
+        HttpClientConnection h2 = newHttp2Connection(url_info, getConnectionProxyInfo(url_info),
             opts.protocol == "auto");
         applyTcpUserTimeout(h2);
         return h2;
@@ -3231,10 +3297,7 @@ printf("%d connection(s) migrated\n", migrated);
         # Create H3 connection (non-blocking — constructor sets up QUIC poll op)
         *Http3ClientConnection h3conn;
         try {
-            h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
-                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                NOTHING, getH3AvoidedFamilies(key));
+            h3conn = newHttp3Connection(h3_url_info, getH3AvoidedFamilies(key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -3304,10 +3367,7 @@ printf("%d connection(s) migrated\n", migrated);
 
         # H3 didn't connect yet — start H2 in parallel
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
-        h2conn = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
-            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-            opts.protocol == "auto");
+        h2conn = newHttp2Connection(url_info, getConnectionProxyInfo(url_info), opts.protocol == "auto");
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
@@ -3845,10 +3905,7 @@ printf("%d connection(s) migrated\n", migrated);
 
         *Http3ClientConnection h3conn;
         try {
-            h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
-                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-                opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                NOTHING, getH3AvoidedFamilies(key));
+            h3conn = newHttp3Connection(h3_url_info, getH3AvoidedFamilies(key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -4063,10 +4120,8 @@ printf("%d connection(s) migrated\n", migrated);
     private startRaceH2(AsyncRace race) {
         log(LoggerLevel::DEBUG,
             "happy eyeballs (async): starting H2 for %s (H3 still pending)", race.key);
-        Http2ClientConnection h2conn(race.url_info, opts.connect_timeout, logger,
-            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            getConnectionProxyInfo(race.url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file,
-            opts.ssl_ca_path);
+        Http2ClientConnection h2conn = newHttp2Connection(race.url_info, getConnectionProxyInfo(race.url_info),
+            False);
         # the race owns the candidate as soon as it exists, so that it is closed if it cannot be submitted
         race.h2conn = h2conn;
         applyTcpUserTimeout(h2conn);

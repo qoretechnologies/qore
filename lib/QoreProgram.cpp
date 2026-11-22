@@ -34,6 +34,7 @@
 #include <qore/Restrictions.h>
 #include <qore/QoreCounter.h>
 #include <qore/QoreSandboxManager.h>
+#include <qore/ParseOptionMap.h>
 #include <chrono>
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/QoreSignal.h"
@@ -2385,6 +2386,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     // the parent's options are read once, so that the test and the steps below use the same value (issue #6078); the
     // creator's checks read them already, and the child inherits that value, not one that changed meanwhile (#6176)
     QoreParseOptions p_po = p_parse_options ? *p_parse_options : p_pgm->priv->pwo.parse_options.load();
+    // PO_IN_MODULE marks the Program of a user module: a Program that the module's code creates is not module code,
+    // so it does not inherit the mark, or the caller walk would look past it as module code (qore#7067)
+    p_po &= ~QoreParseOptions(PO_IN_MODULE);
     // if children inherit restrictions, then set all child restrictions
     if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
@@ -5468,6 +5472,33 @@ int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* p
     QoreStringMaker label("%s (the new Program has %%modern from its parent, which can allow other options for its "
         "child Programs with %%no-child-restrictions, or create an independent Program)", what);
     return checkModernConflict(inherited, po, true, label.c_str(), xsink);
+}
+
+int qore_program_private::raiseLockedOptions(const QoreParseOptions& requested, ExceptionSink* xsink) {
+    QoreStringNode* desc = new QoreStringNode("parse options have been locked on this program object; requested:");
+    for (unsigned i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(uint64_t(1) << i);
+        if (requested.getLo() & bit) {
+            auto it = pomaps.pomap.find(bit);
+            const char* name = it == pomaps.pomap.end() ? ParseOptionMap::find_name(QoreParseOptions(bit))
+                : it->second;
+            if (name) {
+                desc->sprintf(" %s", name);
+            } else {
+                desc->sprintf(" bit %u", i);
+            }
+        }
+        if (requested.getHi() & bit) {
+            const char* name = ParseOptionMap::find_name(QoreParseOptions(0, bit));
+            if (name) {
+                desc->sprintf(" %s", name);
+            } else {
+                desc->sprintf(" bit %u", i + 64);
+            }
+        }
+    }
+    xsink->raiseException("OPTIONS-LOCKED", desc);
+    return -1;
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {

@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of caller-program.qtest whose code creates a Program from the code that it is given (qore#7077): the
+# Program that it creates is not a module's, and does not inherit PO_IN_MODULE from the module's Program (qore#7067)
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module ProgramMaker {
+    version = "1.0";
+    desc = "creates a Program from code that it is given";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ProgramMaker {
+#! creates a Program with the given code as this module's code
+public Program sub make_program(string src) {
+    Program p(PO_NEW_STYLE);
+    p.parse(src, "made by a module");
+    return p;
+}
+}
