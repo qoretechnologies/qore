@@ -1288,6 +1288,14 @@ public:
         of different callers (qore#7010)
     */
     uint64_t work_gen = 0;
+    //! true if the code that captured the context is sandboxed or acts for sandboxed code (see
+    //! qore_caller_is_sandboxed()): the exceptions of the C++ steps that the context's operation runs on the async I/O
+    //! thread are raised for it (see QoreExceptionOriginScope; qore#7232)
+    /** Set by capture_async_io_sandbox_context() only
+    */
+    bool origin_sandboxed = false;
+    //! the ID of the sandboxed Program of that code, or 0 if it is not known
+    qore_program_id_t origin_pgm_id = 0;
     //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
     /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
         controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
@@ -2218,6 +2226,35 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true and sets \a pgm_id if the code that raises an exception or sets an error now is sandboxed or acts for
+//! sandboxed code: the origin that a QoreExceptionOriginScope sets (work that the library does on the async I/O thread
+//! for a sandboxed submitter), else qore_caller_is_sandboxed() (qore#7139, qore#7232)
+DLLLOCAL bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id);
+
+//! Sets the origin of the exceptions that the current thread raises while it exists: work that the library does for a
+//! sandboxed submitter where no sandbox context is applied, such as a C++ step of an operation on the async I/O thread
+//! (qore#7232)
+/** Inactive if \a origin_sandboxed is false; costs a thread-local load and store when active, and a branch otherwise
+*/
+class QoreExceptionOriginScope {
+public:
+    DLLLOCAL QoreExceptionOriginScope(bool origin_sandboxed, qore_program_id_t origin_pgm_id);
+    DLLLOCAL ~QoreExceptionOriginScope();
+
+    DLLLOCAL QoreExceptionOriginScope(const QoreExceptionOriginScope&) = delete;
+    DLLLOCAL QoreExceptionOriginScope& operator=(const QoreExceptionOriginScope&) = delete;
+
+    //! the scope of the current thread, or nullptr
+    DLLLOCAL static const QoreExceptionOriginScope* current();
+
+    //! the ID of the sandboxed Program, or 0 if it is not known
+    qore_program_id_t pgm_id;
+
+private:
+    const QoreExceptionOriginScope* previous = nullptr;
+    bool active;
+};
 
 //! Returns true and sets \a mark if an exception in \a xsink was raised by code that is sandboxed or acts for
 //! sandboxed code (qore#7139)

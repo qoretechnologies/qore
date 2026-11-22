@@ -64,7 +64,7 @@ QoreExceptionBase::QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValu
     }
     // an exception that code that is sandboxed or acts for sandboxed code raises is reported marked, wherever and in
     // whichever thread it is reported, so that the text of its choosing cannot pass for the host's own (qore#7139)
-    sandboxed = qore_caller_is_sandboxed(&sandboxed_pgm_id);
+    sandboxed = qore_code_origin_sandboxed(&sandboxed_pgm_id);
 }
 
 void QoreException::del(ExceptionSink* xsink) {
@@ -117,7 +117,7 @@ QoreException* QoreException::replaceTop(const QoreListNode& new_ex, ExceptionSi
     // choosing: it is reported marked from then on (qore#7139)
     if (new_ex.size() > 0) {
         qore_program_id_t pgm_id = 0;
-        if (qore_caller_is_sandboxed(&pgm_id)) {
+        if (qore_code_origin_sandboxed(&pgm_id)) {
             sandboxed = true;
             sandboxed_pgm_id = pgm_id;
         }

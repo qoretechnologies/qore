@@ -56,6 +56,26 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
         });
         addTestCase("values that are not strings", sub () { checkEscaped("values", "tenant line\\nforged line"); });
         addTestCase("a chained exception", \chainedTest());
+        addTestCase("a pipeline step of the sandboxed code on the I/O thread", sub () {
+            checkEscaped("pipeline", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a JSON stream of the sandboxed code", sub () {
+            checkEscaped("json-stream", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a YAML input stream of the sandboxed code", sub () {
+            checkEscaped("yaml-read", "TENANT-ERR: tenant line\\nforged line");
+        });
+        addTestCase("a module load of the sandboxed code that a host thread waits for", sub () {
+            # the test waits for the host's thread with a debug hook of debug builds
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("the library is not a debug build (dbg_module_load_waiters())");
+            }
+            checkEscaped("module-load", "TENANT-ERR: module 'ReportLoadFail' failed to load in another thread: tenant "
+                "line\\nforged line", True);
+        });
+        addTestCase("a YAML output stream of the sandboxed code", sub () {
+            checkEscaped("yaml-write", "TENANT-ERR: tenant line\\nforged line");
+        });
         addTestCase("a future that the sandboxed code rejects", sub () {
             checkEscaped("promise-error", "P-ERR: tenant line\\nforged line");
         });
@@ -69,6 +89,8 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
         addTestCase("the host's code, on stderr", sub () { checkHost("host-timer-stderr"); });
         addTestCase("the host's task", sub () { checkHost("host-task"); });
         addTestCase("the host's background thread", sub () { checkHost("host-background"); });
+        addTestCase("the host's pipeline on the I/O thread", sub () { checkHost("host-pipeline"); });
+        addTestCase("the host's JSON stream", sub () { checkHost("host-json-stream"); });
         set_return_value(main());
     }
 
@@ -124,11 +146,18 @@ class SandboxedExceptionReportTest inherits QUnit::Test {
 
     #! checks the marked report on stderr of \a mode: \a escaped on a marked line, every line marked, no escape
     #! character or carriage return
-    private checkEscaped(string mode, string escaped) {
+    #! with \a module_mark, the mark is that of the Program of a module that the sandboxed code loaded by path, whose
+    #! code raised the exception
+    private checkEscaped(string mode, string escaped, *bool module_mark) {
         foreach hash<auto> r in (run(mode)) {
             string what = mode + ", " + r.exec;
             assertEq(0, r.rc, what + ": exit code");
             string mark = "[caller Program " + pgmId(r.out) + "] ";
+            if (module_mark) {
+                *string id = (r.err =~ x/^\[caller Program ([0-9]+)\] /m)[0];
+                assertTrue(id.toInt() > pgmId(r.out).toInt(), what + ": the module's Program, created after the tenant's");
+                mark = "[caller Program " + (id ?? "?") + "] ";
+            }
             assertTrue(r.err.find(mark) >= 0, what + ": the mark");
             assertTrue(r.err.find(escaped) >= 0, what + ": the escaped text");
             assertEq((), (select r.err.split("\n"), $1 && !$1.equalPartial(mark)), what + ": every line marked");

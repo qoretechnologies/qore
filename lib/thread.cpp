@@ -8425,6 +8425,9 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
         isolation->ref();
     }
     caller_restrictions = src->caller_restrictions;
+    // the steps of the operation are still raised for its submitter (qore#7232)
+    origin_sandboxed = src->origin_sandboxed;
+    origin_pgm_id = src->origin_pgm_id;
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }

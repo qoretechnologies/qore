@@ -121,3 +121,47 @@ Future sub async_error() {
 code sub map_closure() {
     return sub (auto x) { throw "TENANT-ERR", text(); };
 }
+
+#! a pipeline whose delegate fails on the async I/O thread with text of this code's choosing (qore#7232): its C++ step
+#! raises the error, which rejects the host's promise, on the I/O thread
+sub pipeline_error(Socket server, Promise pr) {
+    PollPipeline inner();
+    inner.addRequireContextKey("no-such-key", "TENANT-ERR", text());
+    PollPipeline outer(server);
+    outer.addDelegate(inner);
+    outer.setResultPromise(pr);
+    AsyncIoController::submit(<SocketPollOperationInfo>{"sock": server, "spop": outer, "to": -1s,
+        "owner": "tenant-pipeline"});
+}
+
+#! an input stream whose read() raises
+class BadInputStream inherits InputStream {
+    *binary read(int limit) {
+        throw "TENANT-ERR", text();
+    }
+    int peek() {
+        return -1;
+    }
+}
+
+#! an output stream whose write() raises
+class BadOutputStream inherits OutputStream {
+    nothing write(binary data) {
+        throw "TENANT-ERR", text();
+    }
+    nothing close() {
+    }
+}
+
+InputStream sub bad_input() {
+    return new BadInputStream();
+}
+
+OutputStream sub bad_output() {
+    return new BadOutputStream();
+}
+
+#! loads a module by path
+sub load_path(string path) {
+    load_module(path);
+}
