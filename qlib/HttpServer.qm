@@ -9708,7 +9708,7 @@ class Http3HandlerSocket inherits Qore::Socket {
     */
     int close() {
         # I/O on the stream from other threads is refused from now on
-        closed = True;
+        setClosed();
         endStream(True);
         return 0;
     }
@@ -9970,17 +9970,31 @@ class Http3HandlerSocket inherits Qore::Socket {
             real.submitQuicStreamData(session_id, stream_id, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {
             if (!cancel_if_needed) {
-                # the stream is not ended: a later close() cancels it
-                releaseEnd();
+                # the stream is not ended: a later close() cancels it, or, if close() was called while the graceful
+                # end was in progress (and found the end taken), the stream is cancelled here
+                if (releaseEnd()) {
+                    real.cancelQuicStream(session_id, stream_id);
+                }
                 rethrow;
             }
             real.cancelQuicStream(session_id, stream_id);
         }
     }
 
-    #! Clears the flag set by takeEnd() after a graceful end that failed
-    private:internal synchronized releaseEnd() {
+    #! Sets the flag that refuses I/O on the stream, under the object's lock (see releaseEnd())
+    private:internal synchronized setClosed() {
+        closed = True;
+    }
+
+    #! Clears the flag set by takeEnd() after a graceful end that failed, unless close() was called
+    /** @return @ref True "True" if close() was called, then the caller cancels the stream
+    */
+    private:internal synchronized bool releaseEnd() {
+        if (closed) {
+            return True;
+        }
         ended = False;
+        return False;
     }
 
     #! Raises an exception unless the session is the handler's own and its stream is not closed

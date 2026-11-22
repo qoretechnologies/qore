@@ -333,6 +333,56 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
 }
 ";
 
+        #! a socket that stands for the listener's: the graceful end of a stream fails once the test releases it;
+        #! with the class of the handler socket, a shutdown() whose graceful end fails while a close() is called
+        const RaceSource = "
+class FakeListenerSocket inherits Socket {
+    public {
+        Queue entered();
+        Queue release();
+        Queue calls();
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        calls.push(\"end\");
+        entered.push(True);
+        release.get();
+        throw \"QUIC-HTTP3-ERROR\", \"no streaming response\";
+    }
+
+    nothing cancelQuicStream(int session_id, int stream_id) {
+        calls.push(\"cancel\");
+    }
+}
+
+list<string> sub run_race() {
+    FakeListenerSocket real();
+    Http3HandlerSocket sock(real, 1, 0);
+    Queue done();
+    background sub () {
+        try {
+            sock.shutdown();
+            done.push(\"shutdown: ok\");
+        } catch (hash<ExceptionInfo> ex) {
+            done.push(\"shutdown: \" + ex.err);
+        }
+    }();
+    # the graceful end of the shutdown() is in progress
+    real.entered.get();
+    # the close() finds the end taken by the shutdown()
+    sock.close();
+    # the graceful end fails (twice, in case the close() tries it too)
+    real.release.push(True);
+    real.release.push(True);
+    list<string> rv = (done.get(),);
+    while (real.calls.size()) {
+        rv += real.calls.get();
+    }
+    rv += sock.isOpen() ? \"open\" : \"closed\";
+    return rv;
+}
+";
+
         #! the results of the SSE handler's attempts: its connection's setup and stream get the socket of its own
         #! request, and the setup gets the request's own session and stream
         const SseResults = ("setup: own=ok cipher=QUIC-SESSION-ERROR ids=own",
@@ -369,6 +419,7 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         addTestCase("a handler's changes to its request context do not change the transport of its SSE stream",
             \sseContextTest());
         addTestCase("a handler cannot send its SSE stream on another request's stream", \sseForgeTest());
+        addTestCase("a close() while a shutdown() fails to end the stream cancels it", \raceTest());
         addTestCase("a listener class cannot drop the mark of a QUIC listener", \listenerMarkTest());
         addTestCase("a look-alike of the handler socket class cannot read the listener's socket", \lookAlikeTest());
         set_return_value(main());
@@ -622,6 +673,18 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
             "request_timeout": 10s,
             "connect_timeout": 10s,
         });
+    }
+
+    #! A close() that is called while the graceful end of a shutdown() is in progress, and fails, cancels the stream:
+    #! the class of the handler socket, from the module, with a socket that stands for the listener's
+    raceTest() {
+        string src = ReadOnlyFile::readTextFile(get_script_dir() + "/../../../../qlib/HttpServer.qm");
+        *string cls = (src =~ x/(\nclass Http3HandlerSocket inherits Qore::Socket \{.*?\n\}\n)/s)[0];
+        assertTrue(exists cls, "the class is found in the module");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\n" + cls + RaceSource, "race");
+        # the graceful end is tried once, and the stream is cancelled
+        assertEq(("shutdown: QUIC-HTTP3-ERROR", "end", "cancel", "closed"), p.callFunction("run_race"));
     }
 
     #! A subclass of HttpListener cannot override the method that marks a QUIC listener, whose handlers would then
