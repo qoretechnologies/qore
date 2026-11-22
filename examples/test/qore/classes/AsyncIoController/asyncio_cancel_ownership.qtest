@@ -530,6 +530,8 @@ bool sub direct_key(string key) {
         addTestCase("an operation of a library's initialization belongs to no tenant", \libraryInitTest());
         addTestCase("a cancel by owner on the I/O thread refuses the queued submissions of the owner",
             \ioThreadOwnerRefusalTest());
+        addTestCase("a restricted cancel by owner on the I/O thread refuses no other application's submissions",
+            \ioThreadOwnerOtherAppTest());
         addTestCase("a cancel that an I/O thread processes refuses the queued submissions of the canceled key",
             \ioThreadKeyRefusalTest());
         addTestCase("a timer of a library's initialization has no generation that sandboxed code can match",
@@ -786,6 +788,35 @@ bool sub direct_key(string key) {
             "submission accepted, expected the canceled-owner refusal");
         assertTrue(rq1.get(HangGuard).canceled, "the tenant's operation is canceled");
         assertTrue(rq2.get(HangGuard).canceled, "the tenant's queued submission of the owner is refused");
+    }
+
+    #! a tenant's cancel by owner that runs on the I/O thread and cancels its own operation of the owner does not
+    #! refuse another tenant's submission of the same owner queued before it: the tombstone of a restricted cancel is
+    #! its application's (qore#7010)
+    ioThreadOwnerOtherAppTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        Program b = getTenant();
+        string owner = getName("io-owner-other-app");
+        on_exit AsyncIoController::cancelByOwner(owner);
+        auto a1 = a.callFunction("submit_own", owner, owner + "-a1");
+        auto b1 = b.callFunction("submit_own", owner, owner + "-b1");
+        auto a2;
+        int count;
+        holdIoThread(sub () {
+            # a's next submission of the owner is queued, then b cancels the owner on the I/O thread
+            a2 = a.callFunction("submit_own", owner, owner + "-a2");
+            count = call_function("dbg_async_io_cancel_owner_on_io_thread", owner, b.getProgramId(), HangGuard);
+        });
+        assertEq(1, count, "b's cancel cancels its own operation only");
+        assertTrue(b1.get(HangGuard).canceled, "b's operation is canceled");
+        list<string> ck = AsyncIoController::getInfo().cache_keys;
+        assertTrue(inlist(owner + "-a2", ck), "a's queued submission of the owner is not refused");
+        assertTrue(inlist(owner + "-a1", ck), "a's operation is not canceled");
+        assertEq(0, a1.size());
+        assertEq(0, a2.size());
     }
 
     #! a cancel by owner that an I/O thread processes as a queued command refuses a submission of the key of an

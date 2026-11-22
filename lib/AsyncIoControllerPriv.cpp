@@ -5846,7 +5846,8 @@ int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, con
                         // are accepted as fresh.
                         if (!restrict_app.restricted || !keys.empty()) {
                             int dead_seq = tp.submit_seq.load(std::memory_order_relaxed);
-                            auto& ci = tp.cancelled_owners[owner_str];
+                            auto& ci = tp.cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str,
+                                restrict_app)];
                             ci.ttl = 2;
                             if (dead_seq > ci.seq) {
                                 ci.seq = dead_seq;
@@ -5903,7 +5904,7 @@ int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, con
             // are accepted as fresh.
             if (!restrict_app.restricted || !keys.empty()) {
                 int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
-                auto& ci = tp.cancelled_owners[owner_str];
+                auto& ci = tp.cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str, restrict_app)];
                 ci.ttl = 2;
                 if (own_seq > ci.seq) {
                     ci.seq = own_seq;
@@ -5963,7 +5964,8 @@ int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, con
                         // submit_seq; see CancelOwner handler.
                         if (!restrict_app.restricted || !keys.empty()) {
                             int dead_seq = tp->submit_seq.load(std::memory_order_relaxed);
-                            auto& ci = tp->cancelled_owners[owner_str];
+                            auto& ci = tp->cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str,
+                                restrict_app)];
                             ci.ttl = 2;
                             if (dead_seq > ci.seq) {
                                 ci.seq = dead_seq;
@@ -9901,10 +9903,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                        disconnect/reconnect) work without depending on TTL
                        aging.  Use max() so a later cancel cannot retreat the
                        gate. */
-                    // a cancel restricted to the operations of a Program (qore#7010) records the owner only if it
-                    // canceled one of them
+                    // a cancel restricted to the operations of an application (qore#7010) records the owner only if
+                    // it canceled one of them, and only for that application: the submissions of the owner by other
+                    // applications are not refused
                     if (!cmd.restrict_app.restricted || local_count) {
-                        auto& ci = t.cancelled_owners[cmd.owner];
+                        auto& ci = t.cancelled_owners[QoreCallDispatcher::ownerMarkKey(cmd.owner, cmd.restrict_app)];
                         ci.ttl = 2;
                         if (cmd.seq_at_push > ci.seq) {
                             ci.seq = cmd.seq_at_push;
@@ -10121,6 +10124,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // submit, not a stale racing resubmit.
                     {
                         auto co_it = t.cancelled_owners.find(cmd.owner);
+                        if (co_it == t.cancelled_owners.end() || cmd.seq_at_push > co_it->second.seq) {
+                            // the owner canceled for the submitter's application by a restricted cancel (qore#7010)
+                            AioAppRestriction submitter;
+                            submitter.restricted = true;
+                            submitter.app_id = cmd.submit_app_id;
+                            co_it = t.cancelled_owners.find(QoreCallDispatcher::ownerMarkKey(cmd.owner, submitter));
+                        }
                         if (co_it != t.cancelled_owners.end()
                                 && cmd.seq_at_push <= co_it->second.seq) {
                             // Reset TTL — keep blocking further stale submits
