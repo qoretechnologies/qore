@@ -439,6 +439,106 @@ static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeC
     return static_cast<int64>(freed + qore_type_retirement_free());
 }
 
+#ifdef DEBUG
+namespace {
+//! An operation whose second step (on the I/O thread, when its socket is readable, or on a callback worker with
+//! \a worker) raises the error given, and whose completion rejects the promise given with the error of the result
+//! (qore#7286); a canceled operation rejects it with DBG-CANCELED, so that a test does not wait for ever
+/** The completion turns the result's exception hash into the rejection on the I/O thread, as a completion that
+    rejects a promise of the host would
+*/
+class DbgCompletionRejectOp : public SocketPollOperationBase {
+public:
+    DLLLOCAL DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
+            bool worker) : sock_obj(sock_obj), promise(promise), err(std::move(err)), desc(std::move(desc)),
+            worker(worker) {
+    }
+
+    DLLLOCAL virtual bool needsWorkerDispatch() const override {
+        return worker;
+    }
+
+    DLLLOCAL ~DbgCompletionRejectOp() {
+        ExceptionSink xsink;
+        promise->deref(&xsink);
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return false;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (calls++) {
+            xsink->raiseException(err.c_str(), "%s", desc.c_str());
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", SOCK_POLLIN, xsink);
+        info->setKeyValue("socket", sock_obj->objectRefSelf(), xsink);
+        return *xsink ? nullptr : info.release();
+    }
+
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
+            override {
+        if (canceled) {
+            promise->setError("DBG-CANCELED", "the operation was canceled", QoreValue(), xsink);
+            return true;
+        }
+        if (!ex_hash) {
+            return false;
+        }
+        QoreStringValueHelper e(ex_hash->getKeyValue("err"));
+        QoreStringValueHelper d(ex_hash->getKeyValue("desc"));
+        promise->setError(e->c_str(), d->c_str(), QoreValue(), xsink);
+        return true;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return "waiting";
+    }
+
+private:
+    //! the socket, which the operation object's member references
+    QoreObject* sock_obj;
+    //! the promise (referenced)
+    QorePromise* promise;
+    std::string err;
+    std::string desc;
+    bool worker;
+    int calls = 0;
+};
+}
+#endif
+
+//! Returns an operation on the socket whose completion rejects the promise with the error that its second step raises
+//! on the I/O thread (qore#7286)
+static QoreValue f_dbg_completion_reject_op(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreObject* sock = const_cast<QoreObject*>(get_hard_value_param(params, 0).get<const QoreObject>());
+    const QoreObject* pobj = get_hard_value_param(params, 1).get<const QoreObject>();
+    QorePromise* promise = static_cast<QorePromise*>(pobj->getReferencedPrivateData(CID_PROMISE, xsink));
+    if (!promise) {
+        return QoreValue();
+    }
+    QoreStringValueHelper err(get_hard_value_param(params, 2));
+    QoreStringValueHelper desc(get_hard_value_param(params, 3));
+    bool worker = get_hard_value_param(params, 4).getAsBool();
+    DbgCompletionRejectOp* op = new DbgCompletionRejectOp(sock, promise, err->c_str(), desc->c_str(), worker);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
+    op->setSelf(*op_obj);
+    if (qore_poll_op_set_member(op_obj, "sock", sock->objectRefSelf(), xsink)) {
+        return QoreValue();
+    }
+    return op_obj.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_completion_reject_op() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
 //! Waits until threads wait for the load of a module that another thread runs (qore#7232); returns false on timeout
 static QoreValue f_dbg_module_load_waiters(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef DEBUG
@@ -29816,6 +29916,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_completion_reject_op", f_dbg_completion_reject_op, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        objectTypeInfo, 5, objectTypeInfo, QORE_PARAM_NO_ARG, "sock", objectTypeInfo, QORE_PARAM_NO_ARG, "promise",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "err", stringTypeInfo, QORE_PARAM_NO_ARG, "desc", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "worker");
     qns.addBuiltinVariant("dbg_module_load_waiters", f_dbg_module_load_waiters, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
