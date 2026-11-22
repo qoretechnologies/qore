@@ -2482,6 +2482,14 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             asyncIo.startDrain();
         }
 
+        # A stop that runs on a thread of the handler pool (a request or the end of a connection that stops the server
+        # or releases the last reference to it) waits for the server's connections, whose ends run on the handler pool:
+        # the thread no longer counts against the pool's maximum, so that the pool can start another thread for them
+        # (with max_handler_threads=1 they would otherwise wait for this thread, whose stop waits for them; issue #7188)
+        if (asyncIo) {
+            asyncIo.detachHandlerThread();
+        }
+
         # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
         # while the I/O that the handshakes need still runs; all of them close at the same time, so this
         # waits at most one handshake timeout in total
@@ -5825,8 +5833,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
 
                         hash<auto> sock_cx = cx + {"listener": listener.getHandlerView(), "id": sock_id};
-                        sock_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id,
-                            cx.handler_name, pend);
+                        hash<auto> ends = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id, cx.handler_name,
+                            pend);
+                        sock_cx."header-info".ws_end = ends.end;
+                        sock_cx."header-info".ws_end_hold = ends.hold;
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
                         if (sockhandler.start(listener.getID(), sock_cx, hdr, request_helper.handler_sock ?? s)) {
@@ -5956,8 +5966,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # dedicated connections (dThreads, which a stop of the listener waits for) includes the
                         # connection until then
                         pend = new HttpServerAsyncIo::HttpPersistentRequestEnd();
-                        ws_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, s, cx.id,
-                            cx.handler_name, pend);
+                        hash<auto> ends = getAsyncWebSocketEnd(holder, listener, s, cx.id, cx.handler_name, pend);
+                        ws_cx."header-info".ws_end = ends.end;
+                        ws_cx."header-info".ws_end_hold = ends.hold;
                         # called by a handler that takes over the end of the connection (WebSocketHandler)
                         ws_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         # registers the connection with the server's async I/O, called by the handler when it is
@@ -6042,9 +6053,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         @param pend reports the end of the connection to the async target of the request, if the request leaves the
         connection open (see HttpServerAsyncIo::HttpAsyncTarget::onPersistentRequestEnd())
 
-        @return the code that ends the connection in the server
+        @return a hash with the following keys:
+        - \c end: the code that ends the connection in the server (\c ws_end in the connection's header-info)
+        - \c hold: code that the handler calls when the end of the connection starts (\c ws_end_hold in the
+          connection's header-info): from then on, the server is held until \c end has run, so that it is not
+          destroyed in the handler's part of the end, which runs user code (\c WebSocketConnection::connectionClosed())
+          while the listener still counts the connection: its destructor's stop of the listener would wait for the
+          connection, whose server's end could not run until the destructor returned (issue #7188).  The code returns
+          nothing: the handler, which can be sandboxed code, gets no reference to the server, and the server is held
+          at most until the end of the connection
     */
-    private code<nothing()> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
+    private hash<auto> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
             *Socket s, softstring sock_id, *string handler_name, HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
         # the controller and the handler keep this code for the life of the connection, so its references to the
         # controller and to the listener are opaque (@=: strong references that the scan for reference cycles does
@@ -6057,7 +6076,30 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # a weak reference (:=, not @=): the connection's context, which keeps this code, must not keep the server
         # alive
         refs.server := self;
-        return sub () {
+        # the strong reference that the hold takes (see below), only in this code, never given to the handler
+        refs.held_lock = new Mutex();
+        code<nothing()> hold = sub () {
+            AutoLock al(refs.held_lock);
+            # once, and not after the end has run
+            if (!refs.hold_done) {
+                refs.hold_done = True;
+                refs.held = refs.server;
+            }
+        };
+        code<nothing()> end = sub () {
+            # the server held since the end of the connection started (see hold above), released last: the on_exit
+            # blocks run in reverse order
+            on_exit {
+                *HttpServer held;
+                {
+                    AutoLock al(refs.held_lock);
+                    refs.hold_done = True;
+                    held = remove refs.held;
+                }
+                # the server is destroyed here if this was its last reference, now that it no longer counts the
+                # connection
+                remove held;
+            }
             # runs once
             if (!holder.claim()) {
                 return;
@@ -6090,6 +6132,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 l.removeDedicatedSocket(sock_id);
                 l.log("dedicated socket %y: stopped dedicated socket handler: %y", sock_id, handler_name);
             }
+        };
+        return {
+            "end": end,
+            "hold": hold,
         };
     }
 
