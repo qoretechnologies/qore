@@ -137,6 +137,11 @@ public class Lib {
         service_replies.get(60s);
     }
 
+    #! adds a timer that does not expire in the test in the call; returns its ID
+    static int addTimerCall() {
+        return AsyncIoController::addTimerDelay(1D, True);
+    }
+
     #! cancels a timer in the call
     static bool cancelTimerCall(int id) {
         return AsyncIoController::cancelTimer(id);

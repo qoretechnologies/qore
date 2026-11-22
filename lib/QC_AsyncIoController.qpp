@@ -1109,24 +1109,34 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
 
-    @par Module Code and Restricted Callers
-    Module code that runs for an application with restrictions (a Qorus service, for example) can cancel only the
-    timers that module code added for the same application, the first %Program in the chain of callers that is not a
-    module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
-    to cancel timers of other applications or of the host; see @ref MODULE_OWNED
+    @par Sandboxed Code
+    A timer belongs to the application of the code that adds it: that of the sandboxed %Program that adds it, or of
+    the caller that module code adds it for.  Code that is sandboxed (by a @ref Qore::SandboxManager "SandboxManager"
+    or by the restrictions of its %Program) cancels only the timers of the application that it runs for, as timer
+    IDs can be guessed: a tenant cancels the timers that it added and that module code added in its calls, and not
+    those of the host or of another tenant, directly, through module code or in a thread that module code starts;
+    for any other timer, this method returns @ref False "False" (see @ref sandbox_process_wide_registries)
 
-    A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
-    a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
-    its application, so the timers that it adds on its own (for work handed to it by a call of another application,
-    for example) belong to no application: no application can cancel them, not even the one whose call started the
-    thread, and the thread itself can cancel only such timers that it added itself, not those of an application, of
-    the host or of another thread that module code started, so it cannot be used to cancel the timers of an
-    application or of another one's thread.  Code that does not run module code for a restricted caller (the host, code without restrictions,
-    and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
-    cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
-    other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work
-    of the thread would belong to the call's application and keep its restrictions; see
-    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+    Sandboxed code that runs for no application cancels only the timers for no application that its own work added.
+    Such is the code of a thread that module code starts, which can serve every caller of the module (a module's
+    service thread, started during the call of one application): it keeps the restrictions and the sandbox of the
+    code that started it, but not its application, so the timers that it adds belong to no application.  No
+    application can cancel them, not even the one whose call started the thread, and the thread cancels only the
+    timers that it added itself, not those of an application, of the host or of another thread that module code
+    started.  Module
+    code cannot yet give the context of a call to the thread that serves it, so that the work of the thread would
+    belong to the call's application; see <a href="https://github.com/qoretechnologies/qore/issues/6245">issue
+    #6245</a>.
+
+    @par Module Code and Restricted Callers
+    Module code that runs for an application with restrictions (a Qorus service, for example) can moreover cancel
+    only the timers that module code added for the same application, the first %Program in the chain of callers that
+    is not a module, so a restricted caller cannot use module code to cancel timers of other applications or of the
+    host; see @ref MODULE_OWNED
+
+    Code that is not sandboxed (the host, and a thread that module code starts outside the call of sandboxed code, as
+    in its initialization) can cancel any timer: a module that relays the requests of applications to such a thread
+    lets them cancel each other's timers.
 
     @since %Qore 3.0
 */

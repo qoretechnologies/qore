@@ -303,6 +303,14 @@ hash<auto> sub get_info() {
 sub flush_owner(string owner) {
     AsyncIoController::flushCallbacksByOwner(owner);
 }
+
+int sub add_timer() {
+    return AsyncIoController::addTimerDelay(1D, True);
+}
+
+bool sub cancel_timer(int id) {
+    return AsyncIoController::cancelTimer(id);
+}
 ";
 
         #! the child of libraryInitTest(): its tenant loads the library whose initialization submits an operation
@@ -413,6 +421,14 @@ auto sub add_timer_bg() {
 auto sub cancel_timer_bg(int id) {
     return AioCancelBgLib::Lib::cancelTimerBg(id);
 }
+
+int sub add_timer_call() {
+    return AioCancelBgLib::Lib::addTimerCall();
+}
+
+bool sub cancel_timer_direct(int id) {
+    return AsyncIoController::cancelTimer(id);
+}
 ";
 
         #! the code of a tenant that calls a module (with a restriction of its own) that calls another module
@@ -475,6 +491,9 @@ bool sub direct_key(string key) {
             \moduleThreadTimerTest());
         addTestCase("the host's code in the callback of a tenant's operation acts for the tenant",
             \hostCodeInTenantCallbackTest());
+        addTestCase("a sandboxed caller cancels only the timers of its own application", \tenantTimerTest());
+        addTestCase("a tenant sandboxed by its SandboxManager only cancels only its own timers",
+            \sandboxManagerTimerTest());
         set_return_value(main());
     }
 
@@ -905,6 +924,69 @@ bool sub direct_key(string key) {
         assertFalse(c.result, sprintf("another tenant's later thread of the module (TID %d, the adder's %d)", c.tid,
             added.tid));
         assertTrue(AsyncIoController::cancelTimer(added.id), "the host's cancel");
+    }
+
+    #! sandboxed code cancels only the timers of its own application by their IDs, which can be guessed: not the host's
+    #! nor another tenant's, whether that tenant added them directly or through module code (qore#7010)
+    tenantTimerTest() {
+        Program t1 = getTenant();
+        Program t2 = getTenant();
+        # tenants with a restriction that the module does not have, for which module code tags its timers
+        Program r1 = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program r2 = getTenantBg(PO_NO_LOCALE_CONTROL);
+        int host_id = AsyncIoController::addTimerDelay(1D, True);
+        on_exit AsyncIoController::cancelTimer(host_id);
+        int t1_id = t1.callFunction("add_timer");
+        on_exit AsyncIoController::cancelTimer(t1_id);
+        int r1_id = r1.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(r1_id);
+
+        assertFalse(t1.callFunction("cancel_timer", host_id), "a tenant does not cancel the host's timer");
+        assertFalse(t2.callFunction("cancel_timer", t1_id), "a tenant does not cancel another tenant's timer");
+        assertFalse(t1.callFunction("cancel_timer", r1_id),
+            "a tenant does not cancel the timer that module code added for another tenant");
+        assertFalse(r2.callFunction("cancel_timer_direct", r1_id),
+            "a tenant does not cancel another tenant's timer of module code directly");
+        assertFalse(r2.callFunction("cancel_timer_call", r1_id),
+            "a tenant does not cancel another tenant's timer of module code through module code");
+        assertFalse(r2.callFunction("cancel_timer_direct", host_id), "a tenant does not cancel the host's timer");
+
+        # each cancels its own
+        assertTrue(t1.callFunction("cancel_timer", t1_id), "the tenant cancels its own timer");
+        assertTrue(r1.callFunction("cancel_timer_call", r1_id),
+            "the tenant cancels the timer that module code added for it through module code");
+        assertTrue(AsyncIoController::cancelTimer(host_id), "the host cancels its own timer");
+    }
+
+    #! a tenant that only its SandboxManager restricts (no parse option of its own) cancels only its own timers,
+    #! directly, in a call of module code and in a thread that module code starts (qore#7010)
+    sandboxManagerTimerTest() {
+        Program s = getTenantBg();
+        Program r = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program t = getTenant();
+        int host_id = AsyncIoController::addTimerDelay(1D, True);
+        on_exit AsyncIoController::cancelTimer(host_id);
+        int r_id = r.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(r_id);
+        int t_id = t.callFunction("add_timer");
+        on_exit AsyncIoController::cancelTimer(t_id);
+        int s_id = s.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(s_id);
+
+        foreach hash<auto> i in ({"id": host_id, "whose": "the host's"}, {"id": r_id, "whose": "a restricted tenant's"},
+                {"id": t_id, "whose": "another tenant's"}) {
+            assertFalse(s.callFunction("cancel_timer_call", i.id), "through module code: " + i.whose);
+            assertFalse(s.callFunction("cancel_timer_bg", i.id), "through a thread of module code: " + i.whose);
+            assertFalse(s.callFunction("cancel_timer_direct", i.id), "directly: " + i.whose);
+        }
+        assertFalse(r.callFunction("cancel_timer_call", s_id), "another tenant does not cancel the tenant's timer");
+        assertFalse(t.callFunction("cancel_timer", s_id), "another tenant does not cancel the tenant's timer directly");
+
+        # the timer that module code added in its call is its own
+        assertTrue(s.callFunction("cancel_timer_call", s_id), "the tenant cancels its own timer");
+        assertTrue(AsyncIoController::cancelTimer(host_id), "the host cancels its own timer");
+        assertTrue(AsyncIoController::cancelTimer(r_id), "the host cancels a tenant's timer");
+        assertTrue(AsyncIoController::cancelTimer(t_id), "the host cancels a tenant's timer");
     }
 
     #! the host's code that runs in the callback of a tenant's operation (an object of the host's class that the

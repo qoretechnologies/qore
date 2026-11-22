@@ -366,6 +366,22 @@ struct AioAppRestriction {
     qore_program_id_t app_id = 0;
 };
 
+//! The timers that the calling code may cancel by ID (qore#7010)
+/** Code that is sandboxed cancels only the timers of the application that it runs for; if it runs for no known
+    application, only the timers for no application that its own work added (see
+    AsyncIoControllerPriv::timerCancelAllowed()); trusted code cancels any timer
+*/
+struct AioTimerRestriction {
+    //! true if the calling code is sandboxed
+    bool restricted = false;
+    //! true if the calling code is sandboxed but runs for no known application
+    bool none = false;
+    //! the application whose timers the calling code may cancel, if \a restricted and not \a none
+    qore_program_id_t app_id = 0;
+    //! the generation of the calling code's work (runtime_get_thread_generation())
+    uint64_t gen = 0;
+};
+
 //! the application that the code of a callback of an operation runs for (qore#7010)
 DLLLOCAL extern thread_local qore_program_id_t aio_callback_app_id;
 DLLLOCAL extern thread_local bool aio_callback_app_set;
@@ -2398,6 +2414,17 @@ private:
         operation
     */
     DLLLOCAL static AioAppRestriction cancelRestriction(bool& none);
+
+    //! Returns the timers that the calling code may cancel by ID (qore#7010)
+    DLLLOCAL static AioTimerRestriction timerCancelRestriction();
+
+    //! Returns true if code with the given restriction may cancel the timer (qore#7010)
+    /** Code that is sandboxed cancels only the timers of the application that it runs for (TimerInfo::cb_app_id), as
+        timer IDs can be guessed; if it runs for no known application (the code of a thread that module code started,
+        which can serve every caller of the module, qore#6208), only the timers for no application that its own work
+        added (TimerInfo::adder_gen).  Trusted code cancels any timer
+    */
+    DLLLOCAL static bool timerCancelAllowed(const AioTimerRestriction& restrict_app, const TimerInfo& tinfo);
 
     //! Returns true if a submission takes the key of an operation that the submitting code may not replace
     /** Sandboxed code replaces only an operation of its own application, or its own operation object; if it runs for
