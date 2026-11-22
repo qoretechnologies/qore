@@ -36,6 +36,7 @@
 #include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreLValue.h"
