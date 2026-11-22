@@ -3814,12 +3814,52 @@ private:
     DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
 };
 
+//! The initialization of a module's Program that a runtime parse or commit runs (qore#7289)
+/** A module that is loaded at run time (Program::loadModule(), load_module()) is parsed and committed, and so
+    initialized, while the call of the code that loads it runs: the thread's call Program context (see
+    qore_get_call_program_context()) is still that of the loading code, which stays the caller of the initialization
+    for the sandbox and the parse options of the calls that the initialization makes.  The frames of these calls name
+    the Program of the code that makes them, the module's: a call made while the call context is the one that the
+    loading code set is made by the code that runs in the current Program (see qore_module_init_frame_caller()).
+*/
+struct QoreModuleInitFrames {
+    //! the module's Program being initialized, or nullptr
+    const QoreProgram* pgm = nullptr;
+    //! the call Program context when its initialization started
+    const QoreProgram* call_ctx = nullptr;
+};
+
+
+//! Sets the initialization of a module's Program that the thread runs while a runtime parse or commit has switched
+//! the thread to the Program (qore#7289); restores the previous setting when it goes out of scope
+class QoreModuleInitFramesHelper {
+public:
+    DLLLOCAL QoreModuleInitFramesHelper() {
+    }
+
+    //! Sets the initialization of \a pgm if it is a module's Program; the call context is the thread's current one
+    DLLLOCAL void set(QoreProgram* pgm);
+
+    //! Restores the previous setting, if set() changed it
+    DLLLOCAL void reset();
+
+    DLLLOCAL ~QoreModuleInitFramesHelper() {
+        reset();
+    }
+
+private:
+    QoreModuleInitFrames old;
+    bool active = false;
+};
+
 class ProgramRuntimeParseContextHelper {
 protected:
     QoreProgram* old_pgm;
     //! the thread's local data before the switch, which the destructor restores
     ThreadLocalProgramData* old_tlpd;
     bool restore;
+    //! the initialization of a module's Program that the switch starts (qore#7289)
+    QoreModuleInitFramesHelper init_frames;
 
     //! switches the thread to the Program locked for parsing: the current Program and its thread-local data
     /** The thread's local data is switched with the current Program, as code of the Program can run under the parse
@@ -3856,6 +3896,8 @@ protected:
     //! the Program whose parse lock the helper took for code that runs in it, without changing the thread's
     //! Program (issue #6568), or nullptr
     QoreProgram* locked_pgm = nullptr;
+    //! the initialization of a module's Program that the switch starts (qore#7289)
+    QoreModuleInitFramesHelper init_frames;
 
 public:
     DLLLOCAL ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink, QoreProgram* pgm);

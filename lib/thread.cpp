@@ -834,6 +834,8 @@ public:
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
+    //! the initialization of a module's Program that the thread runs (qore#7289; see QoreModuleInitFrames)
+    QoreModuleInitFrames module_init_frames;
 
     // current program context helper
     ProgramThreadCountContextHelper* current_pgm_ctx = nullptr;
@@ -4349,6 +4351,20 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
 }
 
 // called when pushing a new location on the stack
+//! Returns the Program of the code that makes a call whose frame is pushed in the initialization of a module's
+//! Program (qore#7289; see QoreModuleInitFrames)
+/** The Program that was current before the call: the one that the call's Program context helper replaced if the call
+    switched the thread to another Program, otherwise the current one
+*/
+static QORE_INTERN_NOINLINE QoreProgram* qore_module_init_frame_caller(ThreadData* td,
+        const QoreStackLocation* stack_loc) {
+    const ProgramThreadCountContextHelper* ch = dynamic_cast<const ProgramThreadCountContextHelper*>(stack_loc);
+    if (ch && ch == td->current_pgm_ctx && ch->getOldProgram()) {
+        return ch->getOldProgram();
+    }
+    return td->current_pgm;
+}
+
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
@@ -4358,6 +4374,12 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     assert(!td->call_site_pgm);
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    // in the initialization of a module's Program, a call made while the call context is the one that the code
+    // loading the module set is made by the code that ran before the call (qore#7289)
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0) && frame_pgm
+            && frame_pgm == td->module_init_frames.call_ctx) {
+        current_pgm = qore_module_init_frame_caller(td, stack_loc);
+    }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
@@ -4375,6 +4397,12 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     assert(!td->call_site_pgm);
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    // in the initialization of a module's Program, a call made while the call context is the one that the code
+    // loading the module set is made by the code that ran before the call (qore#7289)
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0) && frame_pgm
+            && frame_pgm == td->module_init_frames.call_ctx) {
+        current_pgm = qore_module_init_frame_caller(td, stack_loc);
+    }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
@@ -8933,6 +8961,28 @@ void qore_pop_sandbox_policy_barrier() {
     }
 }
 
+void QoreModuleInitFramesHelper::reset() {
+    if (active) {
+        thread_data.get()->module_init_frames = old;
+        active = false;
+    }
+}
+
+void QoreModuleInitFramesHelper::set(QoreProgram* pgm) {
+    assert(!active);
+    if (!qore_program_is_module_inline(pgm)) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    // with no call context, the frames name the current Program already
+    if (!td->call_program_context) {
+        return;
+    }
+    old = td->module_init_frames;
+    td->module_init_frames = {pgm, td->call_program_context};
+    active = true;
+}
+
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,
         QoreProgram* pgm) : old_pgm(0), old_tlpd(0), xsink(xsink), restore(false) {
     if (!pgm)
@@ -8956,7 +9006,9 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
         set_thread_current_pgm(td, pgm);
+        init_frames.set(pgm);
         auto undo = [this, td, pgm]() {
+            init_frames.reset();
             set_thread_current_pgm(td, old_pgm);
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
@@ -9006,6 +9058,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     // the exit handler runs while the thread is still in the Program
     entry_frame.exit(xsink);
+    init_frames.reset();
     set_thread_current_pgm(td, old_pgm);
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
@@ -9042,6 +9095,7 @@ void ProgramRuntimeParseContextHelper::switchTo(QoreProgram* pgm) {
     td->tlpd = new_tlpd;
     restore = true;
     sync_runtime_config_program(td);
+    init_frames.set(pgm);
 }
 
 ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
@@ -9077,6 +9131,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
+    init_frames.reset();
     set_thread_current_pgm(td, old_pgm);
     td->tlpd = old_tlpd;
     sync_runtime_config_program(td);

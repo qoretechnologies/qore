@@ -2735,6 +2735,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the frames of the calls that the initialization of a module makes name the module's
+      @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
+      loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",
+      @ref Qore::load_module() "load_module()"); they named the Program of the code that loaded the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/7289">issue 7289</a>)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
