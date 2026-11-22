@@ -5895,6 +5895,10 @@ bool qore_module_cleanup_abandoned() {
     return module_cleanup_abandoned.load(std::memory_order_acquire);
 }
 
+bool qore_cleanup_left_library() {
+    return qore_module_cleanup_abandoned();
+}
+
 bool qore_module_cleanup_counted_work_running() {
     return qore_module_cleanup_counted_item_running || qore_module_cleanup_task_running;
 }

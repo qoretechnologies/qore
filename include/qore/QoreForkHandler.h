@@ -218,11 +218,14 @@ DLLEXPORT void qore_fork_child_exit_quickly();
 */
 DLLEXPORT bool qore_fork_child_exits_quickly();
 
-//! ends the process with \c _exit() if it is a child process that exits quickly; returns otherwise
+//! ends the process with \c _exit() if it must end without running exit-time handlers; returns otherwise
 /** For an embedding program that ends by returning from \c main(): call this function after qore_cleanup(), with the
-    exit status that \c main() returns.  If qore_fork_child_exits_quickly() is true, it flushes the standard I/O
-    streams and ends the process with \c _exit() and @p rc, so that no exit-time handler runs; otherwise it returns.
-    The \c qore and \c qr programs call it at the end of their main program.
+    exit status that \c main() returns.  If the process must end without running exit-time handlers (a child process
+    that exits quickly: qore_fork_child_exits_quickly(); a JIT compile still in LLVM; or a library that qore_cleanup()
+    left allocated: qore_cleanup_left_library(), see below), it flushes the standard I/O streams and ends the process
+    with \c _exit() and @p rc, so that no exit-time handler or static destructor runs (nor the reports that some
+    write at exit, such as that of \c QORE_SCAN_STATS); otherwise it returns.  The \c qore and \c qr programs, the
+    executables that \c qcc creates and the AOT runtime call it at the end of their main program.
 
     A native compilation that the JIT's background compiler still runs in LLVM when the library is torn down is
     waited for by qore_cleanup(), so a program can return from \c main() after qore_cleanup() whether or not it calls
@@ -234,8 +237,9 @@ DLLEXPORT bool qore_fork_child_exits_quickly();
     grace period after its deadline had passed: \c QORE_MODULE_CLEANUP_HANDOVER_GRACE), those threads can still run in
     the library, which qore_cleanup() then leaves allocated; this function then also ends the process with
     \c _exit(), as the static objects of the library, which those threads use, would be destroyed under them by
-    \c exit().  A program that embeds the library and ends without this function must then not let \c exit() run
-    while those threads run.
+    \c exit().  A program that embeds the library and cannot end here (a language runtime that calls qore_cleanup()
+    in its own exit processing, for example) can check qore_cleanup_left_library() and end the process itself without
+    running exit-time handlers.
 
     @param rc the exit status of the process
 

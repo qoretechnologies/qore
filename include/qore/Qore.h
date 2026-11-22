@@ -241,6 +241,12 @@ DLLEXPORT void qore_init(qore_license_t license = QL_GPL, const char* default_en
     destructors run while the library can still run Qore code (but cannot start threads: \c THREAD-CREATION-FAILURE
     is raised then); the Program itself is freed when its owner releases it, and no Qore code can be run after this
     function returns
+    @note If the module cleanup stopped waiting for work that it handed over to other threads (once the grace period
+    after its deadline had passed, see qore_set_module_cleanup_handover_grace()), this function leaves the modules,
+    their Programs and the library allocated, as those threads can still run in them, and
+    qore_cleanup_left_library() returns true; the process must then end without running the static destructors of the
+    library under those threads: call qore_fork_child_quick_exit() with the exit status right after this function,
+    which ends the process with \c _exit() in that case (and returns otherwise)
 
     @see qore_init()
 */
@@ -285,8 +291,8 @@ DLLEXPORT int qore_set_module_cleanup_timeout(int64 timeout_ms);
 */
 DLLEXPORT int64 qore_get_module_cleanup_timeout();
 
-//! defined for qore_set_module_cleanup_handover_grace(), qore_get_module_cleanup_handover_grace() and
-//! QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS (qore#7239)
+//! defined for qore_set_module_cleanup_handover_grace(), qore_get_module_cleanup_handover_grace(),
+//! qore_cleanup_left_library() and QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS (qore#7239)
 #define _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE 1
 
 //! the least default grace period of the work that the module cleanup hands over to other threads, in milliseconds
@@ -315,6 +321,16 @@ DLLEXPORT int qore_set_module_cleanup_handover_grace(int64 grace_ms);
     @since %Qore 3.0
 */
 DLLEXPORT int64 qore_get_module_cleanup_handover_grace();
+
+//! returns true if qore_cleanup() left the library allocated because the module cleanup stopped waiting for work
+//! handed over to other threads
+/** The threads that hold that work can still run in the library: the process must then end without running the
+    static destructors of the library under them, for example with qore_fork_child_quick_exit(), which does so in this
+    case (see qore_cleanup())
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_cleanup_left_library();
 
 //! returns true if all the bits set in the argument are also set in the qore library init option variable
 DLLEXPORT bool qore_check_option(int opt);
