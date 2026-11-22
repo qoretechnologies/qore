@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc and the executables that it links in child processes
+# test-platform: macos - the link of qcc script objects into an executable with the system linker
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTLinkUnresolvedReferenceTest
+
+#! the link of qcc script objects refuses a reference that no linked object defines (issue #6902)
+/** An object compiled with <tt>qcc -c -L</tt> defers a bareword or a static class member reference that the objects
+    it is compiled against do not define to run time (a DeferredStaticClassMemberRefNode), so that a name that
+    another object defines can be used; a name that no linked object defines was accepted by the compile and the
+    link, and failed only when the code ran.  A parse of the same sources in one Program refuses it ("cannot resolve
+    bareword").  The link of the objects into an executable now checks the references that the objects import and
+    refuses the link with the names, the source files and the objects of those that no linked object defines; a set
+    whose references all resolve links and runs as before.
+*/
+class AOTLinkUnresolvedReferenceTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string env;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTLinkUnresolvedReferenceTest", "1.0", \ARGV) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("a subclass's reference to a private:internal member of its parent class",
+            \testPrivateInternalMember());
+        addTestCase("unresolved global, namespace constant and static class member references",
+            \testUnresolvedReferences());
+        addTestCase("references that linked objects define link and run", \testResolvedReferences());
+        set_return_value(main());
+    }
+
+    private hash<auto> run(string cmd) {
+        string out = backquote(sprintf("%s %s 2>&1; echo rc=$?", env, cmd));
+        *list<*string> m = out =~ x/rc=([0-9]+)\n$/;
+        return {
+            "rc": m ? m[0].toInt() : -1,
+            "out": out,
+        };
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    #! compiles the sources in order, each against the objects compiled before it, and links the objects
+    /** @return the result of the link
+    */
+    private hash<auto> compileAndLink(string dir, list<hash<auto>> sources, string exe) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string obj_dir = dir + "/o";
+        mkdir(obj_dir);
+        list<string> objs = ();
+        foreach hash<auto> src in (sources) {
+            string path = dir + "/" + src.name + ".q";
+            write(path, src.code);
+            string obj = obj_dir + "/" + src.name + ".qo";
+            hash<auto> r = run(sprintf("%s -c %s -o %s %s", qcc_bin, objs ? "-L " + obj_dir : "", obj, path));
+            assertEq(0, r.rc, src.name + ": the object compiles: " + r.out);
+            objs += obj;
+        }
+        return run(sprintf("%s -o %s %s", qcc_bin, exe, foldl $1 + " " + $2, objs));
+    }
+
+    testPrivateInternalMember() {
+        TmpDir tmp("qore-aot-link-unresolved-");
+        string exe = tmp.path + "/prog";
+        hash<auto> r = compileAndLink(tmp.path, (
+            {"name": "base", "code": "%modern
+class PiBase {
+    private:internal {
+        auto v;
+    }
+    setV(auto x) { v = x; }
+    auto getV() { return v; }
+}
+"},
+            {"name": "sub", "code": "%modern
+class S inherits PiBase {
+    auto r() { return v; }
+    w(auto x) { v = x; }
+}
+"},
+            {"name": "main", "code": "%modern
+int sub main() {
+    S s();
+    s.setV(\"base value\");
+    printf(\"read: %y\\n\", s.r());
+    return 0;
+}
+main();
+"},
+        ), exe);
+        assertNeq(0, r.rc, "the link fails");
+        assertRegex("error: unresolved reference to global variable or constant 'v' in " + tmp.path + "/sub.q "
+            "\\(object " + tmp.path + "/o/sub.qo\\): no linked object defines it", r.out,
+            "the error names the reference, its source and its object");
+        assertFalse(is_file(exe), "no executable is written");
+    }
+
+    testUnresolvedReferences() {
+        TmpDir tmp("qore-aot-link-unresolved-");
+        string exe = tmp.path + "/prog";
+        hash<auto> r = compileAndLink(tmp.path, (
+            {"name": "base", "code": "%modern
+namespace N { const NC = 2; }
+class B { public { static int sv = 3; } }
+"},
+            {"name": "uses", "code": "%modern
+int sub uses() { return B::nosuch + N::NONE + nosuchglobal; }
+"},
+            {"name": "main", "code": "%modern
+int sub main() { printf(\"%d\\n\", uses()); return 0; }
+main();
+"},
+        ), exe);
+        assertNeq(0, r.rc, "the link fails");
+        assertRegex("unresolved reference to static class variable or scoped constant 'B::nosuch' in "
+            + tmp.path + "/uses.q", r.out, "B::nosuch is reported");
+        assertRegex("unresolved reference to static class variable or scoped constant 'N::NONE' in "
+            + tmp.path + "/uses.q", r.out, "N::NONE is reported");
+        assertRegex("unresolved reference to global variable or constant 'nosuchglobal' in " + tmp.path
+            + "/uses.q", r.out, "nosuchglobal is reported");
+        assertFalse(is_file(exe), "no executable is written");
+    }
+
+    testResolvedReferences() {
+        TmpDir tmp("qore-aot-link-unresolved-");
+        string exe = tmp.path + "/prog";
+        hash<auto> r = compileAndLink(tmp.path, (
+            {"name": "base", "code": "%modern
+namespace N { const NC = 2; }
+enum E { A = 1 }
+class B { public { static int sv = 3; const BC = 4; } }
+our int g = 5;
+class P {
+    private { auto v = 6; }
+}
+"},
+            {"name": "uses", "code": "%modern
+%requires Mime
+class S inherits P {
+    int pv() { return v; }
+}
+int sub uses() { return B::sv + B::BC + N::NC + g + E::A + (new S()).pv(); }
+string sub mime() { return MimeTypeJson; }
+"},
+            {"name": "main", "code": "%modern
+int sub main() { printf(\"%d %s\\n\", uses(), mime()); return 0; }
+main();
+"},
+        ), exe);
+        assertEq(0, r.rc, "the link succeeds: " + r.out);
+        hash<auto> pr = run(exe);
+        assertEq(0, pr.rc, "the executable ends normally: " + pr.out);
+        assertEq("21 application/json\nrc=0\n", pr.out, "the executable runs");
+    }
+}

@@ -2711,6 +2711,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the link of \c qcc script objects into an executable refuses a reference to a global variable, constant, static
+      class variable or enum member that no linked object defines, which an object compiled with \c -L deferred to run
+      time (see @ref qcc_link_unresolved_references;
+      <a href="https://github.com/qoretechnologies/qore/issues/6902">issue 6902</a>)
     - the end of the process waits at most 10 seconds for a thread of another runtime (registered with
       \c q_register_foreign_thread(), such as a JVM thread of the \c jni module) whose call into the script never
       returns, and then ends; it waited for the call forever
