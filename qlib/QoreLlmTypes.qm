@@ -2301,6 +2301,12 @@ public class LlmAsyncOperation {
 
         #! The last finish hook ID issued
         int hook_seq = 0;
+
+        #! The thread that runs the completion callback while it runs
+        int completing_tid = 0;
+
+        #! The thread that runs the tasks while it runs them
+        int task_tid = 0;
     }
 
     #! Creates the operation of a call
@@ -2396,7 +2402,7 @@ public class LlmAsyncOperation {
 
     #! Waits until the call has ended and its completion callback has returned
     /** For tests and for callers that are synchronous themselves; a caller of an asynchronous call normally uses
-        the completion callback instead.
+        the completion callback instead.  Called from the completion callback, it returns at once.
 
         @param timeout_ms the maximum time to wait; not given or negative: waits until the call has ended
 
@@ -2405,6 +2411,10 @@ public class LlmAsyncOperation {
     bool wait(*timeout timeout_ms) {
         *date deadline = exists timeout_ms && timeout_ms >= 0 ? now_us() + milliseconds(timeout_ms) : NOTHING;
         AutoLock al(m);
+        # the completion callback itself (or code it calls) sees the call as ended: it is done once it returns
+        if (finished && completing_tid == gettid()) {
+            return True;
+        }
         while (!done) {
             if (!deadline) {
                 cond.wait(m);
@@ -2507,8 +2517,26 @@ public class LlmAsyncOperation {
         remove finish_hooks{id};
     }
 
+    #! Returns @ref True if the calling thread is running a task of this operation
+    /** Steps use it to tell whether they may wait: a task runs in a thread of the executor, which may wait, while
+        other code of a call (a cancellation handler, a finish hook) can run in a thread of the async I/O controller,
+        which must not wait.
+    */
+    bool inTask() {
+        AutoLock al(m);
+        return task_tid == gettid();
+    }
+
     #! Runs the pending tasks in a thread of the executor
     private:internal drain() {
+        {
+            AutoLock al(m);
+            task_tid = gettid();
+        }
+        on_exit {
+            AutoLock al(m);
+            task_tid = 0;
+        }
         while (True) {
             hash<auto> item;
             {
@@ -2600,10 +2628,18 @@ public class LlmAsyncOperation {
         postIntern(sub () {
             on_exit op.markDone();
             if (op.on_complete) {
+                op.setCompleting(True);
+                on_exit op.setCompleting(False);
                 op.on_complete(op);
             }
         }, True);
         return True;
+    }
+
+    #! Records the thread that runs the completion callback
+    private:internal setCompleting(bool completing) {
+        AutoLock al(m);
+        completing_tid = completing ? gettid() : 0;
     }
 
     #! Marks the operation done and wakes the waiting threads
@@ -2660,6 +2696,7 @@ public class LlmAsyncSseRequest {
         code<nothing(hash<ExceptionInfo>)> error_cb;
         code<hash<ExceptionInfo>(hash<ExceptionInfo>)> start_error;
         *int deadline_ms;
+        *string start_desc;
 
         #! Guards the fields that cancellation handlers and finish hooks read
         Mutex m();
@@ -2695,12 +2732,14 @@ public class LlmAsyncSseRequest {
         @param on_end called in a task of \a op when the stream is complete
         @param error_cb receives the error of the call in a task of \a op
         @param deadline_ms if given, the time in milliseconds by which the stream must be complete
+        @param start_desc the method and path of the request, as in \c "POST /v1/messages", for the error of a stream
+        whose response does not start in time, which is then the one that a synchronous stream reader raises
     */
     constructor(AbstractLlmProvider provider, LlmAsyncOperation op, *hash<LlmRequestOptions> opts,
             code<code<nothing()>(LlmAsyncSseRequest, int)> open, code<bool(hash<auto>)> on_event,
             code<nothing()> on_eof, code<hash<ExceptionInfo>()> timeout_error,
             code<hash<ExceptionInfo>(hash<ExceptionInfo>)> start_error, code<nothing()> on_end,
-            code<nothing(hash<ExceptionInfo>)> error_cb, *int deadline_ms) {
+            code<nothing(hash<ExceptionInfo>)> error_cb, *int deadline_ms, *string start_desc) {
         self.provider = provider;
         self.op = op;
         self.opts = opts;
@@ -2712,6 +2751,16 @@ public class LlmAsyncSseRequest {
         self.on_end = on_end;
         self.error_cb = error_cb;
         self.deadline_ms = deadline_ms;
+        self.start_desc = start_desc;
+    }
+
+    #! Returns the error of a stream whose response has not started in time
+    private:internal hash<ExceptionInfo> startTimeoutError(*hash<ExceptionInfo> ex) {
+        if (start_desc) {
+            return AbstractLlmProvider::makeException("HTTPCLIENT-TIMEOUT",
+                sprintf("timeout waiting for SSE response headers for %s", start_desc), NOTHING);
+        }
+        return ex ?? AbstractLlmProvider::makeException("HTTPCLIENT-TIMEOUT", "LLM call deadline exhausted", NOTHING);
     }
 
     #! Returns the error of a stream that an SSE observable closed
@@ -2727,12 +2776,18 @@ public class LlmAsyncSseRequest {
         }
         auto error = info.error;
         if (info.reason == "stream-error") {
-            # the error item of the stream, reported as a synchronous stream reader reports it
-            return AbstractLlmProvider::makeException("SSE-STREAM-ERROR", sprintf("stream error: %y",
-                error.typeCode() == NT_HASH && exists error.desc ? error.desc : error), NOTHING);
+            # an event larger than the maximum event size, as a synchronous stream reader reports it
+            if (error.typeCode() == NT_HASH && error.err == "SSE-EVENT-TOO-LARGE") {
+                return AbstractLlmProvider::makeException(error.err, error.desc ?? "", NOTHING);
+            }
+            # the error item of the stream (a hash with "err" and "desc" keys), reported as a synchronous stream
+            # reader reports it
+            return AbstractLlmProvider::makeException("SSE-STREAM-ERROR", sprintf("stream error: %y", error),
+                NOTHING);
         }
         if (error.typeCode() == NT_HASH && error.err.typeCode() == NT_STRING) {
-            return AbstractLlmProvider::makeException(error.err, error.desc ?? "", error.arg);
+            # the error itself, with its call stack and chained errors
+            return cast<hash<ExceptionInfo>>(error);
         }
         return AbstractLlmProvider::makeException("SSE-STREAM-ERROR", sprintf("the event stream was closed: %s",
             info.reason), NOTHING);
@@ -2884,6 +2939,9 @@ public class LlmAsyncSseRequest {
         }
         if (done) {
             # the stream ended before it started: an error of the attempt, which the retry policy handles
+            if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                ex = startTimeoutError(ex);
+            }
             done(ex ?? AbstractLlmProvider::makeException("HTTPCLIENT-CANCELLED",
                 "the event stream was closed before it started", NOTHING));
             return;
@@ -2929,7 +2987,7 @@ public class LlmAsyncSseRequest {
         }
         if (done) {
             stopTransport();
-            done(AbstractLlmProvider::makeException("HTTPCLIENT-TIMEOUT", "LLM call deadline exhausted", NOTHING));
+            done(startTimeoutError());
             return;
         }
         if (!streaming) {
@@ -2987,18 +3045,33 @@ public class LlmAsyncSseRequest {
     }
 
     #! Stops the transport of the current attempt; can be called in any thread
+    /** Stopping a stream can wait until the async I/O controller has stopped reading it, so it waits only in a task
+        of the operation, which runs in a thread of the executor.  Anywhere else (a cancellation handler, or a finish
+        hook run in a thread of the controller when the executor refuses a task) it is stopped in a thread of its own,
+        so that a thread of the controller never waits for the controller.
+    */
     private:internal stopTransport() {
         *code<nothing()> s;
         {
             AutoLock al(m);
             s = remove stop;
         }
-        if (s) {
-            try {
-                s();
-            } catch (hash<ExceptionInfo> ex) {
-                # the stream is being abandoned; a failure to close it cannot change how the call ends
-            }
+        if (!s) {
+            return;
+        }
+        if (op.inTask()) {
+            LlmAsyncSseRequest::runStop(s);
+            return;
+        }
+        background LlmAsyncSseRequest::runStop(s);
+    }
+
+    #! Stops a transport
+    private:internal static runStop(code<nothing()> stop_transport) {
+        try {
+            stop_transport();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream is being abandoned; a failure to close it cannot change how the call ends
         }
     }
 
@@ -3217,8 +3290,11 @@ class LlmAsyncRetry {
     }
 
     private:internal runAttempt() {
-        if (ended) {
-            return;
+        {
+            AutoLock al(m);
+            if (ended) {
+                return;
+            }
         }
         # a cancelled call does not start an attempt
         if (*hash<ExceptionInfo> cancel_ex = provider.getRequestCancelledError(opts)) {
@@ -3249,12 +3325,21 @@ class LlmAsyncRetry {
                 # the attempt reports its end whatever the abort does
             }
         };
+        bool released = False;
         {
             AutoLock al(m);
-            if (!in_flight || my_seq != seq || ended) {
+            if (!in_flight || my_seq != seq) {
                 return;
             }
-            abort = safe_abort;
+            # release() ran while the attempt was being started, and found no attempt to abort
+            released = ended;
+            if (!released) {
+                abort = safe_abort;
+            }
+        }
+        if (released) {
+            safe_abort();
+            return;
         }
         # runs the abort at once if the call has already been cancelled
         setCancelHandler(provider.addRequestCancelHandler(opts, safe_abort));

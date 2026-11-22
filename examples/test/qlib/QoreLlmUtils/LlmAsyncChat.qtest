@@ -36,6 +36,9 @@ hashdecl StubReply {
     #! When set, the chunks are sent, and then the connection is held until the client closes it, which is reported
     #! in AsyncStubServer::closed
     bool hold_after_chunks = False;
+    #! When set with hold_after_chunks, this chunk is sent again and again after the chunks until the client closes
+    #! the connection, so that only the client can end the response
+    *string repeat_chunk;
 }
 
 #! Stub LLM server speaking HTTP/1.1 on a raw socket; one thread accepts the connections and reads the requests, so a
@@ -251,8 +254,12 @@ class AsyncStubServer {
                 string head = sprintf("HTTP/1.1 %d OK\r\nContent-Type: %s\r\nConnection: close\r\n\r\n",
                     reply.code, reply.content_type);
                 conn.send(head + reply.chunks.join(""));
+                while (reply.repeat_chunk) {
+                    conn.send(reply.repeat_chunk);
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
+            # the client has closed the connection
             closed.push(True);
             return;
         }
@@ -309,12 +316,13 @@ class RefusingExecutor inherits LlmAsyncExecutor {
 #! Asynchronous chat calls of LlmBackend and of the Anthropic and OpenAI-compatible providers
 public class LlmAsyncChatTest inherits QUnit::Test {
     private {
-        AsyncStubServer server();
-        LlmThreadPoolExecutor executor(2);
+        # created in the constructor, once the async I/O controller has been configured: their sockets use it
+        AsyncStubServer server;
+        LlmThreadPoolExecutor executor;
     }
 
     #! The keys of an exception hash that depend on where it was raised
-    const LocationKeys = ("callstack", "file", "line", "endline", "source", "offset", "lang", "next", "type");
+    const LocationKeys = ("callstack", "file", "line", "endline", "source", "offset", "lang", "type");
 
     #! The callback workers of the async I/O controller
     /** The controller runs the steps of its operations in a pool of callback workers that grows while many steps
@@ -325,7 +333,11 @@ public class LlmAsyncChatTest inherits QUnit::Test {
     const CallbackWorkers = 4;
 
     constructor() : Test("LlmAsyncChatTest", "1.0") {
+        # one I/O thread: a step of a call that waited in a thread of the controller would stop the controller
+        AsyncIoController::setMaxIoThreads(1);
         AsyncIoController::setMaxCallbackWorkers(CallbackWorkers);
+        server = new AsyncStubServer();
+        executor = new LlmThreadPoolExecutor(2);
         addTestCase("concurrent calls use few threads", \concurrentCallsUseFewThreads());
         addTestCase("stream deltas arrive in order", \streamDeltasInOrder());
         addTestCase("cancel stops a request", \cancelStopsRequest());
@@ -337,6 +349,13 @@ public class LlmAsyncChatTest inherits QUnit::Test {
         addTestCase("errors", \errorsTest());
         addTestCase("providers without async transport", \fallbackProvider());
         addTestCase("executor and operation", \executorAndOperation());
+        addTestCase("a streamed 429 is retried", \streamRetry429());
+        addTestCase("cancel in a delta callback", \cancelInCallback());
+        addTestCase("cancel during a repair continuation", \cancelDuringRepair());
+        addTestCase("the stream deadline", \streamDeadline());
+        addTestCase("executor shutdown with calls in flight", \executorShutdown());
+        addTestCase("completion callback waits", \completionCallbackWaits());
+        addTestCase("stream close errors", \streamCloseErrors());
         on_exit {
             # the workers of the executor and the server's thread end before the process does
             server.stop();
@@ -591,23 +610,28 @@ public class LlmAsyncChatTest inherits QUnit::Test {
     cancelStopsStream() {
         foreach string mode in (("http", "anthropic")) {
             LlmBackend llm = backend(mode, {"max_retries": 3});
+            # the start of the stream, up to the first text delta, and then further deltas until the client closes
             list<string> chunks = mode == "http" ? openAiStreamChunks(("first",)) : anthropicStreamChunks(("first",));
-            # only the start of the stream, up to the first text delta, is sent
-            list<string> start = mode == "http" ? (chunks[0],) : chunks[0..3];
-            server.script(<StubReply>{"content_type": "text/event-stream", "chunks": start,
-                "hold_after_chunks": True});
+            server.script(<StubReply>{"content_type": "text/event-stream",
+                "chunks": mode == "http" ? (chunks[0],) : chunks[0..3], "hold_after_chunks": True,
+                "repeat_chunk": mode == "http" ? chunks[0] : chunks[3]});
             Queue deltas();
+            Queue release();
             LlmCancellation token();
             LlmAsyncOperation op = llm.chatCompletionsStreamAsync(request("hold"), sub (hash<auto> chunk) {
                 if (chunk.choices[0].delta.content.val()) {
                     deltas.push(chunk.choices[0].delta.content);
+                    # the first delta waits until the call has been cancelled
+                    release.get(300s);
                 }
             }, asyncOpts(), <LlmFacadeCallOptions>{"cancellation": token});
             assertEq("first", deltas.get(300s), mode);
             token.cancel("stopped by the test");
+            release.push(True);
             assertThrows("LLM-CANCELLED", "stopped by the test", sub () { op.get(300s); }, NOTHING, mode);
             assertTrue(server.closed.get(300s), mode + " the server sees the connection close");
             assertEq(1, server.getConnectionCount(), mode + " no retry");
+            # the server kept sending deltas until the close; none reached the callback after the cancel
             assertEq(0, deltas.size(), mode + " no further delta");
         }
     }
@@ -656,7 +680,181 @@ public class LlmAsyncChatTest inherits QUnit::Test {
             # the same replies give the same response synchronously
             compareSyncAsync(mode + " 429", replies, auto sub () { return llm.chatCompletions(request("retry")); },
                 LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("retry"), asyncOpts()); });
+
+            # during a long Retry-After wait the executor's only thread runs another operation: the wait holds no
+            # thread; a wait that held it would make the next request before the other operation ran
+            server.script(errorReply(429, "slow down", {"Retry-After": "30"}));
+            LlmThreadPoolExecutor one(1);
+            on_exit one.shutdown();
+            op = llm.chatCompletionsAsync(request("retry"), asyncOpts(NOTHING, one));
+            server.request_queue.get(300s);
+            LlmAsyncOperation other(one);
+            other.post(sub () { other.complete(server.getRequests().size()); });
+            assertEq(1, other.get(300s), mode + " the other operation ran during the wait");
+            assertFalse(op.isDone(), mode + " the call waits");
+            op.cancel("enough");
+            assertThrows("LLM-CANCELLED", sub () { op.get(300s); });
+            assertEq(1, server.getConnectionCount(), mode + " no further request");
         }
+    }
+
+    #! A stream answered with 429 before it starts is retried, as the synchronous stream is
+    streamRetry429() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode, {"max_retries": 2});
+            list<hash<StubReply>> replies = (errorReply(429, "slow"), streamReply(mode == "http"
+                ? openAiStreamChunks(("a", "b")) : anthropicStreamChunks(("a", "b"))));
+            compareSyncAsync(mode + " stream 429", replies,
+                auto sub () { return llm.chatCompletionsStream(request("s"), sub (hash<auto> c) {}); },
+                LlmAsyncOperation sub () {
+                    return llm.chatCompletionsStreamAsync(request("s"), sub (hash<auto> c) {}, asyncOpts());
+                });
+            assertEq(2, server.getConnectionCount(), mode);
+        }
+    }
+
+    #! A delta callback that cancels its call stops the stream: no further delta is delivered
+    cancelInCallback() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode);
+            list<string> chunks = mode == "http" ? openAiStreamChunks(("first",)) : anthropicStreamChunks(("first",));
+            server.script(<StubReply>{"content_type": "text/event-stream",
+                "chunks": mode == "http" ? (chunks[0],) : chunks[0..3], "hold_after_chunks": True,
+                "repeat_chunk": mode == "http" ? chunks[0] : chunks[3]});
+            LlmCancellation token();
+            int deltas = 0;
+            LlmAsyncOperation op = llm.chatCompletionsStreamAsync(request("hold"), sub (hash<auto> chunk) {
+                if (chunk.choices[0].delta.content.val()) {
+                    ++deltas;
+                    token.cancel("from the callback");
+                }
+            }, asyncOpts(), <LlmFacadeCallOptions>{"cancellation": token});
+            assertThrows("LLM-CANCELLED", "from the callback", sub () { op.get(300s); }, NOTHING, mode);
+            assertTrue(server.closed.get(300s), mode + " the server sees the connection close");
+            assertEq(1, deltas, mode);
+        }
+    }
+
+    #! A cancel while a repair request is in flight stops it, and no further repair follows
+    cancelDuringRepair() {
+        LlmBackend llm = backend("http");
+        hash<auto> body = request("look up invoice 7") + {
+            "tools": ({"type": "function", "function": {"name": "lookup", "description": "looks an invoice up",
+                "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ("id",)}}},),
+            "tool_choice": {"type": "function", "function": {"name": "lookup"}},
+        };
+        # the response without the required call is repaired; the repair request is held
+        server.script((openAiReply(""), <StubReply>{"hold": True}));
+        LlmCancellation token();
+        LlmAsyncOperation op = llm.chatCompletionsAsync(body, asyncOpts(),
+            <LlmFacadeCallOptions>{"cancellation": token});
+        server.request_queue.get(300s);
+        server.request_queue.get(300s);
+        token.cancel("in the repair");
+        assertThrows("LLM-CANCELLED", "in the repair", sub () { op.get(300s); });
+        assertTrue(server.closed.get(300s));
+        assertEq(2, server.getConnectionCount());
+    }
+
+    #! A stream with a request timeout ends at its deadline with the error of the synchronous stream
+    streamDeadline() {
+        LlmBackend llm = backend("http");
+        hash<LlmRequestOptions> opts = <LlmRequestOptions>{"timeout_ms": 2000};
+        # no response starts
+        compareSyncAsync("deadline before the response", <StubReply>{"hold": True},
+            auto sub () { llm.chatStream(messages("d"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts); },
+            LlmAsyncOperation sub () {
+                return llm.chatStreamAsync(messages("d"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts,
+                    asyncOpts());
+            });
+        # the stream stops after its first event
+        list<string> chunks = openAiStreamChunks(("first",));
+        compareSyncAsync("deadline in the stream", <StubReply>{"content_type": "text/event-stream",
+                "chunks": (chunks[0],), "hold_after_chunks": True},
+            auto sub () { llm.chatStream(messages("d"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts); },
+            LlmAsyncOperation sub () {
+                return llm.chatStreamAsync(messages("d"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts,
+                    asyncOpts());
+            });
+    }
+
+    #! Calls in flight when their executor is shut down end with the executor's error, and release their requests
+    executorShutdown() {
+        assertEq(1, AsyncIoController::getInfo().io_threads);
+        # one callback worker: the timers and the steps of the operations of the controller run in it, so a step that
+        # waited for another step of the controller would never end
+        AsyncIoController::setMaxCallbackWorkers(1);
+        on_exit AsyncIoController::setMaxCallbackWorkers(CallbackWorkers);
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode);
+            list<string> chunks = mode == "http" ? openAiStreamChunks(("first",)) : anthropicStreamChunks(("first",));
+            server.script(<StubReply>{"content_type": "text/event-stream",
+                "chunks": mode == "http" ? (chunks[0],) : chunks[0..3], "hold_after_chunks": True});
+            LlmThreadPoolExecutor one(1);
+            Queue got();
+            # the deadline timer of the OpenAI stream and the idle timeout of the stream end the wait separately
+            LlmAsyncOperation op = llm.chatStreamAsync(messages("hold"), sub (hash<ChatStreamEvent> e) {
+                if (e.delta.val()) {
+                    got.push(e.delta);
+                }
+            }, NOTHING, <LlmRequestOptions>{"timeout_ms": 1000}, asyncOpts(NOTHING, one));
+            assertEq("first", got.get(300s), mode);
+            one.shutdown();
+            assertTrue(op.wait(300s), mode + " the call ends");
+            assertEq("LLM-ASYNC-EXECUTOR-ERROR", op.getError().err, mode);
+            assertTrue(server.closed.get(300s), mode + " the server sees the connection close");
+
+            # a non-streamed request in flight
+            server.script(<StubReply>{"hold": True});
+            LlmThreadPoolExecutor two(1);
+            op = llm.chatAsync(messages("hold"), NOTHING, <LlmRequestOptions>{"timeout_ms": 1000},
+                asyncOpts(NOTHING, two));
+            server.request_queue.get(300s);
+            two.shutdown();
+            assertTrue(op.wait(300s), mode + " the request ends");
+            assertEq("LLM-ASYNC-EXECUTOR-ERROR", op.getError().err, mode);
+            assertTrue(server.closed.get(300s), mode + " the server sees the request close");
+        }
+    }
+
+    #! The completion callback sees its call as ended: wait() and get() return at once there
+    completionCallbackWaits() {
+        LlmBackend llm = backend("http");
+        server.script(openAiReply("x"));
+        Queue q();
+        llm.chatCompletionsAsync(request("x"), asyncOpts(sub (LlmAsyncOperation o) {
+            try {
+                # a wait for the end of the call from its own completion callback would never end
+                q.push({"wait": o.wait(30s), "content": o.get(30s).choices[0].message.content});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"error": ex.err});
+            }
+        }));
+        assertEq({"wait": True, "content": "x"}, q.get(300s));
+    }
+
+    #! The errors of a stream that the observable closed are those of a synchronous stream reader
+    streamCloseErrors() {
+        hash<auto> item = {"err": "SOCKET-CLOSED", "desc": "remote end closed the connection"};
+        hash<ExceptionInfo> ex = LlmAsyncSseRequest::getCloseError({"reason": "stream-error", "error": item});
+        assertEq("SSE-STREAM-ERROR", ex.err);
+        # SseStreamReader::readEvent(): sprintf("stream error: %y", data.error) for the item {"error": item}
+        assertEq(sprintf("stream error: %y", item), ex.desc);
+        hash<auto> too_large = {"err": "SSE-EVENT-TOO-LARGE",
+            "desc": sprintf("the server-sent event exceeds the maximum event size of %d bytes",
+                HttpClientStreamingIo::DefaultMaxEventSize)};
+        ex = LlmAsyncSseRequest::getCloseError({"reason": "stream-error", "error": too_large});
+        assertEq(too_large, ex{"err", "desc"});
+        # a startup error is passed on as it is, with its call stack
+        hash<ExceptionInfo> startup;
+        try {
+            throw "REST-RESPONSE-ERROR", "HTTP 429 response received", {"status_code": 429};
+        } catch (hash<ExceptionInfo> e) {
+            startup = e;
+        }
+        assertEq(startup, LlmAsyncSseRequest::getCloseError({"reason": "startup-error", "error": startup}));
+        assertEq(NOTHING, LlmAsyncSseRequest::getCloseError({}));
+        assertEq(NOTHING, LlmAsyncSseRequest::getCloseError({"reason": "idle-timeout"}));
     }
 
     #! A required tool call missing from the response is repaired with further requests made as continuations
@@ -855,6 +1053,16 @@ public class LlmAsyncChatTest inherits QUnit::Test {
             LlmAsyncOperation sub () {
                 return openai.chatCompletionsStreamAsync(request("t"), sub (hash<auto> c) {}, asyncOpts());
             });
+
+        # a successful response to a stream request that is not an event stream
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode);
+            compareSyncAsync(mode + " not an event stream", mode == "http" ? openAiReply("x") : anthropicReply("x"),
+                auto sub () { return llm.chatCompletionsStream(request("s"), sub (hash<auto> c) {}); },
+                LlmAsyncOperation sub () {
+                    return llm.chatCompletionsStreamAsync(request("s"), sub (hash<auto> c) {}, asyncOpts());
+                });
+        }
 
         # an invalid request is refused before an operation is started, as by the synchronous call
         assertThrows("LLM-REQUEST-ERROR", sub () {

@@ -1751,7 +1751,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     OpenAiLlmProvider::requestErrorDetail(ex)), ex);
             },
             on_end, error_cb,
-            request_deadline ? max(1, (request_deadline - now_us()).durationMilliseconds()) : NOTHING);
+            request_deadline ? max(1, (request_deadline - now_us()).durationMilliseconds()) : NOTHING,
+            "POST " + wire.target.path);
         req.start();
     }
 

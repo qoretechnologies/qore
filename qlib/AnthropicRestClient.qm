@@ -946,7 +946,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 return makeException("LLM-ERROR", sprintf("Anthropic streaming chat request failed: %s",
                     AnthropicLlmProvider::requestErrorDetail(ex)), ex);
             },
-            on_end, error_cb);
+            on_end, error_cb, NOTHING, "POST " + getMessagesTarget().path);
         req.start();
     }
 
