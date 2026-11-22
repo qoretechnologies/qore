@@ -39,6 +39,10 @@ const OpenApi3Doc = {
             "name": {"type": "string"},
         }},
         "Other": {"type": "object", "properties": {"x": {"type": "string"}}},
+        "Auth": {"type": "object", "required": ("meta",), "properties": {
+            "meta": {"type": "object", "properties": {"k": {"type": "string"}}},
+            "note": {"type": "object", "properties": {"k": {"type": "string"}}},
+        }},
     }},
 };
 
@@ -204,6 +208,27 @@ object sub get_type(object shared, string path, string typestr) {
 *string sub own_token_default(object shared, string token) {
     return token_default(shared, new TenantTokenRest(token));
 }
+
+# the field of a required property with a default of the tenant's REST client
+string sub own_token_field(object shared, string token) {
+    object f = shared.getTypeForReference(\"Thing\", True, new TenantTokenRest(token)).getFields().token;
+    return sprintf(\"default %y, mandatory %y, preselected %y\", f.getDefaultValue(), f.isMandatory(),
+        f.getAttributes().preselected);
+}
+
+# a REST client object of the tenant whose request bodies carry objects for a required and an optional property
+class TenantMetaRest {
+    auto preprocessRequestBody() {
+        return {\"meta\": {\"k\": \"tenant\"}, \"note\": {\"k\": \"tenant\"}};
+    }
+}
+
+# the fields of a required and an optional object property with defaults of the tenant's REST client
+string sub own_object_fields(object shared) {
+    hash<auto> fields = shared.getTypeForReference(\"Auth\", True, new TenantMetaRest()).getFields();
+    return foldl $1 + \"; \" + $2, (map sprintf(\"%s: default %y, required %y\", $1, fields{$1}.getDefaultValue(),
+        fields{$1}.getAttributes().required), (\"meta\", \"note\"));
+}
 ";
 
 Program sub tenant() {
@@ -297,6 +322,14 @@ Program p = tenant();
     printf("tenants with their own REST clients: %y, %y; the first one again: %y\n",
         p.callFunction("own_token_default", shared, "tenant-1"), p2.callFunction("own_token_default", shared, "tenant-2"),
         p.callFunction("own_token_default", shared, "tenant-1"));
+    object schema_field = shared.getTypeForReference("Thing").getFields().token;
+    printf("the field of a required property with a tenant's default: %s; the schema's field: mandatory %y, "
+        "preselected %y\n", p.callFunction("own_token_field", shared, "tenant-1"), schema_field.isMandatory(),
+        schema_field.getAttributes().preselected);
+    hash<auto> auth_fields = shared.getTypeForReference("Auth").getFields();
+    printf("the object fields with a tenant's defaults: %s; the schema's: meta required %y, note required %y\n",
+        p.callFunction("own_object_fields", shared), auth_fields.meta.getAttributes().required,
+        auth_fields.note.getAttributes().required);
     object field = shared.components.schemas.Thing.getField("thing", NOTHING, True, new HostRest());
     printf("a field with the host's REST client: default %y; without: %y\n",
         field.getType().getFields().token.getDefaultValue(),

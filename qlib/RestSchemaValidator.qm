@@ -1780,7 +1780,7 @@ public namespace RestSchemaValidator {
             foreach hash<auto> i in (base_hash.getFields().pairIterator()) {
                 if (exists defaults{i.key} && properties{i.key} instanceof AbstractRestSchemaObject) {
                     push fields, cast<AbstractRestSchemaObject>(properties{i.key}).getUseField(i.value, i.key,
-                        NOTHING, required{i.key} ?? False, defaults{i.key});
+                        NOTHING, self.required{i.key} ?? False, defaults{i.key});
                 } else {
                     push fields, i.value;
                 }

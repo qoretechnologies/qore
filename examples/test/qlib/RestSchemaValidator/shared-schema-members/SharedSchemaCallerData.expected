@@ -18,4 +18,6 @@ the host builds a type with its REST client: default "host-secret"
 a tenant builds the type without a REST client: default null
 trusted code builds the type without a REST client: default null
 tenants with their own REST clients: "tenant-1", "tenant-2"; the first one again: "tenant-1"
+the field of a required property with a tenant's default: default "tenant-1", mandatory True, preselected null; the schema's field: mandatory True, preselected null
+the object fields with a tenant's defaults: meta: default {k: "tenant"}, required True; note: default {k: "tenant"}, required null; the schema's: meta required True, note required null
 a field with the host's REST client: default "host-secret"; without: null
