@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP, WebSocket and SSE connections and pings over loopback sockets, refused connections
 
 /*  ConnectionUpStatus.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -103,6 +104,19 @@ class SlowPingConnection inherits TestConnection {
     }
 }
 
+#! records the paths of the requests and answers them with an OAuth2 token
+class TokenHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue paths();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        paths.push(hdr.path);
+        return makeResponse(200, "{\"access_token\": \"t\", \"token_type\": \"Bearer\", \"expires_in\": 3600}",
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
 #! answers every request with 200 OK
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -115,6 +129,9 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         HttpServer rest_server;
         HttpServer ws_server;
         HttpServer sse_server;
+        HttpServer token_server;
+        TokenHandler token_handler();
+        int token_port;
         int rest_port;
         int ws_port;
         int sse_port;
@@ -139,6 +156,11 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         on_exit sse_server.stop();
         sse_server.setDefaultHandler("sse", new ServerSentEventHandler({"logger": logger}));
         sse_port = sse_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        token_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_exit token_server.stop();
+        token_server.setDefaultHandler("token", token_handler);
+        token_port = token_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         {
             Socket s();
@@ -466,6 +488,25 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         ping = conn.ping();
         assertFalse(ping.ok);
         assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() without ping_method of a closed port");
+        # an OAuth2 connection without a ping request pings without logging in: its token endpoint is not contacted
+        string token_url = "http://127.0.0.1:" + token_port + "/token";
+        hash<auto> oauth2_opts = {
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_token_url": token_url,
+        };
+        conn = new RestConnection("rest", "test", url, {"monitor": False}, oauth2_opts);
+        start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "OAuth2 ping() without ping_method");
+        assertEq(0, token_handler.paths.size(), "the token endpoint was not contacted");
+        # a request of the connection's client logs in, so the token endpoint is the one that a ping does not contact
+        RestClient oauth2_client = conn.get();
+        oauth2_client.get("/x");
+        assertEq("token", token_handler.paths.get(5s));
+
         # as a monitor pings (the Qorus monitor pings with these flags)
         conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False},
             {"token": "bogus"});
