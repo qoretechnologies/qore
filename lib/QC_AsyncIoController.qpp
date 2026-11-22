@@ -1122,8 +1122,10 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     service thread, started during the call of one application): it keeps the restrictions and the sandbox of the
     code that started it, but not its application, so the timers that it adds belong to no application.  No
     application can cancel them, not even the one whose call started the thread, and the thread cancels only the
-    timers that it added itself, not those of an application, of the host or of another thread that module code
-    started.  Module
+    timers that it added itself, also through the work that it hands to other threads (a task of a
+    @ref Qore::Thread::ThreadPool "ThreadPool", the code of a timer that it adds), not those of an application, of
+    the host or of another thread that module code started, even when their work runs on the same worker thread.
+    Module
     code cannot yet give the context of a call to the thread that serves it, so that the work of the thread would
     belong to the call's application; see <a href="https://github.com/qoretechnologies/qore/issues/6245">issue
     #6245</a>.

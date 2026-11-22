@@ -3153,6 +3153,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (submitter_restrictions) {
             item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
         }
+        // the item is work of the code that submitted the operation or added the timer, whose generation its context
+        // carries, or else work of its own: a worker does not share one generation between the work of different
+        // callers (qore#7010)
+        QoreWorkGenerationHelper work_gen_helper(async_item.sandbox_ctx && async_item.sandbox_ctx->work_gen
+            ? async_item.sandbox_ctx->work_gen : qore_new_work_generation());
         QoreThreadRuntimeParseOptionsHelper item_po_helper((async_item.pgm || submitter_restrictions)
             ? &item_po : nullptr);
         // a callback that is not run in a Program (a timer's) runs with the options of the code that registered it,
@@ -7277,7 +7282,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             return false;
         }
         // module code that runs for no application (a thread that module code started, which can serve every caller
-        // of the module, qore#6208) cancels only the timers for no application that its own thread added: not those
+        // of the module, qore#6208) cancels only the timers for no application that its own work added: not those
         // of the threads that the module started during the calls of other applications (qore#7010)
         if (for_app && !app_pgm_id && it->second.adder_gen != restrict_app.gen) {
             return false;

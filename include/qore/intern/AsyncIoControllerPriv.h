@@ -1890,9 +1890,10 @@ private:
         qore_program_id_t cb_app_id = 0;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
-        //! The generation of the thread that added the timer (runtime_get_thread_generation(), which unlike its TID is
-        //! never reused): module code that runs for no application (the code of a thread that module code started)
-        //! cancels only the timers for no application that its own thread added (qore#7010)
+        //! The generation of the work that added the timer (runtime_get_thread_generation(), which unlike a TID is
+        //! never reused, and which a pooled or reused thread takes from the work item that it runs): module code that
+        //! runs for no application (the code of a thread that module code started) cancels only the timers for no
+        //! application that its own work added (qore#7010)
         uint64_t adder_gen = 0;
         //! The ID of the application Program that module code added the timer for, if for_app is set
         /** Module code running for an application with restrictions can cancel only the timers added for the same

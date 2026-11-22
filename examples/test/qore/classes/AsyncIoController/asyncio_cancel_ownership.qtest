@@ -429,6 +429,46 @@ int sub add_timer_call() {
 bool sub cancel_timer_direct(int id) {
     return AsyncIoController::cancelTimer(id);
 }
+
+auto sub add_timer_pool_bg() {
+    return AioCancelBgLib::Lib::addTimerPoolBg();
+}
+
+auto sub cancel_timer_pool_bg(int id) {
+    return AioCancelBgLib::Lib::cancelTimerPoolBg(id);
+}
+
+auto sub add_cancel_timer_pool_bg() {
+    return AioCancelBgLib::Lib::addCancelTimerPoolBg();
+}
+";
+
+        #! the child of timerCallbackWorkerTest(): the callbacks of the timers of the threads of a module for two tenants
+        #! run on the one callback worker of the controller
+        const TimerCallbackChildSource = "%modern
+%no-child-restrictions
+AsyncIoController::setMaxCallbackWorkers(1);
+Program sub tenant(int po) {
+    Program p(PO_NO_CHILD_PO_RESTRICTIONS | po);
+    SandboxManager sm();
+    sm.setNetworkDefaultPolicy(True);
+    p.setSandboxManager(sm);
+    p.parse(\"%modern\\n%requires AioCancelBgLib\\n\"
+        \"auto sub add() { return AioCancelBgLib::Lib::addTimerInCallbackBg(); }\\n\"
+        \"auto sub cancel(int id) { return AioCancelBgLib::Lib::cancelTimerInCallbackBg(id); }\\n\"
+        \"auto sub own() { return AioCancelBgLib::Lib::addCancelTimerInCallbackBg(); }\\n\", \"tenant\");
+    return p;
+}
+foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+    Program a = tenant(po);
+    Program b = tenant(po);
+    hash<auto> added = a.callFunction(\"add\");
+    hash<auto> c = b.callFunction(\"cancel\", added.id);
+    printf(\"%d: same worker: %y\\n\", po, added.tid == c.tid);
+    printf(\"%d: other: %y\\n\", po, c.result);
+    printf(\"%d: own: %y\\n\", po, a.callFunction(\"own\"));
+    printf(\"%d: host: %y\\n\", po, AsyncIoController::cancelTimer(added.id));
+}
 ";
 
         #! the code of a tenant that calls a module (with a restriction of its own) that calls another module
@@ -494,6 +534,10 @@ bool sub direct_key(string key) {
         addTestCase("a sandboxed caller cancels only the timers of its own application", \tenantTimerTest());
         addTestCase("a tenant sandboxed by its SandboxManager only cancels only its own timers",
             \sandboxManagerTimerTest());
+        addTestCase("the tasks of a shared pool for the threads of a module for tenants do not cancel each other's timers",
+            \poolWorkerTimerTest());
+        addTestCase("the timer callbacks of the threads of a module for tenants do not cancel each other's timers",
+            \timerCallbackWorkerTest());
         set_return_value(main());
     }
 
@@ -987,6 +1031,40 @@ bool sub direct_key(string key) {
         assertTrue(AsyncIoController::cancelTimer(host_id), "the host cancels its own timer");
         assertTrue(AsyncIoController::cancelTimer(r_id), "the host cancels a tenant's timer");
         assertTrue(AsyncIoController::cancelTimer(t_id), "the host cancels a tenant's timer");
+    }
+
+    #! the threads that a module starts during the calls of two tenants submit tasks to the module's pool, whose one
+    #! worker runs them all: the task of one does not cancel the timer that the task of the other added, while a
+    #! thread's own tasks cancel each other's timers (qore#6208); the worker runs the work of each (qore#7010)
+    poolWorkerTimerTest() {
+        foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+            Program a = getTenantBg(po);
+            Program b = getTenantBg(po);
+            hash<auto> added = a.callFunction("add_timer_pool_bg");
+            on_exit AsyncIoController::cancelTimer(added.id);
+            hash<auto> c = b.callFunction("cancel_timer_pool_bg", added.id);
+            assertEq(added.tid, c.tid, "the pool's one worker runs both tasks (po " + po + ")");
+            assertFalse(c.result, "another tenant's thread does not cancel the timer through the pool (po " + po + ")");
+            assertTrue(a.callFunction("add_cancel_timer_pool_bg"),
+                "a thread's own tasks of the pool cancel each other's timers (po " + po + ")");
+            assertTrue(AsyncIoController::cancelTimer(added.id), "the host cancels the timer (po " + po + ")");
+        }
+    }
+
+    #! the callbacks of the timers that the threads of a module add during the calls of two tenants run on the one
+    #! callback worker of the controller: the callback of one does not cancel the timer that the callback of the other
+    #! added, while the callbacks of one thread's timers cancel each other's (qore#7010)
+    /** The count of callback workers is set before the controller's first operation, so the check runs in a child
+        process
+    */
+    timerCallbackWorkerTest() {
+        string out = runChild(TimerCallbackChildSource);
+        foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+            assertRegex(sprintf("\\b%d: same worker: True\n", po), out, out);
+            assertRegex(sprintf("\\b%d: other: False\n", po), out, out);
+            assertRegex(sprintf("\\b%d: own: True\n", po), out, out);
+            assertRegex(sprintf("\\b%d: host: True\n", po), out, out);
+        }
     }
 
     #! the host's code that runs in the callback of a tenant's operation (an object of the host's class that the
