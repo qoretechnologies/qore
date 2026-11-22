@@ -293,6 +293,29 @@ sub indexes() {
     printf("variable index: %y literal %y\n", lit_holder[z], lit());
 }
 
+#! an index beyond the start of a list at any step of a path, and through the roots of a path other than a local
+sub negative_paths() {
+    list<auto> l = ((1, 2), (3,));
+    auto w;
+    int k = -5;
+    printf("nested l[0][-5]: %y l[-5][0]: %y l[0][k]: %y l[k][0]: %y\n", (w := l[0][-5]), (w := l[-5][0]),
+        (w := l[0][k]), (w := l[k][0]));
+    hash<string, list<auto>> h = {"a": (1,)};
+    printf("hash h.a[-5]: %y h.a[k]: %y\n", (w := h.a[-5]), (w := h.a[k]));
+    Holder o();
+    o.l = ((1,),);
+    printf("member o.l[-5]: %y o.l[k][0]: %y\n", (w := o.l[-5]), (w := o.l[k][0]));
+    Holder::sh = {"k": ((1,),)};
+    printf("static Holder::sh.k[-5]: %y\n", (w := Holder::sh.k[k]));
+    list<auto> src = ((1,), (2,));
+    list<auto> wl;
+    wl := src;
+    printf("weak root wl[-5]: %y wl[k][0]: %y wl[-1]: %y\n", (w := wl[-5]), (w := wl[k][0]), (w := wl[-1]));
+    reference<list<auto>> r = \src;
+    printf("reference root r[-5]: %y r[k]: %y r[-1]: %y\n", (w := r[-5]), (w := r[k]), (w := r[-1]));
+    printf("after: l %y src %y\n", l, src);
+}
+
 #! remove and delete at an index beyond the start of a list behave as before
 sub remove_delete() {
     list<auto> l = (1, 2);
@@ -323,4 +346,5 @@ edges();
 not_paths();
 no_value_paths();
 indexes();
+negative_paths();
 remove_delete();

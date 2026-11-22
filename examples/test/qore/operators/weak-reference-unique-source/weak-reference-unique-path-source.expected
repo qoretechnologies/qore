@@ -51,6 +51,13 @@ empty list 0: null
 empty list variable -1: null
 list after: [[1], [2], [3]] empty list after: []
 variable index: [{x: 12}, {x: 1}] literal [{x: 0}, {x: 1}]
+nested l[0][-5]: null l[-5][0]: null l[0][k]: null l[k][0]: null
+hash h.a[-5]: null h.a[k]: null
+member o.l[-5]: null o.l[k][0]: null
+static Holder::sh.k[-5]: null
+weak root wl[-5]: null wl[k][0]: null wl[-1]: [2]
+reference root r[-5]: null r[k]: null r[-1]: [2]
+after: l [[1, 2], [3]] src [[1], [2]]
 remove -5: NEGATIVE-LIST-INDEX
 delete -5: NEGATIVE-LIST-INDEX
 remove -1: 2 l [1, null]
