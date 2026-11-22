@@ -30,6 +30,8 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("ping", \ping());
         addTestCase("options given as connection options", \connectionOptions());
         addTestCase("driver not loaded", \driverNotLoaded());
+        addTestCase("values of non-sensitive options that cannot be shown", \valuesNotShown());
+        addTestCase("connection strings and URLs in non-sensitive options", \credentialStrings());
         set_return_value(main());
     }
 
@@ -88,7 +90,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         hash<ConnectionInfo> info = conn.getInfo();
         assertFalse(sprintf("%y", info).find(Secret) >= 0);
         assertEq("****", info.opts.secret);
-        assertEq(4, info.opts.rows);
+        assertEq("4", info.opts.rows);
     }
 
     driverNotLoaded() {
@@ -102,5 +104,44 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("****", info.opts.rows);
         assertEq(1, info.opts.min);
         assertEq("****", info.url_hash.options.rows);
+    }
+
+    valuesNotShown() {
+        # "fault" and "rows" are declared not sensitive; a value that cannot be shown in a datasource string, such as a
+        # URL with credentials, or that is not a string, a number or a boolean, is masked in the information and the
+        # ping results, as in the safe URL
+        DatasourceConnection conn("c7070", "test", "db://dbitest:u/p@db{fault=https://usr:PW@h/x,rows=5}");
+        assertEq("****", conn.getInfo().opts.fault);
+        assertEq("5", conn.getInfo().opts.rows);
+        assertEq("****", conn.ping().opts.fault);
+        assertEq("****", conn.getInfo().url_hash.options.fault);
+        assertFalse(conn.safe_url.find("PW") >= 0, conn.safe_url);
+        foreach auto v in ("DSN=x;PWD=secret", "u@h", {"x": "user:pw"}, ("user", "pw")) {
+            DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db", {}, {"driver": {"fault": v, "rows": v}});
+            hash<ConnectionInfo> info = c.getInfo();
+            assertEq("****", info.opts.fault, sprintf("%y", v));
+            assertEq("****", info.opts.rows, sprintf("%y", v));
+            assertEq("****", c.ping().opts.fault, sprintf("%y", v));
+            assertFalse(sprintf("%y", info).find("pw") >= 0 || sprintf("%y", info).find("secret") >= 0
+                || sprintf("%y", info).find("u@h") >= 0, sprintf("%y", info));
+        }
+    }
+
+    credentialStrings() {
+        # an ODBC connection string and a JDBC URL with credentials in an option that the driver declares not
+        # sensitive are masked in every form: the safe URL, the url_hash and the options of the information, and the
+        # options of the ping results
+        foreach string v in ("DSN=x;PWD=y", "jdbc:postgresql://h/db?user=u&password=p") {
+            DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{fault=" + v + ",rows=5}");
+            assertFalse(c.safe_url.find("PWD") >= 0 || c.safe_url.find("password") >= 0, c.safe_url);
+            assertEq("****", parse_datasource(c.safe_url.substr(5)).options.fault, v);
+            hash<ConnectionInfo> info = c.getInfo();
+            assertEq("****", info.url_hash.options.fault, v);
+            assertEq("****", info.opts.fault, v);
+            assertEq("****", c.ping().opts.fault, v);
+            DatasourceConnection o("c7070", "test", "db://dbitest:u/p@db", {}, {"driver": {"fault": v}});
+            assertEq("****", o.getInfo().opts.fault, v);
+            assertEq("****", o.ping().opts.fault, v);
+        }
     }
 }

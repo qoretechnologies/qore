@@ -527,24 +527,27 @@ string mask_datasource(hash<auto> config, *hash<auto> opts) [flags=RET_VALUE_ONL
 }
 
 //! Returns the options of a datasource for display, with the value of each sensitive option masked
-/** The value of an option is kept only if the DBI driver \a driver is already loaded and declares the option without
+/** The value of an option is shown only if the DBI driver \a driver is already loaded and declares the option without
     declaring it sensitive (see the \c "sensitive" key of
-    @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"); every other value is replaced with
-    \c "****": the value of a sensitive option (a credential, or a connection string or URL that can embed one), of
-    an option that the driver does not declare and of every option of a driver that is not loaded.  The driver is
-    never loaded by this function.
+    @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and only as a string, if it is a string, a
+    number or a boolean whose string form can be shown in a datasource string (only printable ASCII characters and
+    none of \c "@", \c "%", \c "{", \c "}", \c "(", \c ")", \c ",", \c "=", \c ";" or \c "://", as in the masked
+    forms of a datasource; see @ref datasource_mask_options); every other value is replaced with \c "****": the value
+    of a sensitive option (a credential, or a connection string or URL that can embed one), a value that cannot be
+    shown (such as a URL or a connection string, a hash or a list), the value of an option that the driver does not
+    declare and of every option of a driver that is not loaded.  The driver is never loaded by this function.
 
     @param driver the name of the DBI driver of the datasource
     @param options the options of the datasource (as in the \c "options" key of a
     @ref datasource_hash "datasource hash")
 
-    @return a hash with the keys of \a options, where the value of each option that cannot be shown is \c "****"; an
-    empty hash if no options are given
+    @return a hash with the keys of \a options, where the value of each option that is shown is a string and the value
+    of each option that cannot be shown is \c "****"; an empty hash if no options are given
 
     @par Example:
     @code{.py}
-# ex: {"conn": "****", "timezone": "Europe/Prague"} once the odbc driver is loaded
-hash<auto> h = mask_datasource_options("odbc", {"conn": "DSN=x;PWD=secret", "timezone": "Europe/Prague"});
+# ex: {"conn": "****", "qore-timezone": "Europe/Prague"} once the odbc driver is loaded
+hash<auto> h = mask_datasource_options("odbc", {"conn": "DSN=x;PWD=secret", "qore-timezone": "Europe/Prague"});
     @endcode
 
     @note this function never throws an exception

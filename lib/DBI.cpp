@@ -927,6 +927,20 @@ void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
     q_ds_append_masked_flags(str, h, 0);
 }
 
+static QoreStringNode* q_ds_shown_option_value(const QoreValue v);
+
+// the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
+// the options of a db:// connection's information and ping results, mask_datasource_options()): returns the value
+// to show as a string, or nullptr if the value is masked: if the driver is not loaded (\a dd is nullptr), if the
+// option cannot be shown (see qore_dbi_private::isOptionShowable()), or if the value cannot be shown in a datasource
+// string (see q_ds_shown_option_value()) (qore#7070)
+static QoreStringNode* q_dbi_shown_option(const qore_dbi_private* dd, const char* key, const QoreValue v) {
+    if (!dd || !dd->isOptionShowable(key)) {
+        return nullptr;
+    }
+    return q_ds_shown_option_value(v);
+}
+
 QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
     if (!opts || opts->empty()) {
@@ -943,11 +957,11 @@ QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
     }
     ConstHashIterator i(opts);
     while (i.next()) {
-        if (dd && dd->isOptionShowable(i.getKey())) {
-            rv->setKeyValue(i.getKey(), i.getReferenced(), nullptr);
-        } else {
-            rv->setKeyValue(i.getKey(), new QoreStringNode(QORE_DS_MASK), nullptr);
-        }
+        // the value of an option that the driver declares not sensitive is shown only as the masked forms of a
+        // datasource show it: as a string, if it can be shown in a datasource string (see q_ds_masked_hash()); a value
+        // such as a URL or a connection string with credentials, or a container, is masked as well
+        QoreStringNode* val = q_dbi_shown_option(dd, i.getKey(), i.get());
+        rv->setKeyValue(i.getKey(), val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
     }
     return rv.release();
 }
@@ -1223,7 +1237,7 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
                     valid = false;
                     break;
                 }
-                QoreStringNode* val = dd && dd->isOptionShowable(key) ? q_ds_shown_option_value(i.get()) : nullptr;
+                QoreStringNode* val = q_dbi_shown_option(dd, key, i.get());
                 oh->setKeyValue(key, val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
             }
             if (valid) {

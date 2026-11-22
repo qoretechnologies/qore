@@ -1956,8 +1956,9 @@ DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
 
 //! returns a copy of the options of a datasource with the value of each option that cannot be shown masked (qore#7070)
-/** The value of an option is kept only if \a driver is a driver already loaded that declares the option and does not
-    declare it sensitive (\ref QDBI_OPT_SENSITIVE); every other value is replaced with \ref QORE_DS_MASK (fail-closed:
+/** The value of an option is shown only if \a driver is a driver already loaded that declares the option and does not
+    declare it sensitive (\ref QDBI_OPT_SENSITIVE), and only as a string, if it can be shown in a datasource string (as
+    in q_ds_masked_hash()); every other value is replaced with \ref QORE_DS_MASK (fail-closed:
     an option of a driver that is not loaded or that the driver does not declare is masked); no module is loaded;
     never raises an exception
 

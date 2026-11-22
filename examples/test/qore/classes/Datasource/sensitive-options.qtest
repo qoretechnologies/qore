@@ -18,6 +18,7 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("the option information of a Datasource", \datasourceOptions());
         addTestCase("the option information of a DatasourcePool", \poolOptions());
         addTestCase("mask_datasource_options()", \maskOptions());
+        addTestCase("mask_datasource_options() values that cannot be shown", \maskOptionValues());
         set_return_value(main());
     }
 
@@ -60,11 +61,12 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
     }
 
     maskOptions() {
-        # a sensitive option and an option that the driver does not declare are masked
-        assertEq({"secret": "****", "rows": 3, "fault": "", "unknown": "****"},
+        # a sensitive option and an option that the driver does not declare are masked; a value that is shown is
+        # given as a string
+        assertEq({"secret": "****", "rows": "3", "fault": "", "unknown": "****"},
             mask_datasource_options("dbitest", {"secret": "s3cr3t", "rows": 3, "fault": "", "unknown": "x"}));
         # option names are matched as the driver matches them, without case
-        assertEq({"SECRET": "****", "Rows": 3}, mask_datasource_options("dbitest", {"SECRET": "s3cr3t", "Rows": 3}));
+        assertEq({"SECRET": "****", "Rows": "3"}, mask_datasource_options("dbitest", {"SECRET": "s3cr3t", "Rows": 3}));
         # a driver that is not loaded is not loaded by the function: every value is masked
         assertEq({"rows": "****"}, mask_datasource_options("qore-7070-no-such-driver", {"rows": 3}));
         assertFalse(inlist("qore-7070-no-such-driver", dbi_get_driver_list() ?? ()));
@@ -78,5 +80,29 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         assertEq({"rows": "****"}, mask_datasource_options("dbitest\0x", {"rows": 3}));
         assertEq({}, mask_datasource_options("dbitest", NOTHING));
         assertEq({}, mask_datasource_options("dbitest", {}));
+    }
+
+    maskOptionValues() {
+        # the value of an option that the driver declares not sensitive is shown only if it can be shown in a
+        # datasource string, as in the masked forms of a datasource: a URL or a string with a separator, and a value
+        # that is not a string, a number or a boolean, are masked whatever the option
+        list<auto> masked = (
+            "https://usr:PW@h/x", "usr@host", "DSN=x;PWD=secret", "a=b", "a,b", "a{b}", "(x)", "50%", "tab\t",
+            "\u00e9", {"x": "user:pw"}, ("user", "pw"), binary("pw"), 2026-11-22,
+        );
+        foreach auto v in (masked) {
+            assertEq({"fault": "****", "FAULT": "****"}, mask_datasource_options("dbitest", {"fault": v, "FAULT": v}),
+                sprintf("%y", v));
+        }
+        # an ODBC connection string and a JDBC URL with credentials are masked in every form
+        foreach string v in ("DSN=x;PWD=y", "jdbc:postgresql://h/db?user=u&password=p") {
+            assertEq({"fault": "****"}, mask_datasource_options("dbitest", {"fault": v}), v);
+            hash<auto> h = {"type": "dbitest", "db": "db", "options": {"fault": v}};
+            assertEq("dbitest:****/****@db{fault=****}", mask_datasource(h, {"show_db": True, "show_options": True}),
+                v);
+            assertEq({"fault": "****"}, mask_datasource_hash(h, {"show_options": True}).options, v);
+        }
+        assertEq({"fault": "Europe/Prague", "rows": "5", "Rows": "1.5"},
+            mask_datasource_options("dbitest", {"fault": "Europe/Prague", "rows": 5, "Rows": 1.5}));
     }
 }
