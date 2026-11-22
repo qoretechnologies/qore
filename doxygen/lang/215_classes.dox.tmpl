@@ -559,6 +559,21 @@ class B2 inherits private:internal P2 { private abstract string m(); }  # privat
 (new A2()).m();   # "P2::m"
 (new B2()).m();   # METHOD-IS-PRIVATE
     @endcode
+    The access of an abstract declaration of a parent class is also at least that of the least restrictive path from
+    the class to the class that declares it, the access of a path being that of its most restrictive inheritance edge:
+    an abstract method that a class reaches only through @ref private_inheritance "private" or
+    <tt><b>private:internal</b></tt> inheritance does not make the method that implements it public, so that a method
+    of a class that the class also inherits privately stays inaccessible from outside the class hierarchy (since
+    %Qore 3.0):
+    @code{.py}
+class Secret { string m() { return "Secret::m"; } }
+class Iface { abstract string m(); }
+class X3 inherits private Secret, private Iface {}  # private: Iface is reached through private inheritance only
+class Y3 inherits private Secret, Iface {}          # public: Iface is inherited publicly
+
+(new X3()).m();   # METHOD-IS-PRIVATE
+(new Y3()).m();   # "Secret::m"
+    @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n

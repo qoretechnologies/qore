@@ -2777,6 +2777,10 @@
       access of the abstract declaration, or of the implementing method if it is more restrictive (see
       @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7277">issue 7277</a>)
+    - a public method of a privately inherited class that implements an abstract method that the class reaches only
+      through private inheritance could be called from outside the class hierarchy (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7288">issue 7288</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it

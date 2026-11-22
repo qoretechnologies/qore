@@ -1099,11 +1099,58 @@ static bool reaches_class_publicly(const BCList& scl, const qore_class_private& 
     return false;
 }
 
+typedef std::map<const qore_class_private*, ClassAccess> class_path_access_map_t;
+
+//! returns the access of the least restrictive path from the class \a qc to the class \a target, the access of a
+//! path being that of its most restrictive inheritance edge: \c Public if \a qc is \a target, \c Inaccessible if no
+//! path reaches it (qore#7288)
+/** A \c private:internal edge below the first one of a path is not cut (as lookups from \a qc cut it), but gives the
+    path \c Internal access, the most restrictive one that a method of \a qc can have.  The access from each class is
+    computed once (\a done), so that the walk is linear in the hierarchy, not in its paths.
+*/
+static ClassAccess class_path_access(const qore_class_private& qc, const qore_class_private& target,
+        class_path_access_map_t& done) {
+    if (qc.sameClass(target)) {
+        return Public;
+    }
+    class_path_access_map_t::const_iterator i = done.find(&qc);
+    if (i != done.end()) {
+        return i->second;
+    }
+    ClassAccess rv = Inaccessible;
+    if (qc.scl) {
+        for (const BCNode* n : *qc.scl) {
+            if (!n->sclass) {
+                continue;
+            }
+            ClassAccess pa = class_path_access(*qore_class_private::get(*n->sclass), target, done);
+            if (pa == Inaccessible) {
+                continue;
+            }
+            if (pa < n->access) {
+                pa = n->access;
+            }
+            if (pa < rv) {
+                rv = pa;
+                if (rv == Public) {
+                    break;
+                }
+            }
+        }
+    }
+    done[&qc] = rv;
+    return rv;
+}
+
 //! sets the access \a va (that of \a v in the method of the class that has it) of the concrete variant \a v that
 //! implements the abstract variant \a av in the class \a qc (qore#7277)
 /** The variant has at least the access of \a av, except that a variant of a class that a public path from \a qc
     reaches has its own access, as the least restrictive path to a class does (multiple_path_inheritance), and a
     variant of \a qc itself (runtimeInit()) is its own override.
+
+    The access of \a av in \a qc is at least that of the least restrictive path from \a qc to the class that declares
+    it: a declaration that \a qc reaches only through private or private:internal inheritance does not make the
+    method public (qore#7288).
 */
 static void abstract_variant_restrict_access(ClassAccess& va, const MethodVariantBase* v,
         const MethodVariantBase* av, const qore_class_private& qc) {
@@ -1116,8 +1163,16 @@ static void abstract_variant_restrict_access(ClassAccess& va, const MethodVarian
             return;
         }
     }
-    if (va < av->getAccess()) {
-        va = av->getAccess();
+    ClassAccess aa = av->getAccess();
+    if (const QoreClass* ac = av->getClass()) {
+        class_path_access_map_t done;
+        ClassAccess pa = class_path_access(qc, *qore_class_private::get(*ac), done);
+        if (pa != Inaccessible && aa < pa) {
+            aa = pa;
+        }
+    }
+    if (va < aa) {
+        va = aa;
     }
 }
 
