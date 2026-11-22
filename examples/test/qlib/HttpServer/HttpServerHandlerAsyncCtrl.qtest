@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, HTTP/2 over TLS and HTTP/3 (QUIC) requests, WebSocket connections, and sandboxed HTTP handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHandlerAsyncCtrlTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The trusted process-wide async I/O controller is not reachable by a sandboxed handler (qore#7213)
+/** A sandboxed request handler and WebSocket handler walk every path to an async I/O controller that they have:
+    their request context and its header information (two levels), the listener object of the context, the public
+    accessor of the process-wide controller, and the controller of a WebSocket connection; for each controller found,
+    they try to replace its logger through reflection.  None of them is the trusted controller, whose logger stays
+    the host's
+*/
+class HttpServerHandlerAsyncCtrlTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's handlers: report every async I/O controller that they can reach, and try to replace its
+        #! logger through reflection
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires WebSocketHandler
+%requires Logger
+%requires reflection
+
+#! the controllers found, and where
+list<hash<auto>> sub find_controllers(hash<auto> cx, HttpListenerInterface listener) {
+    list<hash<auto>> rv;
+    code add = sub (string path, auto v) {
+        if (v instanceof AsyncSocketIo::AsyncSocketIoController) {
+            rv += {\"path\": path, \"ctrl\": v};
+        }
+    };
+    foreach hash<auto> i in (cx.pairIterator()) {
+        add(\"cx.\" + i.key, i.value);
+        if (i.value.typeCode() == NT_HASH) {
+            foreach hash<auto> j in (i.value.pairIterator()) {
+                add(\"cx.\" + i.key + \".\" + j.key, j.value);
+            }
+        }
+    }
+    add(\"listener\", listener);
+    add(\"cx.listener\", cx.listener);
+    add(\"getGlobalAsyncIoController()\", AsyncSocketIo::getGlobalAsyncIoController());
+    return rv;
+}
+
+#! tries to replace the logger of each controller through reflection; returns the result for the host
+hash<auto> sub attack(list<hash<auto>> found) {
+    Logger tenant_logger(\"tenant\");
+    foreach hash<auto> f in (found) {
+        try {
+            cast<NormalMethod>(Class::forName(\"LoggerWrapper\").getMethod(\"setLogger\")).call(f.ctrl,
+                tenant_logger);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    return {\"found\": found, \"logger\": tenant_logger};
+}
+
+class TenantHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) {
+        self.to_host = to_host;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        list<hash<auto>> found = find_controllers(cx, listener);
+        to_host.push(attack(found));
+        return makeResponse(200, \"ok\");
+    }
+}
+
+class TenantWsConnection inherits WebSocketConnection {
+    private {
+        Queue to_host;
+    }
+
+    constructor(WebSocketHandler handler, Queue to_host) : WebSocketConnection(handler) {
+        self.to_host = to_host;
+    }
+
+    gotMessage(string msg) {
+        list<hash<auto>> found;
+        *AsyncSocketIo::AsyncSocketIoController c = getAsyncCtrl();
+        if (c) {
+            found += {\"path\": \"WebSocketConnection::getAsyncCtrl()\", \"ctrl\": c};
+        }
+        to_host.push(attack(found));
+        send(\"done\");
+    }
+}
+
+class TenantWsHandler inherits WebSocketHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) : WebSocketHandler() {
+        self.to_host = to_host;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        list<hash<auto>> found = find_controllers(cx, cx.listener);
+        to_host.push(attack(found));
+        return new TenantWsConnection(self, to_host);
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler(Queue to_host) {
+    return new TenantHandler(to_host);
+}
+
+AbstractHttpSocketHandler sub get_ws_handler(Queue to_host) {
+    return new TenantWsHandler(to_host);
+}
+";
+    }
+
+    private {
+        #! the host's logger of the process-wide controller during the test
+        Logger host_logger("host");
+        AsyncSocketIo::AsyncSocketIoController trusted;
+    }
+
+    constructor() : QUnit::Test("handler async I/O controller", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1: a sandboxed handler cannot reach the trusted controller", \requestTest(), "1.1");
+        addTestCase("HTTP/2: a sandboxed handler cannot reach the trusted controller", \requestTest(), "2.0");
+        addTestCase("HTTP/3: a sandboxed handler cannot reach the trusted controller", \requestTest(), "3.0");
+        addTestCase("a sandboxed WebSocket handler cannot reach the trusted controller", \webSocketTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        trusted = AsyncSocketIo::getGlobalAsyncIoController();
+        trusted.setLogger(host_logger);
+    }
+
+    globalTearDown() {
+        trusted.setLogger();
+    }
+
+    requestTest(string http_version) {
+        Queue to_host();
+        Program tenant = getTenantProgram();
+        AbstractHttpRequestHandler handler = tenant.callFunction("get_handler", to_host);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("t", "^t", NOTHING, handler);
+        int port = addTlsListener(server);
+        server.waitForAsyncIo();
+
+        HTTPClient hc({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit hc.disconnect();
+        assertEq("ok", hc.get("/t"));
+        checkFound(to_host.get(HangGuard));
+    }
+
+    webSocketTest() {
+        Queue to_host();
+        Program tenant = getTenantProgram();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_ws_handler", to_host);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ws", "^ws", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, {"url": sprintf("ws://localhost:%d/ws", port), "timeout": HangGuard});
+        wsc.connect();
+        on_exit wsc.disconnect();
+        # the connection's context
+        checkFound(to_host.get(HangGuard));
+        # the connection's controller
+        wsc.send("x");
+        assertEq("done", msgs.get(HangGuard));
+        checkFound(to_host.get(HangGuard));
+    }
+
+    #! None of the controllers that the tenant found is the trusted one, whose logger is not the tenant's
+    private checkFound(hash<auto> r) {
+        # in one comparison, so that a failure shows both
+        list<string> trusted_paths = map $1.path, r.found, $1.ctrl == trusted;
+        assertEq({"trusted_paths": (), "tenant_logger": False}, {
+            "trusted_paths": trusted_paths,
+            "tenant_logger": trusted.isLogger(r.logger),
+        }, "no path gives the trusted controller, whose logger is not the tenant's");
+        # the host's logger again, for the next case
+        trusted.setLogger(host_logger);
+    }
+
+    #! Adds a TLS listener that also serves HTTP/3 on its port and returns the port
+    private static int addTlsListener(HttpServer server) {
+        return server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+    }
+
+    #! Returns a sandboxed Program with the tenant's handlers
+    private Program getTenantProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}
