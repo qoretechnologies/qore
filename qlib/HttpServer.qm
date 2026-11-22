@@ -5226,7 +5226,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 # the handler's changes, except for the server's own keys, also those that the server's context
                 # does not have
-                if (handler_cx != cx) {
+                # only if the handler's code changed its copy, which is then no longer the same hash as the server's
+                # context (qore#7240): an identity test, which takes a constant time, unlike a comparison
+                if (!handler_cx.isSame(cx)) {
                     cx = (handler_cx - ServerContextKeys) + cx{ServerContextKeys};
                 }
 
