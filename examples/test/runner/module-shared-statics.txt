@@ -13,9 +13,6 @@ class qlib/AsyncApiDataProvider/AsyncApiDataProviderFactory.qc AsyncApiDataProvi
 class qlib/AwsRestClientDataProvider/AwsRestClientDataProviderFactory.qc AwsRestClientDataProviderFactory::cls
 class qlib/AwsS3DataProvider/AwsS3DataProviderFactory.qc AwsS3DataProviderFactory::cls
 class qlib/AwsTextractDataProvider/AwsTextractDataProvider.qc AwsTextractDataProviderFactory::cls
-module-data qlib/AwsTextractDataProvider/AwsTextractSchema.qc AwsTextractSchema::legacy_types
-module-data qlib/AwsTextractDataProvider/AwsTextractSchema.qc AwsTextractSchema::schema
-module-data qlib/AwsTextractDataProvider/AwsTextractSchema.qc AwsTextractSchema::types
 class qlib/AzureDocumentIntelligenceDataProvider/AzureDocumentIntelligenceDataProvider.qc AzureDocumentIntelligenceDataProviderFactory::cls
 module-data qlib/AzureDocumentIntelligenceDataProvider/AzureDocumentIntelligenceSchema.qc AzureDocumentIntelligenceSchema::sets
 class qlib/AzureOpenAiDataProvider/AzureOpenAiDataProviderFactory.qc AzureOpenAiDataProviderFactory::cls
@@ -169,7 +166,6 @@ class qlib/GitLabDataProvider/GitLabDataProviderFactory.qc GitLabDataProviderFac
 module-data qlib/GitLabDataProvider/GitLabSchema.qc GitLabSchema::action_set
 module-data qlib/GitLabDataProvider/GitLabSchema.qc GitLabSchema::schema
 class qlib/GmailDataProvider/GmailDataProviderFactory.qc GmailDataProviderFactory::cls
-module-data qlib/GmailDataProvider/GmailListWithMetadataDataProvider.qc GmailListWithMetadataDataProvider::response_type
 module-data qlib/GmailDataProvider/GmailMessageWatchDataProvider.qc GmailMessageWatchDataProvider::gmailMessageEventDataType
 class qlib/GoHighLevelDataProvider/GoHighLevelDataProviderFactory.qc GoHighLevelDataProviderFactory::cls
 class qlib/GoogleCalendarDataProvider/GoogleCalendarDataProviderFactory.qc GoogleCalendarDataProviderFactory::cls
