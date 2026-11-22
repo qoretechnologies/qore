@@ -8,6 +8,11 @@ Base runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
 Base runReference: 7
 Base runThrow: "caught BASE-ERROR: Base::thrower(6)"
 Base runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Base takeTemp t1
+Tmp t1 destroyed
+Base takeTemp u1
+Tmp u1 destroyed
+Base runTemp: "Base::takeTemp Base::takeTemp"
 Base fib: 55
 Base depth: 5
 Base runClosure: "Base::m(8) Base::m(9)"
@@ -24,6 +29,11 @@ Derived runVarargs: "Derived::va(1, [2, 3]) Derived::va(4, null)"
 Derived runReference: 205
 Derived runThrow: "caught DERIVED-ERROR: Derived::thrower(6)"
 Derived runThrowOut: "DERIVED-ERROR: Derived::thrower(7)"
+Derived takeTemp t1
+Tmp t1 destroyed
+Derived takeTemp u1
+Tmp u1 destroyed
+Derived runTemp: "Derived::takeTemp Derived::takeTemp"
 Derived fib: 55
 Derived depth: 50
 Derived runClosure: "Derived::m(8) Derived::m(9)"
@@ -40,6 +50,11 @@ Base runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
 Base runReference: 7
 Base runThrow: "caught BASE-ERROR: Base::thrower(6)"
 Base runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Base takeTemp t1
+Tmp t1 destroyed
+Base takeTemp u1
+Tmp u1 destroyed
+Base runTemp: "Base::takeTemp Base::takeTemp"
 Base fib: 55
 Base depth: 5
 Base runClosure: "Base::m(8) Base::m(9)"
@@ -56,6 +71,11 @@ Inherits runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
 Inherits runReference: 7
 Inherits runThrow: "caught BASE-ERROR: Base::thrower(6)"
 Inherits runThrowOut: "BASE-ERROR: Base::thrower(7)"
+Inherits takeTemp t1
+Tmp t1 destroyed
+Inherits takeTemp u1
+Tmp u1 destroyed
+Inherits runTemp: "Base::takeTemp Base::takeTemp"
 Inherits fib: 55
 Inherits depth: 5
 Inherits runClosure: "Base::m(8) Base::m(9)"
@@ -72,6 +92,11 @@ InheritsOverride runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
 InheritsOverride runReference: 7
 InheritsOverride runThrow: "caught BASE-ERROR: Base::thrower(6)"
 InheritsOverride runThrowOut: "BASE-ERROR: Base::thrower(7)"
+InheritsOverride takeTemp t1
+Tmp t1 destroyed
+InheritsOverride takeTemp u1
+Tmp u1 destroyed
+InheritsOverride runTemp: "Base::takeTemp Base::takeTemp"
 InheritsOverride fib: 55
 InheritsOverride depth: 5
 InheritsOverride runClosure: "InheritsOverride::m(8) InheritsOverride::m(9)"
@@ -88,6 +113,11 @@ Derived runVarargs: "Derived::va(1, [2, 3]) Derived::va(4, null)"
 Derived runReference: 205
 Derived runThrow: "caught DERIVED-ERROR: Derived::thrower(6)"
 Derived runThrowOut: "DERIVED-ERROR: Derived::thrower(7)"
+Derived takeTemp t1
+Tmp t1 destroyed
+Derived takeTemp u1
+Tmp u1 destroyed
+Derived runTemp: "Derived::takeTemp Derived::takeTemp"
 Derived fib: 55
 Derived depth: 50
 Derived runClosure: "Derived::m(8) Derived::m(9)"
@@ -104,6 +134,11 @@ FinalClass runVarargs: "Base::va(1, [2, 3]) Base::va(4, null)"
 FinalClass runReference: 7
 FinalClass runThrow: "caught BASE-ERROR: Base::thrower(6)"
 FinalClass runThrowOut: "BASE-ERROR: Base::thrower(7)"
+FinalClass takeTemp t1
+Tmp t1 destroyed
+FinalClass takeTemp u1
+Tmp u1 destroyed
+FinalClass runTemp: "Base::takeTemp Base::takeTemp"
 FinalClass fib: 55
 FinalClass depth: 5
 FinalClass runClosure: "FinalClass::m(8) FinalClass::m(9)"

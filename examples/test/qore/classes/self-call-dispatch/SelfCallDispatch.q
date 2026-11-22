@@ -2,6 +2,19 @@
 # unqualified calls of methods of self (m()) on objects of the class of the call, of the method's class and of
 # subclasses, which must dispatch as the AST interpreter does (issue #7267); its output is SelfCallDispatch.expected
 
+# a temporary argument whose destructor shows when the call releases it
+class Tmp {
+    public {
+        string n;
+    }
+    constructor(string n) {
+        self.n = n;
+    }
+    destructor() {
+        printf("Tmp %s destroyed\n", n);
+    }
+}
+
 class Base {
     public {
         list<string> log;
@@ -53,6 +66,10 @@ class Base {
     # an exception that leaves the calling method
     string runThrowOut(int i) { thrower(i); return "not reached"; }
 
+    # a temporary object argument, released by the call
+    string runTemp(int i) { return takeTemp(new Tmp("t" + i)) + " " + takeTemp(new Tmp("u" + i), i); }
+    string takeTemp(Tmp t, *int i) { printf("%s takeTemp %s\n", self.className(), t.n); return "Base::takeTemp"; }
+
     # recursion
     int fib(int n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }
     int depth(int n) { return n ? depth(n - 1) + step() : 0; }
@@ -88,6 +105,7 @@ class Derived inherits Base {
     thrower(int i) { throw "DERIVED-ERROR", sprintf("Derived::thrower(%d)", i); }
     int step() { return 10; }
     int len(string s) { return 1; }
+    string takeTemp(Tmp t, *int i) { printf("%s takeTemp %s\n", self.className(), t.n); return "Derived::takeTemp"; }
 }
 
 # a class that inherits the methods without overriding them: the object's class is neither the class of the call
@@ -171,6 +189,7 @@ sub run_object(Base o) {
     } catch (hash<ExceptionInfo> ex) {
         show(c + " runThrowOut", ex.err + ": " + ex.desc);
     }
+    show(c + " runTemp", o.runTemp(1));
     show(c + " fib", o.fib(10));
     show(c + " depth", o.depth(5));
     show(c + " runClosure", o.runClosure(8));
