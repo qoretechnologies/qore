@@ -2963,46 +2963,16 @@ void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) 
 }
 
 void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
-    // get the current class context
-    const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
-        // a class on the private:internal path to the member uses it (issue #6800)
-        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, key, class_ctx);
-    }
-
-    const qore_class_private* member_class_ctx = nullptr;
-    // check for external access to private members
-    if (priv->checkMemberAccess(key, class_ctx, member_class_ctx, xsink)) {
+    // the member is removed as by the delete operator, with its access checks, member gate and accessors, the
+    // object's scan count and recursive set: an undeclared member's key is removed, a declared member keeps its slot
+    // with no value, and a member that is not set is not created (qore#7179, qore#7208)
+    ValueHolder v(priv->takeMember(xsink, key, true, true), xsink);
+    if (*xsink) {
         return;
     }
-
-    QoreValue v{};
-    const qore_class_private* cls = qore_class_private::get(*priv->theclass);
-    if (cls->findAccessorMember(key)) {
-        // a declared member held in external storage is read and cleared with its accessors
-        v = cls->evalExternalMemberWrite(this, key, QoreValue(), QoreMemberWriteOp::Delete, xsink);
-        if (*xsink) {
-            v.discard(xsink);
-            return;
-        }
-    } else {
-        QoreSafeVarRWWriteLocker sl(priv->rml);
-
-        if (priv->status == OS_DELETED) {
-            makeAccessDeletedObjectException(xsink, key, priv->theclass->getName());
-            return;
-        }
-
-        QoreHashNode* odata = member_class_ctx ? priv->getInternalData(member_class_ctx) : priv->data;
-        if (odata) {
-            v = odata->takeKeyValue(key);
-        }
+    if (v->getType() == NT_OBJECT) {
+        v->get<QoreObject>()->doDelete(xsink);
     }
-
-    if (v.getType() == NT_OBJECT) {
-        v.get<QoreObject>()->doDelete(xsink);
-    }
-    v.discard(xsink);
 }
 
 QoreValue QoreObject::takeMember(const QoreString* key, ExceptionSink* xsink) {
