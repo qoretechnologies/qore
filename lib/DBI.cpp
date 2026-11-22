@@ -90,10 +90,13 @@ struct qore_dbi_mlist_private {
     dbi_method_list_t l;
     dbi_opt_map_t omap;
 
-    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0, int flags = 0) {
+    //! registers an option; \a declared is true for the variant with option flags, which decides whether the option
+    //! is sensitive (qore#7070)
+    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags,
+            bool declared) {
         assert(omap.find(name) == omap.end());
         // only the flags known to this library are kept
-        omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE);
+        omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE, declared);
     }
 
     DLLLOCAL static qore_dbi_mlist_private* get(const qore_dbi_method_list& ml) {
@@ -289,11 +292,13 @@ void qore_dbi_method_list::add(int code, q_dbi_option_get_t method) {
 }
 
 void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type) {
-    priv->registerOption(name, desc, type);
+    // no decision about the sensitivity of the option: it counts as undeclared, and its value is never shown in a
+    // masked form of a datasource (qore#7070)
+    priv->registerOption(name, desc, type, 0, false);
 }
 
 void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags) {
-    priv->registerOption(name, desc, type, flags);
+    priv->registerOption(name, desc, type, flags, true);
 }
 
 DbiArgHelper::DbiArgHelper(const QoreListNode* ol, bool numeric, ExceptionSink* xs) : orig(ol), nl(0), xsink(xs) {

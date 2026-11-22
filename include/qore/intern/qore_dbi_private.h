@@ -43,11 +43,15 @@ struct DbiOptInfo {
     const QoreTypeInfo *typeInfo = nullptr;
     //! the option flags (QDBI_OPT_SENSITIVE)
     int flags = 0;
+    //! true if the driver registered the option with the variant of registerOption() with option flags, which
+    //! decides whether the option is sensitive; an option registered without flags counts as undeclared (qore#7070)
+    bool declared = false;
 
     DLLLOCAL DbiOptInfo() {
     }
 
-    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t, int f = 0) : desc(d), typeInfo(t), flags(f) {
+    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t, int f = 0, bool decl = false) : desc(d), typeInfo(t),
+            flags(f), declared(decl) {
     }
 
     //! returns true if the value of the option is sensitive (qore#7070)
@@ -554,13 +558,15 @@ struct qore_dbi_private {
     }
 
     //! returns true if the value of the option can be shown in a masked description of a datasource
-    /** Fail-closed: only an option that the driver declares and does not declare sensitive with
-        @ref QDBI_OPT_SENSITIVE can be shown; an option that the driver does not declare (such as an option of a driver
-        with @ref DBI_CAP_OPTION_PASSTHRU) is treated as sensitive (qore#7070)
+    /** Fail-closed: only an option that the driver registers with option flags (the variant of
+        qore_dbi_method_list::registerOption() with flags, which decides whether the option is sensitive) without
+        @ref QDBI_OPT_SENSITIVE can be shown; an option registered without flags, and an option that the driver does
+        not register (such as an option of a driver with @ref DBI_CAP_OPTION_PASSTHRU), is treated as sensitive
+        (qore#7070)
     */
     DLLLOCAL bool isOptionShowable(const char* opt) const {
         dbi_opt_map_t::const_iterator i = omap.find(opt);
-        return i != omap.end() && !i->second.isSensitive();
+        return i != omap.end() && i->second.declared && !i->second.isSensitive();
     }
 
     DLLLOCAL static qore_dbi_private* get(const DBIDriver& d) {

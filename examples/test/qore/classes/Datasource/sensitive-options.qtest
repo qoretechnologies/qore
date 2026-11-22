@@ -19,6 +19,7 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("the option information of a DatasourcePool", \poolOptions());
         addTestCase("mask_datasource_options()", \maskOptions());
         addTestCase("mask_datasource_options() values that cannot be shown", \maskOptionValues());
+        addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
         set_return_value(main());
     }
 
@@ -104,5 +105,19 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         }
         assertEq({"fault": "Europe/Prague", "rows": "5", "Rows": "1.5"},
             mask_datasource_options("dbitest", {"fault": "Europe/Prague", "rows": 5, "Rows": 1.5}));
+    }
+
+    undeclaredOptions() {
+        # "stream-chunk" is registered with the registerOption() variant without flags, which makes no decision about
+        # the sensitivity of the option: it counts as undeclared, and its value is masked in every form, as the value
+        # of an option that the driver does not declare
+        assertEq({"stream-chunk": "****", "rows": "5"}, mask_datasource_options("dbitest", {"stream-chunk": 64,
+            "rows": 5}));
+        hash<auto> h = {"type": "dbitest", "db": "db", "options": {"stream-chunk": 64, "rows": 5}};
+        assertEq("dbitest:****/****@db{stream-chunk=****,rows=5}", mask_datasource(h, {"show_db": True,
+            "show_options": True}));
+        assertEq({"stream-chunk": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
+        # the option information gives it as not sensitive, as the driver does not declare it sensitive
+        assertFalse(dbi_get_driver_options("dbitest"){"stream-chunk"}.sensitive);
     }
 }

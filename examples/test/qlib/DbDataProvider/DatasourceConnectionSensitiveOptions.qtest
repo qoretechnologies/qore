@@ -32,6 +32,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("driver not loaded", \driverNotLoaded());
         addTestCase("values of non-sensitive options that cannot be shown", \valuesNotShown());
         addTestCase("connection strings and URLs in non-sensitive options", \credentialStrings());
+        addTestCase("options registered without a sensitivity decision", \undeclaredOptions());
         set_return_value(main());
     }
 
@@ -143,5 +144,17 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
             assertEq("****", o.getInfo().opts.fault, v);
             assertEq("****", o.ping().opts.fault, v);
         }
+    }
+
+    undeclaredOptions() {
+        # "stream-chunk" is registered without a sensitivity decision: masked in every form
+        DatasourceConnection c("c7070", "test", "db://dbitest:u/p@db{stream-chunk=64,rows=5}");
+        assertEq("****", parse_datasource(c.safe_url.substr(5)).options{"stream-chunk"});
+        assertEq("5", parse_datasource(c.safe_url.substr(5)).options.rows);
+        hash<ConnectionInfo> info = c.getInfo();
+        assertEq("****", info.url_hash.options{"stream-chunk"});
+        assertEq("****", info.opts{"stream-chunk"});
+        assertEq("5", info.opts.rows);
+        assertEq("****", c.ping().opts{"stream-chunk"});
     }
 }

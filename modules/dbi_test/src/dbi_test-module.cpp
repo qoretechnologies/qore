@@ -944,11 +944,14 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
     methods.registerOption(DBITEST_OPT_FAULT, "the faults to inject, separated by commas: \"select\", \"exec\", "
         "\"commit\", \"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
         "\"bulk-unavailable\", \"bulk-rows\", \"close\" (closing the connection reports an error), or \"stmt-close\" "
-        "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo);
+        "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo, 0);
     methods.registerOption(DBITEST_OPT_SECRET, "a string kept on the connection, declared sensitive as a credential "
         "would be", stringTypeInfo, QDBI_OPT_SENSITIVE);
+    // "fault" and "rows" are registered with option flags (not sensitive), so their values can be shown in the
+    // masked forms of a datasource; the other options are registered without flags, which makes no decision about
+    // their sensitivity, and their values are masked (qore#7070)
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
-        bigIntTypeInfo);
+        bigIntTypeInfo, 0);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_BULK_LOAD_STATS, "native bulk-load protocol statistics");
