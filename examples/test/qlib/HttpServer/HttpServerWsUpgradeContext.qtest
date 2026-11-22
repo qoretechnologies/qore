@@ -31,10 +31,28 @@ class HttpServerWsUpgradeContextTest inherits QUnit::Test {
 %requires WebSocketHandler
 
 class TenantWsConnection inherits WebSocketConnection {
-    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    private {
+        # the server's code that registered the connection
+        *code reg;
+    }
+
+    constructor(WebSocketHandler handler, *code reg) : WebSocketConnection(handler) {
+        self.reg = reg;
     }
 
     gotMessage(string msg) {
+        if (msg == \"again\") {
+            # the registration again, once the connection is registered
+            string r;
+            try {
+                reg();
+                r = \"ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+            send(\"again \" + r);
+            return;
+        }
         send(\"echo \" + msg);
     }
 }
@@ -51,7 +69,7 @@ class TenantWsHandler inherits WebSocketHandler {
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         to_host.push(sprintf(\"controller=%y target=%y\", exists cx.\"header-info\".async_io_controller,
             exists cx.\"header-info\".async_target));
-        return new TenantWsConnection(self);
+        return new TenantWsConnection(self, cx.\"header-info\".ws_register);
     }
 }
 
@@ -99,5 +117,10 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host) {
         # the connection is registered with the server's async I/O
         wsc.send("hello");
         assertEq("echo hello", msgs.get(HangGuard), "the connection works");
+        # the registration code runs once: a later call is refused, and the connection keeps working
+        wsc.send("again");
+        assertEq("again WEBSOCKET-REGISTER-ERROR", msgs.get(HangGuard), "a later registration is refused");
+        wsc.send("still");
+        assertEq("echo still", msgs.get(HangGuard), "the connection still works");
     }
 }
