@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%requires DbDataProvider
+%requires ConnectionProvider
+%requires dbitest
+
+%exec-class DatasourceConnectionSensitiveDbNameTest
+
+#! The safe URL, the information and the ping result of a db:// connection mask a sensitive database name (qore#7275)
+/** The "dbitestsensitivedb" mock driver declares that its database name can hold credentials
+    (DBI_CAP_SENSITIVE_DBNAME); the "dbitest" mock driver does not.  The database name is shown only if the driver is
+    loaded and does not declare the capability.
+*/
+class DatasourceConnectionSensitiveDbNameTest inherits QUnit::Test {
+    public {
+        const Secret = "s3cr3t-7275";
+        const Db = "srv;password=" + Secret;
+        const Url = "db://dbitestsensitivedb:user/pass@" + Db + "{rows=3,min=1,max=2}";
+        const PlainUrl = "db://dbitest:user/pass@plaindb7275{rows=3,min=1,max=2}";
+    }
+
+    constructor() : Test("DatasourceConnection sensitive database names", "1.0", \ARGV) {
+        addTestCase("safe URL", \safeUrl());
+        addTestCase("connection info", \connectionInfo());
+        addTestCase("connection info with passwords", \connectionInfoWithPasswords());
+        addTestCase("ping", \ping());
+        addTestCase("failed ping", \failedPing());
+        addTestCase("a driver that does not declare it", \plainDriver());
+        addTestCase("driver not loaded", \driverNotLoaded());
+        set_return_value(main());
+    }
+
+    safeUrl() {
+        DatasourceConnection conn("c7275", "test", Url);
+        string url = conn.safe_url;
+        assertFalse(url.find(Secret) >= 0, url);
+        assertFalse(url =~ /pass/, url);
+        hash<auto> h = parse_datasource(url.substr(5));
+        assertEq("dbitestsensitivedb", h.type);
+        assertEq("user", h.user);
+        assertEq("****", h.db);
+        assertEq("3", h.options.rows);
+        assertEq("1", h.options.min);
+    }
+
+    connectionInfo() {
+        DatasourceConnection conn("c7275", "test", Url);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(sprintf("%y", info).find(Secret) >= 0);
+        assertEq("****", info.url_hash.db);
+        assertEq("dbitestsensitivedb", info.url_hash.type);
+        assertEq(3, info.opts.rows.toInt());
+        hash<ConnectionDataInfo> dinfo = conn.getInfoAsData();
+        assertFalse(sprintf("%y", dinfo).find(Secret) >= 0);
+        assertEq("****", dinfo.url_hash.db);
+        # the deprecated form
+        assertFalse(sprintf("%y", conn.getInfo(False)).find(Secret) >= 0);
+    }
+
+    connectionInfoWithPasswords() {
+        DatasourceConnection conn("c7275", "test", Url);
+        hash<ConnectionInfo> info = conn.getInfo({"with_passwords": True});
+        assertEq(Db, info.url_hash.db);
+        assertEq("pass", info.url_hash.pass);
+    }
+
+    ping() {
+        DatasourceConnection conn("c7275", "test", Url);
+        hash<PingInfo> rv = conn.ping();
+        assertTrue(rv.ok, rv.info);
+        assertFalse(sprintf("%y", rv).find(Secret) >= 0);
+        assertEq("****", parse_datasource(rv.url.substr(5)).db);
+    }
+
+    failedPing() {
+        # the datasource cannot be made (an option that the driver does not declare): the result of the ping does
+        # not show the database name either
+        DatasourceConnection conn("c7275", "test", "db://dbitestsensitivedb:user/pass@" + Db
+            + "{undeclared7275=1,min=1,max=2}");
+        hash<PingInfo> rv = conn.ping();
+        assertFalse(rv.ok);
+        assertFalse(sprintf("%y", rv).find(Secret) >= 0);
+    }
+
+    plainDriver() {
+        DatasourceConnection conn("c7275", "test", PlainUrl);
+        assertEq("plaindb7275", parse_datasource(conn.safe_url.substr(5)).db);
+        assertEq("plaindb7275", conn.getInfo().url_hash.db);
+        hash<PingInfo> rv = conn.ping();
+        assertTrue(rv.ok, rv.info);
+        assertEq("plaindb7275", parse_datasource(rv.url.substr(5)).db);
+    }
+
+    driverNotLoaded() {
+        # a driver that is not loaded: the database name is masked (fail-closed), as every driver option value is
+        DatasourceConnection conn("c7275", "test", "db://qore7275nodriver:user/pass@nodb7275{rows=3,min=1,max=2}");
+        hash<auto> h = parse_datasource(conn.safe_url.substr(5));
+        assertEq("****", h.db);
+        assertEq("****", h.options.rows);
+        assertEq("1", h.options.min);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(sprintf("%y", info).find("nodb7275") >= 0);
+        assertEq("****", info.url_hash.db);
+        hash<PingInfo> rv = conn.ping();
+        assertFalse(rv.ok);
+        assertFalse(sprintf("%y", rv).find("nodb7275") >= 0);
+        assertFalse(inlist("qore7275nodriver", dbi_get_driver_list() ?? ()));
+    }
+}

@@ -531,7 +531,8 @@ mv.doRequest({"concurrent": True});
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
     - the safe URL and the information of a @ref DbDataProvider::DatasourceConnection "DatasourceConnection" mask the
       value of each driver option that can hold a credential (see
-      @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"; issue #7070)
+      @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"; issue #7070) and a database name that
+      can hold credentials (see @ref Qore::SQL::mask_datasource_dbname() "mask_datasource_dbname()"; issue #7275)
     - code that a sandbox governs cannot give SQL text: the \c exec-sql child provider, the \c sql search option and
       an index column that is not a field (an expression) raise \c DB-SANDBOX-ERROR (issue #6578)
     - added the \c "recursive" search option of @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider", which

@@ -67,10 +67,11 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             assertTrue(safe =~ /^db:\/\//);
             # safe URL must not contain password
             assertFalse(safe =~ /pass/);
-            # safe URL must contain the driver, user, db, host
+            # safe URL must contain the driver, user, host, and the db name if the driver is loaded (it is masked
+            # otherwise, as the driver could declare that its db name can hold credentials; qore#7275)
             assertTrue(safe =~ /pgsql/);
             assertTrue(safe =~ /user/);
-            assertTrue(safe =~ /dbname/);
+            assertEq(pgsqlLoaded() ? "dbname" : "****", parse_datasource(safe.substr(5)).db);
             assertTrue(safe =~ /dbhost/);
         }
         # no password case
@@ -80,8 +81,12 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             string safe = conn.safe_url;
             assertTrue(safe =~ /^db:\/\//);
             assertTrue(safe =~ /user/);
-            assertTrue(safe =~ /dbname/);
+            assertEq(pgsqlLoaded() ? "dbname" : "****", parse_datasource(safe.substr(5)).db);
         }
+    }
+
+    static bool pgsqlLoaded() {
+        return inlist("pgsql", dbi_get_driver_list() ?? ());
     }
 
     testSqlite3Paths() {
