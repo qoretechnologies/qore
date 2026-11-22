@@ -745,7 +745,8 @@ conn.checkSandboxAccess(True);
     #! Returns the options of the connection without the values of its sensitive options
     /** Used for the information (getInfo() without the \c with_passwords option) and the ping results of the
         connection: the base implementation removes the options that the connection scheme declares sensitive; a
-        connection whose options can hold credentials that its scheme does not declare reimplements it
+        connection whose options can hold credentials that its scheme does not declare reimplements it, and calls the
+        base implementation to remove the declared ones (qore#7017, qore#7070)
 
         @param opts the options of the connection
 
