@@ -4946,8 +4946,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             // Capture the post-bump per-thread value into the cmd so the
             // I/O thread can compare it against any cancelled_owners
             // tombstone (SubmitOp accept gate).
-            // the sequence numbers are bumped once the command is queued: a failure to queue it changes neither
-            cmd.seq_at_push = target->submit_seq.load(std::memory_order_relaxed) + 1;
+            ++submit_seq;
+            cmd.seq_at_push = ++target->submit_seq;
             if (readsCommands(*target)) {
                 target->cmdq.push(std::move(cmd));
             } else {
@@ -4955,8 +4955,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 // again (below); it is kept where cancelByProgram() can see it until then (qore#7225)
                 target->preserved_submits.push_back(std::move(cmd));
             }
-            ++submit_seq;
-            ++target->submit_seq;
             socket_async_io_guard.release();
         }
         if (thread_idx) {
@@ -6320,25 +6318,18 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             if (in_cancel_by_program(ctrl)) {
                 return;
             }
-            // only the dispatchers that this thread retired: another thread's cancelByProgram() can still use its own
-            std::vector<QoreCallDispatcher*> retired;
-            {
-                AutoLocker al(ctrl->m);
-                int tid = q_gettid();
-                auto& rd = ctrl->retired_dispatchers;
-                for (auto i = rd.begin(); i != rd.end();) {
-                    if (i->first == tid) {
-                        retired.push_back(i->second);
-                        i = rd.erase(i);
-                    } else {
-                        ++i;
-                    }
-                }
+            // only the dispatchers that this thread retired: another thread's cancelByProgram() can still use its own;
+            // nothing here allocates, as a destructor must not throw: they are moved to the end and deleted under the
+            // lock (they are stopped already, by the stop() that retired them, and their destructor takes no lock)
+            AutoLocker al(ctrl->m);
+            int tid = q_gettid();
+            auto& rd = ctrl->retired_dispatchers;
+            auto own = std::partition(rd.begin(), rd.end(),
+                [tid](const std::pair<int, QoreCallDispatcher*>& e) { return e.first != tid; });
+            for (auto i = own; i != rd.end(); ++i) {
+                delete i->second;
             }
-            // stopped already, by the stop() that retired them
-            for (QoreCallDispatcher* cd : retired) {
-                delete cd;
-            }
+            rd.erase(own, rd.end());
         }
     } cancel_scope(this);
     // Mark the program as shutting down in the call dispatcher FIRST.
@@ -9525,11 +9516,25 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             pending_cmd.completion->cancel_pinfos.push_back(std::move(pinfo));
                         }
                     }
-                } else if (pending_cmd.cmd == IoCommand::CancelOwner && !pending_cmd.restrict_app.restricted) {
-                    auto& ci = t.cancelled_owners[pending_cmd.owner];
-                    ci.ttl = 2;
-                    if (pending_cmd.seq_at_push > ci.seq) {
-                        ci.seq = pending_cmd.seq_at_push;
+                } else if (pending_cmd.cmd == IoCommand::CancelOwner) {
+                    // a cancel restricted to the operations of an application (qore#7010) records the owner only if it
+                    // applies to a kept submission, as its handler records it only if it canceled an operation
+                    bool record = !pending_cmd.restrict_app.restricted;
+                    if (!record) {
+                        for (const auto& pc : t.preserved_submits) {
+                            if ((pc.owner == pending_cmd.owner || pc.inherited_owner == pending_cmd.owner)
+                                    && pc.submit_app_id == pending_cmd.restrict_app.app_id) {
+                                record = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (record) {
+                        auto& ci = t.cancelled_owners[pending_cmd.owner];
+                        ci.ttl = 2;
+                        if (pending_cmd.seq_at_push > ci.seq) {
+                            ci.seq = pending_cmd.seq_at_push;
+                        }
                     }
                 }
                 if (pending_cmd.cmd == IoCommand::Cancel) {
@@ -9682,7 +9687,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             restart_preserved_commands = !*xsink && anyThreadRunning();
         }
 
-        if (!restart_preserved_commands) {
+        // the counters stay while submissions are kept for the thread, whose sequence numbers the tombstones of later
+        // cancellations are compared with (qore#7225)
+        if (!restart_preserved_commands && t.preserved_submits.empty()) {
             // the counters of this thread only; another thread's counters are compared with the sequence numbers
             // of the commands pushed to it and by waitForProcessing()
             t.submit_seq.store(0, std::memory_order_relaxed);
