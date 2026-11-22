@@ -57,8 +57,11 @@ class CoreAttributionTest(unittest.TestCase):
             marker = root / "gdb-called"
             scripts = {
                 # writes the foreign core first, then its own, which is the newest: a runner that takes the first
-                # or the newest new core is caught either way by the core it names
-                "qore": '#!/bin/sh\ncase "$*" in *two.qtest*) exit 0 ;; esac\n'
+                # or the newest new core is caught either way by the core it names.  Only the run of one.qtest does:
+                # run_tests.sh also runs qore before the tests (qore --version, its build-match check), and cores
+                # written then exist before the test starts, so the test's own core would rewrite a core that the
+                # runner had already seen, which BusyBox find -newer (whole seconds, Alpine) does not report as new
+                "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) ;; *) exit 0 ;; esac\n'
                         'if [ "$FOREIGN_CORE" = 1 ]; then printf "OTHER_PROGRAM=1\\0" > "$CORE_DIR/core.other.1"; fi\n'
                         'if [ "$OWN_CORE" = 1 ]; then '
                         'printf "QORE_TEST_PROCESS_MARK=%s\\0" "$QORE_TEST_PROCESS_MARK" > "$CORE_DIR/core.own"; fi\n'
