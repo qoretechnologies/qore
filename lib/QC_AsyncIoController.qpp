@@ -391,9 +391,14 @@ AsyncIoController::copy() {
     the application that module code runs for (also module code that other module code calls for it), or none for
     the initialization of library code (also in a callback); an operation submitted by a callback of an operation
     belongs to that operation's application, unless the callback is the sandboxed code of an application Program,
-    whose operations belong to its own application.  Code that is sandboxed, or acts for sandboxed code, does not
-    replace the operation of another application with \a replace_existing, nor, if it runs for no known application,
-    any operation other than its own operation object: on the I/O thread of the key, the submission raises
+    whose operations belong to its own application; the trusted code of another Program that runs in such a callback
+    runs for the operation's application as well.  The code of a trusted Program that runs for sandboxed code in
+    another way (a method of an object of the trusted Program that sandboxed code calls, or a thread or a task that
+    trusted code in a callback starts) runs for the trusted Program's application, as when the trusted Program calls
+    it itself: trusted code that serves sandboxed code checks the keys and owners that it is given (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7148">issue #7148</a>).  Code that is sandboxed, or acts
+    for sandboxed code, does not replace the operation of another application with \a replace_existing, nor, if it
+    runs for no known application, any operation other than its own operation object: on the I/O thread of the key, the submission raises
     \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a canceled result whose
     \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
     (\c ASYNC-IO-ERROR).  The operation with the key is not affected
