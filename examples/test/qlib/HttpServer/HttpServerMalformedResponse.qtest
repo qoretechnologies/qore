@@ -95,6 +95,19 @@ class BadHandler inherits AbstractHttpRequestHandler {
                     # more data than one frame for a streamed response to HEAD, given at once with its end
                     stream({}, binary(strmul("d", 100000)));
                     break;
+                case "connect-200-cl-invalid":
+                case "connect-304-data": {
+                    # a 2xx that opens the tunnel: the client drops its content-length, which is not checked; a 304
+                    # has no content: the tunnel data given for it is not sent
+                    bool tunnel = c == "connect-200-cl-invalid";
+                    int status = tunnel ? 200 : 304;
+                    hash<auto> h = tunnel ? {"content-length": "abc"} : {};
+                    h3 ? s.submitQuicConnectResponse(session_id, sid, status, h)
+                       : s.submitHttp2ConnectResponse(sid, status, h);
+                    h3 ? s.submitQuicStreamData(session_id, sid, binary("tunnel data"))
+                       : s.sendHttp2StreamData(sid, binary("tunnel data"));
+                    break;
+                }
                 case "connect-204-cl":
                 case "connect-400-cl-dup":
                 case "connect-400-cl-data": {
@@ -399,7 +412,8 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
 
     connectTest() {
         foreach string protocol in ("h2", "h3") {
-            foreach string c in ("connect-204-cl", "connect-400-cl-dup", "connect-400-cl-data") {
+            foreach string c in ("connect-204-cl", "connect-400-cl-dup", "connect-400-cl-data",
+                    "connect-200-cl-invalid", "connect-304-data") {
                 string msg = protocol + " " + c;
                 HttpClientConnectionManager mgr = manager(protocol);
                 on_exit delete mgr;

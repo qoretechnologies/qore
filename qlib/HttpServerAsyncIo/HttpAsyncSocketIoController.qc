@@ -2882,6 +2882,7 @@ public class HttpAsyncSocketIoController {
                 if (ex.desc =~ /^response already submitted/) {
                     log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
                         session_id, stream_id, uh);
+                    wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
                     return;
                 }
                 log(LoggerLevel::ERROR,
@@ -6082,6 +6083,11 @@ public class HttpAsyncSocketIoController {
                 if (ex.desc =~ /^response already submitted/) {
                     log(LoggerLevel::DEBUG, "HTTP/2 stream=%d on %y: the handler submitted the response", stream_id,
                         uh);
+                    # as after a response that the controller submits
+                    try {
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
+                        controller.wakeSocket(cinfo.sock);
+                    } catch () {}
                     return;
                 }
                 log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
