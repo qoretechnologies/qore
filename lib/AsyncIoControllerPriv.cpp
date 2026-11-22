@@ -2235,8 +2235,10 @@ QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* c
 }
 
 QoreCallDispatcher::~QoreCallDispatcher() {
+#ifdef DEBUG
     // a dispatcher is never deleted while a mark or a clear of a Program uses it (qore#7226)
     assert(!dbg_users.load(std::memory_order_acquire));
+#endif
 }
 
 #ifdef DEBUG
@@ -4944,8 +4946,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             // Capture the post-bump per-thread value into the cmd so the
             // I/O thread can compare it against any cancelled_owners
             // tombstone (SubmitOp accept gate).
-            ++submit_seq;
-            cmd.seq_at_push = ++target->submit_seq;
+            // the sequence numbers are bumped once the command is queued: a failure to queue it changes neither
+            cmd.seq_at_push = target->submit_seq.load(std::memory_order_relaxed) + 1;
             if (readsCommands(*target)) {
                 target->cmdq.push(std::move(cmd));
             } else {
@@ -4953,6 +4955,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 // again (below); it is kept where cancelByProgram() can see it until then (qore#7225)
                 target->preserved_submits.push_back(std::move(cmd));
             }
+            ++submit_seq;
+            ++target->submit_seq;
             socket_async_io_guard.release();
         }
         if (thread_idx) {
@@ -6316,10 +6320,20 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             if (in_cancel_by_program(ctrl)) {
                 return;
             }
+            // only the dispatchers that this thread retired: another thread's cancelByProgram() can still use its own
             std::vector<QoreCallDispatcher*> retired;
             {
                 AutoLocker al(ctrl->m);
-                retired.swap(ctrl->retired_dispatchers);
+                int tid = q_gettid();
+                auto& rd = ctrl->retired_dispatchers;
+                for (auto i = rd.begin(); i != rd.end();) {
+                    if (i->first == tid) {
+                        retired.push_back(i->second);
+                        i = rd.erase(i);
+                    } else {
+                        ++i;
+                    }
+                }
             }
             // stopped already, by the stop() that retired them
             for (QoreCallDispatcher* cd : retired) {
@@ -6417,6 +6431,24 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                         ++tp->submit_seq;
                     }
                     wait_remote = true;
+                }
+            } else {
+                // no I/O thread of this controller runs (this is an I/O thread of another controller): every
+                // thread's cache and kept submissions are walked directly, as in the worker branch (qore#7225)
+                for (auto& tp : io_threads) {
+                    std::vector<std::string> keys;
+                    for (auto& [key, pinfo] : tp->cache) {
+                        if (pinfo.spop_obj && pinfo.spop_obj->getProgram() == pgm) {
+                            keys.push_back(key);
+                        }
+                    }
+                    for (auto& key : keys) {
+                        auto it = tp->cache.find(key);
+                        if (it != tp->cache.end()) {
+                            cancel_pinfos.push_back(tp->takeUnregisteredOp(it));
+                        }
+                    }
+                    takeProgramSubmitsLocked(*tp, pgm, cancel_pinfos);
                 }
             }
         }
@@ -6565,6 +6597,12 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             for (auto* tp : live_targets) {
                 tp->notifier->notify();
             }
+#ifdef DEBUG
+            // test hook: the commands have been queued
+            if (dbg_cancel_by_program_queued) {
+                dbg_cancel_by_program_queued();
+            }
+#endif
             // Wait for all live I/O threads to complete the command
             {
                 AutoLocker al(m);
@@ -6948,7 +6986,7 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
             // outermost call returns (qore#7226)
             if (in_cancel_by_program(this)) {
                 AutoLocker al(m);
-                retired_dispatchers.push_back(cd);
+                retired_dispatchers.emplace_back(q_gettid(), cd);
             } else {
                 delete cd;
             }
@@ -7697,13 +7735,6 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         }
         // a thread that has stopped processes commands again once started
         t.commands_closed = false;
-        // with the submissions kept for it, in their order (qore#7225); the thread is not running, and no command
-        // was queued to it after them
-        for (auto& pcmd : t.preserved_submits) {
-            t.cmdq.push(std::move(pcmd));
-        }
-        t.preserved_submits.clear();
-
         if (!t.loop || !t.loop->isValid()) {
             xsink->raiseException("ASYNC-IO-ERROR", "event loop %d is not valid", i);
             return;
@@ -7723,7 +7754,12 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
 
         ref();  // Reference for each I/O thread
         IoThreadStartInfo* start_info = new IoThreadStartInfo{this, i};
+#ifdef DEBUG
+        // test hook: the start of the thread fails
+        t.tid = dbg_fail_io_thread_start ? -1 : q_start_thread(xsink, ioThreadEntry, start_info, thread_flags);
+#else
         t.tid = q_start_thread(xsink, ioThreadEntry, start_info, thread_flags);
+#endif
         if (t.tid == -1) {
             t.tid = 0;
             delete start_info;
@@ -7732,6 +7768,16 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
             t.loop->remove(t.notifier->fd(), &cleanup_xsink);
             cleanup_xsink.clear();
             return;
+        }
+        // the submissions kept for the thread are processed by it, in their order, now that it has started
+        // (qore#7225): they stay where cancelByProgram() and stop() see them if it cannot start; submitters queue
+        // commands only with the lock held, which this call holds, so none is queued before them
+        if (!t.preserved_submits.empty()) {
+            for (auto& pcmd : t.preserved_submits) {
+                t.cmdq.push(std::move(pcmd));
+            }
+            t.preserved_submits.clear();
+            t.notifier->notify();
         }
     }
     // NOTE: do not call log() here — caller holds the lock.
@@ -9465,6 +9511,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     t.preserved_submits.push_back(std::move(pending_cmd));
                     restart_after_exit = true;
                     continue;
+                }
+                // a cancellation found by this drain applies to the submissions that it kept before it, which are
+                // processed only when the thread is started again (qore#7225): those of a Program are given to the
+                // caller of cancelByProgram() to cancel while the Program is valid, and an owner's are refused when
+                // admitted (the owner is recorded as canceled, as the command's handler does)
+                if (pending_cmd.cmd == IoCommand::CancelByProgram && pending_cmd.pgm && pending_cmd.completion) {
+                    std::vector<PollInfo> taken;
+                    takeProgramSubmitsLocked(t, pending_cmd.pgm, taken);
+                    if (!taken.empty()) {
+                        AutoLocker al2(pending_cmd.completion->pinfos_lock);
+                        for (auto& pinfo : taken) {
+                            pending_cmd.completion->cancel_pinfos.push_back(std::move(pinfo));
+                        }
+                    }
+                } else if (pending_cmd.cmd == IoCommand::CancelOwner && !pending_cmd.restrict_app.restricted) {
+                    auto& ci = t.cancelled_owners[pending_cmd.owner];
+                    ci.ttl = 2;
+                    if (pending_cmd.seq_at_push > ci.seq) {
+                        ci.seq = pending_cmd.seq_at_push;
+                    }
                 }
                 if (pending_cmd.cmd == IoCommand::Cancel) {
                     // Signal cancel waiter — the operation was already completed

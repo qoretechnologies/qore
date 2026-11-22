@@ -9778,12 +9778,15 @@ public:
     and that no operation is admitted after the thread is released.
 */
 class AsyncIoPreservedSubmitTest {
+    friend class AsyncIoDispatcherCancelTest;
     typedef AsyncIoControllerPriv Ctrl;
 
 public:
     static void run(UnitTestCounters& c) {
         runCase(c, true);
         runCase(c, false);
+        drainedCancelCase(c);
+        failedRestartCase(c);
     }
 
 private:
@@ -9792,6 +9795,201 @@ private:
         while (!held) {
             t.dbg_cond.wait(ctrl.m);
         }
+    }
+
+    //! a one-shot signal between threads
+    struct Signal {
+        QoreThreadLock l;
+        QoreCondition cond;
+        bool set = false;
+
+        DLLLOCAL void post() {
+            AutoLocker al(l);
+            set = true;
+            cond.broadcast();
+        }
+
+        //! waits at most for the hang guard; returns true if the signal was posted
+        DLLLOCAL bool wait(int guard_ms) {
+            AutoLocker al(l);
+            while (!set) {
+                if (cond.wait2(l, guard_ms)) {
+                    break;
+                }
+            }
+            return set;
+        }
+    };
+
+    //! starts a controller with one I/O thread; returns nullptr on failure
+    static Ctrl* startCtrl(UnitTestCounters& c, ExceptionSink& xsink) {
+        Ctrl* ctrl = new Ctrl(false, &xsink);
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "preserved-submit controller starts its I/O thread");
+        return ctrl;
+    }
+
+    //! stops the controller on every exit path; a held thread is released and the hooks cleared first
+    struct CtrlStop {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        DLLLOCAL ~CtrlStop() {
+            {
+                AutoLocker al(ctrl->m);
+                ctrl->dbg_fail_io_thread_start = false;
+                ctrl->dbg_cancel_by_program_queued = std::function<void()>();
+                for (auto& tp : ctrl->io_threads) {
+                    tp->dbg_hold_before_drain = false;
+                    tp->dbg_hold_after_drain = false;
+                    tp->dbg_cond.broadcast();
+                }
+            }
+            xsink.clear();
+            ctrl->stopClear(&xsink);
+            ctrl->deref(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! makes the I/O thread stop and holds it before its last drain (\a before) or after it
+    static void holdStopping(Ctrl& ctrl, bool before, bool after) {
+        AutoLocker al(ctrl.m);
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[0];
+        t.dbg_hold_before_drain = before;
+        t.dbg_hold_after_drain = after;
+        Ctrl::Command cmd;
+        cmd.cmd = Ctrl::IoCommand::Quit;
+        t.cmdq.push(std::move(cmd));
+        t.notifier->notify();
+        waitHeldLocked(ctrl, t, before ? t.dbg_held_before_drain : t.dbg_held);
+    }
+
+    //! submits an operation of this Program as a submitter that saw the thread running
+    static int submitRunning(Ctrl& ctrl, ReferenceHolder<QoreObject>& sock_obj, ReferenceHolder<QoreObject>& queue_obj,
+            ExceptionSink& xsink) {
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[0];
+        QoreObject* so;
+        QoreObject* qo;
+        t.running.store(true, std::memory_order_release);
+        int idx = AsyncIoStoppingThreadTest::submitAccept(ctrl, "preserved", so, qo, xsink);
+        t.running.store(false, std::memory_order_release);
+        if (idx == 0) {
+            sock_obj = so;
+            queue_obj = qo;
+        }
+        return idx;
+    }
+
+    //! returns true if the operation's result Queue has a canceled result
+    static bool canceledResult(QoreObject* queue_obj, ExceptionSink& xsink) {
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (!queue || queue->size() != 1) {
+            return false;
+        }
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 1000, &timed_out), &xsink);
+        return !timed_out && result->getType() == NT_HASH
+            && result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool();
+    }
+
+    //! a cancellation queued to the stopping thread before its last drain, with the submission: the drain finds both
+    static void drainedCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx = submitRunning(*ctrl, sock_obj, queue_obj, xsink);
+        UT_ASSERT(c, idx == 0 && !xsink, "an operation is submitted to the stopping thread before its last drain");
+        if (idx != 0 || xsink) {
+            return;
+        }
+        // cancelByProgram() in this thread (it cancels the operation, running its abort() in Qore): it sees the thread
+        // reading commands, queues its command and waits; another thread then lets the last drain run, which finds
+        // the submission and the cancellation, and holds the thread after it
+        Signal queued;
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->dbg_cancel_by_program_queued = [&queued]() { queued.post(); };
+        }
+        bool was_queued = false;
+        std::thread releaser([ctrl, &queued, &was_queued]() {
+            was_queued = queued.wait(30000);
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+        });
+        ctrl->cancelByProgram(getProgram(), &xsink);
+        releaser.join();
+        UT_ASSERT(c, was_queued, "the cancellation is queued to the stopping thread before its last drain");
+        UT_ASSERT(c, !xsink, "cancelByProgram() succeeds (drained cancellation)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_obj, xsink),
+            "the cancellation found by the last drain cancels the submission that the drain kept");
+        xsink.clear();
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->io_threads[0]->dbg_hold_after_drain = false;
+            ctrl->io_threads[0]->dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (drained cancellation)");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(),
+            "no operation of the canceled Program is admitted after a cancellation found by the last drain");
+    }
+
+    //! the thread cannot be started again: the kept submission stays where a cancellation finds it
+    static void failedRestartCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx = submitRunning(*ctrl, sock_obj, queue_obj, xsink);
+        UT_ASSERT(c, idx == 0 && !xsink, "an operation is submitted to the stopping thread (failed restart)");
+        if (idx != 0 || xsink) {
+            return;
+        }
+        // the thread keeps the submission, stops and fails to start again
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            ctrl->dbg_fail_io_thread_start = true;
+            t.dbg_hold_before_drain = false;
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+            AsyncIoStoppingThreadTest::waitStoppedLocked(*ctrl, t);
+            UT_ASSERT(c, t.preserved_submits.size() == 1, "the submission is still kept after the failed restart");
+        }
+        ctrl->cancelByProgram(getProgram(), &xsink);
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_obj, xsink),
+            "a cancellation after a failed restart cancels the kept submission");
+        xsink.clear();
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->dbg_fail_io_thread_start = false;
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the started thread processes its commands (failed restart)");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(), "no operation of the canceled Program is admitted (failed restart)");
     }
 
     static void runCase(UnitTestCounters& c, bool in_drain) {
@@ -9932,6 +10130,7 @@ public:
         markAllocCase(c);
         remarkCase(c);
         clearStopCase(c);
+        otherThreadCase(c);
     }
 
 private:
@@ -10079,6 +10278,70 @@ private:
         }
         UT_ASSERT(c, calls >= 3, "the item on the new dispatcher was released by the cancellation");
         UT_ASSERT(c, !xsink, "the cancellation raises no exception");
+    }
+
+    //! the argument of thread A of otherThreadCase()
+    struct OtherThreadArg {
+        Ctrl* ctrl;
+        QoreProgram* pgm;
+        AsyncIoPreservedSubmitTest::Signal retired;
+        AsyncIoPreservedSubmitTest::Signal go;
+        AsyncIoPreservedSubmitTest::Signal done;
+    };
+
+    //! thread A of otherThreadCase()
+    static void otherThread(ExceptionSink* xsink, void* p) {
+        OtherThreadArg& arg = *static_cast<OtherThreadArg*>(p);
+        bool stopped = false;
+        Disp::dbgSetReleaseHook([&]() {
+            if (!stopped) {
+                stopped = true;
+                ExceptionSink stop_xsink;
+                arg.ctrl->stop(&stop_xsink);
+                arg.retired.post();
+                arg.go.wait(30000);
+            }
+        });
+        arg.ctrl->cancelByProgram(arg.pgm, xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        xsink->clear();
+        arg.done.post();
+    }
+
+    //! 4b: the dispatcher that a stop() in one thread's cancellation retired is not deleted when the cancellation of
+    //! another thread returns
+    static void otherThreadCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        OtherThreadArg arg{ctrl, pgm};
+        // thread A (a Qore thread): its clear releases the parked item, whose release stops the controller, and waits
+        int tid = q_start_thread(&xsink, otherThread, &arg);
+        UT_ASSERT(c, tid != -1 && !xsink, "thread A starts");
+        if (tid == -1 || xsink) {
+            xsink.clear();
+            return;
+        }
+        AsyncIoPreservedSubmitTest::Signal& retired = arg.retired;
+        AsyncIoPreservedSubmitTest::Signal& go = arg.go;
+        UT_ASSERT(c, retired.wait(30000), "thread A's cancellation retired the dispatcher");
+        // this thread's cancellation returns while A's still uses the retired dispatcher
+        ctrl->cancelByProgram(pgm, &xsink);
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT_EQ(c, 1, (int)ctrl->retired_dispatchers.size(),
+                "another thread's cancellation does not delete the dispatcher that A retired");
+        }
+        go.post();
+        UT_ASSERT(c, arg.done.wait(30000), "thread A's cancellation returns");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "A's cancellation deleted it when it returned");
+        }
+        UT_ASSERT(c, !xsink, "the cancellations raise no exception");
     }
 
     //! 4: a destructor that the clear runs stops the controller: the dispatcher in use is not deleted

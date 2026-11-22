@@ -3268,9 +3268,16 @@ private:
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
-    //! dispatchers that a stop() replaced while cancelByProgram() ran in the stopping thread; stopped, and deleted when
-    //! the outermost cancelByProgram() of that thread returns, as it can still use them (guarded by m; qore#7226)
-    std::vector<QoreCallDispatcher*> retired_dispatchers;
+    //! dispatchers that a stop() replaced while cancelByProgram() ran in the stopping thread, with that thread's ID;
+    //! stopped, and deleted when the outermost cancelByProgram() of that thread returns, as it can still use them
+    //! (guarded by m; qore#7226)
+    std::vector<std::pair<int, QoreCallDispatcher*>> retired_dispatchers;
+#ifdef DEBUG
+    //! test hook: called by cancelByProgram() in a worker thread after it has queued its commands (qore#7225)
+    std::function<void()> dbg_cancel_by_program_queued;
+    //! test hook: the start of an I/O thread fails (qore#7225)
+    bool dbg_fail_io_thread_start = false;
+#endif
 
     //! Configured max callback workers; 0 = auto
     int max_callback_workers = 0;
