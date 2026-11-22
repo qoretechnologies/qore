@@ -930,19 +930,25 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
             return QoreValue();
         }
 
-        const AbstractQoreNode* target = nullptr;
+        // the target is compared by its address; a copy is kept with a reference of its own, taken through the weak
+        // reference, or is a new empty container if it was freed (qore#7198)
         switch (v.getType()) {
-            case NT_WEAKREF_HASH:
-                target = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode())->get();
+            case NT_WEAKREF_HASH: {
+                const WeakHashReferenceNode* w = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
+                if (w->borrow() != assigned_node) {
+                    copy = w->lock();
+                }
                 break;
-            case NT_WEAKREF_LIST:
-                target = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode())->get();
+            }
+            case NT_WEAKREF_LIST: {
+                const WeakListReferenceNode* w = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
+                if (w->borrow() != assigned_node) {
+                    copy = w->lock();
+                }
                 break;
+            }
             default:
                 break;
-        }
-        if (target && target != assigned_node) {
-            copy = target->refSelf();
         }
 
         // reference return value if necessary

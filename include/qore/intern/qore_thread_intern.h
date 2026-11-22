@@ -746,8 +746,38 @@ DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 */
 DLLLOCAL qore_program_id_t runtime_get_sandboxed_module_call_app_id();
 
-//! returns the generation of the current thread: unique in the process, unlike its TID, which is reused (qore#7010)
+//! returns the generation of the work that the current thread runs: unique in the process, unlike its TID (qore#7010)
+/** A thread runs work of its own generation, which it is given when it is created; while it runs a work item of other
+    code (a task of a ThreadPool, the callback of a timer or of an operation of the async I/O controller, a signal
+    handler, a handler of a Program that runs for every thread that enters it), the generation of that work, which the
+    work item carries (QoreThreadRuntimeParseOptions::work_gen, QoreSandboxContext::work_gen) and
+    QoreThreadRuntimeParseOptionsHelper or QoreWorkGenerationHelper installs: a pooled or reused thread does not share
+    one generation between the work of different callers
+*/
 DLLLOCAL uint64_t runtime_get_thread_generation();
+
+//! returns a new work generation, unique in the process (qore#7010)
+DLLLOCAL uint64_t qore_new_work_generation();
+
+//! Makes the current thread run work of the given generation while it exists (qore#7010)
+/** See runtime_get_thread_generation(); restores the generation in effect before when it is destroyed
+*/
+class QoreWorkGenerationHelper {
+public:
+    //! installs \a gen; leaves the generation in effect if \a gen is 0
+    DLLLOCAL QoreWorkGenerationHelper(uint64_t gen);
+
+    DLLLOCAL ~QoreWorkGenerationHelper();
+
+    DLLLOCAL QoreWorkGenerationHelper(const QoreWorkGenerationHelper&) = delete;
+    DLLLOCAL QoreWorkGenerationHelper& operator=(const QoreWorkGenerationHelper&) = delete;
+
+private:
+    //! the thread's data, if a generation was installed
+    ThreadData* td = nullptr;
+    //! the generation in effect before
+    uint64_t old_gen = 0;
+};
 
 //! returns the ID of the application Program that the module code of a call by a sandboxed caller runs for
 /** The caller's application; for module code that calls module code for a sandboxed caller, the one that the calling
@@ -1252,6 +1282,12 @@ public:
         qore_get_provenance_origin_restrictions()
     */
     QoreParseOptions origin_restrictions;
+    //! The generation of the work of the capturing code, for a continuation (runtime_get_thread_generation()), or 0
+    /** The work that the context continues on another thread (a step or a callback of a poll operation, the callback
+        of a timer) runs with it: a worker of the async I/O controller does not share one generation between the work
+        of different callers (qore#7010)
+    */
+    uint64_t work_gen = 0;
     //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
     /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
         controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
@@ -1842,11 +1878,18 @@ struct QoreThreadRuntimeParseOptions {
     QoreCallParseOptionsOverride override;
     //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
     QoreParseOptions caller_domain_restrictions;
+    //! the generation of the work of the capturing code, which the work that runs with the options continues
+    //! (runtime_get_thread_generation()); 0 for options made otherwise, which leave the generation in effect (qore#7010)
+    uint64_t work_gen = 0;
+    //! true if the work that runs with the options is work of its own, which runs with a new generation: a thread
+    //! that the capturing code starts, a handler that runs for every thread that enters a Program (qore#7010)
+    bool new_work = false;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
-            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions),
+            work_gen(old.work_gen), new_work(old.new_work) {
         refPrograms();
     }
 
@@ -1857,6 +1900,8 @@ struct QoreThreadRuntimeParseOptions {
             std::swap(po, copy.po);
             std::swap(override, copy.override);
             std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
+            std::swap(work_gen, copy.work_gen);
+            std::swap(new_work, copy.new_work);
         }
         return *this;
     }
@@ -1884,7 +1929,8 @@ struct QoreThreadRuntimeParseOptions {
     /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
         module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
         (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
-        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208).  Nor the generation of
+        the work of the starting code: what the thread runs is work of its own (qore#7010)
     */
     DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
 
@@ -1927,8 +1973,10 @@ private:
     QoreParseOptions old_caller_restrictions;
     //! their generation (ThreadData::thread_caller_restrictions_gen)
     uint64_t old_caller_restrictions_gen = 0;
+    //! the generation of the work in effect before (see runtime_get_thread_generation())
+    uint64_t old_work_gen = 0;
 
-    //! restores old_caller_restrictions
+    //! restores old_caller_restrictions and old_work_gen
     DLLLOCAL void restoreCallerRestrictions();
 };
 
@@ -2201,6 +2249,13 @@ DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const QoreString*
 
 //! Appends \a text (UTF-8, as the names of files and functions) to \a out escaped as by the variant above
 DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const char* text);
+
+//! Appends UTF-8 \a text to \a out with the characters that could end or rewrite a log line escaped (line breaks,
+//! the other C0 and C1 control characters except tab, DEL, the Unicode line and paragraph separators and the
+//! bidirectional formatting characters), and \c % doubled if \a double_percent (qore#7216)
+/** Backslash is not escaped, so text escaped with qore_append_escaped_report_text() is kept as it is
+*/
+DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent);
 
 //! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
 /** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the

@@ -112,15 +112,22 @@ module QoreLlmUtils {
     the controls the installed facade supports.
 
     To cancel a facade call, pass an @ref QoreLlmUtils::LlmCancellation object as \c cancellation in the
-    request and call its \c cancel() method. The facade keeps the token out of provider request bodies.
+    @ref QoreLlmUtils::LlmFacadeCallOptions "call options" given beside the request (or in the request itself)
+    and call its \c cancel() method from any thread. The facade keeps the token out of provider request bodies.
     Both chat-completions entry points report \c LLM-CANCELLED when a request is interrupted. Native HTTP
     transports cancel the in-flight request. In callback mode the application owns the transport; its callback
     can register a close handler on the same token to interrupt a blocked I/O operation.
     @code{.py}
 LlmCancellation stop();
 # The control thread calls stop.cancel("user requested stop").
-hash<auto> result = backend.chatCompletions({"messages": messages, "cancellation": stop});
+hash<auto> result = backend.chatCompletions({"messages": messages},
+    <LlmFacadeCallOptions>{"cancellation": stop});
     @endcode
+
+    A cancellation aborts the request in flight at once: a non-streamed request has its connection closed (or
+    its HTTP/2 stream reset) while its response is awaited, and a stream's reader stops without waiting for the
+    next event. No transport retry or repair request follows a cancellation, and a call cancelled before its
+    request is sent sends nothing.
 
     Reasoning models may consume their output budget before producing visible
     text. Size @c max_output_tokens (or @c max_tokens) for both reasoning and

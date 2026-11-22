@@ -102,6 +102,12 @@ class TenantH3Handler inherits AbstractHttpRequestHandler {
             s.close();
             return makeResponse(200, \"closed \" + sd);
         }
+        if (hdr.path =~ /session$/) {
+            # the handler's own session, which can carry requests of the same client to other handlers
+            return makeResponse(200, sprintf(\"notice=%s shutdown=%s\",
+                try_it(sub () { s.submitQuicShutdownNotice(own); }),
+                try_it(sub () { s.submitQuicShutdown(own); })));
+        }
         int victim = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
         hash<string, string> r = {
             \"session_id\": try_it(sub () {
@@ -434,6 +440,7 @@ list<string> sub run_race() {
         addTestCase("a sandboxed HTTP/3 handler acts on its own session only", \attackTest());
         addTestCase("a handler that changes its header information still gets its own socket", \tamperTest());
         addTestCase("close() and shutdown() end the handler's own stream only", \closeTest());
+        addTestCase("a handler cannot end its whole session", \sessionTest());
         addTestCase("a WebSocket connection over HTTP/3 ends its own stream only", \webSocketTest());
         addTestCase("a dedicated connection over HTTP/3 ends its own stream only", \dedicatedTest());
         addTestCase("an SSE connection over HTTP/3 gets its own socket", \sseTest());
@@ -510,6 +517,23 @@ list<string> sub run_race() {
         assertTrue(getOrError(other, "/whoami") =~ /^[0-9]+$/, "the listener serves another client");
         assertTrue(getOrError(hc, "/whoami") =~ /^[0-9]+$/, "the client's next request is served");
         assertTrue(session > 0);
+    }
+
+    #! The handler cannot end the whole session of its request, which can carry requests of the same client to
+    #! other handlers (qore#7215)
+    sessionTest() {
+        Program tenant = getTenantProgram(TenantSource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        hash<auto> srv = startServer(probe);
+        on_exit delete srv.server;
+
+        HTTPClient hc = getClient(srv.port);
+        on_exit hc.disconnect();
+        string session = hc.get("/whoami");
+        assertEq("notice=HTTP3-HANDLER-SOCKET-ERROR shutdown=HTTP3-HANDLER-SOCKET-ERROR",
+            getOrError(hc, "/probe/session"));
+        # the session continues
+        assertEq(session, getOrError(hc, "/whoami"), "the client's session continues");
     }
 
     #! A WebSocket connection over HTTP/3 (extended CONNECT) ends its own stream, not the listener's socket
