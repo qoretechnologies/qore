@@ -1,0 +1,15 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Uses the source module RuntimeUserCycleAot, which loads the user module RuntimeUserCycleLoaded from its own Program at
+# run time (which requires it), and then the AOT module RuntimeUserCycleAotReq (compiled by deleted-program-types.qtest
+# into a directory of the module path), which requires the loaded module, so that both user modules are left to the
+# end of the cleanup; see deleted-program-types.qtest.
+
+%modern
+
+%requires RuntimeUserCycleAot
+
+print(runtime_user_cycle_load() + "\n");
+load_module("RuntimeUserCycleAotReq");
+print("ok\n");

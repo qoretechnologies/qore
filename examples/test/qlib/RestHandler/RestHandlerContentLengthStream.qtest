@@ -1,0 +1,633 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HTTP/1.x Connect and DataStream v1 request bodies with a Content-Length given to REST stream handlers
+    (qore#7323):
+    - the stream handler gets the body in binary parts of at most BodyStreamPartSize bytes, with no body given whole
+      and each byte once, whether the server read the body before the dispatch (at most DefaultBodyStreamThreshold
+      bytes) or reads it from the socket, and decodes the same records
+    - a large streamed body reaches the handler before the client has sent all of it
+    - a character split by a part boundary, and compressed Connect frames
+    - a DataStream v1 body with compressed records is given whole
+    - a REST method without a stream handler gets the body whole
+    - chunked bodies, the maximum request body size, and keep-alive
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires yaml
+%requires json
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+
+%exec-class RestHandlerContentLengthStreamTest
+
+#! what a stream handler received
+hashdecl StreamRecord {
+    #! the type of each body part given to recvImpl()
+    list<string> part_types = ();
+    #! the size of each body part given to recvImpl()
+    list<int> part_sizes = ();
+    #! True if any part was given deserialized, as a body given whole is
+    bool deserialized = False;
+    #! the body parts given to recvImpl(), concatenated
+    binary data = binary();
+    #! the records decoded from the body
+    list<auto> records = ();
+    #! the error response of the handler, if any
+    *hash<auto> error;
+}
+
+#! the records and signals of the stream handlers
+class Recorder {
+    public {
+        #! the record of each request whose response was made
+        Queue records();
+        #! signaled when a request gets its first record
+        Queue first_record();
+    }
+}
+
+#! records the body parts and the records that it receives
+class RecordingStreamHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        Recorder recorder;
+        hash<StreamRecord> rec();
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, Recorder recorder) : AbstractDataStreamRequestHandler(cx, ah) {
+        self.recorder = recorder;
+    }
+
+    nothing recvImpl(hash v) {
+        if (exists v.data) {
+            rec.part_types += v.data.type();
+            if (v.deserialized) {
+                rec.deserialized = True;
+            }
+            switch (v.data.typeCode()) {
+                case NT_BINARY:
+                    rec.part_sizes += v.data.size();
+                    rec.data += v.data;
+                    break;
+                case NT_STRING:
+                    rec.part_sizes += v.data.size();
+                    rec.data += binary(v.data);
+                    break;
+                default:
+                    rec.part_sizes += -1;
+                    break;
+            }
+        }
+        AbstractDataStreamRequestHandler::recvImpl(v);
+    }
+
+    private nothing recvDataImpl(auto data) {
+        rec.records += data;
+        if (rec.records.size() == 1) {
+            recorder.first_record.push(True);
+        }
+    }
+
+    hash<auto> getResponseHeaderMessageImpl() {
+        rec.error = getErrorResponse();
+        recorder.records.push(rec);
+        if (rec.error) {
+            return rec.error;
+        }
+        return {"code": 200, "body": sprintf("%d records", rec.records.size())};
+    }
+
+    private auto sendDataImpl() {
+    }
+}
+
+#! a REST class with a stream handler for POST
+class RecordsClass inherits AbstractRestClass {
+    private {
+        Recorder recorder;
+    }
+
+    constructor(Recorder recorder) {
+        self.recorder = recorder;
+    }
+
+    string name() {
+        return "records";
+    }
+
+    AbstractRestStreamRequestHandler streamPost(hash<auto> cx, *hash<auto> ah) {
+        return new RecordingStreamHandler(cx, ah, recorder);
+    }
+}
+
+#! a REST class without a stream handler for POST: it gets the body whole
+class WholeClass inherits AbstractRestClass {
+    string name() {
+        return "whole";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        auto sb = cx."stream-body";
+        auto body = cx.body;
+        return RestHandler::makeResponse(200, {
+            "stream_body_type": sb.type(),
+            "stream_body_size": sb.size(),
+            "stream_body_digest": exists sb ? SHA256(sb) : NOTHING,
+            "body_type": body.type(),
+            "body_size": body.typeCode() == NT_BINARY || body.typeCode() == NT_STRING ? body.size() : NOTHING,
+            "body_digest": body.typeCode() == NT_BINARY ? SHA256(body) : NOTHING,
+            "arg_a": ah.a,
+        });
+    }
+}
+
+class RestHandlerContentLengthStreamTest inherits QUnit::Test {
+    private {
+        const Timeout = 30s;
+
+        #! the maximum request body size of the server whose limit is over the threshold
+        const LargeLimit = 2 * 1024 * 1024;
+
+        #! the content type of a Connect request
+        const ConnectType = "application/connect+yaml";
+
+        #! the header fields of a DataStream v1 request
+        const DsHeaders = {
+            "DataStream-Content-Type": "application/yaml;charset=utf-8",
+            "DataStream-Accept": "application/yaml",
+        };
+
+        HttpServer server;
+        HttpServer limit_server;
+
+        Recorder recorder();
+        Recorder limit_recorder();
+
+        int port;
+        int limit_port;
+    }
+
+    constructor() : Test("RestHandlerContentLengthStreamTest", "1.0") {
+        addTestCase("same parts under and over the threshold", \samePartsTest());
+        addTestCase("large body streams before it is complete", \streamsBeforeCompleteTest());
+        addTestCase("character split by a part boundary", \splitCharacterTest());
+        addTestCase("compressed Connect frames stream", \compressedConnectTest());
+        addTestCase("compressed DataStream v1 records are given whole", \compressedDataStreamTest());
+        addTestCase("REST method without a stream handler gets the body whole", \wholeTest());
+        addTestCase("chunked body still streams", \chunkedTest());
+        addTestCase("maximum request body size", \limitTest());
+        addTestCase("keep-alive after streamed bodies", \keepAliveTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("rest-cl-stream", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        RestHandler rest();
+        rest.addClass(new RecordsClass(recorder));
+        rest.addClass(new WholeClass());
+        server.setHandler("rest", "^(records|whole)", NOTHING, rest);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        limit_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "max_request_body_size": LargeLimit,
+        });
+        RestHandler limit_rest();
+        limit_rest.addClass(new RecordsClass(limit_recorder));
+        limit_server.setHandler("rest", "^records", NOTHING, limit_rest);
+        limit_port = limit_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        server.stop();
+        limit_server.stop();
+    }
+
+    #! the record with the given index and string
+    static hash<auto> makeRecord(int i, string s) {
+        return {"i": i, "s": s};
+    }
+
+    #! a record encoded as it is sent: a Connect frame, or a YAML document of DataStream v1
+    static binary encodeRecord(bool connect, hash<auto> rec, *code compress) {
+        binary yaml = binary(make_yaml(rec));
+        if (compress) {
+            yaml = binary(compress(yaml));
+        }
+        if (connect) {
+            return connect_frame_message(yaml, compress ? CONNECT_FLAG_COMPRESSED : 0);
+        }
+        return yaml;
+    }
+
+    #! a body of records of exactly the given size; the records are returned in \a records
+    static binary makeBody(bool connect, int size, reference<list<auto>> records, string prefix = "") {
+        records = ();
+        binary body = binary();
+        int i = 0;
+        if (prefix.val()) {
+            hash<auto> rec = makeRecord(i++, prefix);
+            records += rec;
+            body += encodeRecord(connect, rec);
+        }
+        while (size - body.size() > 3000) {
+            hash<auto> rec = makeRecord(i++, strmul(chr(ord("a") + (i % 26)), 1000));
+            records += rec;
+            body += encodeRecord(connect, rec);
+        }
+        # the last record fills the body to the given size
+        int remaining = size - body.size();
+        int len = remaining - encodeRecord(connect, makeRecord(i, "")).size();
+        hash<auto> rec;
+        for (int tries = 0; tries < 10; ++tries) {
+            rec = makeRecord(i, strmul("z", len));
+            int diff = remaining - encodeRecord(connect, rec).size();
+            if (!diff) {
+                break;
+            }
+            len += diff;
+        }
+        records += rec;
+        body += encodeRecord(connect, rec);
+        if (body.size() != size) {
+            throw "TEST-ERROR", sprintf("cannot make a body of %d bytes: %d", size, body.size());
+        }
+        return body;
+    }
+
+    #! the part sizes of a streamed body of the given size
+    static list<int> expectedParts(int size) {
+        list<int> rv = ();
+        while (size > 0) {
+            int part = size > BodyStreamPartSize ? BodyStreamPartSize : size;
+            rv += part;
+            size -= part;
+        }
+        return rv;
+    }
+
+    #! the header fields of a request of the given kind
+    static hash<auto> requestHeaders(bool connect, *hash<auto> hdrs) {
+        hash<auto> rv = connect
+            ? {"Content-Type": ConnectType}
+            : {"Content-Type": MimeTypeOctetStream} + DsHeaders;
+        return rv + hdrs;
+    }
+
+    static Socket openSocket(int port) {
+        Socket s();
+        s.connect("localhost:" + port, Timeout);
+        return s;
+    }
+
+    static sendHead(Socket s, string path, int content_length, hash<auto> hdrs) {
+        string head = sprintf("POST %s HTTP/1.1\r\nHost: localhost\r\nAccept: application/json\r\n"
+            "Content-Length: %d\r\n", path, content_length);
+        map head += sprintf("%s: %s\r\n", $1.key, $1.value), hdrs.pairIterator();
+        s.send(head + "\r\n");
+    }
+
+    static hash<auto> readResponse(Socket s) {
+        hash<auto> rh = s.readHTTPHeader(Timeout);
+        int cl = int(rh."content-length");
+        if (cl > 0) {
+            rh.body = s.recvBinary(cl, Timeout);
+        }
+        return rh;
+    }
+
+    static hash<auto> post(int port, string path, binary body, hash<auto> hdrs) {
+        Socket s = RestHandlerContentLengthStreamTest::openSocket(port);
+        on_exit s.close();
+        RestHandlerContentLengthStreamTest::sendHead(s, path, body.size(), hdrs);
+        s.send(body);
+        return RestHandlerContentLengthStreamTest::readResponse(s);
+    }
+
+    #! removes the records and signals of earlier requests
+    private reset() {
+        recorder.records.clear();
+        recorder.first_record.clear();
+        limit_recorder.records.clear();
+        limit_recorder.first_record.clear();
+    }
+
+    #! a label for a response status assertion that gives the response body
+    static string respText(hash<auto> resp, string label = "") {
+        return sprintf("%s: %s", label, resp.body ? resp.body.toString().substr(0, 2000) : "<no body>");
+    }
+
+    #! checks that a record is that of a streamed body
+    private checkStreamed(hash<StreamRecord> rec, binary body, list<auto> records, string label) {
+        assertEq(NOTHING, rec.error, label + ": no error");
+        assertFalse(rec.deserialized, label + ": not given whole");
+        assertEq((map "binary", rec.part_sizes), rec.part_types, label + ": binary parts");
+        assertEq(RestHandlerContentLengthStreamTest::expectedParts(body.size()), rec.part_sizes,
+            label + ": part sizes");
+        assertTrue(rec.data == body, label + ": each byte once, in order");
+        assertEq(records, rec.records, label + ": records");
+    }
+
+    samePartsTest() {
+        reset();
+        # the same handler gets the same parts and records for a body under or at the threshold, which the server
+        # reads before the dispatch, and one over it, which is read from the socket
+        foreach bool connect in ((True, False)) {
+            string kind = connect ? "Connect" : "DataStream";
+            foreach int size in ((5000, BodyStreamPartSize + 1, DefaultBodyStreamThreshold - 1,
+                    DefaultBodyStreamThreshold, DefaultBodyStreamThreshold + 1)) {
+                list<auto> records;
+                binary body = makeBody(connect, size, \records);
+                string label = sprintf("%s size %d", kind, size);
+                hash<auto> resp = post(port, "/records", body, requestHeaders(connect));
+                assertEq(200, resp.status_code, respText(resp, label));
+                checkStreamed(recorder.records.get(Timeout), body, records, label);
+            }
+        }
+    }
+
+    streamsBeforeCompleteTest() {
+        reset();
+        # a body well over the threshold reaches the handler before the client has sent all of it
+        foreach bool connect in ((True, False)) {
+            string kind = connect ? "Connect" : "DataStream";
+            int size = 4 * DefaultBodyStreamThreshold;
+            list<auto> records;
+            binary body = makeBody(connect, size, \records);
+            recorder.first_record.clear();
+            Socket s = openSocket(port);
+            on_exit s.close();
+            sendHead(s, "/records", size, requestHeaders(connect));
+            int half = size / 2;
+            s.send(body.substr(0, half));
+            # the client sends the rest only after the handler has its first record
+            assertTrue(recorder.first_record.get(Timeout), kind + ": first record before the body is complete");
+            s.send(body.substr(half));
+            hash<auto> resp = readResponse(s);
+            assertEq(200, resp.status_code, respText(resp, kind));
+            checkStreamed(recorder.records.get(Timeout), body, records, kind + " 4 MiB");
+        }
+    }
+
+    splitCharacterTest() {
+        reset();
+        # a part boundary inside a UTF-8 character: the records are decoded from the whole byte sequence
+        foreach bool connect in ((True, False)) {
+            string kind = connect ? "Connect" : "DataStream";
+            binary body;
+            list<auto> records;
+            bool split = False;
+            # a prefix record of a varying size moves the boundary into a character
+            for (int pad = 1; pad < 5; ++pad) {
+                list<auto> recs = (makeRecord(0, strmul("x", pad)),);
+                binary b = encodeRecord(connect, recs[0]);
+                for (int i = 1; b.size() < 3 * BodyStreamPartSize; ++i) {
+                    hash<auto> rec = makeRecord(i, strmul("čř", 500));
+                    recs += rec;
+                    b += encodeRecord(connect, rec);
+                }
+                # a UTF-8 continuation byte starts the second part
+                if ((b[BodyStreamPartSize] & 0xc0) == 0x80) {
+                    body = b;
+                    records = recs;
+                    split = True;
+                    break;
+                }
+            }
+            assertTrue(split, kind + ": a part boundary inside a character");
+            hash<auto> resp = post(port, "/records", body, requestHeaders(connect));
+            assertEq(200, resp.status_code, respText(resp, kind));
+            checkStreamed(recorder.records.get(Timeout), body, records, kind + " split character");
+        }
+    }
+
+    #! a string of the given size that compresses little
+    static string makeNoise(int seed, int size) {
+        string rv;
+        int x = seed;
+        while (rv.size() < size) {
+            x = (x * 1103515245 + 12345) % 2147483648;
+            rv += sprintf("%08x", x);
+        }
+        return rv.substr(0, size);
+    }
+
+    compressedConnectTest() {
+        reset();
+        # Connect frames compressed one by one are self-delimiting: they stream over the threshold too
+        code compress = ds_get_content_encode("gzip");
+        list<auto> records = ();
+        binary body = binary();
+        for (int i = 0; body.size() <= DefaultBodyStreamThreshold + BodyStreamPartSize; ++i) {
+            hash<auto> rec = makeRecord(i, makeNoise(i, 4000));
+            records += rec;
+            body += encodeRecord(True, rec, compress);
+        }
+        hash<auto> resp = post(port, "/records", body, requestHeaders(True, {"Connect-Content-Encoding": "gzip"}));
+        assertEq(200, resp.status_code, respText(resp));
+        checkStreamed(recorder.records.get(Timeout), body, records, "compressed Connect");
+    }
+
+    compressedDataStreamTest() {
+        reset();
+        # a DataStream v1 body with a content encoding is given whole, under and over the threshold: with
+        # DataStream-Content-Encoding, its records are compressed one by one and are not delimited; with
+        # Content-Encoding, the whole body is compressed, and the server decompresses it before the handler gets it
+        code compress = ds_get_content_encode("gzip");
+        foreach string field in (("DataStream-Content-Encoding", "Content-Encoding")) {
+            bool per_record = field == "DataStream-Content-Encoding";
+            foreach int min_size in ((3 * BodyStreamPartSize, DefaultBodyStreamThreshold + BodyStreamPartSize)) {
+                list<auto> records = ();
+                binary body = binary();
+                for (int i = 0; body.size() <= min_size; ++i) {
+                    hash<auto> rec = makeRecord(i, makeNoise(i, 4000));
+                    records += rec;
+                    body += encodeRecord(False, rec, per_record ? compress : NOTHING);
+                }
+                # the bytes sent, and the bytes that the handler gets
+                binary sent = per_record ? body : binary(compress(body));
+                string label = sprintf("%s size %d", field, sent.size());
+                hash<auto> resp = post(port, "/records", sent, requestHeaders(False, {field: "gzip"}));
+                assertEq(200, resp.status_code, respText(resp, label));
+                hash<StreamRecord> rec = recorder.records.get(Timeout);
+                assertEq(NOTHING, rec.error, label);
+                assertEq((body.size(),), rec.part_sizes, label + ": one part");
+                assertTrue(rec.data == body, label + ": body bytes");
+                assertEq(records, rec.records, label + ": records");
+            }
+        }
+    }
+
+    wholeTest() {
+        reset();
+        # a REST method without a stream handler gets the body whole, as it would without streaming
+        foreach int size in ((5000, DefaultBodyStreamThreshold + 1)) {
+            # Connect: the body is given in cx."stream-body"
+            list<auto> records;
+            binary body = makeBody(True, size, \records);
+            hash<auto> resp = post(port, "/whole", body, requestHeaders(True));
+            assertEq(200, resp.status_code, respText(resp, "Connect size " + size));
+            assertEq({
+                "stream_body_type": "binary",
+                "stream_body_size": size,
+                "stream_body_digest": SHA256(body),
+                "body_type": "nothing",
+                "body_size": NOTHING,
+                "body_digest": NOTHING,
+                "arg_a": NOTHING,
+            }, parse_json(resp.body.toString()), "Connect size " + size);
+
+            # DataStream v1 with a binary content type: the body is given in cx.body
+            body = makeBody(False, size, \records);
+            resp = post(port, "/whole", body, requestHeaders(False));
+            assertEq(200, resp.status_code, respText(resp, "DataStream size " + size));
+            assertEq({
+                "stream_body_type": "nothing",
+                "stream_body_size": 0,
+                "stream_body_digest": NOTHING,
+                "body_type": "binary",
+                "body_size": size,
+                "body_digest": SHA256(body),
+                "arg_a": NOTHING,
+            }, parse_json(resp.body.toString()), "DataStream size " + size);
+
+            # a JSON body with a DataStream content type: decoded, deserialized and reflected in the arguments
+            string s = strmul("ä", size / 2);
+            binary json = binary(make_json({"a": 1, "s": s}));
+            resp = post(port, "/whole", json, {"Content-Type": MimeTypeJson + ";charset=utf-8"} + DsHeaders);
+            assertEq(200, resp.status_code, respText(resp, "JSON size " + size));
+            assertEq({
+                "stream_body_type": "nothing",
+                "stream_body_size": 0,
+                "stream_body_digest": NOTHING,
+                "body_type": "hash",
+                "body_size": NOTHING,
+                "body_digest": NOTHING,
+                "arg_a": 1,
+            }, parse_json(resp.body.toString()), "JSON size " + size);
+
+            # a JSON body that cannot be deserialized is a client error
+            resp = post(port, "/whole", binary("{\"a\": "), {"Content-Type": MimeTypeJson} + DsHeaders);
+            assertEq(400, resp.status_code, respText(resp, "invalid JSON"));
+        }
+    }
+
+    chunkedTest() {
+        reset();
+        # a chunked body is given chunk by chunk, as before
+        foreach bool connect in ((True, False)) {
+            string kind = connect ? "Connect" : "DataStream";
+            Socket s = openSocket(port);
+            on_exit s.close();
+            string head = "POST /records HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n";
+            map head += sprintf("%s: %s\r\n", $1.key, $1.value), requestHeaders(connect).pairIterator();
+            s.send(head + "\r\n");
+            list<auto> records = ();
+            list<int> sizes = ();
+            binary body = binary();
+            for (int i = 0; i < 3; ++i) {
+                hash<auto> rec = makeRecord(i, strmul("c", 100 * (i + 1)));
+                records += rec;
+                binary chunk = encodeRecord(connect, rec);
+                sizes += chunk.size();
+                body += chunk;
+                s.send(sprintf("%x\r\n", chunk.size()));
+                s.send(chunk);
+                s.send("\r\n");
+            }
+            s.send("0\r\n\r\n");
+            hash<auto> resp = readResponse(s);
+            assertEq(200, resp.status_code, respText(resp, kind));
+            hash<StreamRecord> rec = recorder.records.get(Timeout);
+            assertEq(NOTHING, rec.error, kind);
+            assertEq(sizes, rec.part_sizes, kind);
+            assertTrue(rec.data == body, kind);
+            assertEq(records, rec.records, kind);
+        }
+    }
+
+    limitTest() {
+        reset();
+        # a body at the limit is accepted, and one past it is refused before any of it is read: the client sends
+        # only the request head
+        foreach bool connect in ((True, False)) {
+            string kind = connect ? "Connect" : "DataStream";
+            list<auto> records;
+            binary body = makeBody(connect, LargeLimit, \records);
+            hash<auto> resp = post(limit_port, "/records", body, requestHeaders(connect));
+            assertEq(200, resp.status_code, respText(resp, kind + " at the limit"));
+            checkStreamed(limit_recorder.records.get(Timeout), body, records, kind + " at the limit");
+
+            Socket s = openSocket(limit_port);
+            on_exit s.close();
+            sendHead(s, "/records", LargeLimit + 1, requestHeaders(connect));
+            resp = readResponse(s);
+            assertEq(413, resp.status_code, respText(resp, kind + " past the limit"));
+            assertEq("close", resp.connection, kind + " past the limit");
+        }
+        assertEq(0, limit_recorder.records.size());
+    }
+
+    keepAliveTest() {
+        reset();
+        # streamed bodies, and bodies read whole for a method without a stream handler, leave the connection at the
+        # next request
+        Socket s = openSocket(port);
+        on_exit s.close();
+        foreach hash<auto> req in ((
+                {"connect": True, "size": DefaultBodyStreamThreshold + 1, "path": "/records"},
+                {"connect": False, "size": 1000, "path": "/records"},
+                {"connect": True, "size": DefaultBodyStreamThreshold + 1, "path": "/whole"},
+                {"connect": False, "size": 2 * DefaultBodyStreamThreshold, "path": "/records"},
+                {"connect": False, "size": DefaultBodyStreamThreshold + 1, "path": "/whole"},
+                {"connect": True, "size": 5000, "path": "/records"},
+            )) {
+            string label = sprintf("%s %s size %d", req.connect ? "Connect" : "DataStream", req.path, req.size);
+            list<auto> records;
+            binary body = makeBody(req.connect, req.size, \records);
+            sendHead(s, req.path, req.size, requestHeaders(req.connect));
+            s.send(body);
+            hash<auto> resp = readResponse(s);
+            assertEq(200, resp.status_code, respText(resp, label));
+            assertNeq("close", resp.connection, label);
+            if (req.path == "/records") {
+                checkStreamed(recorder.records.get(Timeout), body, records, label);
+            }
+        }
+    }
+}
