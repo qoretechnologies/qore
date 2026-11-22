@@ -993,13 +993,12 @@ public:
     }
 
 private:
-    //! Closes the socket also when it has no descriptor
-    /** A connection that is being made (ex: resolving its host) gives the socket no descriptor after the close: the
-        close changes the socket's descriptor generation, which the connection checks before it adopts one (qore#7003)
-    */
+    //! Closes the socket; a socket with no descriptor gets none from a connection being made (qore#7003)
     DLLLOCAL void closeIoLocked() {
-        priv->shutdown_direct();
-        priv->close();
+        if (!priv->endConnectIfNoDescriptor()) {
+            priv->shutdown_direct();
+            priv->close();
+        }
     }
 
     qore_socket_private* priv;

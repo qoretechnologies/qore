@@ -2698,6 +2698,22 @@ public:
         return close_internal();
     }
 
+    //! Ends a connection being made if the socket has no descriptor; returns false if the socket has one
+    /** A connection that is being made (ex: resolving its host) gives the socket no descriptor after this: the
+        socket's descriptor generation changes, which the connection checks with @ref close_m held before it gives the
+        socket a descriptor (qore#7003).  Nothing else of the socket is changed.
+
+        @return true if the socket had no descriptor, false if it has one, which the caller then closes
+    */
+    DLLLOCAL bool endConnectIfNoDescriptor() {
+        CloseLockHelper cl(*this);
+        if (sock != QORE_INVALID_SOCKET) {
+            return false;
+        }
+        ++fd_generation;
+        return true;
+    }
+
     //! Shuts down the connection for sending and receiving; a TLS connection sends its close_notify alert first
     DLLLOCAL int shutdown_direct() {
         if (std::shared_ptr<Http2Session> h2 = getH2SessionForClose()) {

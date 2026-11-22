@@ -7809,9 +7809,13 @@ public:
     //! (qore#6962)
     /** See runConnectCloseInProgress(): here the connection is submitted to an async I/O controller, whose I/O thread
         registers the socket's descriptor, the attempt's, in its event loop.  The socket is then closed by the test's
-        thread, and another descriptor is opened.  The loop's removal of the registration must not fail, the
-        connection ends with its time limit, the socket must not take over the new descriptor, and nothing may close
-        it.
+        thread, and another descriptor is opened, with the controller's lock held: the I/O thread takes it before it
+        continues an operation, so the operation cannot end (and release the attempt's number) before the checks.  The
+        connection has a time limit that cannot end it before the close either.  Then the connection is canceled: the
+        close shuts the connection being established down, which wakes the operation only if the event loop reports it
+        before the number gets the inert descriptor (the release of the original one removes its registration), so the
+        operation has either failed as closed or is canceled.  The loop's removal of the registration must not fail,
+        the socket must not take over the new descriptor, and nothing may close it.
     */
     static void runConnectCloseRegistered(UnitTestCounters& c) {
         ExceptionSink xsink;
@@ -7896,8 +7900,8 @@ public:
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
         info->setKeyValue("owner", new QoreStringNode("connect-close-registered-unit-test"), &xsink);
-        // the connection ends with its time limit once its descriptor is inert
-        info->setKeyValue("to", 1500, &xsink);
+        // the connection's time limit must not end it before the checks
+        info->setKeyValue("to", 600000, &xsink);
         ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
         UT_ASSERT(c, !xsink && queue_obj, "the connection is submitted (registered)");
         if (xsink || !queue_obj) {
@@ -7934,26 +7938,38 @@ public:
         }
         UT_ASSERT(c, registered, "the attempt's descriptor is registered in the event loop");
 #endif
-        // another thread closes the socket while the I/O thread has the descriptor registered
-        sock->close();
-        int reuse_fd = fcntl(sp[0], F_DUPFD_CLOEXEC, attempt_fd);
-        if (reuse_fd >= 0) {
-            fds.push_back(reuse_fd);
+        int reuse_fd;
+        {
+            // the I/O thread cannot continue the operation while the controller's lock is held
+            AutoLocker al(ctrl->m);
+            UT_ASSERT_EQ(c, 0, (int)queue->size(),
+                "the connection is in progress when the socket is closed (registered)");
+            // another thread closes the socket while the I/O thread has the descriptor registered
+            sock->close();
+            reuse_fd = fcntl(sp[0], F_DUPFD_CLOEXEC, attempt_fd);
+            if (reuse_fd >= 0) {
+                fds.push_back(reuse_fd);
+            }
+            UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
+                "the attempt's number is not given to another descriptor while the registered operation has it");
         }
-        UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
-            "the attempt's number is not given to another descriptor while the registered operation has it");
 
+        // the operation has failed as closed, or is canceled now
+        ctrl->cancel(sock, &xsink);
         bool timed_out = false;
         ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
         UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the closed connection ends (registered)");
         if (result->getType() == NT_HASH) {
-            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+            const QoreHashNode* rh = result->get<QoreHashNode>();
+            QoreValue ex = rh->getKeyValue("ex");
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            UT_ASSERT(c, exh != nullptr, "the closed connection fails (registered)");
-            UT_ASSERT(c, err.getType() != NT_STRING
-                || strcmp(err.get<const QoreStringNode>()->c_str(), "EVENT-LOOP-ERROR"),
-                "the removal of the inert descriptor's registration does not fail");
+            bool canceled = rh->getKeyValue("canceled").getAsBool();
+            std::string what = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str()
+                : (canceled ? "canceled" : "no error");
+            // not EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
+            UT_ASSERT(c, (canceled && !exh) || what == "SOCKET-CLOSED",
+                ("the closed connection fails as closed or is canceled (registered): " + what).c_str());
         }
         xsink.clear();
         UT_ASSERT(c, sock->getPollableDescriptor() != reuse_fd,
@@ -8423,6 +8439,53 @@ public:
         s->close();
     }
 
+    //! A close of a socket that has no descriptor changes its descriptor generation and nothing else (qore#7003)
+    /** A close through the async I/O controller (Socket::close(), QoreSocket::close()) of a socket without a
+        descriptor ends a connection being made, which checks the generation, and keeps the rest of the socket's
+        state: a socket can have no descriptor and still have an HTTP/2 session and its stream callbacks (after an
+        error path closed only its descriptor), whose release without the session's end would leave the session's
+        streams without their end (seen as a server whose externally managed WebSocket connection never ended, so
+        that its Program never ended).  The test gives a socket that has no descriptor a stream completion callback
+        that holds a reference, closes it with the public close, and checks that the generation changed and the
+        callback, with its reference, is still there.
+    */
+    static void runCloseWithoutDescriptor(UnitTestCounters& c, bool socket_object) {
+        const std::string when = socket_object ? " (Socket::close())" : " (QoreSocket::close())";
+        ExceptionSink xsink;
+        std::unique_ptr<QoreSocket> qs;
+        QoreSocketObject* sock = nullptr;
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        qore_socket_private* sp;
+        if (socket_object) {
+            sock = new QoreSocketObject;
+            sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+            sp = qore_socket_private::get(*sock->priv->socket);
+        } else {
+            qs.reset(new QoreSocket);
+            sp = qore_socket_private::get(*qs);
+        }
+        std::shared_ptr<int> token = std::make_shared<int>(0);
+        sp->setH2StreamCompleteCallback([token](int32_t, Http2StreamInfo*, ExceptionSink*) {});
+        uint32_t gen0;
+        int fd = sp->getDescriptorGeneration(gen0);
+        UT_ASSERT_EQ(c, QORE_INVALID_SOCKET, fd, ("the socket has no descriptor" + when).c_str());
+        if (socket_object) {
+            sock->close();
+        } else {
+            qs->close();
+        }
+        uint32_t gen1;
+        sp->getDescriptorGeneration(gen1);
+        UT_ASSERT(c, gen1 != gen0, ("the close changes the descriptor generation" + when).c_str());
+        UT_ASSERT_EQ(c, 2, (int)token.use_count(),
+            ("the close keeps the stream completion callback of the socket" + when).c_str());
+        sp->clearH2StreamCompleteCallback();
+        UT_ASSERT_EQ(c, 1, (int)token.use_count(), ("the callback is released when it is cleared" + when).c_str());
+        if (socket_object) {
+            sock->close();
+        }
+    }
+
     //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
     /** A contract test (qore#7003), not a reproduction: no path of the library can give a socket a new descriptor
         between the read of its descriptor and its replacement, as the paths that give a socket a descriptor run with
@@ -8576,7 +8639,6 @@ public:
         std::unique_ptr<AbstractPollState> st;
         QoreSocketObject* sock = new QoreSocketObject;
         ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
-        sock->ref();
         ReferenceHolder<QoreObject> op_obj(&xsink);
         SocketConnectPollOperation* op = nullptr;
         struct StateDestroyer {
@@ -8589,6 +8651,8 @@ public:
             qs.reset(new QoreSocket);
             st.reset(qs->startConnect(&xsink, target.c_str()));
         } else {
+            // the reference of the connect operation
+            sock->ref();
             op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock);
             op_obj = new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op);
             if (!xsink) {
@@ -24517,6 +24581,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 3, true);
+    AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, true);
+    AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, false);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
