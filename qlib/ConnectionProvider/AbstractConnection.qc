@@ -1213,6 +1213,10 @@ conn.checkSandboxAccess(True);
         @since ConnectionProvider 1.7.1
     */
     object getPollImpl() {
+        # the client is handed to the caller as get()'s is: it is checked for code restricted from NETWORK (qore#7262)
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            checkLentClientTarget();
+        }
         return getImpl(False);
     }
 

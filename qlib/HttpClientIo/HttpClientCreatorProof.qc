@@ -333,7 +333,16 @@ public final class HttpClientCreatorProof {
         IPv6 host without brackets; RFC 3986 requires them)
     */
     private:internal static bool ambiguousHost(string url, string host) {
-        return host =~ /:/ && host !~ /^\// && url !~ /^[^\/]*\/\/([^\/@]*@)?\[/;
+        if (host !~ /:/ || host =~ /^\//) {
+            return False;
+        }
+        # the host and port of the authority follow its last "@": userinfo can hold brackets too
+        string hostport = (url =~ x/^[^\/]*\/\/([^\/?#]*)/)[0] ?? "";
+        int at = hostport.rfind("@");
+        if (at >= 0) {
+            hostport = hostport.substr(at + 1);
+        }
+        return hostport !~ /^\[/;
     }
 
     #! Returns the \c "host:port" key of a proxy URL

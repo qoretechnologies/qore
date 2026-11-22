@@ -5933,6 +5933,18 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since %RestClient 1.9.1
     */
     object getPollImpl() {
+        # the synchronous client is not given to code restricted from NETWORK (qore#7262; see
+        # HttpBasedConnection::checkLentClientTarget())
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            checkLentClientTarget();
+        }
+        return getPingClient();
+    }
+
+    #! Returns an unconnected client for the connection's own ping operations (qore#7262)
+    /** Not given to the caller: the ping operations check its target with checkLentNetworkTarget() before they connect
+    */
+    private:internal RestClient getPingClient() {
         # ensure that no validator is used, as loading the schema cannot be done in a nonblocking way in the polling
         # thread
         hash<auto> new_opts;
@@ -6087,7 +6099,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             }
             # the synchronous client connects outside get() and getAsync(): code restricted from NETWORK may connect only
             # to the target of a connection that was lent to it (qore#7262), checked before connecting
-            object client = getPollImpl();
+            object client = getPingClient();
             if (client.hasCallableMethod("startPollConnect") && client.hasCallableMethod("getURL")) {
                 checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
                     ? client.getProxyURL() : NOTHING);
@@ -6941,7 +6953,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since %RestClient 2.7
     */
     private pingConnect() {
-        RestClient conn_client = getPollImpl();
+        RestClient conn_client = getPingClient();
         on_exit conn_client.disconnect();
         # the client is created outside get() and getAsync(): code restricted from NETWORK may connect only to the
         # target of a connection that was lent to it, as with their clients (qore#7262), checked before connecting

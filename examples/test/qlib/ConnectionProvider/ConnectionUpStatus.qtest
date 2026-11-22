@@ -669,11 +669,18 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another target");
         assertNothing(listener.accept(0), "no connection to the other target was attempted");
 
-        # a connection with no proof that allows its target (its creator's proof has no HTTP origin for the URL)
+        # a rest:// connection's proof has the connection's HTTP origin (its real URL, qore#7262): its ping connects to
+        # its own target
         conn = new RestConnection("lent", "test", "rest://127.0.0.1:" + listener.getSocketInfo().port,
             {"monitor": False});
-        assertEq("PERMISSION-DENIED", p.callFunction("do_ping", conn));
-        assertNothing(listener.accept(0), "no connection without a proof was attempted");
+        assertEq("OK", p.callFunction("do_ping", conn), "a lent rest:// connection pinged by restricted code");
+        {
+            *Socket accepted = listener.accept(0);
+            assertTrue(exists accepted, "the ping of a lent rest:// connection connected to its own target");
+            if (accepted) {
+                accepted.close();
+            }
+        }
         # code restricted from the network cannot create a connection itself
         Program own(PO_NEW_STYLE | PO_NO_NETWORK);
         own.parse("%modern

@@ -101,6 +101,7 @@ class LentClientCreatorProofTest inherits QUnit::Test {
         const ProxyDenied = "^PERMISSION-DENIED: .*through another proxy";
         const CaDenied = "^PERMISSION-DENIED: .*other CA certificate locations";
         const LentTargetDenied = "^PERMISSION-DENIED: connection .*may connect only to the target of a connection";
+        const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound .*use getAsync";
         const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create"
             "|connection .*may connect only to the target of a connection)";
 
@@ -198,6 +199,25 @@ string sub rest_ping(object conn) {
     try {
         hash<auto> h = conn.ping(True);
         return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_sync(object conn, bool poll) {
+    try {
+        object c = poll ? conn.getPollImpl() : conn.get(False);
+        c.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_real_opts_proxy(object conn, string proxy) {
+    try {
+        conn.real_opts.proxy = proxy;
+        object c = conn.getAsync(False);
+        c.restGet(\"/rest/x\");
+        return \"DONE\";
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -459,6 +479,7 @@ object sub lookalike() {
         addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
         addTestCase("a lent HTTP connection's synchronous client, " + m, sub () { testLentSync(m); });
         addTestCase("a lent HTTP connection's synchronous poll, " + m, sub () { testLentSyncPoll(m); });
+        addTestCase("a lent REST connection's synchronous client, " + m, sub () { testLentRestSync(m); });
         addTestCase("restricted code's own clients, " + m, sub () { testOwn(m); });
         addTestCase("a look-alike proof, " + m, sub () { testLookAlike(m); });
         addTestCase("the borrower's sandbox, " + m, sub () { testSandbox(m); });
@@ -719,6 +740,26 @@ object sub lookalike() {
         assertTrue(other.isDataAvailable(0), "trusted code connects to the target that it set");
     }
 
+    #! a lent REST connection gives restricted code no synchronous client (whose requests are made by its Qore code
+    #! from targets that the caller can change), only its async client, which is bound to the creator's target; a proxy
+    #! that restricted code sets in the connection's options is refused by that client
+    testLentRestSync(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("rest://127.0.0.1:%d/rest", plain_port);
+        Socket other = listen();
+        on_exit other.close();
+        RestConnection rest("r", "r", url, {"monitor": False}, {"data": "json"});
+        assertRegex(UnboundDenied, p.callFunction("rest_sync", rest, False), "get() of a lent REST connection, " + mode);
+        assertRegex(UnboundDenied, p.callFunction("rest_sync", rest, True),
+            "getPollImpl() of a lent REST connection, " + mode);
+        RestConnection proxied("x", "x", url, {"monitor": False}, {"data": "json"});
+        assertRegex(ProxyDenied, p.callFunction("rest_real_opts_proxy", proxied,
+            sprintf("http://127.0.0.1:%d", other.getSocketInfo().port)), "a proxy set in real_opts, " + mode);
+        assertFalse(other.isDataAvailable(0), "the proxy's listener sees no connection, " + mode);
+        # trusted code's own synchronous client is not checked
+        assertEq(200, rest.get(False).restGet("/rest/x").status_code, "trusted code's synchronous client");
+    }
+
     #! the synchronous client of a lent HTTP connection's poll operation is checked as get()'s
     testLentSyncPoll(string mode) {
         Program p = getProgram(mode);
@@ -775,6 +816,10 @@ object sub lookalike() {
         HttpClientCreatorProof r6 = HttpClientCreatorProof::get("http://[::1]:8080/");
         assertTrue(r6.allowsUrl("http://[::1]:8080/"), "a bracketed IPv6 host");
         assertFalse(r6.allowsUrl("http://::1:8080/"), "an IPv6 host without brackets");
+        # brackets in the userinfo do not make the host bracketed
+        HttpClientCreatorProof r80 = HttpClientCreatorProof::get("http://[::1]:80/");
+        assertFalse(r80.allowsUrl("http://[x]:p@::1:80/"), "an IPv6 host without brackets after bracketed userinfo");
+        assertTrue(r80.allowsUrl("http://u:p@[::1]:80/"), "a bracketed IPv6 host after userinfo");
         assertFalse(HttpClientCreatorProof::get("http://::1:8080/").allowsUrl("http://::1:8080/"),
             "a proof of an IPv6 host without brackets");
         HttpClientCreatorProof r6p = HttpClientCreatorProof::get("http://h/", {"proxy": "http://[::1]:3128"});
