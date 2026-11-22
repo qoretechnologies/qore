@@ -306,6 +306,15 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             getConnectionDomainsImpl())
         */
         transient int creator_restrictions = AbstractConnection::getCreatorRestrictions();
+
+        #! The proof that the code that created the connection may create an HTTP client connection manager (qore#7262)
+        /** Taken when the connection is created, also when it is deserialized, and bound to the connection's URL then;
+            get() and getAsync() grant it to the next HTTP client created in their thread (see
+            HttpClientIo::HttpClientCreatorProofGrant), so a connection that trusted code created and lent creates
+            clients for the code that uses it that are the trusted code's, which reach only the connection's target.
+            It is never handed to the connection's class
+        */
+        transient *HttpClientIo::HttpClientCreatorProof creator_proof;
     }
 
     #! creates the AbstractConnection object
@@ -887,6 +896,11 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
+        # the HTTP client that the connection creates for restricted code that was lent the connection is the
+        # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
+        # restricted code that runs while it calls (a callback, for example) can take the connection's
+        *HttpClientIo::HttpClientCreatorProofGrant grant =
+            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
         if (!connect) {
             object o = getImpl(False, rtopts);
             postProcess(o);
@@ -934,6 +948,11 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
+        # the HTTP client that the connection creates for restricted code that was lent the connection is the
+        # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
+        # restricted code that runs while it calls (a callback, for example) can take the connection's
+        *HttpClientIo::HttpClientCreatorProofGrant grant =
+            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
             postProcess(o);
@@ -1406,6 +1425,8 @@ scheme://user:pass@hostname:port/path
 
         opts = validateOptions(getHash(config, "opts") ?? {});
         orig_opts = opts;
+        # the proof of the code that creates the connection, bound to its URL and proxy (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(url, {"proxy": opts.proxy});
 
         if (opts.disable_automatic_pings) {
             disable_automatic_pings = True;
@@ -1528,13 +1549,14 @@ scheme://user:pass@hostname:port/path
         transient_info = {};
         sandbox_check = new DataProvider::DataProviderSandboxCheck();
         creator_restrictions = AbstractConnection::getCreatorRestrictions();
+        creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(members.url, {"proxy": members.opts.proxy});
         checkCreation(members.name);
         # the transient and internal members are the deserializing process's own, never the serialized data's
         self += members - TransientMembers;
     }
 
     #! The members that deserializeMembers() assigns itself
-    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions");
+    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions", "creator_proof");
 
     #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
     const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);

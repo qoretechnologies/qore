@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - binary modules read lists and hashes through weak references while other threads free them
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceModuleReadDuringFreeTest
+
+#! a binary module reads a list or hash that it reaches through a weak reference while another thread frees it as
+#! freed (qore#7231)
+/** A weak reference (\c :=) does not keep the entries of its list or hash.  The modules that walk containers read the
+    target of a weak reference with QoreValue::resolveIndirect(), which returns it borrowed, and walked the entries of
+    a list or hash whose free had started in another thread; they now read it with QoreValue::resolveIndirectRef(),
+    which reads it as the language does (qore#7198): with a reference of its own, or as an empty list or hash once its
+    free has started.  A debug hook (dbg_hold_container_free()) holds the freeing thread at the start of the free, so
+    that each module reads at that point deterministically, with no sleeps.  The program,
+    \c weak-reference-module-read-during-free/weak-reference-module-read-during-free.q, has the json, yaml, avro and
+    dataframe modules serialize or key values that hold weak references to a list and a hash being freed; every mode
+    must print the expected output.
+
+    The hook is in debug builds only, which the test jobs build.  The conversion of the mongodb module
+    (bson_conversion.cpp) is made only for a request to a server, so it is not run here.
+*/
+class WeakReferenceModuleReadDuringFreeTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-module-read-during-free";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Program = "weak-reference-module-read-during-free";
+    }
+
+    constructor() : QUnit::Test("WeakReferenceModuleReadDuringFreeTest", "1.0", \ARGV) {
+        addTestCase("the modules read a list or hash being freed as freed in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        string expected = ReadOnlyFile::readTextFile(dir + "/" + Program + ".expected");
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+                "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, Program));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(expected, r.stdout, mode);
+        }
+    }
+}

@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%exec-class MemberLookupPathsTest
+
+#! Member and hash key lookups through every path give the same results in every execution mode (qore#7194)
+/** The names of members and the keys of hashes are compared by their lengths and bytes, without strcmp(); the probe
+    reads and writes members through typed and untyped variables and with names given at run time (also in other
+    encodings), in classes whose members are searched in a list (fewer than 8) and in an index, private members in
+    the class's methods and a base class's private member on an object of a subclass, private:internal members of the
+    same name in a class and its base class, members added and removed at run time (with non-ASCII names), a member
+    gate, a deleted object, hash keys (non-ASCII, empty, in other encodings, added, deleted and removed), hash
+    comparisons and hashdecl members.  The names have the lengths at which the comparison changes the size of its
+    loads, and names of one length differ in one byte at the start, in the middle or at the end.  The output must be
+    the expected one, which the AST interpreter gave before the change, in every execution mode and as a
+    qcc-compiled executable.
+*/
+class MemberLookupPathsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probe = get_script_dir() + "/member-lookup-paths/probe.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/member-lookup-paths/expected.txt");
+    }
+
+    constructor() : QUnit::Test("member lookup paths test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("member and key lookups in every execution mode and in AOT", \testLookups());
+        set_return_value(main());
+    }
+
+    testLookups() {
+        # the expected output has the results that the lookups are about
+        assertTrue(expected =~ /^small9: 91 92 93 94 9 8 7$/m);
+        assertTrue(expected =~ /^small17\{abcdefghijklmnopy\}: INVALID-MEMBER$/m);
+        assertTrue(expected =~ /^internal: 100 200$/m);
+        assertTrue(expected =~ /^dyn\{naïve\} iso-8859-1: "latin"$/m);
+        assertTrue(expected =~ /^gate: 1 null "gate:zz" "gate:hidden"$/m);
+        assertTrue(expected =~ /^hash\{"abcdefghijklmnopy"\} exists: False$/m);
+        assertTrue(expected =~ /^hash compare: True False True True$/m);
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe)), mode);
+        }
+        TmpDir tmp("qore-member-lookup-paths-");
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+    }
+}

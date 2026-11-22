@@ -1290,8 +1290,10 @@ static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObj
 template <typename F>
 QoreValue RunTimeObjectMethodReferenceNode::evalInContext(F f) const {
     // a direct call of a pseudo-method runs in the class context of its code: a call through the reference runs in
-    // that of the code that made the reference, which can differ from the context it is called in
-    if ((missing || !qc) && qc != runtime_get_class()) {
+    // that of the code that made the reference, which can differ from the context it is called in; so does a method
+    // looked up without a class context, whose variants are selected in the class context of the code, as for a
+    // direct call (qore#7220)
+    if ((missing || !qc || lookup_without_ctx) && qc != runtime_get_class()) {
         ClassOnlySubstitutionHelper csh(qc);
         return f();
     }
@@ -1303,6 +1305,13 @@ RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QorePro
         missing(n_missing) {
     QoreProgram* creator;
     runtime_get_program_and_class(creator, qc);
+    // a method call in the code that creates the reference looks the method up without a class context if the
+    // context has no private access to the object's class (MethodCallNode::execImpl()), such as the code of a class
+    // that the object's class reaches only through the private:internal inheritance of one of its parent classes,
+    // whose calls are made as from outside the class hierarchy (qore#7220); a pseudo-method or a member with code
+    // (n_missing) is looked up as before
+    lookup_without_ctx = qc && !n_missing
+        && !qore_class_private::runtimeCheckPrivateClassAccess(*n_obj->getClass(), qc);
     // the restrictions that a call of the reference is checked against: those of the creating context (#5803)
     captureCreatorParseOptions();
     printd(5, "RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
@@ -1359,7 +1368,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* ar
     QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
     return evalInContext([&] () {
         return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(obj, method.c_str(),
-            args, qc, rc, xsink, nullptr, pgm_ctx);
+            args, getLookupContext(), rc, xsink, nullptr, pgm_ctx);
     });
 }
 
@@ -1378,7 +1387,7 @@ QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args,
     QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
     return evalInContext([&] () {
         return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethodGivenArgs(obj,
-            method.c_str(), args, qc, rc, xsink, pgm_ctx);
+            method.c_str(), args, getLookupContext(), rc, xsink, pgm_ctx);
     });
 }
 
@@ -1401,7 +1410,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     // with), whose variants the names are bound to; a methodGate() method takes
     // its arguments by position
     const qore_class_private* cls = qore_class_private::get(*qore_object_private::get(*obj)->theclass);
-    const QoreMethod* m = cls->getMethodForEval(method.c_str(), obj->getProgram(), qc, xsink);
+    const QoreMethod* m = cls->getMethodForEval(method.c_str(), obj->getProgram(), getLookupContext(), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1467,7 +1476,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListN
     QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
     return evalInContext([&] () {
         return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(policy, obj,
-            method.c_str(), args, qc, rc, xsink, nullptr, pgm_ctx);
+            method.c_str(), args, getLookupContext(), rc, xsink, nullptr, pgm_ctx);
     });
 }
 

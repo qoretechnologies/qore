@@ -401,6 +401,13 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
         ssl_config.key->ref();
         sock_priv_raw->setPrivateKey(ssl_config.key);
     }
+    if (ssl_config.trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_config.trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_config.ca_file.empty() || !ssl_config.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(

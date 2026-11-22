@@ -122,7 +122,22 @@ class OracleTestIsolationTest inherits QUnit::Test {
             TestInterpreter::qore_interpreter(), script, dir, ready));
         File r();
         r.open2(ready);
+        # a write end of the test's own: the reader does not see the end of the FIFO between the write of the holder
+        # and that of its shell, so that the shell's line can be waited for
+        File keep();
+        keep.open2(ready, O_WRONLY);
         string line = r.readLine(False);
+        # the shell says "ended" when the holder has ended; the directory is removed only then: its redirection would
+        # create the FIFO again as a file in a directory that remove_tree() is removing
+        bool ended = (line == "ended");
+        on_exit {
+            while (!ended) {
+                *string l = r.readLine(False);
+                if (!exists l || l == "ended") {
+                    ended = True;
+                }
+            }
+        }
         if (line != "held") {
             File out();
             out.open2(dir + "/out");

@@ -11662,6 +11662,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
+    // Takes the reference that the container operand of a container store owns, before
+    // releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak reference
+    // to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container until
+    // the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
+    // other lvalue load) and the value of the local's initializer give nothing.
+    auto holdOwnedContainerOperand = [&](uint32_t container_slot_id, uint32_t vid) -> QoreValue {
+        if (vid >= values.size()
+                || (container_slot_id != UINT32_MAX && container_slot_id < local_init_slots.size()
+                    && local_init_slots[container_slot_id] == vid)
+                || !removeCleanupEntry(cleanup, vid)) {
+            return QoreValue();
+        }
+        QoreValue rv = values[vid];
+        values[vid] = QoreValue();
+        if (vid < load_slot_registered.size()) {
+            load_slot_registered[vid] = false;
+        }
+        return rv;
+    };
 
     struct LocalInstantiationCleanup {
         std::vector<const LocalVar*>& locals_ordered;
@@ -14865,7 +14884,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (o && o->isValid()) {
-                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                        out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     }
                     if (xsink && *xsink) {
                         unwindForException();
@@ -14897,7 +14916,7 @@ load_local_done:
                     out.refSelf();
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
-                    out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
                         cleanupLocalCaches();
@@ -14952,6 +14971,9 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 ValueHolder val_holder(val.refSelf(), xsink);
+                // this frame's own reference to a hash read through a weak reference that the local holds, which
+                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this lambda, so that the exception is dispatched to an
                 // enclosing catch block by the common tail below; a false return aborts without an exception
                 auto store_key = [&]() -> bool {
@@ -14964,6 +14986,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hks_inst->container_lv || hks_inst->container)
                                 && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(hks_inst->container_slot_id,
+                                hks_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
                                 hks_inst->operands[0].id);
                         }
@@ -14971,11 +14995,6 @@ load_local_done:
                         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
                         // This makes `h.b = h` copy the outer hash before storing the original.
                         if (h->reference_count() > 1) {
-                            // COW: create unique copy and update the local variable.
-                            // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
-                            // in LValueHelper::assign takes the "unique" in-place branch for
-                            // hash<auto!> etc., leaving new_h in TLS at refcount 1.
-                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             // Prefer container_lv (set at AOT deser time) over
                             // container->ref.id (fresh-parse path); the container
                             // VarRefNode is not serialized, so AOT-loaded closure
@@ -14992,6 +15011,17 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
                                 is_closure = (hks_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a hash that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, h, hks_inst->key_name.c_str(), 0,
+                                    val, xsink)) {
+                                return true;
+                            }
+                            // COW: create unique copy and update the local variable.
+                            // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
+                            // in LValueHelper::assign takes the "unique" in-place branch for
+                            // hash<auto!> etc., leaving new_h in TLS at refcount 1.
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                             } else {
@@ -15113,6 +15143,9 @@ load_local_done:
                 qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
+                // this frame's own reference to a hash read through a weak reference that the local holds, which
+                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
                 // enclosing catch block below
                 auto store_dynamic_key = [&]() {
@@ -15128,6 +15161,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hksd_inst->container_lv || hksd_inst->container)
                                 && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(hksd_inst->container_slot_id,
+                                hksd_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
                                 hksd_inst->operands[0].id);
                         }
@@ -15138,8 +15173,6 @@ load_local_done:
                         }
 
                         if (h->reference_count() > 1) {
-                            // COW: see HashKeyStore above for rationale on *Transfer variants
-                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             LocalVar* lv;
                             bool is_closure;
                             if (hksd_inst->container_lv) {
@@ -15150,6 +15183,14 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
                                 is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a hash that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, h, key_str.c_str(), 0, val,
+                                    xsink)) {
+                                return;
+                            }
+                            // COW: see HashKeyStore above for rationale on *Transfer variants
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                             } else {
@@ -15276,6 +15317,9 @@ load_local_done:
                 // routes the exception to the instruction's exception target (i.e. the enclosing catch block).
                 // Returning directly from an error path here would make the exception bypass any enclosing
                 // try/catch in the same function
+                // this frame's own reference to a list read through a weak reference that the local holds, which
+                // keeps the list until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 do {
                     if (list_val.getType() == NT_LIST) {
                         QoreListNode* l = list_val.get<QoreListNode>();
@@ -15286,6 +15330,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((lis_inst->container_lv || lis_inst->container)
                                 && !isClosureContainer(lis_inst->container_lv, lis_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(lis_inst->container_slot_id,
+                                lis_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(lis_inst->container_slot_id,
                                 lis_inst->operands[0].id);
                         }
@@ -15293,9 +15339,6 @@ load_local_done:
                         // After the bookkeeping release, refcount = TLS (1) for an unshared
                         // container; trigger COW if there are additional external references.
                         if (l->reference_count() > 1) {
-                            // COW: see HashKeyStore above for rationale on *Transfer variants.
-                            // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
-                            QoreListNode* new_l = l->copy();  // refcount 1, unique
                             // Prefer container_lv (resolved at AOT deser time) over
                             // container->ref.id (fresh-parse path); the container
                             // VarRefNode is not serialized, so AOT-loaded closure
@@ -15312,6 +15355,14 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
                                 is_closure = (lis_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a list that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, l, nullptr, index, val, xsink)) {
+                                break;
+                            }
+                            // COW: see HashKeyStore above for rationale on *Transfer variants.
+                            // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
+                            QoreListNode* new_l = l->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                             } else {
@@ -20664,6 +20715,10 @@ load_local_done:
                             || path_inst->unary_op == LVUnaryOp::Chomp
                             || path_inst->unary_op == LVUnaryOp::EnsureUnique);
                         LValueHelper lvh(xsink);
+                        // the source of a weak assignment is read as an rvalue reads it (qore#7242)
+                        if (path_inst->unary_op == LVUnaryOp::EnsureUnique) {
+                            lvh.setWeakSourceResolution();
+                        }
                         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                             if (no_vivify && !*xsink) {
                                 // navigatePath failed without error — lvalue doesn't exist, no-op
@@ -24523,7 +24578,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (*xsink) {
                     return QoreValue();
                 }
-                ValueHolder rv(o->evalMember(key.c_str(), xsink), xsink);
+                ValueHolder rv(qore_object_private::get(*o)->evalMember(key.c_str(), key.size(), xsink), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }

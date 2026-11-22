@@ -1254,6 +1254,12 @@ public:
     */
     DLLLOCAL bool hasUserModuleDependencyPath(const std::string& from, const std::string& to);
 
+#ifdef DEBUG
+    //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
+    //! that another thread runs; returns false on timeout (qore#7232)
+    DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+#endif
+
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
     /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
         mutex is released and reacquired while each child is loaded.  See
@@ -1361,6 +1367,10 @@ private:
         ModuleLoadState state = MLS_INITIALIZING;
         std::string err;                        // valid iff state == MLS_FAILED
         std::string desc;                       // valid iff state == MLS_FAILED
+        // true if code that is sandboxed or acts for sandboxed code raised the failure: the waiters raise it marked
+        // (qore#7232); valid iff state == MLS_FAILED
+        bool err_sandboxed = false;
+        qore_program_id_t err_pgm_id = 0;       // the ID of the sandboxed Program of the failure, or 0
         unsigned waiters = 0;                   // cross-thread waiters currently parked on this entry
 
         DLLLOCAL ModuleLoadEntry(int tid) : owner_tid(tid) {}
@@ -1389,6 +1399,10 @@ protected:
         see qore_module_manager_mutex_attr()
     */
     QoreThreadLock mutex{qore_module_manager_mutex_attr()};
+#ifdef DEBUG
+    //! signaled when a thread starts to wait for the load of a module in another thread (see dbgWaitLoadWaiters())
+    QoreCondition dbg_load_waiter_cond;
+#endif
 
     // user module dependency map: module -> dependents
     ModMap md_map;

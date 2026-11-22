@@ -90,11 +90,12 @@ public class AbstractStreamContext {
         failing; the default implementation calls @ref sendData().
 
         @param data the binary payload to send
-        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
-        zero waits without a limit
+        @param timeout_ms the maximum time that the stream send buffer may make no progress (the peer takes none of
+        the stream's data); a value less than or equal to zero waits without a limit
         @param end_stream if @ref True, signals end of stream after this data
 
-        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw STREAM-SEND-TIMEOUT the peer took none of the data for this time, or the stream ended with its send
+        buffer full; the data was not sent
 
         @since AsyncSocketIo 1.0
     */

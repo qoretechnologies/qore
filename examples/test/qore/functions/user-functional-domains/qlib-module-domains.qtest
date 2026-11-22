@@ -73,6 +73,7 @@ class QlibModuleDomainsTest inherits QUnit::Test {
             ("module": "SqlUtil", "code": "SqlUtil::sqlutil_register_table_resolver(NOTHING);"),
             ("module": "SqlUtil", "code": "SqlUtil::sqlutil_clear_table_cache();"),
             ("module": "QoreLlmTypes", "code": "QoreLlmUtils::LlmProviderRegistry::deregisterFactory(\"openai\");"),
+            ("module": "QoreLlmTypes", "code": "new QoreLlmUtils::LlmThreadPoolExecutor(1);", "dom": "THREAD_CONTROL"),
             ("module": "ConnectionProvider",
              "code": "sub f(hash<ConnectionProvider::ConnectionSchemeInfo> i) { "
                 "ConnectionProvider::ConnectionSchemeCache::registerScheme(\"x\", i); }"),

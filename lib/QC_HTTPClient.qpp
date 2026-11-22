@@ -598,6 +598,11 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
       set, the server's certificate is verified against these CA certificates instead of the default CA certificates
       of the system; the same restrictions apply as with \c ssl_ca_file
+    - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" object: the server's certificate is verified
+      against its CA certificates, which were read when it was created, instead of \c ssl_ca_file, \c ssl_ca_path and
+      the default CA certificates of the system, on every connection path (HTTP/1.1, HTTP/2, HTTP/3); no file is read
+      and the environment is not consulted when a certificate is verified; it implies \c ssl_verify_cert unless that
+      option is given as @ref False; a client with a trust store cannot be serialized (since %Qore 3.0)
     - \c ssl_verify_cert: if @ref True "True" then the server's certificate will only be accepted if it's verified
     - \c timeout: The timeout value in milliseconds (also can be a @ref relative_dates "relative date-time value" for
       clarity, ex: \c 5m)
@@ -657,6 +662,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       - \c max_response_body_size
       - \c ssl_ca_file
       - \c ssl_ca_path
+      - \c ssl_trust_store
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);

@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A WebSocket over HTTP/2 or HTTP/3 learns at once that its connection reached CLOSED, however the connection was
+# closed: the close is not left in the stream's queue for the next heartbeat to find (qoretechnologies/qore#7241)
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) connections over TLS, their close and the async I/O controller's dispatch
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketClientStreamConnectionClosedTest
+
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+#! A client that gives the HTTP/2 or HTTP/3 connection of its WebSocket
+class TestWsClient inherits WebSocketClient {
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
+    }
+
+    HttpClientIo::HttpClientConnection getStreamConnection() {
+        return hcio_stream.getConnection();
+    }
+}
+
+class WebSocketClientStreamConnectionClosedTest inherits QUnit::Test {
+    public {
+        #! far longer than the bound of the tests: a close found by the heartbeat comes too late
+        const Heartbeat = 1h;
+
+        #! the time a close notification has to arrive
+        const Bound = 30s;
+    }
+
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketClientStreamConnectionClosed", "1.0") {
+        addTestCase("the connection is closed by its owner", \ownerCloseTest());
+        addTestCase("the connection is aborted by another thread", \abortTest());
+        addTestCase("the server ends the connection", \serverEndTest());
+        addTestCase("an HTTP/3 connection is closed by its owner", \h3OwnerCloseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        (server, port) = startServer();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    #! returns a server and its port
+    private list<auto> startServer() {
+        HttpServer s(<HttpServerOptionInfo>{"logger": new Logger("ws", LoggerLevel::getLevelInfo())});
+        s.setHandler("ws", "/ws", NOTHING, new EchoWsHandler());
+        s.waitForAsyncIo();
+        int p = s.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        s.waitForAsyncIo();
+        return (s, p);
+    }
+
+    #! returns a connected client whose close is counted down on the counter
+    private TestWsClient client(Counter closed, Queue msgs, int p = port, string http_version = "2.0") {
+        TestWsClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed.dec();
+            }
+        }, {
+            "url": "wss://127.0.0.1:" + p + "/ws",
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "heartbeat": Heartbeat,
+        });
+        wsc.connect();
+        if (http_version == "3.0") {
+            assertTrue(wsc.isHttp3(), "the WebSocket runs over HTTP/3");
+        } else {
+            assertTrue(wsc.isHttp2(), "the WebSocket runs over HTTP/2");
+        }
+        # the WebSocket works before the connection is closed
+        wsc.send("one");
+        assertEq("ECHO:one", msgs.get(Bound));
+        return wsc;
+    }
+
+    ownerCloseTest() {
+        Counter closed(1);
+        Queue msgs();
+        TestWsClient wsc = client(closed, msgs);
+        on_exit delete wsc;
+        wsc.getStreamConnection().close();
+        assertEq(0, closed.waitForZero(Bound), "the WebSocket learned that its connection was closed");
+    }
+
+    abortTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the connection is aborted at a state of its poll operation with a debug hook");
+        }
+        Counter closed(1);
+        Queue msgs();
+        TestWsClient wsc = client(closed, msgs);
+        on_exit delete wsc;
+        # the next time the connection's poll operation becomes idle, another thread aborts it, as an abort() of the
+        # operation or a close of the connection does
+        call_function("dbg_poll_close_before_open_state", wsc.getStreamConnection().getPollOperation(), "cycle-start");
+        # makes the operation read and become idle again
+        wsc.send("two");
+        assertNeq(NOTHING, call_function("dbg_poll_wait_close_before_open_state", 30000), "the abort ran");
+        assertEq(0, closed.waitForZero(Bound), "the WebSocket learned that its connection was aborted");
+    }
+
+    h3OwnerCloseTest() {
+        Counter closed(1);
+        Queue msgs();
+        TestWsClient wsc = client(closed, msgs, port, "3.0");
+        on_exit delete wsc;
+        wsc.getStreamConnection().close();
+        assertEq(0, closed.waitForZero(Bound), "the WebSocket learned that its HTTP/3 connection was closed");
+    }
+
+    serverEndTest() {
+        # a server of its own, which ends the connection when it stops
+        HttpServer s;
+        int p;
+        (s, p) = startServer();
+        on_exit if (s) {
+            delete s;
+        }
+        Counter closed(1);
+        Queue msgs();
+        TestWsClient wsc = client(closed, msgs, p);
+        on_exit delete wsc;
+        delete s;
+        assertEq(0, closed.waitForZero(Bound), "the WebSocket learned that the server ended its connection");
+    }
+}

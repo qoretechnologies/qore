@@ -84,7 +84,11 @@ public:
         raised as @p default_err
     */
     DLLLOCAL void raiseError(ExceptionSink* xsink, const char* default_err) const {
-        if (!error_code.empty()) {
+        // the exception of the stream itself, which keeps its call stack and origin (a stream of sandboxed code;
+        // qore#7232)
+        if (stream_xsink) {
+            xsink->assimilate(stream_xsink);
+        } else if (!error_code.empty()) {
             xsink->raiseException(error_code.c_str(), "%s", error_message.c_str());
         } else {
             xsink->raiseException(default_err, "stream read error: %s", error_message.c_str());
@@ -92,6 +96,8 @@ public:
     }
 
 private:
+    //! the exception that the stream raised while reading, kept to be raised by raiseError()
+    mutable ExceptionSink stream_xsink;
     QoreObject* stream;
     const QoreEncoding* encoding;
     //! a Qore StreamReader reading the text of the stream in an encoding other than UTF-8, created at the first read
