@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - exit() on the signal handler thread and with threads running, process exit paths, fork()
+# test-exec-mode: children - every check runs in child processes of the interpreter, which run in the default mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class ProcessEndCallbacksTest
+
+#! Verifies the process-end callbacks of binary modules (qore_register_process_end_callback(), qore#7191)
+/** Each case runs a child process whose debug probes (dbg_register_process_end_probe()) are process-end callbacks
+    that append a line to a file when they run: "<label> <reason> shutdown=<0|1> exit-hooks=<0|1>", then what their
+    behavior records.  The ordering, the deregistration, the concurrency and the fork() cases of the registry itself
+    are also C++ unit tests (ProcessEndCallbacksTest in lib/ql_debug.cpp).
+*/
+class ProcessEndCallbacksTest inherits QUnit::Test {
+    constructor() : Test("process-end callbacks", "1.0", \ARGV) {
+        addTestCase("the script's end runs them at the start of qore_cleanup()", \endTest());
+        addTestCase("exit() with no other thread runs them before exit()", \exitTest());
+        addTestCase("exit() on the signal handler thread runs them before _Exit()", \signalTest());
+        addTestCase("exit() while another thread runs runs them before _Exit()", \threadsTest());
+        addTestCase("they run once, in the reverse order of their registration", \orderTest());
+        addTestCase("a deregistered callback does not run", \deregisterTest());
+        addTestCase("a callback deregisters itself and cannot register another", \insideTest());
+        addTestCase("a callback that calls exit() ends the process", \reentrantTest());
+        addTestCase("a thread that ends the process while they run waits for them", \concurrentTest());
+        addTestCase("a thread that ends the process waits only for the wait bound", \boundedTest());
+        addTestCase("a child process created with fork() does not run its parent's callbacks", \forkTest());
+        set_return_value(main());
+    }
+
+    private skipRelease() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the probes are only in debug builds");
+        }
+    }
+
+    endTest() {
+        skipRelease();
+        # an exit hook (Qore code) runs before the callbacks, and the library is not torn down yet
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+register_exit_hook(sub () { File f(); f.open2(ENV.PE_FILE, O_CREAT | O_WRONLY | O_APPEND); f.write(\"hook\\n\"); });
+");
+        assertEq(0, r.rc, r.output);
+        assertEq(("hook", "a cleanup shutdown=0 exit-hooks=1"), r.lines);
+    }
+
+    exitTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+exit(3);
+");
+        assertEq(3, r.rc, r.output);
+        assertEq(("a exit shutdown=0 exit-hooks=0",), r.lines);
+    }
+
+    signalTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+set_signal_handler(SIGUSR1, sub (int sig) { exit(4); });
+kill(getpid(), SIGUSR1);
+Counter c(1);
+c.waitForZero();
+", True);
+        assertEq(4, r.rc, r.output);
+        assertEq(("a quick-exit shutdown=0 exit-hooks=0",), r.lines);
+    }
+
+    threadsTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+Counter c(1);
+Counter started(1);
+background sub () { started.dec(); c.waitForZero(); }();
+started.waitForZero();
+exit(5);
+");
+        assertEq(5, r.rc, r.output);
+        assertEq(("a quick-exit shutdown=0 exit-hooks=0",), r.lines);
+    }
+
+    orderTest() {
+        skipRelease();
+        hash<auto> r = runChild("map dbg_register_process_end_probe(ENV.PE_FILE, $1, 0), (\"a\", \"b\", \"c\");
+exit(0);
+");
+        assertEq(0, r.rc, r.output);
+        assertEq(("c exit shutdown=0 exit-hooks=0", "b exit shutdown=0 exit-hooks=0", "a exit shutdown=0 exit-hooks=0"),
+            r.lines);
+    }
+
+    deregisterTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+int id = dbg_register_process_end_probe(ENV.PE_FILE, \"b\", 0);
+if (dbg_deregister_process_end_probe(id) != 0) { exit(1); }
+if (dbg_deregister_process_end_probe(id) != -1) { exit(2); }
+");
+        assertEq(0, r.rc, r.output);
+        assertEq(("a cleanup shutdown=0 exit-hooks=1",), r.lines);
+    }
+
+    insideTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 2);
+dbg_register_process_end_probe(ENV.PE_FILE, \"b\", 3);
+");
+        assertEq(0, r.rc, r.output);
+        # b, registered last, runs first; a new registration fails while the callbacks run; a deregistration of the
+        # running callback reports that it runs
+        assertEq(("b cleanup shutdown=0 exit-hooks=1", "b register-during=-1", "a cleanup shutdown=0 exit-hooks=1",
+            "a deregister-self=1"), r.lines);
+    }
+
+    reentrantTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 0);
+dbg_register_process_end_probe(ENV.PE_FILE, \"b\", 1);
+exit(0);
+");
+        # the callback's exit(7) ends the process at once, without waiting for the callbacks or running them again:
+        # the callbacks after it do not run
+        assertEq(7, r.rc, r.output);
+        assertEq(("b exit shutdown=0 exit-hooks=0", "b calls exit"), r.lines);
+    }
+
+    concurrentTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 4);
+Counter started(1);
+background sub () { started.dec(); dbg_process_end_wait_started(30000); exit(6); }();
+started.waitForZero();
+exit(0);
+");
+        # one of the two exit codes; the callback ran once, while the other thread waited for it
+        assertTrue(r.rc == 0 || r.rc == 6, r.output);
+        assertEq(("a quick-exit shutdown=0 exit-hooks=0", "a waiter=1", "a end"), r.lines);
+    }
+
+    boundedTest() {
+        skipRelease();
+        hash<auto> r = runChild("dbg_process_end_set_wait_ms(200);
+dbg_register_process_end_probe(ENV.PE_FILE, \"a\", 5);
+Counter started(1);
+background sub () { started.dec(); dbg_process_end_wait_started(30000); exit(8); }();
+started.waitForZero();
+exit(0);
+");
+        # the callback never returns: the other thread ends the process after the wait bound
+        assertEq(8, r.rc, r.output);
+        assertEq(("a quick-exit shutdown=0 exit-hooks=0", "a blocks"), r.lines);
+    }
+
+    forkTest() {
+        skipRelease();
+        # the child exits while it holds the write end of the pipe open, so the parent reads until it has exited
+        hash<auto> r = runChild("dbg_register_process_end_probe(ENV.PE_FILE, \"parent\", 0);
+hash<PipeInfo> pipe = File::getPipe();
+flush();
+int pid = fork();
+if (!pid) {
+    pipe.read.close();
+    exit(0);
+}
+pipe.write.close();
+while (pipe.read.readBinary(4096)) {
+}
+");
+        assertEq(0, r.rc, r.output);
+        assertEq(("parent cleanup shutdown=0 exit-hooks=1",), r.lines);
+    }
+
+    #! runs the code in a child process; returns its exit code, its output and the lines that its probes recorded
+    private hash<auto> runChild(string code, bool signals = False) {
+        string dir = make_tmp_dir("process-end-");
+        on_exit remove_tree(dir);
+        string script = dir + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%no-child-restrictions\n" + code);
+        f.close();
+        string file = dir + "/probe.txt";
+        string output = dir + "/output.txt";
+        # signal handling is disabled (-b) except for the case of the signal handler
+        string command = sprintf("PE_FILE='%s' '%s' %s--enable-debug '%s' > '%s' 2>&1", file,
+            TestInterpreter::qore_interpreter(), signals ? "" : "-b ", script, output);
+        int rc = system(command);
+        string out = ReadOnlyFile::readTextFile(output);
+        list<string> lines = is_file(file) ? trim(ReadOnlyFile::readTextFile(file)).split("\n") : ();
+        return {"rc": rc, "output": out, "lines": lines};
+    }
+}

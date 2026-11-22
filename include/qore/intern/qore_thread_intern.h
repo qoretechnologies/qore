@@ -709,6 +709,11 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
 */
 DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
 
+//! Runs the process-end callbacks of the modules once (see qore_register_process_end_callback(), qore#7191)
+/** Called by qore_cleanup() (#QPE_CLEANUP) and qore_exit_process() (#QPE_EXIT, #QPE_QUICK_EXIT)
+*/
+DLLLOCAL void qore_run_process_end_callbacks(qore_process_end_e reason);
+
 //! returns the data of the current thread, for the functions that take it to look it up only once
 DLLLOCAL ThreadData* qore_get_thread_data();
 
