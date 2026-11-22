@@ -9,6 +9,10 @@
 # look-alike of Mid (a class with the same name and declarations in another namespace; qore#7036) cannot.
 # call_object_method() and call_object_method_args() still cannot call a private method, also not one of Mid in the
 # code of Mid, which can call it directly and through a call reference.
+#
+# A call reference selects the variants of its method with the class context of the code that created it: one created
+# with no class context calls only the public variants wherever it is called, and one created by the code of a class
+# of a child Program keeps that context after the Program has been deleted.
 
 %modern
 %no-child-restrictions
@@ -344,4 +348,128 @@ show("outside on subh", {
     } catch (hash<ExceptionInfo> ex) {
         printf("sub direct: %s\n", ex.err);
     }
+}
+
+#! a class with methods with variants of different access, whose code calls a call reference that it is given
+class CV {
+    string mv(int i) {
+        return "CV::mv(int)";
+    }
+
+    private string mv(string s) {
+        return "CV::mv(string)";
+    }
+
+    private:internal string mv(float f) {
+        return "CV::mv(float)";
+    }
+
+    static string sv(int i) {
+        return "CV::sv(int)";
+    }
+
+    private static string sv(string s) {
+        return "CV::sv(string)";
+    }
+
+    #! calls the call reference in the code of the class
+    auto callRef(code r, auto arg) {
+        return r(arg);
+    }
+}
+
+class DV inherits CV {
+    #! calls the call reference in the code of the subclass
+    auto callRefSub(code r, auto arg) {
+        return r(arg);
+    }
+}
+
+# a call reference made with no class context selects only the public variants of its method, also when the code of
+# the class or of its subclass calls it
+{
+    CV cv();
+    DV dv();
+    # an object of the subclass with the declared type of the class: the reference is resolved for the object's class
+    CV cd = dv;
+    hash<string, code> refs = {
+        "getCallReference": cv.getCallReference("mv"),
+        "parse-time": \cv.mv(),
+        "parse-time on subclass object": \cd.mv(),
+        "static getCallReference": cv.getCallReference("sv"),
+        "static parse-time": \CV::sv(),
+    };
+    list<auto> args = (1, "x", 1.5);
+    foreach hash<auto> i in (refs.pairIterator()) {
+        code r = i.value;
+        foreach auto arg in (args) {
+            if (arg.typeCode() == NT_FLOAT && i.key =~ /^static/) {
+                continue;
+            }
+            string label = sprintf("%s %s", i.key, arg.type());
+            show("context-less reference", {
+                "outside " + label: tc(auto sub () { return r(arg); }),
+                "in class " + label: tc(auto sub () { return cv.callRef(r, arg); }),
+                "in subclass " + label: tc(auto sub () { return dv.callRefSub(r, arg); }),
+            });
+        }
+    }
+}
+
+public class PB {
+    string m(int i) {
+        return "PB::m(int)";
+    }
+
+    private string m(string s) {
+        return "PB::m(string)";
+    }
+}
+
+public class PBS inherits PB {}
+
+#! returns a call reference that the code of a subclass of PB in a child Program makes, after deleting the Program
+code sub child_reference(string form, PB b) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    p.parse("class Sub inherits PB {
+    static code getRef(PB b) { return b.getCallReference(\"m\"); }
+    static code parseRef(PB b) { return \\b.m(); }
+    static code pseudoRef() { string s = \"abcdef\"; return \\s.substr(); }
+}
+code sub get(string form, PB b) {
+    switch (form) {
+        case \"getCallReference\": return Sub::getRef(b);
+        case \"pseudo\": return Sub::pseudoRef();
+    }
+    return Sub::parseRef(b);
+}
+", "child");
+    code r = p.callFunction("get", form, b);
+    delete p;
+    return r;
+}
+
+# a call reference made by the code of a class of a Program that has been deleted since is called with the access of
+# its creator
+{
+    PB pb();
+    PBS pbs();
+    hash<string, code> refs = {
+        "getCallReference": child_reference("getCallReference", pb),
+        "parse-time": child_reference("parse-time", pb),
+        "parse-time on subclass object": child_reference("parse-time", pbs),
+    };
+    foreach hash<auto> i in (refs.pairIterator()) {
+        code r = i.value;
+        show("deleted creator", {
+            i.key + " int": tc(auto sub () { return r(1); }),
+            i.key + " string": tc(auto sub () { return r("x"); }),
+        });
+    }
+    # a reference to a pseudo-method of a value made there, called with positional and named arguments
+    code r = child_reference("pseudo", pb);
+    show("deleted creator", {
+        "pseudo-method positional": tc(auto sub () { return r(2); }),
+        "pseudo-method named": tc(auto sub () { return r(start: 2); }),
+    });
 }
