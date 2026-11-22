@@ -2526,7 +2526,7 @@ Socket::constructor() {
 }
 
 //! Creates a socket with client credentials for its first HTTP client poll operation
-/** Internal HTTP transport API used by the HttpClientIo module. The operation takes the references on
+/** @internal HTTP transport API used by the HttpClientIo module. The operation takes the references on
     construction. Raw socket TLS methods never use them.
     @param certificate the client certificate for the target TLS handshake
     @param private_key the client private key for the target TLS handshake
