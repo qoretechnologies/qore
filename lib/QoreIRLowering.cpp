@@ -14530,14 +14530,14 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     // not-NOTHING guard that the variable's type may call for is applied to the value that the access reads; a base
     // that is itself an expression (h.a{k}, h[i]{k}, f(){k}) gets no guard on its root variable, whose value no
     // instruction would use
-    QoreIRValue base_val = lowerExpression(op->getLeft(), error);
+    const QoreValue base = op->getLeft();
+    QoreIRValue base_val = lowerExpression(base, error);
     if (!base_val.isValid()) {
         return QoreIRValue();
     }
-    if (const VarRefNode* base_var = dynamic_cast<const VarRefNode*>(op->getLeft().getInternalNode());
+    if (const VarRefNode* base_var = dynamic_cast<const VarRefNode*>(base.getInternalNode());
             base_var && !dynamic_cast<const VarRefNewObjectNode*>(base_var)) {
-        maybeInsertNotNothingGuard(base_val, &op->getLeft(), getVarRefLocation(base_var),
-            getVarRefTypeInfo(base_var), false);
+        maybeInsertNotNothingGuard(base_val, &base, getVarRefLocation(base_var), getVarRefTypeInfo(base_var), false);
     }
     QoreIRValue key_val = lowerExpression(op->getRight(), error);
     if (!key_val.isValid()) {
