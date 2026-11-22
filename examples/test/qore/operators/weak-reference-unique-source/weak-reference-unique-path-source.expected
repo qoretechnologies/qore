@@ -1,0 +1,22 @@
+member: c.l [{x: 7}, {x: 1}] w [{x: 7}, {x: 1}] literal [{x: 0}, {x: 1}]
+hash key: h.k [{x: 8}, {x: 1}] literal [{x: 0}, {x: 1}]
+list element: outer[0] [{x: 0}, {x: 9}] literal [{x: 0}, {x: 1}]
+nested path: [{x: 10}, {x: 1}] literal [{x: 0}, {x: 1}]
+static path: [{x: 11}, {x: 1}] literal [{x: 0}, {x: 1}]
+self member: l [{x: 3}, {x: 1}] literal [{x: 0}, {x: 1}]
+shared hash key: a [{x: 0}, {x: 1}] h.k [{x: 7}, {x: 1}] w [{x: 7}, {x: 1}]
+shared member: b [{x: 0}, {x: 1}] c.l [{x: 0}, {x: 5}]
+shared variable: v [{x: 0}, {x: 1}] lv [{x: 6}, {x: 1}]
+unshared: w [{x: 4}, {x: 1}]
+after remove: w []
+missing key: h {} w null
+beyond the end: l [1] w2 null
+scalar: {k: "str"} "str"
+slice: {a: [1], b: [2]}
+runtime slice: {a: [1], b: [2]}
+memberGate("zz")
+undeclared member: [9]
+memberGate("p")
+private member: [9]
+key calls: 2
+index: i 1 Mutex

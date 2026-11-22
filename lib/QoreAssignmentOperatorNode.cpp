@@ -43,6 +43,9 @@
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
@@ -733,6 +736,114 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     return err;
 }
 
+//! returns true if \a node is the root of an lvalue path whose container a weak assignment makes unique: a variable,
+//! a member of the object (self) or a class static variable
+static bool qore_weak_assignment_path_root(const AbstractQoreNode* node) {
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        return var->getType() != VT_IMMEDIATE;
+    }
+    return dynamic_cast<const SelfVarrefNode*>(node) != nullptr
+        || dynamic_cast<const StaticClassVarRefNode*>(node) != nullptr
+        || dynamic_cast<const DeferredStaticClassMemberRefNode*>(node) != nullptr;
+}
+
+//! returns the parse type of an operand of an lvalue path (nullptr if it has none: no type)
+static const QoreTypeInfo* qore_weak_path_operand_type(const QoreValue& v) {
+    if (const AbstractQoreNode* n = v.getInternalNode()) {
+        if (auto* var = dynamic_cast<const VarRefNode*>(n)) {
+            return var->getTypeInfo();
+        }
+        if (auto* pn = dynamic_cast<const ParseNode*>(n)) {
+            return pn->getParseTypeInfo();
+        }
+    }
+    return v.getFullTypeInfo();
+}
+
+//! returns true if the key or index of a step of an lvalue path cannot be a list, which would make the step a slice,
+//! which is not an lvalue that a weak assignment's source can be made unique through (qore#7242)
+static bool qore_weak_path_selector_not_list(const QoreValue& sel) {
+    if (dynamic_cast<const QoreParseListNode*>(sel.getInternalNode())) {
+        return false;
+    }
+    const QoreTypeInfo* ti = qore_weak_path_operand_type(sel);
+    return QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseReturns(ti, NT_LIST) == QTI_NOT_EQUAL;
+}
+
+//! returns true if a member or key step of an lvalue path can be made unique as the AST evaluates it (qore#7242): a
+//! hash key that is not a list, or a public member declared in the known class of an object whose class has no
+//! memberGate() method, which the read of the member calls for a member that the lvalue cannot access
+static bool qore_weak_path_member_step(const QoreHashObjectDereferenceOperatorNode* hd) {
+    QoreValue key = hd->getRight();
+    if (!qore_weak_path_selector_not_list(key)) {
+        return false;
+    }
+    const QoreTypeInfo* lti = qore_weak_path_operand_type(hd->getLeft());
+    if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::parseReturns(lti, NT_OBJECT) == QTI_NOT_EQUAL) {
+        // a hash
+        return true;
+    }
+    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(lti);
+    if (!qc || key.getType() != NT_STRING || key.needsEval()) {
+        return false;
+    }
+    char buf[8];
+    const char* mem;
+    if (key.isShortString()) {
+        key.getShortString(buf);
+        mem = buf;
+    } else {
+        mem = key.get<const QoreStringNode>()->c_str();
+    }
+    const qore_class_private* cls = qore_class_private::get(*qc);
+    if (cls->parseHasMemberGate()) {
+        return false;
+    }
+    const qore_class_private* member_class = nullptr;
+    ClassAccess access = Public;
+    const QoreMemberInfo* mi = cls->parseFindMember(mem, member_class, access);
+    return mi && access == Public;
+}
+
+//! returns true if \a node is an lvalue path whose container a weak assignment makes unique (qore#7242): a member of
+//! the object, or an object member, a hash key or a list element reached from a variable, the object or a class
+//! static variable; out of the path of a variable source
+static QORE_INTERN_NOINLINE bool qore_weak_assignment_path_source_made_unique(const AbstractQoreNode* node) {
+    // a weak reference designates the container of the path as it does that of a variable
+    if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        return qore_weak_source_type_may_hold_container(self_ref->getParseTypeInfo());
+    }
+    if (!dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+            && !dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return false;
+    }
+    if (!qore_weak_source_type_may_hold_container(static_cast<const ParseNode*>(node)->getParseTypeInfo())) {
+        return false;
+    }
+    // the root of the path; a step that is a slice, or a member that the lvalue could not access, leaves the path as
+    // it was, which is read as an rvalue
+    const AbstractQoreNode* root = node;
+    while (true) {
+        if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(root)) {
+            if (!qore_weak_path_member_step(hd)) {
+                return false;
+            }
+            root = hd->getLeft().getInternalNode();
+        } else if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(root)) {
+            if (!qore_weak_path_selector_not_list(sb->getRight())) {
+                return false;
+            }
+            root = sb->getLeft().getInternalNode();
+        } else {
+            break;
+        }
+        if (!root) {
+            return false;
+        }
+    }
+    return qore_weak_assignment_path_root(root);
+}
+
 bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
     const AbstractQoreNode* node = right.getInternalNode();
     if (!node) {
@@ -743,8 +854,20 @@ bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
     }
     // a class static variable, or a static or global variable that AOT source parsing has not resolved: the value is
     // checked when the step runs
-    return dynamic_cast<const StaticClassVarRefNode*>(node) != nullptr
-        || dynamic_cast<const DeferredStaticClassMemberRefNode*>(node) != nullptr;
+    if (dynamic_cast<const StaticClassVarRefNode*>(node) != nullptr
+            || dynamic_cast<const DeferredStaticClassMemberRefNode*>(node) != nullptr) {
+        return true;
+    }
+    return qore_weak_assignment_path_source_made_unique(node);
+}
+
+bool QoreAssignmentOperatorNode::weakSourceMadeUnique() const {
+    signed char v = weak_source_unique.load(std::memory_order_relaxed);
+    if (!v) {
+        v = qore_weak_assignment_source_made_unique(right) ? 2 : 1;
+        weak_source_unique.store(v, std::memory_order_relaxed);
+    }
+    return v == 2;
 }
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
@@ -849,27 +972,32 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     // The container made unique is the value assigned: the variable is not read again, as another thread can assign
     // a variable that is shared (a global, a variable that a closure captures) between the two reads, and the
     // weak reference would then designate a container that the step did not make unique (qore#5847).
-    QoreValue unique_source;
+    // the value of the source, read by the step, which is the value assigned whatever its type: the source is not
+    // evaluated again, which would run the side effects of the keys or indexes of a path a second time (qore#7242); it
+    // is held until the operand holds a reference of its own, as the operand can borrow it and another thread can
+    // assign the source meanwhile
+    ValueHolder unique_source(xsink);
+    bool source_read = false;
     if (mode == AssignmentMode::Weak) {
-        if (qore_weak_assignment_source_made_unique(right)) {
+        if (weakSourceMadeUnique()) {
             LValueHelper source(right, xsink, true);
             if (*xsink) {
                 return QoreValue();
             }
-            // a weak reference held by the variable and a value of another type are left as they are
-            if (source && (source.getType() == NT_HASH || source.getType() == NT_LIST)) {
-                source.ensureUnique();
+            if (source) {
+                // a weak reference held by the source and a value of another type are left as they are; the operand
+                // evaluates a weak reference to its target
+                if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
+                    source.ensureUnique();
+                }
                 unique_source = source.getReferencedValue();
+                source_read = true;
             }
         }
     }
 
     // the operand is a statement of its own where the other execution modes evaluate it so
-    QoreMutationOperandHolder new_value(left, unique_source.hasNode() ? unique_source : right, true, xsink);
-    // the operand holds a reference of its own
-    if (unique_source.hasNode()) {
-        unique_source.discard(xsink);
-    }
+    QoreMutationOperandHolder new_value(left, source_read ? *unique_source : right, true, xsink);
     if (*xsink)
         return QoreValue();
 
