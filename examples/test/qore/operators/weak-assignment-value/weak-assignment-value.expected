@@ -34,6 +34,9 @@ opaque member strip: {a: 1}
 list element temp: C destroyed=0
 list element value: C
 softlist value: [1] list<auto> sl=[1]
+softlist released: sl=[]
+softlist in the statement: [2]
+softlist after the statement: sl2=[]
 closure softlist value: [1] list<auto>
 closure softlist released: csl=[]
 member store: DESTRUCTOR-ERROR

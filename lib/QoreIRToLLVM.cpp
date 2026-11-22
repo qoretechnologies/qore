@@ -17131,6 +17131,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                 }
             }
+            // a local assigned with := through an lvalue path whose only step is the local itself (a softlist
+            // variable: see QoreIRLowering::lowerAssignment()) holds a weak reference as a local assigned with a
+            // StoreLocal does: it is not reloaded into its cache, which would read the reference's target and keep
+            // it after the statement (qore#7142)
+            if (inst_ptr->opcode == QoreIROpcode::LValuePathAssign) {
+                const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst_ptr.get());
+                if (path_inst->mode == AssignmentMode::Weak && path_inst->path.size() == 1
+                        && path_inst->path[0].kind == LVPathStepKind::LocalVar && path_inst->path[0].ref_ptr) {
+                    weak_assigned_locals.insert(path_inst->path[0].ref_ptr);
+                }
+            }
             // a captured local is assigned with := in the function that captures it or in another closure, whose
             // stores are not in this function: the parse records every weak assignment of a local
             // (LocalVar::isWeakAssigned()), so that the receiver of a call read from it keeps the object of a weak
