@@ -409,9 +409,16 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     of its parent classes or one of its subclasses calls the private method.  Code of another parent class of the
     object cannot call the private method, so a call there skips it as well and calls the first method of the name
     that it can call, such as its own.  A private method overrides the methods of the same name of the parent classes
-    of its class: a call from outside the class hierarchy through a variable of a parent class, or resolved at run
-    time, on an object of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of
-    the name can be called (\c BASE-CLASS-IS-PRIVATE when the method is reached only through private inheritance).\n\n
+    of its class: a call from outside the class hierarchy on an object of the class, whether it is resolved when
+    parsing (through a variable of the class or of a parent class) or at run time, raises \c METHOD-IS-PRIVATE instead
+    of calling them, as it does when no method of the name can be called (\c BASE-CLASS-IS-PRIVATE when the method is
+    reached only through private inheritance), and a later parent class's public method of the name is called instead
+    only if it is reached through another branch than the private method; a call reference through a variable of the
+    class and a call of a static method by the class's name are then parse errors, as for a class with only a private
+    method of the name (a call reference raises \c ILLEGAL-CALL-REFERENCE at run time instead when the name is also that
+    of an object pseudo-method or of a member holding code).  Code of a class without private access to the object's class, such as a class that the object's
+    class reaches only through the @ref private_inheritance "private:internal" inheritance of one of its parent classes,
+    calls from outside the class hierarchy (since %Qore 3.0).\n\n
     The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.  The default argument values of a method are inside the method's class, with the object of the call as \c self for a normal method, whoever calls the method, and never inside the class of the code that calls it (see @ref function_param_default_values).
 
     @subsection synchronized_methods Synchronized Methods

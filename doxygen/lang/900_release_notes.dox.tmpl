@@ -129,6 +129,12 @@
     object's class reaches that parent class first (see @ref multiple_inheritance_order;
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
 
+    @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
+    Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
+    @ref private_methods "private" one through a variable of the class: the call raises \c METHOD-IS-PRIVATE, as with an
+    untyped variable, and a call reference or static call of it is a parse error; call it through the parent class
+    instead (see @ref private_methods; <a href="https://github.com/qoretechnologies/qore/issues/7211">issue 7211</a>).
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
@@ -2755,6 +2761,14 @@
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
       (<a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>)
+    - a typed call from outside the class hierarchy calls the method that a call resolved at run time calls, and a call
+      reference through a typed receiver and a static method call there are refused as at run time: they called a
+      parent class's method that a private method overrides (see @ref private_methods;
+      <a href="https://github.com/qoretechnologies/qore/issues/7211">issue 7211</a>)
+    - a typed call from code of a class that the object's class reaches only through \c private:internal inheritance
+      raises \c METHOD-IS-PRIVATE, as an untyped call does, for a private method that overrides a parent class's
+      public one (see @ref private_methods;
+      <a href="https://github.com/qoretechnologies/qore/issues/7218">issue 7218</a>)
     - the C++ API \c QoreObject::deleteMemberValue() removes a member as the @ref delete "delete" operator does (see
       @ref remove_object_members); it removed the key of a declared member, and a member that held an object failed an
       assertion in debug builds and left the object's reference scan count wrong
