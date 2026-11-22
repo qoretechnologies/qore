@@ -16517,21 +16517,21 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
         rv.discard(xsink);
         return nullptr;
     }
-    if (rv.getType() == NT_OBJECT) {
+    // an opaque reference to an object reports the type of an object, but get<QoreObject>() does not read it
+    if (!rv.isOpaque() && rv.getType() == NT_OBJECT) {
         // the reference of the read is the reference returned
         return rv.get<QoreObject>();
     }
-    // a weak reference, for example
+    // a weak or an opaque reference, for example: the object is read with a reference of its own, which is taken
+    // only while the object is referenced (qore#7231)
     ValueHolder holder(rv, xsink);
-    QoreValue v = holder->resolveIndirect();
-    if (v.getType() != NT_OBJECT) {
+    ValueHolder v(holder->resolveIndirectRef(), xsink);
+    if (v->getType() != NT_OBJECT) {
         xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",
-            v.getFullTypeName());
+            v->getFullTypeName());
         return nullptr;
     }
-    QoreObject* obj = v.get<QoreObject>();
-    obj->ref();
-    return obj;
+    return v.release().get<QoreObject>();
 }
 
 //! returns the members of the operation of the object that it keeps with the operation, or nullptr (qore#6839)

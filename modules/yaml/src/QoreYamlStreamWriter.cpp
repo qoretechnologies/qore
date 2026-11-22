@@ -460,8 +460,25 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue val, ExceptionSink* xsin
     }
     // A container can hold a weak (":=") or opaque ("@=") reference, and iterating the container yields the
     // reference itself rather than its target, so it is resolved before the value's type is checked; otherwise a
-    // hash or list target reaches the scalar case below and is written as an empty string
-    const QoreValue value = val.resolveIndirect();
+    // hash or list target reaches the scalar case below and is written as an empty string; the target of a weak
+    // reference is read with a reference of its own, as another thread can free its list or hash while it is written
+    // (qore#7231)
+    QoreValue value = val;
+    ValueHolder target(xsink);
+    switch (value.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            target = value.resolveIndirectRef();
+            value = *target;
+            break;
+        default:
+            // the target of an opaque reference is held by the container that holds the reference
+            if (value.isOpaque()) {
+                value = value.resolveIndirect();
+            }
+            break;
+    }
     switch (value.getType()) {
         case NT_HASH: {
             if (startMapping(nullptr, xsink)) return -1;
