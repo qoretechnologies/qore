@@ -317,6 +317,50 @@ public:
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
     }
 
+    //! Returns true if each member of this hash has a member of \a other with the same key whose value is equal to
+    //! its value by \a value_equal (qore#7266)
+    /** Compares the members of two hashes of the same size for the equality operators.  It walks both member lists
+        together while the keys of the members are the same (by length and inline, without hashing the key); from
+        the first pair of members whose keys differ on, it looks each remaining key of this hash up in the key map of
+        \a other.  The values are compared in the order of the members of this hash, with the value of this hash as
+        the first argument of \a value_equal, as a lookup of every key in \a other does, so that the result, the
+        exceptions raised and the order of the comparisons are the same.
+
+        @param other the other hash; the caller has checked that it has as many members as this hash
+        @param value_equal a function taking the value of a member of this hash and the value of the member of
+        \a other with the same key, returning true if they are equal; the comparison ends with false as soon as it
+        returns false
+
+        @return true if every member of this hash has a member of \a other with the same key and an equal value
+    */
+    template <typename F>
+    DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
+        assert(member_list.size() == other.member_list.size());
+        qhlist_t::const_iterator i = member_list.begin();
+        const qhlist_t::const_iterator e = member_list.end();
+        // the other list's end is tested too, so that the walk cannot pass it whatever the sizes are
+        for (qhlist_t::const_iterator j = other.member_list.begin(), oe = other.member_list.end(); i != e && j != oe;
+                ++i, ++j) {
+            const HashMember* m = *i;
+            const HashMember* om = *j;
+            if (!qore_key_equal(m->key.data(), m->key.size(), om->key.data(), om->key.size())) {
+                break;
+            }
+            // the keys are unique, so the member with the same key is the member at the same place
+            if (!value_equal(m->val, om->val)) {
+                return false;
+            }
+        }
+        for (; i != e; ++i) {
+            const HashMember* m = *i;
+            hm_hm_t::const_iterator found = other.findIter(m->key.data(), m->key.size());
+            if (found == other.hm.end() || !value_equal(m->val, (*found->second)->val)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 
     DLLLOCAL QoreValue getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const;

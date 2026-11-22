@@ -2302,8 +2302,13 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
-            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed
+            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed,
+            // and so do those waiting for a stream to drain, as nothing more can be sent (waitForStreamDrain() then
+            // returns -1): a handler whose send waited for a full stream buffer waited until its own timeout for a
+            // peer that had closed the connection (qoretechnologies/qore#7282); the data received before the close
+            // stays readable, so the session is not marked closed for its readers here
             wakeSettingsWaiters();
+            notifyStreamDrain();
             return 0;  // connection closing gracefully
         }
         // A server receives these for a client Initial whose CRYPTO data does not start the
@@ -2438,6 +2443,7 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 // see readPacketLocked()
                 wakeSettingsWaiters();
+                notifyStreamDrain();
                 break;  // connection shutting down — no more packets can be processed
             }
             // see readPacketLocked(): drop silently so the client's retransmitted Initial starts
@@ -3847,7 +3853,9 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         }
     }
 
-    return closed_.load(std::memory_order_acquire) ? -1 : 1;
+    // a connection that the peer closed, or that is closing, sends nothing more: the stream will not drain
+    // (qoretechnologies/qore#7282); isClosed() also covers an idle close and a dropped connection
+    return (closed_.load(std::memory_order_acquire) || isClosed()) ? -1 : 1;
 }
 
 int64_t QuicSession::streamAckedBytes(int64_t stream_id) {

@@ -3216,6 +3216,17 @@ static __attribute__((noinline, cold)) int raise_stack_limit(ExceptionSink* xsin
     return -1;
 }
 
+//! Returns true if entering a Program does nothing: the thread runs in it, with its local data of the Program
+/** The case of ProgramThreadCountContextHelper::set() that returns at once, and so cannot fail; every other case enters
+    the Program.  qore_reference_resolution_check() uses the same test to know that resolving a reference enters no
+    Program (qore#7264), so the two cannot differ.
+*/
+static __attribute__((always_inline)) inline bool thread_program_entry_is_noop(const ThreadData* td,
+        const QoreProgram* pgm) {
+    return pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
+        && !td->dtor_cancel_defer_count;
+}
+
 static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
@@ -3579,6 +3590,24 @@ void thread_ref_remove(const lvalue_ref* r) {
     ThreadData* td = thread_data.get();
     assert(td->ref_set.find(r) != td->ref_set.end());
     td->ref_set.erase(r);
+}
+
+int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // the entry into the Program does nothing only in the case of ProgramThreadCountContextHelper::set() that returns
+    // at once (no Program, or thread_program_entry_is_noop()); the others enter the Program, which can fail
+    if (pgm && !thread_program_entry_is_noop(td, pgm)) {
+        return 0;
+    }
+    // the stack check of RuntimeReferenceHelperBase
+    if (check_stack_intern(xsink, td)) {
+        return -1;
+    }
+    // a reference being resolved raises CIRCULAR-REFERENCE-ERROR
+    if (!td->ref_set.empty() && td->ref_set.find(r) != td->ref_set.end()) {
+        return 0;
+    }
+    return 1;
 }
 
 LocalVarValue* thread_instantiate_lvar() {
@@ -6346,8 +6375,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // and is made without the call that converts a C++ exception
     {
         ThreadData* td = thread_data.get();
-        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
-                && !td->dtor_cancel_defer_count) {
+        if (thread_program_entry_is_noop(td, pgm)) {
             // the Program's code runs with the thread's local data of the Program (qore#6185, qore#6537; see
             // setRethrow())
             assert(td->tlpd->pgm == pgm);
@@ -6399,8 +6427,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // as set() without the object: a call within the Program does nothing more
     {
         ThreadData* td = thread_data.get();
-        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
-                && !td->dtor_cancel_defer_count) {
+        if (thread_program_entry_is_noop(td, pgm)) {
             assert(td->tlpd->pgm == pgm);
             assert(!old_pgm);
             assert(!entry_frame.isActive());
