@@ -1325,6 +1325,56 @@ conn.checkSandboxAccess(True);
         return regex_subst(url, "^" + scheme, targ);
     }
 
+    #! Refuses code restricted from the NETWORK domain a network connection that the connection's creator proof does not allow
+    /** A connection class calls this method before it connects a client that it created outside @ref get() and
+        @ref getAsync() for the calling code (a synchronous client of a ping, for example), giving the target that the
+        client connects to.  Code that is not restricted from the \c NETWORK domain is not checked.  Restricted code
+        that was lent the connection may connect only to the connection's own target, as with the clients that
+        @ref get() and @ref getAsync() create for it (qore#7262): the origin of \a url (TLS or not, host, port) and the
+        proxy must be the ones that the proof that the connection took from the code that created it is bound to; a
+        connection without a proof, or another target, is refused before any connection is attempted.
+
+        @param url the URL that the client connects to (an \c http or \c https URL)
+        @param proxy_url the URL of the client's proxy, if any
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK domain, and the connection's creator
+        proof does not allow the target or the proxy
+
+        @since %ConnectionProvider 3.1
+    */
+    final private checkLentNetworkTarget(string url, *string proxy_url) {
+        if (!SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            return;
+        }
+        bool allowed;
+        if (creator_proof) {
+            try {
+                hash<UrlInfo> u = parse_url(url);
+                bool tls = (u.protocol ?? "http").lwr() == "https";
+                *hash<auto> proxy_info;
+                if (proxy_url.val()) {
+                    hash<UrlInfo> pu = parse_url(proxy_url);
+                    bool proxy_tls = (pu.protocol ?? "http").lwr() == "https";
+                    proxy_info = {
+                        "host": pu.host ?? "",
+                        "port": pu.port ?? (proxy_tls ? 443 : 80),
+                        "ssl": proxy_tls,
+                    };
+                }
+                allowed = u.host.val()
+                    && creator_proof.allowsOrigin(tls, u.host, u.port ?? (tls ? 443 : 80))
+                    && creator_proof.allowsProxy(proxy_info);
+            } catch (hash<ExceptionInfo> ex) {
+                # an invalid URL is no allowed target
+            }
+        }
+        if (!allowed) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
+                "functional domain and may connect only to the target of a connection that unrestricted code created "
+                "and lent to it", name);
+        }
+    }
+
     #! Marks the connection up after a connection was made successfully with get(), unless a failed ping marked it down
     /** Sets @ref up to @ref True "True" and @ref status to \c "OK", as a successful ping does, but without calling
         @ref handlePingSuccess(), which handles pings only.  A connection that the last ping found down is left down:

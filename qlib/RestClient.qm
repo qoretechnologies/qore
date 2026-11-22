@@ -6068,6 +6068,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @throw OAUTH2-ERROR the connection's configuration cannot work (incomplete OAuth2 options, or an OAuth2 grant
         type with an authorization step that is not yet authorized; see @ref checkConfiguration()); a monitor handles
         it as a failed ping, which marks the connection down
+        @throw PERMISSION-DENIED without \c ping_method, the calling code is restricted from the \c NETWORK domain and
+        the connection is not a lent connection whose target the client's is (see
+        @ref ConnectionProvider::AbstractConnection::checkLentNetworkTarget() "checkLentNetworkTarget()")
 
         @see supportsPollingApi()
     */
@@ -6078,6 +6081,18 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
 
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
+            if (opts.ping_method && opts.ping_path) {
+                # an HTTP ping request with HttpClientIo (HttpBasedConnection::startPollConnect())
+                return HttpBasedConnection::startPollConnect(logger);
+            }
+            # the synchronous client connects outside get() and getAsync(): code restricted from NETWORK may connect only
+            # to the target of a connection that was lent to it (qore#7262), checked before connecting
+            object client = getPollImpl();
+            if (client.hasCallableMethod("startPollConnect") && client.hasCallableMethod("getURL")) {
+                checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
+                    ? client.getProxyURL() : NOTHING);
+                return client.startPollConnect();
+            }
             return HttpBasedConnection::startPollConnect(logger);
         }
         auto ping_body = getPingBody();
@@ -6916,13 +6931,21 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     #! Checks the connection for a ping without a ping request: connects to the server and disconnects
     /** Connects the client of @ref getPollImpl() (and makes the TLS handshake for an HTTPS URL), as the polling ping
         does with @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()", without logging in or
-        sending a request; the client's connect timeout applies
+        sending a request; the client's connect timeout applies.  Code restricted from the \c NETWORK domain may
+        connect only to the target of a connection that unrestricted code created and lent to it (see
+        @ref ConnectionProvider::AbstractConnection::checkLentNetworkTarget() "checkLentNetworkTarget()")
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK domain, and the connection is not a
+        lent connection whose target this is
 
         @since %RestClient 2.7
     */
     private pingConnect() {
         RestClient conn_client = getPollImpl();
         on_exit conn_client.disconnect();
+        # the client is created outside get() and getAsync(): code restricted from NETWORK may connect only to the
+        # target of a connection that was lent to it, as with their clients (qore#7262), checked before connecting
+        checkLentNetworkTarget(conn_client.getURL(), conn_client.getProxyURL());
         conn_client.connect();
     }
 
