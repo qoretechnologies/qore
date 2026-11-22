@@ -472,7 +472,8 @@ public class ConnectionProviderTest inherits QUnit::Test {
         # Test single ping success
         {
             HttpConnection hc("test-success", "test", url);
-            assertTrue(hc.getInfo().up);
+            # never checked: not up (issue #7236)
+            assertFalse(hc.getInfo().up);
             TestPollingConnectionMonitor pcm();
             on_exit delete pcm;
             pcm.add(hc);
@@ -499,6 +500,9 @@ public class ConnectionProviderTest inherits QUnit::Test {
             assertEq("error", result.result);
             assertTrue(exists result.ex);
             assertFalse(hc.getInfo().up);
+            # the failed ping set the status, not just left the connection never checked (issue #7236)
+            assertRegex("SOCKET-CONNECT-ERROR", hc.getInfo().status);
+            assertEq(Type::Date, hc.getInfo().last_check.type());
         }
 
         # Test add duplicate same connection is a no-op

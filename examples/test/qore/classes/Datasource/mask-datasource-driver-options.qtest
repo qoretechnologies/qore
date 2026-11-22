@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class MaskDatasourceDriverOptionsTest
+
+#! the option values in the masked forms of a datasource that identify a connection (qore#7016, qore#7017, qore#7070)
+/** With \c show_options, mask_datasource() and mask_datasource_hash() show the value of an option only if the driver
+    is already loaded and declares the option without declaring it sensitive, and if the value can be shown in a
+    datasource string; every other value is masked.  The "dbitest" mock driver declares "secret" sensitive and "rows"
+    not sensitive.  This script does not require the driver: it loads it at run time, so a call made before the driver
+    is loaded must not be evaluated when the script is parsed.
+*/
+class MaskDatasourceDriverOptionsTest inherits QUnit::Test {
+    public {
+        const Secret = "s3cr3t-7070";
+        const DsString = "dbitest:user/" + Secret + "@db{secret=" + Secret + ",rows=3,undeclared=" + Secret + "}";
+        const Opts = {"show_db": True, "show_options": True};
+    }
+
+    constructor() : QUnit::Test("mask_datasource() driver options", "1.0", \ARGV) {
+        addTestCase("driver not loaded, then loaded", \driverLoadTest());
+        addTestCase("values that can be shown", \valueTest());
+        addTestCase("forms without show_options", \noOptionsTest());
+        set_return_value(main());
+    }
+
+    driverLoadTest() {
+        # the driver is not loaded yet: every option value is masked
+        assertFalse(inlist("dbitest", get_module_hash().keys()), "dbitest is not loaded before the test loads it");
+        assertEq({"secret": "****", "rows": "****", "undeclared": "****"}, maskedStringHash().options);
+        assertEq("dbitest:****/****@db{secret=****,rows=****,undeclared=****}", maskedString());
+
+        load_module("dbitest");
+        # the same calls, made after the driver is loaded: the value of the declared option that is not sensitive is
+        # shown; these calls have constant arguments, and are not evaluated when the code is parsed
+        assertEq({"secret": "****", "rows": "3", "undeclared": "****"}, maskedStringHash().options);
+        assertEq("dbitest:****/****@db{secret=****,rows=3,undeclared=****}", maskedString());
+        hash<auto> h = parse_datasource(DsString);
+        assertEq({"secret": "****", "rows": "3", "undeclared": "****"}, mask_datasource_hash(h, Opts).options);
+        assertEq("dbitest:****/****@db{secret=****,rows=3,undeclared=****}", mask_datasource(h, Opts));
+        assertFalse(mask_datasource(h, Opts).find(Secret) >= 0);
+        # driver names are case-sensitive: another driver name is not the loaded driver
+        assertEq({"rows": "****"}, mask_datasource_hash({"type": "DBITEST", "db": "db", "options": {"rows": 3}},
+            Opts).options);
+    }
+
+    valueTest() {
+        load_module("dbitest");
+        # values of the declared option that is not sensitive: shown as a string if they can be shown in a datasource
+        # string, otherwise masked
+        list<auto> shown = (
+            (3, "3"),
+            ("Europe/Prague", "Europe/Prague"),
+            ("+01:00", "+01:00"),
+            (1.5, "1.5"),
+            (2.5n, "2.5"),
+        );
+        foreach list<auto> l in (shown) {
+            hash<auto> h = {"type": "dbitest", "db": "db", "options": {"rows": l[0]}};
+            assertEq(l[1], mask_datasource_hash(h, Opts).options.rows, sprintf("%y", l[0]));
+            assertEq("dbitest:****/****@db{rows=" + l[1] + "}", mask_datasource(h, Opts), sprintf("%y", l[0]));
+        }
+        list<auto> masked = (
+            "a,b", "a=b", "a;b", "a{b", "a}b", "a(b", "a)b", "a@b", "a%b", "x://y", "line\nbreak", "tab\t",
+            "\u00e9t\u00e9", {"a": 1}, (1, 2), binary("x"), 2026-11-22,
+        );
+        foreach auto v in (masked) {
+            hash<auto> h = {"type": "dbitest", "db": "db", "options": {"rows": v}};
+            assertEq("****", mask_datasource_hash(h, Opts).options.rows, sprintf("%y", v));
+            assertEq("dbitest:****/****@db{rows=****}", mask_datasource(h, Opts), sprintf("%y", v));
+        }
+        # a sensitive option and an undeclared option are masked whatever their value
+        hash<auto> h = {"type": "dbitest", "db": "db", "options": {"secret": "plain", "undeclared": 1}};
+        assertEq({"secret": "****", "undeclared": "****"}, mask_datasource_hash(h, Opts).options);
+    }
+
+    noOptionsTest() {
+        load_module("dbitest");
+        # without show_options, no option is shown, and the description for messages is unchanged
+        assertEq("dbitest:****/****@****", mask_datasource(DsString));
+        assertEq("dbitest:****/****@db", mask_datasource(DsString, {"show_db": True}));
+        assertFalse(exists mask_datasource_hash(DsString, {"show_db": True}).options);
+    }
+
+    # these calls have only constant arguments; they are in methods of their own so that each is one call site
+    private static hash<auto> maskedStringHash() {
+        return mask_datasource_hash("dbitest:user/s3cr3t-7070@db{secret=s3cr3t-7070,rows=3,undeclared=s3cr3t-7070}",
+            {"show_db": True, "show_options": True});
+    }
+
+    private static string maskedString() {
+        return mask_datasource("dbitest:user/s3cr3t-7070@db{secret=s3cr3t-7070,rows=3,undeclared=s3cr3t-7070}",
+            {"show_db": True, "show_options": True});
+    }
+}

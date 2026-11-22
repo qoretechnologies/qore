@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
+    Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
+    event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
+    that created the connection (see @ref sandbox_lent_connections;
+    <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
@@ -134,6 +140,12 @@
     one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
     object's class reaches that parent class first (see @ref multiple_inheritance_order;
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
+    @par A Connection That Was Never Checked Is Not Up
+    A connection is not up until a successful ping or connection proves it up: one that was never checked reports
+    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
+    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
 
     @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
     Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
@@ -1350,6 +1362,13 @@
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
     of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
     and database name masked as \c "****", for exception messages and logs (issue #6988).
+
+    @par Sensitive DBI Driver Options
+    A DBI driver registers its options with option flags (\c QDBI_OPT_SENSITIVE in the C++ API, given as the
+    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
+    that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
+    the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
+    (see @ref datasource_mask_options; issue #7070).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and

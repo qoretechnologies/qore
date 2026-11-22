@@ -187,7 +187,20 @@ public class JsonRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         @return a @ref Qore::Json::JsonRpcClient object
     */
     private Qore::Json::JsonRpcClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new Qore::Json::JsonRpcClient(real_opts, !connect);
+        if (!connect || !SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            return new Qore::Json::JsonRpcClient(real_opts, !connect);
+        }
+        # the builtin client cannot be used by code restricted from NETWORK, but it connects here for it: only to the
+        # target of the connection's creator (qore#7262)
+        Qore::Json::JsonRpcClient client(real_opts, True);
+        checkLentNetworkTarget(client.getURL(), client.getProxyURL());
+        client.connect();
+        return client;
+    }
+
+    #! The builtin client is checked before it connects for code restricted from NETWORK (qore#7262)
+    private bool hasBoundClient() {
+        return True;
     }
 
     #! returns a @ref JsonRpcClientIo::JsonRpcClientIo object for async I/O
