@@ -463,6 +463,24 @@ struct qore_list_private {
         return rv.release();
     }
 
+    //! When all or none of the occupied slots need scanning, the count already classifies this slot.
+    DLLLOCAL bool entryNeedsScan(const QoreValue& slot) const {
+        return obj_count && (obj_count == length || needs_scan(slot));
+    }
+
+    //! Move one reference between argument lists without classifying the same value twice.
+    DLLLOCAL void moveEntryTo(size_t index, qore_list_private& dest, size_t dest_index) {
+        assert(this != &dest && index < length);
+        QoreValue& target = dest.getEntryReference(dest_index);
+        assert(target.isNothing());
+        if (entryNeedsScan(entry[index])) {
+            incScanCount(-1);
+            dest.incScanCount(1);
+        }
+        target = entry[index];
+        entry[index].clear();
+    }
+
     //! Initialize a new slot, possibly out of order when binding named arguments.
     DLLLOCAL void initEntry(size_t index, QoreValue val) {
         QoreValue& slot = getEntryReference(index);
@@ -1007,7 +1025,7 @@ public:
 class QoreListEntryEdit {
 public:
     DLLLOCAL QoreListEntryEdit(qore_list_private& list, size_t index)
-            : list(list), value(list.getEntryReference(index)), scanned(needs_scan(value)) {
+            : list(list), value(list.getEntryReference(index)), scanned(list.entryNeedsScan(value)) {
     }
 
     DLLLOCAL ~QoreListEntryEdit() {

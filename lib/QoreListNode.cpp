@@ -90,7 +90,8 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
         return;
     }
     // the arguments of a named call bound at parse time are placed at the positions of their parameters
-    if (qore_list_private::get(*exp)->hasCallArgEvalMap()) {
+    qore_list_private* ep = qore_list_private::get(*exp);
+    if (ep->hasCallArgEvalMap()) {
         evalInternMapped(exp);
         return;
     }
@@ -123,11 +124,10 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
         QoreValue ev = exp->retrieveEntry(i);
         if (!ev.needsEval() || ev.getType() == NT_REFERENCE || ev.getType() == NT_WEAKREF
                 || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
-            ev = qore_list_private::get(*exp)->takeExists(i);
-        } else {
-            ev = ev.eval(xsink);
+            ep->moveEntryTo(i, *vl, i);
+            continue;
         }
-        vl->pushIntern(ev);
+        vl->pushIntern(ev.eval(xsink));
         if (*xsink) {
             return;
         }
@@ -139,7 +139,7 @@ void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
 // they are evaluated in source order and placed at the positions of their parameters, as qore_list_private::eval()
 // places them
 void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
-    const qore_list_private* ep = qore_list_private::get(*exp);
+    qore_list_private* ep = qore_list_private::get(*exp);
     const std::vector<size_t>& pos_map = *ep->getCallArgEvalMap();
     assert(pos_map.size() == exp->size());
     needs_deref = true;
@@ -147,15 +147,14 @@ void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
     qore_list_private* vl = qore_list_private::get(*val);
     vl->resize(ep->getCallArgEvalResultSize());
     for (size_t i = 0, e = exp->size(); i < e; ++i) {
+        assert(pos_map[i] < val->size());
         QoreValue ev = exp->retrieveEntry(i);
         if (!ev.needsEval() || ev.getType() == NT_REFERENCE || ev.getType() == NT_WEAKREF
                 || ev.getType() == NT_WEAKREF_HASH || ev.getType() == NT_WEAKREF_LIST) {
-            ev = qore_list_private::get(*exp)->takeExists(i);
-        } else {
-            ev = ev.eval(xsink);
+            ep->moveEntryTo(i, *vl, pos_map[i]);
+            continue;
         }
-        assert(pos_map[i] < val->size());
-        vl->initEntry(pos_map[i], ev);
+        vl->initEntry(pos_map[i], ev.eval(xsink));
         if (*xsink) {
             return;
         }
