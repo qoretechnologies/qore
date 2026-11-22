@@ -2699,6 +2699,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
+      object, so a shared object is expanded once per conversion (issue #7166).
     - a temporary value given to the @ref weak_assignment_operator "weak assignment operator" (ex:
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object

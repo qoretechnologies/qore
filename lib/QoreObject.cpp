@@ -3251,6 +3251,10 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
         return 0;
     }
 
+    if (fbh.renderSharedObject(str, *this)) {
+        return 0;
+    }
+
     QoreHashNodeHolder h(priv->copyData(xsink, false), xsink);
     if (*xsink) {
         return -1;

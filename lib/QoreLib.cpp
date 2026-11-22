@@ -1167,6 +1167,42 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
     return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
 }
 
+thread_local QoreFormatBoundsHelper* QoreFormatBoundsHelper::graph = nullptr;
+
+QoreFormatBoundsHelper::~QoreFormatBoundsHelper() {
+    if (entered) {
+        ctx->exitContainer();
+    }
+    if (output) {
+        graph = previous;
+        if (objects) {
+            for (const auto& entry : *objects) {
+                const_cast<QoreObject*>(entry.first)->tDeref();
+            }
+        }
+    }
+}
+
+bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObject& obj) {
+    if (ctx) {
+        return false; // explicitly bounded formatting uses its own anchors and aliases
+    }
+    assert(graph && graph->output == &str);
+    auto& objects = graph->objects;
+    if (!objects) {
+        objects.reset(new ObjectIds);
+    }
+    auto entry = objects->emplace(&obj, objects->size() + 1);
+    if (entry.second) {
+        // Keep the address valid if another thread changes the graph. Existence references allow
+        // the Qore destructor to run normally, and their release does not execute user code.
+        obj.tRef();
+        return false;
+    }
+    str.sprintf("{reference to %s object #%zu}", obj.getClassName(), entry.first->second);
+    return true;
+}
+
 // applies the format bounds while the standard formatter expands the value, so that the bounds work with every
 // value format specification ("%n", "%N", "%y", and "%Y") and their output formats are preserved
 void QoreFormatBoundsContext::scan(const QoreValue val) {

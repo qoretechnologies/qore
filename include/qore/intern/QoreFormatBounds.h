@@ -33,6 +33,8 @@
 #define _QORE_QOREFORMATBOUNDS_H
 
 #include <map>
+#include <memory>
+#include <unordered_map>
 
 //! bounds the value formatting done by the standard node getAsString() methods
 /** the bounds are applied while the output is generated, so that the time and the memory used to format a value
@@ -185,14 +187,18 @@ public:
             } else {
                 entered = true;
             }
+        } else if (!graph || graph->output != &str) {
+            // The outer container owns the visit table, even if the first object is nested in a list or hash.
+            previous = graph;
+            graph = this;
+            output = &str;
         }
     }
 
-    DLLLOCAL ~QoreFormatBoundsHelper() {
-        if (entered) {
-            ctx->exitContainer();
-        }
-    }
+    DLLLOCAL ~QoreFormatBoundsHelper();
+
+    //! Emits a back-reference when another path already expanded this object in the same output.
+    DLLLOCAL bool renderSharedObject(QoreString& str, const QoreObject& obj);
 
     //! returns True if the container was rendered by the helper and must not be expanded by the caller
     DLLLOCAL bool elided() const {
@@ -205,6 +211,11 @@ public:
     }
 
 private:
+    DLLLOCAL static thread_local QoreFormatBoundsHelper* graph;
+    QoreFormatBoundsHelper* previous = nullptr;
+    const QoreString* output = nullptr;
+    using ObjectIds = std::unordered_map<const QoreObject*, size_t>;
+    std::unique_ptr<ObjectIds> objects;
     QoreFormatBoundsContext* ctx;
     bool entered = false;
     bool done = false;
