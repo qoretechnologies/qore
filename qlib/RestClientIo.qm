@@ -6686,6 +6686,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             }
             state = SPS_ERROR_DRAIN;
             waiting_for_stream = False;
+            # the error body, and its end, may have arrived with the response headers: the stream's notifier was
+            # signaled for all of them, so they are read now, not after a further signal that never comes
+            processErrorDrainItems();
             return;
         }
 
