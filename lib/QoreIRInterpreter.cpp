@@ -652,16 +652,31 @@ static inline AssignmentMode getStoreMode(AssignmentMode mode, const QoreValue& 
 // interpreter reads it (AbstractQoreNode::eval()), which for a weak reference to an object that has been destroyed is
 // the destroyed object, so that it exists and a method call through it raises OBJECT-ALREADY-DELETED; any other value
 // is returned as it is.  The weak reference keeps the target allocated.
+// The list or hash of a weak reference is returned borrowed only to reads that keep nothing of it while it is
+// referenced; takeWeakReferenceTarget() gives it with a reference of its own.
 static QoreValue getWeakReferenceTarget(const QoreValue& value) {
     switch (value.getType()) {
         case NT_WEAKREF:
             return QoreValue(value.get<const WeakReferenceNode>()->get());
         case NT_WEAKREF_HASH:
-            return QoreValue(value.get<const WeakHashReferenceNode>()->get());
+            return QoreValue(value.get<const WeakHashReferenceNode>()->borrow());
         case NT_WEAKREF_LIST:
-            return QoreValue(value.get<const WeakListReferenceNode>()->get());
+            return QoreValue(value.get<const WeakListReferenceNode>()->borrow());
         default:
             return value;
+    }
+}
+
+// Returns the target of a weak reference with a new reference, as getWeakReferenceTarget() reads it; the list or hash
+// of a weak reference is read with lock(), as a new empty one that cannot be changed if it was freed (qore#7198)
+static QoreValue takeWeakReferenceTarget(const QoreValue& value) {
+    switch (value.getType()) {
+        case NT_WEAKREF_HASH:
+            return QoreValue(value.get<const WeakHashReferenceNode>()->lock());
+        case NT_WEAKREF_LIST:
+            return QoreValue(value.get<const WeakListReferenceNode>()->lock());
+        default:
+            return getWeakReferenceTarget(value).refSelf();
     }
 }
 
@@ -672,7 +687,7 @@ static bool normalizeWeakReferenceForAssignment(QoreValue& value, ValueHolder& h
     if (!isWeakReferenceType(value.getType())) {
         return false;
     }
-    holder = getWeakReferenceTarget(value).refSelf();
+    holder = takeWeakReferenceTarget(value);
     value = *holder;
     return true;
 }
@@ -684,7 +699,7 @@ static bool evaluateOwnedWeakReferenceResult(QoreValue& value, ExceptionSink* xs
         return false;
     }
     ValueHolder old(value, xsink);
-    value = getWeakReferenceTarget(*old).refSelf();
+    value = takeWeakReferenceTarget(*old);
     return true;
 }
 
@@ -13279,8 +13294,23 @@ dispatch_folded_step_host:
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+                        QoreValue entry = l->retrieveEntry(static_cast<size_t>(index));
+                        qore_type_t entry_type = entry.getType();
+                        if (entry_type == NT_WEAKREF_HASH || entry_type == NT_WEAKREF_LIST) {
+                            // the list or hash of a weak reference is read with a reference of its own, as a
+                            // consumer can keep it (qore#7198); the slot is owned, and released by the cleanup
+                            clearSlotForOverwrite(inst->result.id);
+                            setValueSlotDirect(values, inst->result.id, takeWeakReferenceTarget(entry));
+                            cleanup.push_back(inst->result.id);
+                            ++ip;
+                            break;
+                        }
                         result = getBorrowedListElement(l, static_cast<size_t>(index));
                     }
+                }
+                // a value left in the slot, borrowed or owned (see above), is released as it is held
+                if (values[inst->result.id].hasNode()) {
+                    clearSlotForOverwrite(inst->result.id);
                 }
                 setValueSlotDirect(values, inst->result.id, result);
                 // Do NOT add to cleanup — no owned reference (borrowed from list)
@@ -14336,6 +14366,15 @@ dbg_dismissed_exit:
                                 goto load_local_done;
                             }
                         }
+                        if (cache_has_value && (cached_node_type == NT_WEAKREF_HASH
+                                || cached_node_type == NT_WEAKREF_LIST)) {
+                            // the list or hash of a weak reference that the variable of a foreach loop was assigned
+                            // is read with a reference of its own (qore#7198)
+                            out = takeWeakReferenceTarget(cached_val);
+                            local_flags = 0;
+                            result_slot_owned = true;
+                            goto load_local_done;
+                        }
                         if (cache_has_value && isWeakReferenceType(cached_node_type)) {
                             // the variable of a foreach loop that was assigned a weak reference
                             // (AssignmentMode::Element) reads as its target, which is borrowed, as
@@ -14817,7 +14856,8 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 } else if (base.getType() == NT_WEAKREF_HASH) {
-                    const QoreHashNode* h = base.get<const WeakHashReferenceNode>()->get();
+                    // the member is read from the hash held with a reference of its own (qore#7198)
+                    ReferenceHolder<QoreHashNode> h(base.get<const WeakHashReferenceNode>()->lock(), xsink);
                     if (h) {
                         out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                         if (xsink && *xsink) {
@@ -20120,7 +20160,7 @@ load_local_done:
                 // other store assigns its target, as the AST interpreter reads it
                 if (path_inst->mode != AssignmentMode::Weak && path_inst->mode != AssignmentMode::Element
                         && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-                    eval_holder = getWeakReferenceTarget(val).refSelf();
+                    eval_holder = takeWeakReferenceTarget(val);
                     assign_val = *eval_holder;
                     assign_eval = true;
                 }

@@ -803,6 +803,38 @@ public:
 
     DLLLOCAL void setHashDecl(const TypedHashDecl* hd);
 
+    //! Returns a new reference to a hash that a weak reference holds, or a new empty hash that cannot be changed if
+    //! its last reference was released (qore#7198; see WeakHashReferenceNode::lock() and qore_list_private::lockWeak())
+    DLLLOCAL static QoreHashNode* lockWeak(QoreHashNode& h) {
+        // the reference is taken as QoreReferenceCounter::optRef() takes it, inline
+        int count = h.references.load();
+        while (count > 0) {
+            if (h.references.compare_exchange_weak(count, count + 1)) {
+                return !h.priv->weak_hold ? &h : lockWeakFreeing(h);
+            }
+        }
+        return getFreedStandIn(h);
+    }
+
+    //! Releases the reference that lockWeak() took to a hash whose free has started, and returns a new empty hash
+    //! (see qore_list_private::lockWeakFreeing())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* lockWeakFreeing(QoreHashNode& h) {
+#ifdef DEBUG
+        bool last =
+#endif
+        h.ROdereference();
+        assert(!last);
+        return getFreedStandIn(h);
+    }
+
+    //! Returns a new empty hash with the type of a hash whose last reference was released, which cannot be changed
+    //! (qore#7198; see lockWeak())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* getFreedStandIn(const QoreHashNode& h) {
+        QoreHashNode* rv = h.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
+    }
+
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
         if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {
             return h;

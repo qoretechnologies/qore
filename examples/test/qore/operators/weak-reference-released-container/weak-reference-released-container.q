@@ -121,7 +121,13 @@ sub changes() {
     printf("computed: %y %y %y\n", sorted, plus, hplus);
 }
 
-#! a released container that code holds is given a weak holder again after its weak holders released theirs
+#! a released container read through a weak reference is given a weak holder again after its weak holders released
+#! theirs
+/** Reads through weak references take no reference to a freed container (qore#7198): \c s is a new empty container,
+    which its weak holders keep as any other container.  Native code that reads the variable of a foreach loop with a
+    borrowed read can still take a reference to the freed container itself, which then gets a weak holder again
+    (QoreListNode::weakRef()); that read changes with the AOT batch.
+*/
 sub weak_holder_again() {
     list<auto> w;
     w := list(1, 2);
