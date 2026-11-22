@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - asynchronous I/O operations on sockets and the controller's logging and trace on stderr
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AsyncIoLogLineEscapeTest
+
+#! records the messages that the controller logs, rendered as the Qore logger renders them (the message is a format)
+class CapturingLogger inherits LoggerInterfaceBase {
+    public {
+        list<string> messages = ();
+    }
+
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        messages += vsprintf(message, format_args);
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+
+#! The names that the code that submits work chooses stay on the controller's log and trace lines (qore#7216)
+/** An owner with a line break, an escape sequence and a printf directive is logged by the controller's logger on one
+    line, with the line break and the escape character escaped and the directive printed as it is; the debug trace
+    (QORE_ASYNC_IO_TRACE=1, compiled into debug builds) prints it on its trace line
+*/
+class AsyncIoLogLineEscapeTest inherits QUnit::Test {
+    public {
+        const Owner = "own" + chr(10) + "forged line" + chr(27) + "[2J %s %d";
+        const Escaped = "own\\nforged line\\x1b[2J %s %d";
+        #! the child that submits and cancels an operation with the owner, traced
+        const TraceScript = "%modern
+%no-child-restrictions
+Socket listener();
+listener.bindINET(\"127.0.0.1\", \"0\", True);
+listener.listen();
+Socket client();
+client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port);
+Socket server = listener.accept();
+HttpWebSocketPollOperationBase op(server);
+string owner = \"own\" + chr(10) + \"forged line\" + chr(27) + \"[2J %s %d\";
+AsyncIoController::submit(<SocketPollOperationInfo>{\"sock\": server, \"spop\": op, \"to\": -1s, \"owner\": owner});
+AsyncIoController::cancelByOwner(owner);
+";
+    }
+
+    constructor() : QUnit::Test("AsyncIoLogLineEscapeTest", "1.0") {
+        addTestCase("the controller's logger", \loggerTest());
+        addTestCase("the debug trace", \traceTest());
+        set_return_value(main());
+    }
+
+    #! submits an operation with the hostile owner and cancels it
+    static submitAndCancel() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+        Socket server = listener.accept();
+        HttpWebSocketPollOperationBase op(server);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": server, "spop": op, "to": -1s, "owner": Owner,
+        });
+        AsyncIoController::cancelByOwner(Owner);
+    }
+
+    loggerTest() {
+        CapturingLogger logger();
+        AsyncIoController::setLogger(logger);
+        on_exit AsyncIoController::setLogger();
+        AsyncIoLogLineEscapeTest::submitAndCancel();
+        list<string> with_owner = select logger.messages, $1 =~ /forged line/;
+        assertTrue(with_owner.size() > 0, "the owner was logged: " + logger.messages.join("|"));
+        foreach string m in (with_owner) {
+            assertTrue(m.find(Escaped) >= 0, "escaped on its line: " + m);
+            assertEq(-1, m.find("\n"), "no line break");
+            assertEq(-1, m.find(chr(27)), "no escape character");
+        }
+    }
+
+    traceTest() {
+        TmpDir tmp("qore-asyncio-log-escape-");
+        string script = tmp.path + "/trace.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(TraceScript);
+        f.close();
+        string err = tmp.path + "/trace.err";
+        int rc;
+        backquote(sprintf("QORE_ASYNC_IO_TRACE=1 %s -b %s 2>%s", QORE_ARGV[0], script, err), \rc);
+        list<string> lines = (ReadOnlyFile::readTextFile(err) ?? "").split("\n");
+        # the child must succeed whether or not the build traces
+        assertEq(0, rc, "exit code: " + lines.join("\n"));
+        if (!(select lines, $1 =~ /^\[ASYNC-IO /)) {
+            testSkip("the build has no asynchronous I/O trace (it is compiled into debug builds)");
+        }
+        list<string> with_owner = select lines, $1 =~ /forged line/;
+        assertTrue(with_owner.size() > 0, "the owner was traced");
+        foreach string l in (with_owner) {
+            assertTrue(l =~ /^\[ASYNC-IO /, "on its trace line: " + l);
+            assertEq(-1, l.find(chr(27)), "no escape character");
+        }
+    }
+}

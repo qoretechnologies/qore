@@ -2202,6 +2202,13 @@ DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const QoreString*
 //! Appends \a text (UTF-8, as the names of files and functions) to \a out escaped as by the variant above
 DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const char* text);
 
+//! Appends UTF-8 \a text to \a out with the characters that could end or rewrite a log line escaped (line breaks,
+//! the other C0 and C1 control characters except tab, DEL, the Unicode line and paragraph separators and the
+//! bidirectional formatting characters), and \c % doubled if \a double_percent (qore#7216)
+/** Backslash is not escaped, so text escaped with qore_append_escaped_report_text() is kept as it is
+*/
+DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent);
+
 //! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
 /** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
     stack that is not a module's is trusted host code (a Program that is not sandboxed and whose options allow terminal

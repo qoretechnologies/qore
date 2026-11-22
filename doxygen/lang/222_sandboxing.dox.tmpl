@@ -819,7 +819,10 @@ authenticate();
       C0 and C1 control characters and DEL, the Unicode line and paragraph separators and the bidirectional formatting
       characters (as \c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN and \c \\u{NNNN}), as are the bytes of
       invalid UTF-8 (\c \\xNN); the asynchronous I/O controller's error log lines escape the text of every exception
-      and the names that the submitter chose (owner, key)
+      and the names that the submitter chose (owner, key), and every message of the asynchronous I/O loggers and of
+      the controller's debug trace (\c QORE_ASYNC_IO_TRACE) keeps the text that submitting code chose on its line:
+      its line breaks and other control characters except tab are escaped (backslash is kept) and a \c % is printed as
+      it is (qore#7216)
 
     The marked report on @ref Qore::stderr "stderr" is a compact form of the report of other code: for each exception of
     the chain, the location where it was raised, the error, description and argument, and the function, file and line
