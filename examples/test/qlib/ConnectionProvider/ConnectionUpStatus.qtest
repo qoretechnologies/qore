@@ -207,7 +207,7 @@ string sub gate(object conn, string url, *string proxy) {
         return ex.err;
     }
 }
-string sub set_target(object conn, string url) {
+sub set_target(object conn, string url) {
     conn.url = url;
     conn.real_url = url;
     try {
@@ -1008,9 +1008,14 @@ string sub own_ping(string url) {
                     assertEq("PERMISSION-DENIED", p.callFunction("path_poll", conn, c[1]), label + ", polling");
                 }
             }
-            # the legitimate targets, also with credentials
-            list<string> own = (tcp_own, socket_own, sprintf("http://user:pass@127.0.0.1:%d", rest_port),
-                "http://user:pass@socket=" + encode_url(rest_socket, True));
+            # the legitimate targets; an HTTP connection also with credentials in its configured URL, as its client's
+            # target is checked without them (the JSON-RPC connection's configured URL is checked as it is by
+            # HttpBasedConnection::checkLentClientTarget())
+            list<string> own = (tcp_own, socket_own);
+            if (!kind.poll) {
+                own += (sprintf("http://user:pass@127.0.0.1:%d/", rest_port),
+                    "http://user:pass@socket=" + encode_url(rest_socket, True));
+            }
             if (rest_port6) {
                 push own, sprintf("http://[::1]:%d", rest_port6);
             }

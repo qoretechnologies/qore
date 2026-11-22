@@ -234,18 +234,24 @@ public final class HttpClientCreatorProof {
         @return True if the origin of \a url is one that the proof allows and \a proxy_url is its proxy (or both have
         none)
 
-        A URL (\a url and \a proxy_url alike) allows nothing unless its authority is unambiguous, so that every
-        reading of it gives the same target (see unambiguousUrl()); any error in checking it allows nothing.
+        The URLs checked here (\a url and \a proxy_url alike) allow nothing if they have user information (a
+        connection class gives the target URL without it, ex: \c HTTPClient::getURL(UC_TARGET), as the code that
+        was lent the connection can set the credentials so that the rendered URL reads as another target), if their
+        authority is not of the \c "scheme://authority" form, or, for \a url, if a socket path and a socket
+        authority do not match exactly (see socketAuthorityMatches()); an IPv6 host without brackets allows nothing
+        (ambiguousHost()), and any error in checking a URL allows nothing.  These checks apply only to the checked
+        URLs: the URL that a proof is issued for (a creator's configured URL, also with credentials) and the URL of a
+        client that takes a granted proof are derived as before.
 
         @since HttpClientIo 1.0 (qore#7262); qore#7236 refuses ambiguous URLs
     */
     bool allowsUrl(string url, *string proxy_url) {
         try {
-            if (!HttpClientCreatorProof::unambiguousUrl(url)
-                    || (proxy_url.val() && !HttpClientCreatorProof::unambiguousUrl(proxy_url))) {
+            if (!HttpClientCreatorProof::checkedUrlOk(url)
+                    || (proxy_url.val() && !HttpClientCreatorProof::checkedUrlOk(proxy_url))) {
                 return False;
             }
-            *string key = HttpClientCreatorProof::getOrigins(url).firstKey();
+            *string key = HttpClientCreatorProof::getOrigins(url, True).firstKey();
             if (!key || !origins{key}) {
                 return False;
             }
@@ -323,7 +329,7 @@ public final class HttpClientCreatorProof {
     }
 
     #! Returns the origins of the given URL, as \c "host:port" keys
-    private:internal static hash<string, bool> getOrigins(string url) {
+    private:internal static hash<string, bool> getOrigins(string url, *bool strict) {
         hash<auto> u;
         try {
             u = parse_url(url);
@@ -331,6 +337,11 @@ public final class HttpClientCreatorProof {
             return {};
         }
         if (!u.host.val() || HttpClientCreatorProof::ambiguousHost(url, u.host)) {
+            return {};
+        }
+        # a URL that is checked against a proof (allowsUrl()) gives a socket path only with a canonical socket
+        # authority, and a socket authority only a socket path (qore#7236)
+        if (strict && !HttpClientCreatorProof::socketAuthorityMatches(url, u)) {
             return {};
         }
         # a UNIX domain socket target: plain HTTP with port 0, as the manager connects to it
@@ -344,66 +355,55 @@ public final class HttpClientCreatorProof {
         return {HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80)): True};
     }
 
-    #! Returns True if a URL's authority gives one target in every reading (qore#7236)
-    /** The URL that allowsUrl() checks can be the configured URL of a connection, with any credentials, or the URL
-        that a client renders from its members, which the code that was lent the connection can set (its host, port,
-        socket path, user name and password).  The text of such a URL can be read in more than one way, so the target
-        that the check derives from it must be the one that every reader (the client, parse_url(), a client that
-        splits the user information at the first or at the last \c "@") derives:
-        - the URL has a scheme and an authority (\c "scheme://authority", the authority ending at the first \c "/",
-          \c "?" or \c "#")
-        - it has one \c "@" at most, and only in the authority: then the user information before it is ignored (the
-          credentials of a configured URL are legitimate, and with a single \c "@" every reader splits the authority
-          at the same place); a second \c "@", or one after the authority (a password with \c "@host:port/" in a
-          rendered URL), makes the URL ambiguous
-        - the host and port after the user information are canonical, rebuilt from what parse_url() gives: a host
-          name or IPv4 address without a colon, an IPv6 address in brackets, and a port of digits; a UNIX domain socket
-          is \c "socket=" followed by its path with every reserved character encoded (as @ref encode_url() "encode_url(path, True)"
-          gives it), with no port; any character that the rebuilt form does not have (an unbracketed IPv6 address, an
-          encoded path that decodes to another path, a socket path with a raw \c "@" or \c "%") makes the URL
-          ambiguous
-        - a URL whose authority is not a socket authority is not parsed as a socket path
+    #! Returns True if a URL that allowsUrl() checks has an authority and no user information (qore#7236)
+    /** The URL must be of the \c "scheme://authority" form, the authority (ending at the first \c "/", \c "?" or
+        \c "#") must have no \c "@", and parse_url() must give no user name or password: a URL that a client renders
+        with its credentials, which the code that was lent the connection can set (a password with \c "@host:port/"
+        or \c "@host?"), can be read as another target
 
         @param url the URL
 
-        @return True if the URL is unambiguous
+        @return True if the URL has an authority without user information; any error gives False
     */
-    private:internal static bool unambiguousUrl(string url) {
+    private:internal static bool checkedUrlOk(string url) {
         try {
-            *list<*string> m = url =~ x/^[A-Za-z][-A-Za-z0-9+.]*:\/\/([^\/?#]*)(.*)$/s;
-            if (!m) {
+            *list<*string> m = url =~ x/^[A-Za-z][-A-Za-z0-9+.]*:\/\/([^\/?#]*)/;
+            if (!m || !(m[0] ?? "").val() || (m[0] ?? "") =~ /@/) {
                 return False;
-            }
-            string authority = m[0] ?? "";
-            string rest = m[1] ?? "";
-            if (!authority.val() || rest =~ /@/) {
-                return False;
-            }
-            string hostport = authority;
-            int at = authority.find("@");
-            if (at >= 0) {
-                if (authority.find("@", at + 1) >= 0) {
-                    return False;
-                }
-                hostport = authority.substr(at + 1);
             }
             hash<auto> u = parse_url(url);
-            *string host = u.host;
-            if (!host.val()) {
-                return False;
+            return !exists u.username && !exists u.password;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! Returns True if a URL gives a UNIX domain socket path exactly when its authority is a canonical socket authority
+    /** The host and port after the user information must be \c "socket=" followed by the path that parse_url() gives
+        with every reserved character encoded (as @ref encode_url() "encode_url(path, True)" and
+        @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()" give it), with no port, so that the path is the only
+        one that the URL can be read as: a raw \c "@", \c "%", \c ":", \c "#" or \c "?" in the path, or an encoded
+        path that decodes to another path, does not match; and a URL whose authority is not a socket authority must not
+        give a socket path (qore#7236)
+
+        @param url the URL
+        @param u the parsed URL
+
+        @return True if the socket path and the socket authority match (or the URL has neither); any error gives False
+    */
+    private:internal static bool socketAuthorityMatches(string url, hash<auto> u) {
+        try {
+            string hostport = (url =~ x/^[^\/]*\/\/([^\/?#]*)/)[0] ?? "";
+            int at = hostport.rfind("@");
+            if (at >= 0) {
+                hostport = hostport.substr(at + 1);
             }
             bool socket_authority = hostport.lwr().equalPartial("socket=");
-            if (socket_authority) {
-                return host =~ /^\// && !u.port && hostport == "socket=" + encode_url(host, True);
+            bool socket_path = (u.host ?? "") =~ /^\//;
+            if (!socket_authority && !socket_path) {
+                return True;
             }
-            if (host =~ /^\//) {
-                return False;
-            }
-            string expected = host =~ /:/ ? "[" + host + "]" : host;
-            if (exists u.port) {
-                expected += ":" + u.port;
-            }
-            return hostport.lwr() == expected.lwr();
+            return socket_authority && socket_path && !u.port && hostport == "socket=" + encode_url(u.host, True);
         } catch (hash<ExceptionInfo> ex) {
             return False;
         }
