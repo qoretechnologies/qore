@@ -405,7 +405,8 @@ public class SseConnectPollOperation inherits ConnectionProvider::HttpClientIoPo
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger,
             string sse_method = "GET", *data sse_body)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), base_url,
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
+                base_url,
                 sse_method,
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts,
                     SseConnectPollOperation::getSseHeaders(headers, sse_body)),
