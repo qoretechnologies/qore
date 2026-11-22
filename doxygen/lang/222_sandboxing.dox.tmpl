@@ -571,15 +571,15 @@ authenticate();
     deserialization), or if the code of a class that trusted code declared created it directly in a constructor,
     method or destructor of an object that the sandbox owns while that code served the sandbox (the new object is
     owned as that object is and takes its provenance; not in a static method or a function, nor in a method of
-    another object, nor while the code serves another sandbox or no sandbox).  An object that trusted code creates while it
-    serves sandboxed code, such as a shared object that it creates lazily for its first caller, is governed by that
-    code's sandbox but owned by no sandbox.  Trusted code that creates an object for the sandboxed code that it serves
-    hands it over with @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()"
-    (in C++: \c qore_transfer_object_to_caller()); the transfer is one-way, and only to sandboxed code at the
-    enforcement level of tenant isolation.  The bound of the rule: an object that the
-    code of a trusted class creates directly in a method of an object that a sandbox owns, while it serves that
-    sandbox, is that sandbox's, also if the method stores it in a static member or a global variable, where other code
-    can reach it.
+    another object, nor while the code serves another sandbox or no sandbox).  An object that trusted code creates
+    while it serves sandboxed code, such as a shared object that it creates lazily for its first caller, is governed
+    by that code's sandbox but owned by no sandbox.  Trusted code that creates an object for the sandboxed code that
+    it serves hands it over with
+    @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()" (in C++:
+    \c qore_transfer_object_to_caller()); the transfer is one-way, and only to sandboxed code at the enforcement level
+    of tenant isolation.  The bound of the rule: an object that the code of a trusted class creates directly in a
+    method of an object that a sandbox owns, while it serves that sandbox, is that sandbox's, also if the method stores
+    it in a static member or a global variable, where other code can reach it.
 
     The rule does not apply to:
     - a write of a member of \c self, or of an object of the writing code's class or of a subclass of it, whose behavior
