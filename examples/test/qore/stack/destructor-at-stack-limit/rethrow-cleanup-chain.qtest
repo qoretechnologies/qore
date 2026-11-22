@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - stack-limit unwinding on a worker with a bounded native stack
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class RethrowCleanupChainTest
+
+our int made;
+our int released;
+
+class ExceptionPayload {
+    public { int id; }
+
+    constructor(int id) {
+        self.id = id;
+        ++made;
+    }
+
+    destructor() {
+        ++released;
+    }
+}
+
+class ThrowOnRelease {
+    private { int id; }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    destructor() {
+        throw "CLEANUP", "releasing a local", new ExceptionPayload(id);
+    }
+}
+
+int sub exhaustStack(int depth) {
+    return 1 + exhaustStack(depth + 1);
+}
+
+sub unwind(int level, bool at_limit) {
+    ThrowOnRelease local(level);
+    if (!level) {
+        if (at_limit) {
+            exhaustStack(0);
+        }
+        throw "LEAF", "ordinary unwind";
+    }
+    try {
+        unwind(level - 1, at_limit);
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+list<auto> sub observe(bool at_limit) {
+    list<auto> chain();
+    try {
+        unwind(3, at_limit);
+    } catch (hash<ExceptionInfo> ex) {
+        *hash<ExceptionInfo> e = ex;
+        while (e) {
+            push chain, e.err == "CLEANUP" ? e.arg.id : e.err;
+            e = e.next;
+        }
+    }
+    return chain;
+}
+
+class RethrowCleanupChainTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RethrowCleanupChain", "1.0") {
+        addTestCase("ordinary unwind", \ordinary());
+        addTestCase("stack-limit unwind", \stackLimit());
+        set_return_value(main());
+    }
+
+    ordinary() {
+        made = released = 0;
+        assertEq(("LEAF", 0, 1, 2, 3), observe(False));
+        assertEq(4, made);
+        assertEq(made, released);
+    }
+
+    stackLimit() {
+        if (!Option::HAVE_STACK_GUARD || !Option::HAVE_MANAGE_STACK) {
+            testSkip("requires stack protection");
+        }
+        int old_size = get_default_thread_stack_size();
+        set_default_thread_stack_size(256 * 1024);
+        on_exit set_default_thread_stack_size(old_size);
+        list<auto> chain();
+        made = released = 0;
+        int tid = background sub () {
+            chain = observe(True);
+        }();
+        thread_join(tid);
+        assertEq(("STACK-LIMIT-EXCEEDED", 0, 1, 2, 3), chain);
+        assertEq(4, made);
+        assertEq(made, released);
+    }
+}

@@ -104,14 +104,20 @@ void qore_es_private::insert(QoreException *e) {
     } else {
         tail->next = e;
     }
+    // A rethrow brings the whole caught chain. A subsequent exception must be
+    // appended after its last node or the remaining exceptions are orphaned.
+    for (;;) {
+        if (!externally_managed) {
+            ++count;
+            inc_active_exceptions(1);
+        }
+        if (!e->next) {
+            break;
+        }
+        e = e->next;
+    }
     tail = e;
     pending = true;
-
-    // increment exception counts
-    if (!externally_managed) {
-        ++count;
-        inc_active_exceptions(1);
-    }
 }
 
 ExceptionSink::ExceptionSink() : priv(new qore_es_private) {
