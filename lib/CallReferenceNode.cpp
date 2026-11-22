@@ -809,7 +809,18 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                     if (check_call_reference_domain(loc, parse_context, m) && !err) {
                         err = -1;
                     }
-                    qc = n_qc;
+                    // a method with abstract variants that its class does not implement is resolved for the class of
+                    // the object when the reference is made, as a call of it is (QoreDotEvalOperatorNode): another
+                    // parent class of the object's class implements them, and the abstract methods of the classes
+                    // are resolved after this code is parsed, so that the method found here may not be the one that
+                    // is called (qore#7206)
+                    if (!m->isStatic() && (qore_method_private::get(*m)->isAbstract()
+                            || qore_class_private::get(*m->getClass())->hasUnimplementedAbstractVariants(
+                                method.c_str()))) {
+                        m = nullptr;
+                    } else {
+                        qc = n_qc;
+                    }
                 } else {
                     // issue #995: a pseudo-method of objects, such as className(), or a member, which a direct call
                     // calls if it holds code; the reference is made for the object's class when the expression is

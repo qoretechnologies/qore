@@ -1296,6 +1296,12 @@
     serialization for all callers (see @ref Qore::HTTPClient::constructor()). Opening credential files in other
     clients or copies requires filesystem access.
 
+    @par call_static_method() Refuses a Static Method of a Privately Inherited Class
+    @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
+    method call in the caller's code calls, so they raise \c BASE-CLASS-IS-PRIVATE for a static method of a privately
+    inherited class called from outside the class, which they called before (see @ref Qore::call_static_method();
+    <a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>).
+
     @par Removing an Undeclared Object Member Removes Its Key
     The @ref remove "remove" and @ref delete "delete" operators remove the key of an object member that its class
     does not declare, as for a hash, so that @ref keys "keys", @ref elements "elements" and the object iterators no
@@ -2721,6 +2727,14 @@
 
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
       object, so a shared object is expanded once per conversion (issue #7166).
+    - an abstract method that a private method of a parent class implements is private, so that code outside the
+      class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
+      executables did, also through a call reference (see @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7206">issue 7206</a>)
+    - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
+      method call in the caller's code calls: they refused a later parent class's public method behind a private one,
+      and called a method of a privately inherited class from outside it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>)
     - the C++ API \c QoreObject::deleteMemberValue() removes a member as the @ref delete "delete" operator does (see
       @ref remove_object_members); it removed the key of a declared member, and a member that held an object failed an
       assertion in debug builds and left the object's reference scan count wrong

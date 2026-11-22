@@ -272,6 +272,15 @@ struct AbstractMethodMap : amap_t {
 
     DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
 
+    //! drops the abstract variants inherited from the parent classes that none of them has pending any more
+    /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
+        parseResolveAbstract()): the variants of the parent classes are merged to the class before that
+        (qore_class_private::parseInitPartialIntern()), so that a variant that a parent class implements itself, with
+        a variant of one of its own parent classes, would stay pending in the class and be implemented again there, by
+        the first concrete variant of its whole hierarchy (qore#7206)
+    */
+    DLLLOCAL void parseDropResolvedInParents(const qore_class_private& qc, const BCList& scl);
+
     // runtime version of parseInit() for classes created dynamically (e.g., JNI classes)
     DLLLOCAL void runtimeInit(qore_class_private& qc, BCList* scl);
 
@@ -5671,6 +5680,19 @@ public:
     }
 
     DLLLOCAL bool runtimeHasCallableMethod(const char* m, int mask) const;
+
+    //! returns the static method of the name that code of the class context \a class_ctx calls, as a static method
+    //! call in that code finds it (qore#7207)
+    /** A caller without a class context (\a class_ctx is nullptr: code outside the class hierarchy) calls the first
+        public static method of the name reached through public edges, so that an inaccessible private method of a
+        parent class is skipped for the method of a later parent class (qore#6704); if it cannot call any, an exception
+        is raised.  Code of a class context calls the method that it can call (qore#6759), or else the method found
+        first, whose call then raises the error of the variants.
+
+        @return the method, or nullptr if the class has no static method of the name or if an exception was raised
+    */
+    DLLLOCAL const QoreMethod* runtimeFindCallableStaticMethod(const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
 
     DLLLOCAL void execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
