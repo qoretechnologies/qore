@@ -295,9 +295,10 @@ public:
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
 
     //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
-    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of the
-        object's own class hierarchy that trusted code declared; see checkSharedChange().  Set before the object is
-        published to other Programs, and read with relaxed ordering on every member write.
+    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of a
+        class of the object that runs in an update scope for it (see SandboxManager::updateSharedObject()); see
+        checkSharedChange().  Set before the object is published to other Programs, and read with relaxed ordering on
+        every member write.
     */
     std::atomic<bool> shared_object{false};
 
@@ -312,26 +313,36 @@ public:
     }
 
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
-    /** Code that a sandbox governs cannot change an object that trusted code marked as shared, unless it is the code
-        of the object's own class hierarchy that trusted code declared, which keeps the object's state (such as its
-        lazily built caches) also in a call for sandboxed code.
+    /** Code that a sandbox governs, or that acts for sandboxed code, cannot change an object that trusted code marked
+        as shared, unless the change is made in an update scope for the object (see
+        SandboxManager::updateSharedObject()) by the code of the Program that opened it.  The decision depends on the
+        running code only, never on a class context that a caller gives (Reflection gives the class that declares a
+        member).
 
         @param mem the member to change, or nullptr if the whole object is deleted or its members are changed together
-        @param class_ctx the class context of the running code, or nullptr if it has none
         @param xsink for the exception
         @param del true if the object is deleted
     */
-    DLLLOCAL int checkSharedChange(const char* mem, const qore_class_private* class_ctx, ExceptionSink* xsink,
-            bool del = false) const {
+    DLLLOCAL int checkSharedChange(const char* mem, ExceptionSink* xsink, bool del = false) const {
         if (!shared_object.load(std::memory_order_relaxed)) [[likely]] {
             return 0;
         }
-        return checkSharedChangeIntern(mem, class_ctx, xsink, del);
+        return checkSharedChangeIntern(mem, xsink, del);
     }
 
     //! checkSharedChange() for an object marked as shared
-    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedChangeIntern(const char* mem, const qore_class_private* class_ctx,
-            ExceptionSink* xsink, bool del) const;
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedChangeIntern(const char* mem, ExceptionSink* xsink, bool del) const;
+
+    //! Runs \a update with the object writable for the code of the Program that calls it; see
+    //! SandboxManager::updateSharedObject()
+    /** @return the value that \a update returns, or no value with an exception raised
+    */
+    DLLLOCAL QoreValue runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink);
+
+    //! Returns 0 if \a callback may run on behalf of the calling code while the object is changed, or raises
+    //! SHARED-OBJECT-ERROR and returns -1; see SandboxManager::checkSharedObjectCallback()
+    DLLLOCAL int checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
+            ExceptionSink* xsink) const;
 
     //! Returns 0 if the calling code can change the object in a method, or raises SHARED-OBJECT-ERROR and returns -1
     /** For SandboxManager::checkSharedObjectChange(): code that a sandbox governs cannot change a shared object, also

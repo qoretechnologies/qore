@@ -1,9 +1,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # Sandboxed code cannot change the members of an object that trusted code marked as shared with
-# SandboxManager::shareObject(), or delete it, in any form of write; reads work, the object's own class code and
-# trusted callers can change it, and an object that is not marked is not affected (qore#6843); see
-# shared-object-writes.qtest
+# SandboxManager::shareObject(), or delete it, in any form of write, also through Reflection and the methods of the
+# object's own class; reads work, trusted callers can change it, and an object that is not marked is not affected
+# (qore#6843); see shared-object-writes.qtest
 
 %modern
 %enable-all-warnings
@@ -24,7 +24,7 @@ public class SharedTarget {
         SharedInner obj();
     }
 
-    #! changes a member in the code of the object's own class, as a cache that it builds would be
+    #! changes a member in the code of the object's own class without an update scope
     cacheValue(string v) {
         s = v;
     }
@@ -43,6 +43,7 @@ public class SharedTarget {
 # the code of a tenant: a sandboxed Program
 const TenantCode = "
 %modern
+%requires reflection
 
 # a class that sandboxed code declares, which inherits the class of the shared object
 class TenantSubclass inherits SharedTarget {
@@ -97,6 +98,10 @@ hash<string, code> sub changes() {
         \"member of a held object through the object\": sub (auto o, SharedTarget t) { o.obj.x = \"x\"; },
         \"method of a tenant subclass\": sub (auto o, SharedTarget t) { TenantSubclass::poke(t); },
         \"guarded method\": sub (auto o, SharedTarget t) { t.setValue(\"x\"); },
+        \"Reflection NormalMember::setValue()\": sub (auto o, SharedTarget t) {
+            Reflection::Class c = Reflection::Class::getClass(o);
+            cast<Reflection::NormalMember>(c.getMember(\"s\")).setValue(o, \"x\");
+        },
         \"delete\": sub (auto o, SharedTarget t) { delete o; },
     };
 }

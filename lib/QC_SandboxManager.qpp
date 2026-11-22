@@ -1705,16 +1705,19 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
       reference, is not affected
     - cannot delete the object with the \c delete operator (\c SHARED-OBJECT-ERROR)
 
-    The code of the object's own class hierarchy (the class of the object, a class that it inherits or a class that
-    inherits it) that trusted code declared can still change the members, also in a call for sandboxed code, so that
-    the object can maintain its state (for example, caches that it builds on first use); a method of such a class
-    that changes the object on behalf of its caller checks with checkSharedObjectChange().
+    This applies to every code that runs for sandboxed code, also to the methods of the object's own class and to
+    Reflection.  A class whose objects maintain state that they build from themselves, such as caches that they build
+    on first use, also in a call for sandboxed code, makes each such change with updateSharedObject(); a method that
+    runs code that its caller gives while it holds the object's state checks the code with
+    checkSharedObjectCallback().  A closure that a class creates and gives to other code changes the object only in
+    an update scope that it opens itself.
+
+    The mark cannot be removed, and any code can set it: an object that sandboxed code marks cannot be changed by
+    sandboxed code or code that acts for it afterwards, also when that code is trusted code of another class.
 
     An object held in a member of a shared object is a separate object: it is shared only if it is marked itself.  A
     copy of a shared object is not shared unless it is marked; an object that \c Serializable::deserialize() creates
     runs no constructor, so it is not marked by one.
-
-    The mark cannot be removed.  It only restricts sandboxed code, so any code can set it.
 
     @param obj the object to mark as shared
 
@@ -1755,10 +1758,90 @@ static bool SandboxManager::isSharedObject(object obj) [flags=RET_VALUE_ONLY] {
     return qore_object_private::get(*obj)->isShared();
 }
 
+//! Runs a closure that updates the state of a shared object, such as a cache that the object builds on first use
+/** Sandboxed code, and code that acts for sandboxed code, cannot change a shared object (see shareObject()), also
+    through the methods of the object's class.  A class whose objects maintain state that they build from themselves,
+    such as caches built on first use, also in a call for sandboxed code, makes each such change in an update scope:
+    the closure runs, with no arguments, with the object writable for the code of the %Program that calls this method;
+    code that the closure calls in another %Program, such as a callback of the caller, still cannot change the object.
+
+    The update must compute the new state from the object itself, never from data that the caller gives; the
+    scope ends when the closure returns or raises an exception, and a thread that the closure starts does not inherit
+    it.
+
+    @param obj the shared object to update
+    @param update a closure that a method of a class of \a obj creates, in the code that calls this method; a closure
+    that other code created and passed on (such as through a trusted helper) is refused
+
+    @return the value that \a update returns
+
+    @throw SHARED-OBJECT-ERROR \a obj is not shared; the calling code is sandboxed; \a update is not a closure that a
+    method of a class of \a obj created in the code of the calling %Program
+
+    @par Example:
+    @code{.py}
+private AbstractDataProviderType getCachedType() {
+    if (!type) {
+        AbstractDataProviderType t = buildType();
+        if (SandboxManager::isSharedObject(self)) {
+            SandboxManager::updateSharedObject(self, sub () { type = t; });
+        } else {
+            type = t;
+        }
+    }
+    return type;
+}
+    @endcode
+
+    @see
+    - shareObject()
+    - checkSharedObjectChange()
+
+    @since %Qore 3.0
+*/
+static auto SandboxManager::updateSharedObject(object obj, code update) {
+    return qore_object_private::get(*const_cast<QoreObject*>(obj))->runSharedUpdate(update, xsink);
+}
+
+//! Raises an exception if sandboxed code gives a shared object code to run while the object is changed
+/** For a method of a shared object's class that runs code that its caller gives while it holds the object's state,
+    such as a lock: code that is sandboxed or acts for sandboxed code can only give a closure that a method of a class
+    that trusted code declared created, so that sandboxed code cannot run its own code while it holds the state of
+    an object that every %Program of the process uses.
+
+    It decides as checkSharedObjectChange() does: nothing is checked for an object that is not shared or for a caller
+    that no sandbox governs, and if the sandbox that governs the code cannot be resolved, the code is refused.
+
+    @param obj the object that the caller changes
+    @param callback the code that the caller gives
+    @param what what is done, for the exception (ex: \c "run a type build")
+
+    @throw SHARED-OBJECT-ERROR the object is shared (see shareObject()), the calling code is sandboxed or acts for
+    sandboxed code, and \a callback is not a closure that a method of a class that trusted code declared created
+
+    @par Example:
+    @code{.py}
+auto runLocked(code c) {
+    SandboxManager::checkSharedObjectCallback(self, c, "run code locked");
+    AutoLock al(lck);
+    return c();
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkSharedObjectCallback(object obj, code callback, string what) {
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    qore_object_private::get(*const_cast<QoreObject*>(obj))->checkSharedCallback(callback, str->c_str(), xsink);
+}
+
 //! Raises an exception if the calling code is sandboxed and the object is shared by every %Program of the process
-/** For a method of a shared object's class that changes the object on behalf of its caller: code of the object's
-    own class can change its members also in a call for sandboxed code (see shareObject()), so such a method refuses
-    the change itself.
+/** For a method of a shared object's class that changes the object on behalf of its caller, before anything is
+    changed, so that the method refuses the change with a message that names it; a change of a member that the method
+    makes is refused in any case (see shareObject())
 
     It decides as isProcessWideRegistrationAllowed() does: if the sandbox that governs the code cannot be resolved,
     the change is refused.

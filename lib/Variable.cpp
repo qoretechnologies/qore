@@ -4496,7 +4496,7 @@ void LValueRemoveHelper::deleteLValue() {
                     continue;
                 }
                 // sandboxed code cannot delete a shared object (qore#6843)
-                if (qore_object_private::get(*o)->checkSharedChange(nullptr, runtime_get_class(), xsink, true)) {
+                if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                     continue;
                 }
                 o->doDelete(xsink);
@@ -4514,7 +4514,7 @@ void LValueRemoveHelper::deleteLValue() {
         return;
     }
     // sandboxed code cannot delete a shared object (qore#6843)
-    if (qore_object_private::get(*o)->checkSharedChange(nullptr, runtime_get_class(), xsink, true)) {
+    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
         return;
     }
 

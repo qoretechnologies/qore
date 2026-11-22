@@ -148,6 +148,11 @@ public:
         return dispatchValue(args, xsink);
     }
 
+    //! Returns the class context of the code that created the closure, or nullptr if it has none
+    DLLLOCAL const qore_class_private* getClassContext() const {
+        return class_ctx;
+    }
+
     // A closure is user code; its declaration owns the argument filters, and its body owns its operations.
     QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override {

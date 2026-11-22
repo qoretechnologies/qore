@@ -20294,7 +20294,7 @@ load_local_done:
                         return;
                     }
                     // sandboxed code cannot delete a shared object (qore#6843)
-                    if (qore_object_private::get(*o)->checkSharedChange(nullptr, runtime_get_class(), xsink, true)) {
+                    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                         return;
                     }
                     o->doDelete(xsink);
@@ -20537,7 +20537,7 @@ load_local_done:
                                 if (o->isSystemObject()) {
                                     xsink->raiseException("SYSTEM-OBJECT-ERROR",
                                         "cannot delete a system constant object (class '%s')", o->getClassName());
-                                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, runtime_get_class(), xsink, true)) {
+                                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                                     // sandboxed code cannot delete a shared object (qore#6843)
                                     o->doDelete(xsink);
                                 }

@@ -772,7 +772,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
 
 void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
     // the members of a shared object cannot be changed by sandboxed code (qore#6843)
-    if (checkSharedChange(nullptr, runtime_get_class(), xsink)) {
+    if (checkSharedChange(nullptr, xsink)) {
         return;
     }
     return mergeImpl<false>(o, vl, sdh, xsink, {});
@@ -780,7 +780,7 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
 
 void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
-    if (checkSharedChange(nullptr, runtime_get_class(), xsink)) {
+    if (checkSharedChange(nullptr, xsink)) {
         return;
     }
     return mergeImpl<true>(o, vl, sdh, xsink, policy);
@@ -838,7 +838,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode
 
 void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
     // the members of a shared object cannot be changed by sandboxed code (qore#6843)
-    if (checkSharedChange(nullptr, runtime_get_class(), xsink)) {
+    if (checkSharedChange(nullptr, xsink)) {
         return;
     }
     return mergeImpl<false>(h, vl, sdh, xsink, {});
@@ -846,27 +846,65 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
 
 void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
-    if (checkSharedChange(nullptr, runtime_get_class(), xsink)) {
+    if (checkSharedChange(nullptr, xsink)) {
         return;
     }
     return mergeImpl<true>(h, vl, sdh, xsink, policy);
 }
 
-int qore_object_private::checkSharedChangeIntern(const char* mem, const qore_class_private* class_ctx,
-        ExceptionSink* xsink, bool del) const {
-    // the code of the object's own class hierarchy that trusted code declared: the class of the object, a class that
-    // it inherits or a class that inherits it, by identity (qore#7036)
-    if (class_ctx && !class_ctx->sandbox_ctx) {
-        ClassAccess access;
-        const qore_class_private* cls = qore_class_private::get(*theclass);
-        if (cls->getAccessClass(*class_ctx, access) || class_ctx->getAccessClass(*cls, access)) {
-            return 0;
-        }
+namespace {
+//! An update scope of a shared object: the object, and the Program whose code opened it
+struct SharedUpdateScope {
+    const qore_object_private* obj;
+    const QoreProgram* pgm;
+};
+
+//! The update scopes of the thread, innermost last (see SandboxManager::updateSharedObject())
+/** A thread that a scope starts begins with none: scopes are never inherited
+*/
+thread_local std::vector<SharedUpdateScope> qore_shared_update_scopes;
+
+//! Ends an update scope on every path out of it
+class SharedUpdateScopeHelper {
+public:
+    DLLLOCAL SharedUpdateScopeHelper(const qore_object_private* obj, const QoreProgram* pgm) {
+        qore_shared_update_scopes.push_back({obj, pgm});
     }
+
+    DLLLOCAL ~SharedUpdateScopeHelper() {
+        qore_shared_update_scopes.pop_back();
+    }
+
+    SharedUpdateScopeHelper(const SharedUpdateScopeHelper&) = delete;
+    SharedUpdateScopeHelper& operator=(const SharedUpdateScopeHelper&) = delete;
+};
+
+//! true if QORE_SHARED_OBJECT_TRACE is set: each refused change of a shared object is also reported on stderr
+bool qore_shared_object_trace() {
+    static const bool trace = getenv("QORE_SHARED_OBJECT_TRACE");
+    return trace;
+}
+}
+
+int qore_object_private::checkSharedChangeIntern(const char* mem, ExceptionSink* xsink, bool del) const {
     // fails closed: true if the governing sandbox cannot be resolved; false under a module initialization barrier for
     // the code that loads library code
     if (!qore_caller_is_sandboxed()) {
         return 0;
+    }
+    // a change in an update scope for the object, by the code of the Program that opened it: not by code that the
+    // scope's code calls in another Program, such as a callback of the caller
+    if (!qore_shared_update_scopes.empty()) {
+        const QoreProgram* pgm = getProgram();
+        for (const SharedUpdateScope& scope : qore_shared_update_scopes) {
+            if (scope.obj == this && scope.pgm == pgm) {
+                return 0;
+            }
+        }
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: %s of class '%s'%s%s\n", del ? "delete" : "change",
+            theclass->getName(), mem ? " member " : "", mem ? mem : "");
     }
     if (del) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
@@ -881,6 +919,65 @@ int qore_object_private::checkSharedChangeIntern(const char* mem, const qore_cla
             "change the members of an object of class '%s': the object is shared by every Program of the process",
             theclass->getName());
     }
+    return -1;
+}
+
+QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink) {
+    if (!isShared()) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "an object of class '%s' is not shared; an update scope is only "
+            "for a shared object", theclass->getName());
+        return QoreValue();
+    }
+    // the code that calls: the code of a Program that no sandbox governs
+    const QoreProgram* pgm = getProgram();
+    if (!pgm || qore_program_is_sandboxed(pgm)) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
+            "object of class '%s'", theclass->getName());
+        return QoreValue();
+    }
+    // the update: a closure that a method of a class of the object created, in the code of the same Program, which
+    // no sandbox governs; not one that other code created and passed on (qore#6843)
+    const QoreClosureBase* closure = update->getType() == NT_RUNTIME_CLOSURE
+        ? static_cast<const QoreClosureBase*>(update) : nullptr;
+    const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
+    ClassAccess access;
+    if (!closure_class || closure_class->sandbox_ctx
+        || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
+        || qore_closure_code_program(closure) != pgm) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
+            "method of a class of the object creates in the code that opens the update scope", theclass->getName());
+        return QoreValue();
+    }
+    // the closure runs in the Program that was current when it was created (the Program of the object's class for a
+    // method of a base class of another module), which is the Program of the code that changes the object in it
+    const QoreProgram* run_pgm = closure->getProgram();
+    if (!run_pgm || qore_program_is_sandboxed(run_pgm)) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
+            "method of a class of the object creates in the code that opens the update scope", theclass->getName());
+        return QoreValue();
+    }
+    SharedUpdateScopeHelper scope(this, run_pgm);
+    return update->execValue(nullptr, xsink);
+}
+
+int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
+        ExceptionSink* xsink) const {
+    // fails closed, as checkSharedChangeIntern()
+    if (!isShared() || !qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // a closure that the code of a trusted library class created; not code of the caller or of another sandboxed
+    // Program
+    const QoreClosureBase* closure = callback->getType() == NT_RUNTIME_CLOSURE
+        ? static_cast<const QoreClosureBase*>(callback) : nullptr;
+    const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
+    const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
+    if (closure_class && !closure_class->sandbox_ctx && code_pgm && !qore_program_is_sandboxed(code_pgm)) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
+        "object of class '%s' with code that is not a closure of a trusted class: the object is shared by every "
+        "Program of the process", what, theclass->getName());
     return -1;
 }
 
@@ -1211,7 +1308,7 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         // a member of a shared object held in external storage cannot be removed by sandboxed code (qore#6843)
-        if (checkSharedChange(key, runtime_get_class(), xsink)) {
+        if (checkSharedChange(key, xsink)) {
             return QoreValue();
         }
         QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
@@ -1234,7 +1331,7 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         return QoreValue();
     }
     // a member of a shared object cannot be removed by sandboxed code (qore#6843)
-    if (checkSharedChange(key, class_ctx, xsink)) {
+    if (checkSharedChange(key, xsink)) {
         return QoreValue();
     }
 
@@ -1303,7 +1400,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         // a member of a shared object held in external storage cannot be removed by sandboxed code (qore#6843)
-        if (checkSharedChange(key, runtime_get_class(), lvh.vl.xsink)) {
+        if (checkSharedChange(key, lvh.vl.xsink)) {
             return QoreValue();
         }
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
@@ -1332,7 +1429,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
         return QoreValue();
     }
     // a member of a shared object cannot be removed by sandboxed code (qore#6843)
-    if (checkSharedChange(key, class_ctx, lvh.vl.xsink)) {
+    if (checkSharedChange(key, lvh.vl.xsink)) {
         return QoreValue();
     }
 
@@ -1422,7 +1519,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         bool for_delete) {
     lvh.disableMemberWriteBack();
     // the members of a shared object cannot be removed by sandboxed code (qore#6843)
-    if (checkSharedChange(nullptr, runtime_get_class(), lvh.vl.xsink)) {
+    if (checkSharedChange(nullptr, lvh.vl.xsink)) {
         return;
     }
     // members held in external storage are taken one at a time, as their accessors and gates run without locks; so
@@ -1599,7 +1696,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         // a member of a shared object held in external storage is written as any other (qore#6843)
-        if (!lvh.isReadValueOnly() && checkSharedChange(key, class_ctx, xsink)) {
+        if (!lvh.isReadValueOnly() && checkSharedChange(key, xsink)) {
             return -1;
         }
         return lvh.setMemberWriteGateLValue(obj, key);
@@ -1610,7 +1707,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
         return -1;
     }
     // a member of a shared object is resolved to be written, unless the value of a reference is only read (qore#6843)
-    if (!lvh.isReadValueOnly() && checkSharedChange(key, class_ctx, xsink)) {
+    if (!lvh.isReadValueOnly() && checkSharedChange(key, xsink)) {
         return -1;
     }
 
@@ -1659,7 +1756,7 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
         const qore_class_private* class_ctx, LValueHelper& lvh,
         bool for_remove, ExceptionSink* xsink) {
     // a member of a shared object is resolved to be written, unless the value of a reference is only read (qore#6843)
-    if (!lvh.isReadValueOnly() && checkSharedChange(key, class_ctx, xsink)) {
+    if (!lvh.isReadValueOnly() && checkSharedChange(key, xsink)) {
         return -1;
     }
     // a declared member held in external storage is bound to a temporary that is written with its setter

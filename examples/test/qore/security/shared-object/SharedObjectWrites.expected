@@ -24,9 +24,10 @@ reference argument: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed,
 member of a held object through the object: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
 method of a tenant subclass: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
 guarded method: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+Reflection NormalMember::setValue(): shared: REFLECTION-ACCESS-ERROR, unchanged; not shared: REFLECTION-ACCESS-ERROR, unchanged
 delete: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
 reads: "orig" 1 "v" 2 "inner" "orig" ["s", "i", "h", "l", "obj"]
-the object's own class code for the tenant: changed, s: "cached"
-the tenant changes its copy: changed, s: "cached"
+the object's own class code for the tenant: SHARED-OBJECT-ERROR, s: "orig"
+the tenant changes its copy: changed, s: "orig"
 a trusted caller: changed: s: "trusted method" i: 10 h: {} l: [1, 2, 3, 4] obj.x: "inner" members: ["s", "i", "h", "l", "obj"]
 trusted code deletes a shared object: OBJECT-ALREADY-DELETED

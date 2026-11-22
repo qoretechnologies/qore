@@ -577,11 +577,24 @@ authenticate();
     delete the object with the \c delete operator: each raises \c SHARED-OBJECT-ERROR before anything is changed.
     Reading the members is not affected.
 
-    The code of the object's own class hierarchy that trusted code declared can still change the object, also in a
-    call for sandboxed code, so that the object maintains its own state, such as the caches that it builds on first
-    use; a method of such a class that changes the object on behalf of its caller refuses sandboxed code with
-    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()".  A class that
-    sandboxed code declares is never the object's own class, even when it inherits it.
+    This applies to every code that runs for sandboxed code: the methods of the object's own class, Reflection and
+    the code that trusted library code runs for its caller.  A class whose objects maintain state that they build from
+    themselves, such as the caches that they build on first use, also in a call for sandboxed code, makes each such
+    change in an update scope with
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()": a closure that a method of
+    a class of the object creates runs with the object writable for the code of that class's %Program only; each such
+    update computes the new state from the object itself, never from data that its caller gives.  A method that runs
+    code that its caller gives while it holds the object's state accepts only a closure of a trusted class from
+    sandboxed code (@ref Qore::SandboxManager::checkSharedObjectCallback() "SandboxManager::checkSharedObjectCallback()"),
+    and a method that changes the object on behalf of its caller can name the change it refuses with
+    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()".  A closure that a
+    class creates and gives to other code changes the object only in an update scope that it opens itself.
+
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" accepts any object, also from sandboxed
+    code: an object that sandboxed code marks cannot be changed by sandboxed code, or code that acts for it, from then
+    on, also when that code is trusted code of another class.  Setting the environment variable
+    \c QORE_SHARED_OBJECT_TRACE reports each refused change of a shared object on standard error, to find the changes
+    that a class must make in an update scope.
 
     The REST and AsyncAPI schemas of the \c Swagger, \c OpenApi3 and \c AsyncApi modules and their schema objects
     are marked in this way when trusted code creates them, so that a tenant cannot change a schema that a module
@@ -593,7 +606,8 @@ authenticate();
     class marks it again, as the schema classes do when trusted code makes the copy.  An object that
     \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
     it: trusted code that shares a deserialized object marks it with
-    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that
+    serialized data provider types restore, which are not marked.
 
     @since %Qore 3.0
 

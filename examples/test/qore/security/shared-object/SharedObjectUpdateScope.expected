@@ -1,0 +1,17 @@
+a method that updates in a scope: shared: changed, cached: "filled 1" count: 1; not shared: SHARED-OBJECT-ERROR
+a method that changes without a scope: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: changed
+a scope that the tenant opens with its own closure: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
+a scope that the tenant opens with a closure of the class: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
+a tenant closure that a trusted helper forwards: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
+a call reference of the tenant that a trusted helper forwards: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
+a change after a scope that raised an exception: shared: SHARED-OBJECT-ERROR, cached: "before the exception" count: 1; not shared: changed
+a callback of the tenant in a scope: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: SHARED-OBJECT-ERROR
+a tenant closure run while the state is held: shared: SHARED-OBJECT-ERROR, cached: "orig" count: 1; not shared: changed
+a thread that a scope starts: SHARED-OBJECT-ERROR, cached: "orig" count: 1
+another object in a scope: SHARED-OBJECT-ERROR, cached: "orig" count: 1
+a scope of another trusted class: SHARED-OBJECT-ERROR, cached: "orig" count: 1
+a closure of the class run while the state is held: SHARED-OBJECT-ERROR, cached: "orig" count: 1
+a tenant replaces the logger of a shared logger wrapper: SHARED-OBJECT-ERROR SHARED-OBJECT-ERROR, host logger kept: True
+a tenant replaces the logger of a logger wrapper that is not shared: changed changed, host logger kept: False
+trusted code updates an object that is not shared: SHARED-OBJECT-ERROR
+trusted code updates a shared object: cached: "unscoped" count: 2
