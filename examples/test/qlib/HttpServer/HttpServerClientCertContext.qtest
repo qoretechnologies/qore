@@ -38,9 +38,16 @@ class HttpServerClientCertContextTest inherits QUnit::Test {
         addTestCase("HTTP/1.1", \certTest(), "1.1");
         addTestCase("HTTP/2", \certTest(), "2.0");
         addTestCase("HTTP/3", \certTest(), "3.0");
-        addTestCase("HTTP/1.1 required certificate", \requiredCertTest(), "1.1");
-        addTestCase("HTTP/2 required certificate", \requiredCertTest(), "2.0");
-        addTestCase("HTTP/3 required certificate", \requiredCertTest(), "3.0");
+        foreach string ver in (("1.1", "2.0", "3.0")) {
+            string pv = "HTTP/" + (ver == "2.0" ? "2" : (ver == "3.0" ? "3" : ver));
+            addTestCase(pv + " required certificate", \requiredCertTest(),
+                (ver, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT));
+            # get_remote_certs adds SSL_VERIFY_PEER to the flags of the listener
+            addTestCase(pv + " required certificate without SSL_VERIFY_PEER", \requiredCertTest(),
+                (ver, SSL_VERIFY_FAIL_IF_NO_PEER_CERT));
+            addTestCase(pv + " untrusted certificate", \untrustedCertTest(), ver);
+        }
+        addTestCase("listener info", \listenerInfoTest());
         set_return_value(main());
     }
 
@@ -57,29 +64,76 @@ class HttpServerClientCertContextTest inherits QUnit::Test {
     }
 
     #! the listener's verify flags apply to the QUIC listener paired with it as to its TCP listener (qore#7261)
-    requiredCertTest(string http_version) {
+    requiredCertTest(string http_version, int ssl_verify_flags) {
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit delete server;
-        int port = startListener(server, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
+        int port = startListener(server, ssl_verify_flags);
 
         TmpDir tmp();
         string expected = sprintf("cert=%s peer=", new SSLCertificate(CertPem).getSignature().toHex());
         string r = get(port, http_version, writeClientPem(tmp));
         assertEq(expected, r.substr(0, expected.size()), "a client with a certificate is served");
 
+        assertRefused(port, http_version, NOTHING, "a client without a certificate is refused");
+    }
+
+    #! with ssl_accept_all_certs False, the listener and the QUIC listener paired with it refuse a client certificate
+    #! that they cannot verify (qore#7261)
+    untrustedCertTest(string http_version) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        int port = startListener(server, SSL_VERIFY_NONE, False);
+
+        TmpDir tmp();
+        # the client's certificate is self-signed
+        assertRefused(port, http_version, writeClientPem(tmp), "an untrusted client certificate is refused");
+
+        string r = get(port, http_version);
+        assertEq("cert=none peer=", r.substr(0, 15), "a client without a certificate is served");
+    }
+
+    #! the info of the QUIC listener gives the client certificate options that it applies (qore#7261)
+    listenerInfoTest() {
+        foreach bool accept_all in ((True, False)) {
+            HttpServer server(<HttpServerOptionInfo>{});
+            on_exit delete server;
+            startListener(server, SSL_VERIFY_NONE, accept_all);
+            # the listener added with HttpServer::addQuicListener() directly
+            int qid = server.addQuicListener(<HttpListenerOptionInfo>{
+                "name": "direct",
+                "node": "localhost",
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "get_remote_certs": True,
+                "ssl_accept_all_certs": accept_all,
+            }).id;
+
+            hash<string, hash<auto>> info = server.getListeners();
+            # the TCP listener, the QUIC listener paired with it and the one added directly
+            assertEq(3, info.size());
+            foreach hash<auto> i in (info.iterator()) {
+                assertEq(accept_all, i.ssl_accept_all_certs, sprintf("%s: ssl_accept_all_certs", i.name));
+                assertTrue(i.get_remote_certs, sprintf("%s: get_remote_certs", i.name));
+            }
+            assertEq(accept_all, info{qid}.ssl_accept_all_certs, "the direct QUIC listener's ssl_accept_all_certs");
+        }
+    }
+
+    private assertRefused(int port, string http_version, *string path, string msg) {
         # the server's TLS alert ends the handshake or the connection: the error depends on the protocol and on whether
         # the alert arrives before or after the request is sent, but it is never a timeout or a response
         *string err;
+        *string r;
         try {
-            r = get(port, http_version);
+            r = get(port, http_version, path);
         } catch (hash<ExceptionInfo> ex) {
             err = ex.err;
         }
-        assertEq(Type::String, err.type(), "a client without a certificate is refused");
+        assertEq(Type::String, err.type(), sprintf("%s (response: %y)", msg, r));
         assertFalse(err =~ /TIMEOUT/, "the refusal is not a timeout");
     }
 
-    private int startListener(HttpServer server, int ssl_verify_flags = SSL_VERIFY_NONE) {
+    private int startListener(HttpServer server, int ssl_verify_flags = SSL_VERIFY_NONE, bool accept_all = True) {
         server.setHandler("peer", "^peer", NOTHING, new PeerHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
@@ -89,6 +143,7 @@ class HttpServerClientCertContextTest inherits QUnit::Test {
             "http_version": "auto",
             "get_remote_certs": True,
             "ssl_verify_flags": ssl_verify_flags,
+            "ssl_accept_all_certs": accept_all,
         }).port;
         server.waitForAsyncIo();
         return port;

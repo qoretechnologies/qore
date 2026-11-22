@@ -2007,6 +2007,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "cert": opts.cert,
             "key": opts.key,
             "ssl_verify_flags": opts.ssl_verify_flags,
+            # so that its info gives the value that the QUIC listener applies (qore#7261)
+            "ssl_accept_all_certs": opts.ssl_accept_all_certs,
             "get_remote_certs": opts.get_remote_certs,
             "max_request_body_size": opts.max_request_body_size,
             "max_decoded_body_size": opts.max_decoded_body_size,
