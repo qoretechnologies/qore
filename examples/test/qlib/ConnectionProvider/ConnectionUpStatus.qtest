@@ -117,6 +117,41 @@ class TokenHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a polling monitor that reports the result of each ping
+class ResultMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue results();
+    }
+
+    constructor() : PollingConnectionMonitor() {
+        ping_timeout = 5s;
+    }
+
+    hash<auto> waitForResult() {
+        return results.get(15s);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        results.push({"result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        results.push({"result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        results.push({"result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        results.push({"result": "timeout"});
+    }
+}
+
 #! answers every request with 200 OK
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -179,6 +214,7 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("skipped automatic ping", \skippedAutomaticPingTest());
         addTestCase("restored and copied", \restoredTest());
         addTestCase("REST connection", \restTest());
+        addTestCase("unauthorized REST connection", \unauthorizedRestTest());
         addTestCase("HTTP connection", \httpTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
@@ -516,6 +552,71 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False}, ping_opts);
         assertFalse(conn.ping().ok);
         assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() of a closed port");
+    }
+
+    #! a connection whose configuration cannot work fails every ping with that error, also without ping_method
+    unauthorizedRestTest() {
+        string url = "rest://127.0.0.1:" + rest_port;
+        string token_base = "http://127.0.0.1:" + token_port;
+        hash<auto> auth_opts = {
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_auth_url": token_base + "/authorize",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": token_base + "/callback",
+            "oauth2_token_url": token_base + "/token",
+        };
+        int token_requests = token_handler.paths.size();
+        string err_regex = "^OAUTH2-ERROR: .*not yet authorized";
+
+        RestConnection conn("auth", "test", url, {"monitor": False}, auth_opts);
+        assertFalse(conn.up);
+        assertRegex("not yet authorized", conn.status);
+        hash<PingInfo> ping = conn.ping();
+        assertFalse(ping.ok);
+        assertEq("OAUTH2-ERROR", ping.ex.err);
+        assertRegex("not yet authorized", ping.info);
+        assertDown(conn, err_regex, "ping()");
+        assertThrows("OAUTH2-ERROR", "not yet authorized", \conn.ping(), PF_THROW_EXCEPTION | PF_AUTOMATIC_PING);
+        assertDown(conn, err_regex, "automatic ping");
+
+        # the same through a polling monitor
+        RestConnection mconn("auth-monitored", "test", url, {"monitor": False}, auth_opts);
+        {
+            ResultMonitor monitor();
+            on_exit delete monitor;
+            monitor.add(mconn);
+            hash<auto> result = monitor.waitForResult();
+            assertEq("error", result.result);
+            assertEq("OAUTH2-ERROR", result.ex.err);
+            assertRegex("not yet authorized", result.ex.desc);
+        }
+        assertFalse(mconn.up);
+        assertRegex(err_regex, mconn.status);
+        assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
+
+        # once authorized, the connection pings normally: the auth flow's option update creates it again with the
+        # token...
+        conn = new RestConnection("auth", "test", url, {"monitor": False}, auth_opts + {"token": "t"});
+        date start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping() after authorization");
+        # ... and a connection whose options get the token in place is checked again, not by its status
+        mconn.opts.token = "t";
+        start = now_us();
+        ping = mconn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(mconn, start, "ping() after the token was added to the options");
+        {
+            ResultMonitor monitor();
+            on_exit delete monitor;
+            mconn.handlePingFailed(0s, "reset");
+            monitor.add(mconn);
+            assertEq("OK", monitor.waitForResult().result);
+        }
+        assertTrue(mconn.up);
+        assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
     }
 
     httpTest() {
