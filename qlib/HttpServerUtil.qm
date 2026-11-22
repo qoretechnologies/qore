@@ -169,7 +169,8 @@ module HttpServerUtil {
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
       members of the class when sandboxed code declares them; the context is a copy with the request metadata only
       (@ref HttpServer::AbstractStreamRequest::ContextKeys "ContextKeys",
-      @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"; issue #6843)
+      @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"), and neither gives the credentials
+      of the request (@ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders"; issue #6843)
     - the persistence and the close notification of a request handler
       (@ref HttpServer::AbstractHttpRequestHandler::setPersistent() "AbstractHttpRequestHandler::setPersistent()",
       @ref HttpServer::AbstractHttpRequestHandler::notifyClosed() "notifyClosed()") are kept by the handler only:
