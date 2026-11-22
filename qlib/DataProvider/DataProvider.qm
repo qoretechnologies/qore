@@ -1825,6 +1825,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::checkModuleSandboxAccess()
       "DataProviderActionCatalog::checkModuleSandboxAccess()" and
       @ref DataProvider::DataProviderActionCatalog::initLoadedApps() "DataProviderActionCatalog::initLoadedApps()"
+    - fixed @ref DataProvider::HashDataType::addField() "HashDataType::addField()" and the \c QoreDataField
+      constructor for a hashdecl member with a default value, which raised \c RUNTIME-TYPE-ERROR; the field now also
+      has the generated display name (<a href="https://github.com/qoretechnologies/qore/issues/7162">issue 7162</a>)
     - fixed @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" for expressions
       rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
       \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
