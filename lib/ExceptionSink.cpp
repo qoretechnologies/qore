@@ -594,12 +594,23 @@ bool qore_exception_sandboxed_mark(const ExceptionSink& xsink, QoreString& mark)
 }
 
 //! appends the escape of code point \a cp and returns true, or returns false if it is not escaped
-static bool qore_report_escape_code_point(QoreString& out, unsigned cp) {
+//! with \a line_only, only the characters that can end or rewrite the line are escaped (not backslash or tab)
+static bool qore_report_escape_code_point(QoreString& out, unsigned cp, bool line_only = false) {
     switch (cp) {
         case '\n': out.concat("\\n"); return true;
         case '\r': out.concat("\\r"); return true;
-        case '\t': out.concat("\\t"); return true;
-        case '\\': out.concat("\\\\"); return true;
+        case '\t':
+            if (line_only) {
+                return false;
+            }
+            out.concat("\\t");
+            return true;
+        case '\\':
+            if (line_only) {
+                return false;
+            }
+            out.concat("\\\\");
+            return true;
         default:
             break;
     }
@@ -617,7 +628,8 @@ static bool qore_report_escape_code_point(QoreString& out, unsigned cp) {
 }
 
 //! appends UTF-8 text escaped; the bytes of invalid UTF-8 are escaped as \xNN
-static void qore_append_escaped_utf8(QoreString& out, const char* text, size_t len) {
+static void qore_append_escaped_utf8(QoreString& out, const char* text, size_t len, bool line_only = false,
+        bool double_percent = false) {
     const unsigned char* s = reinterpret_cast<const unsigned char*>(text);
     size_t i = 0;
     while (i < len) {
@@ -659,11 +671,17 @@ static void qore_append_escaped_utf8(QoreString& out, const char* text, size_t l
             ++i;
             continue;
         }
-        if (!qore_report_escape_code_point(out, cp)) {
+        if (double_percent && cp == '%') {
+            out.concat("%%");
+        } else if (!qore_report_escape_code_point(out, cp, line_only)) {
             out.concat(text + i, n);
         }
         i += n;
     }
+}
+
+void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent) {
+    qore_append_escaped_utf8(out, text, len, true, double_percent);
 }
 
 void qore_append_escaped_report_text(QoreString& out, const char* text) {
