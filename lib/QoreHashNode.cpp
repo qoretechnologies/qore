@@ -1011,22 +1011,23 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
         return 1;
     }
 
-    ConstHashIterator hi(this);
-    while (hi.next()) {
-        hm_hm_t::const_iterator j = h->priv->findIter(hi.getKey());
-        if (j == h->priv->hm.end())
-            return 1;
-
+    // the members are compared in the order of this hash, as a lookup of each of its keys in the other hash does
+    // (qore#7266)
+    return !priv->membersEqual(*h->priv, [xsink](const QoreValue& lv, const QoreValue& rv) -> bool {
+        // two ints or two floats compare as QoreValue::isEqualHard() compares them (a NaN is not equal to itself)
+        if (lv.isInt()) {
+            if (rv.isInt()) {
+                return lv.getInt() == rv.getInt();
+            }
+        } else if (lv.isFloat() && rv.isFloat()) {
+            return lv.getDouble() == rv.getDouble();
+        }
         // the sink is optional in this API: without one, an exception means that the hashes are not equal
         if (xsink) {
-            if (!hi.get().isEqualHard((*j->second)->val, xsink) || *xsink) {
-                return 1;
-            }
-        } else if (!hi.get().isEqualHard((*j->second)->val)) {
-            return 1;
+            return lv.isEqualHard(rv, xsink) && !*xsink;
         }
-    }
-    return 0;
+        return lv.isEqualHard(rv);
+    });
 }
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
