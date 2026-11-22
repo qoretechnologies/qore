@@ -1183,7 +1183,7 @@ QoreFormatBoundsHelper::~QoreFormatBoundsHelper() {
     }
 }
 
-bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObject& obj) {
+bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObject& obj, int foff) {
     if (ctx) {
         return false; // explicitly bounded formatting uses its own anchors and aliases
     }
@@ -1199,7 +1199,14 @@ bool QoreFormatBoundsHelper::renderSharedObject(QoreString& str, const QoreObjec
         obj.tRef();
         return false;
     }
-    str.sprintf("{reference to %s object #%zu}", obj.getClassName(), entry.first->second);
+    if (foff < FMT_YAML_LONG) {
+        str.addch(' ', FMT_YAML_LONG - foff);
+    }
+    if (q_yaml_format(foff)) {
+        str.sprintf("\"{reference to %s object #%zu}\"", obj.getClassName(), entry.first->second);
+    } else {
+        str.sprintf("{reference to %s object #%zu}", obj.getClassName(), entry.first->second);
+    }
     return true;
 }
 

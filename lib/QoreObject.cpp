@@ -3251,7 +3251,10 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
         return 0;
     }
 
-    if (fbh.renderSharedObject(str, *this)) {
+    if (priv->status == OS_DELETED) {
+        return Nothing.getAsString(str, foff, xsink);
+    }
+    if (fbh.renderSharedObject(str, *this, foff)) {
         return 0;
     }
 

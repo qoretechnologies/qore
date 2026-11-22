@@ -198,7 +198,7 @@ public:
     DLLLOCAL ~QoreFormatBoundsHelper();
 
     //! Emits a back-reference when another path already expanded this object in the same output.
-    DLLLOCAL bool renderSharedObject(QoreString& str, const QoreObject& obj);
+    DLLLOCAL bool renderSharedObject(QoreString& str, const QoreObject& obj, int foff);
 
     //! returns True if the container was rendered by the helper and must not be expanded by the caller
     DLLLOCAL bool elided() const {
