@@ -2051,6 +2051,10 @@ uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSin
 void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 uint64_t qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
     ExceptionSink* xsink);
+//! Weak or opaque store to a local via an AOT local slot, which can assign through a reference that the local holds;
+//! see qore_rt_assign_local_mode() (qore#7164)
+uint64_t qore_rt_assign_local_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
+    ExceptionSink* xsink);
 
 //! Add a native integer delta to a typed local via an AOT local slot
 int64_t qore_rt_add_assign_local_int_aot(QoreAOTContext* ctx, int32_t idx,

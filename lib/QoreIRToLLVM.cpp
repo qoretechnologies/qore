@@ -8633,6 +8633,21 @@ bool QoreIRToLLVM::usesReferenceFlag(const void* key) const {
 }
 
 // documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::modeStoreMayAssignThroughReference(const void* key) const {
+    const LocalVar* local = static_cast<const LocalVar*>(key);
+    if (!qore_ir_local_may_hold_reference(local)) {
+        return false;
+    }
+    if (QoreTypeInfo::isReference(local->getTypeInfo())) {
+        return true;
+    }
+    // the variable of a foreach loop is given a reference by an element (reference_element_locals)
+    return function_creates_reference || !reference_flag_body_locals.count(key)
+        || (current_ir_func && (current_ir_func->reference_store_locals.count(key)
+            || current_ir_func->reference_element_locals.count(key)));
+}
+
+// documented in QoreIRToLLVM.h
 llvm::AllocaInst* QoreIRToLLVM::localReferenceFlag(const void* key, llvm::Function* llvm_func) {
     if (!usesReferenceFlag(key)) {
         return nullptr;
@@ -21309,6 +21324,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // (qore#7084)
                 llvm::Value* assigned_outer = nullptr;
 
+                // a weak or opaque store that can assign through a reference that the local holds converts the value
+                // to the type of the lvalue assigned, known only when it runs (see
+                // modeStoreMayAssignThroughReference()), and gives the value of the assignment (qore#7164)
+                if (qore_assignment_mode_converts_value(linst->mode) && modeStoreMayAssignThroughReference(key)) {
+                    llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(linst->mode));
+                    llvm::Value* converted;
+                    if (aot_mode) {
+                        auto mode_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        converted = emitMaybeInvoke(
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_aot", mode_ft),
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_aot_throwing", mode_ft),
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed, mode_arg, xsink_arg},
+                                module, llvm_func, inst);
+                    } else {
+                        auto mode_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i32_type, ptr_type},
+                                false);
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(linst->local)), ptr_type);
+                        converted = emitMaybeInvoke(
+                                module.getOrInsertFunction("qore_rt_assign_local_mode", mode_ft),
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_throwing", mode_ft),
+                                {var_as_ptr, boxed, mode_arg, xsink_arg}, module, llvm_func, inst);
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                    // the referenced lvalue can be a local of the function whose value its cache holds
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                    // the operand is kept to the end of the statement, as the other weak and opaque stores keep it
+                    emitConvertedStoreResult(converted, inst, module, llvm_func);
+                    return true;
+                }
+
                 // Check if typed: apply coercion or type stripping
                 const QoreTypeInfo* outer_ti = linst->local->getTypeInfoForLValue();
                 bool is_complex_typed_outer = QoreTypeInfo::isComplex(outer_ti)
@@ -21720,6 +21768,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Runtime value or out-of-range constant: track for cleanup
                 trackBoxedTempCleanup(boxed);
             }
+            // a weak or opaque store that can assign through a reference that the local holds is made on the runtime
+            // stack with the type of the lvalue assigned (see modeStoreMayAssignThroughReference()): the value is not
+            // converted to the local's own type nor made a weak or opaque reference here, and the value of the
+            // assignment is the one that the store gives (qore#7164)
+            const bool mode_store_through_runtime = qore_assignment_mode_converts_value(linst->mode) && linst->local
+                && !is_ir_only && modeStoreMayAssignThroughReference(key);
             // the operand's own NaN-boxed value, which an IR-only store can take over (see below)
             llvm::Value* operand_bits = nanboxed_values.count(inst->operands[0].id) ? boxed : nullptr;
             // the value of a weak or opaque assignment: the value assigned, converted to the local's type (qore#7084)
@@ -21786,7 +21840,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 needs_type_strip = false;
             }
             bool needs_value_coerce = element_coerce
-                || (!element_store && (is_complex_typed || needs_scalar_coerce || needs_plain_any));
+                || (!element_store && !mode_store_through_runtime
+                    && (is_complex_typed || needs_scalar_coerce || needs_plain_any));
             llvm::Value* consumed_cleanup = nullptr;
 
             // IR-only locals still need their cached alloca value to match
@@ -21897,7 +21952,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     local_cleanup_allocas[key].push_back(cleanup);
                 }
             }
-            if (qore_assignment_mode_converts_value(linst->mode)) {
+            if (qore_assignment_mode_converts_value(linst->mode) && !mode_store_through_runtime) {
                 auto weak_fn = module.getOrInsertFunction(
                         qore_assignment_mode_value_helper(linst->mode),
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
@@ -22096,7 +22151,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateStore(flag, read_flag);
             }
             markLocalCacheFresh(key, llvm_func);
-            if (inst->result.isValid()) {
+            // the value of a store made on the runtime stack is the value that it gives (see below)
+            if (inst->result.isValid() && !mode_store_through_runtime) {
                 // the value of a weak or opaque assignment is the value assigned, held by the operand until the end of
                 // the statement, as the AST interpreter gives it to its consumers (qore#7084)
                 llvm::Value* store_value = qore_assignment_mode_converts_value(linst->mode) ? assigned
@@ -22188,7 +22244,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_throwing"
                             : "qore_rt_assign_local_eval_weak_throwing");
 
-                if (aot_mode) {
+                // the value of the assignment given by a store made on the runtime stack, owned by the frame
+                llvm::Value* mode_store_value = nullptr;
+                if (mode_store_through_runtime) {
+                    llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(linst->mode));
+                    if (aot_mode) {
+                        auto mode_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        mode_store_value = emitMaybeInvoke(
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_aot", mode_ft),
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_aot_throwing", mode_ft),
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed, mode_arg, xsink_arg},
+                                module, llvm_func, inst);
+                    } else {
+                        auto mode_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i32_type, ptr_type},
+                                false);
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(linst->local)), ptr_type);
+                        mode_store_value = emitMaybeInvoke(
+                                module.getOrInsertFunction("qore_rt_assign_local_mode", mode_ft),
+                                module.getOrInsertFunction("qore_rt_assign_local_mode_throwing", mode_ft),
+                                {var_as_ptr, boxed, mode_arg, xsink_arg}, module, llvm_func, inst);
+                    }
+                } else if (aot_mode) {
                     auto aot_ft = llvm::FunctionType::get(void_type,
                             {ptr_type, i32_type, i64_type, ptr_type}, false);
                     auto assign_helper = module.getOrInsertFunction(qore_store_helper_name(aot_helper_name, linst->foreach_assignment), aot_ft);
@@ -22224,9 +22303,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // runtime slot stores the same bits already in the alloca.  Keep
                 // the cache correct by retaining those bits directly instead of
                 // emitting a qore_rt_load_local_aot() round trip.
-                if (readsThroughReference(linst->local)) {
+                if (readsThroughReference(linst->local) || mode_store_through_runtime) {
                     // Reference locals write through to another variable; any local
-                    // cache could now be stale.
+                    // cache could now be stale.  So can a store made on the runtime stack through a reference that the
+                    // local holds.
                     reloadAllLocalsFromRuntime(module, llvm_func);
                 } else if (llvm::AllocaInst* ref_flag = localReferenceFlag(key, llvm_func)) {
                     // a local of no reference type that can hold a reference: if it held one, the store wrote
@@ -22280,6 +22360,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!qore_assignment_mode_converts_value(linst->mode)) {
                     clear_cleanup_alloca(consumed_cleanup);
                     clear_consumed_operand_cleanup(inst->operands[0].id);
+                }
+                if (mode_store_value) {
+                    emitConvertedStoreResult(mode_store_value, inst, module, llvm_func);
                 }
             } else if (is_ir_only && !qore_assignment_mode_converts_value(linst->mode)) {
                 // The local cache owns the assigned value. Keeping the coercion's extra reference until frame

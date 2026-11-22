@@ -534,6 +534,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot) },
     { "qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot) },
     { "qore_rt_store_closure_mode_aot", reinterpret_cast<void*>(&qore_rt_store_closure_mode_aot) },
+    { "qore_rt_assign_local_mode_aot", reinterpret_cast<void*>(&qore_rt_assign_local_mode_aot) },
     { "qore_rt_add_assign_local_int_aot", reinterpret_cast<void*>(&qore_rt_add_assign_local_int_aot) },
     { "qore_rt_increment_closure_int_aot", reinterpret_cast<void*>(&qore_rt_increment_closure_int_aot) },
     { "qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot) },
@@ -16773,6 +16774,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_store_closure_mode_aot(QoreAOTContext* ctx
     return qore_rt_assign_local_mode(ctx->locals[idx], val, mode, xsink);
 }
 
+//! A weak or opaque store to a local that can hold a reference: the lvalue that the local designates (the referenced
+//! lvalue if it holds a reference) is assigned with its type, as the AST interpreter assigns it (qore#7164)
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        int32_t mode, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_assign_local_mode(ctx->locals[idx], val, mode, xsink);
+}
+
 extern "C" DLLEXPORT int64_t qore_rt_add_assign_local_int_aot(
         QoreAOTContext* ctx, int32_t idx, int64_t delta, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
@@ -17090,6 +17099,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_store_global_mod
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_store_closure_mode_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
     uint64_t rv = qore_rt_store_closure_mode_aot(ctx, idx, val, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_mode_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_assign_local_mode_aot(ctx, idx, val, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

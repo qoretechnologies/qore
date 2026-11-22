@@ -1280,6 +1280,16 @@ private:
     */
     bool usesReferenceFlag(const void* key) const;
 
+    //! Returns true if a weak or opaque store to a local on the runtime stack can assign through a reference it holds
+    /** A local that holds a reference assigns the referenced lvalue (LocalVarValue::getLValue()), whose type, known
+        only when the store runs, converts the value before the weak or opaque reference is made, as the AST
+        interpreter assigns it; such a store is made by qore_rt_assign_local_mode() (qore#7164).  A local of a reference
+        type, and a local of no type, \c auto or \c any that can be given a reference (a parameter, a local of an
+        enclosing scope, a body local that a store or an element of a foreach loop can give one, or a local of a
+        function that creates one; see usesReferenceFlag()), can.
+    */
+    bool modeStoreMayAssignThroughReference(const void* key) const;
+
     //! Returns true if a local keeps a reference it holds in its native cache (QoreIRFunction::reference_slot_locals)
     bool isReferenceSlotLocal(const void* key) const {
         return current_ir_func && current_ir_func->reference_slot_locals.count(key)
