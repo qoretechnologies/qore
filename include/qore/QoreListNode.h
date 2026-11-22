@@ -149,6 +149,10 @@ public:
         return "list";
     }
 
+    //! Returns a mutable slot, growing the list if necessary.
+    /** For replacements that add or remove a value requiring a recursive-reference scan (such as an object,
+        closure, or container holding one), use setEntry() so the list tracks the change.
+    */
     DLLEXPORT QoreValue& getEntryReference(size_t index);
 
     //! returns the element at "index" (first element is index 0)
@@ -413,12 +417,17 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! Increments the weak reference count for this object
-    /** @since %Qore 2.0
+    /** The caller must hold a reference to the list (strong or weak); if the list was freed and its weak holders
+        released their references, the weak holders take a strong reference to it again, which the last weakDeref()
+        releases
+
+        @since %Qore 2.0
     */
     DLLEXPORT void weakRef();
 
     //! Decrements the weak reference count for this object
-    /** @return if \c true then the object was deleted
+    /** @return if \c true then this was the last weak reference; the list is deleted unless a strong reference to it
+        is held
 
         @since %Qore 2.0
     */

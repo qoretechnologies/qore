@@ -2525,6 +2525,23 @@ Socket::constructor() {
     self->setPrivate(CID_SOCKET, new QoreSocketObject);
 }
 
+//! Creates a socket with client credentials for its first HTTP client poll operation
+/** @internal HTTP transport API used by the HttpClientIo module. The operation takes the references on
+    construction. Raw socket TLS methods never use them.
+    @param certificate the client certificate for the target TLS handshake
+    @param private_key the client private key for the target TLS handshake
+
+    @since %Qore 3.0
+*/
+static Socket Socket::forHttpClientHandshake(*SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, xsink);
+    my_socket_priv* priv = my_socket_priv::getPriv(**sock);
+    priv->http_handshake_cert = certificate.release();
+    priv->http_handshake_key = private_key.release();
+    return new QoreObject(QC_SOCKET, getProgram(), sock.release());
+}
+
 //! Creates a new Socket object, not based on the source being copied
 /** @par Example:
     @code{.py} Socket newsock = sock.copy(); @endcode
@@ -7472,7 +7489,7 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 */
 Socket::setMaxHeaderSize(int max_header_size) [flags=NAMED_ARGS] {
     if (max_header_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (" QLLD ")",
             max_header_size);
     }
     s->setMaxHeaderSize(static_cast<size_t>(max_header_size));
@@ -7503,7 +7520,7 @@ int Socket::getMaxHeaderSize() [flags=CONSTANT] {
 */
 Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
     if (max_line_size < 0) {
-        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (%d)",
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (" QLLD ")",
             max_line_size);
     }
     s->setMaxLineSize(static_cast<size_t>(max_line_size));
@@ -8957,6 +8974,37 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
 */
 int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
+}
+
+//! Returns the number of bytes of an HTTP/2 stream's buffered data that the connection has taken so far
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForHttp2StreamDrain()) can tell from it whether the connection still takes the data (the peer grants
+    flow-control credit): a wait during which the count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int taken = sock.getHttp2StreamTakenBytes(stream_id);
+    @endcode
+
+    @param stream_id the stream ID
+
+    @return the byte count, or -1 if the session is closed or has no such stream
+
+    @throw HTTP2-ERROR no HTTP/2 session is active
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getHttp2StreamTakenBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getHttp2StreamTakenBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_h2_stream_taken(s, stream_id, xsink);
 }
 
 //! Returns the number of bytes of a client-side HTTP/3 stream's data that the peer has acknowledged

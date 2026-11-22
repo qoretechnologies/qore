@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of calls whose default values are evaluated in the class context of the callee, and loading of AOT modules compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DefaultArgContextTest
+
+#! Default values are evaluated in the context of the code that declared them, not in the caller's (qore#7066)
+/** The default values of a method are evaluated in the method's class with the object of the call, those of a
+    function with no class context and those of a closure in the context that it captured, whoever calls them: the
+    class context of the calling code never reaches them.
+
+    DefaultArgContext.q calls code of a sandboxed Program, of the script and of a module from the methods of a class
+    of the module (DefaultArgVault.qm), in every way that a class can call code that it was given (a method of an
+    object, by name, a function or method reference, a static method reference, closures with and without captured
+    variables, closures created in a method, call_function_args(), a static method, a background thread, a sort
+    callback); the default values of that code cannot read or write the private and private:internal members of the
+    class or call its private methods.  It also calls the methods of the class and the closures created in them in
+    every way, from code outside the class, from another class and from a subclass, and their default values use the
+    private declarations of the class.  Its output must be the one in DefaultArgContext.expected in every execution
+    mode, on the IR tier, with the module compiled with qcc, and when the script is compiled with qcc -O0 and -O3.
+*/
+class DefaultArgContextTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+        string fixture = dir + "/DefaultArgContext.q";
+        string expected = ReadOnlyFile::readTextFile(dir + "/DefaultArgContext.expected");
+    }
+
+    constructor() : QUnit::Test("default argument context", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                check(ExecModeHarness::run(command(execution_mode, dir)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            check(ExecModeHarness::run_ir_tier(command("tiered", dir)));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! compares the output with the expected one, after checking that no default value of other code got access
+    private check(string output) {
+        foreach string line in (output.split("\n")) {
+            if (line =~ /^(sandbox|script|module) / && line !~ /^sandbox program: /) {
+                assertTrue(line =~ /: [A-Z][-A-Z]+$/, "a default value of other code has no access: " + line);
+            }
+        }
+        assertEq(expected, output);
+    }
+
+    #! the command that runs the fixture in an execution mode with the module in the given directory
+    private string command(string mode, string module_dir) {
+        return sprintf("QORE_MODULE_DIR=%s:\"$QORE_MODULE_DIR\" %s --enable-debug --exec-mode=%s %s",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the module and the fixture with qcc and checks the output of the program and of the fixture
+    private checkQcc(int opt) {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string mod_dir = tmp + "/modules";
+        mkdir(mod_dir);
+        copy_file(dir + "/DefaultArgVault.qm", mod_dir + "/DefaultArgVault.qm");
+        string env = sprintf("QORE_MODULE_DIR=%s:\"$QORE_MODULE_DIR\"", shellQuote(mod_dir));
+        int rc;
+        string output = backquote(sprintf("%s %s -O%d --module -o %s %s 2>&1", env, shellQuote(qcc_bin), opt,
+            shellQuote(mod_dir + "/DefaultArgVault.qmod"), shellQuote(mod_dir + "/DefaultArgVault.qm")), \rc);
+        assertEq(0, rc, "the module compiled: " + output);
+        string program = tmp + "/default-arg-context";
+        output = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)), \rc);
+        assertEq(0, rc, "the fixture compiled: " + output);
+        # the programs use the compiled module only
+        unlink(mod_dir + "/DefaultArgVault.qm");
+        check(ExecModeHarness::run_any(env + " " + shellQuote(program)));
+        if (!opt) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                check(ExecModeHarness::run(command(mode, mod_dir)));
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

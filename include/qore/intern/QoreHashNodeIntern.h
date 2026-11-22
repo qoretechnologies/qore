@@ -126,11 +126,17 @@ public:
     const TypedHashDecl* hashdecl = nullptr;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     unsigned obj_count = 0;
-    QoreReferenceCounter weakRefs;
+    QoreContainerWeakRefs weakRefs;
 #ifdef DEBUG
     bool is_obj = false;
 #endif
+    //! false if the hash cannot be changed: it was freed, or it is a copy of a freed hash (see copyFreedState())
     bool valid = true;
+    //! true once the hash has been freed (see QoreHashNode::derefImpl())
+    bool freed = false;
+    //! true if the weak holders of the hash hold one reference of their own since its free started (see
+    //! QoreContainerWeakRefs)
+    bool weak_hold = false;
     //! the estimated memory of the members (see sbMemberSize()); always kept, so that it is right when charged
     size_t sb_bytes = 0;
     //! the sandbox memory charge of the members (see design/sandbox-resource-limits.md); synced with sb_bytes
@@ -485,7 +491,9 @@ public:
 
     //! returns a copy of the hash with the type of its sum with \a other (ex: <tt>h + other</tt>)
     DLLLOCAL QoreHashNode* copyCheckNewType(const qore_hash_private& other) const {
-        QoreHashNode* rv = copy();
+        // a new value, which can be changed also when this hash was freed (see copyFreedState())
+        QoreHashNode* rv = getCopy();
+        copyIntern(*rv->priv);
         if (hashdecl || other.hashdecl) {
             if (!hashdecl || !other.hashdecl || !hashdecl->equal(other.hashdecl)) {
                 // issue #6023: if one hashdecl inherits the other, the result is a hash of the child, which declares
@@ -528,6 +536,7 @@ public:
         if (!strip || (!complexTypeInfo && !hashdecl)) {
             QoreHashNode* h = getCopy();
             copyIntern(*h->priv);
+            copyFreedState(*h->priv);
             return h;
         }
         QoreHashNode* h = new QoreHashNode;
@@ -541,8 +550,22 @@ public:
             ha.swap(v);
 #endif
         }
-
+        copyFreedState(*h->priv);
         return h;
+    }
+
+    //! A copy of a freed hash cannot be changed either (qore#7163)
+    /** A hash freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
+        reference to it is never its only one, and changing the hash through that reference copies it; the copy reads
+        as empty, as the hash does, and changing it raises \c HASH-ERROR, as changing the hash itself does.  A value
+        computed from it (its sum with another hash) is a new hash.
+
+        The copy is not freed: it is freed as any other hash when its last reference is released.
+    */
+    DLLLOCAL void copyFreedState(qore_hash_private& h) const {
+        if (!valid) {
+            h.valid = false;
+        }
     }
 
     DLLLOCAL void copyIntern(qore_hash_private& h) const {
@@ -659,11 +682,12 @@ public:
     }
 
     //! Frees all members of a hash whose last reference was released, and marks it as freed
-    /** A weak reference can keep the node allocated after this; \c valid then tells that it was freed.
+    /** A weak reference can keep the node allocated after this; \c freed then tells that it was freed.
     */
     DLLLOCAL bool derefImpl(ExceptionSink* xsink, bool reverse = false) {
         freeMembers(xsink, reverse);
         valid = false;
+        freed = true;
         return true;
     }
 
@@ -691,7 +715,20 @@ public:
         p->hm.clear();
         p->obj_count = 0;
         p->sbClear();
+        finishFreeMembers(h);
+    }
+
+    //! Finishes freeing a hash after its members have been freed and its member index cleared
+    DLLLOCAL static void finishFreeMembers(QoreHashNode& h) {
+        qore_hash_private* p = h.priv;
+        if (!p->weak_hold) {
+            // no weak holder can take a reference to the hash (see QoreContainerWeakRefs)
+            delete &h;
+            return;
+        }
+        // its weak holders keep the node allocated, and read it as an empty hash
         p->valid = false;
+        p->freed = true;
         h.weakDeref();
     }
 
@@ -704,6 +741,9 @@ public:
         exists = true;
         return ha.swap(val);
     }
+
+    //! Removes the key and returns its value, if the key exists; \a o is the object whose members this hash holds
+    DLLLOCAL QoreValue takeKeyValueIfExists(const char* key, qore_object_private* o, bool& exists);
 
     DLLLOCAL QoreValue swapKeyValue(const char* key, QoreValue val, qore_object_private* o) {
         //printd(0, "qore_hash_private::swapKeyValue() this: %p key: %s val: %p (%s) deprecated API called\n", this, key, val, get_node_type(val));
@@ -754,10 +794,6 @@ public:
         return hashdecl;
     }
 
-    DLLLOCAL void weakRef() {
-        weakRefs.ROreference();
-    }
-
     DLLLOCAL bool weakDeref() {
         if (weakRefs.ROdereference()) {
             return true;
@@ -766,6 +802,38 @@ public:
     }
 
     DLLLOCAL void setHashDecl(const TypedHashDecl* hd);
+
+    //! Returns a new reference to a hash that a weak reference holds, or a new empty hash that cannot be changed if
+    //! its last reference was released (qore#7198; see WeakHashReferenceNode::lock() and qore_list_private::lockWeak())
+    DLLLOCAL static QoreHashNode* lockWeak(QoreHashNode& h) {
+        // the reference is taken as QoreReferenceCounter::optRef() takes it, inline
+        int count = h.references.load();
+        while (count > 0) {
+            if (h.references.compare_exchange_weak(count, count + 1)) {
+                return !h.priv->weak_hold ? &h : lockWeakFreeing(h);
+            }
+        }
+        return getFreedStandIn(h);
+    }
+
+    //! Releases the reference that lockWeak() took to a hash whose free has started, and returns a new empty hash
+    //! (see qore_list_private::lockWeakFreeing())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* lockWeakFreeing(QoreHashNode& h) {
+#ifdef DEBUG
+        bool last =
+#endif
+        h.ROdereference();
+        assert(!last);
+        return getFreedStandIn(h);
+    }
+
+    //! Returns a new empty hash with the type of a hash whose last reference was released, which cannot be changed
+    //! (qore#7198; see lockWeak())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* getFreedStandIn(const QoreHashNode& h) {
+        QoreHashNode* rv = h.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
+    }
 
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
         if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {

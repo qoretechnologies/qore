@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module cleanup reaches its deadline with the operation of AaDeadline; then the destructor of AbWsClient's data
+# connects a WebSocket client with a heartbeat to the echo server of the URL given and waits for the echo: the frame
+# arrives in work that the cleanup handed over, whose re-arm of the heartbeat timer is refused, which the client
+# handles quietly (qore#7027)
+# arguments: the URL of the echo server
+
+%requires AaDeadline
+%requires AbWsClient
+
+Holder::url = ARGV[0];
+printf("started\n");
+flush();

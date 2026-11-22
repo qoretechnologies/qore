@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/1.1, HTTP/2 and HTTP/3 (QUIC), and their reconnect
+
+/*  WebSocketSendDataOnConnection.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7106: WebSocketClientWithSerialization::sendDataOnConnection() sends a message only on the connection that it belongs to, so a
+    message that was held across a reconnect (a heartbeat) is not sent on the new connection.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketSendDataOnConnectionTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Gives every message that the server receives to the handler's queue
+class TestConnection inherits WebSocketConnection {
+    private {
+        Queue received;
+    }
+
+    constructor(WebSocketHandler handler, Queue received) : WebSocketConnection(handler) {
+        self.received = received;
+    }
+
+    gotMessage(string msg) {
+        received.push(msg);
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    public {
+        Queue received();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestConnection(self, received);
+    }
+}
+
+class WebSocketSendDataOnConnectionTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TestHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketSendDataOnConnection", "1.0") {
+        foreach string ver in (("1.1", "2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a message is sent only on its own connection", ver), \testOwnConnection(),
+                ver);
+            addTestCase(sprintf("HTTP/%s: a message of a replaced connection is not sent on the new one", ver),
+                \testReplacedConnection(), ver);
+        }
+        addTestCase("a client that was never connected sends nothing", \testNeverConnected());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testNeverConnected() {
+        WebSocketClientWithSerialization wsc({"url": sprintf("wss://localhost:%d", port)});
+        assertFalse(wsc.sendDataOnConnection(0, "text"), "no connection: nothing is sent");
+        assertFalse(wsc.sendDataOnConnection(-1, "text"), "also for the ID that means no connection");
+    }
+
+    testOwnConnection(string ver) {
+        WebSocketClientWithSerialization wsc = getClient(ver);
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        int cid = wsc.getCurrentConnectionId();
+        assertTrue(cid >= 0, "the connection has an ID");
+
+        assertTrue(wsc.sendDataOnConnection(cid, "own"), "a message of the connection is sent");
+        assertEq("own", handler.received.get(HangGuard), "and received");
+
+        # a message of another connection is dropped; the next one of this connection is the next that arrives, on
+        # the same connection, so the dropped one was never sent
+        assertFalse(wsc.sendDataOnConnection(cid + 1000, "other"), "a message of another connection is dropped");
+        assertTrue(wsc.sendDataOnConnection(cid, "marker"));
+        assertEq("marker", handler.received.get(HangGuard), "nothing was sent for the other connection");
+    }
+
+    testReplacedConnection(string ver) {
+        WebSocketClientWithSerialization wsc = getClient(ver);
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        int old_cid = wsc.getCurrentConnectionId();
+        wsc.disconnect();
+        assertFalse(wsc.sendDataOnConnection(old_cid, "closed"), "a message of a closed connection is dropped");
+
+        # the client's new connection
+        wsc.connect();
+        int new_cid = wsc.getCurrentConnectionId();
+        assertTrue(old_cid != new_cid, "the new connection has an ID of its own");
+
+        # the message that was held for the old connection is dropped, and the new connection carries only its own
+        assertFalse(wsc.sendDataOnConnection(old_cid, "stale"), "the message of the old connection is dropped");
+        assertTrue(wsc.sendDataOnConnection(new_cid, "fresh"), "a message of the new connection is sent");
+        assertEq("fresh", handler.received.get(HangGuard), "the new connection received only its own message");
+    }
+
+    private WebSocketClientWithSerialization getClient(string ver) {
+        return new WebSocketClientWithSerialization({
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+    }
+}

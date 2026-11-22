@@ -1,0 +1,21 @@
+outside: "C1::m"
+outside call_object_method: "C1::m"
+outside call reference: "C1::m"
+outside hasCallableMethod: True
+unrelated class: "C1::m"
+unrelated class call reference: "C1::m"
+P1 code: "P1::m"
+P1 call_object_method: "C1::m"
+P1 call reference: "P1::m"
+A1 code: "P1::m"
+B1 code: "P1::m"
+B1 call_object_method: "C1::m"
+B1 call reference: "P1::m"
+C1 code: "C1::m"
+C1 call_object_method: "C1::m"
+X1 code: "P1::m"
+X1 call_object_method: "C1::m"
+X1 call reference: "P1::m"
+X1 hasCallableMethod: True
+B1 instance: "P1::m"
+B1 instance outside: METHOD-IS-PRIVATE

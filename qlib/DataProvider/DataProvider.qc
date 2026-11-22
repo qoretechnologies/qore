@@ -2089,7 +2089,7 @@ if (action.data_provider_info) {
             try {
                 i.value();
             } catch (hash<ExceptionInfo> ex) {
-                if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                if (SandboxManager::isTerminalIoAllowed()) {
                     stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
                 }
             }
@@ -2164,7 +2164,7 @@ if (action.data_provider_info) {
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
                             ex.err, ex.desc);
                     }
@@ -2178,7 +2178,7 @@ if (action.data_provider_info) {
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore NO-FUNCTION error
-                    if (ex.err != "NO-FUNCTION" && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (ex.err != "NO-FUNCTION" && SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: %s: "
                             "%s\n", mod, type, ex.err, ex.desc);
                     }
@@ -2241,7 +2241,7 @@ if (action.data_provider_info) {
                             "description": ex.desc,
                             "argument": ex.arg,
                         });
-                    } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    } else if (SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod,
                             get_ex_pos(ex), ex.err, ex.desc);
                     }
@@ -2261,7 +2261,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        } else if (SandboxManager::isTerminalIoAllowed()) {
                             stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: "
                                 "%s: %s\n", mod, type, ex.err, ex.desc);
                         }
@@ -2291,7 +2291,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        } else if (SandboxManager::isTerminalIoAllowed()) {
                             stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS provider module %y %s: %s: %s\n",
                                 mod_str, get_ex_pos(ex), ex.err, ex.desc);
                         }
@@ -2567,7 +2567,7 @@ class DataProviderModuleLoader {
                 } else {
                     logger.error("%s", err);
                 }
-            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            } else if (!init && SandboxManager::isTerminalIoAllowed()) {
                 stderr.print(err + "\n");
             }
         }

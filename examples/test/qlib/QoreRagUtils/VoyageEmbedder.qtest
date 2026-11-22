@@ -151,10 +151,10 @@ class VoyageEmbedderTest inherits QUnit::Test {
         handler.setDelay(1500);
         on_exit handler.setDelay(0);
         VoyageEmbedder emb = makeEmbedder();
-        date started = now_us();
+        date started = microseconds(clock_get_monotonic_us());
         assertThrows("HTTPCLIENT-TIMEOUT", \emb.encodeBatch(),
             (("slow request",), {"timeout": 200ms}));
-        assertLt(1000, (now_us() - started).durationMilliseconds(),
+        assertLt(1000, (microseconds(clock_get_monotonic_us()) - started).durationMilliseconds(),
             "the per-call timeout returns before the delayed response");
     }
 
@@ -168,10 +168,10 @@ class VoyageEmbedderTest inherits QUnit::Test {
             "model": "voyage-4-lite",
             "timeout": 200ms,
         });
-        date started = now_us();
+        date started = microseconds(clock_get_monotonic_us());
         assertThrows("HTTPCLIENT-TIMEOUT", \emb.encodeBatch(),
             (("slow request",),));
-        assertLt(1000, (now_us() - started).durationMilliseconds(),
+        assertLt(1000, (microseconds(clock_get_monotonic_us()) - started).durationMilliseconds(),
             "the configured timeout returns before the delayed response");
     }
 }

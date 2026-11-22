@@ -1,0 +1,40 @@
+returned list: []
+returned hash: {}
+returned softlist: []
+in place: [] {}
+copies: [] {}
+typed copies: [] {}
+in a list: [[], {}]
+arguments: [] {}
+after the copies: [] {}
+list +=: LIST-ERROR
+list index: LIST-ERROR
+list push: LIST-ERROR
+list unshift: LIST-ERROR
+list with two references: LIST-ERROR
+list references: [] [] []
+hash member: HASH-ERROR
+hash with two references: HASH-ERROR
+hash dynamic key: HASH-ERROR
+hash references: {} {} {}
+list copy +=: LIST-ERROR
+copy after its weak holder: []
+weak holder after the copy: []
+copy through its weak holder: LIST-ERROR
+new containers: [1, 2, 3] {a: 1, b: 2}
+computed: [1] [2, 1] {b: 1, c: 2}
+weak holder after the reference: [] {}
+reference after the weak holder: [] {}
+list entry destructor: list nothing
+list after its free: []
+hash member destructor: list hash
+hash after its free: {}
+kept: []
+kept after the holder: []
+nested hash member destructor: list hash
+nested hash after its free: {}
+nested list entry destructor: list hash
+nested list after its free: []
+kept: [] 0
+threads: done
+shared holders: done

@@ -436,13 +436,13 @@ sub submit(ThreadPool tp, Queue started, Queue gate, Queue result, int i) {
         p.callFunction("submit", tp, started, gate, result, 1);
         started.get(60s);
         Queue stopped();
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         int tid = background (sub () { tp.stop(); stopped.push(True); })();
         on_exit thread_join(tid);
         release(gate, 2);
         assertEq(True, stopped.get(60s), "stop() returns");
         # the pool's thread stops at once instead of waiting idle_release_timeout (5s) to retry getting a worker
-        assertLt(4s, now_us() - start, "stop() does not wait to retry");
+        assertLt(4s, microseconds(clock_get_monotonic_us()) - start, "stop() does not wait to retry");
         list<string> outcomes = (result.get(60s), result.get(60s));
         assertEq("ran", outcomes[0], "the running task ends");
         assertTrue(outcomes[1] == "ran" || outcomes[1] == "cancelled", "the waiting task runs or is cancelled");

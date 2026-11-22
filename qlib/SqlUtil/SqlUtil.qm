@@ -150,12 +150,51 @@ module SqlUtil {
     @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" for any name that can come from
     untrusted data.
 
+    @section sqlutil_serialization Serialized Objects and Datasource Credentials
+
+    The objects of %SqlUtil (tables and databases) can be serialized (@ref Qore::Serializable "Serializable"); their
+    datasource is serialized by a serializer registered with
+    @ref SqlUtil::sqlutil_register_ds_serializer() "sqlutil_register_ds_serializer()", or by the default serializer,
+    which keeps no credentials of the datasource in the serialized data: it keeps the masked configuration of the
+    datasource (see @ref datasource_mask_options), which identifies it by its driver, database, character encoding,
+    host, port and option names, with the password removed and the user name masked as \c "****", and every option
+    value masked as \c "****" (an option of a driver can hold a credential) unless the driver declares the option not
+    sensitive (see @ref datasource_mask_options).
+
+    When data is deserialized, the datasource is given by, in this order:
+    - the connection that the data names (see below)
+    - for data with no credentials, a credential resolver registered with
+      @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()", which gets
+      the masked configuration and gives the full one from the configured source
+    - a deserializer registered with @ref SqlUtil::sqlutil_register_ds_deserializer()
+      "sqlutil_register_ds_deserializer()", which gets the string of the serializer; for data with no credentials, it
+      gets @ref SqlUtil::SqlUtilNoCredentials "SqlUtilNoCredentials" (an empty string), never masked credentials,
+      which would make it log in with them
+    - the configuration with its credentials that the default serializer of an earlier version kept, which is still
+      restored; the object is serialized again without the credentials
+    - otherwise \c DATASOURCE-DESERIALIZATION-ERROR is raised, naming the masked datasource whose credentials are
+      missing
+
+    A datasource of a named connection (see @ref Qore::SQL::Datasource::setConnectionName() "setConnectionName()") is
+    serialized as the name of its connection only, and restored as a datasource of that connection, looked up with
+    @ref ConnectionProvider::get_connection() "get_connection()"; an object restored from a pool is given a pool of
+    the connection.
+
+    @note serialized data that names a connection gives a datasource of that connection to the code that restores
+    it, as the configuration that serialized data kept did before: restore only data from a trusted source, and
+    restore data with code that may use the connections that the data can name; code restricted from the
+    \c DATABASE domain cannot restore a datasource at all
+
     See @subpage sqlutil_relnotes "Release Notes for the SqlUtil Module" for the changes in each version.
 */
 /** @page sqlutil_relnotes Release Notes for the SqlUtil Module
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - serialized objects keep no credentials of their datasource: the default serializer keeps its masked
+      configuration, and a datasource is restored with a registered deserializer or the new
+      @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
+      an earlier version with credentials is still restored (see @ref sqlutil_serialization; issue #7016)
     - the description of a datasource in messages
       (@ref SqlUtil::AbstractSqlUtilBase::makeDatasourceDesc() "AbstractSqlUtilBase::makeDatasourceDesc()",
       @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()",
@@ -8514,8 +8553,11 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     our *code ds_do;
 
     #! registers a closure or call reference taking a string type and string datasource configuration that will return an AbstractDatasource
-    /** The callback continues to receive the string configuration, including for data that also contains the
-        structured configuration used by the default deserializer.
+    /** The callback receives the string of the serialized datasource: the string of a registered serializer, or the
+        configuration string of data serialized by the default serializer of an earlier version; for data serialized
+        by the default serializer, which keeps no credentials (see @ref sqlutil_serialization), it gets
+        @ref SqlUtil::SqlUtilNoCredentials "SqlUtilNoCredentials" (an empty string), and is not called if a credential
+        resolver is registered (see sqlutil_register_ds_credential_resolver()).
     */
     public sub sqlutil_register_ds_deserializer(*code new_ds_get) [dom=PROCESS_CONTROL] {
         # the deserializer is process-wide and is given every caller's datasource configuration (qore#6747)
@@ -8543,23 +8585,132 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
     }
 
-    # private function used to deserialize datasources
-    AbstractDatasource sub sqlutil_get_ds(string type, string config, *hash<auto> structured_config) {
-        if (ds_get) {
-            return ds_get(type, config);
-        }
+    # private variable to store the closure used to resolve the credentials of serialized datasources (if any)
+    our *code ds_resolve;
 
-        # a deserialized configuration opens a connection of its own
-        check_caller_database();
+    #! the options of the masked datasource configuration that serialized data keeps: it identifies the connection
+    const SqlUtilMaskOptions = {"show_db": True, "show_options": True};
+
+    #! the configuration string that a registered deserializer gets for data that keeps no credentials of its datasource
+    /** The default serializer keeps no credentials of a datasource (see @ref sqlutil_serialization); a deserializer
+        registered with sqlutil_register_ds_deserializer() gets this empty string for such data, never a masked
+        configuration that it could use to log in, so that it can give the datasource from its own source (by the
+        type of the datasource) or fail without a login attempt
+
+        @since %SqlUtil 3.11.0
+    */
+    public const SqlUtilNoCredentials = "";
+
+    #! registers a closure or call reference that gives the full configuration of a serialized datasource
+    /** The default serializer keeps no credentials of a datasource in serialized data: it keeps the masked
+        configuration of the datasource (see @ref datasource_mask_options), with the password removed and the user
+        name and every option value masked, except the values of the options that the driver declares not
+        sensitive.  When data is deserialized without a registered deserializer (see
+        sqlutil_register_ds_deserializer()), this callback is called with the type of the datasource
+        (\c "Datasource" or \c "DatasourcePool") and the masked @ref datasource_hash "datasource hash", and returns
+        the full @ref datasource_hash "datasource hash" (or datasource string) of the datasource, with its credentials
+        from the configured source.
+
+        @param new_ds_resolve the callback, with the signature
+        <tt>hash<auto>|string sub (string type, hash<auto> masked_config)</tt>, or @ref nothing to remove it
+
+        @see @ref sqlutil_serialization
+
+        @since %SqlUtil 3.11.0
+    */
+    public sub sqlutil_register_ds_credential_resolver(*code new_ds_resolve) [dom=PROCESS_CONTROL] {
+        # the resolver is process-wide and gives the credentials of every caller's datasources
+        DataProvider::checkSharedRegistration("SqlUtil configuration", "datasource credential resolver", "",
+            !exists new_ds_resolve);
+        ds_resolve = new_ds_resolve;
+    }
+
+    # private function: returns a datasource of the named connection of the given type (qore#7016)
+    AbstractDatasource sub sqlutil_get_connection_ds(string name, string type) {
+        # loaded on demand: only a restore by connection name needs the connection registry
+        load_module("ConnectionProvider");
+        object conn = call_function("ConnectionProvider::get_connection", name);
+        # not connected here: a connection of another type is refused without connecting to it
+        object ds = conn.get(False);
+        if (!(ds instanceof AbstractDatasource)) {
+            throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("connection %y of the serialized data is a %y "
+                "connection, not a datasource connection", name, conn.getType());
+        }
+        # a pool of the connection, for an object that was serialized with a pool
+        if (type == "DatasourcePool" && !(ds instanceof DatasourcePool)) {
+            DatasourcePool pool(cast<AbstractDatasource>(ds).getConfigHash());
+            pool.setConnectionName(name);
+            return pool;
+        }
+        return ds;
+    }
+
+    # private function: returns the datasource that the credential resolver gives for the masked configuration
+    AbstractDatasource sub sqlutil_resolve_ds(string type, hash<auto> masked) {
+        auto config = ds_resolve(type, masked);
+        if (config.typeCode() != NT_HASH && config.typeCode() != NT_STRING) {
+            throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("the datasource credential resolver returned %s for "
+                "datasource %s; expecting a datasource hash or string", config.type(),
+                mask_datasource(masked, SqlUtilMaskOptions));
+        }
+        return sqlutil_new_ds(type, config);
+    }
+
+    # private function: creates a datasource of the given type from its configuration
+    AbstractDatasource sub sqlutil_new_ds(string type, auto config) {
         switch (type) {
             case "DatasourcePool":
-                return new DatasourcePool(structured_config ?? config);
+                return new DatasourcePool(config);
             case "Datasource":
-                return new Datasource(structured_config ?? config);
+                return new Datasource(config);
             default:
                 throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("cannot deserialize datasource of unknown type %y",
                     type);
         }
+    }
+
+    # private function used to deserialize datasources
+    /* the serialized data of a datasource is (see sqlutil_ds()):
+       - "ds_type" and "ds_masked" (with "ds", its masked string): the default serializer since SqlUtil 3.11 keeps no
+         credentials (qore#7016)
+       - "ds_type", "ds" and "ds_config": the configuration with its credentials, of the default serializer of an
+         earlier version: still restored, and serialized again without them
+       - "ds_type" and "ds": a registered serializer's, or the string of an earlier version
+    */
+    AbstractDatasource sub sqlutil_get_ds(hash<auto> dsh) {
+        string type = dsh.ds_type;
+        if (exists dsh.connection) {
+            # a connection name gives no access by itself: the caller must be able to open a connection
+            check_caller_database();
+            return sqlutil_get_connection_ds(dsh.connection, type);
+        }
+        if (exists dsh.ds_masked && ds_resolve) {
+            # data with no credentials: the credential resolver gives them, also when a deserializer is registered
+            check_caller_database();
+            return sqlutil_resolve_ds(type, dsh.ds_masked);
+        }
+        if (ds_get) {
+            # a registered deserializer never gets masked credentials, which would make it log in with them: for data
+            # with no credentials, it gets the empty string (SqlUtilNoCredentials)
+            return ds_get(type, exists dsh.ds_masked ? SqlUtilNoCredentials : dsh.ds ?? "");
+        }
+
+        # a deserialized configuration opens a connection of its own
+        check_caller_database();
+        if (!exists dsh.ds_masked) {
+            if (!exists dsh.ds_config && !exists dsh.ds) {
+                throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("the serialized data of a datasource of type %y "
+                    "has no configuration", type);
+            }
+            # data of an earlier version with the credentials of the datasource
+            return sqlutil_new_ds(type, dsh.ds_config ?? dsh.ds);
+        }
+        hash<auto> masked = dsh.ds_masked;
+        throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("the serialized data of datasource %s has no credentials "
+            "(its password, user name and option values that can hold credentials are not serialized); register a "
+            "deserializer (sqlutil_register_ds_deserializer()) or a credential resolver "
+            "(sqlutil_register_ds_credential_resolver()) that gives them", mask_datasource(masked,
+            SqlUtilMaskOptions));
     }
 
     # private function used to serialize datasources
@@ -8568,11 +8719,21 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             return ds_do(ds);
         }
 
+        # a datasource of a named connection is restored by the name of the connection (qore#7016)
+        *string connection = ds.getConnectionName();
+        if (connection) {
+            return {
+                "ds_type": ds.className(),
+                "connection": connection,
+            };
+        }
+        # no credentials are serialized: the masked configuration identifies the datasource (qore#7016)
+        hash<auto> config = ds.getConfigHash();
         return {
             "ds_type": ds.className(),
-            # Keep the string for existing custom deserializers; builtin reconstruction uses the typed hash.
-            "ds": ds.getConfigString(),
-            "ds_config": ds.getConfigHash(),
+            "ds_masked": mask_datasource_hash(config, SqlUtilMaskOptions),
+            # the masked string, for registered deserializers, which receive a string
+            "ds": mask_datasource(config, SqlUtilMaskOptions),
         };
     }
 

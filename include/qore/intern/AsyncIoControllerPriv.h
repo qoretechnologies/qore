@@ -171,6 +171,17 @@ struct AsyncIoDeferredRelease {
     //! qore_close_module_programs()); counted until the references are released (QoreModuleCleanupWorkFlag), as the
     //! module cleanup waits for their release (qore#6928)
     QoreModuleCleanupWorkFlag module_cleanup_delegate;
+    //! True if the references belong to an operation that the module cleanup canceled
+    //! (QoreSandboxContext::module_cleanup_canceled): the destructors that releasing them runs cannot start new
+    //! asynchronous work (AsyncIoControllerPriv::checkModuleCleanupNewWork(), qore#7027)
+    bool module_cleanup_canceled = false;
+
+    //! the functional-domain restrictions of the code that submitted the work whose references these are, which the
+    //! release runs with (see QoreSubmitterRestrictionsHelper, qore#6844)
+    QoreParseOptions caller_restrictions;
+
+    //! Sets the module cleanup flags of the references from the context of the work that they belong to
+    DLLLOCAL void setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx);
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -305,12 +316,91 @@ DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<cons
     return ctx && ctx->module_cleanup_delegate;
 }
 
+//! Returns true if @a ctx belongs to work of the module cleanup that the cleanup does not count (qore#7027)
+/** An operation, a timer or a work item that work of the cleanup submitted, whose context it captured
+    (QoreSandboxContext::module_cleanup_delegate without QoreSandboxContext::module_cleanup_work): the cleanup counts
+    its work items when they are queued, and cancels the operations and timers when it waits for its work
+    (AsyncIoControllerPriv::cancelModuleCleanupUncounted()); timers and the operations that the controller does not
+    submit for it are such work, while the operations that it submits are counted (AsyncIoControllerPriv::submit())
+*/
+DLLLOCAL inline bool async_io_module_cleanup_uncounted(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_work;
+}
+
+//! Returns true if @a ctx belongs to an operation that the module cleanup canceled
+//! (QoreSandboxContext::module_cleanup_canceled, qore#7027)
+DLLLOCAL inline bool async_io_module_cleanup_canceled(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_canceled;
+}
+
+//! Returns true if a cancel round of the module cleanup cancels the operation or timer of @a ctx (qore#7027)
+/** Before the deadline of the cleanup, the work that it does not count (async_io_module_cleanup_uncounted()); at and
+    after it (@a deadline), all of its work that it has not canceled yet
+*/
+DLLLOCAL inline bool async_io_module_cleanup_cancel_match(const std::shared_ptr<const QoreSandboxContext>& ctx,
+        bool deadline) {
+    return deadline ? ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_canceled
+        : async_io_module_cleanup_uncounted(ctx);
+}
+
+//! Returns the functional-domain restrictions of the code that captured the context, or none (qore#6844)
+DLLLOCAL inline QoreParseOptions async_io_caller_restrictions(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx ? ctx->caller_restrictions : QoreParseOptions();
+}
+
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
 //! and the thread does not run the module cleanup or work that the cleanup handed over
 /** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
     operation's sandbox.
 */
 DLLLOCAL AsyncIoSandboxContext capture_async_io_sandbox_context();
+
+//! The operations that the calling code may cancel or flush by key or owner (qore#7010)
+/** Code that is sandboxed acts only on the operations of the application it runs for (see
+    AsyncIoControllerPriv::callerAppId()); trusted code acts on any operation
+*/
+struct AioAppRestriction {
+    //! true if the calling code is restricted to the operations of \a app_id
+    bool restricted = false;
+    //! the application whose operations the calling code may act on, if \a restricted
+    qore_program_id_t app_id = 0;
+};
+
+//! The timers that the calling code may cancel by ID (qore#7010)
+/** Code that is sandboxed cancels only the timers of the application that it runs for; if it runs for no known
+    application, only the timers for no application that its own work added (see
+    AsyncIoControllerPriv::timerCancelAllowed()); trusted code cancels any timer
+*/
+struct AioTimerRestriction {
+    //! true if the calling code is sandboxed
+    bool restricted = false;
+    //! true if the calling code is sandboxed but runs for no known application
+    bool none = false;
+    //! the application whose timers the calling code may cancel, if \a restricted and not \a none
+    qore_program_id_t app_id = 0;
+    //! the generation of the calling code's work (runtime_get_thread_generation())
+    uint64_t gen = 0;
+};
+
+//! the application that the code of a callback of an operation runs for (qore#7010)
+DLLLOCAL extern thread_local qore_program_id_t aio_callback_app_id;
+DLLLOCAL extern thread_local bool aio_callback_app_set;
+
+//! Sets the application that the code of a callback of an operation runs for while it exists (qore#7010)
+/** The callback (the operation's step, completion, abort, stream data or result, or a timer's code) runs on a
+    worker thread for the application that the operation was submitted for (see AsyncIoControllerPriv::callerAppId()):
+    an operation that it submits belongs to that application, also when no Program of the application is on the
+    thread's stack
+*/
+class AioCallbackAppScope {
+public:
+    DLLLOCAL explicit AioCallbackAppScope(qore_program_id_t app_id);
+    DLLLOCAL ~AioCallbackAppScope();
+
+private:
+    qore_program_id_t old_id;
+    bool old_set;
+};
 
 class QoreCallDispatcher {
 public:
@@ -344,6 +434,8 @@ public:
         int thread_idx = -1;
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
+        //! the application that the item's operation (or timer) is for: its code runs for it (qore#7010)
+        qore_program_id_t app_pgm_id = 0;
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
         AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
         bool sent = false;                   //!< For DT_STREAM_SEND_RESULT_NOTIFY: the transmission result
@@ -360,6 +452,11 @@ public:
         //! For DT_ABORT: the task in native_task delivers the result after abort() (see
         //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
         bool after_abort_on_complete = false;
+        //! Counts the item as work of the module cleanup if its context is delegated but not counted (qore#7027)
+        /** Set when the item is queued (see async_io_module_cleanup_uncounted()): the item of an operation that work
+            of the cleanup submitted and that ended on its own, which the cleanup waits for as it waits for its own
+        */
+        QoreModuleCleanupWorkFlag module_cleanup_work;
 #ifdef DEBUG
         //! Debug-only: the item was held by the dbg_async_io_hold_module_cleanup_work() test hook; the worker writes on
         //! stderr when it has ended (qore#6928)
@@ -387,7 +484,8 @@ public:
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false);
+        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false,
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -395,7 +493,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
@@ -405,7 +504,7 @@ public:
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions());
+        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -422,7 +521,7 @@ public:
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key, uint64_t op_id, int thread_idx,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        bool read_state = false);
+        bool read_state = false, qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -434,7 +533,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onStreamSendResult(stream_key, sent) asynchronously (fire-and-forget)
     /** Called by the I/O thread with the transmission result of a response whose stream is watched by an HTTP/2
@@ -446,7 +546,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key, bool sent,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)
     /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
@@ -457,7 +558,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Runs a native task on a callback worker (fire-and-forget)
     /** The item is not owner-tracked.  When it cannot be queued, the task is discarded instead of run.
@@ -530,6 +632,11 @@ public:
     */
     DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
+    //! Debug-only: waits until a thread waits in waitForOwnerIdle() (in flushCallbacksByOwner(), whose mark is then
+    //! set; qore#7010)
+    /** @return true if a thread waits in waitForOwnerIdle(), false if none did when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitOwnerIdleWaiter(int timeout_ms);
     //! Debug-only: waits until the given number of onComplete() items have been queued for the workers
     /** Counted once the item is in the queue (or discarded by enqueue()), so a flush of the callbacks made after the
         wait covers it; for tests that must wait for the completion of an operation that no Qore code of theirs can
@@ -607,10 +714,20 @@ public:
         item later: an item popped after clearOwnerShuttingDown() no longer sees
         the mark and would run the user callback past the barrier.
     */
-    DLLLOCAL void markOwnerShuttingDown(const std::string& owner);
+    DLLLOCAL void markOwnerShuttingDown(const std::string& owner,
+        const AioAppRestriction& restrict_app = AioAppRestriction());
 
     //! Remove an owner from the shutting-down set
-    DLLLOCAL void clearOwnerShuttingDown(const std::string& owner);
+    DLLLOCAL void clearOwnerShuttingDown(const std::string& owner,
+        const AioAppRestriction& restrict_app = AioAppRestriction());
+
+    //! Returns the key of the mark of an owner: the owner itself, or for restricted code its application's mark
+    DLLLOCAL static std::string ownerMarkKey(const std::string& owner, const AioAppRestriction& restrict_app);
+
+    //! Returns true if the owner of the item is marked as shutting down, for all its items or for its application's
+    /** Called with m held
+    */
+    DLLLOCAL bool ownerShuttingDownLocked(const AsyncWorkItem& item) const;
 
     //! Wait for in-flight callbacks belonging to a specific owner to complete
     /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
@@ -658,6 +775,8 @@ private:
     int dbg_idle_waiters = 0;
     //! Debug-only: signaled when a thread blocks in waitForIdle()
     QoreCondition dbg_idle_waiter_cond;
+    //! Debug-only: the number of threads blocked in waitForOwnerIdle() (see dbgWaitOwnerIdleWaiter())
+    int dbg_owner_idle_waiters = 0;
     //! Debug-only: the number of onComplete() items queued (see dbgWaitOnCompleteQueued()); protected by m
     int64_t dbg_on_complete_queued = 0;
     //! Debug-only: signaled when an onComplete() item has been queued
@@ -969,6 +1088,25 @@ public:
     //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
     DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
 
+    //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner (see
+    //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())
+    DLLLOCAL bool dbgWaitOwnerFlushBlocked(int timeout_ms);
+
+    //! Debug-only: returns true if a submission takes the key of an operation that it may not replace (see
+    //! submitTakesKeyOfOther())
+    /** For the submission of sandboxed code that runs for no known application, which no Qore code reaches today
+    */
+    DLLLOCAL static bool dbgSubmitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id,
+            qore_program_id_t other_app_id, bool same_object) {
+        PollInfo pinfo;
+        pinfo.app_pgm_id = other_app_id;
+        // the identities of the objects only are compared
+        QoreObject* const obj = reinterpret_cast<QoreObject*>(&pinfo);
+        pinfo.spop_obj = same_object ? obj : nullptr;
+        bool rv = submitTakesKeyOfOther(sandboxed, app_id, pinfo, obj);
+        pinfo.spop_obj = nullptr;
+        return rv;
+    }
     //! Debug-only: waits until the given number of onComplete() items have been queued since the dispatcher was
     //! created (see QoreCallDispatcher::dbgWaitOnCompleteQueued())
     DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
@@ -1009,6 +1147,11 @@ public:
 
     //! Returns true if the Qore object of a registered poll operation was deleted
     DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
+
+#ifdef DEBUG
+    //! Debug-only: the number of objects in the registry of the operations without a C++ poll operation
+    DLLLOCAL static size_t dbgQoreOpRegisteredCount();
+#endif
 
     //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
     //! is canceled (qore#6531)
@@ -1108,6 +1251,9 @@ public:
     //! Returns info about the controller state
     DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink);
 
+    //! Returns the settings of the controller only: the keys of getInfo() that give no operation of any caller
+    DLLLOCAL QoreHashNode* getSettingsInfo(ExceptionSink* xsink);
+
     //! Sets the logger
     /** @param logger_obj the LoggerInterface Qore object (or nullptr to clear)
         @param xsink for exception handling
@@ -1132,7 +1278,7 @@ public:
         @return the timer ID (> 0)
     */
     DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), ResolvedCallReferenceNode* cancel = nullptr);
 
     //! Adds a timer that fires after the given delay, measured on the monotonic clock
     /** As addTimer(), but the deadline is the time of the call plus \a delay_us on the monotonic clock: a step of the
@@ -1145,11 +1291,15 @@ public:
         @return the timer ID (> 0)
     */
     DLLLOCAL int64_t addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), ResolvedCallReferenceNode* cancel = nullptr);
 
     //! Adds a timer with the given deadline: since the epoch, or on the monotonic clock if \a monotonic is true
     DLLLOCAL int64_t addTimerIntern(int64_t deadline_us, bool monotonic, const char* method, QoreValue udata,
-        ExceptionSink* xsink, const std::string& owner);
+        ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel);
+
+    //! Cancels a timer for the module cleanup and runs its cancel callback (TimerInfo::cancel_cb), if any, as the
+    //! work of a canceled operation (qore#7116); returns true if the timer was found
+    DLLLOCAL bool cancelTimerForModuleCleanup(int64_t id, ExceptionSink* xsink);
 
     //! Cancels a timer
     /** @param id the timer ID returned by addTimer()
@@ -1194,6 +1344,30 @@ public:
         @param xsink for exception handling
     */
     DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! Cancels for the module cleanup the operations and timers of work of the cleanup that it does not count
+    /** Called by the module cleanup when it waits for its work (qore_module_cleanup_drain_work()), on its own thread:
+        an operation or timer whose context is delegated but not counted (async_io_module_cleanup_uncounted()), which
+        work of the cleanup submitted, would otherwise run its onComplete() or callback after the Program of its
+        module has been deleted; canceled for the cleanup, its onComplete() is counted work of the cleanup (qore#7027)
+
+        With \a deadline (the cleanup reached its deadline: qore_module_cleanup_deadline_passed()), all of the work of
+        the cleanup that it has not canceled yet, counted or not (async_io_module_cleanup_cancel_match()); the names of
+        the operations are then appended to \a names, if given
+
+        @return the number of operations and timers canceled
+    */
+    DLLLOCAL size_t cancelModuleCleanupUncounted(bool deadline, std::vector<std::string>* names,
+            ExceptionSink* xsink);
+
+    //! Raises ASYNC-IO-SHUTDOWN-ERROR and returns -1 if the current thread cannot start new asynchronous work
+    /** Called by the %Qore-language entry points that start asynchronous work (AsyncIoController::submit(),
+        addTimer*(), submitTask()): the work of an operation that the module cleanup canceled cannot start any, as the
+        cleanup would wait for it in turn; nor can the work that the cleanup handed over add a timer (\a timer) after
+        its deadline; synchronous I/O and AsyncIoController::exec() are not refused (qore#7027)
+    */
+    DLLLOCAL static int checkModuleCleanupNewWork(const char* method, bool timer, ExceptionSink* xsink);
+
 
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
@@ -1289,6 +1463,13 @@ private:
             processed, so the address cannot be reused meanwhile
         */
         const QoreObject* cancel_spop_obj = nullptr;
+        //! For Cancel / CancelOwner: the operations that the canceling code may cancel (qore#7010)
+        AioAppRestriction restrict_app;
+        //! For SubmitOp: the application that the operation is submitted for (see callerAppId())
+        qore_program_id_t submit_app_id = 0;
+        //! For SubmitOp: true if the submitting code is sandboxed: it does not take the key of another application's
+        //! operation (qore#7010)
+        bool submit_sandboxed = false;
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
         //! For SubmitOp: the owner of the poll op whose continuePoll() was
         //! running on this (worker) thread when submit() was called — the
@@ -1316,6 +1497,9 @@ private:
             exit drain (abandoned path). */
         CancelCountRef* cancel_count = nullptr;
         QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
+        //! For CancelByProgram without a Program: the module cleanup reached its deadline (see
+        //! cancelModuleCleanupUncounted())
+        bool module_cleanup_deadline = false;
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         //! For AddTimer: true if timer_deadline_us is on the monotonic clock (addTimerDelay()), not since the epoch
         bool timer_monotonic = false;
@@ -1364,6 +1548,9 @@ private:
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
         //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
+        //! For SubmitOp: work that the module cleanup handed over submitted the operation, not the cleanup itself
+        //! (see cancelAdmittedAfterModuleCleanupDeadline(), qore#7027)
+        bool submit_module_cleanup_handed_over = false;
         //! For CancelDeletedOp: the C++ poll operation whose Qore object was deleted (referenced)
         /** The reference keeps the address from being reused for another operation until the command is processed
         */
@@ -1384,6 +1571,8 @@ private:
         QoreHashNode* poll_info;        //!< Last SocketPollInfo hash (referenced, or nullptr)
         int64 timeout_us;               //!< Timeout in microseconds (negative = no timeout)
         std::string owner;              //!< Owner identifier
+        //! the application that the operation was submitted for (see callerAppId(), qore#7010)
+        qore_program_id_t app_pgm_id = 0;
         //! Inherited cancel scope: the owner of the poll op whose
         //! continuePoll() spawned this op (empty if none).  cancelByOwner()
         //! matches this in addition to @ref owner so cancelling a poll op
@@ -1548,6 +1737,12 @@ private:
         QoreHashNode* info_result = nullptr;
         //! Accumulated PollInfos (CancelByProgram), guarded by pinfos_lock
         std::vector<PollInfo> cancel_pinfos;
+        //! The operations of a CancelByProgram without a Program (cancelModuleCleanupUncounted()) whose cancel waits
+        //! for their step in flight (pending_aborts), which are canceled too (qore#7027)
+        std::atomic<size_t> in_flight_canceled{0};
+        //! The names of the operations of in_flight_canceled at the deadline of the module cleanup, guarded by
+        //! pinfos_lock (moduleCleanupOpName())
+        std::vector<std::string> in_flight_names;
         //! Protects cancel_pinfos against concurrent appends from I/O threads
         QoreThreadLock pinfos_lock;
 
@@ -1613,6 +1808,8 @@ private:
         AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
         //! The references taken by the synchronous exec() call that waits for the result, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+        //! the application of the operation (qore#7010)
+        qore_program_id_t app_pgm_id = 0;
     };
 
     //! Delivers the result of an operation whose abort() runs on a callback worker, after abort() has returned
@@ -1673,17 +1870,31 @@ private:
         AsyncIoSandboxContext sandbox_ctx;  //!< The submitter's sandbox context
         AsyncIoNativeTask* after_abort;     //!< Owned, or nullptr
         bool after_abort_on_complete;       //!< True if after_abort calls onComplete() when it is run
+        qore_program_id_t app_pgm_id = 0;   //!< the application of the operation (qore#7010)
     };
 
     //! Timer info stored under lock
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
+        //! The code (referenced) run when the module cleanup cancels the timer, or NOTHING (qore#7116)
+        /** So that an owner that counts its scheduled timers can balance the count of a timer that the cleanup
+            cancels at the end of the process, whose callback never runs; not run when the owner cancels the timer,
+            when it fires or when the controller stops
+        */
+        QoreValue cancel_cb;
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
         AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
         //! The run-time parse options of the code that added the timer, which its callback runs with (qore#6208)
         AsyncIoRuntimeOptions runtime_po;
+        //! the application that the timer's code runs for (see AsyncIoControllerPriv::callerAppId(), qore#7010)
+        qore_program_id_t cb_app_id = 0;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
+        //! The generation of the work that added the timer (runtime_get_thread_generation(), which unlike a TID is
+        //! never reused, and which a pooled or reused thread takes from the work item that it runs): module code that
+        //! runs for no application (the code of a thread that module code started) cancels only the timers for no
+        //! application that its own work added (qore#7010)
+        uint64_t adder_gen = 0;
         //! The ID of the application Program that module code added the timer for, if for_app is set
         /** Module code running for an application with restrictions can cancel only the timers added for the same
             application; see runtime_get_module_caller_app()
@@ -2174,7 +2385,8 @@ private:
         @return true if the operation was found on the calling thread, or a Cancel was queued for another I/O thread
         (or, during a continuePoll() batch, for the calling thread)
     */
-    DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink);
+    DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink,
+        const AioAppRestriction& restrict_app = AioAppRestriction());
 
     //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
     /** @param uh the operation key
@@ -2184,7 +2396,48 @@ private:
         @return true if an operation was found and canceled
     */
     DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
-        const QoreObject* only_spop_obj = nullptr);
+        const QoreObject* only_spop_obj = nullptr, const AioAppRestriction& restrict_app = AioAppRestriction());
+
+    //! Returns the ID of the application Program that the calling code runs for (qore#7010)
+    /** The initialization of library code and the code of a trusted build run for no application
+        (QORE_NO_PROGRAM_ID), also in a callback: an operation that they submit belongs to no tenant.  The application
+        of module code is the application that it runs for (qore#6208, see runtime_get_module_call_app_id()); the code
+        of a callback of an operation runs for the application that the operation was submitted for (see
+        AioCallbackAppScope), except the sandboxed code of an application Program, which runs for its own application
+
+        Operations record the application that they are submitted for; code that is sandboxed cancels, flushes and
+        replaces only the operations of its own application, as keys and owners can be guessed
+    */
+    DLLLOCAL static qore_program_id_t callerAppId();
+
+    //! Returns the operations that the calling code may cancel or flush by key or owner
+    /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no
+        operation
+    */
+    DLLLOCAL static AioAppRestriction cancelRestriction(bool& none);
+
+    //! Returns the timers that the calling code may cancel by ID (qore#7010)
+    DLLLOCAL static AioTimerRestriction timerCancelRestriction();
+
+    //! Returns true if code with the given restriction may cancel the timer (qore#7010)
+    /** Code that is sandboxed cancels only the timers of the application that it runs for (TimerInfo::cb_app_id), as
+        timer IDs can be guessed; if it runs for no known application (the code of a thread that module code started,
+        which can serve every caller of the module, qore#6208), only the timers for no application that its own work
+        added (TimerInfo::adder_gen).  Trusted code cancels any timer
+    */
+    DLLLOCAL static bool timerCancelAllowed(const AioTimerRestriction& restrict_app, const TimerInfo& tinfo);
+
+    //! Returns true if a submission takes the key of an operation that the submitting code may not replace
+    /** Sandboxed code replaces only an operation of its own application, or its own operation object; if it runs for
+        no known application, it replaces only its own operation object
+    */
+    DLLLOCAL static bool submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
+        const QoreObject* spop_obj);
+
+    //! Returns true if the operation may be canceled or flushed by code with the given restriction
+    DLLLOCAL static bool opInProgram(const PollInfo& pinfo, const AioAppRestriction& restrict_app) {
+        return !restrict_app.restricted || pinfo.app_pgm_id == restrict_app.app_id;
+    }
 
     //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
     //! the map's ref.  Caller must hold m.
@@ -2383,13 +2636,31 @@ public:
     */
     DLLLOCAL static void dbgHoldStepResults(bool hold);
 
-    //! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (qore#6928)
-    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook: such an item (a canceled operation's
-        onComplete() with QoreSandboxContext::module_cleanup_delegate) is held instead of queued until the module
+    //! Debug-only: holds the onComplete() and timer work items that the module cleanup hands over from now on
+    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook (qore#6928, qore#7027): such an item (a canceled
+        operation's onComplete() or a timer's callback with QoreSandboxContext::module_cleanup_delegate) is held
+        instead of queued until the module
         cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
-        the cleanup lets it
+        the cleanup lets it; with \a stream_data, also the stream data and poll-complete notifications of such
+        operations (the frames that a connection receives), which the cleanup releases only after its deadline
+        (qore#7027)
     */
-    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
+    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold, bool stream_data = false);
+
+    //! Debug-only: waits until at least \a count items are held by dbgHoldModuleCleanupWork(), of operations whose
+    //! class name contains \a class_part if given; returns false if the wait timed out (qore#7027)
+    /** Note that the stream data and poll-complete notifications held are released only after the deadline of the
+        cleanup, also after an onComplete() of the same operation, and that code that waits for such a notification
+        while they are held waits until then
+    */
+    DLLLOCAL static bool dbgWaitHeldModuleCleanupWork(size_t count, const char* class_part, int64 timeout_ms);
+
+    //! Debug-only: the held test-hook work that the drain of the module cleanup releases (QDMCDP_* flags, qore#7027)
+    /** QDMCDP_BEFORE_CANCEL_ROUND: the step results held by dbg_async_io_hold_step_results(), before the drain's cancel
+        round; QDMCDP_WAIT_AFTER_CANCEL: the same, when the drain waits after a cancel round; QDMCDP_AFTER_TIMER_SCAN:
+        the timer callbacks held by dbg_async_io_hold_timer_callbacks(), after the round's scan of the timers
+    */
+    DLLLOCAL static void dbgModuleCleanupDrainReleases(int flags);
 
     //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);
@@ -2456,8 +2727,40 @@ private:
     */
     DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
 
+    //! Cancels the operation of \a key that the I/O thread has just admitted, if work that the module cleanup handed
+    //! over submitted it (\a handed_over), the cleanup has not canceled it and the cleanup has reached its deadline
+    //! (qore#7027)
+    /** Called on the I/O thread where an operation enters its cache: such an operation would otherwise be canceled
+        only by a later cancel round of the cleanup, which runs only when its wait ends, which the work that waits for
+        it synchronously would keep from ending; also named in a warning.  An operation of the cleanup thread itself
+        is canceled by the cleanup's next round, and a synchronous wait of it keeps the operation's own timeout
+    */
+    DLLLOCAL void cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
+            bool handed_over, ExceptionSink* xsink);
+
+    //! Returns a name of the operation of \a pinfo for a message of the module cleanup: its class and owner
+    DLLLOCAL static std::string moduleCleanupOpName(const PollInfo& pinfo);
+
+    //! Completes a submission that is not admitted: its operation is canceled and its result delivered
+    /** The result is a canceled result, which carries \a cancel_ex if given.  The operation is described as it is when
+        it is admitted, with the sandbox context of its submitter, so that its abort() and onComplete() run as they do
+        for an admitted operation that is canceled (a stale submission after a cancellation, a submission that is
+        refused because its key holds another operation).  Called from the I/O thread; the payload of \a cmd is
+        released.
+
+        @param cmd the SubmitOp command
+        @param cancel_ex if given, the exception that the canceled result carries (borrowed)
+        @param xsink for exceptions
+    */
+    DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
+
     //! Cancel an operation internally (delivers result, called from I/O thread)
-    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+    /** @param pinfo the operation
+        @param xsink for exceptions
+        @param cancel_ex if given, the exception that the canceled result carries (a refused submission, which is
+        reported canceled with the reason; borrowed)
+    */
+    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex = nullptr);
 
     //! Delivers a deferred result and releases the references of @a dd
     DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);
@@ -2839,7 +3142,8 @@ private:
         @param stream_key the stream identifier to pass to onStreamData()
     */
     DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
@@ -2872,7 +3176,8 @@ private:
     */
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
-        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(), AsyncIoSyncRelease* sync_release = nullptr);
+        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(), AsyncIoSyncRelease* sync_release = nullptr,
+        qore_program_id_t app_pgm_id = 0);
 
     //! Notes the state an operation with a state queue has after a step, and reports it if it changed
     /** Called on the I/O thread with the state read after each step: the first state read is always reported,

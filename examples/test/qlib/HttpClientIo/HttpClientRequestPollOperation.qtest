@@ -502,13 +502,13 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
     }
 
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + 30000000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (microseconds(deadline - clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

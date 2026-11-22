@@ -31,6 +31,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/QC_HttpClientConnection.h"
+#include "qore/intern/QC_Socket.h"
 
 /** @cond INTERNAL */
 
@@ -61,17 +62,8 @@
     Direct use from Qore code is supported but minimal.
 
     @par DGC
-    The C++ @c Http1ClientConnection priv holds raw @c QoreObject* refs
-    on the socket and poll-op it owns (@c sock_obj, @c poll_op_obj —
-    see those declarations for the full rationale).  These refs are
-    <b>not</b> declared as @c internal_members here because the qclass is
-    currently unused in practice (H1/H2/H3 client connections are driven
-    through @ref HttpClientConnectionManagerBase in C++ with no qclass
-    wrapper).  If this class starts being created from Qore code, add
-    @c internal_members=Socket sock_obj,AbstractPollOperation poll_op_obj
-    and move the ref storage from the priv's raw pointers into the
-    internal-member slots via @c setValueIntern — see @c design/dgc.md
-    Pattern A.
+    The socket and poll operation are private:internal members so the deterministic garbage collector
+    can follow cycles through either transport object.
 
     @since %Qore 3.0
 */
@@ -80,6 +72,7 @@ qclass Http1Connection [
     ns=Qore;
     arg=Http1ClientConnection* priv;
     flags=final;
+    internal_members=Socket sock_obj,AbstractPollOperation poll_op_obj;
 ];
 
 //! Creates a new HTTP/1.1 client connection and starts connecting
@@ -105,7 +98,10 @@ Http1Connection::constructor(string target_host, int target_port, bool ssl_requi
     if (*xsink) {
         return;
     }
-    self->setPrivate(CID_HTTP1CONNECTION, conn.release());
+    conn->moveTransportToMembers(self, xsink);
+    if (!*xsink) {
+        self->setPrivate(CID_HTTP1CONNECTION, conn.release());
+    }
 }
 
 //! Closes the connection and releases resources

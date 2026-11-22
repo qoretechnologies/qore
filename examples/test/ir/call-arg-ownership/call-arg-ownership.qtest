@@ -48,7 +48,8 @@ class CallArgOwnershipTest inherits QUnit::Test {
             "value-before-parameters": "[\"~v\", \"~p\", \"caught:DX\"]",
             "recursive-value-before-parameters": "[\"~v\", \"~p1\", \"~p\", \"caught:DX\"]",
             "method-reference-value": "[\"~a\", \"~t\"]",
-            "function-reference": "[\"body\", \"~p\"]",
+            # call_function() gives its arguments to the call, as a direct call gives them (qore#6052)
+            "function-reference": "[\"~p\", \"body\"]",
             "stable": "True",
         };
 

@@ -608,6 +608,19 @@ string AbstractDatasource::getMaskedDescription() {
     return rv.release();
 }
 
+//! Returns the name of the connection that the datasource was created for, if any
+/** The name identifies the datasource in serialized data (see @ref sqlutil_serialization);
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" return the name set
+    with their \c setConnectionName() method; a subclass implemented in %Qore can reimplement this method
+
+    @return the name of the connection that the datasource was created for; this implementation returns @ref nothing
+
+    @since %Qore 3.0
+*/
+*string AbstractDatasource::getConnectionName() {
+    return QoreValue();
+}
+
 //! Returns the driver-specific server version data for the current connection
 /** @return the driver-specific server version data for the current connection
 

@@ -519,6 +519,11 @@ while (!done.waitForZero(500ms)) {
 
     #! Writes output to the display; can be overridden to capture the output
     private writeOutput(string str) {
+        # nothing is written to the terminal for code that is restricted from terminal I/O, or that library code
+        # serves for it (qore#7140)
+        if ((output == stdout || output == stderr) && !SandboxManager::isTerminalIoAllowed()) {
+            return;
+        }
         output.write(str);
     }
 
@@ -527,7 +532,8 @@ while (!done.waitForZero(500ms)) {
         if (opts.columns) {
             return opts.columns;
         }
-        if (interactive) {
+        # the terminal is not read for code that is restricted from terminal I/O (qore#7140)
+        if (interactive && SandboxManager::isTerminalIoAllowed()) {
             try {
                 int cols = TermIOS::getWindowSize().columns;
                 if (cols > 0) {

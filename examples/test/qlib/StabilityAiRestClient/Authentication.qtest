@@ -95,9 +95,9 @@ class StabilityAuthenticationTest inherits QUnit::Test {
             assertEq(200, conn.getAsync(False).restGet("/v1/user/balance").status_code);
         }
         auto poll = connection().startPollConnect();
-        date deadline = now_us() + 10s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 10s;
         while (auto info = poll.continuePoll()) {
-            assertTrue(now_us() < deadline);
+            assertTrue(microseconds(clock_get_monotonic_us()) < deadline);
             Socket::poll((info,), 1s);
         }
         assertTrue(poll.goalReached());

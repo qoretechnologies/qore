@@ -354,6 +354,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - new @ref WebSocketClient::WebSocketClientWithSerialization::sendDataOnConnection() "sendDataOnConnection()" sends
+      a message only if the client's connection is the one with the given ID, so a message that belongs to one
+      connection (a heartbeat) and was held across a reconnect is dropped instead of being sent on the new connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
     - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
@@ -385,9 +389,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
-    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code or the
+      code that calls it has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an
+      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - \c WebSocketConnectionObject::getImpl() is declared to return a
       @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
       @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
@@ -5474,7 +5479,7 @@ ws.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("WebSocketClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("WebSocketClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
                     vsprintf(message, args));
             }
@@ -6298,6 +6303,44 @@ class MyObserver inherits Observer {
         send(serializeData(value));
     }
 
+    #! Sends string data over the web socket only if the client's connection is the one with the given ID
+    /** A message that belongs to one connection (a heartbeat, a keep-alive, an acknowledgement of what that connection
+        received) must not be sent on another: sendData() sends on the client's connection at the time it is called,
+        which after a reconnect is a new one, so a message that was prepared (or held) for the old connection would
+        be taken by the new connection's peer as that connection's own.  The connection is taken once, after the
+        message was validated and serialized, so a reconnect that happens before it is taken makes the message be
+        dropped, not sent on the new connection.
+
+        @param cid the ID of the connection that the message belongs to (see
+        @ref getCurrentConnectionId())
+        @param value The value to serialize and send over the WebSocket
+
+        @return True if the message was sent on the connection with the ID; False if the client's connection is not
+        that one (it was closed or replaced), or the client has none; the message was not sent then
+
+        @throw WEBSOCKET-CLOSING-ERROR the close handshake of the connection started (see @ref send())
+
+        @since WebSocketClient 2.5
+    */
+    bool sendDataOnConnection(int cid, auto value) {
+        hash<auto> headers = {};
+        validateOutgoingMessage(\value, \headers);
+        string str = serializeData(value);
+        *WscConnection c = conn;
+        if (!c || c.cid != cid) {
+            logDebug("not sending a message of the connection %d: the client's connection is %d", cid,
+                c ? c.cid : -1);
+            return False;
+        }
+        *object po = c.op;
+        if (!po) {
+            return False;
+        }
+        po.sendText(str);
+        wakeAsyncIo();
+        return True;
+    }
+
     #! Returns the data serialization value (\c "none", \c "json", or \c "yaml")
     string getSerialization() {
         return serialization;
@@ -6377,7 +6420,7 @@ class MyObserver inherits Observer {
             # EVENT_WS_ERROR, data-processing errors would otherwise be silently dropped if the
             # logger has no appender, and the caller would see an unexplained timeout (e.g.,
             # parse_json failure on a non-JSON payload when serialization is "json").
-            if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
                     serialization, ex.err, ex.desc, buf_summary);
             }
@@ -6407,7 +6450,7 @@ class MyObserver inherits Observer {
                 });
                 # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
                 # and the logger may have no appender
-                if (!hasErrorObservers() && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                if (!hasErrorObservers() && SandboxManager::isTerminalIoAllowed()) {
                     stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
                         ex.err, ex.desc);
                 }
@@ -8405,6 +8448,8 @@ public class WebSocketClientHcioPollOp {
             @since WebSocketClient 2.5
         */
         bool error_close = False;
+        #! True once a refused re-arm of the heartbeat timer at the end of the process has been logged
+        bool heartbeat_shutdown_logged = False;
 
         #! The close code and reason of the error that the client closed the connection for (see startErrorClose());
         #! reported when the close ends; protected by @ref heartbeat_mutex
@@ -8538,9 +8583,34 @@ public class WebSocketClientHcioPollOp {
     }
 
     #! Marks the adapter as started — enables on_poll_complete delivery
+    /** The frames that arrived before the start (with the handshake) are delivered as later frames are: a
+        notification is made for them on a worker of the async I/O controller, so that their delivery does not wait for
+        the client's initial drain, which the connecting thread makes only after other work (issue #7123); whichever of
+        the two runs first delivers them, as both drain the queue with @ref process_mutex held.  No notification is
+        made when no frame arrived (issue #6154).
+    */
     start() {
         started = True;
         rescheduleHeartbeatTimer();
+        if (!msg_queue.empty()) {
+            # the task references the operation, so that it stays valid until the task has run; a connection that
+            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
+            WebSocketClientHcioPollOp op = self;
+            try {
+                Qore::AsyncIoController::submitTask(task: sub () {
+                    try {
+                        op.notifyIo();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the operation was deleted explicitly meanwhile: its client tore the connection down
+                        if (ex.err != "OBJECT-ALREADY-DELETED") {
+                            rethrow;
+                        }
+                    }
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                # the controller is stopping: the client's initial drain delivers the frames
+            }
+        }
     }
 
     #! Drains any frames already dispatched before the adapter was fully wired up
@@ -8921,7 +8991,7 @@ public class WebSocketClientHcioPollOp {
             }
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
+            logCloseTimerError(timer_err, "");
         }
         try {
             # the stream's frame state records that the client sends its close frame, so that it sends no second one
@@ -9009,8 +9079,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
         if (timer_err) {
-            logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
-                timer_err.desc);
+            logCloseTimerError(timer_err, "; the connection is closed at once");
         }
         # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown that did not send the
         # client's close), nothing would end the close: the connection is closed now
@@ -9257,6 +9326,16 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
+    #! logs that the close timer cannot be armed; at the debug level at the end of the process, when the work of the
+    #! module cleanup cannot add timers after its deadline (see @ref Qore::AsyncIoController::submit())
+    private logCloseTimerError(hash<ExceptionInfo> ex, string what) {
+        if (ex.err == "ASYNC-IO-SHUTDOWN-ERROR") {
+            logDebug("cannot arm the close timer at the end of the process: %s: %s%s", ex.err, ex.desc, what);
+        } else {
+            logError("cannot arm the close timer: %s: %s%s", ex.err, ex.desc, what);
+        }
+    }
+
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
         last_recv_activity_ms = clock_get_monotonic_us() / 1000;
@@ -9303,9 +9382,24 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection goes on without
+            # its heartbeat
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            # the idle timeout, which shares the timer, ends with it; logged once, as every frame that the connection
+            # receives re-arms the timer
+            if (!heartbeat_shutdown_logged) {
+                heartbeat_shutdown_logged = True;
+                logDebug("heartbeat timer not re-armed at the end of the process: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

@@ -42,8 +42,12 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("****", h.options.secret);
         assertEq("****", h.options.undeclared);
         assertEq("3", h.options.rows);
-        assertEq("1", h.options.min);
-        assertEq("2", h.options.max);
+        # the pool sizes in the URL are not options of the driver: masked in the safe URL (qore#7017), shown in the
+        # options of the connection
+        assertEq("****", h.options.min);
+        assertEq("****", h.options.max);
+        # the user name is masked (qore#7017)
+        assertEq("****", h.user);
     }
 
     connectionInfo() {
@@ -88,13 +92,15 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
     }
 
     driverNotLoaded() {
-        # a driver that is not loaded: every driver option value is masked, and the pool options are shown
+        # a driver that is not loaded: every option value is masked in the safe URL, and the pool options are shown in
+        # the options of the connection
         DatasourceConnection conn("c7070", "test", "db://qore7070nodriver:user/pass@db{rows=3,min=1,max=2}");
         hash<auto> h = parse_datasource(conn.safe_url.substr(5));
         assertEq("****", h.options.rows);
-        assertEq("1", h.options.min);
+        assertEq("****", h.options.min);
         hash<ConnectionInfo> info = conn.getInfo();
         assertEq("****", info.opts.rows);
+        assertEq(1, info.opts.min);
         assertEq("****", info.url_hash.options.rows);
     }
 }

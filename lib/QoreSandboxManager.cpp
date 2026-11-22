@@ -1410,23 +1410,35 @@ int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xs
             "the isolation domains of its members");
         return -1;
     }
-    std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
-    if (fs_mgr.priv->isolation_domain == domain) {
-        return 0;
+    // the error is raised after the lock is released: raising an exception resolves the sandbox of the code that
+    // raises it (qore#7139), which can take the domain lock of this manager as a member of a composition
+    std::string current;
+    bool governs = false;
+    {
+        std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
+        if (fs_mgr.priv->isolation_domain == domain) {
+            return 0;
+        }
+        if (fs_mgr.priv->isolation_domain.empty()) {
+            governs = fs_mgr.priv->governs.load(std::memory_order_acquire);
+            if (!governs) {
+                fs_mgr.priv->isolation_domain = domain;
+                qore_isolation_domains_used.store(true, std::memory_order_release);
+                return 0;
+            }
+        } else {
+            current = fs_mgr.priv->isolation_domain;
+        }
     }
-    if (!fs_mgr.priv->isolation_domain.empty()) {
+    if (!current.empty()) {
         xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain of "
-            "the sandbox is already set to '%s'; it cannot be changed", fs_mgr.priv->isolation_domain.c_str());
+            "the sandbox is already set to '%s'; it cannot be changed", current.c_str());
         return -1;
     }
-    if (fs_mgr.priv->governs.load(std::memory_order_acquire)) {
-        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the sandbox already "
-            "governs code; its isolation domain must be set before it is given to a Program");
-        return -1;
-    }
-    fs_mgr.priv->isolation_domain = domain;
-    qore_isolation_domains_used.store(true, std::memory_order_release);
-    return 0;
+    assert(governs);
+    xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the sandbox already "
+        "governs code; its isolation domain must be set before it is given to a Program");
+    return -1;
 }
 
 std::string qore_caller_isolation_domain() {
@@ -2435,6 +2447,19 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
     // every member does
     assert(purpose == QoreSandboxManagerHelper::Policy || purpose == QoreSandboxManagerHelper::All);
     return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
+}
+
+int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // a module is a capability, but the terminal is not lent to code that is restricted from it: library code that
+    // serves such code writes nothing to the process's terminal for it (qore#7140)
+    if (!qore_caller_restricts_terminal_io()) {
+        return 0;
+    }
+    xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
+        "(functional domain TERMINAL_IO, PO_NO_TERMINAL_IO)", what);
+    return -1;
 }
 
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {

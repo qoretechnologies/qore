@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - class and method reflection of programs compiled with qcc (AOT)
+
+/*  reflection-method-order.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7169: the methods of a class are enumerated in the order in which they are declared, in the interpreter and in
+    a program compiled with qcc.  The method maps of a class are hash maps, and a class copy inserts the methods in
+    the order of the map that it copies, which reverses the order of a hash map that is iterated: the order of a class
+    depended on how often the class was copied, and a compiled program copies it once more than the interpreter.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionMethodOrderTest
+
+#! The methods are declared in an order that is neither sorted nor the reverse of a sorted one
+class OrderedBase {
+    public {
+        static int sv_b = 1;
+        static int sv_a = 2;
+        int m_z = 1;
+        int m_y = 2;
+        int m_x = 3;
+        const C_b = 1;
+        const C_a = 2;
+    }
+
+    constructor() {
+    }
+
+    static string pubStatic(int a) {
+        return "pub";
+    }
+
+    static zStatic() {
+    }
+
+    private:internal static intStatic() {
+    }
+
+    static aStatic() {
+    }
+
+    zMethod() {
+    }
+
+    aMethod() {
+    }
+
+    mMethod() {
+    }
+
+    # another variant of a method that was declared before: the method keeps its place
+    zMethod(int i) {
+    }
+
+    private:internal bMethod() {
+    }
+}
+
+class OrderedDerived inherits OrderedBase {
+    static dStatic() {
+    }
+
+    static cStatic() {
+    }
+
+    yMethod() {
+    }
+
+    xMethod() {
+    }
+}
+
+class ReflectionMethodOrderTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReflectionMethodOrderTest", "1.0") {
+        addTestCase("method order", \methodOrderTest());
+        addTestCase("method order of a class of another Program", \otherProgramTest());
+        addTestCase("method order of a class that is copied", \copiedClassTest());
+        set_return_value(main());
+    }
+
+    private list<string> names(list<auto> l) {
+        return map $1.getName(), l;
+    }
+
+    private checkOrder(Class c) {
+        assertEq(("pubStatic", "zStatic", "intStatic", "aStatic"), names(c.getStaticMethods()),
+            "static methods in declaration order");
+        assertEq(("zMethod", "aMethod", "mMethod", "bMethod"), names(c.getNormalMethods()),
+            "normal methods in declaration order, a method at its first declaration");
+        assertEq(("m_z", "m_y", "m_x", "sv_b", "sv_a"), names(c.getMembers()), "members in declaration order");
+        assertEq(("C_b", "C_a"), names(c.getConstants()), "constants in declaration order");
+    }
+
+    methodOrderTest() {
+        checkOrder(Class::forName("OrderedBase"));
+
+        Class d = Class::forName("OrderedDerived");
+        assertEq(("dStatic", "cStatic"), names(d.getStaticMethods()));
+        assertEq(("yMethod", "xMethod"), names(d.getNormalMethods()));
+        # all methods: the class's own methods are enumerated in declaration order
+        assertEq(("pubStatic", "zStatic", "intStatic", "aStatic"), names(Class::forName("OrderedBase").getAllStaticMethods()));
+    }
+
+    otherProgramTest() {
+        # the class parsed in another Program, as it is in a Program that a program creates
+        Program p(PO_NEW_STYLE);
+        p.parse("class OtherOrdered {
+    static c() {}
+    static a() {}
+    static b() {}
+    z() {}
+    y() {}
+    x() {}
+}
+object sub make() {
+    return new OtherOrdered();
+}", "other");
+        object o = p.callFunction("make");
+        Class c = Class::getClass(o);
+        assertEq(("c", "a", "b"), names(c.getStaticMethods()));
+        assertEq(("z", "y", "x"), names(c.getNormalMethods()));
+    }
+
+    copiedClassTest() {
+        # an object of the class is copied: its class is not copied, and the order does not change
+        OrderedBase o();
+        OrderedBase o2 = o.copy();
+        checkOrder(Class::getClass(o2));
+        checkOrder(Class::getClass(o));
+    }
+}
