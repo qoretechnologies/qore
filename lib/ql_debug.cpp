@@ -8219,162 +8219,68 @@ public:
         xsink.clear();
     }
 
-    //! The socket of the connection that runConnectCloseBeforeAssign() closes before the winner is taken over
-    static inline qore_socket_private* close_assign_sock = nullptr;
+    //! Makes the steps of a connection made with the C++ API (QoreSocket::startConnect()), as a module can
+    /** Each step waits for the events that the state returns, as the documentation of AbstractPollState shows; at
+        most @p max_ms in all.
 
-    //! Closes the socket's descriptor right before the socket takes the winning attempt over, as another thread can
-    static void closeBeforeAssign() {
-        qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
-        close_assign_sock->close_and_reset();
-    }
-
-    //! A connection whose socket is closed by another thread after the step has checked it, and before the socket
-    //! takes the winning attempt over, fails as closed (qore#7003)
-    /** A name that resolves to ::1 and 127.0.0.1 (a hosts file of the test's own) gives a happy-eyeballs connection
-        two attempts under an async I/O controller: the first one gets no answer, and the second one connects, so
-        that the winner is an attempt that the socket has not taken over.  A debug hook
-        (qore_dbg_connect_before_assign_winner) closes the socket right before the winner is taken over: the socket
-        must stay closed and the connection must fail with SOCKET-CLOSED.
+        @return 0 when the connection is made, -1 for an error (raised in @p xsink), 1 if it did not end in time
     */
-    static void runConnectCloseBeforeAssign(UnitTestCounters& c) {
-        const std::string when = " (closed before the winner is taken over)";
-        ExceptionSink xsink;
-        std::vector<int> fds;
-        struct FdCloser {
-            std::vector<int>& fds;
-            ~FdCloser() {
-                for (int fd : fds) {
-                    ::close(fd);
-                }
+    static int driveConnect(QoreSocket& s, AbstractPollState& st, ExceptionSink& xsink, int max_ms = 10000) {
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(max_ms);
+        while (true) {
+            int rc = st.continuePoll(&xsink);
+            if (xsink || rc < 0) {
+                return -1;
             }
-        } fd_closer{fds};
-        // a listener on 127.0.0.1 that accepts, and a target on ::1 with its port that gets no answer
-        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
-        if (lfd < 0) {
-            return;
-        }
-        fds.push_back(lfd);
-        struct sockaddr_in sa = {};
-        sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        socklen_t salen = sizeof(sa);
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
-            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) && !::listen(lfd, 16);
-        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
-        if (!ok || !makeSilentTarget6(c, fds, sa.sin_port, when)) {
-            return;
-        }
-
-        const char* tmp = getenv("TMPDIR");
-        std::string hosts = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-he-assign-hosts-" + std::to_string(getpid());
-        {
-            FILE* f = fopen(hosts.c_str(), "w");
-            UT_ASSERT(c, f != nullptr, ("the hosts file is written" + when).c_str());
-            if (!f) {
-                return;
+            if (!rc) {
+                return 0;
             }
-            fprintf(f, "::1 qore-he-assign\n127.0.0.1 qore-he-assign\n");
-            fclose(f);
-        }
-        struct HostsRestorer {
-            std::string prev, path;
-            ~HostsRestorer() {
-                qore_dbg_cares_set_hosts_file(prev);
-                ::unlink(path.c_str());
+            std::vector<struct pollfd> fds;
+            // there is no socket descriptor while the host name is resolved
+            int fd = s.getDescriptorForLibrary();
+            if (fd >= 0) {
+                short events = ((rc & SOCK_POLLIN) ? POLLIN : 0) | ((rc & SOCK_POLLOUT) ? POLLOUT : 0);
+                fds.push_back({fd, events, 0});
             }
-        } hosts_restorer{qore_dbg_cares_set_hosts_file(hosts), hosts};
-        std::string target = "qore-he-assign:" + std::to_string(ntohs(sa.sin_port));
-
-        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
-        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
-        if (xsink) {
-            xsink.clear();
-            return;
-        }
-        struct Cleanup {
-            AsyncIoControllerPriv* ctrl;
-            ExceptionSink& xsink;
-            ~Cleanup() {
-                qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
-                xsink.clear();
-                ctrl->stopClear(&xsink);
-                xsink.clear();
+            for (const ExtraWaitFd& extra : st.getExtraWaitFds()) {
+                short events = (extra.want_read ? POLLIN : 0) | (extra.want_write ? POLLOUT : 0);
+                fds.push_back({extra.fd, events, 0});
             }
-        } cleanup{*ctrl, xsink};
-        ctrl->setMaxIoThreads(1, &xsink);
-        ctrl->start(&xsink);
-        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
-        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
-        if (!ready || xsink) {
-            return;
+            int64_t remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline
+                - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0) {
+                return 1;
+            }
+            int to = st.getPollTimeoutMs();
+            if (fds.empty() && to < 0) {
+                // nothing can continue the connection
+                return 1;
+            }
+            if (to < 0 || to > remaining) {
+                to = static_cast<int>(remaining);
+            }
+            ::poll(fds.data(), fds.size(), to);
         }
-
-        QoreSocketObject* sock = new QoreSocketObject;
-        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
-        sock->ref();
-        close_assign_sock = qore_socket_private::get(*sock->priv->socket);
-        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
-        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
-        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
-        if (xsink) {
-            return;
-        }
-        op->setSelf(*op_obj);
-        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
-        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
-        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
-        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
-        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
-        info->setKeyValue("owner", new QoreStringNode("connect-close-before-assign-unit-test"), &xsink);
-        info->setKeyValue("to", 10000, &xsink);
-        qore_dbg_connect_before_assign_winner.store(closeBeforeAssign, std::memory_order_release);
-        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
-        UT_ASSERT(c, !xsink && queue_obj, ("the connection is submitted" + when).c_str());
-        if (xsink || !queue_obj) {
-            return;
-        }
-        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
-            &xsink);
-        if (!queue || xsink) {
-            return;
-        }
-        bool timed_out = false;
-        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
-        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, ("the connection ends" + when).c_str());
-        UT_ASSERT(c, !qore_dbg_connect_before_assign_winner.load(std::memory_order_acquire),
-            ("a winner was taken over: the hook ran" + when).c_str());
-        if (result->getType() == NT_HASH) {
-            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
-            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
-            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            UT_ASSERT(c, err.getType() == NT_STRING
-                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CLOSED"),
-                ("the connection fails as closed" + when).c_str());
-        }
-        xsink.clear();
-        UT_ASSERT(c, sock->getPollableDescriptor() < 0, ("the closed socket stays closed" + when).c_str());
-        result.release().discard(&xsink);
-        queue = nullptr;
-        queue_obj = nullptr;
-        op_obj = nullptr;
-        sock->close();
-        xsink.clear();
     }
 
-    //! Where runConnectCloseAt() closes the socket: the place of qore_dbg_connect_before_adopt, or this for the resolve
+    //! Where runConnectCloseAt() closes the socket: a place of qore_dbg_connect_before_adopt, or one of these
+    //! (the resolve phase: qore_dbg_connect_in_resolve; before the winner is taken over:
+    //! qore_dbg_connect_before_assign_winner)
     static constexpr int CLOSE_IN_RESOLVE = 0;
-    //! The place where runConnectCloseAt() closes the socket, and whether it did
-    static inline int close_at_where = -1;
+    static constexpr int CLOSE_BEFORE_ASSIGN = -1;
+    //! The socket that runConnectCloseAt() closes, the place where it closes it, and whether it did
+    static inline QoreSocket* close_at_sock = nullptr;
+    static inline int close_at_where = -100;
     static inline bool close_at_done = false;
 
-    //! Closes the socket, as another thread can, at the place that the test is for
+    //! Closes the socket with QoreSocket::close(), as another thread can, at the place that the test is for
     static void closeAt(int where) {
         if (close_at_done || where != close_at_where) {
             return;
         }
         close_at_done = true;
-        close_assign_sock->close_internal();
+        close_at_sock->close();
     }
 
     //! The hook of the resolve phase: closes the socket while the connection has no descriptor
@@ -8382,22 +8288,35 @@ public:
         closeAt(CLOSE_IN_RESOLVE);
     }
 
-    //! A connection whose socket is closed while it is resolving its host, or between its check of the socket and the
-    //! socket's adoption of a descriptor, fails as closed and leaves the socket closed (qore#7003)
-    /** @p where is CLOSE_IN_RESOLVE (the close while the host is resolved, when the socket has no descriptor; debug hook
-        qore_dbg_connect_in_resolve) or a place of qore_dbg_connect_before_adopt (2: the winner replacing the socket's
-        descriptor; 3: the second attempt replacing the descriptor of the first one, which failed, made to fail with
-        qore_dbg_connect_fail_held_attempt once the second attempt is in progress, whose result is read only once it
-        is writable with qore_dbg_connect_no_immediate_check; 4: the first attempt in progress), where the adoption is
-        refused with the socket's close lock held.  Place 1, the winner when the socket has no descriptor, is reached
-        only by a first attempt that connects within connect() itself, which a TCP connection over loopback does not:
-        it goes through setDescriptorIfGeneration(), as place 4 does.  The name of the test's own resolves to
-        127.0.0.1, where a listener accepts, and with @p two_addresses also to ::1 first, where nothing answers, so that
-        the second attempt is the one that connects.
+    //! The hook before the winner is taken over
+    static void closeBeforeAssign() {
+        closeAt(CLOSE_BEFORE_ASSIGN);
+    }
+
+    //! A connection whose socket is closed while it is resolving its host, between its check of the socket and the
+    //! socket's adoption of a descriptor, or before the socket takes the winning attempt over, fails as closed and
+    //! leaves the socket closed (qore#7003)
+    /** The connection is made with the C++ API (QoreSocket::startConnect(), whose steps the test makes as a module
+        can) and the socket is closed with QoreSocket::close(), which another thread can call during a step: unlike
+        the Socket class, whose object lock a close waits for, a QoreSocket that is not part of an object has no lock
+        that keeps a close from running in a step.
+
+        @p where is CLOSE_IN_RESOLVE (the close while the host is resolved, when the socket has no descriptor),
+        CLOSE_BEFORE_ASSIGN (the close right before the socket takes the winner over, with two addresses), or a place
+        of qore_dbg_connect_before_adopt (2: the winner replacing the socket's descriptor; 3: the second attempt
+        replacing the descriptor of the first one, which failed, made to fail with qore_dbg_connect_fail_held_attempt
+        once the second attempt is in progress, whose result is read only once it is writable with
+        qore_dbg_connect_no_immediate_check; 4: the first attempt in progress, when the socket has no descriptor),
+        where the adoption is refused with the socket's close lock held.  Place 1, the winner when the socket has no
+        descriptor, is reached only by a first attempt that connects within connect() itself, which a TCP connection
+        over loopback does not: it goes through setDescriptorIfGeneration(), as place 4 does.  The name of the test's
+        own resolves to 127.0.0.1, where a listener accepts, and with @p two_addresses also to ::1 first, where nothing
+        answers, so that the second attempt is the one that connects.
     */
     static void runConnectCloseAt(UnitTestCounters& c, int where, bool two_addresses) {
         const std::string when = " (closed " + (where == CLOSE_IN_RESOLVE ? std::string("while resolving")
-            : "before adoption " + std::to_string(where)) + ")";
+            : (where == CLOSE_BEFORE_ASSIGN ? std::string("before the winner is taken over")
+                : "before adoption " + std::to_string(where))) + ")";
         ExceptionSink xsink;
         std::vector<int> fds;
         struct FdCloser {
@@ -8448,35 +8367,17 @@ public:
         } hosts_restorer{qore_dbg_cares_set_hosts_file(hosts), hosts};
         std::string target = "qore-he-closeat:" + std::to_string(ntohs(sa.sin_port));
 
-        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
-        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
-        if (xsink) {
-            xsink.clear();
-            return;
-        }
-        struct Cleanup {
-            AsyncIoControllerPriv* ctrl;
-            ExceptionSink& xsink;
-            ~Cleanup() {
+        // the hooks are cleared before the socket is destroyed
+        std::unique_ptr<QoreSocket> s(new QoreSocket);
+        struct HookCleanup {
+            ~HookCleanup() {
                 qore_dbg_connect_before_adopt.store(nullptr, std::memory_order_release);
                 qore_dbg_connect_in_resolve.store(nullptr, std::memory_order_release);
-                xsink.clear();
-                ctrl->stopClear(&xsink);
-                xsink.clear();
+                qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
+                close_at_sock = nullptr;
             }
-        } cleanup{*ctrl, xsink};
-        ctrl->setMaxIoThreads(1, &xsink);
-        ctrl->start(&xsink);
-        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
-        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
-        if (!ready || xsink) {
-            return;
-        }
-
-        QoreSocketObject* sock = new QoreSocketObject;
-        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
-        sock->ref();
-        close_assign_sock = qore_socket_private::get(*sock->priv->socket);
+        } hook_cleanup;
+        close_at_sock = s.get();
         close_at_where = where;
         close_at_done = false;
         // place 3: the first attempt fails once the second one is in progress, whose result is read in a later step
@@ -8495,55 +8396,31 @@ public:
                 }
             }
         } p3h(where == 3);
-        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
-        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
-        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
-        if (xsink) {
-            return;
-        }
-        op->setSelf(*op_obj);
-        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
-        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
-        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
-        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
-        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
-        info->setKeyValue("owner", new QoreStringNode("connect-close-at-unit-test"), &xsink);
-        info->setKeyValue("to", 10000, &xsink);
         if (where == CLOSE_IN_RESOLVE) {
             qore_dbg_connect_in_resolve.store(closeInResolve, std::memory_order_release);
+        } else if (where == CLOSE_BEFORE_ASSIGN) {
+            qore_dbg_connect_before_assign_winner.store(closeBeforeAssign, std::memory_order_release);
         } else {
             qore_dbg_connect_before_adopt.store(closeAt, std::memory_order_release);
         }
-        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
-        UT_ASSERT(c, !xsink && queue_obj, ("the connection is submitted" + when).c_str());
-        if (xsink || !queue_obj) {
-            return;
+        int rc = -1;
+        {
+            // the state is destroyed before the socket
+            std::unique_ptr<AbstractPollState> st(s->startConnect(&xsink, target.c_str()));
+            UT_ASSERT(c, !xsink && st, ("the connection is started" + when).c_str());
+            if (!xsink && st) {
+                rc = driveConnect(*s, *st, xsink);
+            }
         }
-        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
-            &xsink);
-        if (!queue || xsink) {
-            return;
-        }
-        bool timed_out = false;
-        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
-        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, ("the connection ends" + when).c_str());
         UT_ASSERT(c, close_at_done, ("the socket was closed at the place of the test" + when).c_str());
-        if (result->getType() == NT_HASH) {
-            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
-            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
-            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            UT_ASSERT(c, err.getType() == NT_STRING
-                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CLOSED"),
-                ("the connection fails as closed" + when).c_str());
+        UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"), ("the connection fails as closed" + when).c_str());
         }
         xsink.clear();
-        UT_ASSERT(c, sock->getPollableDescriptor() < 0, ("the closed socket stays closed" + when).c_str());
-        result.release().discard(&xsink);
-        queue = nullptr;
-        queue_obj = nullptr;
-        op_obj = nullptr;
-        sock->close();
-        xsink.clear();
+        UT_ASSERT(c, s->getDescriptorForLibrary() < 0, ("the closed socket stays closed" + when).c_str());
+        s->close();
     }
 
     //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
@@ -8615,12 +8492,13 @@ public:
     static inline int close_step_attempt_fd = -1;
     static inline int close_step_reuse_fd = -1;
     static inline int close_step_reuse_src = -1;
-    static inline qore_socket_private* close_step_sock = nullptr;
+    static inline QoreSocket* close_step_sock = nullptr;
 
-    //! Closes the socket's descriptor in a step of the connection, as another thread can, and opens another descriptor
+    //! Closes the socket with QoreSocket::close() in a step of the connection, as another thread can, and opens
+    //! another descriptor
     static void closeInConnectStep() {
         qore_dbg_connect_before_check_attempts.store(nullptr, std::memory_order_release);
-        close_step_sock->close_and_reset();
+        close_step_sock->close();
         close_step_reuse_fd = fcntl(close_step_reuse_src, F_DUPFD_CLOEXEC, close_step_attempt_fd);
     }
 
@@ -8634,6 +8512,11 @@ public:
         ConnectCloseMode) and opens another descriptor: the attempt's number must not be given to it, the socket must
         not take it over, nothing may close it, and the attempt's descriptor is closed when the operation is done with
         it.
+
+        In a step (CCM_IN_STEP), the connection is made with the C++ API (QoreSocket::startConnect(), whose steps the
+        test makes as a module can), as a close with QoreSocket::close() can run in a step only for a socket that is
+        not part of a Socket object, whose object lock a close waits for; otherwise the connection is a connect
+        operation of a Socket object, closed with Socket::close() between its steps.
 
         The target gets no answer: on Linux a listener whose accept queue is full, which drops the connection requests
         that it cannot queue; elsewhere a port that is bound and does not listen, which macOS does not answer.
@@ -8687,28 +8570,56 @@ public:
         fds.push_back(sp[1]);
         std::string target = "127.0.0.1:" + std::to_string(ntohs(sa.sin_port));
 
+        // a connect operation of a Socket object, or in a step a connection made with the C++ API; the state is
+        // destroyed before its socket
+        std::unique_ptr<QoreSocket> qs;
+        std::unique_ptr<AbstractPollState> st;
         QoreSocketObject* sock = new QoreSocketObject;
         ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
         sock->ref();
-        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock);
-        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
-        if (!xsink) {
-            op->setSelf(*op_obj);
-            // the members are private:internal to SocketPollOperationBase (#6839): set them as the library does
-            if (!qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink)) {
-                qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
+        ReferenceHolder<QoreObject> op_obj(&xsink);
+        SocketConnectPollOperation* op = nullptr;
+        struct StateDestroyer {
+            std::unique_ptr<AbstractPollState>& st;
+            ~StateDestroyer() {
+                st.reset();
+            }
+        } st_destroyer{st};
+        if (mode == CCM_IN_STEP) {
+            qs.reset(new QoreSocket);
+            st.reset(qs->startConnect(&xsink, target.c_str()));
+        } else {
+            op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock);
+            op_obj = new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op);
+            if (!xsink) {
+                op->setSelf(*op_obj);
+                // the members are private:internal to SocketPollOperationBase (#6839): set them as the library does
+                if (!qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink)) {
+                    qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
+                }
             }
         }
+        // makes a step of the connection
+        auto step = [&]() {
+            if (st) {
+                st->continuePoll(&xsink);
+            } else {
+                ReferenceHolder<QoreHashNode> poll(op->continuePoll(&xsink), &xsink);
+            }
+        };
+        auto get_fd = [&]() -> int {
+            return qs ? qs->getDescriptorForLibrary() : sock->getPollableDescriptor();
+        };
         if (!xsink) {
             // the first step starts the connect; the attempt is in progress
-            ReferenceHolder<QoreHashNode> poll(op->continuePoll(&xsink), &xsink);
+            step();
         }
         UT_ASSERT(c, !xsink, msg("the connection is started").c_str());
         if (xsink) {
             xsink.clear();
             return;
         }
-        int attempt_fd = sock->getPollableDescriptor();
+        int attempt_fd = get_fd();
         UT_ASSERT(c, attempt_fd >= 0, msg("the socket has the descriptor of the attempt in progress").c_str());
         if (attempt_fd < 0) {
             return;
@@ -8718,12 +8629,11 @@ public:
             close_step_attempt_fd = attempt_fd;
             close_step_reuse_fd = -1;
             close_step_reuse_src = sp[0];
-            close_step_sock = qore_socket_private::get(*sock->priv->socket);
+            close_step_sock = qs.get();
             qore_dbg_connect_before_check_attempts.store(closeInConnectStep, std::memory_order_release);
-            {
-                ReferenceHolder<QoreHashNode> poll(op->continuePoll(&xsink), &xsink);
-            }
+            step();
             qore_dbg_connect_before_check_attempts.store(nullptr, std::memory_order_release);
+            close_step_sock = nullptr;
             reuse_fd = close_step_reuse_fd;
             UT_ASSERT(c, reuse_fd >= 0, msg("a new descriptor is opened in the step").c_str());
             if (reuse_fd < 0) {
@@ -8764,19 +8674,21 @@ public:
                 }
             }
             if (mode == CCM_POLL_AFTER) {
-                {
-                    ReferenceHolder<QoreHashNode> poll(op->continuePoll(&xsink), &xsink);
-                }
+                step();
                 UT_ASSERT(c, (bool)xsink, msg("the step fails once the socket is closed").c_str());
                 xsink.clear();
             }
         }
-        UT_ASSERT(c, sock->getPollableDescriptor() != reuse_fd,
+        UT_ASSERT(c, get_fd() != reuse_fd,
             msg("the socket does not take over the descriptor that has a number of the attempt").c_str());
         UT_ASSERT(c, reuse_fd != attempt_fd,
             msg("the attempt's number is not given to another descriptor while the operation has it").c_str());
         // the operation is destroyed, then the socket is closed
+        st.reset();
         op_obj = nullptr;
+        if (qs) {
+            qs->close();
+        }
         sock->close();
         UT_ASSERT(c, fcntl(reuse_fd, F_GETFD) != -1,
             msg("the new descriptor is still open after the operation is destroyed and the socket closed").c_str());
@@ -24600,7 +24512,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
-    AsyncIoDescriptorHoldTest::runConnectCloseBeforeAssign(c);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_ASSIGN, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_IN_RESOLVE, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);

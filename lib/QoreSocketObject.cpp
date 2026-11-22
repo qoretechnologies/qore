@@ -4768,10 +4768,10 @@ void QoreSocketObject::deref() {
 void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
-    if (priv->socket->isOpen()) {
-        qore_socket_private::get(*priv->socket)->shutdown_direct();
-        priv->socket->priv->close();
-    }
+    // the socket is closed also when it has no descriptor: a connection that is being made (ex: resolving its host)
+    // gives the socket no descriptor after the close, which changes the socket's descriptor generation (qore#7003)
+    qore_socket_private::get(*priv->socket)->shutdown_direct();
+    priv->socket->priv->close();
 }
 
 bool QoreSocketObject::hasPendingData() const {
