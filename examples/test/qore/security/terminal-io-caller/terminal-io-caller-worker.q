@@ -47,6 +47,10 @@ class Term inherits TelnetClient {
 }
 hash<auto> sub window_size() { return (new Term()).size(); }
 string sub use(string how) { return TermCheck::use(how); }
+# a module object that this code creates runs the code given: the host's (written) and this code's own (refused)
+string sub run_host(code host_code) { return (new TermCheck::Runner(host_code)).run(); }
+string sub run_own() { return (new TermCheck::Runner(sub () { stdout.print(\"restricted code under its object\\n\"); }))"
+    ".run(); }
 # objects of the standard modules that write to the terminal, created by this code
 bool sub own_writers() {
     Logger logger(\"restricted\", LoggerLevel::getLevelInfo());
@@ -113,6 +117,11 @@ check("host-module", True, TermCheck::allowed());
     stream_logger.addAppender(stream_appender);
     stream_logger.info("host stream logger line");
     check("restricted-host-stream-logger", True, p.callFunction("host_logger", stream_logger));
+    # the host's code that a module object of the restricted code runs writes (the terminal is the host's): the
+    # object's provenance does not apply to it; the restricted code's own code that the object runs is refused
+    check("restricted-object-host-code", "ran",
+        p.callFunction("run_host", sub () { stdout.print("host code under a restricted object\n"); }));
+    check("restricted-object-own-code", "ILLEGAL-EXPRESSION", p.callFunction("run_own"));
 }
 
 # a sandboxed caller that is not restricted from terminal I/O may

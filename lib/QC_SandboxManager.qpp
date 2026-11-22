@@ -1890,7 +1890,10 @@ static bool SandboxManager::isCallerDomainDeniedAtEntry(softint domain) [flags=R
     not lent to code that is restricted from it: the builtins that use it refuse such a caller also in library code
     (see @ref sandbox_terminal_io), so library code calls this to leave its output out instead; the initialization
     of library module code is not a call by the code that loads it (see isCallerRestricted()), so a library module's
-    own diagnostics while it is initialized are decided by its own options.
+    own diagnostics while it is initialized are decided by its own options.  The terminal is the host's: when the
+    nearest code on the stack that is not a module's is trusted host code (a %Program that is not sandboxed and whose
+    options allow terminal I/O), the provenance of objects and callbacks that restricted code created does not apply
+    (see @ref sandbox_terminal_io).
 
     It reveals only whether the running code or its caller is restricted, so it is not restricted itself.
 
@@ -1907,7 +1910,7 @@ if (SandboxManager::isTerminalIoAllowed()) {
 */
 static bool SandboxManager::isTerminalIoAllowed() [flags=RET_VALUE_ONLY] {
     return !(runtime_get_parse_options().getLo() & PO_NO_TERMINAL_IO)
-        && !qore_caller_restricts_domain(QDOM_TERMINAL_IO);
+        && !qore_caller_restricts_terminal_io();
 }
 
 //! Returns @ref True if the current thread's code may use uncontrolled APIs

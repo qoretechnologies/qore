@@ -769,6 +769,19 @@ authenticate();
     (\c LoggerAppenderQueue) writes as the code of that thread may.  The output of the \c QUnit tests that such code
     runs is refused (its output is written with the builtins above), so a test cannot run under that restriction.
 
+    The terminal is the host's: the caller is the nearest code on the stack that is not a module's, and when that is
+    trusted host code (a %Program that is not sandboxed and whose options allow terminal I/O), the output is the
+    host's choice and is written, also when the host's code runs under an object or a callback that restricted code
+    created (whose provenance otherwise restricts the code that runs under it).  So an embedding application's own
+    loggers with a terminal appender write the lines of the host's own logging calls, also those it makes for
+    restricted code; they leave out only the lines that library code writes while restricted code is its nearest
+    caller (for example through a \c LoggerWrapper or the logger of a data provider that restricted code uses).
+    It follows that when the host calls a method of a module object that restricted code created (such as a logger
+    with a terminal appender and a layout of its own), the module code writes to the terminal what the object holds:
+    the host decides whether to make the call, and should not call such objects when the terminal must stay closed to
+    that code.  The code of a %Program that has released its classes runs in its caller's %Program with the caller's
+    options, so the code of a released restricted %Program that the host calls is the host's code for the terminal.
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
