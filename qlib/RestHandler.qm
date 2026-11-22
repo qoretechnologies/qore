@@ -442,9 +442,12 @@ Content-Length: 16
       @ref RestHandler::RestHandler::isLogTraceEnabled() "RestHandler::isLogTraceEnabled()"; request arguments and
       bodies are masked and formatted for debug messages only if they will be logged
     - exception messages in REST debug and error log messages are masked
-    - @ref RestHandler::RestHandler::responseSerializationError() "RestHandler::responseSerializationError()" takes
-      the response by reference: a response that it changes so that it can be serialized in a type that the client
-      accepts is sent; before, the client always received status 406 (Not Acceptable)
+    - added @ref RestHandler::RestHandler::responseSerializationRetry() "RestHandler::responseSerializationRetry()":
+      a response that it changes so that it can be serialized in a type that the client accepts is sent; before, the
+      client always received status 406 (Not Acceptable);
+      @ref RestHandler::RestHandler::responseSerializationError() "RestHandler::responseSerializationError()" is
+      unchanged since Qore 2.2.1 and is still called first with a copy of the response, but a 406 response no longer
+      always follows it
       (<a href="https://github.com/qoretechnologies/qore/issues/7250">issue 7250</a>)
 
     @section rh_1_6_7 RestHandler v1.6.7
@@ -1831,10 +1834,12 @@ public namespace RestHandler {
                             }
                             rethrow ex.err, ex.desc;
                         }
+                        # notify subclasses with a copy of the response, as in Qore 2.2
+                        responseSerializationError(cx, aih, rv);
                         # let subclasses change the response so that it can be serialized; a retry that succeeds is
                         # sent (qore#7250)
                         auto orig_body = rv.body;
-                        responseSerializationError(cx, aih, \rv);
+                        responseSerializationRetry(cx, aih, \rv);
                         if (rv.body === orig_body) {
                             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
                             # present, and if the server cannot send a response which is acceptable according to the
@@ -2039,10 +2044,26 @@ public namespace RestHandler {
         requestDeserializationError(hash<auto> hdr, hash<auto> cx, string body) {
         }
 
-        #! Called when response serialization fails
-        /** Called when the response cannot be serialized in a type that the client accepts (an \c ACCEPT-ERROR
-            exception from the schema validator); subclasses can override this method to change the response so that
-            it can be sent.
+        #! Called when the response cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, with a copy of
+            the response; changes to \a rv have no effect, and a <tt>406 Not Acceptable</tt> response follows only if
+            the response is not made serializable by the retry hook.  It is called before
+            @ref RestHandler::RestHandler::responseSerializationRetry() "responseSerializationRetry()", which can
+            change the response so that it can be sent.
+
+            The default implementation does nothing.
+
+            @param cx the call context hash
+            @param aih the accepted content types from the client
+            @param rv a copy of the response that could not be serialized
+        */
+        responseSerializationError(hash<auto> cx, *hash<auto> aih, hash<auto> rv) {
+        }
+
+        #! Called to change a response that cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, after
+            @ref RestHandler::RestHandler::responseSerializationError() "responseSerializationError()"; subclasses
+            can override this method to change the response so that it can be sent.
 
             If the body is changed, the response (with its code, headers and new body) is serialized again; when this
             succeeds, the response is sent, otherwise (whatever the error) a <tt>406 Not Acceptable</tt> response is
@@ -2058,9 +2079,14 @@ public namespace RestHandler {
 
             @param cx the call context hash
             @param aih the accepted content types from the client
-            @param rv reference to the response hash; change \c rv.body (and \c rv.hdr if needed) to retry
+            @param rv reference to the response; change \c rv.body (and \c rv.code and \c rv.hdr if needed) to retry
+
+            @note an override must declare these parameter types: a method with another typed reference for \a rv
+            (such as <tt>reference&lt;hash&lt;auto&gt;&gt;</tt>) is a separate variant that is never called
+
+            @since RestHandler 1.6.8
         */
-        responseSerializationError(hash<auto> cx, *hash<auto> aih, reference rv) {
+        responseSerializationRetry(hash<auto> cx, *hash<auto> aih, reference<hash<HttpHandlerResponseInfo>> rv) {
         }
 
         #! This method is called with informational log messages
