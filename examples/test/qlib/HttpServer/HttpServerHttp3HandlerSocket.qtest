@@ -79,11 +79,12 @@ class TenantH3Handler inherits AbstractHttpRequestHandler {
             *data body) {
         int own = cx.\"header-info\".session_id;
         if (hdr.path =~ /close$/) {
-            # ends the handler's own stream: the response is not sent
-            s.shutdown();
+            # a stream without a streaming response cannot be ended gracefully: shutdown() fails, and close() then
+            # cancels it; the response is not sent
+            string sd = try_it(sub () { s.shutdown(); });
             s.close();
             s.close();
-            return makeResponse(200, \"closed\");
+            return makeResponse(200, \"closed \" + sd);
         }
         int victim = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
         hash<string, string> r = {
@@ -355,7 +356,7 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
         int session = hc.get("/whoami").toInt();
         # the stream of the request ends without its response
         string r = getOrError(hc, "/probe/close");
-        assertNeq("closed", r, "the handler's stream ended before its response");
+        assertRegex("^QUIC-STREAM-RESET", r, "the handler's stream was cancelled before its response");
         # the session's other streams continue: the same client, on its session
         HTTPClient other = getClient(srv.port);
         on_exit other.disconnect();

@@ -9664,6 +9664,9 @@ class Http3HandlerSocket inherits Qore::Socket {
 
     #! Ends the handler's own stream gracefully, after its pending data; does nothing if it is already ended
     /** @return 0
+
+        @throw QUIC-HTTP3-ERROR the stream cannot be ended gracefully (for example a stream without a streaming
+        response); the stream is then not ended, and a later close() cancels it
     */
     int shutdown() {
         endStream(False);
@@ -9677,8 +9680,9 @@ class Http3HandlerSocket inherits Qore::Socket {
         @return 0
     */
     int close() {
-        endStream(True);
+        # I/O on the stream from other threads is refused from now on
         closed = True;
+        endStream(True);
         return 0;
     }
 
@@ -9939,10 +9943,17 @@ class Http3HandlerSocket inherits Qore::Socket {
             real.submitQuicStreamData(session_id, stream_id, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {
             if (!cancel_if_needed) {
+                # the stream is not ended: a later close() cancels it
+                releaseEnd();
                 rethrow;
             }
             real.cancelQuicStream(session_id, stream_id);
         }
+    }
+
+    #! Clears the flag set by takeEnd() after a graceful end that failed
+    private:internal synchronized releaseEnd() {
+        ended = False;
     }
 
     #! Raises an exception unless the session is the handler's own and its stream is not closed
