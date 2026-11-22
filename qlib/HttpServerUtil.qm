@@ -4920,21 +4920,55 @@ public class AbstractHttpSocketHandlerInterface {
 
     #! Returns a closure that can be used to confirm that the connection has been closed
     /** The id of a dedicated connection over HTTP/2 or HTTP/3 is that of its stream (\c "<connection id>:<stream
-        id>"), a string (qore#7042)
+        id>"), a string (qore#7042).
+
+        The closure ends the connection: on HTTP/1.x it shuts down and closes the socket; over HTTP/2 it ends the
+        connection's own stream only, as the client's other streams share the socket; over HTTP/3 the socket is that
+        of the connection's own stream, whose @ref Qore::Socket::shutdown() "shutdown()" and
+        @ref Qore::Socket::close() "close()" end the stream.
     */
     code setExternallyManaged(softstring lid, hash<auto> cx, Socket s) {
         # get local vars that will be bound in the closure
         HttpServer::HttpListenerInterface listener = cx.listener;
         string cid = cx.id.toString();
+        # the stream of a connection over HTTP/2, decided by the transport
+        *int h2_stream_id = (!s.isQuic() && s.isHttp2()) ? cx."header-info".stream_id : NOTHING;
+        auto ctrl = cx.async_ctrl;
 
         # return a closure to confirm that the connection has been closed
         return sub () {
             handlerStopped(lid);
             # only this handler's own connection is removed (qore#6921)
             listener.removeExternalDedicatedSocket(cid, self);
-            s.shutdown();
-            s.close();
+            if (exists h2_stream_id) {
+                endHttp2Stream(s, h2_stream_id, ctrl);
+            } else {
+                s.shutdown();
+                s.close();
+            }
         };
+    }
+
+    #! Ends the stream of a connection over HTTP/2 after its pending data, or resets it if it cannot be ended
+    /** The socket is the client's connection, which its other streams share: it is left open
+    */
+    private static endHttp2Stream(Socket s, int stream_id, auto ctrl) {
+        try {
+            s.sendHttp2StreamData(stream_id, NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended or been reset by the peer
+            try {
+                s.resetHttp2Stream(stream_id);
+            } catch () {
+            }
+        }
+        # the I/O controller flushes the end of the stream
+        if (ctrl) {
+            try {
+                ctrl.wakeSocket(s);
+            } catch () {
+            }
+        }
     }
 
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established

@@ -12,6 +12,7 @@
 %requires HttpServerUtil
 %requires WebSocketUtil
 %requires WebSocketClient
+%requires HttpClientIo
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerExternalDedicatedMultiplexedTest
@@ -100,6 +101,21 @@ class WhoamiHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Holds its request until the test releases it
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        entered.push(True);
+        release.get(HangGuard);
+        return makeResponse(200, "held");
+    }
+}
+
 #! setExternallyManaged() ends a dedicated connection over HTTP/2 and HTTP/3 (qore#7042)
 /** The id of such a connection is that of its stream ("<connection id>:<stream id>"), which the method stored as an
     integer: it raised RUNTIME-TYPE-ERROR instead of returning the closure that ends the connection
@@ -108,6 +124,7 @@ class HttpServerExternalDedicatedMultiplexedTest inherits QUnit::Test {
     constructor() : QUnit::Test("external dedicated connections over HTTP/2 and HTTP/3", "1.0", \ARGV) {
         addTestCase("HTTP/2: setExternallyManaged() ends the connection", \endTest(), "2.0");
         addTestCase("HTTP/3: setExternallyManaged() ends the connection", \endTest(), "3.0");
+        addTestCase("HTTP/2: setExternallyManaged() ends the connection's own stream only", \http2StreamTest());
         set_return_value(main());
     }
 
@@ -166,5 +183,79 @@ class HttpServerExternalDedicatedMultiplexedTest inherits QUnit::Test {
         });
         on_exit hc.disconnect();
         assertEq("ok", hc.get("/whoami"));
+    }
+
+    #! Over HTTP/2 the closure ends the connection's own stream: another stream of the same client connection
+    #! continues
+    http2StreamTest() {
+        EndingHandler handler();
+        HoldHandler hold();
+        DedicatedServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ded", "^ded", NOTHING, handler);
+        server.setHandler("hold", "^hold", NOTHING, hold);
+        # a held request ends before the server is deleted, also when the test fails
+        on_exit hold.release.push(True);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d/", port);
+
+        # the dedicated connection: an extended CONNECT stream
+        HttpClientStreamHandle tunnel = mgr.acquireStream(url);
+        on_exit {
+            try {
+                tunnel.cancel();
+            } catch () {
+            }
+        }
+        tunnel.startStreaming("CONNECT", "/ded", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto step = handler.to_host.get(HangGuard);
+        assertEq("h2", step.proto, sprintf("the closure is returned: %y", step));
+        assertEq(200, tunnel.readData(HangGuard).status_code, "the server accepts the connection");
+
+        # another stream of the same client connection, in progress while the dedicated connection ends
+        Queue other();
+        background sub () {
+            try {
+                other.push(mgr.request(url, "GET", "/hold").body);
+            } catch (hash<ExceptionInfo> ex) {
+                other.push(ex.err);
+            }
+        }();
+        hold.entered.get(HangGuard);
+
+        handler.from_host.push(True);
+        assertEq("ended", handler.to_host.get(HangGuard), "the closure ends the connection");
+        # the dedicated connection's stream ends
+        string event;
+        try {
+            auto d = tunnel.readData(HangGuard);
+            event = (d.typeCode() == NT_HASH && d.end_stream) ? "end" : sprintf("data: %y", d);
+        } catch (hash<ExceptionInfo> ex) {
+            event = ex.err;
+        }
+        assertEq("end", event, "the dedicated connection's stream ends");
+
+        # the other stream completes on the same connection
+        hold.release.push(True);
+        assertEq("held", other.get(HangGuard), "the other stream of the connection completes");
+        assertEq(1, mgr.getStats().total_connections, "the client's connection was not closed");
     }
 }
