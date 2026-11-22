@@ -2543,6 +2543,15 @@ private:
     //! With \a defer_to (see getInvokeResultDeferBlock()), the result replaces the value of the alloca at the start of
     //! that block, the normal continuation of an IR invoke, rather than where it is emitted; returns true if it does,
     //! and the exception edge of the invoke must then release the result (getInvokeResultDiscardEdge())
+    //! Gives the value of a weak or opaque store to a closure, global or thread-local variable to its consumers
+    /** @param converted the value that the store helper returned, owned by the frame: the value assigned, converted
+        to the variable's type, with a weak reference replaced by its target (qore#7084); it is the result of the
+        instruction, released at the end of the statement as a call's result is, or released at once if the
+        instruction has no result
+    */
+    void emitConvertedStoreResult(llvm::Value* converted, const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func);
+
     bool trackResultForCleanup(llvm::Value* result, uint32_t result_id,
             llvm::Function* llvm_func, llvm::BasicBlock* defer_to = nullptr);
 

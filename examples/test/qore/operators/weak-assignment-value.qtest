@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of weak assignments and their temporaries
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakAssignmentValueTest
+
+#! the value of a weak assignment, and the lifetime of the temporary that it is given
+#! (qore#7084, qore#7085, qore#7122)
+/** The value of a weak assignment (\c :=) is the value assigned, converted to the variable's type: a variable, a
+    container or a call that is given the value holds it, as in the AST interpreter. Native code (JIT and qcc
+    executables) gave the consumer the weak reference that the variable holds, or, for a local, a value that it read as
+    an integer (qore#7084), and the IR interpreter gave the weak reference in some consumers. A temporary that a weak
+    assignment is given lives until the end of the statement in every execution mode ("all chains, whole statement"):
+    the AST interpreter and native code released it when the assignment ended, so that the weak reference designated a
+    destroyed object for the rest of the statement (qore#7085); so does a copy that the variable's type makes of a
+    container, which the AST interpreter released at once. Every mode must print the output of the AST; the JIT is also
+    run with its functions compiled synchronously, as otherwise they can run in the IR interpreter.
+
+    The same holds for the lvalues assigned through an lvalue path (members, hash and hashdecl keys, list elements, a
+    softlist variable), where the IR interpreter and native code released the temporary and gave the weak reference
+    (qore#7122).
+
+    The program is in \c weak-assignment-value/.
+*/
+class WeakAssignmentValueTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-assignment-value";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-assignment-value",);
+    }
+
+    constructor() : QUnit::Test("WeakAssignmentValueTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode, string env = "") {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", env, qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+            # the functions compiled before they run
+            assertEq(expected(name), run(name, "jit", "QORE_JIT_SYNC_COMPILE=1 "), name + " jit (synchronous)");
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-assignment-value-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}
