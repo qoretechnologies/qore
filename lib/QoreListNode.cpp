@@ -558,18 +558,18 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
         holder = init = l = new QoreListNode(autoTypeInfo);
     } else {
         const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+        // the value is converted in the holder, which owns it: a conversion (ex: of a string to softint) replaces the
+        // value and releases the one it converted, which must not be released or read again (qore#7300)
         if (ctor_args) {
             // a single argument of the constructor, which is the element of the list
-            if (!QoreTypeInfo::superSetOf(vti, init.getTypeInfo())) {
-                acceptConstructorArg<Lexical>(vti, 0, init, xsink, policy);
+            if (!QoreTypeInfo::superSetOf(vti, holder->getTypeInfo())) {
+                acceptConstructorArg<Lexical>(vti, 0, *holder, xsink, policy);
             }
         } else if constexpr (Lexical) {
-            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink, policy);
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", *holder, xsink, policy);
         } else {
-            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", *holder, xsink);
         }
-        holder.release();
-        holder = init;
         if (*xsink) {
            return nullptr;
         }
