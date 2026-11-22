@@ -496,39 +496,93 @@
 }
 
 # ============================================================================
-# PCRE2 JIT-generated code
+# PCRE2 JIT-generated code: not suppressed; run with QORE_PCRE2_NO_JIT=1
 # ============================================================================
 # Regular expressions are compiled with the PCRE2 just-in-time compiler (see
-# QoreRegexBase::jitCompile()), which is required for linear-time matching on
-# subjects over 5,000,000 bytes -- PCRE2's interpreter disables its
-# required-code-unit start-of-match optimization past that size and becomes
-# quadratic.
+# QoreRegexBase::jitCompile()).  The JIT emits machine code into anonymous
+# executable memory, which valgrind can neither symbolize nor unwind through,
+# and its scanning loops test whole words, which memcheck reports as reading
+# uninitialised values (false positives; upstream's --enable-valgrind build
+# option annotates the JIT, and distribution packages are not built with it).
 #
-# The JIT emits machine code into anonymous executable memory, so valgrind can
-# neither symbolize it nor unwind through it (every frame prints as '???' and
-# frames repeat).  Its scanning loops test whole words and rely on PCRE2's own
-# bounds tracking, which memcheck reports as reading uninitialised values.
-# These are false positives: upstream ships a --enable-valgrind build option
-# that annotates the JIT for memcheck, and distribution PCRE2 packages are not
-# built with it.
+# These frames can only be matched as 'obj:*', and an entry whose first frame
+# is 'obj:*' matches every error: the entries that were here suppressed every
+# uninitialised-value report of a run, also a deliberate read of uninitialised
+# heap memory in a plain C++ program (qore#7296).  So there is no entry for
+# them: run valgrind with QORE_PCRE2_NO_JIT=1 (see README.md and AGENTS.md),
+# which makes Qore use PCRE2's interpreter.  The JIT is what keeps matching
+# linear on subjects over 5,000,000 bytes (PCRE2's interpreter disables its
+# required-code-unit start-of-match optimization past that size), so a test
+# that matches such subjects runs much longer under valgrind without it.
 #
-# NOTE: valgrind can only match unattributable frames as 'obj:*', so these
-# entries also cover any other JIT-generated code, including Qore's own LLVM
-# JIT tier (which is valgrind-clean as of this writing).  When investigating a
-# suspected bug in Qore-generated machine code, re-run without
-# --suppressions=qore.supp, or comment out this block.
+# ============================================================================
+# libLLVM: speculative reads of values that do not decide the outcome (qore#7296)
+# ============================================================================
+# Use: valgrind --suppressions=qore.supp ... (with QORE_PCRE2_NO_JIT=1, above)
+#
+# The distribution's libLLVM (seen with Ubuntu's LLVM 21.1 on aarch64,
+# valgrind 3.22.0) is compiled with optimizations that read a value before the
+# condition that guards it is known and select or mask the result afterwards:
+# a conditional select whose condition depends on an uninitialised value, but
+# whose arms are equal when it is (both 0), or a compare masked by a defined
+# flag.  memcheck cannot see that the result is defined and reports the
+# conditional branch on it.  The C++ source is correct in each case, and none
+# of the values comes from Qore:
+# - PassBuilder::buildModuleSimplificationPipeline() reads a field of the
+#   payload of its std::optional<PGOOptions> member, which is empty (Qore's
+#   optimizeModule() and LLVM's own tools pass std::nullopt), and selects the
+#   engaged flag or 0 on it; reproduced by a C++ program that only builds the
+#   default O2 pipeline with LLVM (no Qore code), and gone when the PassBuilder
+#   is constructed in zeroed memory, or when only the payload of that member is
+#   left undefined it comes back
+# - AsmPrinter::emitPatchableFunctionEntries() compares the output of
+#   StringRef::getAsInteger(), which getAsInteger() does not write for an
+#   absent attribute ("patchable-function-prefix"/"-entry"), and masks the
+#   result with its error flag (origin: a stack slot of the function itself)
+# - InstCombinerImpl::SimplifySelectsFeedingBinaryOp() evaluates
+#   "LHSIsSelect && RHSIsSelect && A == D" with A == D first, where D is not
+#   written when the right operand is not a select: the select on it has two
+#   arms that are both 0 then (RHSIsSelect is false), as in the first case
+# The PassBuilder and AsmPrinter entries match their function and its caller
+# as top frames.  The InstCombine function has no exported symbol in the
+# distribution's libLLVM, so its entry matches the five unnamed libLLVM frames
+# under InstCombinePass::run() that the report has with that build: it covers
+# any uninitialised-value report at that depth under InstCombine (also one in
+# another visitor), and another LLVM build, version or architecture inlines
+# differently and does not match it; with LLVM's debug symbols installed, the
+# frames are named and the entry that names the function matches instead.  A
+# report in libLLVM that these entries do not match is not suppressed; if one
+# appears, analyze it the same way (--track-origins=yes, --sym-offsets=yes)
+# before adding an entry.
 # ============================================================================
 
 {
-   pcre2_jit_generated_code_cond
+   llvm_PassBuilder_buildModuleSimplificationPipeline_optional_payload
    Memcheck:Cond
-   obj:*
-   ...
+   fun:_ZN4llvm11PassBuilder33buildModuleSimplificationPipelineENS_17OptimizationLevelENS_18ThinOrFullLTOPhaseE
+   fun:_ZN4llvm11PassBuilder29buildPerModuleDefaultPipelineENS_17OptimizationLevelENS_18ThinOrFullLTOPhaseE
 }
 
 {
-   pcre2_jit_generated_code_value8
-   Memcheck:Value8
-   obj:*
-   ...
+   llvm_AsmPrinter_emitPatchableFunctionEntries_getAsInteger
+   Memcheck:Cond
+   fun:_ZN4llvm10AsmPrinter28emitPatchableFunctionEntriesEv
+   fun:_ZN4llvm10AsmPrinter16emitFunctionBodyEv
+}
+
+{
+   llvm_InstCombine_visitor_select
+   Memcheck:Cond
+   obj:*/libLLVM*.so*
+   obj:*/libLLVM*.so*
+   obj:*/libLLVM*.so*
+   obj:*/libLLVM*.so*
+   obj:*/libLLVM*.so*
+   fun:_ZN4llvm15InstCombinePass3runERNS_8FunctionERNS_15AnalysisManagerIS1_JEEE
+}
+
+{
+   llvm_InstCombine_SimplifySelectsFeedingBinaryOp_debug_symbols
+   Memcheck:Cond
+   fun:*InstCombinerImpl*SimplifySelectsFeedingBinaryOp*
 }
