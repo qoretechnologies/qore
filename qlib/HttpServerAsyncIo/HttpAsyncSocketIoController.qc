@@ -5164,6 +5164,14 @@ public class HttpAsyncSocketIoController {
         if (!handle) {
             return c;
         }
+        # the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056);
+        # checked here, as the code below runs it in a closure of this module
+        try {
+            check_thread_callable(c, "HttpAsyncSocketIoController::wrapCleanupHandover()");
+        } catch (hash<ExceptionInfo> ex) {
+            AsyncIoController::releaseModuleCleanupWork(handle);
+            rethrow;
+        }
         return sub () {
             AsyncIoController::runModuleCleanupWork(handle, c);
         };

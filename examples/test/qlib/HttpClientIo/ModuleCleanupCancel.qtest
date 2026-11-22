@@ -500,11 +500,14 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         if (handover == "twice") {
             assertRegex("(^|\n)first release: True\nsecond release: False\n", out, "released once: " + out);
             assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
+            assertRegex("(^|\n)later module data deleted\n", out, "the cleanup goes on with the next module: " + out);
         } else {
             assertRegex("(^|\n)warning: the module cleanup at the end of the process waited 300 ms after its deadline "
                 "\\(QORE_MODULE_CLEANUP_HANDOVER_GRACE\\) for 1 piece of work handed over to other threads, which did "
                 "not end; the modules are left as they are: owner 'module-cleanup-handover-never' at [^\n]*"
                 "AaHandover\\.qm:[0-9]+\n", out, "the handle is reported and no longer waited for: " + out);
+            # the modules are left as they are: the data of the module deleted after AaHandover's is not deleted
+            assertNRegex("later module data deleted", out, "the modules are left as they are: " + out);
         }
         assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
     }

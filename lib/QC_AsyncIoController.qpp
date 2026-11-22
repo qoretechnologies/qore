@@ -1333,7 +1333,7 @@ on_exit AsyncIoController::releaseModuleCleanupWork(h);
 
     @since %Qore 3.0
 */
-static int AsyncIoController::holdModuleCleanupWork() [flags=CONSTANT] {
+static int AsyncIoController::holdModuleCleanupWork() {
     std::string where;
     try {
         if (qore_module_cleanup_counted_owner && !qore_module_cleanup_counted_owner->empty()) {
@@ -1369,7 +1369,7 @@ static int AsyncIoController::holdModuleCleanupWork() [flags=CONSTANT] {
 
     @since %Qore 3.0
 */
-static bool AsyncIoController::releaseModuleCleanupWork(int handle) [flags=CONSTANT] {
+static bool AsyncIoController::releaseModuleCleanupWork(int handle) {
     return qore_module_cleanup_release_work(handle);
 }
 

@@ -2111,8 +2111,15 @@ class WebSocketStreamProcessor {
         # exception safety: the gate must be released on ANY exit path, or the stream
         # would silently stop processing frames
         on_error {
-            AutoLock al(notify_lock);
-            processing = False;
+            list<int> left;
+            {
+                AutoLock al(notify_lock);
+                processing = False;
+                # the work handed over to this thread that it will not do: the cleanup does not wait for it
+                left = pending_cleanup_work;
+                pending_cleanup_work = ();
+            }
+            map AsyncIoController::releaseModuleCleanupWork($1), left;
         }
 
         while (True) {

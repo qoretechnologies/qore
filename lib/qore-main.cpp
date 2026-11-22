@@ -456,6 +456,17 @@ void qore_cleanup() {
     // first delete all user modules (runs module del handlers, stops ThreadPools)
     QMM.delUser();
 
+    // the module cleanup stopped waiting for work that it handed over to other threads (qore#7239): those threads can
+    // still run in the Programs of the modules and on the workers of the asynchronous I/O controller, so neither is
+    // stopped nor torn down; the library is left as it is and its memory is released with the process
+    if (qore_module_cleanup_abandoned()) {
+        printd(5, "qore_cleanup() leaving the library as it is: the module cleanup stopped waiting for handed-over "
+            "work\n");
+        // a background compile still in LLVM is waited for, so that no compile is in LLVM when this function returns
+        QoreJIT::instance().finishDetachedCompile();
+        return;
+    }
+
     // stop the global async I/O controller after modules are done using it;
     // must happen before waitForZero() because the controller's ThreadPool
     // threads (QTF_EXTERNAL_LIFECYCLE) won't exit until the controller stops

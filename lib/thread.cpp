@@ -107,6 +107,7 @@
 #include <mutex>
 #include <cerrno>
 #include <map>
+#include <random>
 
 // syscall() and __NR_membarrier come from the Linux includes above
 #if defined(__linux__) && __has_include(<linux/membarrier.h>)
@@ -6002,8 +6003,8 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
     //! the handles of counted work handed over to another thread that are still held, with who took them and where
     //! (qore_module_cleanup_hold_work(), qore#7239); each one is counted in @ref count
     std::map<int64, std::string> handles;
-    //! the last handle given
-    int64 last_handle = 0;
+    //! the generator of the handles, which other code cannot guess
+    std::mt19937_64 rng{std::random_device{}()};
 #ifdef DEBUG
     //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
     bool dbg_held = false;
@@ -6054,13 +6055,22 @@ size_t qore_module_cleanup_handle_count() {
 int64 qore_module_cleanup_hold_work(const std::string& where) {
     // only the work that the cleanup counts can hand it over, so that a handle cannot keep the cleanup waiting for
     // work that it does not wait for in the first place
-    if (!qore_module_cleanup_counted_work_running() || qore_module_cleanup_abandoned()) {
+    if (!qore_module_cleanup_counted_work_running()) {
         return 0;
     }
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
     AutoLocker al(work.lock);
+    // checked under the lock, which the cleanup holds when it drops the handles
+    if (qore_module_cleanup_abandoned()) {
+        return 0;
+    }
     try {
-        int64 id = ++work.last_handle;
+        // a random handle that other code cannot guess, so that it cannot release a handle of other work or run code
+        // as work of the cleanup with it (see runModuleCleanupWork())
+        int64 id;
+        do {
+            id = static_cast<int64>(work.rng() & 0x7fffffffffffffffull);
+        } while (!id || work.handles.find(id) != work.handles.end());
         work.handles.emplace(id, where);
         ++work.count;
         // a cleanup that waits without a time limit for the other work waits for the handles until the end of the

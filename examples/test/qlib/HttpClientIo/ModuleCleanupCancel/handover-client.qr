@@ -5,6 +5,7 @@
 # then leaves the modules as they are (qore#7239)
 
 %requires AaHandover
+%requires AbLater
 
 Holder::start(ARGV[0]);
 printf("started\n");
