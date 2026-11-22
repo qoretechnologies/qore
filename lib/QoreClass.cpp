@@ -1237,6 +1237,8 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
                     scl->parseAddAncestors(m);
+                    // the inheritance lists of the subclasses' methods are built again with it (qore#7307)
+                    qc.abstract_method_created = true;
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v, va);
                 continue;
@@ -1301,6 +1303,9 @@ void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc,
 void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
     //printd(5, "AbstractMethodMap::runtimeInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
     //    empty());
+    // the methods that the parent classes created by resolving abstract methods are in the inheritance lists of the
+    // class's methods (qore#7307)
+    qc.runtimeUpdateAbstractAncestors();
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
@@ -1340,6 +1345,8 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
                     scl->addAncestors(m);
+                    // as in parseInit() (qore#7307)
+                    qc.abstract_method_created = true;
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v, va);
                 continue;
@@ -10464,12 +10471,75 @@ void qore_class_private::parseResolveAbstract() {
         }
         scl->parseResolveAbstract();
 
+        // the methods that the parent classes have created by resolving abstract methods are in the inheritance lists
+        // of the class's methods (qore#7307)
+        parseUpdateAbstractAncestors(false);
+
         // the abstract variants that the parent classes have implemented since they were merged are not pending here
         // (qore#7206)
         ahm.parseDropResolvedInParents(*this, *scl);
 
         // search for new concrete variants of abstract variants last
         ahm.parseInit(*this, scl);
+    }
+}
+
+//! returns true if a parent class in \a scl or one of its ancestors has created a method by resolving an abstract
+//! method (qore#7307)
+static bool parent_created_abstract_method(const BCList& scl) {
+    for (const BCNode* n : scl) {
+        if (n->sclass && qore_class_private::get(*n->sclass)->abstract_method_created) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! returns true if the method of the name has an inheritance list
+/** As in initializeHierarchy(), where none of the special methods of a parsed class has been assigned yet
+    (checkSpecial()), and in insertBuiltinMethod(); for a class loaded from compiled code (\a aot), as in
+    QoreAOTBinaryDeserializer::commitClassesPrepare()
+*/
+static bool has_ancestor_list(const char* mname, bool aot) {
+    if (!strcmp(mname, "constructor") || !strcmp(mname, "destructor") || !strcmp(mname, "copy")) {
+        return false;
+    }
+    return aot || (strcmp(mname, "methodGate") && strcmp(mname, "memberGate") && strcmp(mname, "memberNotification"));
+}
+
+void qore_class_private::parseUpdateAbstractAncestors(bool aot) {
+    assert(scl);
+    if (!parent_created_abstract_method(*scl)) {
+        return;
+    }
+    // the subclasses build the lists of their methods again too
+    abstract_method_created = true;
+    for (auto& i : hm) {
+        QoreMethod* m = i.second;
+        MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+        // a parsed class's methods are all new (a committed class is not resolved again)
+        if ((!aot && !f->committedEmpty()) || !has_ancestor_list(m->getName(), aot)) {
+            continue;
+        }
+        f->clearAncestors();
+        scl->parseAddAncestors(m);
+    }
+}
+
+void qore_class_private::runtimeUpdateAbstractAncestors() {
+    if (!scl || !parent_created_abstract_method(*scl)) {
+        return;
+    }
+    // as in parseUpdateAbstractAncestors()
+    abstract_method_created = true;
+    for (auto& i : hm) {
+        QoreMethod* m = i.second;
+        // the special methods have no inheritance lists (insertBuiltinMethod())
+        if (!has_ancestor_list(m->getName(), false)) {
+            continue;
+        }
+        qore_method_private::get(*m)->getFunction()->clearAncestors();
+        scl->addAncestors(m);
     }
 }
 

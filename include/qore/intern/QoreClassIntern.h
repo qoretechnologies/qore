@@ -3422,7 +3422,12 @@ public:
         /** The methods' inheritance lists are built there, and each subclass's hierarchy is initialized through its
             base classes (issue #6106)
         */
-        hierarchy_initialized : 1 = false
+        hierarchy_initialized : 1 = false,
+        //! set when the class or one of its ancestors has created a method by resolving an abstract method
+        /** The inheritance lists of the methods of its subclasses are built again then (see
+            parseUpdateAbstractAncestors(); qore#7307)
+        */
+        abstract_method_created : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -5924,6 +5929,20 @@ public:
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
+    //! builds the inheritance lists of the class's methods again if a parent class has created a method by resolving
+    //! an abstract method since they were built (qore#7307)
+    /** Called when the abstract methods of the parent classes have been resolved, before the class's own: the lists
+        are built when the hierarchy is initialized, before abstract methods are resolved, so that the method that
+        resolving an abstract method creates in a parent class would be missing from the lists of its subclasses.
+
+        @param aot true for a class loaded from compiled code: the lists of all of its methods except the
+        constructor, destructor and copy method were built (QoreAOTBinaryDeserializer::commitClassesPrepare()),
+        otherwise those of its new methods except the special ones, as in initializeHierarchy()
+    */
+    DLLLOCAL void parseUpdateAbstractAncestors(bool aot);
+    //! runtime version of parseUpdateAbstractAncestors() for classes created dynamically (AbstractMethodMap::
+    //! runtimeInit())
+    DLLLOCAL void runtimeUpdateAbstractAncestors();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();

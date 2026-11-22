@@ -21660,7 +21660,13 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
-        if (!priv->scl || priv->ahm.empty()) {
+        if (!priv->scl) {
+            continue;
+        }
+        // the methods that the parent classes created here by resolving abstract methods are in the inheritance
+        // lists of the class's methods, which commitClassesPrepare() built before (qore#7307)
+        priv->parseUpdateAbstractAncestors(true);
+        if (priv->ahm.empty()) {
             continue;
         }
         // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent

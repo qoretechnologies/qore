@@ -2743,6 +2743,16 @@ public:
         }
     }
 
+    //! removes the ancestors from the inheritance list, so that it can be built again
+    /** The list is built again when a parent class has created a method by resolving an abstract method after the
+        list was built (qore#7307)
+    */
+    DLLLOCAL void clearAncestors() {
+        assert(!ilist.empty());
+        assert(ilist.front().func == this);
+        ilist.erase(ilist.begin() + 1, ilist.end());
+    }
+
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
     //! resolves the signatures of the pending variants
     /** A plain function's signatures (their default argument values) are resolved with no class context, a new local
