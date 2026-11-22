@@ -258,6 +258,7 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
         addTestCase("lent IPv6 REST connection pinged by restricted code", \lentRestIpv6Test());
         addTestCase("lent UNIX socket REST connection pinged by restricted code", \lentRestSocketTest());
+        addTestCase("socket paths that read as other targets", \lentSocketPathTest());
         addTestCase("HTTP connection", \httpTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
@@ -779,6 +780,65 @@ string sub own_ping(string url) {
         assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent UNIX socket connection");
         assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another UNIX socket");
         assertNothing(listener.accept(0), "no connection to the other UNIX socket was attempted");
+    }
+
+    #! a UNIX socket path whose URL would read as another target is refused, for the ping and the polling ping
+    lentSocketPathTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-socket-paths");
+        string prefix = sprintf("/tmp/q7236-%s", get_random_string(6));
+
+        # the evil sockets, each with a listener that must see no connection
+        hash<string, Socket> listeners;
+        on_exit {
+            map ($1.value.close(), unlink($1.key)), listeners.pairIterator();
+        }
+        code listen = sub (string path) {
+            Socket s();
+            # bindUNIX(): bind() reads a path with ":" as a host and port
+            s.bindUNIX(path);
+            s.listen();
+            listeners{path} = s;
+        };
+
+        # a socket path with "@host:port": its URL with "@" written as it is would read as the lent TCP target
+        string tcp_own = "http://127.0.0.1:" + rest_port;
+        string at_path = sprintf("%s-a@127.0.0.1:%d", prefix, rest_port);
+        listen(at_path);
+        RestConnection conn("lent", "test", tcp_own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(at_path, True)),
+            "a socket path with @host:port");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with @host:port, polling");
+
+        # a socket path with "%2e": its URL with "%" written as it is would read as the lent socket's path
+        string socket_own = "http://socket=" + encode_url(rest_socket, True);
+        string pct_path = rest_socket.substr(0, -5) + "%2esock";
+        assertEq(".sock", rest_socket.substr(-5));
+        listen(pct_path);
+        conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(pct_path, True)),
+            "a socket path with %2e");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with %2e, polling");
+
+        # socket paths with ":", "#" and "?"
+        foreach string sfx in (":1", "#x", "?x") {
+            string path = rest_socket + sfx;
+            listen(path);
+            conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(path, True)),
+                "a socket path with " + sfx);
+            assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with " + sfx + ", polling");
+        }
+
+        foreach hash<auto> i in (listeners.pairIterator()) {
+            assertNothing(i.value.accept(0), "no connection to " + i.key);
+        }
+
+        # the lent socket at its own path still pings up
+        conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent socket connection at its own path");
     }
 
     httpTest() {
