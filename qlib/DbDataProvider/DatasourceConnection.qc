@@ -146,8 +146,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     #! Returns connection info
     /** Overridden so that without the \c with_passwords option, @c url_hash has no credentials, as the safe URL: the
         password is removed, the user name is masked as @c "****", and the value of each driver option is masked as
-        @c "****" unless the driver is loaded and declares the option without declaring it sensitive (see
-        @ref datasource_mask_options; qore#7017, qore#7070)
+        @c "****" unless all of the conditions of @ref datasource_mask_options hold: the driver is loaded, registers
+        the option with option flags without declaring it sensitive, the option name names no credential, and the
+        value is a plain string, number or boolean that a datasource string can show (qore#7017, qore#7070)
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = AbstractConnectionWithInfo::getInfo(opts);
@@ -159,8 +160,10 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
 
     #! Returns the options of the connection without the values that can hold credentials
     /** The options of the connection scheme (the pool sizes) are shown; the value of every other option, a driver
-        option that the URL or the options give, is masked as @c "****" unless the driver is loaded and declares the
-        option without declaring it sensitive (see
+        option that the URL or the options give, is masked as @c "****" unless all of the conditions of
+        @ref datasource_mask_options hold: the driver is loaded, registers the option with option flags without
+        declaring it sensitive, the option name names no credential, and the value is a plain string, number or
+        boolean that a datasource string can show (see
         @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"), as an option of a driver can hold a
         credential (qore#7017, qore#7070)
     */
@@ -223,10 +226,11 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     #! Creates a "safe" URL string with no credentials
     /** The URL is shown in user interfaces and logs: it shows the driver, the database, the character encoding, the
         host and the port, and the names of the options; the user name and the password are masked as @c "****", and
-        the value of each option is masked as @c "****" unless the driver is loaded and declares the option without
-        declaring it sensitive, as an option of a driver can hold a credential (see
-        @ref Qore::SQL::mask_datasource(hash<auto>, *hash<auto>) "mask_datasource()" and
-        @ref datasource_mask_options; qore#7017, qore#7070)
+        the value of each option is masked as @c "****" unless all of the conditions of @ref datasource_mask_options
+        hold: the driver is loaded, registers the option with option flags without declaring it sensitive, the option
+        name names no credential, and the value is a plain string, number or boolean that a datasource string can
+        show, as an option of a driver can hold a credential (see
+        @ref Qore::SQL::mask_datasource(hash<auto>, *hash<auto>) "mask_datasource()"; qore#7017, qore#7070)
 
         @param urlh a parsed URL hash (as returned from parseUrl())
 

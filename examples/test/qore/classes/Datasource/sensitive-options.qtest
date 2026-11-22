@@ -156,6 +156,14 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         assertEq("dbitest:****/****@db{api_token=****,rows=5}", mask_datasource(h, {"show_db": True,
             "show_options": True}));
         assertEq({"api_token": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
+        # "dsn_name" is declared not sensitive too, but its name has "dsn"
+        assertFalse(dbi_get_driver_options("dbitest").dsn_name.sensitive);
+        assertFalse(dbi_get_driver_options("dbitest").dsn_name.showable);
+        assertEq({"dsn_name": "****", "rows": "5"}, mask_datasource_options("dbitest", {"dsn_name": "x", "rows": 5}));
+        h = {"type": "dbitest", "db": "db", "options": {"dsn_name": "x", "rows": 5}};
+        assertEq("dbitest:****/****@db{dsn_name=****,rows=5}", mask_datasource(h, {"show_db": True,
+            "show_options": True}));
+        assertEq({"dsn_name": "****", "rows": "5"}, mask_datasource_hash(h, {"show_options": True}).options);
     }
 
     unknownFlags() {

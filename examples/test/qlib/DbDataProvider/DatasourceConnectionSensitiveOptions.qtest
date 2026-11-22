@@ -170,6 +170,14 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
         assertEq("5", info.opts.rows);
         assertEq("****", c.ping().opts.api_token);
         assertFalse(sprintf("%y", info).find("abc") >= 0, sprintf("%y", info));
+        # "dsn_name" too: its name has "dsn"
+        DatasourceConnection d("c7070", "test", "db://dbitest:u/p@db{dsn_name=xyz,rows=5}");
+        assertEq("****", parse_datasource(d.safe_url.substr(5)).options.dsn_name);
+        info = d.getInfo();
+        assertEq("****", info.url_hash.options.dsn_name);
+        assertEq("****", info.opts.dsn_name);
+        assertEq("****", d.ping().opts.dsn_name);
+        assertFalse(sprintf("%y", info).find("xyz") >= 0, sprintf("%y", info));
     }
 
     unknownFlags() {

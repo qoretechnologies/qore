@@ -158,8 +158,10 @@ module SqlUtil {
     which keeps no credentials of the datasource in the serialized data: it keeps the masked configuration of the
     datasource (see @ref datasource_mask_options), which identifies it by its driver, database, character encoding,
     host, port and option names, with the password removed and the user name masked as \c "****", and every option
-    value masked as \c "****" (an option of a driver can hold a credential) unless the driver declares the option not
-    sensitive (see @ref datasource_mask_options).
+    value masked as \c "****" (an option of a driver can hold a credential) unless all of the conditions of
+    @ref datasource_mask_options hold: the driver is loaded, registers the option with option flags without declaring
+    it sensitive, the option name names no credential, and the value is a plain string, number or boolean that a
+    datasource string can show.
 
     When data is deserialized, the datasource is given by, in this order:
     - the connection that the data names (see below)
@@ -8604,8 +8606,10 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     #! registers a closure or call reference that gives the full configuration of a serialized datasource
     /** The default serializer keeps no credentials of a datasource in serialized data: it keeps the masked
         configuration of the datasource (see @ref datasource_mask_options), with the password removed and the user
-        name and every option value masked, except the values of the options that the driver declares not
-        sensitive.  When data is deserialized without a registered deserializer (see
+        name and every option value masked, except the values that all of the conditions of
+        @ref datasource_mask_options let be shown (the driver is loaded, registers the option with option flags
+        without declaring it sensitive, the option name names no credential, and the value is a plain string, number
+        or boolean that a datasource string can show).  When data is deserialized without a registered deserializer (see
         sqlutil_register_ds_deserializer()), this callback is called with the type of the datasource
         (\c "Datasource" or \c "DatasourcePool") and the masked @ref datasource_hash "datasource hash", and returns
         the full @ref datasource_hash "datasource hash" (or datasource string) of the datasource, with its credentials
