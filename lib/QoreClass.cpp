@@ -5329,6 +5329,27 @@ void BCList::setSmlComplete() {
         }
     }
     diamond_free = edges == sml.size();
+    // whether a class of the hierarchy inherits a parent class with private or private:internal access (qore#6798)
+    bool priv_edge = false;
+    for (const BCNode* n : *this) {
+        if (n->access > Public) {
+            priv_edge = true;
+            break;
+        }
+    }
+    for (auto i = sml.begin(), e = sml.end(); !priv_edge && i != e; ++i) {
+        const BCList* l = i->first->priv->scl;
+        if (!l) {
+            continue;
+        }
+        for (const BCNode* n : *l) {
+            if (n->access > Public) {
+                priv_edge = true;
+                break;
+            }
+        }
+    }
+    private_edge = priv_edge;
     sml_complete = true;
 }
 
@@ -6760,6 +6781,25 @@ const QoreMethod* qore_class_private::parseFindContextPublicOverride(const char*
     return cm ? cm : m;
 }
 
+//! returns the method that code of the class context calls in place of the method \a cm that the parse-time lookup in
+//! the class \a cls found after skipping a method that the class context cannot call, if the context's own hierarchy
+//! overrides \a cm, otherwise \a cm: as for a method found first (qore#6798)
+static const QoreMethod* parse_check_found_context_override(qore_class_private& cls, const char* nme,
+        const QoreMethod* cm, const qore_class_private* class_ctx, bool is_static) {
+    if (!cls.scl || cls.scl->diamond_free || cls.isClassContext(class_ctx)) {
+        return cm;
+    }
+    if (qore_method_private::getAccess(*cm) == Private) {
+        const QoreMethod* ctx_own = parse_find_context_override(cls, nme, cm, class_ctx, is_static);
+        if (!ctx_own) {
+            return cm;
+        }
+        const QoreMethod* rv = parse_find_context_override_method(cls, nme, class_ctx, is_static, ctx_own, nullptr);
+        return rv ? rv : cm;
+    }
+    return cls.parseFindContextPublicOverride(nme, cm, class_ctx, is_static);
+}
+
 const QoreMethod* qore_class_private::parseFindContextCallableMethod(const char* nme, const QoreMethod* m,
         const qore_class_private* class_ctx, bool is_static) {
     assert(m && class_ctx);
@@ -6784,11 +6824,11 @@ const QoreMethod* qore_class_private::parseFindContextCallableMethod(const char*
     bool own = isClassContext(class_ctx);
     LookupVisit r = (cm && own) ? LookupVisit::Found : parse_context_method_visit(*this, cm, class_ctx);
     if (r == LookupVisit::Found) {
-        return cm;
+        return parse_check_found_context_override(*this, nme, cm, class_ctx, is_static);
     }
     if (r == LookupVisit::Descend && scl) {
         if ((cm = scl->parseFindContextCallableMethod(nme, class_ctx, own, is_static))) {
-            return cm;
+            return parse_check_found_context_override(*this, nme, cm, class_ctx, is_static);
         }
     }
     return m;
@@ -7950,34 +7990,6 @@ static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_context_override(cons
     return cw;
 }
 
-bool qore_class_private::computeHierarchyHasPrivateEdge() const {
-    bool rv = false;
-    if (scl) {
-        // a hierarchy not known completely is checked at each lookup
-        rv = !scl->sml_complete;
-        for (const BCNode* n : *scl) {
-            if (rv) {
-                break;
-            }
-            rv = n->access > Public;
-        }
-        for (auto i = scl->sml.begin(), e = scl->sml.end(); !rv && i != e; ++i) {
-            const qore_class_private& p = *i->first->priv;
-            if (!p.scl) {
-                continue;
-            }
-            for (const BCNode* n : *p.scl) {
-                if (n->access > Public) {
-                    rv = true;
-                    break;
-                }
-            }
-        }
-    }
-    hierarchy_has_private_edge.store(rv ? 1 : 0, std::memory_order_relaxed);
-    return rv;
-}
-
 const QoreMethod* qore_class_private::runtimeFindPublicContextOverride(const char* nme, const QoreMethod* w,
         ClassAccess& access, const qore_class_private* class_ctx) const {
     assert(w && class_ctx);
@@ -8012,6 +8024,11 @@ const QoreMethod* qore_class_private::runtimeFindCallableCommittedMethod(const c
         }
         ClassAccess a = Public;
         if (const QoreMethod* cw = runtimeFindContextCallableCommittedMethod(nme, a, class_ctx, is_static)) {
+            // the method that the class context calls in place of the method found, if its own hierarchy overrides
+            // it, as for a method found first (qore#6798)
+            if (scl && !scl->diamond_free) {
+                cw = runtime_find_context_override(*this, nme, cw, a, class_ctx);
+            }
             access = a;
             return cw;
         }

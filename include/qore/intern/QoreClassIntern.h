@@ -2777,6 +2777,9 @@ public:
         It does not change once set: the hierarchy of a class does not change after it has been initialized.
     */
     bool diamond_free = false;
+    //! false if no class of the hierarchy inherits a parent class with private or private:internal access; set with
+    //! sml_complete (true, conservatively, for a hierarchy not known to be complete; qore#6798)
+    bool private_edge = true;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2786,7 +2789,7 @@ public:
     }
 
     DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
-            diamond_free(old.diamond_free) {
+            diamond_free(old.diamond_free), private_edge(old.private_edge) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -3493,8 +3496,6 @@ public:
     //! the cached result of runtimeOverridesPrivateParentMethod(): -1 if not computed yet
     mutable std::atomic<int8_t> overrides_private_parent_method{-1};
 
-    //! the cached result of runtimeHierarchyHasPrivateEdge(): -1 if not computed yet
-    mutable std::atomic<int8_t> hierarchy_has_private_edge{-1};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under dataLock()
@@ -5257,18 +5258,6 @@ public:
     //! computes and caches the result of runtimeOverridesPrivateParentMethod()
     DLLLOCAL QORE_INTERN_NOINLINE bool computeOverridesPrivateParentMethod() const;
 
-    //! returns true if a class of the hierarchy of this class inherits a parent class with private or
-    //! private:internal access, or if the hierarchy is not known completely (qore#6798)
-    /** Computed once, at run time: the hierarchy of a class does not change once committed
-    */
-    DLLLOCAL bool runtimeHierarchyHasPrivateEdge() const {
-        int8_t rv = hierarchy_has_private_edge.load(std::memory_order_relaxed);
-        return rv < 0 ? computeHierarchyHasPrivateEdge() : rv;
-    }
-
-    //! computes and caches the result of runtimeHierarchyHasPrivateEdge()
-    DLLLOCAL QORE_INTERN_NOINLINE bool computeHierarchyHasPrivateEdge() const;
-
     //! returns the method that code of the class context calls in place of the public method \a w that a run-time
     //! lookup in this class (the object's class) found with public access, or \a w (qore#6798)
     /** A public method of one of the context's parent classes that the lookup reached first through private
@@ -5279,8 +5268,7 @@ public:
     */
     DLLLOCAL const QoreMethod* runtimeCheckPublicContextOverride(const char* nme, const QoreMethod* w,
             ClassAccess& access, const qore_class_private* class_ctx) const {
-        return (w && class_ctx && scl && !scl->diamond_free && !isClassContext(class_ctx)
-                && runtimeHierarchyHasPrivateEdge())
+        return (w && class_ctx && scl && !scl->diamond_free && scl->private_edge && !isClassContext(class_ctx))
             ? runtimeFindPublicContextOverride(nme, w, access, class_ctx)
             : w;
     }

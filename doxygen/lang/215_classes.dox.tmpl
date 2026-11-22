@@ -917,7 +917,7 @@ class B inherits SpBase, Leaf {}   # (new B()).doIt() returns "b" - SpBase's bra
 
     This is what allows a class to combine a "policy" base that overrides a shared hook once with "behavior" leaf classes reused unchanged from another module: list the class supplying the override <b>first</b>.  If the un-overridden behavior is what runs, the <tt><b>inherits</b></tt> clause is in the wrong order.
 
-    One exception applies to the code of a class that calls a method on an object of its own class or of a subclass (since %Qore 3.0).  Its own hierarchy overrides a method of one of its parent classes when the code calls another accessible, implemented method of the name on an object of its own class, such as its own method; an abstract method does not override it.  The code then never calls such an overridden method of that parent class if the method is @ref private_methods "private", or if it is public but reached first through @ref private_inheritance "private inheritance" (a caller outside the class hierarchy calls another method), also when an earlier branch of the object's class reaches the parent class first.  The lookup skips that method, and the methods of the name of the parent classes of its class, and continues in the order above: the code calls the method of its own hierarchy, or an override that comes before it in that order, such as a method of a subclass or a public method of a class of an earlier branch:
+    One exception applies to the code of a class that calls a method on an object of its own class or of a subclass (since %Qore 3.0).  The class's own hierarchy overrides a method of one of its parent classes when the code calls another accessible, implemented method of the name on an object of its own class, such as its own method; an abstract method does not override it.  The code does not call such an overridden method if it is @ref private_methods "private", even when an earlier branch of the object's class reaches the parent class first.  The same holds for an overridden public method that the lookup reaches first through @ref private_inheritance "private inheritance", unless a caller outside the class hierarchy also calls it (no public path reaches another method before it).  The lookup skips the overridden method, with the methods of the name of the parent classes of its class, and continues in the order above.  The code therefore calls the method of its own hierarchy, or an override that comes before it in that order, such as a method of a subclass or a public method of a class of an earlier branch:
     @code{.py}
 class P {
     private string m() { return "P"; }
@@ -932,6 +932,14 @@ class X inherits A, B {}   # (new X()).call() returns "B" - P is reached through
     @endcode
 
     The code of \c P, \c A and \c X still calls \c P::m() on an object of \c X, as P::m() is not overridden in their own hierarchies, and the policy-base example above is unchanged: \c Base does not inherit \c SpBase, so the override in \c SpBase is called as described.
+
+    A public method reached first through private inheritance is skipped in the same way:
+    @code{.py}
+class Q { string m() { return "Q"; } }
+class C inherits private Q {}
+class D inherits Q { string m() { return "D"; } string call() { return m(); } }
+class Y inherits C, D {}   # (new Y()).call() returns "D", as (new Y()).m() does from outside the class hierarchy
+    @endcode
 
     The code of a class that the object's class inherits with @ref private_inheritance "private:internal" keeps the order above: if \c X were declared as <tt>class X inherits A, private:internal B {}</tt>, the code of \c B would call \c P::m() on an object of \c X.
 

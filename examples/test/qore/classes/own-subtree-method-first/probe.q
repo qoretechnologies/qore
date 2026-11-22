@@ -267,6 +267,41 @@ class XA inherits AA, BA {
     string m() { return "XA::m"; }
 }
 
+# an unrelated earlier branch has a private method of the name that the code of B cannot call: it is skipped, and the
+# rule applies to the method found after it
+class CU { private string m() { return "CU::m"; } private static string sm() { return "CU::sm"; } }
+class AU inherits CU {}
+class AUd inherits AU {}
+class PU1 { private string m() { return "PU1::m"; } private static string sm() { return "PU1::sm"; } }
+class DU1 inherits PU1 {}
+class BU1 inherits PU1 {
+    string m() { return "BU1::m"; }
+    static string sm() { return "BU1::sm"; }
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+    string bTyped(XU1 o) { return o.m(); }
+    string bStatic() { return XU1::sm(); }
+    string bCsm() { return call_static_method("XU1", "sm"); }
+    string bCom() { return call_object_method(self, "m"); }
+    string bRef() { code c = self.getCallReference("m"); return c(); }
+}
+class XU1 inherits AU, DU1, BU1 {}
+# the unrelated private method between the branch reaching P and B
+class XU1b inherits DU1, AU, BU1 {}
+# the unrelated private method deeper in the first branch
+class XU1c inherits AUd, DU1, BU1 {}
+class XU1n inherits DU1, BU1 {}
+# the public method of P reached through private inheritance before B
+class PU2 { string m() { return "PU2::m"; } }
+class DU2 inherits private PU2 {}
+class BU2 inherits PU2 {
+    string m() { return "BU2::m"; }
+    string bSelf() { return self.m(); }
+    string bUntyped(auto o) { return o.m(); }
+    string bTyped(XU2 o) { return o.m(); }
+}
+class XU2 inherits AU, DU2, BU2 {}
+
 # classes inherited by the classes of a child Program
 public class PC { private string m() { return "PC::m"; } }
 public class AC inherits PC {}
@@ -416,6 +451,27 @@ check("XQ3 BQ self.m()", \xq3.bSelf());
 
 XA xa();
 check("XA BA self.m() (abstract in BA)", \xa.bSelf());
+
+XU1 xu1();
+check("XU1 (CU::m first) BU1 self.m()", \xu1.bSelf());
+check("XU1 BU1 untyped", any sub () { return xu1.bUntyped(xu1); });
+check("XU1 BU1 typed XU1", any sub () { return xu1.bTyped(xu1); });
+check("XU1 BU1 XU1::sm()", \xu1.bStatic());
+check("XU1 BU1 call_static_method()", \xu1.bCsm());
+check("XU1 BU1 call_object_method()", \xu1.bCom());
+check("XU1 BU1 getCallReference()", \xu1.bRef());
+check("XU1 outside m()", any sub () { return xu1.m(); });
+XU1b xu1b();
+check("XU1b (CU::m between) BU1 self.m()", \xu1b.bSelf());
+XU1c xu1c();
+check("XU1c (CU::m deeper) BU1 self.m()", \xu1c.bSelf());
+XU1n xu1n();
+check("XU1n (no CU) BU1 self.m()", \xu1n.bSelf());
+XU2 xu2();
+check("XU2 (CU::m first) BU2 self.m()", \xu2.bSelf());
+check("XU2 BU2 untyped", any sub () { return xu2.bUntyped(xu2); });
+check("XU2 BU2 typed XU2", any sub () { return xu2.bTyped(xu2); });
+check("XU2 outside m()", any sub () { return xu2.m(); });
 
 check("doc A doIt()", any sub () { return (new DocA()).doIt(); });
 check("doc B doIt()", any sub () { return (new DocB()).doIt(); });
