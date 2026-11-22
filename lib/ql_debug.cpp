@@ -19162,6 +19162,66 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Returns the global async I/O controller (referenced) for a debug hook, or nullptr with an exception raised
+static AsyncIoControllerPriv* dbg_async_io_ctrl(ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ERROR", "no async I/O controller");
+        }
+        return nullptr;
+    }
+    return static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink));
+}
+
+//! Debug-only: holds the I/O threads of the global async I/O controller before they drain their command queues
+//! (True), or releases them (False); clear it in an on_exit block, as a held thread processes no command (qore#7010)
+static QoreValue f_dbg_async_io_hold_io_commands(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        ctrl->dbgHoldIoCommands(get_param_value(params, 0).getAsBool());
+    }
+    return QoreValue();
+}
+
+//! Debug-only: waits until the first I/O thread is held before its command queue; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_io_commands_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitIoCommandsHeld(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+}
+
+//! Debug-only: cancels the operations of the owner on the held first I/O thread, as code there that runs for the
+//! given application (-1 none, 0 trusted code), before the thread processes its queued commands; returns the count
+static QoreValue f_dbg_async_io_cancel_owner_on_io_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    QoreStringValueHelper owner(get_param_value(params, 0));
+    int rc_count = ctrl->dbgCancelOwnerOnIoThread(owner->c_str(), get_param_value(params, 1).getAsBigInt(),
+        static_cast<int>(get_param_value(params, 2).getAsBigInt()), xsink);
+    return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rc_count));
+}
+
+//! Debug-only: queues a cancel of the operations of the owner, as code that runs for the given application (-1
+//! none, 0 trusted code) requests it on another I/O thread, to the held first I/O thread, which processes it when it
+//! is released, before the commands queued after it
+static QoreValue f_dbg_async_io_queue_cancel_owner(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        QoreStringValueHelper owner(get_param_value(params, 0));
+        ctrl->dbgQueueCancelOwner(owner->c_str(), get_param_value(params, 1).getAsBigInt(), xsink);
+    }
+    return QoreValue();
+}
+
 //! Debug-only: returns the generation of the work that added the timer of the global async I/O controller with the
 //! given ID (0 for a timer that no sandboxed code may cancel by its generation), or -1 if there is no such timer
 //! (qore#7010)
@@ -30087,6 +30147,16 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_io_commands", f_dbg_async_io_hold_io_commands,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_io_commands_held", f_dbg_async_io_wait_io_commands_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_cancel_owner_on_io_thread", f_dbg_async_io_cancel_owner_on_io_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_queue_cancel_owner", f_dbg_async_io_queue_cancel_owner,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id");
     qns.addBuiltinVariant("dbg_async_io_timer_adder_gen", f_dbg_async_io_timer_adder_gen,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,

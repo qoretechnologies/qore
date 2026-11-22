@@ -5770,7 +5770,11 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     if (no_program) {
         return 0;
     }
+    return cancelByOwnerIntern(owner_str, restrict_app, xsink);
+}
 
+int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, const AioAppRestriction& restrict_app,
+        ExceptionSink* xsink) {
     bool do_signal = false;
     int count = 0;
     std::vector<PollInfo> direct_pinfos;
@@ -8926,6 +8930,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             if (t.dbg_before_poll) {
                 t.dbg_before_poll(t);
             }
+            // test hook: a thread to hold goes back to the top of its loop, where it is held before its command queue
+            // (see dbgHoldIoCommands()); checked under the lock with which the hook is set, as the notification of
+            // the hook can have been acknowledged with the commands of the iteration
+            if (t.dbg_hold_commands) {
+                continue;
+            }
 #endif
             if (!t.cmdq.empty()) {
                 continue;
@@ -9537,6 +9547,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
     // Batch drain all pending commands from the MPSC queue.
     // The outer loop handles commands that arrive during acknowledge.
     while (true) {
+#ifdef DEBUG
+        dbgHoldBeforeCommands(t);
+#endif
         std::vector<Command> batch;
         {
             AutoLocker al(m);
@@ -10073,6 +10086,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // reconnect cancelling the HCIO poll op then submitting
                     // the WS poll op on the same socket fd) and must fall
                     // through to create the live op, not be canceled here.
+                    //
+                    // The canceled-key tombstone is keyed by the key alone, also for a cancel restricted to the
+                    // operations of an application (qore#7010): a submission of the key by another application,
+                    // queued before the cancel, would collide with the canceled operation's key anyway (it is refused
+                    // without replace_existing, and may not replace another application's operation with it), so
+                    // refusing it as stale takes nothing from it that the collision would not
                     auto ck_it = t.cancelled_keys.find(cmd.key);
                     if (ck_it != t.cancelled_keys.end()
                             && cmd.seq_at_push <= ck_it->second.seq) {
@@ -10881,6 +10900,145 @@ bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
         cd = call_dispatcher;
     }
     return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
+}
+
+void AsyncIoControllerPriv::dbgHoldBeforeCommands(IoThreadContext& t) {
+    AutoLocker al(m);
+    if (!t.dbg_hold_commands) {
+        return;
+    }
+    t.dbg_commands_held = true;
+    t.dbg_cond.broadcast();
+    while (t.dbg_hold_commands) {
+        if (!t.dbg_actions.empty()) {
+            std::function<void()> action = std::move(t.dbg_actions.front());
+            t.dbg_actions.pop_front();
+            {
+                // the action takes the controller's lock itself, as code on the I/O thread does
+                AutoUnlocker aul(m);
+                action();
+            }
+            continue;
+        }
+        t.dbg_cond.wait(m);
+    }
+    // actions not run are ended: their waiters see that they did not run
+    t.dbg_actions.clear();
+    t.dbg_commands_held = false;
+    t.dbg_cond.broadcast();
+}
+
+void AsyncIoControllerPriv::dbgHoldIoCommands(bool hold) {
+    AutoLocker al(m);
+    for (auto& tp : io_threads) {
+        tp->dbg_hold_commands = hold;
+        tp->dbg_cond.broadcast();
+        // a thread that waits in its event loop is woken, to be held before its command queue
+        if (hold && tp->notifier && readsCommands(*tp)) {
+            tp->notifier->notify();
+        }
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitIoCommandsHeld(int timeout_ms) {
+    AutoLocker al(m);
+    if (io_threads.empty()) {
+        return false;
+    }
+    IoThreadContext& t = *io_threads[0];
+    while (!t.dbg_commands_held) {
+        if (!t.dbg_hold_commands || t.dbg_cond.wait(m, timeout_ms) == ETIMEDOUT) {
+            return t.dbg_commands_held;
+        }
+    }
+    return true;
+}
+
+int AsyncIoControllerPriv::dbgRunOnHeldIoThread(std::function<void(ExceptionSink*)> action, int timeout_ms,
+        ExceptionSink* xsink) {
+    struct State {
+        bool done = false;
+        ExceptionSink xsink;
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+    AutoLocker al(m);
+    if (io_threads.empty() || !io_threads[0]->dbg_commands_held) {
+        xsink->raiseException("DBG-ERROR", "the I/O thread is not held (dbg_async_io_hold_io_commands())");
+        return -1;
+    }
+    IoThreadContext& t = *io_threads[0];
+    t.dbg_actions.push_back([state, action, this]() {
+        ExceptionSink action_xsink;
+        action(&action_xsink);
+        AutoLocker al(m);
+        state->xsink.assimilate(action_xsink);
+        state->done = true;
+        io_threads[0]->dbg_cond.broadcast();
+    });
+    t.dbg_cond.broadcast();
+    while (!state->done) {
+        if (!t.dbg_commands_held) {
+            xsink->raiseException("DBG-ERROR", "the I/O thread was released before the action ran");
+            return -1;
+        }
+        if (t.dbg_cond.wait(m, timeout_ms) == ETIMEDOUT && !state->done) {
+            xsink->raiseException("DBG-ERROR", "the action on the held I/O thread did not complete in %d ms",
+                timeout_ms);
+            return -1;
+        }
+    }
+    if (state->xsink) {
+        xsink->assimilate(state->xsink);
+        return -1;
+    }
+    return 0;
+}
+
+//! the restriction of code on the I/O thread that runs for the given application (-1 none, 0 trusted code)
+static AioAppRestriction dbg_io_thread_restriction(int64 app_id) {
+    AioAppRestriction r;
+    if (app_id) {
+        r.restricted = true;
+        r.app_id = app_id < 0 ? QORE_NO_PROGRAM_ID : static_cast<qore_program_id_t>(app_id);
+    }
+    return r;
+}
+
+int AsyncIoControllerPriv::dbgCancelOwnerOnIoThread(const std::string& owner, int64 app_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    // shared with the action, which can outlive a wait that timed out
+    std::shared_ptr<int> count = std::make_shared<int>(0);
+    AioAppRestriction r = dbg_io_thread_restriction(app_id);
+    if (dbgRunOnHeldIoThread([this, owner, r, count](ExceptionSink* axsink) {
+            // fails closed for no application, as cancelByOwner() does
+            if (r.restricted && r.app_id == QORE_NO_PROGRAM_ID) {
+                return;
+            }
+            *count = cancelByOwnerIntern(owner, r, axsink);
+        }, timeout_ms, xsink)) {
+        return -1;
+    }
+    return *count;
+}
+
+int AsyncIoControllerPriv::dbgQueueCancelOwner(const std::string& owner, int64 app_id, ExceptionSink* xsink) {
+    AioAppRestriction r = dbg_io_thread_restriction(app_id);
+    AutoLocker al(m);
+    if (io_threads.empty() || !io_threads[0]->dbg_commands_held) {
+        xsink->raiseException("DBG-ERROR", "the I/O thread is not held (dbg_async_io_hold_io_commands())");
+        return -1;
+    }
+    IoThreadContext& tp = *io_threads[0];
+    // as cancelByOwner() on an I/O thread queues it for another I/O thread, but not waited for
+    Command cmd;
+    cmd.cmd = IoCommand::CancelOwner;
+    cmd.owner = owner;
+    cmd.restrict_app = r;
+    ++submit_seq;
+    cmd.seq_at_push = ++tp.submit_seq;
+    tp.cmdq.push(std::move(cmd));
+    tp.notifier->notify();
+    return 0;
 }
 
 int64 AsyncIoControllerPriv::dbgTimerAdderGen(int64_t id) {
@@ -11812,6 +11970,11 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
         // stops by itself; a Quit left in their queues would stop them as soon as they are started again
         bool pushed = false;
         for (auto& tp : io_threads) {
+#ifdef DEBUG
+            // a thread held by the test hook stops (see dbgHoldIoCommands())
+            tp->dbg_hold_commands = false;
+            tp->dbg_cond.broadcast();
+#endif
             if (!readsCommands(*tp)) {
                 continue;
             }
