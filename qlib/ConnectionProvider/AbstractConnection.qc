@@ -1357,7 +1357,9 @@ conn.checkSandboxAccess(True);
         that was lent the connection may connect only to the connection's own target, as with the clients that
         @ref get() and @ref getAsync() create for it (qore#7262): the origin of \a url (TLS or not, host, port) and the
         proxy must be the ones that the proof that the connection took from the code that created it is bound to; a
-        connection without a proof, or another target, is refused before any connection is attempted.
+        connection without a proof, or another target, is refused before any connection is attempted.  A URL whose
+        IPv6 host is not in brackets is ambiguous and refused as well.  A UNIX domain socket target is compared by its
+        socket path.
 
         @param url the URL that the client connects to (an \c http or \c https URL)
         @param proxy_url the URL of the client's proxy, if any
