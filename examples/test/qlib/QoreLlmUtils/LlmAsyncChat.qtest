@@ -1,0 +1,938 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LlmAsyncChat.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires HttpServerUtil
+%requires RestClientIo
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires AnthropicRestClient
+%requires json
+%requires QUnit
+
+%exec-class LlmAsyncChatTest
+
+#! A scripted reply of the stub LLM server
+hashdecl StubReply {
+    #! HTTP status code
+    int code = 200;
+    #! Content-Type of the response
+    string content_type = "application/json";
+    #! Complete response body, sent with Content-Length
+    *string body;
+    #! Chunks of a close-delimited event-stream body
+    list<string> chunks = ();
+    #! Additional response headers
+    *hash<auto> headers;
+    #! When set, nothing is sent until the client closes the connection, which is reported in AsyncStubServer::closed
+    bool hold = False;
+    #! When set, the chunks are sent, and then the connection is held until the client closes it, which is reported
+    #! in AsyncStubServer::closed
+    bool hold_after_chunks = False;
+}
+
+#! Stub LLM server speaking HTTP/1.1 on a raw socket; one thread accepts the connections and reads the requests, so a
+#! batch of concurrent requests uses no thread of its own
+class AsyncStubServer {
+    public {
+        int port;
+        #! Receives True when the client closes a held connection, False if it is not closed in time
+        Queue closed();
+        #! Receives num_threads() when every request of a batch has arrived, before any of them is answered
+        Queue batch_threads();
+        #! Receives the path of each request as soon as it has been read
+        Queue request_queue();
+    }
+
+    private {
+        Socket listener();
+        Mutex m();
+        Counter running();
+        bool stopping = False;
+        #! Scripted replies, used in order; when empty, the handler answers
+        list<hash<StubReply>> replies = ();
+        #! Answers requests when there is no scripted reply
+        *code<hash<StubReply>(hash<auto>)> handler;
+        #! The requests read since the last reset()
+        list<hash<auto>> request_log = ();
+        #! Requests of the current batch are answered together when this many have arrived
+        int batch = 0;
+        #! The connections of the current batch
+        list<hash<auto>> batch_conns = ();
+        #! The number of connections accepted, probes excluded, since the last reset()
+        int accepted = 0;
+        #! Receives the number of connections accepted before each probe
+        Queue probe_results();
+    }
+
+    const ProbePath = "/__probe";
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("http://localhost:%d", port);
+    }
+
+    #! Sets the replies of the following requests and forgets the requests read so far
+    script(softlist<hash<StubReply>> replies, *code<hash<StubReply>(hash<auto>)> handler) {
+        AutoLock al(m);
+        self.replies = replies;
+        self.handler = handler;
+        request_log = ();
+        accepted = 0;
+        closed.clear();
+        request_queue.clear();
+    }
+
+    #! Answers the next \a n requests together, once all of them have arrived
+    setBatch(int n) {
+        AutoLock al(m);
+        batch = n;
+        batch_conns = ();
+    }
+
+    #! Returns the requests read since the last script() call
+    list<hash<auto>> getRequests() {
+        AutoLock al(m);
+        return request_log;
+    }
+
+    #! Returns the number of connections opened since the last script() call
+    /** The server accepts the connections in order: a probe connection opened after a call has ended is accepted
+        after every connection of the call, retries included, so its count is exact without waiting for a time.
+    */
+    int getConnectionCount() {
+        Socket probe();
+        on_exit probe.close();
+        probe.connect(sprintf("127.0.0.1:%d", port), 60s);
+        probe.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", ProbePath));
+        return probe_results.get(300s);
+    }
+
+    stop() {
+        {
+            AutoLock al(m);
+            if (stopping) {
+                return;
+            }
+            stopping = True;
+        }
+        try {
+            Socket wake();
+            wake.connect(sprintf("127.0.0.1:%d", port), 5s);
+            wake.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private bool isStopping() {
+        AutoLock al(m);
+        return stopping;
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!isStopping()) {
+            Socket conn;
+            try {
+                conn = listener.accept(300s);
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            if (isStopping()) {
+                conn.close();
+                break;
+            }
+            try {
+                serve(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                # a client that has given up closes the connection
+                conn.close();
+            }
+        }
+    }
+
+    private serve(Socket conn) {
+        hash<auto> hdr = conn.readHTTPHeader(300s);
+        if (hdr.path == ProbePath) {
+            int count;
+            {
+                AutoLock al(m);
+                count = accepted;
+            }
+            conn.close();
+            probe_results.push(count);
+            return;
+        }
+        *data body;
+        if (hdr."content-length") {
+            body = conn.recv(hdr."content-length".toInt(), 300s);
+        }
+        hash<StubReply> reply;
+        list<hash<auto>> to_answer;
+        int batch_count;
+        {
+            AutoLock al(m);
+            ++accepted;
+            hash<auto> request = {
+                "path": hdr.path,
+                "hdr": hdr,
+                "body": body ? parse_json(body.typeCode() == NT_BINARY ? body.toString() : body) : NOTHING,
+            };
+            push request_log, request;
+            request_queue.push(hdr.path);
+            reply = replies ? shift replies : handler(request);
+            if (batch) {
+                push batch_conns, {"conn": conn, "reply": reply};
+                if (batch_conns.size() < batch) {
+                    return;
+                }
+                to_answer = batch_conns;
+                batch_count = batch;
+                batch_conns = ();
+                batch = 0;
+            }
+        }
+        if (to_answer) {
+            # every request of the batch is in flight now; no reply has been sent yet
+            batch_threads.push(num_threads());
+            foreach hash<auto> item in (to_answer) {
+                sendReply(item.conn, item.reply);
+            }
+            return;
+        }
+        if (reply.hold || reply.hold_after_chunks) {
+            running.inc();
+            background serveHeld(conn, reply);
+            return;
+        }
+        sendReply(conn, reply);
+    }
+
+    private sendReply(Socket conn, hash<StubReply> reply) {
+        on_exit conn.close();
+        string head = sprintf("HTTP/1.1 %d %s\r\nContent-Type: %s\r\nConnection: close\r\n", reply.code,
+            HttpServer::HttpCodes{reply.code} ?? "Status", reply.content_type);
+        foreach hash<auto> i in (reply.headers.pairIterator()) {
+            head += sprintf("%s: %s\r\n", i.key, i.value);
+        }
+        if (exists reply.body) {
+            conn.send(head + sprintf("Content-Length: %d\r\n\r\n", reply.body.size()) + reply.body);
+            return;
+        }
+        conn.send(head + "\r\n");
+        foreach string chunk in (reply.chunks) {
+            conn.send(chunk);
+        }
+    }
+
+    private serveHeld(Socket conn, hash<StubReply> reply) {
+        on_exit {
+            conn.close();
+            running.dec();
+        }
+        try {
+            if (reply.hold_after_chunks) {
+                string head = sprintf("HTTP/1.1 %d OK\r\nContent-Type: %s\r\nConnection: close\r\n\r\n",
+                    reply.code, reply.content_type);
+                conn.send(head + reply.chunks.join(""));
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            closed.push(True);
+            return;
+        }
+        waitForClientClose(conn);
+    }
+
+    #! Reports whether the client closes the connection; nothing more is sent, so a read ends only then
+    /** A client that closes the connection with unread data resets it, so a reset is a close too.
+    */
+    private waitForClientClose(Socket conn) {
+        bool client_closed = False;
+        try {
+            conn.recv(1, 300s);
+        } catch (hash<ExceptionInfo> ex) {
+            client_closed = ex.err == "SOCKET-CLOSED" || (ex.err == "SOCKET-RECV-ERROR" && ex.arg == ECONNRESET);
+        }
+        closed.push(client_closed);
+    }
+}
+
+#! Records the tasks that an executor runs, and the threads that run them
+class RecordingExecutor inherits LlmAsyncExecutor {
+    public {
+        LlmThreadPoolExecutor pool;
+        Mutex m();
+        hash<string, bool> tids = {};
+        int tasks = 0;
+    }
+
+    constructor(int threads) {
+        pool = new LlmThreadPoolExecutor(threads);
+    }
+
+    execute(code<nothing()> task) {
+        RecordingExecutor self_ref = self;
+        pool.execute(sub () {
+            {
+                AutoLock al(self_ref.m);
+                self_ref.tids{gettid()} = True;
+                ++self_ref.tasks;
+            }
+            task();
+        });
+    }
+}
+
+#! An executor that refuses every task
+class RefusingExecutor inherits LlmAsyncExecutor {
+    execute(code<nothing()> task) {
+        throw "TEST-EXECUTOR-REFUSED", "the executor refuses the task";
+    }
+}
+
+#! Asynchronous chat calls of LlmBackend and of the Anthropic and OpenAI-compatible providers
+public class LlmAsyncChatTest inherits QUnit::Test {
+    private {
+        AsyncStubServer server();
+        LlmThreadPoolExecutor executor(2);
+    }
+
+    #! The keys of an exception hash that depend on where it was raised
+    const LocationKeys = ("callstack", "file", "line", "endline", "source", "offset", "lang", "next", "type");
+
+    #! The callback workers of the async I/O controller
+    /** The controller runs the steps of its operations in a pool of callback workers that grows while many steps
+        are ready at once, as when the requests of many calls are submitted together, more so on a slow run (under
+        valgrind, for example).  A fixed pool makes the count of threads with many calls in flight deterministic,
+        and shows that the calls complete with far fewer threads than calls.
+    */
+    const CallbackWorkers = 4;
+
+    constructor() : Test("LlmAsyncChatTest", "1.0") {
+        AsyncIoController::setMaxCallbackWorkers(CallbackWorkers);
+        addTestCase("concurrent calls use few threads", \concurrentCallsUseFewThreads());
+        addTestCase("stream deltas arrive in order", \streamDeltasInOrder());
+        addTestCase("cancel stops a request", \cancelStopsRequest());
+        addTestCase("cancel stops a stream", \cancelStopsStream());
+        addTestCase("cancel ends a retry wait", \cancelEndsRetryWait());
+        addTestCase("retry after 429 on a timer", \retryAfter429());
+        addTestCase("repair continuation", \repairContinuation());
+        addTestCase("sync and async are equivalent", \syncAsyncEquivalence());
+        addTestCase("errors", \errorsTest());
+        addTestCase("providers without async transport", \fallbackProvider());
+        addTestCase("executor and operation", \executorAndOperation());
+        on_exit {
+            # the workers of the executor and the server's thread end before the process does
+            server.stop();
+            executor.shutdown();
+        }
+        set_return_value(main());
+    }
+
+    private LlmBackend backend(string mode, *hash<auto> extra) {
+        hash<auto> config = {
+            "mode": mode,
+            "url": server.getUrl(),
+            "protocol": "h1",
+            "model": mode == "anthropic" ? "claude-sonnet-4-5" : "gpt-test",
+            "api_key": "test-key",
+            "timeout_ms": 60000,
+            "max_retries": 0,
+            "retry_delay_ms": 20,
+        } + extra;
+        return new LlmBackend(cast<hash<LlmBackendConfig>>(config));
+    }
+
+    private hash<LlmAsyncCallOptions> asyncOpts(*code<nothing(LlmAsyncOperation)> on_complete,
+            *LlmAsyncExecutor exec) {
+        return <LlmAsyncCallOptions>{"executor": exec ?? executor, "on_complete": on_complete};
+    }
+
+    private static hash<auto> request(string text, *hash<auto> extra) {
+        return {"messages": ({"role": "user", "content": text},)} + extra;
+    }
+
+    private static list<hash<ChatMessage>> messages(string text) {
+        return (<ChatMessage>{"role": "user", "content": text},);
+    }
+
+    #! An OpenAI chat completion
+    private static string openAiBody(string text, *hash<auto> message, *string finish) {
+        return make_json({
+            "id": "chatcmpl-1",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "gpt-test",
+            "choices": ({
+                "index": 0,
+                "message": {"role": "assistant", "content": text} + message,
+                "finish_reason": finish ?? "stop",
+            },),
+            "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
+        });
+    }
+
+    private static hash<StubReply> openAiReply(string text, *hash<auto> message, *string finish) {
+        return <StubReply>{"body": openAiBody(text, message, finish)};
+    }
+
+    #! An Anthropic message
+    private static hash<StubReply> anthropicReply(string text) {
+        return <StubReply>{"body": make_json({
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-5",
+            "content": ({"type": "text", "text": text},),
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        })};
+    }
+
+    private static string sseData(hash<auto> data, *string event) {
+        return (event ? sprintf("event: %s\n", event) : "") + "data: " + make_json(data) + "\n\n";
+    }
+
+    #! The chunks of an OpenAI chat completion stream with the given text deltas
+    private static list<string> openAiStreamChunks(list<string> deltas) {
+        list<string> rv = ();
+        foreach string delta in (deltas) {
+            rv += sseData({"id": "chatcmpl-s", "model": "gpt-test", "created": 1700000000,
+                "choices": ({"index": 0, "delta": {"content": delta}, "finish_reason": NOTHING},)});
+        }
+        rv += sseData({"id": "chatcmpl-s", "model": "gpt-test", "created": 1700000000,
+            "choices": ({"index": 0, "delta": {}, "finish_reason": "stop"},)});
+        rv += sseData({"id": "chatcmpl-s", "model": "gpt-test", "created": 1700000000, "choices": (),
+            "usage": {"prompt_tokens": 9, "completion_tokens": deltas.size(), "total_tokens": 9 + deltas.size()}});
+        rv += "data: [DONE]\n\n";
+        return rv;
+    }
+
+    #! The chunks of an Anthropic message stream with the given text deltas
+    private static list<string> anthropicStreamChunks(list<string> deltas) {
+        list<string> rv = (
+            sseData({"type": "message_start", "message": {"id": "msg_s", "type": "message", "role": "assistant",
+                "model": "claude-sonnet-4-5", "content": (), "usage": {"input_tokens": 12, "output_tokens": 1}}},
+                "message_start"),
+            sseData({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+                "content_block_start"),
+            sseData({"type": "ping"}, "ping"),
+        );
+        foreach string delta in (deltas) {
+            rv += sseData({"type": "content_block_delta", "index": 0,
+                "delta": {"type": "text_delta", "text": delta}}, "content_block_delta");
+        }
+        rv += sseData({"type": "content_block_stop", "index": 0}, "content_block_stop");
+        rv += sseData({"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+            "usage": {"output_tokens": deltas.size()}}, "message_delta");
+        rv += sseData({"type": "message_stop"}, "message_stop");
+        return rv;
+    }
+
+    private static hash<StubReply> streamReply(list<string> chunks) {
+        return <StubReply>{"content_type": "text/event-stream", "chunks": chunks};
+    }
+
+    private static hash<StubReply> errorReply(int code, string message, *hash<auto> headers) {
+        return <StubReply>{"code": code, "headers": headers,
+            "body": make_json({"error": {"type": "error", "code": code, "message": message}})};
+    }
+
+    #! Removes the keys of an exception that depend on where it was raised, also from nested exceptions
+    private static auto normalizeError(auto v) {
+        if (v.typeCode() == NT_LIST) {
+            return map LlmAsyncChatTest::normalizeError($1), v;
+        }
+        if (v.typeCode() != NT_HASH) {
+            return v;
+        }
+        hash<auto> rv = {};
+        foreach hash<auto> i in (v.pairIterator()) {
+            if (inlist(i.key, LocationKeys)) {
+                continue;
+            }
+            rv{i.key} = LlmAsyncChatTest::normalizeError(i.value);
+        }
+        return rv;
+    }
+
+    #! Runs a call and returns its result or its error, and the requests the server read for it
+    private hash<auto> outcome(code call) {
+        hash<auto> rv = {};
+        try {
+            rv.result = call();
+        } catch (hash<ExceptionInfo> ex) {
+            rv.error = normalizeError(ex);
+        }
+        rv.requests = map ("path": $1.path, "body": $1.body, "auth": $1.hdr.authorization ?? $1.hdr."x-api-key",
+            "accept": $1.hdr.accept), server.getRequests();
+        return rv;
+    }
+
+    #! Runs the same scripted replies through a synchronous and an asynchronous call and checks that they agree
+    private compareSyncAsync(string name, softlist<hash<StubReply>> replies, code sync_call,
+            code<LlmAsyncOperation()> async_call) {
+        server.script(replies);
+        hash<auto> sync_outcome = outcome(sync_call);
+        server.script(replies);
+        hash<auto> async_outcome = outcome(auto sub () { return async_call().get(300s); });
+        assertEq(sync_outcome, async_outcome, name);
+    }
+
+    #! N concurrent asynchronous calls hold far fewer than N threads while they wait for the provider
+    concurrentCallsUseFewThreads() {
+        int n = 24;
+        # the calls wait for the whole batch, which takes long on a slow run (under valgrind)
+        LlmBackend llm = backend("http", {"timeout_ms": 900000});
+        assertTrue(llm.supportsAsyncChat());
+        server.script((), hash<StubReply> sub (hash<auto> req) {
+            return openAiReply("answer to " + req.body.messages[0].content);
+        });
+        # a first call starts the threads of the async I/O controller and of the executor
+        assertEq("answer to warm-up", llm.chatCompletionsAsync(request("warm-up"), asyncOpts()).get(300s)
+            .choices[0].message.content);
+        int base = num_threads();
+        server.setBatch(n);
+        list<LlmAsyncOperation> ops = ();
+        for (int i = 0; i < n; ++i) {
+            ops += llm.chatCompletionsAsync(request("call " + i), asyncOpts());
+        }
+        # taken by the server when every request has arrived and none has been answered
+        int in_flight_threads = server.batch_threads.get(900s);
+        for (int i = 0; i < n; ++i) {
+            hash<auto> response = ops[i].get(300s);
+            assertEq("answer to call " + i, response.choices[0].message.content);
+            assertEq(18, response.usage.total_tokens);
+        }
+        if (m_options.verbose) {
+            printf("threads: %d before the calls, %d with %d calls in flight (executor: %d threads)\n", base,
+                in_flight_threads, n, executor.getThreadCount());
+        }
+        # the server's own accept thread is counted in both; the calls hold no thread while they wait: the threads
+        # are the fixed pools of the executor and of the async I/O controller
+        assertLe(base + CallbackWorkers, in_flight_threads, "threads with the calls in flight");
+    }
+
+    #! Stream deltas reach the callback in order, one at a time, in threads of the executor
+    streamDeltasInOrder() {
+        list<string> deltas = map sprintf("d%03d ", $1), xrange(60);
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode);
+            server.script(streamReply(mode == "http" ? openAiStreamChunks(deltas) : anthropicStreamChunks(deltas)));
+            list<string> received = ();
+            int active = 0;
+            int overlaps = 0;
+            Mutex m();
+            RecordingExecutor rec(4);
+            LlmAsyncOperation op = llm.chatCompletionsStreamAsync(request("stream"), sub (hash<auto> chunk) {
+                {
+                    AutoLock al(m);
+                    if (++active > 1) {
+                        ++overlaps;
+                    }
+                }
+                on_exit {
+                    AutoLock al(m);
+                    --active;
+                }
+                if (chunk.choices[0].delta.content.val()) {
+                    received += chunk.choices[0].delta.content;
+                }
+            }, asyncOpts(NOTHING, rec));
+            hash<auto> response = op.get(300s);
+            rec.pool.shutdown();
+            assertEq(deltas, received, mode + " deltas");
+            assertEq(0, overlaps, mode + " callbacks never overlap");
+            assertEq(deltas.join(""), response.choices[0].message.content, mode + " content");
+            assertTrue(rec.tasks > 0);
+            assertFalse(rec.tids{gettid()} ?? False, mode + " no task runs in the calling thread");
+        }
+    }
+
+    #! A cancel aborts a request whose response is awaited: the server sees the connection close, and no retry
+    #! follows
+    cancelStopsRequest() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode, {"max_retries": 3});
+            server.script(<StubReply>{"hold": True});
+            Queue completed();
+            LlmAsyncOperation op = llm.chatCompletionsAsync(request("hold"), asyncOpts(sub (LlmAsyncOperation op) {
+                completed.push(op.getError());
+            }));
+            # the request has reached the server
+            server.request_queue.get(300s);
+            op.cancel("stopped by the test");
+            hash<auto> ex = completed.get(300s);
+            assertEq("LLM-CANCELLED", ex.err, mode);
+            assertRegex("stopped by the test", ex.desc, mode);
+            assertTrue(server.closed.get(300s), mode + " the server sees the connection close");
+            assertEq(1, server.getConnectionCount(), mode + " no retry");
+            assertThrows("LLM-CANCELLED", \op.getResult());
+        }
+    }
+
+    #! A cancel stops a stream after its first event
+    cancelStopsStream() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode, {"max_retries": 3});
+            list<string> chunks = mode == "http" ? openAiStreamChunks(("first",)) : anthropicStreamChunks(("first",));
+            # only the start of the stream, up to the first text delta, is sent
+            list<string> start = mode == "http" ? (chunks[0],) : chunks[0..3];
+            server.script(<StubReply>{"content_type": "text/event-stream", "chunks": start,
+                "hold_after_chunks": True});
+            Queue deltas();
+            LlmCancellation token();
+            LlmAsyncOperation op = llm.chatCompletionsStreamAsync(request("hold"), sub (hash<auto> chunk) {
+                if (chunk.choices[0].delta.content.val()) {
+                    deltas.push(chunk.choices[0].delta.content);
+                }
+            }, asyncOpts(), <LlmFacadeCallOptions>{"cancellation": token});
+            assertEq("first", deltas.get(300s), mode);
+            token.cancel("stopped by the test");
+            assertThrows("LLM-CANCELLED", "stopped by the test", sub () { op.get(300s); }, NOTHING, mode);
+            assertTrue(server.closed.get(300s), mode + " the server sees the connection close");
+            assertEq(1, server.getConnectionCount(), mode + " no retry");
+            assertEq(0, deltas.size(), mode + " no further delta");
+        }
+    }
+
+    #! A cancel ends a retry wait at once
+    cancelEndsRetryWait() {
+        LlmBackend llm = backend("http", {"max_retries": 3, "retry_delay_ms": 600000, "timeout_ms": 3600000});
+        server.script(errorReply(503, "overloaded"));
+        Queue completed();
+        LlmAsyncOperation op = llm.chatCompletionsAsync(request("retry"), asyncOpts(sub (LlmAsyncOperation op) {
+            completed.push(op.getError());
+        }));
+        server.request_queue.get(300s);
+        # the first attempt has been answered; whether its answer has been read or not, the cancel ends the call
+        date start = now_us();
+        op.cancel("stopped during the wait");
+        hash<auto> ex = completed.get(300s);
+        assertEq("LLM-CANCELLED", ex.err);
+        # far shorter than the ten-minute wait
+        assertLt(60s, now_us() - start);
+        assertEq(1, server.getConnectionCount(), "no retry");
+    }
+
+    #! A 429 answer is retried after a wait on a timer, as the synchronous call retries it
+    retryAfter429() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode, {"max_retries": 2});
+            list<hash<StubReply>> replies = (
+                errorReply(429, "slow down"),
+                errorReply(429, "slow down", {"Retry-After": "1"}),
+                mode == "http" ? openAiReply("after the wait") : anthropicReply("after the wait"),
+            );
+            server.script(replies);
+            RecordingExecutor rec(1);
+            date start = now_us();
+            LlmAsyncOperation op = llm.chatCompletionsAsync(request("retry"), asyncOpts(NOTHING, rec));
+            hash<auto> response = op.get(300s);
+            date elapsed = now_us() - start;
+            rec.pool.shutdown();
+            assertEq("after the wait", response.choices[0].message.content, mode);
+            assertEq(3, server.getConnectionCount(), mode + " requests");
+            # the Retry-After wait of one second was taken, on a timer: the executor's single thread was not held
+            assertGe(1s, elapsed, mode);
+            assertEq(1, rec.tids.size());
+
+            # the same replies give the same response synchronously
+            compareSyncAsync(mode + " 429", replies, auto sub () { return llm.chatCompletions(request("retry")); },
+                LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("retry"), asyncOpts()); });
+        }
+    }
+
+    #! A required tool call missing from the response is repaired with further requests made as continuations
+    repairContinuation() {
+        LlmBackend llm = backend("http");
+        list<hash<auto>> tools = ({
+            "type": "function",
+            "function": {
+                "name": "lookup",
+                "description": "looks an invoice up",
+                "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ("id",)},
+            },
+        },);
+        hash<auto> body = request("look up invoice 7") + {
+            "tools": tools,
+            "tool_choice": {"type": "function", "function": {"name": "lookup"}},
+        };
+        list<hash<StubReply>> replies = (
+            # no tool call and no content: the required tool call is repaired
+            openAiReply(""),
+            # the JSON repair answers with the arguments
+            openAiReply("{\"id\": \"7\"}"),
+        );
+        server.script(replies);
+        hash<auto> response = llm.chatCompletionsAsync(body, asyncOpts()).get(300s);
+        list<hash<auto>> requests = server.getRequests();
+        assertEq(2, requests.size());
+        assertEq("lookup", response.choices[0].message.tool_calls[0].function.name);
+        assertEq({"id": "7"}, parse_json(response.choices[0].message.tool_calls[0].function.arguments));
+        assertTrue(response.provider_diagnostics.forced_tool_retry.attempted);
+        assertEq("required_tool_no_output", response.provider_diagnostics.forced_tool_retry.reason);
+        # the repair asks for JSON without tools
+        assertEq(NOTHING, requests[1].body.tools);
+
+        # a JSON repair that the provider cannot satisfy is followed by the structural repair, which resends the tools
+        list<hash<StubReply>> structural = (
+            openAiReply(""),
+            openAiReply("I cannot answer with JSON"),
+            openAiReply("", {"tool_calls": ({"id": "call_1", "type": "function",
+                "function": {"name": "lookup", "arguments": "{\"id\": \"7\"}"}},)}, "tool_calls"),
+        );
+        server.script(structural);
+        response = llm.chatCompletionsAsync(body, asyncOpts()).get(300s);
+        requests = server.getRequests();
+        assertEq(3, requests.size());
+        assertEq(tools, requests[2].body.tools);
+        assertEq("call_1", response.choices[0].message.tool_calls[0].id);
+
+        compareSyncAsync("JSON repair", replies, auto sub () { return llm.chatCompletions(body); },
+            LlmAsyncOperation sub () { return llm.chatCompletionsAsync(body, asyncOpts()); });
+        compareSyncAsync("structural repair", structural, auto sub () { return llm.chatCompletions(body); },
+            LlmAsyncOperation sub () { return llm.chatCompletionsAsync(body, asyncOpts()); });
+        hash<auto> stream_body = body + {"stream": True};
+        compareSyncAsync("streamed repair", (streamReply(openAiStreamChunks(())), replies[1]),
+            auto sub () { return llm.chatCompletionsStream(stream_body, sub (hash<auto> chunk) {}); },
+            LlmAsyncOperation sub () {
+                return llm.chatCompletionsStreamAsync(stream_body, sub (hash<auto> chunk) {}, asyncOpts());
+            });
+    }
+
+    #! The same responses give the same results, deltas, usage, telemetry and requests synchronously and
+    #! asynchronously
+    syncAsyncEquivalence() {
+        list<string> deltas = ("Invoice ", "INV-7 ", "is ", "paid.");
+        foreach string mode in (("http", "anthropic")) {
+            list<hash<auto>> events = ();
+            Mutex m();
+            LlmBackend llm = backend(mode, {"telemetry_observer": <LlmTelemetryObserver>{
+                "event_callback": sub (hash<LlmTelemetryEvent> event) {
+                    AutoLock al(m);
+                    events += {
+                        "type": event.type,
+                        "operation": event.operation,
+                        "status": event.status,
+                        "usage": event.usage,
+                        "stop_reason": event.stop_reason,
+                        "model": event.model,
+                        "stream_delta": event.stream_delta,
+                    };
+                },
+            }});
+            hash<StubReply> plain = mode == "http" ? openAiReply("paid") : anthropicReply("paid");
+            hash<StubReply> stream = streamReply(mode == "http"
+                ? openAiStreamChunks(deltas) : anthropicStreamChunks(deltas));
+
+            # chat
+            code take_events = list<hash<auto>> sub () {
+                AutoLock al(m);
+                on_exit events = ();
+                return events;
+            };
+            take_events();
+            compareSyncAsync(mode + " chat", plain, auto sub () { return llm.chat(messages("status")); },
+                LlmAsyncOperation sub () { return llm.chatAsync(messages("status"), NOTHING, NOTHING, asyncOpts()); });
+            list<hash<auto>> all_events = take_events();
+            assertEq(all_events.size() / 2, 2, mode + " chat telemetry events");
+            assertEq(all_events[0..1], all_events[2..3], mode + " chat telemetry");
+
+            # chatCompletions
+            compareSyncAsync(mode + " chatCompletions", plain,
+                auto sub () { return llm.chatCompletions(request("status")); },
+                LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("status"), asyncOpts()); });
+
+            # chatStream: the events delivered and the telemetry
+            list<hash<ChatStreamEvent>> sync_events = ();
+            list<hash<ChatStreamEvent>> async_events = ();
+            take_events();
+            compareSyncAsync(mode + " chatStream", stream, auto sub () {
+                    llm.chatStream(messages("status"), sub (hash<ChatStreamEvent> e) { sync_events += e; });
+                }, LlmAsyncOperation sub () {
+                    return llm.chatStreamAsync(messages("status"), sub (hash<ChatStreamEvent> e) {
+                        async_events += e; }, NOTHING, NOTHING, asyncOpts());
+                });
+            assertEq(sync_events, async_events, mode + " stream events");
+            all_events = take_events();
+            int half = all_events.size() / 2;
+            assertEq(all_events[0..half - 1], all_events[half..], mode + " stream telemetry");
+
+            # chatCompletionsStream: chunks and the final response
+            list<hash<auto>> sync_chunks = ();
+            list<hash<auto>> async_chunks = ();
+            compareSyncAsync(mode + " chatCompletionsStream", stream, auto sub () {
+                    return llm.chatCompletionsStream(request("status"), sub (hash<auto> c) { sync_chunks += c; });
+                }, LlmAsyncOperation sub () {
+                    return llm.chatCompletionsStreamAsync(request("status"), sub (hash<auto> c) {
+                        async_chunks += c; }, asyncOpts());
+                });
+            assertEq(sync_chunks, async_chunks, mode + " chunks");
+            assertEq(deltas, map $1.choices[0].delta.content, async_chunks, $1.choices[0].delta.content.val());
+        }
+
+        # OpenAI structured output whose strict schema is adapted: the response is held back until it is complete
+        LlmBackend llm = backend("http");
+        hash<auto> schema_body = request("extract") + {"response_format": {"type": "json_schema", "json_schema": {
+            "name": "invoice", "strict": True, "schema": {"type": "object",
+                "properties": {"id": {"type": "string"}, "note": {"type": "string"}}, "required": ("id",),
+                "additionalProperties": False}}}};
+        compareSyncAsync("structured", openAiReply("{\"id\": \"7\", \"note\": null}"),
+            auto sub () { return llm.chatCompletions(schema_body); },
+            LlmAsyncOperation sub () { return llm.chatCompletionsAsync(schema_body, asyncOpts()); });
+        list<string> structured_deltas = ("{\"id\": ", "\"7\", ", "\"note\": null}");
+        compareSyncAsync("structured stream", streamReply(openAiStreamChunks(structured_deltas)),
+            auto sub () { return llm.chatCompletionsStream(schema_body, sub (hash<auto> c) {}); },
+            LlmAsyncOperation sub () {
+                return llm.chatCompletionsStreamAsync(schema_body, sub (hash<auto> c) {}, asyncOpts());
+            });
+    }
+
+    #! Errors are those of the synchronous calls
+    errorsTest() {
+        foreach string mode in (("http", "anthropic")) {
+            LlmBackend llm = backend(mode, {"max_retries": 1});
+            # a request rejected by the provider
+            compareSyncAsync(mode + " 400", errorReply(400, "bad request"),
+                auto sub () { return llm.chatCompletions(request("bad")); },
+                LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("bad"), asyncOpts()); });
+            # transient errors until the retries are spent: the error has the record of the attempts
+            compareSyncAsync(mode + " 500", (errorReply(500, "boom"), errorReply(502, "boom")),
+                auto sub () { return llm.chatCompletions(request("boom")); },
+                LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("boom"), asyncOpts()); });
+            # a Retry-After longer than the request timeout is not waited for
+            compareSyncAsync(mode + " Retry-After", errorReply(429, "later", {"Retry-After": "3600"}),
+                auto sub () { return llm.chatCompletions(request("later")); },
+                LlmAsyncOperation sub () { return llm.chatCompletionsAsync(request("later"), asyncOpts()); });
+            # a stream refused before it starts
+            compareSyncAsync(mode + " stream 400", errorReply(400, "bad stream"),
+                auto sub () { return llm.chatCompletionsStream(request("bad"), sub (hash<auto> c) {}); },
+                LlmAsyncOperation sub () {
+                    return llm.chatCompletionsStreamAsync(request("bad"), sub (hash<auto> c) {}, asyncOpts());
+                });
+            # a callback that raises an exception ends the call with it
+            compareSyncAsync(mode + " callback error", streamReply(mode == "http"
+                    ? openAiStreamChunks(("a", "b")) : anthropicStreamChunks(("a", "b"))),
+                auto sub () {
+                    return llm.chatCompletionsStream(request("cb"), sub (hash<auto> c) {
+                        throw "CALLBACK-ERROR", "the callback fails";
+                    });
+                }, LlmAsyncOperation sub () {
+                    return llm.chatCompletionsStreamAsync(request("cb"), sub (hash<auto> c) {
+                        throw "CALLBACK-ERROR", "the callback fails";
+                    }, asyncOpts());
+                });
+        }
+        # a stream that reports an error
+        LlmBackend anthropic = backend("anthropic");
+        compareSyncAsync("anthropic error event", streamReply((sseData({"type": "error",
+                "error": {"type": "overloaded_error", "message": "Overloaded"}}, "error"),)),
+            auto sub () { return anthropic.chatCompletionsStream(request("e"), sub (hash<auto> c) {}); },
+            LlmAsyncOperation sub () {
+                return anthropic.chatCompletionsStreamAsync(request("e"), sub (hash<auto> c) {}, asyncOpts());
+            });
+        # an OpenAI stream that ends without its terminal frame
+        LlmBackend openai = backend("http");
+        compareSyncAsync("openai truncated stream", streamReply(openAiStreamChunks(("a",))[0..0]),
+            auto sub () { return openai.chatCompletionsStream(request("t"), sub (hash<auto> c) {}); },
+            LlmAsyncOperation sub () {
+                return openai.chatCompletionsStreamAsync(request("t"), sub (hash<auto> c) {}, asyncOpts());
+            });
+
+        # an invalid request is refused before an operation is started, as by the synchronous call
+        assertThrows("LLM-REQUEST-ERROR", sub () {
+            openai.chatCompletionsAsync(request("x", {"tool_repair_enabled": "yes"}), asyncOpts());
+        });
+        assertThrows("LLM-REQUEST-ERROR", sub () {
+            openai.chatCompletionsAsync(request("x", {"cancellation": "token"}), asyncOpts());
+        });
+        # a token cancelled before the call sends nothing
+        LlmCancellation cancelled();
+        cancelled.cancel("before the call");
+        server.script(openAiReply("never"));
+        assertThrows("LLM-CANCELLED", "before the call", sub () {
+            openai.chatCompletionsAsync(request("x"), asyncOpts(), <LlmFacadeCallOptions>{"cancellation": cancelled})
+                .get(300s);
+        });
+        assertEq(0, server.getConnectionCount());
+        # an executor that refuses the tasks ends the call with its error
+        LlmAsyncOperation op = openai.chatCompletionsAsync(request("x"), asyncOpts(NOTHING, new RefusingExecutor()));
+        assertTrue(op.wait(300s));
+        assertThrows("TEST-EXECUTOR-REFUSED", \op.getResult());
+    }
+
+    #! A provider without an asynchronous transport runs its synchronous call in a thread of the executor
+    fallbackProvider() {
+        LlmBackend llm(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                return parse_json(LlmAsyncChatTest::openAiBody("from the callback"));
+            }});
+        assertFalse(llm.supportsAsyncChat());
+        RecordingExecutor rec(1);
+        hash<auto> response = llm.chatCompletionsAsync(request("x"), asyncOpts(NOTHING, rec)).get(300s);
+        rec.pool.shutdown();
+        assertEq("from the callback", response.choices[0].message.content);
+        assertEq(response, llm.chatCompletions(request("x")));
+        assertFalse(rec.tids{gettid()} ?? False);
+    }
+
+    #! The operation and the thread-pool executor
+    executorAndOperation() {
+        assertThrows("LLM-ASYNC-EXECUTOR-ERROR", sub () { new LlmThreadPoolExecutor(0); });
+        LlmThreadPoolExecutor pool(1);
+        pool.shutdown();
+        assertThrows("LLM-ASYNC-EXECUTOR-ERROR", sub () { pool.execute(sub () {}); });
+
+        LlmAsyncOperation op(executor);
+        assertFalse(op.isDone());
+        assertThrows("LLM-ASYNC-NOT-DONE", \op.getResult());
+        assertFalse(op.wait(0));
+        assertThrows("LLM-ASYNC-TIMEOUT", sub () { op.get(0); });
+        # the steps run in order, and a step given after the end is not run
+        list<int> ran = ();
+        foreach int i in (xrange(5)) {
+            int step = i;
+            op.post(sub () { ran += step; });
+        }
+        op.post(sub () { op.complete("done"); });
+        op.post(sub () { ran += 99; });
+        assertEq("done", op.get(300s));
+        assertEq((0, 1, 2, 3, 4), ran);
+        assertFalse(op.complete("again"));
+        assertFalse(op.fail(<ExceptionInfo>{"err": "X", "desc": "x"}));
+        # a step that raises an exception ends the operation with it, and the completion callback sees it
+        Queue seen();
+        LlmAsyncOperation failing(executor, NOTHING, sub (LlmAsyncOperation o) { seen.push(o.getError().err); });
+        failing.post(sub () { throw "STEP-ERROR", "the step fails"; });
+        assertEq("STEP-ERROR", seen.get(300s));
+        assertThrows("STEP-ERROR", \failing.getResult());
+        assertTrue(failing.isError());
+        # a finish hook runs once when the operation ends, also when added after the end
+        int hooks = 0;
+        LlmAsyncOperation hooked(executor);
+        hooked.addFinishHook(sub () { ++hooks; });
+        int removed = hooked.addFinishHook(sub () { hooks += 100; });
+        hooked.removeFinishHook(removed);
+        hooked.post(sub () { hooked.complete(); });
+        hooked.wait(300s);
+        assertEq(0, hooked.addFinishHook(sub () { ++hooks; }));
+        assertEq(2, hooks);
+    }
+}

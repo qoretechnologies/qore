@@ -2483,6 +2483,54 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             });
         }
 
+        #! Starts an async request with explicit path semantics and signals a notifier when it ends
+        /** Prepares the request in the calling thread (including an OAuth2 token refresh, request signing and body
+            serialization) and submits it as @ref restDoRequestTargetWithTimeout() does, without waiting for the
+            response: \a notifier is signaled when the request ends, whether with a response, an error, a timeout or a
+            cancellation, so that a caller that watches the notifier with the async I/O controller holds no thread
+            while the response is awaited.  The response is then available at once from
+            @ref RestFuture::get() "RestFuture::get()", with the same response handling and errors as
+            @ref restDoRequestTargetWithTimeout().
+
+            @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param body request body, serialized by the client
+            @param hdr additional headers
+            @param timeout_ms the positive transport deadline of this request in milliseconds, replacing the client's
+            request timeout
+            @param notifier signaled once when the request has ended
+
+            @return a cancellable future containing the deserialized REST response
+
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+
+            @par Example
+            @code{.py}
+EventNotifier notifier();
+RestFuture future = rest.restDoRequestAsyncTargetWithNotifier("POST",
+    <RestRequestTarget>{"path": "messages"}, body, NOTHING, 30000, notifier);
+# ... the async I/O controller reports the notifier readable ...
+hash<RestResponseInfo> response = future.get();
+            @endcode
+
+            @since RestClientIo 1.0
+        */
+        RestFuture restDoRequestAsyncTargetWithNotifier(string method, hash<RestClient::RestRequestTarget> target,
+                auto body, *hash<auto> hdr, int timeout_ms, EventNotifier notifier) {
+            if (timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+            }
+            hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr,
+                False, False, notifier, NOTHING, NOTHING, timeout_ms, resolveRequestTarget(target, method));
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, hash<RestClient::RestResponseInfo> sub (hash<auto> response) {
+                return buildAsyncOperationResponse(response, op);
+            });
+        }
+
         #! Creates a caller-driven request with explicit path semantics
         /** @param method HTTP method
             @param target API-relative endpoint or origin-absolute target
