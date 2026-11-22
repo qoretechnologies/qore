@@ -7890,8 +7890,8 @@ public:
             return;
         }
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8119,8 +8119,8 @@ public:
             return;
         }
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8321,8 +8321,8 @@ public:
             return;
         }
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8502,8 +8502,8 @@ public:
             return;
         }
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("connect"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
