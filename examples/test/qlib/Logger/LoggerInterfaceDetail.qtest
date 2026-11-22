@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the default LoggerInterface::detail() calls logArgs() with the DETAIL level, the message and its format arguments as
+# one list, also with more than one format argument (qore#7197: it passed them one by one and raised
+# RUNTIME-OVERLOAD-ERROR)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerInterfaceDetailTest
+
+#! a LoggerInterface that does not override detail() and records the calls of logArgs(int, ...)
+class RecordingLogger inherits LoggerInterface {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        calls += {"level": level, "message": message, "args": format_args};
+    }
+
+    logArgs(LoggerLevel level, string message, *softlist<auto> format_args) {
+        logArgs(level.getValue(), message, format_args);
+    }
+
+    logArgs(string level, string message, *softlist<auto> format_args) {
+        logArgs(LoggerLevel::getLevel(level).getValue(), message, format_args);
+    }
+
+    log(int level, string message, ...) {}
+    log(LoggerLevel level, string message, ...) {}
+    log(string level, string message, ...) {}
+    trace(string message, ...) {}
+    debug(string message, ...) {}
+    info(string message, ...) {}
+    warn(string message, ...) {}
+    error(string message, ...) {}
+    fatal(string message, ...) {}
+    assertLog(bool assertion, string message, ...) {}
+    traceVar(string var_name, auto value) {}
+    debugVar(string var_name, auto value) {}
+    logEvent(LoggerEvent event) {}
+    bool isEnabledFor(int level) { return True; }
+    bool isEnabledFor(LoggerLevel level) { return True; }
+    bool isEnabledFor(string level) { return True; }
+    bool isTraceEnabled() { return True; }
+    bool isDebugEnabled() { return True; }
+    bool isInfoEnabled() { return True; }
+    bool isWarnEnabled() { return True; }
+    bool isErrorEnabled() { return True; }
+    bool isFatalEnabled() { return True; }
+    *LoggerLevel getLevel(bool effective = True) { return LoggerLevel::getLevelAll(); }
+    setLevel(int level) {}
+    setLevel(*LoggerLevel level) {}
+    setLevel(string level) {}
+    decLevel() {}
+    incLevel() {}
+}
+
+class LoggerInterfaceDetailTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LoggerInterfaceDetailTest", "1.0") {
+        addTestCase("detail", \detailTest());
+        set_return_value(main());
+    }
+
+    detailTest() {
+        int Detail = LoggerLevel::getLevelDetail().getValue();
+        RecordingLogger l();
+        l.detail("none");
+        l.detail("one %s", 1);
+        l.detail("two %s %s", 1, "b");
+        l.detail("three %s %s %y", 1, "b", {"c": 3});
+        # a list argument is one format argument, not flattened
+        l.detail("list %y", (1, 2));
+        list<hash<auto>> expected = (
+            {"level": Detail, "message": "none", "args": NOTHING},
+            {"level": Detail, "message": "one %s", "args": (1,)},
+            {"level": Detail, "message": "two %s %s", "args": (1, "b")},
+            {"level": Detail, "message": "three %s %s %y", "args": (1, "b", {"c": 3})},
+            {"level": Detail, "message": "list %y", "args": ((1, 2),)},
+        );
+        assertEq(expected, l.calls);
+    }
+}
