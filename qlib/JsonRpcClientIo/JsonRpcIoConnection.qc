@@ -35,6 +35,11 @@ public namespace JsonRpcClientIo {
     on the above options
 */
 public class JsonRpcIoConnection inherits ConnectionProvider::HttpBasedConnection {
+    #! The client creates its connections with HttpClientIo and the creator's proof (qore#7262)
+    private bool hasBoundClient() {
+        return True;
+    }
+
     public {
         #! Real options for creating the JSON-RPC client
         hash<auto> real_opts;

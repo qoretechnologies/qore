@@ -201,6 +201,12 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       which refuse sandboxed code; the public static member
       @ref ConnectionProvider::AbstractConnection::post_processing "AbstractConnection::post_processing", which any code
       can read, is deprecated (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
+    - a connection that was never checked is not up: @ref ConnectionProvider::AbstractConnection::up "up" is
+      @ref False until a successful ping or connection proves it up; such a connection keeps the status
+      \c "not checked" and no \c last_check value (also when it was serialized as up before this version); a failed
+      ping marks a connection down also when its error is thrown, and an automatic ping that disabled automatic pings
+      skip leaves its state as it is
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "validateConnectionOptions()"
       accepts values assignable to the declared Qore option type, including closures and call references for
       \c code options and lists with the declared element type (issue #6712)
@@ -523,12 +529,16 @@ public hashdecl ConnectionInfo {
     *hash opts;
 
     #! a string giving the connection's status
+    /** \c "not checked" for a connection that was never checked, \c "OK", or the error of the last failed check
+    */
     string status;
 
     #! the connection type
     string type;
 
-    #! a boolean vaue indicating the connection is known to be up (will be @ref False "False" if not checked)
+    #! a boolean value indicating the connection is known to be up (@ref False "False" if not checked)
+    /** See @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up" for when a connection is up
+    */
     bool up = False;
 
     #! the date/time value of the update (or @ref nothing if not updated)
@@ -635,12 +645,16 @@ public hashdecl ConnectionDataInfo {
     *hash opts;
 
     #! a string giving the connection's status
+    /** \c "not checked" for a connection that was never checked, \c "OK", or the error of the last failed check
+    */
     string status;
 
     #! the connection type
     string type;
 
-    #! a boolean vaue indicating the connection is known to be up (will be @ref False "False" if not checked)
+    #! a boolean value indicating the connection is known to be up (@ref False "False" if not checked)
+    /** See @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up" for when a connection is up
+    */
     bool up = False;
 
     #! the date/time value of the update (or @ref nothing if not updated)
