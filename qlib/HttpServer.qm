@@ -5452,6 +5452,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 "hdr": {"Content-Type": "text/plain", "Connection": "close"},
             };
         }
+        # a protocol upgrade (101) exists in HTTP/1.x only: on a multiplexed connection (HTTP/2 or HTTP/3, decided by
+        # the transport) the server's upgrade path would act on the connection's shared socket, so a handler's 101
+        # response is answered with an error before anything is sent for it (qore#7212)
+        if (rv."code" == 101 && (s.isQuic() || s.isHttp2())) {
+            string err = sprintf("101 Switching Protocols returned from handler %y for an HTTP/%s request; a "
+                "protocol upgrade exists in HTTP/1.x only", cx.handler_name, s.isQuic() ? "3" : "2");
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            rv = <HttpResponseInfo>{
+                "code": 500,
+                "body": "a protocol upgrade is not possible on this connection",
+                "hdr": {"Content-Type": "text/plain"},
+            };
+        }
         if (request_helper.log_info) {
             listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
                 rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
