@@ -111,7 +111,7 @@ module HttpServerUtil {
     |\c hdr|hash|the request headers, as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" for an HTTP/1.x request, except for the \c content-type key; see @ref httpserverutil_request_headers
     |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
     |\c handler_name|string|the name of the handler serving the request
-    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers)
+    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers); its \c body_reader key is the @ref HttpServer::Http1BodyReader "Http1BodyReader" of an HTTP/1.x body with a \c Content-Length that a stream handler wants as a stream (see @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
@@ -164,6 +164,14 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
+      @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
+      (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") whose handler wants an HTTP/1.x body with a
+      \c Content-Length as a stream gets it in binary parts of the same size whatever the size of the body, with no
+      body in the constructor, and the server closes the connection after the response when the handler did not
+      read the whole body; documented how a body is given to a stream request that does not want a stream
+      (<a href="https://github.com/qoretechnologies/qore/issues/7308">issue 7308</a>)
     - the persistence and the close notification of a request handler
       (@ref HttpServer::AbstractHttpRequestHandler::setPersistent() "AbstractHttpRequestHandler::setPersistent()",
       @ref HttpServer::AbstractHttpRequestHandler::notifyClosed() "notifyClosed()") are kept by the handler only:
@@ -432,6 +440,25 @@ public const date<relative> ReadTimeout = DefaultTimeout;
     @since HttpServerUtil 1.6
 */
 public const int DefaultMaxDecodedBodySize = 128 * 1024 * 1024;
+
+#! the largest HTTP/1.x request body with a \c Content-Length that the server reads before the request is dispatched (1 MiB)
+/** A body of this size or smaller is read by the server's I/O thread before the handler is called, so that a small
+    request does not hold a handler thread while its body arrives; a larger body is read on the handler thread: as a
+    stream in parts by a stream handler that wants it (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"),
+    whole otherwise.  The value decides only where the bytes are read: a stream handler receives a body of either
+    size in the same way (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultBodyStreamThreshold = 1024 * 1024;
+
+#! the largest part of an HTTP/1.x request body with a \c Content-Length that a stream handler receives (64 KiB)
+/** @see @ref HttpServer::Http1BodyReader "Http1BodyReader"
+
+    @since HttpServerUtil 1.6
+*/
+public const int BodyStreamPartSize = 64 * 1024;
 
 #! maximum X.509 and private key file length
 /** there is no real maximum size for these files, however an upper limit is used here to ensure that
@@ -2505,6 +2532,119 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
     }
 }
 
+#! Reads an HTTP/1.x request body with a \c Content-Length in parts for a stream handler
+/** The server gives an object of this class to a stream handler that wants the body of an HTTP/1.x request with a
+    \c Content-Length as a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
+    in the \c body_reader key of \c cx."header-info"; @ref HttpServer::AbstractStreamRequest::handleRequest()
+    "AbstractStreamRequest::handleRequest()" reads the body with it and gives each part to
+    @ref HttpServer::AbstractStreamRequest::recv() "AbstractStreamRequest::recv()".
+
+    Each part is @ref binary data of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, also for
+    a text content type (a part could end inside a multibyte character), and each byte of the body is given once.  The
+    parts are the same whether the server read the body before the request was dispatched (a body of at most
+    @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes) or reads it from the socket as it
+    is read here.
+
+    The server refuses a body larger than the maximum request body size of the listener before it is read; the
+    reader also refuses to give more than that size.  When the handler has not read the whole body, the server closes
+    the connection after the response, as the bytes that remain cannot be told apart from the next request.
+
+    @since HttpServerUtil 1.6
+*/
+public class Http1BodyReader {
+    private:internal {
+        #! the socket that the body is read from
+        Socket s;
+        #! the bytes of the body that the server read before the request was dispatched, given before any others
+        *binary buffered;
+        #! the offset in \c buffered of the next part
+        int buffered_offset = 0;
+        #! the length of the body
+        int length;
+        #! the number of bytes of the body given so far
+        int received = 0;
+        #! the maximum size of the body; 0 for no limit
+        int max_body;
+    }
+
+    #! Creates the reader of a body
+    /** @param s the socket that the body is read from
+        @param length the length of the body (its \c Content-Length)
+        @param buffered the bytes of the body that the server read before the request was dispatched, if any
+        @param max_body the maximum size of the body; 0 for no limit
+
+        @throw HTTP-BODY-READER-ERROR the length is negative, or the buffered bytes are more than the body
+    */
+    constructor(Socket s, int length, *binary buffered, int max_body = 0) {
+        if (length < 0) {
+            throw "HTTP-BODY-READER-ERROR", sprintf("invalid body length %d", length);
+        }
+        if (buffered && buffered.size() > length) {
+            throw "HTTP-BODY-READER-ERROR", sprintf("%d buffered bytes exceed the body length %d", buffered.size(),
+                length);
+        }
+        self.s = s;
+        self.length = length;
+        self.buffered = buffered;
+        self.max_body = max_body;
+    }
+
+    #! Returns the next part of the body, or @ref nothing when the whole body has been given
+    /** @param timeout_ms the timeout for reading the part from the socket
+
+        @return the next part of the body, of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes,
+        or @ref nothing when the whole body has been given
+
+        @throw HTTP-BODY-TOO-LARGE the body exceeds the maximum request body size
+        @throw SOCKET-TIMEOUT, SOCKET-CLOSED or another socket error: the part could not be read
+    */
+    *binary read(timeout timeout_ms = HttpServer::DefaultTimeout) {
+        int remaining = length - received;
+        if (!remaining) {
+            return;
+        }
+        int size = remaining > BodyStreamPartSize ? BodyStreamPartSize : remaining;
+        if (max_body > 0 && received + size > max_body) {
+            throw "HTTP-BODY-TOO-LARGE", sprintf("HTTP/1.x request body size %d exceeds maximum allowed body size %d",
+                length, max_body);
+        }
+        binary part;
+        int buffered_left = buffered ? buffered.size() - buffered_offset : 0;
+        if (buffered_left) {
+            # the bytes read before the request was dispatched are given in parts of the same size as those read
+            # from the socket
+            if (size > buffered_left) {
+                size = buffered_left;
+            }
+            part = (buffered_offset == 0 && size == buffered.size()) ? buffered : buffered.substr(buffered_offset, size);
+            buffered_offset += size;
+            if (buffered_offset == buffered.size()) {
+                remove buffered;
+                buffered_offset = 0;
+            }
+        } else {
+            part = s.recvBinary(size, timeout_ms);
+            if (part.size() != size) {
+                throw "HTTP-BODY-INCOMPLETE", sprintf("HTTP/1.x request body ended after %d of %d bytes",
+                    received + part.size(), length);
+            }
+        }
+        received += size;
+        return part;
+    }
+
+    #! Returns the length of the body
+    int getLength() {
+        return length;
+    }
+
+    #! Returns the number of bytes of the body that have not been given yet
+    int getRemaining() {
+        return length - received;
+    }
+}
+
 #! abstract class for streaming HTTP chunked requests/responses
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
 
@@ -2515,6 +2655,22 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
       the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate
       a chunked transfer.  The simulation of a chunked transfer or the actual chunked receive with the callbacks is
       made by the handleRequest() method. Subclasses should re-implement recvImpl() which is called by this method
+
+    @par Request Bodies With a Content-Length
+    How the body of a request with a \c Content-Length reaches the object depends on whether the handler wants it as
+    a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"):
+    - <b>as a stream</b>: the \c body argument of the constructor is @ref nothing, and recv() is called once for each
+      part of the body, with @ref binary data (also for a text content type) and each byte once, then once with the
+      end of the body.  Over HTTP/1.x, each part has at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize"
+      bytes, whatever the size of the body: a body of at most
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes, which the server reads before
+      the request is dispatched, is given in the same parts as a larger one, which is read from the socket as the
+      parts are given (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
+    - <b>whole</b> (the default): the complete body is the \c body argument of the constructor, decoded as text for a
+      text content type (a REST handler gives it deserialized), and the same body is also given in a single call of
+      recv() before the end of the body; a handler that reads the body in recv() must then ignore the constructor's
+      argument, or the reverse
     - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers
       and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by
       this method
@@ -2656,6 +2812,8 @@ public class AbstractStreamRequest {
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         bool chunked_recv_aborted = False;
+        # the reader of an HTTP/1.x body with a Content-Length that the handler wants as a stream (qore#7308)
+        *Http1BodyReader body_reader;
         # handle message body
         if (exists body) {
             hash<auto> dh = {
@@ -2668,6 +2826,20 @@ public class AbstractStreamRequest {
             recv(dh);
             # signal end of data with any trailers received with the buffered body
             recvImpl({"hdr": cx.trailers});
+        } else if (body_reader = cx."header-info".body_reader) {
+            # an HTTP/1.x body with a Content-Length that the handler wants as a stream (qore#7308): it is given in
+            # binary parts of at most BodyStreamPartSize bytes, whether the server read it before the request was
+            # dispatched or it is read from the socket here
+            while (*binary part = body_reader.read(timeout_ms)) {
+                recv({"data": part});
+                if (hasRecvError()) {
+                    # the rest of the body is not read: the server closes the connection after the response, as the
+                    # bytes that remain cannot be told apart from the next request
+                    break;
+                }
+            }
+            # signal end of data
+            recvImpl({"hdr": NOTHING});
         } else if (cx."header-info".body_streaming) {
             # Opt-in interactive bidirectional streaming on HTTP/2 / HTTP/3: instead of
             # reading all inbound DATA before replying, interleave read -> reply on the
@@ -2864,10 +3036,11 @@ public class AbstractStreamRequest {
         }
 
         hash<HttpHandlerResponseInfo> resp = sendResponse();
-        if (chunked_recv_aborted) {
-            # Force connection close: the socket has unread chunked data
-            # from the client, so keep-alive would desynchronize the
-            # protocol
+        if (chunked_recv_aborted || (body_reader && body_reader.getRemaining())) {
+            # Force connection close: the socket has unread body data
+            # from the client (chunked, or a Content-Length body that the
+            # handler stopped reading), so keep-alive would desynchronize
+            # the protocol
             resp.close = True;
             resp.hdr.Connection = "close";
         }
@@ -2990,8 +3163,16 @@ public class AbstractStreamRequest {
 
         # build and submit early 200 streaming response headers (no body)
         hash<HttpHandlerResponseInfo> rh = getResponseHeaderMessage();
-        http_set_reply_headers(s, cx, \rh);
         int rcode = rh."code" ?? 200;
+        # the status of the response must be a final one: a protocol upgrade (101) exists in HTTP/1.x only and makes
+        # the client fail its HTTP/2 or HTTP/3 stream or connection, with the other streams on it, and another
+        # informational (1xx) status leaves the client waiting; it is refused before anything is sent, so the server
+        # answers the request with an error (qoretechnologies/qore#7212, #7222)
+        if (rcode < 200 || rcode > 599) {
+            throw "HTTP-RESPONSE-STATUS-ERROR", sprintf("status %d returned for an interactive HTTP/%s stream is not "
+                "the status of a final response", rcode, http3 ? "3" : "2");
+        }
+        http_set_reply_headers(s, cx, \rh);
         hash<auto> resp_hdr = rh.hdr ?? {};
         # HTTP/2 and HTTP/3 do not use chunked transfer encoding
         remove resp_hdr."Transfer-Encoding";
@@ -3733,6 +3914,20 @@ public class AbstractHttpRequestHandler {
           \c cx."header-info".  The handler thread drives the TCP socket directly.
 
         Check \c cx."header-info".http3 to determine which protocol is in use.
+
+        @par HTTP/1.x Request Bodies With a Content-Length
+        For an HTTP/1.x request with a \c Content-Length body, this method is called for a stream handler (one
+        created with \c stream = @ref True "True") on the handler thread, before the body is given to the handler;
+        \c body_streaming is not set.  When it returns @ref True "True", the body is not given whole: the server
+        sets \c cx."header-info".body_reader to an @ref HttpServer::Http1BodyReader "Http1BodyReader", which
+        @ref HttpServer::AbstractStreamRequest::handleRequest() "AbstractStreamRequest::handleRequest()" reads the
+        body with, giving each part of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes to
+        @ref HttpServer::AbstractStreamRequest::recv() "AbstractStreamRequest::recv()" as @ref binary data.  The
+        parts are the same whether the server read the body before the request was dispatched (a body of at most
+        @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes) or reads it from the socket
+        as the handler reads the parts.  A body larger than the maximum request body size is refused with 413 before
+        any of it is read.  The method is not called for a handler that is not a stream handler, which always gets
+        an HTTP/1.x body whole.
 
         Any trailer fields that the client sends after the body are available once the body has ended from
         @ref Qore::Socket::getQuicStreamTrailers() "Socket::getQuicStreamTrailers()" (HTTP/3) or

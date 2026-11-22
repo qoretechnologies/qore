@@ -1,0 +1,351 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpClientCreatorProof.qc the proof that the creator of a client passed the caller check of a manager
+
+/** HttpClientCreatorProof.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Main namespace
+public namespace HttpClientIo {
+
+#! An opaque proof that the code that created a client passed the caller check of a connection manager (qore#7262)
+/** A client that creates its @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" lazily,
+    when it connects or reconnects, or again when it is closed, takes a proof with forClient() when it is created and
+    gives it to the manager's constructor each time: a client that trusted code created and lent to restricted code
+    therefore keeps working for it, while restricted code that creates a client of its own gets no proof and is refused
+    when the client creates its manager, as before.
+
+    A proof is bound to what the code that took it gave: the origin (host and port) of the URL of the client when it was
+    created, or of the connection object that creates the client (see
+    @ref HttpClientIo::HttpClientCreatorProofGrant "HttpClientCreatorProofGrant"), its proxy, and its CA certificate
+    locations.  A manager that is created with a proof for code that could not create one itself checks every
+    connection that it creates against them: it connects only to that origin, only through that proxy (or with no
+    proxy if the client had none; HTTP/3, which cannot use a proxy, is refused if it had one), and with no other CA
+    certificate locations, so restricted code that changes the target, the proxy or the CA locations of a lent client,
+    of a lent connection or of its manager, or that obtains the proof, reaches nothing that the client could not; a
+    redirect of such a client to the same origin is followed, while one to another origin is refused.
+
+    An origin is whether the connection uses TLS, the host and the port: the same host and port with plain HTTP instead
+    of TLS, or the other way round, is another origin.  The scheme decides TLS: \c https, \c wss and the secure schemes
+    of connection objects that their clients map to \c https (such as \c jsonrpcs, \c yamlrpcs, \c mcps and
+    \c a2as) use it; \c http, \c ws and the plain schemes (\c jsonrpc, \c yamlrpc, \c mcp, \c a2a, ...) do not;
+    a URL without a scheme uses TLS, as the manager does, and a URL of another scheme allows no origin.  A URL without
+    a port has the default port of its TLS mode (443 or 80).  Host names are compared case-insensitively, without a
+    trailing dot and IPv6 addresses without their brackets; other spellings of a host (an internationalized name and
+    its punycode form, a name and its address) are other hosts.  The host is resolved by the manager as for any client,
+    as the code that created the client chose it.
+
+    Only this class issues proofs: its constructor is private, and a proof is genuine only if it is recorded in the
+    class's own register (genuine()), so neither an object of another class with the same name and signature nor a
+    copy of a proof is accepted.  A proof covers what the code that took it may do: a proof of code restricted from
+    the \c FILESYSTEM functional domain does not allow a manager with CA certificate locations.
+
+    @since HttpClientIo 1.0
+*/
+public final class HttpClientCreatorProof {
+    private:internal {
+        #! True if the code that took the proof may give a manager CA certificate locations
+        bool ca_locations;
+
+        #! the origins that the proof allows, as \c "scheme|host:port" keys (scheme \c http or \c https)
+        hash<string, bool> origins;
+
+        #! the proxy that the proof allows, as a \c "scheme|host:port" key, or nothing for none
+        *string proxy;
+
+        #! the CA certificate file and directory that the proof allows, if any
+        *string ca_file;
+        *string ca_path;
+
+        #! the proofs issued and not yet destroyed, by object
+        static hash<string, bool> issued = {};
+
+        #! the lock of \c issued and \c grants
+        static Mutex lock();
+
+        #! the grants of proofs to the next client of their target created in a thread (see
+        #! HttpClientCreatorProofGrant), by thread, innermost last; each has the \c id of its grant and its \c proof
+        static hash<string, list<hash<auto>>> grants = {};
+
+        #! True for the schemes that use TLS, False for the plain ones, of the schemes that are mapped to HTTP
+        const SchemeTls = {
+            "http": False, "ws": False, "jsonrpc": False, "jsonrpcio": False, "yamlrpc": False, "yamlrpcio": False,
+            "mcp": False, "a2a": False, "sewiows": False,
+            "https": True, "wss": True, "jsonrpcs": True, "jsonrpcios": True, "yamlrpcs": True, "yamlrpcios": True,
+            "mcps": True, "a2as": True, "sewiowss": True,
+        };
+    }
+
+    #! Issues a proof
+    private:internal constructor(bool ca_locations, hash<string, bool> origins, *hash<auto> opts) {
+        self.ca_locations = ca_locations;
+        self.origins = origins;
+        if (opts.proxy.val()) {
+            proxy = HttpClientCreatorProof::getProxyKey(opts.proxy);
+        }
+        ca_file = opts.ssl_ca_file;
+        ca_path = opts.ssl_ca_path;
+        AutoLock al(lock);
+        issued{self.uniqueHash()} = True;
+    }
+
+    #! Withdraws the proof
+    destructor() {
+        AutoLock al(lock);
+        remove issued{self.uniqueHash()};
+    }
+
+    #! A copy of a proof is not a proof
+    /** @throw PERMISSION-DENIED always
+    */
+    copy() {
+        throw "PERMISSION-DENIED", "an HTTP client creator proof cannot be copied";
+    }
+
+    #! Returns a proof for the calling code, bound to the given target
+    /** @param url the URL of the target
+        @param opts the options that the proof is bound to: \c proxy (the URL of the proxy, if any), \c ssl_ca_file
+        and \c ssl_ca_path (the CA certificate locations, if any)
+
+        @return a proof that the calling code passed the caller check of a connection manager
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain
+    */
+    static HttpClientCreatorProof get(string url, *hash<auto> opts) {
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
+                "restricted from the NETWORK functional domain";
+        }
+        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+            HttpClientCreatorProof::getOrigins(url), opts);
+    }
+
+    #! Returns a proof for the calling code bound to the given target, or nothing if it cannot have one
+    /** @param url the URL of the target; with no URL, no proof is returned
+        @param opts the options that the proof is bound to (see get())
+
+        @return a proof if the calling code may create a connection manager, otherwise nothing: a client created by
+        such code is refused when it creates its manager
+    */
+    static *HttpClientCreatorProof tryGet(*string url, *hash<auto> opts) {
+        if (!url.val() || SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            return;
+        }
+        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+            HttpClientCreatorProof::getOrigins(url), opts);
+    }
+
+    #! Returns the proof of a client that is being created
+    /** In order: the innermost proof that a connection object grants in this thread to the next client of its target
+        (see HttpClientCreatorProofGrant) whose origins include the origin of the client's URL, which is taken, so that a
+        client of another target that is created in the meantime (to fetch a token, for example) does not take it; else
+        a proof for the calling code, bound to the client's URL (tryGet())
+
+        @param url the URL of the client
+        @param opts the options that a proof for the calling code is bound to (see get())
+
+        @return the proof of the client, or nothing
+
+        @note a granted proof is bound to what the connection that grants it fixed when it was created, so code that
+        takes it reaches only what that connection's clients can reach
+    */
+    static *HttpClientCreatorProof forClient(*string url, *hash<auto> opts) {
+        if (url.val()) {
+            # the origin of the client's URL (a URL has one origin at most)
+            *string want = HttpClientCreatorProof::getOrigins(url).firstKey();
+            if (want) {
+                AutoLock al(lock);
+                string tid = string(gettid());
+                if (*list<hash<auto>> l = grants{tid}) {
+                    for (int i = l.size() - 1; i >= 0; --i) {
+                        HttpClientCreatorProof granted = l[i].proof;
+                        if (granted.origins{want}) {
+                            splice l, i, 1;
+                            if (l) {
+                                grants{tid} = l;
+                            } else {
+                                remove grants{tid};
+                            }
+                            return granted;
+                        }
+                    }
+                }
+            }
+        }
+        return HttpClientCreatorProof::tryGet(url, opts);
+    }
+
+    #! Returns True if the given object is a proof that this class issued
+    static bool genuine(object proof) {
+        AutoLock al(lock);
+        return issued{proof.uniqueHash()} ?? False;
+    }
+
+
+    #! Returns True if the proof allows connections to the given origin
+    /** @param tls True if the connection uses TLS
+        @param host the host of the target
+        @param port the port of the target
+    */
+    bool allowsOrigin(bool tls, string host, int port) {
+        return origins{HttpClientCreatorProof::getKey(tls, host, port)} ?? False;
+    }
+
+    #! Returns True if the proof allows connections through the given proxy, or with no proxy
+    /** @param proxy_info the \c host, \c port and \c ssl of the proxy, or nothing for a connection without a proxy
+
+        @return True if the proxy is the one that the proof is bound to, or if there is none and the proof has none
+    */
+    bool allowsProxy(*hash<auto> proxy_info) {
+        if (!proxy_info) {
+            return !exists proxy;
+        }
+        return exists proxy
+            && proxy == HttpClientCreatorProof::getKey(proxy_info.ssl ?? False, proxy_info.host ?? "",
+                proxy_info.port ?? 0);
+    }
+
+    #! Returns True if the proof allows the given CA certificate locations
+    /** @param file the CA certificate file, if any
+        @param path the CA certificate directory, if any
+    */
+    bool allowsCaLocations(*string file, *string path) {
+        if (!file.val() && !path.val()) {
+            return True;
+        }
+        return ca_locations && (file ?? "") == (ca_file ?? "") && (path ?? "") == (ca_path ?? "");
+    }
+
+    #! Grants this proof to the next client created in this thread, while the returned object exists
+    /** @return an object that removes the grant when it goes out of scope, if it was not taken
+    */
+    HttpClientCreatorProofGrant grantNext() {
+        HttpClientCreatorProofGrant grant(self);
+        AutoLock al(lock);
+        hash<auto> entry = {"id": grant.uniqueHash(), "proof": self};
+        grants{string(gettid())} += (entry,);
+        return grant;
+    }
+
+    #! Removes the given grant of this proof in this thread if it was not taken (see HttpClientCreatorProofGrant)
+    /** @param id the ID of the grant: the unique hash of its HttpClientCreatorProofGrant object
+    */
+    revokeGrant(string id) {
+        AutoLock al(lock);
+        string tid = string(gettid());
+        *list<hash<auto>> l = grants{tid};
+        for (int i = l.size() - 1; i >= 0; --i) {
+            if (l[i].id == id && l[i].proof === self) {
+                splice l, i, 1;
+                if (l) {
+                    grants{tid} = l;
+                } else {
+                    remove grants{tid};
+                }
+                return;
+            }
+        }
+    }
+
+    #! Returns the key of an origin or a proxy: \c "scheme|host:port"
+    private:internal static string getKey(bool tls, string host, int port) {
+        return sprintf("%s|%s:%d", tls ? "https" : "http", HttpClientCreatorProof::canonicalHost(host), port);
+    }
+
+    #! Returns the canonical form of a host name: lower case, without a trailing dot and IPv6 brackets
+    /** A UNIX domain socket path is returned as it is
+    */
+    private:internal static string canonicalHost(string host) {
+        if (host =~ /^\//) {
+            return host;
+        }
+        host = host.lwr();
+        if (host =~ /^\[.*\]$/) {
+            host = host.substr(1, -1);
+        }
+        return regex_subst(host, "\\.+$", "");
+    }
+
+    #! Returns the origins of the given URL, as \c "host:port" keys
+    private:internal static hash<string, bool> getOrigins(string url) {
+        hash<auto> u;
+        try {
+            u = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            return {};
+        }
+        if (!u.host.val()) {
+            return {};
+        }
+        # a UNIX domain socket target: plain HTTP with port 0, as the manager connects to it
+        if (!u.port && u.host =~ /^\//) {
+            return (u.protocol ?? "http") == "http" ? {HttpClientCreatorProof::getKey(False, u.host, 0): True} : {};
+        }
+        *bool tls = SchemeTls{(u.protocol ?? "https").lwr()};
+        if (!exists tls) {
+            return {};
+        }
+        return {HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80)): True};
+    }
+
+    #! Returns the \c "host:port" key of a proxy URL
+    private:internal static *string getProxyKey(string url) {
+        hash<auto> u;
+        try {
+            u = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            return "";
+        }
+        if (!u.host.val()) {
+            return "";
+        }
+        bool tls = (u.protocol == "https");
+        return HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80));
+    }
+}
+
+#! The grant of a proof to the next client that the code of a connection object creates in this thread (qore#7262)
+/** A connection object takes a proof when it is created, bound to its URL, and grants it with
+    @ref HttpClientIo::HttpClientCreatorProof::grantNext() "HttpClientCreatorProof::grantNext()" while it creates its
+    client in @ref ConnectionProvider::AbstractConnection::get() "get()" or
+    @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()", also for restricted code that was lent the
+    connection: the first client of its target created in this thread takes it (see
+    @ref HttpClientIo::HttpClientCreatorProof::forClient() "HttpClientCreatorProof::forClient()").  The proof is never
+    handed to the code of the connection's class, so code that derives a class from it cannot read it, and it is bound
+    to the connection's URL when it was created, so changing the connection's URL or options does not move it.
+
+    @since HttpClientIo 1.0
+*/
+public final class HttpClientCreatorProofGrant {
+    private:internal {
+        HttpClientCreatorProof proof;
+    }
+
+    #! Records the grant (see HttpClientCreatorProof::grantNext())
+    constructor(HttpClientCreatorProof proof) {
+        self.proof = proof;
+    }
+
+    #! Removes the grant if it was not taken
+    destructor() {
+        proof.revokeGrant(self.uniqueHash());
+    }
+}
+}

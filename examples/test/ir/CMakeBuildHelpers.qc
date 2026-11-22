@@ -50,6 +50,8 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
             \testQmodSourcesChecked());
         addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
+        addPartCase(3, "a group watches what its members read from outside it through one depfile with Ninja",
+            \testGroupExternalInputsDepfileNinja());
         addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
             \testPartialAggregateBodyContracts());
 
@@ -1512,6 +1514,25 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         shared parse's depfile, so an edit to it rebuilt nothing.
     */
     testGroupExternalInputsDepfile() {
+        groupExternalInputsDepfile("Unix Makefiles");
+    }
+
+    #! As testGroupExternalInputsDepfile() with the Ninja generator (qore#7189)
+    /** Under policy CMP0116 NEW, which the project's cmake_minimum_required() and cmake/QoreMacros.cmake set, Ninja
+        reads CMake's copy of a depfile, which only the command of its rule refreshes; the group's incremental plan
+        rewrites the depfile of the group's external-input stamp, so the module that a member starts requiring did not
+        reach Ninja, and an edit of the module rebuilt nothing.
+    */
+    testGroupExternalInputsDepfileNinja() {
+        if (!trim(backquote("command -v ninja 2>/dev/null || true"))) {
+            testSkip("ninja is not installed");
+        }
+        groupExternalInputsDepfile("Ninja");
+    }
+
+    #! A group watches what its members read from outside it through one depfile, with the given generator
+    private groupExternalInputsDepfile(string generator) {
+        bool makefiles = generator == "Unix Makefiles";
         TmpDir tmp("qore-cmake-qcc-external-inputs-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
@@ -1566,7 +1587,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
     \"generation_target=${QO_GENERATION_TARGET}\\n\")
 ");
 
-        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+        string configure = run(sprintf("cmake -G %s -S %s -B %s%s", shellQuote(generator), src_dir, build_dir,
             qore_dir ? " -DQore_DIR=" + qore_dir : ""));
         assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
             "configured the external-input group: " + configure);
@@ -1575,11 +1596,13 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
         string generation_dir = build_dir + "/CMakeFiles/" + generation_target + ".dir";
 
         # No object recipe hands the build tool its own depfile any more.
-        string depend_info = read(generation_dir + "/DependInfo.cmake");
-        assertTrue(depend_info.size() > 0, "the generation target has dependency info");
-        assertEq(-1, depend_info.find(".qo.d"),
-            "no member depfile is consolidated into a target consuming the object stamps: "
-                + depend_info);
+        if (makefiles) {
+            string depend_info = read(generation_dir + "/DependInfo.cmake");
+            assertTrue(depend_info.size() > 0, "the generation target has dependency info");
+            assertEq(-1, depend_info.find(".qo.d"),
+                "no member depfile is consolidated into a target consuming the object stamps: "
+                    + depend_info);
+        }
 
         string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(3, occurrences(clean, "qcc: script-context .qo"),
@@ -1608,6 +1631,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
             "the next build compiles nothing: " + settled);
         assertEq(recorded, mtime(external_depfile),
             "and leaves an unchanged external-input set unwritten");
+        if (!makefiles) {
+            # the build after it has nothing to do: no rule runs in every build (qore#7189)
+            string idle = run(sprintf("cmake --build %s -- -j9", build_dir));
+            assertRegex("no work to do", idle, "a settled Ninja build runs no rule: " + idle);
+        }
 
         # An edit to the module rebuilds the member that reads it, and nothing else.
         write(module_path, replace(module_source, "NAME", "two"));
@@ -1619,7 +1647,13 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
         string after_module = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(0, occurrences(after_module, "qcc: script-context .qo"),
             "the build after the module edit converges: " + after_module);
+        if (!makefiles) {
+            assertRegex("no work to do", after_module, "and with Ninja it runs no rule: " + after_module);
+        }
 
+        if (!makefiles) {
+            return;
+        }
         # Dependencies an earlier configuration consolidated are rebuilt from scratch, together
         # with what an interrupted rewrite left behind.
         write(generation_dir + "/compiler_depend.internal", "stale\n");

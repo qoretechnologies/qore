@@ -45,7 +45,7 @@ QoreFuture::~QoreFuture() {
 void qore_future_private::setError(const char* err, const char* desc, QoreValue arg, ExceptionSink* xsink) {
     // whether code that is sandboxed or acts for sandboxed code chooses the text (qore#7139); not under the lock
     qore_program_id_t n_err_pgm_id = 0;
-    const bool n_err_sandboxed = qore_caller_is_sandboxed(&n_err_pgm_id);
+    const bool n_err_sandboxed = qore_code_origin_sandboxed(&n_err_pgm_id);
     AutoLocker al(&lock);
     if (state != PENDING) {
         arg.discard(xsink);
