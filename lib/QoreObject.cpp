@@ -192,7 +192,9 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     sandbox_provenance = provenance.release();
     // a sandbox owns the object if sandboxed code executes the expression that creates it (qore#6842)
     if (sandbox_provenance && qore_sandboxed_code_active()) {
-        sandbox_owned.store(qore_creator_is_sandbox_owner(), std::memory_order_relaxed);
+        if (qore_creator_is_sandbox_owner()) {
+            sandbox_owner.store(sandbox_provenance, std::memory_order_relaxed);
+        }
     }
 }
 
@@ -206,7 +208,7 @@ bool qore_creator_is_sandbox_owner() {
         return true;
     }
     const QoreObject* self = runtime_get_stack_object();
-    return self && qore_object_private::get(*self)->sandbox_owned.load(std::memory_order_acquire);
+    return self && qore_object_private::get(*self)->getSandboxOwner();
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
@@ -229,6 +231,13 @@ QoreStringNode* QoreObject::getUniqueHash() const {
 }
 
 qore_object_private::~qore_object_private() {
+    {
+        // the context of a sandbox that the object was transferred to is referenced on its own
+        QoreSandboxContext* owner = sandbox_owner.load(std::memory_order_relaxed);
+        if (owner && owner != sandbox_provenance) {
+            owner->deref();
+        }
+    }
     if (sandbox_provenance) {
         sandbox_provenance->deref();
     }
@@ -1605,7 +1614,8 @@ bool qore_object_private::sandboxedWriterDeniedIntern(const qore_class_private& 
     if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
         return false;
     }
-    return !qore_sandbox_current_code_created(sandbox_provenance, sandbox_owned.load(std::memory_order_acquire));
+    const QoreSandboxContext* owner = getSandboxOwner();
+    return !qore_sandbox_current_code_created(owner, owner);
 }
 
 int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
@@ -1625,10 +1635,18 @@ int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const q
 }
 
 void qore_object_private::setCopyProvenance(const qore_object_private& source) {
-    sandbox_owned.store(source.sandbox_owned.load(std::memory_order_acquire), std::memory_order_release);
     QoreSandboxContext* src = source.sandbox_provenance;
+    QoreSandboxContext* src_owner = source.getSandboxOwner();
     if (src) {
         src->ref();
+    }
+    // the context of a sandbox that the source was transferred to is referenced on its own
+    if (src_owner && src_owner != src) {
+        src_owner->ref();
+    }
+    QoreSandboxContext* old_owner = sandbox_owner.exchange(src_owner, std::memory_order_acq_rel);
+    if (old_owner && old_owner != sandbox_provenance) {
+        old_owner->deref();
     }
     if (sandbox_provenance) {
         sandbox_provenance->deref();

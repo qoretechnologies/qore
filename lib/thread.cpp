@@ -7605,9 +7605,50 @@ bool qore_caller_created_object(const QoreObject& obj) {
     if (!qore_caller_is_sandboxed()) {
         return true;
     }
-    const qore_object_private* priv = qore_object_private::get(obj);
-    return qore_sandbox_current_code_created(priv->sandbox_provenance,
-        priv->sandbox_owned.load(std::memory_order_acquire));
+    const QoreSandboxContext* owner = qore_object_private::get(obj)->getSandboxOwner();
+    return qore_sandbox_current_code_created(owner, owner);
+}
+
+QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext* creation) {
+    if (!creation) {
+        return nullptr;
+    }
+    try {
+        // the sandboxes that govern the current code, as qore_sandbox_current_code_created() captures them; released
+        // unless returned, also when an allocation below fails
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                if (ctx) {
+                    ctx->deref();
+                }
+            }
+        } current{new QoreSandboxContext(false)};
+        std::vector<const QoreSandboxManager*> current_managers;
+        qore_add_sandbox_context_managers(*current.ctx, current_managers);
+        // only a sandbox at the enforcement level of tenant isolation owns objects: the caller must be governed by one
+        current_managers.erase(std::remove_if(current_managers.begin(), current_managers.end(),
+            [](const QoreSandboxManager* sm) { return !qore_sandbox_owner_rules_apply(*sm); }),
+            current_managers.end());
+        if (current_managers.empty()) {
+            return nullptr;
+        }
+        // the object was created while the caller was served: its provenance names every such sandbox of the caller
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        for (const QoreSandboxManager* sm : current_managers) {
+            if (std::find(creation_managers.begin(), creation_managers.end(), sm) == creation_managers.end()) {
+                return nullptr;
+            }
+        }
+        current.ctx->origin_restrictions = creation->origin_restrictions;
+        QoreSandboxContext* rv = current.ctx;
+        current.ctx = nullptr;
+        return rv;
+    } catch (std::bad_alloc&) {
+        // the sandboxes cannot be compared: fails closed
+        return nullptr;
+    }
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {

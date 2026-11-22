@@ -574,7 +574,8 @@ authenticate();
     serves sandboxed code, such as a shared object that it creates lazily for its first caller, is governed by that
     code's sandbox but owned by no sandbox.  Trusted code that creates an object for the sandboxed code that it serves
     hands it over with @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()"
-    (in C++: \c qore_transfer_object_to_caller()); the transfer is one-way.  The bound of the rule: an object that the
+    (in C++: \c qore_transfer_object_to_caller()); the transfer is one-way, and only to sandboxed code at the
+    enforcement level of tenant isolation.  The bound of the rule: an object that the
     code of a trusted class creates directly in a method of an object that a sandbox owns is that sandbox's, also if
     the method stores it in a static member or a global variable, where other code can reach it.
 

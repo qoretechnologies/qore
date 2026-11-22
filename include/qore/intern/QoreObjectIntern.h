@@ -257,10 +257,13 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
-    //! true if a sandbox owns the object: sandboxed code created it, or trusted class code directly in a method of
-    //! an object that a sandbox owns, or trusted code transferred it to the sandboxed code that it served
-    //! (qore_transfer_object_to_caller()); the sandbox is the one that \c sandbox_provenance records (qore#6842)
-    std::atomic<bool> sandbox_owned{false};
+    //! The sandbox context that owns the object, or nullptr if no sandbox owns it (qore#6842)
+    /** Set if sandboxed code created the object, or trusted class code directly in a method of an object that a
+        sandbox owns: then it is \c sandbox_provenance (not referenced again); or if trusted code transferred the object
+        to the sandboxed code that it served (qore_transfer_object_to_caller()): then it is the caller's context
+        (referenced), which is set once and never changed
+    */
+    std::atomic<QoreSandboxContext*> sandbox_owner{nullptr};
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection
@@ -778,6 +781,11 @@ public:
 
     //! Gives a copy of \a source, which no other code has yet, the creation provenance of \a source (qore#7033)
     DLLLOCAL void setCopyProvenance(const qore_object_private& source);
+
+    //! Returns the sandbox context that owns the object, or nullptr if no sandbox owns it (qore#6842)
+    DLLLOCAL QoreSandboxContext* getSandboxOwner() const {
+        return sandbox_owner.load(std::memory_order_acquire);
+    }
 
     //! the implementation of getReferencedMemberNoMethod() and getReferencedMemberForSelf()
     /** @tparam CheckRead true to check the sandboxed read rule (qore#7033), false for a member of self

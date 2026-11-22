@@ -2254,7 +2254,7 @@ int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
         return -1;
     }
     qore_object_private* priv = qore_object_private::get(obj);
-    if (priv->sandbox_owned.load(std::memory_order_acquire)) {
+    if (priv->getSandboxOwner()) {
         xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that a sandbox owns already cannot be "
             "transferred", obj.getClassName());
         return -1;
@@ -2264,13 +2264,22 @@ int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
             "sandboxed code that the calling code serves", obj.getClassName());
         return -1;
     }
-    // the object must have been created for the caller: its provenance names the caller's sandbox
-    if (!qore_sandbox_current_code_created(priv->sandbox_provenance, true)) {
-        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that was not created while its "
-            "caller was served cannot be transferred to it", obj.getClassName());
+    // the caller must be governed by a sandbox at the enforcement level of tenant isolation, and the object must have
+    // been created for it: its provenance names the caller's sandbox; the caller's context then owns the object
+    QoreSandboxContext* owner = qore_sandbox_transfer_owner_context(priv->sandbox_provenance);
+    if (!owner) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' can only be transferred to sandboxed "
+            "code at the enforcement level of tenant isolation, and only while the code that it was created for is "
+            "served", obj.getClassName());
         return -1;
     }
-    priv->sandbox_owned.store(true, std::memory_order_release);
+    QoreSandboxContext* expected = nullptr;
+    if (!priv->sandbox_owner.compare_exchange_strong(expected, owner, std::memory_order_acq_rel)) {
+        owner->deref();
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that a sandbox owns already cannot be "
+            "transferred", obj.getClassName());
+        return -1;
+    }
     return 0;
 }
 

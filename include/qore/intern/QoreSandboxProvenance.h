@@ -52,6 +52,14 @@ DLLLOCAL bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm);
 /** The caller is sandboxed as decided by qore_caller_is_sandboxed(); see qore_sandbox_current_code_created()
 */
 DLLLOCAL bool qore_caller_created_object(const QoreObject& obj);
+//! Returns the context of the current code that an object whose provenance is \a creation is transferred to, or
+//! nullptr (qore#6842)
+/** Only for code that a sandbox at the enforcement level of tenant isolation governs, every such sandbox of which
+    \a creation names (the object was created while that code was served); the context is referenced for the caller
+    and keeps the functional-domain restrictions of \a creation.  Fails closed (nullptr) if the sandboxes cannot be
+    compared
+*/
+DLLLOCAL QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext* creation);
 //! Records the functional-domain restrictions of the code that creates a call reference to library module code
 /** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520); does
     nothing if \a code_pgm, the Program whose code the reference runs, is not a library module's (or is nullptr) or

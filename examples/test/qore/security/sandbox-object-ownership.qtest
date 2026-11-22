@@ -7,8 +7,8 @@
 # method of an object that the sandbox owns (issue #6842): an object that trusted code creates while it serves a
 # tenant, such as a shared object that it creates lazily for its first caller or an object that it caches through a
 # static method or a function, is owned by no tenant, unless trusted code hands it to the tenant with
-# SandboxManager::transferObjectToCaller(), which is refused for sandboxed code and for an object that a sandbox owns
-# already.
+# SandboxManager::transferObjectToCaller(), which is refused for sandboxed code, for an object that a sandbox owns
+# already, and for a caller that no sandbox at the enforcement level of tenant isolation governs.
 
 %modern
 %no-child-restrictions
@@ -142,6 +142,11 @@ hash<string, string> sub lib() {
     };
 }
 
+#! the host transfers its shared object
+string sub transfer_shared() {
+    return host_transfer(host_get_shared());
+}
+
 #! transfers with the tenant's own code
 string sub tenant_transfer(object o) {
     try {
@@ -201,6 +206,7 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
     constructor() : QUnit::Test("sandbox object ownership", "1.0", \ARGV) {
         foreach string mode in (keys ExecModes) {
             addTestCase("ownership in " + mode, getTest(mode));
+            addTestCase("transfer to a code-safety caller in " + mode, getCodeSafetyTransferTest(mode));
         }
         set_return_value(main());
     }
@@ -209,11 +215,17 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
         return sub () { ownershipTest(mode); };
     }
 
+    private code getCodeSafetyTransferTest(string mode) {
+        return sub () { codeSafetyTransferTest(mode); };
+    }
+
     #! creates a tenant
-    private static Program tenant(string mode) {
+    private static Program tenant(string mode, int level = QSEL_TENANT_ISOLATION) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.setExecMode(ExecModes{mode});
-        p.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        sm.setEnforcementLevel(level);
+        p.setSandboxManager(sm);
         map p.importFunction($1), ("host_get_shared", "host_make_for_caller", "host_make", "host_transfer");
         p.parse(TenantSource, "tenant");
         return p;
@@ -255,5 +267,17 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
         assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("transfer_host_object", new LoggerWrapper()),
             mode + ": an object that the host made before it served A");
         assertEq("SANDBOX-ACCESS-ERROR", host_transfer(new LoggerWrapper()), mode + ": no sandboxed caller");
+    }
+
+    codeSafetyTransferTest(string mode) {
+        Program b = tenant(mode);
+
+        # a caller that only a sandbox at the enforcement level of code safety governs cannot be given an object
+        shared_wrapper = NOTHING;
+        Program c = tenant(mode, QSEL_CODE_SAFETY);
+        assertEq(NotOwned, b.callFunction("shared"), mode + ": B on the shared object it caused");
+        assertEq("SANDBOX-ACCESS-ERROR", c.callFunction("transfer_shared"),
+            mode + ": the shared object transferred to a code-safety caller");
+        assertEq(NotOwned, b.callFunction("shared"), mode + ": B on the shared object after a code-safety transfer");
     }
 }
