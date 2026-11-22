@@ -5921,12 +5921,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
                         ws_cx."header-info".ws_poll_op = ws_poll_op;
-                        # the controller keeps this context in the connection's entry for the life of the
-                        # connection, so the reference back to the controller is opaque, as the controller's
-                        # references to its connections' entries are (see
-                        # HttpAsyncSocketIoController::connections)
-                        ws_cx."header-info".async_io_controller @= asyncIo;
-                        ws_cx."header-info".async_target = asyncTarget;
                         # the server's end of a connection that the handler manages externally, which the handler
                         # runs when the connection ends; it holds the request helper, so the listener's count of
                         # dedicated connections (dThreads, which a stop of the listener waits for) includes the
@@ -5936,6 +5930,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             cx.handler_name, pend);
                         # called by a handler that takes over the end of the connection (WebSocketHandler)
                         ws_cx."header-info".ws_accept_end = sub () { holder.accept(); };
+                        # registers the connection with the server's async I/O, called by the handler when it is
+                        # ready for the connection's frames (WebSocketHandler); the handler gets this code, never the
+                        # async I/O controller or the server's async target, whose methods act on the whole server
+                        # (qore#7200).  The controller keeps the context in the connection's entry, which is the
+                        # context without this code, so that the code and the context do not reference each other.
+                        hash<auto> reg_cx = ws_cx;
+                        HttpServer::HttpListenerInterface ws_listener = ws_cx.listener;
+                        ws_cx."header-info".ws_register = sub () {
+                            asyncIo.registerH1WebSocketConnection(s, ws_poll_op, asyncTarget, ws_listener, reg_cx);
+                        };
                     }
 
                     # test hook: deterministically widen the pre-start window between
