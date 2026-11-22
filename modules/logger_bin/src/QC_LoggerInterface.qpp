@@ -155,16 +155,20 @@ abstract LoggerInterface::debug(string message, ...);
     are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
     @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 
-    @note This method is not abstract in order to not break existing code; by default it logs the message with the
-    \c DEBUG level; reimplement in subclasses to implement proper \c DETAIL logging
+    @note This method is not abstract in order to not break existing code; by default it calls \c logArgs() with the
+    \c DETAIL level, the message and the format arguments as one list; reimplement in subclasses to implement other
+    \c DETAIL logging
 
     @see @ref log()
 */
 LoggerInterface::detail(string message, ...) {
-    (void)message;
+    // logArgs(int level, string message, *softlist<auto> format_args): the format arguments are one list (qore#7197)
     ReferenceHolder<QoreListNode> new_args(new QoreListNode(autoTypeInfo), xsink);
     new_args->push(QLL_DETAIL, xsink);
-    new_args->merge(args, xsink);
+    new_args->push(message->stringRefSelf(), xsink);
+    if (args && args->size() > 1) {
+        new_args->push(args->copyListFrom(1), xsink);
+    }
     ValueHolder v(self->evalMethod(*i->logArgs, *new_args, xsink), xsink);
 }
 
