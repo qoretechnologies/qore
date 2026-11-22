@@ -94,6 +94,9 @@ class CoreAttributionTest(unittest.TestCase):
                 "OWN_CORE": str(int(own_core)),
                 "FOREIGN_CORE": str(int(foreign_core)),
                 "TEST_KERNEL_CORE_PATTERN": "core",
+                # the stand-in qore is built from no commit, so run_tests.sh's build-match check would refuse it
+                # before any test runs; this test is about core attribution, not about which build runs
+                "QORE_TEST_ALLOW_BUILD_MISMATCH": "1",
             }
             if block_gdb:
                 env["QORE_TEST_DEBUGGER_TIMEOUT"] = "1"
