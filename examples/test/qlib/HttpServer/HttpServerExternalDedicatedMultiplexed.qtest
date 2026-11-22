@@ -93,6 +93,52 @@ class EndingHandler inherits AbstractHttpSocketHandler {
     }
 }
 
+#! A sandboxed tenant's socket handler for an extended CONNECT stream that ends it with setExternallyManaged()
+const TenantEndingSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketUtil
+
+class TenantEndingHandler inherits AbstractHttpSocketHandler {
+    private {
+        Queue to_host;
+        Queue from_host;
+    }
+
+    constructor(Queue to_host, Queue from_host) {
+        self.to_host = to_host;
+        self.from_host = from_host;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"hdr\": {\"sec-websocket-accept\": ws_get_response_key(hdr.\"sec-websocket-key\")},
+            \"streaming\": True,
+            \"stream_type\": \"websocket\",
+        };
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        try {
+            code c = setExternallyManaged(lid, cx, s);
+            to_host.push({\"cid\": cx.id, \"proto\": cx.\"header-info\".http3 ? \"h3\" : \"h2\"});
+            from_host.get();
+            c();
+            to_host.push(\"ended\");
+        } catch (hash<ExceptionInfo> ex) {
+            to_host.push({\"err\": ex.err, \"desc\": ex.desc});
+        }
+        return True;
+    }
+}
+
+AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
+    return new TenantEndingHandler(to_host, from_host);
+}
+";
+
 #! Returns the session or connection of its request
 class WhoamiHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
@@ -125,6 +171,9 @@ class HttpServerExternalDedicatedMultiplexedTest inherits QUnit::Test {
         addTestCase("HTTP/2: setExternallyManaged() ends the connection", \endTest(), "2.0");
         addTestCase("HTTP/3: setExternallyManaged() ends the connection", \endTest(), "3.0");
         addTestCase("HTTP/2: setExternallyManaged() ends the connection's own stream only", \http2StreamTest());
+        addTestCase("HTTP/2: the end of an idle connection's stream is sent", \http2QuietEndTest(), False);
+        addTestCase("HTTP/2: the end of a sandboxed handler's idle connection's stream is sent", \http2QuietEndTest(),
+            True);
         set_return_value(main());
     }
 
@@ -183,6 +232,72 @@ class HttpServerExternalDedicatedMultiplexedTest inherits QUnit::Test {
         });
         on_exit hc.disconnect();
         assertEq("ok", hc.get("/whoami"));
+    }
+
+    #! Over HTTP/2 the end of the stream that the closure submits is sent also when nothing else happens on the
+    #! connection: the closure wakes the server's I/O for it (the bound is a hang guard only)
+    http2QuietEndTest(bool sandboxed) {
+        Queue to_host();
+        Queue from_host();
+        AbstractHttpSocketHandler handler;
+        *Program tenant;
+        if (sandboxed) {
+            tenant = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+            tenant.parse(TenantEndingSource, "tenant");
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            tenant.setSandboxManager(sm);
+            handler = tenant.callFunction("get_handler", to_host, from_host);
+        } else {
+            EndingHandler h();
+            to_host = h.to_host;
+            from_host = h.from_host;
+            handler = h;
+        }
+        DedicatedServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("ded", "^ded", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientStreamHandle tunnel = mgr.acquireStream(sprintf("https://localhost:%d/", port));
+        on_exit {
+            try {
+                tunnel.cancel();
+            } catch () {
+            }
+        }
+        tunnel.startStreaming("CONNECT", "/ded", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto step = to_host.get(HangGuard);
+        assertEq("h2", step.proto, sprintf("the closure is returned: %y", step));
+        assertEq(200, tunnel.readData(HangGuard).status_code, "the server accepts the connection");
+        # nothing else happens on the connection from here on
+        from_host.push(True);
+        assertEq("ended", to_host.get(HangGuard), "the closure ends the connection");
+        string event;
+        try {
+            auto d = tunnel.readData(HangGuard);
+            event = (d.typeCode() == NT_HASH && d.end_stream) ? "end" : sprintf("data: %y", d);
+        } catch (hash<ExceptionInfo> ex) {
+            event = ex.err;
+        }
+        assertEq("end", event, "the end of the stream is sent");
     }
 
     #! Over HTTP/2 the closure ends the connection's own stream: another stream of the same client connection

@@ -6745,7 +6745,7 @@ class HttpHandlerThreadContexts {
 /** The connection, its transport and the request's stream (\c "header-info"), and the server's connection state;
     see HttpServer::handleRequest() (qore#6953)
 */
-const ServerContextKeys = ("header-info", "id", "async_ctrl", "listener", "listener-id", "sock_key", "socket",
+const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "sock_key", "socket",
     "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
@@ -10543,7 +10543,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         # Full path — build proper connection context using the listener's template
         # The controller's cx only has "peer" and "socket" keys; the listener's
         # getContextTemplate() builds the full context with "peer-info", "id",
-        # "ssl", "listener-id", "listener-name", "async_ctrl"
+        # "ssl", "listener-id", "listener-name"
         hash<auto> cx = listener.getContextTemplate(info.cx.peer);
         if (exists info.cx{"peer-info-future"}) {
             cx{"peer-info-future"} = info.cx{"peer-info-future"};

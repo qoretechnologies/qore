@@ -37,14 +37,19 @@ class HttpServerHandlerAsyncCtrlTest inherits QUnit::Test {
 %requires HttpServerUtil
 %requires AsyncSocketIo
 %requires WebSocketHandler
+%requires WebSocketUtil
+%requires HttpServerAsyncIo
 %requires Logger
 %requires reflection
 
 #! the controllers found, and where
 list<hash<auto>> sub find_controllers(hash<auto> cx, HttpListenerInterface listener) {
     list<hash<auto>> rv;
+    # any async I/O controller: the process-wide wrapper, the server's HTTP controller and the builtin controller
     code add = sub (string path, auto v) {
-        if (v instanceof AsyncSocketIo::AsyncSocketIoController) {
+        if (v instanceof AsyncSocketIo::AsyncSocketIoController
+            || v instanceof HttpServerAsyncIo::HttpAsyncSocketIoController
+            || v instanceof Qore::AsyncIoController) {
             rv += {\"path\": path, \"ctrl\": v};
         }
     };
@@ -128,6 +133,38 @@ class TenantWsHandler inherits WebSocketHandler {
     }
 }
 
+#! a socket handler that answers with 101 and walks the context of its connection in startImpl()
+class TenantUpgradeHandler inherits AbstractHttpSocketHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) {
+        self.to_host = to_host;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 101,
+            \"hdr\": {
+                \"Upgrade\": \"websocket\",
+                \"Connection\": \"Upgrade\",
+                \"Sec-WebSocket-Accept\": ws_get_response_key(hdr.\"sec-websocket-key\"),
+            },
+        };
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        to_host.push(attack(find_controllers(cx, cx.listener)));
+        return False;
+    }
+}
+
+AbstractHttpSocketHandler sub get_upgrade_handler(Queue to_host) {
+    return new TenantUpgradeHandler(to_host);
+}
+
 AbstractHttpRequestHandler sub get_handler(Queue to_host) {
     return new TenantHandler(to_host);
 }
@@ -149,6 +186,7 @@ AbstractHttpSocketHandler sub get_ws_handler(Queue to_host) {
         addTestCase("HTTP/2: a sandboxed handler cannot reach the trusted controller", \requestTest(), "2.0");
         addTestCase("HTTP/3: a sandboxed handler cannot reach the trusted controller", \requestTest(), "3.0");
         addTestCase("a sandboxed WebSocket handler cannot reach the trusted controller", \webSocketTest());
+        addTestCase("a sandboxed socket handler's 101 connection reaches no controller", \upgradeTest());
         set_return_value(main());
     }
 
@@ -206,6 +244,31 @@ AbstractHttpSocketHandler sub get_ws_handler(Queue to_host) {
         wsc.send("x");
         assertEq("done", msgs.get(HangGuard));
         checkFound(to_host.get(HangGuard));
+    }
+
+    #! The context of a socket handler's 101 connection gives no async I/O controller of the server
+    upgradeTest() {
+        Queue to_host();
+        Program tenant = getTenantProgram();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_upgrade_handler", to_host);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("up", "^up", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        WebSocketClient wsc(sub (*data msg) {}, {"url": sprintf("ws://localhost:%d/up", port), "timeout": HangGuard});
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection ends when startImpl() returns
+        }
+        on_exit wsc.disconnect();
+        hash<auto> r = to_host.get(HangGuard);
+        # the only controller that the context can give is the one that the tenant gets itself
+        list<string> paths = map $1.path, r.found, $1.path != "getGlobalAsyncIoController()";
+        assertEq((), paths, "the context of the connection gives no controller");
+        checkFound(r);
     }
 
     #! None of the controllers that the tenant found is the trusted one, whose logger is not the tenant's
