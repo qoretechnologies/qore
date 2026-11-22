@@ -2721,6 +2721,10 @@
 
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
       object, so a shared object is expanded once per conversion (issue #7166).
+    - the C++ API \c QoreObject::deleteMemberValue() removes a member as the @ref delete "delete" operator does (see
+      @ref remove_object_members); it removed the key of a declared member, and a member that held an object failed an
+      assertion in debug builds and left the object's reference scan count wrong
+      (<a href="https://github.com/qoretechnologies/qore/issues/7208">issue 7208</a>)
     - a temporary value given to the @ref weak_assignment_operator "weak assignment operator" (ex:
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object

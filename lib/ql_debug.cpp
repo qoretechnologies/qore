@@ -25265,6 +25265,15 @@ static QoreValue f_dbg_object_external_ref(const QoreListNode* params, RuntimeCo
     return id;
 }
 
+//! Deletes a member of an object with the C++ API QoreObject::deleteMemberValue(), as a binary module does (qore#7208)
+static QoreValue f_dbg_object_delete_member_value(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    DbgStringNodeHelper key(get_param_value(params, 1));
+    obj->deleteMemberValue(*key, xsink);
+    return QoreValue();
+}
+
 //! Debug-only: releases a reference that dbg_object_external_ref() holds, from C++ (#6329)
 static QoreValue f_dbg_object_external_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64 id = get_param_value(params, 0).getAsBigInt();
@@ -30204,6 +30213,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "timeout_ms");
     qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_object_delete_member_value", f_dbg_object_delete_member_value, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_class_member_index_info", f_dbg_class_member_index_info, QCF_NO_FLAGS,
