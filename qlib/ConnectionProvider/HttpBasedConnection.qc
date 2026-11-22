@@ -728,7 +728,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         if (!hasBoundClient()) {
             throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                 "functional domain, and the connection's synchronous client is not bound to the target of the code "
-                "that created the connection; use getAsync()", name);
+                "that created the connection; use getAsync() where the connection's async client is bound", name);
         }
         *string proxy = opts.proxy;
         checkLentNetworkTarget(real_url ?? url, proxy);

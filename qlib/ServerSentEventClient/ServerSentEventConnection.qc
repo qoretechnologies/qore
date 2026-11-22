@@ -35,6 +35,19 @@ public namespace ServerSentEventClient {
     - \c "yield": a closure to yield current thread execution
 */
 public class ServerSentEventConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The synchronous client is not given to code restricted from NETWORK (qore#7262)
+    /** Its connections and requests are made by module code from the connection's \c url and options, which
+        restricted code that was lent the connection can change, and they send the connection's credentials; it is not
+        bound to the target of the code that created the connection
+
+        @throw PERMISSION-DENIED always (called by get() and getPollImpl() for code restricted from NETWORK only)
+    */
+    private checkLentClientTarget() {
+        throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK functional "
+            "domain, and the connection's synchronous client is not bound to the target of the code that created the "
+            "connection", name);
+    }
+
     #! The connection's clients connect to a network host (qore#6981)
     private final int getConnectionDomainsImpl() {
         return DOM_NETWORK;

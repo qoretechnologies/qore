@@ -24,6 +24,7 @@
 %requires ConnectionProvider
 %requires RestClient
 %requires RestClientIo
+%requires ServerSentEventClient
 %requires ../../../TestCertificates.qm
 
 %try-module process >= 2.2
@@ -101,7 +102,7 @@ class LentClientCreatorProofTest inherits QUnit::Test {
         const ProxyDenied = "^PERMISSION-DENIED: .*through another proxy";
         const CaDenied = "^PERMISSION-DENIED: .*other CA certificate locations";
         const LentTargetDenied = "^PERMISSION-DENIED: connection .*may connect only to the target of a connection";
-        const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound .*use getAsync";
+        const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound";
         const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create"
             "|connection .*may connect only to the target of a connection)";
 
@@ -218,6 +219,17 @@ string sub rest_real_opts_proxy(object conn, string proxy) {
         object c = conn.getAsync(False);
         c.restGet(\"/rest/x\");
         return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub plain_get(object conn, *string url) {
+    try {
+        if (url) {
+            conn.url = url;
+        }
+        conn.get(False);
+        return \"CLIENT\";
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -758,6 +770,14 @@ object sub lookalike() {
         assertFalse(other.isDataAvailable(0), "the proxy's listener sees no connection, " + mode);
         # trusted code's own synchronous client is not checked
         assertEq(200, rest.get(False).restGet("/rest/x").status_code, "trusted code's synchronous client");
+        # a lent server-sent event connection's synchronous client (it sends the connection's credentials from targets
+        # that the restricted code can change) is not given either
+        ServerSentEventConnection sse("s", "s", sprintf("sse://127.0.0.1:%d/rest", plain_port), {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("plain_get", sse, sprintf("sse://127.0.0.1:%d/",
+            other.getSocketInfo().port)), "get() of a lent server-sent event connection, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # trusted code's own client is created
+        assertTrue(exists sse.get(False), "trusted code's server-sent event client");
     }
 
     #! the synchronous client of a lent HTTP connection's poll operation is checked as get()'s
