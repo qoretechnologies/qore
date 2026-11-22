@@ -2090,19 +2090,29 @@ void qore_setup_argv(int pos, int argc, char* argv[]) {
     }
 }
 
+// returns a list with the strings of the given list tagged with the default encoding; a string is read with
+// QoreStringDataHelper, which reads both of its representations, as one of up to QoreValue::SHORTSTR_MAX_BYTES bytes
+// can be held inline, with no QoreStringNode to change (qore#7038)
+static QoreListNode* qore_argv_in_default_encoding(const QoreListNode* l) {
+    QoreListNode* rv = new QoreListNode(stringTypeInfo);
+    ConstListIterator li(l);
+    while (li.next()) {
+        QoreStringDataHelper str(li.getValue());
+        assert(str);
+        rv->push(new QoreStringNode(str.c_str(), str.size(), QCS_DEFAULT), nullptr);
+    }
+    return rv;
+}
+
 void qore_tag_argv_encoding() {
-    for (QoreListNode* l : {ARGV, QORE_ARGV}) {
-        if (!l) {
+    // the lists are replaced before any Program copies them (see qore_program_private)
+    for (QoreListNode** l : {&ARGV, &QORE_ARGV}) {
+        if (!*l) {
             continue;
         }
-        ConstListIterator li(l);
-        while (li.next()) {
-            const QoreValue v = li.getValue();
-            if (v.getType() == NT_STRING) {
-                // the strings are not shared yet: no Program has copied the lists
-                const_cast<QoreStringNode*>(v.get<const QoreStringNode>())->setEncoding(QCS_DEFAULT);
-            }
-        }
+        QoreListNode* tagged = qore_argv_in_default_encoding(*l);
+        (*l)->deref(nullptr);
+        *l = tagged;
     }
 }
 
