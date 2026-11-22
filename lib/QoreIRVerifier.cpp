@@ -3086,9 +3086,17 @@ static void collectLocalsFromStatementBlock(const StatementBlock* block,
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
     switch (inst->opcode) {
         // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, CallClosureDirect, and other expr-based ops)
+        case QoreIROpcode::CallMethod: {
+            // an unqualified call of a method of self (m()) is made with the arguments in its operands (its call node
+            // is copied with them: qore_rt_call_with_args(), the AOT self call targets and the IR interpreter; a call
+            // without arguments has no operands and evaluates its node, which has none), never with the argument
+            // expressions of its node, so they make no local AST-visible, as for an Invoke of the call, and a method
+            // that makes such a call can be called through its fast entry (issue #7267)
+            const QoreValue& expr = static_cast<const QoreIRExprInstruction*>(inst)->expr;
+            return qore_get_self_function_call_node(expr.getInternalNode()) ? nullptr : &expr;
+        }
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
