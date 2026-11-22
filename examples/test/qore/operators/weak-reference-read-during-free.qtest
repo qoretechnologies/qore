@@ -22,9 +22,13 @@
     freed under the reference.  A debug hook (dbg_hold_container_free()) holds the freeing thread at the start of the
     free, so that each case reads at that point deterministically, with no sleeps.  The programs are in
     \c weak-reference-read-during-free/:
-    - \c weak-reference-read-during-free.q reads through an object member, a global variable, a hash member and a list
-      element: every mode, the JIT also with synchronous compilation, and qcc executables must print the output of the
-      AST
+    - \c weak-reference-read-during-free.q reads through an object member, a local, a closure and a global variable, a
+      hash member and a list element: every mode, the JIT also with synchronous compilation, and qcc executables must
+      print the output of the AST
+    - \c weak-reference-read-during-free-interp.q reads through the variable of a foreach loop and an identity map,
+      which native code reads borrowed from runtime helpers whose ownership changes with the AOT batch; it is run by
+      the AST and IR interpreters only, and native code relies on the weak holders' reference for these reads until
+      then (qore#7163)
 
     The hook is in debug builds only, which the test jobs build.
 */
@@ -35,11 +39,14 @@ class WeakReferenceReadDuringFreeTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "jit", "tiered");
         const Programs = ("weak-reference-read-during-free",);
+        #! read by the interpreters only (see the class description)
+        const InterpreterPrograms = ("weak-reference-read-during-free-interp",);
     }
 
     constructor() : QUnit::Test("WeakReferenceReadDuringFreeTest", "1.0", \ARGV) {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("the IR interpreter reads foreach variables and identity maps as the AST does", \testInterpreters());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
         set_return_value(main());
     }
@@ -71,6 +78,13 @@ class WeakReferenceReadDuringFreeTest inherits QUnit::Test {
             }
             # the functions compiled before they run
             assertEq(expected(name), run(name, "jit", "QORE_JIT_SYNC_COMPILE=1 "), name + " jit (synchronous)");
+        }
+    }
+
+    testInterpreters() {
+        foreach string name in (InterpreterPrograms) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+            assertEq(expected(name), run(name, "ir"), name + " ir");
         }
     }
 

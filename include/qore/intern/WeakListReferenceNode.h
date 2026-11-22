@@ -61,11 +61,6 @@ public:
         return l;
     }
 
-    //! Returns the list without a reference, as borrow() does; for the reads of local and closure variables in LocalVar.h
-    DLLLOCAL QoreListNode* get() const {
-        return l;
-    }
-
     //! Returns the type of the list, which does not change when it is freed
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         return l->getTypeInfo();

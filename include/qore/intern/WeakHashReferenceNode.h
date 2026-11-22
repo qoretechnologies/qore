@@ -61,11 +61,6 @@ public:
         return h;
     }
 
-    //! Returns the hash without a reference, as borrow() does; for the reads of local and closure variables in LocalVar.h
-    DLLLOCAL QoreHashNode* get() const {
-        return h;
-    }
-
     //! Returns the type of the hash, which does not change when it is freed
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         return h->getTypeInfo();

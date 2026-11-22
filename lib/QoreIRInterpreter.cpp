@@ -14483,18 +14483,25 @@ dbg_dismissed_exit:
                         // loop lowering emits DiscardTemps per iteration to drop the
                         // out slot's refSelf'd temp ref.
                         bool is_weak_ref_local = false;
+                        // a weak reference to a list or hash is read with a reference of its own, or as a new empty
+                        // container (qore#7198): the value is owned, but it is not cached, which would keep the list
+                        // or hash
+                        bool weak_container_local = false;
                         // a local holding a reference (reference r = \x;) is read as the value of the referenced
                         // lvalue, which can change without a store to this local (x = 10;), so that value is never
                         // cached: every load reads it through the reference, as the AST interpreter does
                         ReferenceNode* reference_value = nullptr;
-                        if ((!needs_deref && val.hasNode())
+                        // a weak reference to a list or hash reads as a list or hash with a reference of its own
+                        // (qore#7198); a cache miss is rare, as a store updates the cache
+                        if ((val.hasNode() && (!needs_deref || val.getType() == NT_LIST || val.getType() == NT_HASH))
                                 || qore_ir_type_may_hold_reference(local_inst->local->getTypeInfo())) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                             if (lvv) {
                                 qore_type_t raw_type = lvv->val.getType();
-                                if (raw_type == NT_WEAKREF || raw_type == NT_WEAKREF_HASH
-                                        || raw_type == NT_WEAKREF_LIST) {
+                                if (raw_type == NT_WEAKREF) {
                                     is_weak_ref_local = true;
+                                } else if (raw_type == NT_WEAKREF_HASH || raw_type == NT_WEAKREF_LIST) {
+                                    weak_container_local = true;
                                 } else if (raw_type == NT_REFERENCE) {
                                     local_flags = IRCallFrame::LocalOwned | IRCallFrame::ReadThroughReference;
                                     reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
@@ -14505,7 +14512,7 @@ dbg_dismissed_exit:
                                     && (local_inst->string_append_local_cow || local_inst->list_push_local_cow))
                                 || (local_inst->auto_local_string_append && !reference_value
                                     && val.getType() == NT_STRING))
-                                && !is_ir_only_local && !is_weak_ref_local) {
+                                && !is_ir_only_local && !is_weak_ref_local && !weak_container_local) {
                             // eval() returned a temporary +1 ref while the TLS
                             // local remains the owner. Release that temporary
                             // and forward borrowed bits to the paired mutation.
@@ -14523,7 +14530,7 @@ dbg_dismissed_exit:
                                 // the slot holds the reference itself, which the fast path above reads through on
                                 // every load; for an IR-only local an empty slot would read as no value
                                 locals_slot_cache.set(sid, reference_value->refRefSelf());
-                            } else if (is_weak_ref_local) {
+                            } else if (is_weak_ref_local || weak_container_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache.set(sid, QoreValue());
@@ -14776,7 +14783,9 @@ load_local_done:
                             // current execution context is the function's own body, not a
                             // closure. In that case, the variable lives on the local stack.
                             if (LocalVarValue* lvv = thread_try_find_lvar(local_inst->local)) {
-                                is_weak_ref_local = isWeakReferenceType(lvv->val.getType());
+                                // a weak reference to a list or hash is read with a reference of its own, or as a new
+                                // empty container, which eval() returns owned (qore#7198)
+                                is_weak_ref_local = lvv->val.getType() == NT_WEAKREF;
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
@@ -15545,9 +15554,10 @@ load_local_done:
                     // the slot caches the value the variable holds, as LoadLocal does, never the int it is read as:
                     // the source keeps its value, whatever it is (ex: an int local with no value stays without one),
                     // and the slot of an IR-only local, now marked instantiated, is the variable itself; the target
-                    // of a weak reference, which eval() gives without a reference, is not cached, as in LoadLocal
+                    // of a weak reference, which eval() gives without a reference, or with one of its own for a list or
+                    // hash (qore#7198), is not cached, as in LoadLocal
                     bool weak_source = false;
-                    if (!nd && sv.hasNode()) {
+                    if (sv.hasNode() && (!nd || sv.getType() == NT_LIST || sv.getType() == NT_HASH)) {
                         LocalVarValue* lvv = thread_try_find_lvar(fused_inst->source);
                         weak_source = lvv && isWeakReferenceType(lvv->val.getType());
                     }

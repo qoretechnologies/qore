@@ -1,7 +1,8 @@
 %modern
 %allow-weak-references
 # the program of weak-reference-read-during-free.qtest: a list or hash read through a weak reference while another
-# thread frees it reads as freed (qore#7198); every execution mode must print the output of the AST interpreter
+# thread frees it reads as freed, in every way that it can be read (qore#7198); every execution mode must print the
+# output of the AST interpreter
 #
 # Each case holds the thread that releases the last reference to the container at the start of its free with a debug
 # hook (dbg_hold_container_free()), reads the container through a weak reference, then lets the free finish: a value
@@ -72,6 +73,37 @@ sub member() {
         sub () { printf("member hash: %d %d\n", before, y.size()); });
 }
 
+#! a local variable that holds a weak reference
+sub local_var() {
+    Holder c();
+    c.l = mklist(5);
+    list<auto> w;
+    w := c.l;
+    list<auto> x;
+    int before;
+    during_free("list", sub () { c.l = (); }, sub () { x = w; before = x.size(); },
+        sub () { printf("local list: %d %d\n", before, x.size()); });
+    c.h = mkhash(5);
+    hash<auto> wh;
+    wh := c.h;
+    hash<auto> y;
+    during_free("hash", sub () { c.h = {}; }, sub () { y = wh; before = y.size(); },
+        sub () { printf("local hash: %d %d\n", before, y.size()); });
+}
+
+#! a variable that holds a weak reference, captured by a closure
+sub closure_var() {
+    Holder c();
+    c.l = mklist(5);
+    list<auto> w;
+    w := c.l;
+    code get = auto sub () { return w; };
+    list<auto> x;
+    int before;
+    during_free("list", sub () { c.l = (); }, sub () { x = get(); before = x.size(); },
+        sub () { printf("closure list: %d %d\n", before, x.size()); });
+}
+
 #! a global variable that holds a weak reference
 sub global_var() {
     Holder c();
@@ -134,6 +166,8 @@ sub freed_value() {
 }
 
 member();
+local_var();
+closure_var();
 global_var();
 hash_member();
 element();
