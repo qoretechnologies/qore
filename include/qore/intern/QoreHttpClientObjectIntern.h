@@ -209,6 +209,12 @@ struct con_info {
                     default: pstr->concat(c); break;
                 }
             }
+        } else if (host.find(':') != std::string::npos && host[0] != '[') {
+            // issue #7236: an IPv6 address is given in brackets (RFC 3986 section 3.2.2), or the URL is ambiguous: a
+            // host "::1:8080" with the default port would be read as host "::1" with port 8080
+            pstr->concat('[');
+            pstr->concat(host.c_str());
+            pstr->concat(']');
         } else {
             pstr->concat(host.c_str());
         }
