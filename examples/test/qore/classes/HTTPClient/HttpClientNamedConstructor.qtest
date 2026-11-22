@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires QUnit
+%exec-class HttpClientNamedConstructorTest
+
+class NamedOptionsClient inherits HTTPClient {
+    constructor(hash<auto> opts) : HTTPClient(options: opts) {
+    }
+}
+
+class HttpClientNamedConstructorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientNamedConstructor", "1.0") {
+        addTestCase("constructor options bind by name", \namedOptions());
+        addTestCase("short and extended credential constructors", \namedCredentials());
+        set_return_value(main());
+    }
+
+    namedOptions() {
+        hash<auto> opts = {"timeout": 173};
+        assertEq(173, new HTTPClient(options: {"timeout": 173}).getTimeout());
+        assertEq(173, new HTTPClient(options: opts).getTimeout());
+        auto dynamic_opts = opts;
+        assertEq(173, new HTTPClient(options: dynamic_opts).getTimeout());
+        assertEq(173, new NamedOptionsClient(opts).getTimeout());
+        assertEq(173, new HTTPClient(opts).getTimeout());
+        assertEq(new HTTPClient().getTimeout(), new HTTPClient(options: {}).getTimeout());
+    }
+
+    namedCredentials() {
+        hash<auto> opts = {"timeout": 341};
+        assertEq(341, new HTTPClient(opts, NOTHING, NOTHING).getTimeout());
+        assertEq(341, new HTTPClient(additional_origins: (), certificate: NOTHING, options: opts,
+            private_key: NOTHING).getTimeout());
+    }
+}
