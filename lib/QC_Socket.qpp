@@ -9736,6 +9736,42 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Returns the number of bytes of an HTTP/3 stream's data that the peer has acknowledged
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForQuicStreamDrain()) can tell from it whether the peer still takes the data: a wait during which the
+    count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int acked = sock.getQuicStreamAckedBytes(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return the acknowledged byte count, or -1 if the stream has no data record or there is no such QUIC session
+
+    @throw QUIC-ERROR the session or stream ID is invalid
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getQuicStreamAckedBytes(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicStreamAckedBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_quic_stream_acked(s, session_id, stream_id, xsink);
+}
+
 //! Flushes pending HTTP/3 write data through the async I/O controller
 /** Runs one QUIC timer/write cycle for the given session on the async I/O
     controller thread and sends any generated packets on the UDP socket.
