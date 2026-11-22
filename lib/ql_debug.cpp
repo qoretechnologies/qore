@@ -73,7 +73,7 @@
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
-#include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_HttpClientConnection.h"
 #include "qore/intern/HttpClientConnectionManagerTestHooks.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/Http2Session.h"
@@ -22420,6 +22420,28 @@ static QoreValue f_dbg_set_realtime_offset(const QoreListNode* params, RuntimeCo
 #endif
 
 #ifdef DEBUG
+//! Stores a test backlink on one of the actual transport objects of a Qore-created HTTP/1 connection.
+/** Neither transport is exposed by Http1Connection. Use the poll operation to reach them so the test
+    can form the same cycle independently of how the connection owns the forward references.
+*/
+static QoreValue f_dbg_http1_transport_backlink(const QoreListNode* params, RuntimeConfig&, ExceptionSink* xsink) {
+    PrivateDataRefHolder<Http1ClientConnection> conn(get_param_value(params, 0).get<const QoreObject>(),
+        CID_HTTP1CONNECTION, xsink);
+    if (conn) {
+        Http1ClientPollOperationPriv* op = conn->getPollOpPriv();
+        QoreValue backlink = get_param_value(params, 2);
+        if (HARD_QORE_VALUE_BOOL(params, 1)) {
+            ReferenceHolder<QoreObject> sock(op->getReferencedSocketObject(xsink), xsink);
+            if (sock) {
+                sock->setValue("dgc_test_backlink", backlink.refSelf(), xsink);
+            }
+        } else {
+            op->self->setValue("dgc_test_backlink", backlink.refSelf(), xsink);
+        }
+    }
+    return QoreValue();
+}
+
 //! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
 //! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
@@ -29465,6 +29487,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_run_tls_duplex_tests", f_dbg_run_tls_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
 #endif
+    qns.addBuiltinVariant("dbg_http1_transport_backlink", f_dbg_http1_transport_backlink, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, QC_HTTP1CONNECTION->getTypeInfo(), QORE_PARAM_NO_ARG, "connection",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "through_socket", objectTypeInfo, QORE_PARAM_NO_ARG, "backlink");
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,
