@@ -205,6 +205,10 @@ class TamperHandler inherits AbstractHttpRequestHandler {
         cx.\"header-info\".session_id = (hdr.path =~ x/victim=([0-9]+)/)[0].toInt();
         cx.\"header-info\".stream_id = 0;
         remove cx.\"header-info\".sock;
+        # keys of the server that its context of this request does not have
+        cx.\"client-cert\" = \"forged\";
+        cx.\"peer-info-future\" = \"forged\";
+        cx.uctx = \"forged\";
     }
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
@@ -221,7 +225,11 @@ class TamperHandler inherits AbstractHttpRequestHandler {
         # the request context has the server's own values again
         string ctx = (cx.\"header-info\".session_id == s.getQuicSessionId() && cx.\"header-info\".http3)
             ? \"own\" : \"changed\";
-        return makeResponse(200, sprintf(\"own=%s shutdown=%s quic=%y ctx=%s\", own, r, s.isQuic(), ctx));
+        # the keys of the server that the handler added are not taken over
+        string added = (exists cx.\"client-cert\" || exists cx.\"peer-info-future\" || exists cx.uctx)
+            ? \"kept\" : \"dropped\";
+        return makeResponse(200, sprintf(\"own=%s shutdown=%s quic=%y ctx=%s added=%s\", own, r, s.isQuic(), ctx,
+            added));
     }
 }
 
@@ -478,7 +486,7 @@ list<string> sub run_race() {
         HTTPClient attacker = getClient(srv.port);
         on_exit attacker.disconnect();
         string r = attacker.get("/probe/tamper?victim=" + victim_session, {"http3": "false"});
-        assertEq("own=yes shutdown=QUIC-SESSION-ERROR quic=True ctx=own", r);
+        assertEq("own=yes shutdown=QUIC-SESSION-ERROR quic=True ctx=own added=dropped", r);
         assertEq(string(victim_session), getOrError(victim, "/whoami"), "the victim's session continues");
     }
 
