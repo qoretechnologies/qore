@@ -131,8 +131,9 @@
 
     @par A Connection That Was Never Checked Is Not Up
     A connection is not up until a successful ping or connection proves it up: one that was never checked reports
-    \c up @ref False with the status \c "not checked" (see @ref ConnectionProvider::AbstractConnection::up
-    "AbstractConnection::up"; <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
+    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
+    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
 
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and

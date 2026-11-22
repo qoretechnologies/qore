@@ -177,6 +177,9 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_7 RestClient v2.7
+    - a ping of a @ref RestClient::RestConnection "RestConnection" without the \c ping_method option connects to the
+      server, as its polling ping does, instead of succeeding without a check
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - a client with invalid OAuth2 options raises \c OAUTH2-ERROR when it is created also with \c do_not_connect, as
       @ref restclientiointro "RestClientIo" does, instead of being created with a grant type that cannot acquire a
       token; an empty value of an option that the grant type requires counts as missing, also for a connection's
@@ -6443,7 +6446,11 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     #! performs the internal ping
-    /** Uses the ping options to make a request to the server
+    /** Uses the ping options to make a request to the server; if \c ping_method or the ping path is not set, the
+        ping connects to the server (and makes the TLS handshake for an HTTPS URL) without sending a request, as the
+        polling ping (@ref startPollConnect()) does
+
+        @since %RestClient 2.7 a ping without \c ping_method connects to the server; it made no check and succeeded
     */
     private pingImpl() {
         # Try async client first (RestClientIo), fall back to sync (RestClient).
@@ -6466,6 +6473,12 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         }
         *string ping_path;
         if (!opts.ping_method || !exists (ping_path = getPingPath())) {
+            # issue #7236: without a ping request, the ping connects to the server, as the polling ping does with
+            # HTTPClient::startPollConnect() on the client of getPollImpl(), so that a ping that succeeds has checked
+            # the connection; the client's connect timeout applies
+            RestClient conn_client = getPollImpl();
+            on_exit conn_client.disconnect();
+            conn_client.connect();
             return;
         }
 
