@@ -2542,6 +2542,20 @@ public class AbstractStreamRequest {
             "header-info", "id", "listener-id", "listener-name", "masked_path", "orig_path", "peer-info", "raw_path",
             "response-encoding", "root_path", "ssl", "trailers", "url", "user");
 
+        #! The request header fields that hold credentials, which getContext(), getHeaders() and filterContext()
+        #! remove from the header fields that they give (lower-case names)
+        /** The \c Authorization and \c Proxy-Authorization fields and the cookies of the request: the credentials that
+            the client sent to the server, which the code that serves the request does not get from these methods
+
+            @since HttpServerUtil 1.6
+        */
+        const CredentialHeaders = {
+            "authorization": True,
+            "proxy-authorization": True,
+            "cookie": True,
+            "set-cookie": True,
+        };
+
         #! The keys of the \c "header-info" hash of the request context that getContext() and filterContext() give
         /** The request metadata that @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" gives, without
             the socket, the stream and session IDs, the closures and the other server state that the server adds; an
@@ -2613,7 +2627,7 @@ public class AbstractStreamRequest {
     /** @since HttpServerUtil 1.6
     */
     final hash<auto> getHeaders() {
-        return hdr;
+        return AbstractStreamRequest::removeCredentialHeaders(hdr);
     }
 
     #! Returns any message body received with the request
@@ -2649,7 +2663,36 @@ public class AbstractStreamRequest {
             }
             rv."header-info" = info;
         }
+        # the credentials of the request are not given (see CredentialHeaders)
+        if (rv.hdr.typeCode() == NT_HASH) {
+            rv.hdr = AbstractStreamRequest::removeCredentialHeaders(rv.hdr);
+        }
+        if (rv."header-info"."headers-raw".typeCode() == NT_HASH) {
+            rv."header-info"."headers-raw" =
+                AbstractStreamRequest::removeCredentialHeaders(rv."header-info"."headers-raw");
+        }
         return rv;
+    }
+
+    #! Returns a copy of a hash of request header fields without the fields in @ref CredentialHeaders
+    /** The names are compared without regard to case; the fields of a \c "headers" hash in \a hdr are removed as well
+
+        @param hdr the header fields
+
+        @return a copy of \a hdr without the credentials of the request
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<auto> removeCredentialHeaders(hash<auto> hdr) {
+        foreach string key in (keys hdr) {
+            if (CredentialHeaders{key.lwr()}) {
+                remove hdr{key};
+            }
+        }
+        if (hdr.headers.typeCode() == NT_HASH) {
+            hdr.headers = AbstractStreamRequest::removeCredentialHeaders(hdr.headers);
+        }
+        return hdr;
     }
 
     #! returns @ref True if the server should apply content encoding (compression) to the response body

@@ -35,6 +35,11 @@ class TS inherits HttpServer::AbstractStreamRequest {
             'context keys': sort(keys cx),
             'headers method': getHeaders().method,
             'body': getBody(),
+            # the credentials of the request are not given
+            'credentials': (map $1, ('authorization', 'proxy-authorization', 'cookie'),
+                cx.hdr.hasKey($1) || getHeaders().hasKey($1) || cx.hdr.headers.hasKey($1)
+                || (cx.'header-info'.'headers-raw'.keys() ?? ()).contains($1)
+                || (map $1.lwr(), keys cx.'header-info'.'headers-raw').contains($1)),
         };
         # the context given is a copy: changing it changes nothing in the request
         cx.id = -1;
@@ -103,7 +108,12 @@ server.waitForAsyncIo();
 
 HTTPClient client({"url": "http://127.0.0.1:" + port});
 hash<auto> info;
-string body = client.send("request-body", "POST", "/ts", {"Content-Type": "text/plain"}, False, \info).body;
+string body = client.send("request-body", "POST", "/ts", {
+    "Content-Type": "text/plain",
+    "Authorization": "Basic dGVzdDp0ZXN0",
+    "Proxy-Authorization": "Basic dGVzdDp0ZXN0",
+    "Cookie": "session=secret",
+}, False, \info).body;
 on_exit client.disconnect();
 printf("response: %s\n", body);
 printf("withheld: %y\n", handler.withheld);
