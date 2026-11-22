@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP loopback, cancellation of an HTTP/1 poll operation and socket teardown
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class Http1ConnectionCycles
+
+class TransportBacklink {
+    private {
+        Http1Connection connection;
+        Counter destroyed;
+    }
+
+    constructor(Http1Connection connection, Counter destroyed) {
+        self.connection = connection;
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.inc();
+    }
+}
+
+class Http1ConnectionCycles inherits QUnit::Test {
+    constructor() : QUnit::Test("Http1ConnectionCycles", "1.0", \ARGV) {
+        addTestCase("cycle through the socket", \checkCycle(), (True,));
+        addTestCase("cycle through the poll operation", \checkCycle(), (False,));
+        set_return_value(main());
+    }
+
+    checkCycle(bool through_socket) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("attaching a backlink to the private transport requires a Debug build");
+        }
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        Counter destroyed();
+        {
+            Http1Connection conn("127.0.0.1", listener.getSocketInfo().port);
+            assertTrue(conn.waitForReady(5000));
+            # Unregister the operation synchronously. An active controller would be another legitimate owner.
+            conn.close();
+            call_function("dbg_http1_transport_backlink", conn, through_socket, new TransportBacklink(conn, destroyed));
+            assertEq(0, destroyed.getCount(), "the live connection still owns the backlink");
+        }
+        assertEq(1, destroyed.getCount(), "dropping the connection collects the cycle exactly once");
+    }
+}

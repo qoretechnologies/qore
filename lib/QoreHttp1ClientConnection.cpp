@@ -35,7 +35,7 @@
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/QoreChannel.h"
-#include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_HttpClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -45,6 +45,7 @@
 #include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
+#include <utility>
 
 // The QPP-generated .cpp for Http1ClientPollOperationBase is #included later
 // in the single-compilation-unit umbrella, so these globals are not yet
@@ -141,21 +142,31 @@ void Http1ClientConnection::configureSsl(int verify_mode, bool accept_all,
     }
 }
 
+void Http1ClientConnection::moveTransportToMembers(QoreObject* owner, ExceptionSink* xsink) {
+    assert(sock_obj && poll_op_obj);
+    // Keep native calls and closeConnection() safe regardless of wrapper destruction order. Each slot
+    // consumes the original object reference, including on error; the native-only path keeps its own.
+    sock_priv->ref();
+    if (owner->setInternalMemberValue("sock_obj", QC_HTTP1CONNECTION, std::exchange(sock_obj, nullptr), xsink)) {
+        return;
+    }
+    poll_op_priv->ref();
+    owner->setInternalMemberValue("poll_op_obj", QC_HTTP1CONNECTION, std::exchange(poll_op_obj, nullptr), xsink);
+}
+
 Http1ClientConnection::~Http1ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
     if (poll_op_obj) {
         poll_op_obj->deref(&xsink);
-        poll_op_obj = nullptr;
+    } else if (poll_op_priv) {
+        poll_op_priv->deref(&xsink);
     }
     if (sock_obj) {
         sock_obj->deref(&xsink);
-        sock_obj = nullptr;
+    } else if (sock_priv) {
+        sock_priv->deref(&xsink);
     }
-    // poll_op_priv / sock_priv are owned by poll_op_obj / sock_obj — clearing
-    // is unnecessary but makes use-after-free bugs easier to catch.
-    poll_op_priv = nullptr;
-    sock_priv = nullptr;
     xsink.clear();
 }
 
