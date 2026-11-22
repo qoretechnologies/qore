@@ -522,7 +522,9 @@ AbstractHttpRequestHandler sub get_handler() {
         on_exit delete srv.server;
         HTTPClient hc = getClient(srv.port);
         on_exit hc.disconnect();
-        assertNeq("leaked", hc.get("/probe/steal"), "the look-alike class does not read the listener's socket");
+        # the access is refused as that of another class: any other result, an exception or a value, fails
+        assertEq("PRIVATE-MEMBER", hc.get("/probe/steal"),
+            "the look-alike class does not read the listener's socket");
     }
 
     #! Starts a server with an HTTP/3 listener, the tenant's probe and the whoami handler
