@@ -925,10 +925,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertTrue(wsc.isHttp3(), sprintf("iteration %d should connect over HTTP/3", i));
 
             string payload = sprintf("first-send-%02d", i);
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             wsc.send(payload);
             int rv = wg.wait(5s);
-            int elapsed_ms = (now_us() - start).durationMilliseconds();
+            int elapsed_ms = (microseconds(clock_get_monotonic_us()) - start).durationMilliseconds();
 
             assertEq(0, rv,
                 sprintf("iteration %d should receive first echo within 5s (elapsed=%dms)", i, elapsed_ms));
@@ -957,9 +957,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         WebSocketClient wsc = createAutoClient(sub (*data msg) {}, setup.port);
         assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         delete wsc;
-        int elapsed_ms = (now_us() - start).durationMilliseconds();
+        int elapsed_ms = (microseconds(clock_get_monotonic_us()) - start).durationMilliseconds();
 
         assertTrue(elapsed_ms < 5000,
             sprintf("HTTP/3 WebSocket destructor disconnect took %dms (expected < 5000ms)", elapsed_ms));

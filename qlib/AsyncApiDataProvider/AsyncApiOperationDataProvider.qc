@@ -212,7 +212,10 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase, Da
         if (message_type) {
             return message_type;
         }
-        return message_type = getMessageType();
+        *AbstractDataProviderType mt = getMessageType();
+        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+        # that caller and is not kept in the instance for the others (qore#7104)
+        return DataProvider::mayRegisterShared() ? (message_type = mt) : mt;
     }
 
     #! Returns the description of a response message, if any

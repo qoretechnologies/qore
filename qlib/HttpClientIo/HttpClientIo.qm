@@ -588,6 +588,24 @@ public namespace HttpClientIo {
         string password = "";
     }
 
+    #! TLS credentials supplied for handshakes at the configured origins
+    public hashdecl HttpClientOriginTlsCredentials {
+        #! An HTTP(S) URL whose scheme, host and effective port identify the origin
+        string url;
+
+        #! Additional origins fixed by the credential owner
+        *list<string> additional_origins;
+
+        #! File-backed connection credentials require filesystem access when copying a REST client sharing the transport
+        bool file_backed = False;
+
+        #! The certificate to use at these origins
+        *SSLCertificate cert;
+
+        #! The private key to use at this origin
+        *SSLPrivateKey key;
+    }
+
     #! Unified connection manager options
     public hashdecl HttpClientConnectionManagerOptions {
         #! Maximum connections per host
@@ -786,6 +804,12 @@ public namespace HttpClientIo {
         #! private key of the client certificate for mutual TLS (mTLS)
         *SSLPrivateKey client_pk;
 
+        #! Origin to which connection-owned TLS credentials are bound
+        /** When set, attempts to acquire a connection to a different origin raise
+            \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR before network I/O.
+        */
+        *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
+
         #! Enable automatic cookie handling (default: True)
         /** When True, the connection manager automatically processes Set-Cookie
             headers from responses and injects matching Cookie headers into
@@ -944,6 +968,23 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
             return;
         }
         return proxy =~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// ? proxy : "http://" + proxy;
+    }
+
+    #! Creates the TLS socket for an HTTP client operation with the ownership of each supplied credential
+    Socket sub http_client_tls_socket(hash<auto> url_info, *SSLCertificate cert, *SSLPrivateKey key) {
+        # An ordinary target may be a UrlInfo hashdecl without credential metadata.
+        bool bound_cert = cert && url_info.hasKey("bound_tls_cert") && url_info.bound_tls_cert;
+        bool bound_key = key && url_info.hasKey("bound_tls_key") && url_info.bound_tls_key;
+        Socket sock = bound_cert || bound_key
+            ? Socket::forHttpClientHandshake(bound_cert ? cert : NOTHING, bound_key ? key : NOTHING)
+            : new Socket();
+        if (cert && !bound_cert) {
+            sock.setCertificate(cert);
+        }
+        if (key && !bound_key) {
+            sock.setPrivateKey(key);
+        }
+        return sock;
     }
 
     #! Returns True if the host is matched by the given no_proxy value (see get_proxy_url_from_environment())

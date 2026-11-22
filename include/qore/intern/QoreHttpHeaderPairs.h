@@ -40,6 +40,7 @@
 #include <utility>
 #include <vector>
 
+class ExceptionSink;
 class QoreHashNode;
 
 //! HTTP header fields as name/value pairs in order
@@ -56,6 +57,10 @@ typedef std::vector<std::pair<std::string, std::string>> qore_http_header_pairs_
     @param out the fields are appended here
 */
 DLLLOCAL void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out);
+
+//! Builds an HTTP/2 request header block and extracts the required method and path; returns -1 on error.
+DLLLOCAL int qore_get_http2_request_headers(const QoreHashNode* headers, std::string& method, std::string& path,
+        qore_http_header_pairs_t& out, ExceptionSink* xsink);
 
 //! Returns the value of the first field with the given name, compared case-insensitively, or nullptr
 DLLLOCAL inline const std::string* qore_find_http_header(const qore_http_header_pairs_t& headers,

@@ -56,6 +56,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
 
+#include <bit>
 #include <map>
 #include <memory>
 #include "qore/intern/QC_Counter.h"
@@ -5260,6 +5261,9 @@ public:
         }
         // the lookups ask the server with one try each, so that a failure is answered once
         ServersHelper servers(dns.port);
+        // the lookups reach the server with socketpairs, so that only the queries that a case does not answer time
+        // out, whatever the load of the host (qore#7119)
+        LocalTransportHelper transport(dns);
         QoreDbgCaresQueryOptions opts;
         opts.tries = 1;
         opts.timeout_ms = 30000;
@@ -5277,6 +5281,8 @@ public:
         destroyDuringProbeAndRepeat(c, dns);
         restartDuringConfirmation(c, dns);
         timeoutDuringConfirmation(c, dns);
+        synchronousTransport(c, dns);
+        lateAnswer(c, dns);
     }
 
 private:
@@ -5297,6 +5303,8 @@ private:
         std::string raw;
         struct sockaddr_storage from = {};
         socklen_t fromlen = 0;
+        //! the socketpair end that the query came from, or -1 if it came over UDP
+        int peer_fd = -1;
     };
 
     //! What the server does with a query
@@ -5309,6 +5317,9 @@ private:
         bool after_a = false;
         //! if not empty, the answer is a CNAME record with this name (and the addresses, if any)
         std::string cname;
+        //! if not 0, the answer is sent this many milliseconds later, while the lookup goes on; this is how an answer
+        //! whose delivery is delayed reaches the lookup
+        int delay_ms = 0;
     };
 
     class DnsServer {
@@ -5317,11 +5328,32 @@ private:
         int port = 0;
         //! the queries received, as "name/type"
         std::vector<std::string> queries;
+        //! the ends of the socketpairs of the lookups' UDP sockets (see LocalTransportHelper)
+        std::vector<int> peers;
 
         DLLLOCAL ~DnsServer() {
             if (fd >= 0) {
                 ::close(fd);
             }
+            closePeers();
+        }
+
+        //! Takes the end of the socketpair of a UDP socket of a lookup (see qore_dbg_cares_set_local_transport())
+        DLLLOCAL static void addPeer(int peer_fd, void* arg) {
+            // nothing may be thrown into c-ares
+            try {
+                static_cast<DnsServer*>(arg)->peers.push_back(peer_fd);
+            } catch (...) {
+                ::close(peer_fd);
+            }
+        }
+
+        //! Closes the socketpair ends, whose lookups are done
+        DLLLOCAL void closePeers() {
+            for (int p : peers) {
+                ::close(p);
+            }
+            peers.clear();
         }
 
         DLLLOCAL bool open() {
@@ -5340,9 +5372,23 @@ private:
 
         //! Reads a query that has arrived; false if none has
         DLLLOCAL bool receive(Query& q) {
+            if (receiveFrom(fd, -1, q)) {
+                return true;
+            }
+            for (int p : peers) {
+                if (receiveFrom(p, p, q)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        //! Reads a query that has arrived on @p sfd; false if none has
+        DLLLOCAL bool receiveFrom(int sfd, int peer_fd, Query& q) {
             char buf[512];
             q.fromlen = sizeof(q.from);
-            ssize_t n = recvfrom(fd, buf, sizeof(buf), MSG_DONTWAIT, reinterpret_cast<struct sockaddr*>(&q.from),
+            q.peer_fd = peer_fd;
+            ssize_t n = recvfrom(sfd, buf, sizeof(buf), MSG_DONTWAIT, reinterpret_cast<struct sockaddr*>(&q.from),
                 &q.fromlen);
             if (n < 17) {
                 return false;
@@ -5412,7 +5458,11 @@ private:
                 r += static_cast<char>(addr.size());
                 r += addr;
             }
-            sendto(fd, r.data(), r.size(), 0, reinterpret_cast<const struct sockaddr*>(&q.from), q.fromlen);
+            if (q.peer_fd >= 0) {
+                send(q.peer_fd, r.data(), r.size(), MSG_DONTWAIT);
+            } else {
+                sendto(fd, r.data(), r.size(), 0, reinterpret_cast<const struct sockaddr*>(&q.from), q.fromlen);
+            }
         }
 
         //! Reads and forgets the queries that have arrived, such as those of a lookup destroyed before they were read,
@@ -5421,6 +5471,8 @@ private:
             char buf[512];
             while (recv(fd, buf, sizeof(buf), MSG_DONTWAIT) >= 0) {
             }
+            // the lookups of earlier cases are done, and their sockets closed
+            closePeers();
             queries.clear();
         }
 
@@ -5458,6 +5510,25 @@ private:
         QoreDbgCaresQueryOptions prev;
     };
 
+    //! Makes the c-ares channels made from now on reach the DNS server with socketpairs, and restores the transport
+    /** Unix-domain datagrams are delivered when they are sent, on every platform, so a query is at the server when
+        c-ares's send returns and an answer is in c-ares's socket when the server's send returns: the lookups that
+        drive() runs then time out only for a query that the case does not answer (qore#7119)
+    */
+    class LocalTransportHelper {
+    public:
+        DLLLOCAL LocalTransportHelper(DnsServer& dns)
+                : prev(qore_dbg_cares_set_local_transport({DnsServer::addPeer, &dns})) {
+        }
+
+        DLLLOCAL ~LocalTransportHelper() {
+            qore_dbg_cares_set_local_transport(prev);
+        }
+
+    private:
+        QoreDbgCaresLocalTransport prev;
+    };
+
     using answer_t = std::function<Answer(const Query&)>;
 
     //! Runs a lookup until it is done or @p stop returns true, answering its queries with @p answer
@@ -5476,6 +5547,32 @@ private:
         std::vector<Held> held;
         std::map<std::string, int> a_count;
         std::map<std::string, int> aaaa_count;
+        // the answers sent later (Answer::delay_ms), with the time at which each is sent
+        struct Delayed {
+            Query q;
+            Answer a;
+            int64 due;
+        };
+        std::vector<Delayed> delayed;
+        auto now_ms = [] () -> int64 {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        };
+        // sends an answer, and the AAAA answers held until it if it is an answer for A
+        auto send_answer = [&dns, &held, &a_count] (const Query& q, const Answer& a) {
+            dns.reply(q, a);
+            if (q.type == TypeA) {
+                int n = ++a_count[q.name];
+                for (auto i = held.begin(); i != held.end();) {
+                    if (i->q.name == q.name && i->n <= n) {
+                        dns.reply(i->q, i->a);
+                        i = held.erase(i);
+                    } else {
+                        ++i;
+                    }
+                }
+            }
+        };
         while (true) {
             int rc = r.continuePoll(&xsink);
             if (rc != 1 || stop()) {
@@ -5485,19 +5582,39 @@ private:
             r.getExtraFds(fds);
             std::vector<struct pollfd> pfds;
             pfds.push_back({dns.fd, POLLIN, 0});
+            for (int p : dns.peers) {
+                pfds.push_back({p, POLLIN, 0});
+            }
             for (auto& [fd, events] : fds) {
                 pfds.push_back({fd, static_cast<short>(((events & SOCK_POLLIN) ? POLLIN : 0)
                     | ((events & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
             }
             int to = r.getPollTimeoutMs();
-            if (::poll(pfds.data(), pfds.size(), to < 0 ? HangGuardMs : std::min(to, HangGuardMs)) < 0
-                    && errno != EINTR) {
+            int poll_ms = to < 0 ? HangGuardMs : std::min(to, HangGuardMs);
+            int64 now = now_ms();
+            for (const Delayed& d : delayed) {
+                poll_ms = std::min(poll_ms, d.due > now ? static_cast<int>(d.due - now) : 0);
+            }
+            if (::poll(pfds.data(), pfds.size(), poll_ms) < 0 && errno != EINTR) {
                 return -1;
+            }
+            now = now_ms();
+            for (auto i = delayed.begin(); i != delayed.end();) {
+                if (i->due <= now) {
+                    send_answer(i->q, i->a);
+                    i = delayed.erase(i);
+                } else {
+                    ++i;
+                }
             }
             Query q;
             while (dns.receive(q)) {
                 Answer a = answer(q);
                 if (a.rcode < 0) {
+                    continue;
+                }
+                if (a.delay_ms) {
+                    delayed.push_back({q, a, now_ms() + a.delay_ms});
                     continue;
                 }
                 if (a.after_a) {
@@ -5507,18 +5624,7 @@ private:
                         continue;
                     }
                 }
-                dns.reply(q, a);
-                if (q.type == TypeA) {
-                    int n = ++a_count[q.name];
-                    for (auto i = held.begin(); i != held.end();) {
-                        if (i->q.name == q.name && i->n <= n) {
-                            dns.reply(i->q, i->a);
-                            i = held.erase(i);
-                        } else {
-                            ++i;
-                        }
-                    }
-                }
+                send_answer(q, a);
             }
         }
     }
@@ -6049,6 +6155,114 @@ private:
             }, xsink);
         }
         UT_ASSERT(c, statusOf(xsink) == "ESERVFAIL", "c-ares restart: the lookup started again is checked");
+    }
+
+    //! A query reaches the server when c-ares sends it, and an answer reaches c-ares when the server sends it
+    /** With LocalTransportHelper, a lookup's queries and answers are not delivered later, as UDP over the loopback
+        interface can be on macOS, where a delivery delayed beyond the timeout of a query made the lookups of this test
+        time out under load (qore#7119)
+    */
+    static void synchronousTransport(UnitTestCounters& c, DnsServer& dns) {
+        dns.drain();
+        static const std::string v4("\x0a\x01\x02\x05", 4);
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.query_cache = false;
+        QueryOptionsHelper query_options(opts);
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("sync.qore-check.", nullptr, AF_INET, SOCK_STREAM, 0);
+            // the lookup is started, and runs until it has sent its query: while c-ares waits to write it, the
+            // server has nothing
+            Query q;
+            bool received = false;
+            for (int i = 0; i < 10 && !received; ++i) {
+                int rc = r.continuePoll(&xsink);
+                UT_ASSERT_EQ(c, 1, rc, "c-ares transport: the lookup waits for its answer");
+                if (rc != 1) {
+                    return;
+                }
+                received = dns.receive(q);
+                if (!received) {
+                    std::vector<std::pair<int, int>> fds;
+                    r.getExtraFds(fds);
+                    bool write_wait = false;
+                    std::vector<struct pollfd> pfds;
+                    for (auto& [fd, events] : fds) {
+                        if (events & SOCK_POLLOUT) {
+                            write_wait = true;
+                            pfds.push_back({fd, POLLOUT, 0});
+                        }
+                    }
+                    UT_ASSERT(c, write_wait, "c-ares transport: the query is at the server once it is sent");
+                    if (!write_wait) {
+                        return;
+                    }
+                    ::poll(pfds.data(), pfds.size(), HangGuardMs);
+                }
+            }
+            UT_ASSERT(c, received, "c-ares transport: the query is sent");
+            if (!received) {
+                return;
+            }
+            UT_ASSERT(c, q.peer_fd >= 0, "c-ares transport: the query comes over a socketpair");
+            Answer a;
+            a.addrs.push_back(v4);
+            dns.reply(q, a);
+            // the answer can be read at once
+            std::vector<std::pair<int, int>> fds;
+            r.getExtraFds(fds);
+            std::vector<struct pollfd> pfds;
+            for (auto& [fd, events] : fds) {
+                pfds.push_back({fd, POLLIN, 0});
+            }
+            UT_ASSERT_EQ(c, 1, ::poll(pfds.data(), pfds.size(), 0),
+                "c-ares transport: the answer is in the lookup's socket when the server has sent it");
+            UT_ASSERT_EQ(c, 0, r.continuePoll(&xsink), "c-ares transport: the lookup is done with the answer");
+            UT_ASSERT(c, addressesOf(r) == "10.1.2.5", "c-ares transport: the address is found");
+        }
+        UT_ASSERT(c, statusOf(xsink).empty(), "c-ares transport: the lookup succeeds");
+    }
+
+    //! An answer that comes later than c-ares's default maximum timeout, but within the timeout of the query, is taken
+    /** c-ares (1.32 and later) caps the timeout of a query with its maximum timeout, 5 s by default, so the 30 s
+        timeout of these lookups was 5 s (qore#7119)
+    */
+    static void lateAnswer(UnitTestCounters& c, DnsServer& dns) {
+        dns.drain();
+        static const std::string v4("\x0a\x01\x02\x06", 4);
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.query_cache = false;
+        QueryOptionsHelper query_options(opts);
+        ExceptionSink xsink;
+        auto start = std::chrono::steady_clock::now();
+        std::string found;
+        {
+            QoreCaresAddrInfoResolver r("late.qore-check.", nullptr, AF_INET, SOCK_STREAM, 0);
+            drive(r, dns, [] (const Query& q) {
+                Answer a;
+                a.addrs.push_back(v4);
+                a.delay_ms = 5500;
+                return a;
+            }, xsink);
+            found = addressesOf(r);
+        }
+        int64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()
+            - start).count();
+        std::string status = statusOf(xsink);
+        UT_ASSERT(c, status.empty(), "c-ares late answer: an answer after 5.5 s is taken");
+        if (!status.empty()) {
+            printf("  got %s after %lld ms; queries:", status.c_str(), static_cast<long long>(elapsed));
+            for (const std::string& q : dns.queries) {
+                printf(" %s", q.c_str());
+            }
+            printf("\n");
+        }
+        UT_ASSERT(c, found == "10.1.2.6", "c-ares late answer: the address is found");
+        UT_ASSERT(c, elapsed >= 5500, "c-ares late answer: the answer was sent late");
     }
 
     //! The lookups of each family that time out make the failure a timeout
@@ -18681,13 +18895,34 @@ static QoreValue f_dbg_async_io_hold_step_results(const QoreListNode* params, Ru
     return QoreValue();
 }
 
-//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not
+//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not;
+//! with the second argument True, also the stream data and poll-complete notifications of its operations
 /** The items held run when the module cleanup releases them (qore_dbg_release_held_module_cleanup_work()); see
     AsyncIoControllerPriv::dbgHoldModuleCleanupWork() (qore#6928)
 */
 static QoreValue f_dbg_async_io_hold_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool());
+    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool(),
+        get_param_value(params, 1).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until at least the given number of items are held by dbg_async_io_hold_module_cleanup_work(), of
+//! operations whose class name contains the string given, if any; False if the wait timed out (qore#7027)
+static QoreValue f_dbg_async_io_wait_held_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    // the class name can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper cls(get_param_value(params, 2));
+    return AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(count < 0 ? 0 : static_cast<size_t>(count),
+        cls ? cls.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
+//! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
+static QoreValue f_dbg_async_io_module_cleanup_drain_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgModuleCleanupDrainReleases(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
 
@@ -22854,6 +23089,34 @@ static void ut_variant_takes_call_arity(UnitTestCounters& c) {
     UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
 }
 
+// the size helper of the JIT runtime (JITRuntime.cpp)
+extern "C" uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
+
+//! qore#7062: qore_fast_any_size() returns the length in characters of a string in both representations
+/** The caller of the helper gives strings to qore_fast_length() and qore_fast_strlen() first, so this is the only
+    check that an inline short string reaching it gets its length instead of 0
+*/
+static void ut_fast_any_size_short_string(UnitTestCounters& c) {
+    auto any_size = [] (QoreValue v, ExceptionSink& xsink) -> int64 {
+        return std::bit_cast<QoreValue>(qore_fast_any_size(std::bit_cast<uint64_t>(v), &xsink)).getAsBigInt();
+    };
+    ExceptionSink xsink;
+    // "\xc3\xa9\xc3\xa9" is two characters in four bytes
+    QoreValue short_value = QoreValue::makeStringValue("\xc3\xa9\xc3\xa9");
+    UT_ASSERT(c, short_value.isShortString(), "a 4-byte string is stored inline");
+    UT_ASSERT_EQ(c, 2, (int)any_size(short_value, xsink), "the size of an inline short string is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of an inline short string raises no exception");
+    QoreValue empty = QoreValue::makeStringValue("");
+    UT_ASSERT_EQ(c, 0, (int)any_size(empty, xsink), "the size of an empty string is 0");
+    // the same characters in a node: "\xc3\xa9\xc3\xa9\xc3\xa9a" is four characters in seven bytes
+    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9" "a", QCS_UTF8));
+    QoreValue node_value(*node);
+    UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
+    UT_ASSERT_EQ(c, 4, (int)any_size(node_value, xsink), "the size of a string node is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of a string node raises no exception");
+    xsink.clear();
+}
+
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -23140,6 +23403,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
+    ut_fast_any_size_short_string(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -27059,6 +27323,79 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
 }
 
 namespace {
+//! the HTTP/2 stream whose buffered data is held back, set by dbg_http2_hold_stream_data(); -1: none
+std::atomic<int64_t> dbg_h2_hold_stream{-1};
+}
+
+namespace {
+//! set by dbg_http3_client_hide_error()
+std::atomic<bool> dbg_h3_client_error_hidden{false};
+}
+
+bool qore_dbg_h3_client_error_hidden() {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
+//! makes the HTTP/3 client poll operations report no error, as if a connection left the connecting state without one
+/** For a test of how a connection race reports a leg that settled without an error (issue #6970): the error is
+    recorded as usual, and only reading it returns nothing.
+
+    @param on True to hide the errors, False to report them again
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http3_client_hide_error(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns True if dbg_http3_client_hide_error() hides the errors of the HTTP/3 client poll operations
+static QoreValue f_dbg_http3_client_error_hidden(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
+//! returns the number of poll operations implemented in Qore that the async I/O controller has registered by their
+//! objects: those that are submitted and not yet released
+/** For tests that check that an operation which is never admitted to the controller (a submission that is refused)
+    leaves nothing registered.
+*/
+static QoreValue f_dbg_async_io_registered_qore_ops(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64_t>(qore_dbg_registered_qore_ops());
+}
+
+bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
+    return dbg_h2_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the buffered data of an HTTP/2 stream back from the transport, as when its peer grants no flow-control credit
+/** The data that is sent on the stream stays buffered in the session, so that tests can fill the stream's send
+    buffer deterministically.  Only one stream is held at a time (the stream ID is that of both ends of a connection
+    within a process: a test holds the stream of a request that its server never answers).
+
+    @param stream_id the HTTP/2 stream ID
+*/
+static QoreValue f_dbg_http2_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    if (stream_id <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_hold_stream_data(): invalid stream ID %lld",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    dbg_h2_hold_stream.store(stream_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the buffered data of the HTTP/2 stream held with dbg_http2_hold_stream_data()
+/** The next send on the stream resumes it.
+*/
+static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_h2_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
 //! count that still advance it, and the progress added so far
 std::atomic<int64_t> dbg_quic_progress_stream{-1};
@@ -27079,9 +27416,10 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
     return dbg_quic_progress_added.load(std::memory_order_acquire);
 }
 
-//! simulates a peer that takes the data of an HTTP/3 client stream a little at a time
-/** The next \a reads reads of the stream's acknowledged byte count (Socket::getQuicClientStreamAckedBytes(), which
-    a send waiting for a full send buffer to drain makes at the start and at the end of each wait) each see one byte
+//! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
+/** The next \a reads reads of the stream's progress count (Socket::getQuicClientStreamAckedBytes() or
+    Socket::getHttp2StreamTakenBytes(), which a send waiting for a full send buffer to drain makes at the start and
+    at the end of each wait) each see one byte
     more acknowledged than the one before, with no clock involved: with the stream's staged data held back (see
     dbg_quic_hold_stream_data()), a wait that times out after such a read has seen progress.  Setting it again
     starts a new count.
@@ -29287,8 +29625,17 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_hold_module_cleanup_work", f_dbg_async_io_hold_module_cleanup_work,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
-        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold",
+        boolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "stream_data");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_module_cleanup_work", f_dbg_async_io_wait_held_module_cleanup_work,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms",
+        stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "class_part");
+    qns.addBuiltinVariant("dbg_async_io_module_cleanup_drain_releases",
+        f_dbg_async_io_module_cleanup_drain_releases, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "flags");
     qns.addBuiltinVariant("dbg_async_io_wait_held_step_results", f_dbg_async_io_wait_held_step_results,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
@@ -29744,6 +30091,19 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_registered_qore_ops", f_dbg_async_io_registered_qore_ops, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
+    qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");

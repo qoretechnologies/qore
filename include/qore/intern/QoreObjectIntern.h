@@ -209,6 +209,18 @@ class VRMutex;
 */
 DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
 
+//! Marks the objects in \a v as constants of the whole process, whose members no code can change (qore#6749)
+/** Called for the value of each builtin constant of the library and of binary modules (QoreNamespace::addConstant(),
+    QoreClass::addBuiltinConstant()) and for the process-wide singleton objects of the library, before the objects are
+    shared: one such object serves every Program and thread, so a member that one caller gave it would be read by
+    every other caller, also by the code of other sandboxes.  The objects in the lists and hashes of \a v are marked
+    too; only system objects (no Program owns them) are marked, as an object that a Program owns, such as one that a
+    language bridge imports as a constant of a Program, is that Program's.  Adding a member to a marked object raises
+    \c SYSTEM-OBJECT-ERROR (a class's member write gate, which owns the storage of its undeclared members, is
+    evaluated first).
+*/
+DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
+
 //! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
 /** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
     released), nor if the root's scan reached it (it is in the root's valid set).
@@ -261,6 +273,13 @@ public:
     private_data_scan_list_t* private_data_scans = nullptr;
 
     bool system_object;
+    //! set when the object is a constant of the whole process: its members cannot be changed (qore#6749)
+    /** An object that a builtin constant of the library or of a binary module holds, and a process-wide singleton
+        object of the library, is one object for every Program and thread: a member that any code gave it would be
+        seen by all other code, also by the code of other sandboxes.  Set before the object is shared (see
+        qore_object_mark_process_constant()) and never cleared, so it is read without a lock.
+    */
+    bool process_constant = false;
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
@@ -367,15 +386,21 @@ public:
             LexicalSemanticPolicy policy);
 
     //! merges the members of the object that the current class context can use into \a hash
-    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
-        member of this object; qore#7107)
-    */
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, bool lock = true) const;
+            LexicalSemanticPolicy policy) const;
+
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical, bool Lock>
+    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
 
     template <bool Lexical>
-    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy, bool lock) const;
+    DLLLOCAL void mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy, const qore_class_private* class_ctx) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -402,68 +427,61 @@ public:
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,
             ExceptionSink* xsink);
 
-    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-            class_ctx = nullptr;
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the member write is refused (qore#6749)
+    /** see checkProcessConstantWrite() and checkForeignBuiltinMemberWrite(); called only where a member is created
+        (the miss path of a member write) and for merges, so that a write to a member that exists, such as a declared
+        member, costs nothing more
 
-        QoreAutoVarRWReadLocker al(rml);
-
-        if (status == OS_DELETED) {
-            makeAccessDeletedObjectException(xsink, theclass->getName());
-            return nullptr;
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkMemberWrite(const char* mem, const QoreHashNode* h, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const {
+        // only a constant of the whole process or an object of a builtin class
+        if (!process_constant && !qore_class_private::get(*theclass)->sys) [[likely]] {
+            return 0;
         }
-
-        // all the members only in the object's class: another class context sees the members that it can use (issue
-        // #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
-            const char* str = data->getFirstKey();
-            //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
-            return !str ? nullptr : new QoreStringNode(str);
-        }
-
-        // get first accessible non-internal member
-        ConstHashIterator hi(data);
-        while (hi.next()) {
-            //printd(5, "qore_object_private::firstKey() checking '%s'\n", hi.getKey());
-            const qore_class_private* member_class_ctx = nullptr;
-            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
-                return new QoreStringNode(hi.getKey());
-            //printd(5, "qore_object_private::firstKey() skipping '%s' (private)\n", hi.getKey());
-        }
-
-        return nullptr;
+        return checkProcessConstantWrite(mem, xsink) || checkForeignBuiltinMemberWrite(mem, h, class_ctx, xsink)
+            ? -1 : 0;
     }
 
-    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) {
-        // get the current class context
-        const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-            class_ctx = nullptr;
-
-        QoreAutoVarRWReadLocker al(rml);
-
-        if (status == OS_DELETED) {
-            makeAccessDeletedObjectException(xsink, theclass->getName());
-            return nullptr;
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the object is a constant of the whole process (qore#6749)
+    /** @param mem the member written, or nullptr for a merge
+    */
+    DLLLOCAL int checkProcessConstantWrite(const char* mem, ExceptionSink* xsink) const {
+        if (!process_constant) [[likely]] {
+            return 0;
         }
+        return raiseProcessConstantWrite(mem, xsink);
+    }
 
-        // all the members only in the object's class (issue #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
-            const char* str = data->getLastKey();
-            return !str ? nullptr : new QoreStringNode(str);
-        }
+    //! Raises \c SYSTEM-OBJECT-ERROR for a member write to a constant of the whole process; returns -1
+    DLLLOCAL int raiseProcessConstantWrite(const char* mem, ExceptionSink* xsink) const;
 
-        // get last accessible non-internal member
-        ReverseConstHashIterator hi(data);
-        while (hi.next()) {
-            const qore_class_private* member_class_ctx = nullptr;
-            if (!checkMemberAccessIntern(hi.getKey(), false, class_ctx, member_class_ctx))
-                return new QoreStringNode(hi.getKey());
-        }
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if sandboxed code gives a member to a foreign builtin object
+    /** The code of a sandboxed Program cannot give an object of a builtin class without a public member list,
+        which another Program or the library created, a member that the class does not declare (qore#6749): the
+        object can be shared, as one that a module keeps in a static member is, and the member would be read by other
+        callers, also by the code of other sandboxes.  The members that the class declares (the private and internal
+        members of a builtin class, which its C++ code writes) and the objects that the Program created are not
+        affected.
 
-        return nullptr;
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
+            const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+
+    //! returns the first name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
+    DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) const {
+        return getRuntimeEdgeMemberKey(false, xsink);
+    }
+
+    //! returns the last name that getRuntimeMemberList() returns, or nullptr if there is none (#7048)
+    DLLLOCAL QoreStringNode* lastKey(ExceptionSink* xsink) const {
+        return getRuntimeEdgeMemberKey(true, xsink);
     }
 
     DLLLOCAL QoreHashNode* getSlice(const QoreListNode* l, ExceptionSink* xsink) const;
@@ -767,11 +785,11 @@ public:
     }
 
     //! merges the members of the object that the current class context can use into \a hash
-    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
-        member of this object; qore#7107)
-    */
-    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            bool lock = true) const;
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
+
+    //! merges the members of the object that the current class context can use into \a hash when this thread holds
+    //! the object's lock for writing already (the lvalue of the merge is a member of this object; qore#7107)
+    DLLLOCAL void mergeDataToHashHeld(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
 
     DLLLOCAL bool checkData(qore_classid_t key) {
         if (!privateData) {
@@ -839,6 +857,41 @@ public:
         @return member data of the object
     */
     DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
+
+    //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
+    /** raises an exception and returns nullptr if the object has been deleted
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return the names of the members, caller owns the reference returned
+    */
+    DLLLOCAL QoreListNode* getRuntimeMemberList(ExceptionSink* xsink) const;
+
+    //! returns the number of the members that the calling code can see, as the size of getRuntimeMemberHash() (#7048)
+    /** returns 0 if the object has been deleted
+
+        @return the number of the members
+    */
+    DLLLOCAL int64 getRuntimeMemberCount() const;
+
+    //! getRuntimeMemberList() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE QoreListNode* getRuntimeMemberListSlow(ExceptionSink* xsink) const;
+
+    //! getRuntimeMemberCount() for a class with non-public members or an object with internal data
+    DLLLOCAL QORE_INTERN_NOINLINE int64 getRuntimeMemberCountSlow() const;
+
+    //! returns @ref true if the calling code can see a member of the object; stops at the first one (#7048)
+    DLLLOCAL bool hasRuntimeMembers() const;
+
+    //! returns the first or last name of getRuntimeMemberList() as a new string, or nullptr if there is none
+    /** @param last @ref true for the last name
+        @param xsink raises an exception if the object has been deleted
+    */
+    DLLLOCAL QoreStringNode* getRuntimeEdgeMemberKey(bool last, ExceptionSink* xsink) const;
+
+    //! returns the first or last name of getRuntimeMemberList() for the class context; the object's lock must be held
+    /** the name is valid while the lock is held
+    */
+    DLLLOCAL const char* getRuntimeEdgeMemberKeyIntern(const qore_class_private* class_ctx, bool last) const;
 
     DLLLOCAL void incScanCount(int dt) {
         assert(dt);

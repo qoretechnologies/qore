@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qdp in child processes of its own binary started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class QdpAppActionOptionsTest
+
+#! qdp reports a missing or invalid option of an app action as a usage error (qore#7126)
+/** The connection of an app action (\c "@App/action{connection=...}") was read with an exception for a missing option,
+    and a missing path option and an unknown connection raised exceptions too: qdp ended with an unhandled exception
+    and its call stack.  Each is now a one-line error with exit status 1 that names the options, and the connection
+    can also be given with \c "qorus_app_connection", the name of the option in Qorus and the IDE.  The Db app has a
+    connection scheme; its "create" action has the path option "table".  The connection "X" of the test connection
+    provider module has a scheme of its own, so a resolved connection ends with the error of its scheme.
+*/
+public class QdpAppActionOptionsTest inherits QUnit::Test {
+    constructor() : Test("QdpAppActionOptionsTest", "1.0") {
+        addTestCase("a missing connection", \missingConnectionTest());
+        addTestCase("missing required options", \missingOptionsTest());
+        addTestCase("qorus_app_connection is the connection", \aliasTest());
+        addTestCase("different connections in both options", \conflictTest());
+        addTestCase("an unknown connection", \unknownConnectionTest());
+        addTestCase("a connection that is not a name", \typeTest());
+        addTestCase("an action without a connection", \noSchemeTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    #! runs qdp with the Db app loaded and the test connection provider module
+    /** An empty provider index directory of its own keeps qdp from loading every known data provider factory for an
+        app action, which takes many seconds; the Db app is loaded with its module
+    */
+    private hash<auto> runQdp(string args) {
+        TmpDir dir("qdp-app-action-");
+        string index_dir = dir.path + "/index";
+        mkdir(index_dir);
+        string out_path = dir.path + "/out.txt";
+        string err_path = dir.path + "/err.txt";
+        string cmd = sprintf("env -u QORE_DATA_PROVIDERS QORE_PROVIDER_INDEX_DIR=%s QORE_CONNECTION_PROVIDERS=%s %s "
+            "--enable-debug %s -m DbDataProvider %s > %s 2> %s < /dev/null", quote(index_dir),
+            quote(get_script_dir() + "/../ConnectionProvider/TestConnectionProvider.qm"),
+            quote(TestInterpreter::qore_interpreter()), quote(get_script_dir() + "/../../../../bin/qdp"), args,
+            quote(out_path), quote(err_path));
+        int rc = system(cmd);
+        return {
+            "rc": rc,
+            "out": ReadOnlyFile::readTextFile(out_path),
+            "err": ReadOnlyFile::readTextFile(err_path),
+        };
+    }
+
+    #! checks a usage error: exit status 1, one error line and no exception
+    private checkUsageError(hash<auto> r, string pattern, string name) {
+        assertEq(1, r.rc, name + ": exit status: " + r.err);
+        assertRegex("qdp: ERROR: " + pattern, r.err, name);
+        assertFalse(regex(r.err, "unhandled|call stack|OPTION-ARG-ERROR|ACTION-ARG-ERROR|CONNECTION-ERROR"),
+            name + ": no exception: " + r.err);
+    }
+
+    missingConnectionTest() {
+        checkUsageError(runQdp("'@Db/select-sql' info"),
+            "@Db/select-sql requires the option \"connection\": qdp '@Db/select-sql\\{connection=<value>\\}'",
+            "no options");
+        checkUsageError(runQdp("'@Db/select-sql{}' info"), "@Db/select-sql requires the option \"connection\"",
+            "empty options");
+    }
+
+    missingOptionsTest() {
+        checkUsageError(runQdp("'@Db/create' info"),
+            "@Db/create requires the options \"connection\", \"table\": "
+                "qdp '@Db/create\\{connection=<value>,table=<value>\\}'", "both missing");
+        # the syntax has every required option of the action
+        checkUsageError(runQdp("'@Db/create{connection=X}' info"),
+            "@Db/create requires the option \"table\": qdp '@Db/create\\{connection=<value>,table=<value>\\}'",
+            "table missing");
+        checkUsageError(runQdp("'@Db/create{qorus_app_connection=X}' info"),
+            "@Db/create requires the option \"table\": ", "table missing with the alias");
+    }
+
+    #! the connection is resolved from either option: its scheme is the next error
+    aliasTest() {
+        string scheme_error = "@Db/select-sql: connection \"X\" has scheme \"TestConnection\"; expecting";
+        checkUsageError(runQdp("'@Db/select-sql{connection=X}' info"), scheme_error, "connection");
+        checkUsageError(runQdp("'@Db/select-sql{qorus_app_connection=X}' info"), scheme_error,
+            "qorus_app_connection");
+        checkUsageError(runQdp("'@Db/select-sql{connection=X,qorus_app_connection=X}' info"), scheme_error,
+            "both with the same connection");
+        # an empty value is no value
+        checkUsageError(runQdp("'@Db/select-sql{connection=\"\",qorus_app_connection=X}' info"), scheme_error,
+            "an empty connection and the alias");
+        checkUsageError(runQdp("'@Db/select-sql{connection=X,qorus_app_connection=\"\"}' info"), scheme_error,
+            "the connection and an empty alias");
+    }
+
+    conflictTest() {
+        checkUsageError(runQdp("'@Db/select-sql{connection=X,qorus_app_connection=Y}' info"),
+            "@Db/select-sql: the options \"connection\" \\(\"X\"\\) and \"qorus_app_connection\" \\(\"Y\"\\) "
+                "name different connections", "conflict");
+    }
+
+    #! the error of the connection provider is given
+    unknownConnectionTest() {
+        string unknown = "@Db/select-sql: connection \"nosuch\" cannot be used: connection identifier \"nosuch\" "
+            "could not be matched to a known connection";
+        checkUsageError(runQdp("'@Db/select-sql{connection=nosuch}' info"), unknown, "connection");
+        checkUsageError(runQdp("'@Db/select-sql{qorus_app_connection=nosuch}' info"), unknown, "qorus_app_connection");
+    }
+
+    #! the error names the option given
+    typeTest() {
+        checkUsageError(runQdp("'@Db/select-sql{connection=1}' info"),
+            "@Db/select-sql: the \"connection\" option must be a connection name; got type \"integer\"", "integer");
+        checkUsageError(runQdp("'@Db/select-sql{qorus_app_connection=(1,2)}' info"),
+            "@Db/select-sql: the \"qorus_app_connection\" option must be a connection name; got type \"list\"",
+            "list");
+    }
+
+    #! an app action without a connection scheme is not changed
+    noSchemeTest() {
+        hash<auto> r = runQdp("'@Qore/record-limit' info");
+        assertEq(0, r.rc, r.err);
+        assertRegex("Name: record-limit", r.out);
+    }
+}

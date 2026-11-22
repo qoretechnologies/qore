@@ -59,18 +59,61 @@ public:
 class QoreProgram;
 
 //! Captures provenance, returning nullptr when no sandbox governs execution and no origin is recorded.
-/** @param code_pgm the Program whose code an object created now runs (its class's), or nullptr: if it is a library
-    module's, the functional-domain restrictions of the creating code are recorded too (qore#6520)
+/** @param code_pgm the Program whose code an object created now runs (its class's), or nullptr for an object of a
+    builtin class: the functional-domain restrictions of the creating code are recorded too if the code runs where the
+    creating code is not on the stack (see qore_creation_origin_for()) (qore#6520, qore#6844)
+    @param spans true if a base class of the object's class has the code of another Program
 */
-DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr);
-//! Records the functional-domain restrictions of the code that creates a call reference to library module code
-/** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520); does
-    nothing if \a code_pgm, the Program whose code the reference runs, is not a library module's (or is nullptr) or
-    if the creating code has no restrictions
+DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr,
+    bool spans = false);
+//! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
+/** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
+    is the code of a module (a library module or one loaded by its path, also when module code creates it), whose
+    Program does not decide for the code that calls it, of a base class of a module (\a spans), or builtin code
+    (\a code_pgm is nullptr, for a call reference); empty for the code of a Program that is not a module's (the
+    creating Program's own, or the host's that it imported), which runs with that Program on the stack, or if the
+    creating code has no restrictions
+
+    @param code_pgm the Program whose code the object or call reference runs, or nullptr for builtin code
+    @param spans true if a base class of the object's class has the code of another Program
+*/
+DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, bool spans = false);
+//! Records the functional-domain restrictions of the code that creates a call reference (qore_creation_origin_for())
+/** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520,
+    qore#6844); does nothing if they are empty
 */
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
 DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure);
+//! Returns the restrictions of a callable value or object as a mask of parse options (see the public
+//! qore_callable_origin_restrictions()), for code of the library that gates the callables it accepts (qore#7056)
+DLLLOCAL QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v);
+//! Calls host code with the host's parse options under the sandbox of another Program (SandboxManager::callGoverned())
+/** @param factory the host code to call: it must have no restrictions (qore_callable_origin_restrictions_po())
+    @param governed the Program whose sandbox governs the call and whose application the work belongs to (referenced
+    by the caller for the call)
+    @param args the arguments for \a factory
+    @param xsink for exceptions: SANDBOX-CALL-GOVERNED-ERROR if the call is refused, or those of \a factory
+*/
+DLLLOCAL QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, QoreProgram* governed,
+    const QoreListNode* args, ExceptionSink* xsink);
+
+//! Returns the restrictions of the code that authored a callable value or object as parse options (qore#7056)
+/** As qore_callable_origin_restrictions_po(), without the restrictions that module or builtin code recorded when it
+    created the value for the code that called it: the restrictions of a closure, function or method of a Program that
+    is not a module's, of a call reference or object that the code of such a Program created (also of a builtin class
+    or of a class that the host imported), and of the code of a child Program that it created; a closure is judged by
+    the Program that defines it and an object by the code of its class (an object of a module or builtin class runs
+    only that code, whichever code creates it); a closure, call reference or object that module code creates for a
+    restricted caller is the module's capability, which the sandbox of the caller governs (its thread limit and
+    policy), and gives 0.  The schedulers that refuse code that may not
+    control threads use this (qore_check_thread_callable()).
+*/
+DLLLOCAL QoreParseOptions qore_callable_authored_restrictions_po(const QoreValue v);
+
+//! Returns the restricting options of a Program that is not a module's: those of the code that it authors (qore#7087)
+DLLLOCAL QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm);
+
 //! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.

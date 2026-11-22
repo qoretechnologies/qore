@@ -50,7 +50,7 @@ hash<auto> result = db.runCommand({"ping": 1});
 
     @since mongodb 1.0
 */
-qclass MongoDatabase [arg=QoreMongoDatabase* database; ns=mongodb; flags=final];
+qclass MongoDatabase [arg=QoreMongoDatabase* database; ns=mongodb; flags=final; dom=NETWORK];
 
 //! Returns the name of this database
 /** @return the database name

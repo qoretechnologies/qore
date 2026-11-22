@@ -144,14 +144,26 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     }
 
     #! Returns connection info
-    /** Overridden to strip the @c pass key from @c url_hash (datasource URLs use @c pass instead of @c password)
+    /** Overridden so that without the \c with_passwords option, @c url_hash has no credentials, as the safe URL: the
+        password is removed, and the user name and every option value are masked as @c "****", as an option of a
+        driver can hold a credential (see @ref datasource_mask_options; qore#7017)
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = AbstractConnectionWithInfo::getInfo(opts);
         if (!opts.with_passwords) {
-            delete h.url_hash.pass;
+            h.url_hash = mask_datasource_hash(urlh, {"show_db": True, "show_options": True}) + {"protocol": "db"};
         }
         return h;
+    }
+
+    #! Returns the options of the connection without the values that can hold credentials
+    /** The options of the connection scheme (the pool sizes) are shown; the value of every other option, a driver
+        option that the URL or the options give, is masked as @c "****", as an option of a driver can hold a
+        credential (qore#7017)
+    */
+    private *hash<auto> getSafeOptions(*hash<auto> opts) {
+        opts = AbstractConnectionWithInfo::getSafeOptions(opts);
+        return map {$1.key: ConnectionScheme.options{$1.key} ? $1.value : "****"}, opts.pairIterator();
     }
 
     #! Returns the ConnectionSchemeInfo hash
@@ -166,6 +178,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     */
     private Datasource getImpl(bool connect = True, *hash<auto> rtopts) {
         Datasource ds(ds_urlh);
+        # the datasource is identified by the name of the connection, which serialized data keeps instead of its
+        # credentials (qore#7016)
+        ds.setConnectionName(name);
         if (connect) {
             ds.open();
         }
@@ -192,16 +207,28 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
             throw "DATASOURCE-PARSE-ERROR", "empty datasource string after 'db://' prefix";
         }
         hash<auto> urlh = parse_datasource(datasource: ds_str);
+        # a datasource needs a driver; the error is the one that the safe URL raised when it was made with
+        # make_datasource_string() (the safe URL is now masked and has no error of its own; qore#7017)
+        if (!urlh.type.val()) {
+            throw "MAKE-DATASOURCE-STRING-ERROR", "the datasource in the 'db://' URL has no driver";
+        }
         urlh.protocol = "db";
         return urlh;
     }
 
-    #! Creates a "safe" URL string with password information removed
-    /** @param urlh a parsed URL hash (as returned from parseUrl())
-        @return a safe URL string with the @c "db://" prefix and no password
+    #! Creates a "safe" URL string with no credentials
+    /** The URL is shown in user interfaces and logs: it shows the driver, the database, the character encoding, the
+        host and the port, and the names of the options; the user name, the password and every option value are
+        masked as @c "****", as an option of a driver can hold a credential (see
+        @ref Qore::SQL::mask_datasource(hash<auto>, *hash<auto>) "mask_datasource()" and
+        @ref datasource_mask_options)
+
+        @param urlh a parsed URL hash (as returned from parseUrl())
+
+        @return a safe URL string with the @c "db://" prefix and no credentials
     */
     private string getSafeUrl(hash<auto> urlh) {
-        return "db://" + make_datasource_string(urlh - "pass");
+        return "db://" + mask_datasource(urlh, {"show_db": True, "show_options": True});
     }
 
     #! Validates connection options

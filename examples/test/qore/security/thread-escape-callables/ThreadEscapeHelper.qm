@@ -1,0 +1,236 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+# a module that runs a callable that it is given on a thread of its own (see thread-escape-callables.q, qore#7056)
+module ThreadEscapeHelper {
+    version = "1.0";
+    desc = "runs a callable that it is given in another thread";
+    author = "Qore"; license = "MIT";
+}
+# a thread-local variable of the module (runThreadLocal())
+thread_local code tl_callable;
+# a global variable of the module (runComputed())
+our code g_callable;
+
+public namespace ThreadEscapeHelper {
+    #! runs a callable on a new thread
+    public sub runInBackground(code<nothing()> c) {
+        background c();
+    }
+
+    #! runs a callable on a new thread with an argument that the new thread computes
+    public sub runInBackgroundWithArg(code<nothing(int)> c, int x) {
+        background c(x + 1);
+    }
+
+    #! runs a function of the module on a new thread with arguments that the new thread computes: the function calls
+    #! the callable that it is given there (the callee is module code)
+    public sub runModuleFunctionWithArgs(code<nothing(int)> c, int x) {
+        background callWith(c, x + 1);
+    }
+
+    #! calls a callable with an argument
+    public sub callWith(code<nothing(int)> c, int x) {
+        c(x);
+    }
+
+    #! calls a method of an object that it is given on a new thread
+    public sub runMethodInBackground(object o) {
+        background o.run();
+    }
+
+    #! calls a method of an object that it is given on a new thread with an argument that the new thread computes
+    public sub runMethodInBackgroundWithArg(object o, int x) {
+        background o.runWith(x + 1);
+    }
+
+    #! runs a callable that it holds in a member, or calls a method of an object that it holds in a member, on a new
+    #! thread
+    public class MemberRunner {
+        private {
+            code c;
+            object o;
+        }
+
+        constructor(code c, object o) {
+            self.c = c;
+            self.o = o;
+        }
+
+        runClosureWithArg(int x) {
+            background c(x + 1);
+        }
+
+        runClosure() {
+            background c(1);
+        }
+
+        runObjectWithArg(int x) {
+            background o.runWith(x + 1);
+        }
+    }
+
+    #! runs callables that it is given as the implicit argument of a map, on new threads
+    public sub runImplicit(list<code> l, int x) {
+        map background $1(x + 1), l;
+    }
+
+    #! runs a callable that it holds in a thread-local variable on a new thread
+    public sub runThreadLocal(code c, int x) {
+        tl_callable = c;
+        background tl_callable(x + 1);
+    }
+
+    #! runs a callable on a new thread from a closure of the module, with an argument that the new thread computes
+    public sub runInClosure(code<nothing(int)> c, int x) {
+        code f = sub () {
+            background c(x + 1);
+        };
+        f();
+    }
+
+    #! runs a callable on a thread pool of the module and waits for it
+    public sub runOnPool(code<nothing()> c) {
+        ThreadPool tp(1);
+        on_exit tp.stopWait();
+        tp.submit(c);
+    }
+
+    #! runs a closure of the module on a new thread, which calls the callable that it is given there: the capability
+    #! pattern of a module that calls back its caller from a thread of its own
+    public sub runWrapped(code<nothing()> c) {
+        background sub () { c(); }();
+    }
+
+    #! runs a callable with call_async() and waits for it
+    public auto sub runAsync(code c) {
+        return call_async(c).get();
+    }
+
+    #! submits a poll operation that it is given to the async I/O controller
+    public sub submitOperation(Socket sock, AbstractPollOperation op) {
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": sock, "spop": op, "owner": "probe"});
+    }
+
+    #! runs an operation that it is given with AsyncIoController::exec()
+    public sub execOperation(Socket sock, AbstractPollOperation op) {
+        AsyncIoController::exec(<SocketPollOperationInfo>{"sock": sock, "spop": op, "owner": "probe"});
+    }
+
+    #! a poll operation of the module, which is done at once
+    public class ModuleOp inherits AbstractPollOperation {
+        string getGoal() { return "done"; }
+        string getState() { return "done"; }
+        bool goalReached() { return True; }
+        *hash<SocketPollInfo> continuePoll() {}
+    }
+
+    #! submits poll operations of the module that it creates; a restricted subclass runs the module's code
+    public class OpSubmitter {
+        string submitOwn(Socket sock) {
+            try {
+                AsyncIoController::submit(<SocketPollOperationInfo>{"sock": sock, "spop": new ModuleOp(),
+                    "owner": "probe"});
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+            return "submitted";
+        }
+    }
+
+    #! runs a callable with parallel_map()
+    public list<auto> sub runParallelMap(code c) {
+        return parallel_map(c, (1, 2));
+    }
+
+    #! makes the current thread decrement the counter when it ends, however it ends; returns nothing
+    public sub signalEnd(Counter end) {
+        set_thread_resource(\decEnd(), end);
+    }
+
+    #! decrements the counter
+    sub decEnd(Counter end) {
+        end.dec();
+    }
+
+    #! returns its argument
+    public auto sub identity(auto v) {
+        return v;
+    }
+
+    #! holds a callable in a static variable
+    public class StaticHolder {
+        public {
+            static code callable;
+        }
+    }
+
+    #! runs a callable that the new thread computes, in the way that \a how names, with an argument that it computes;
+    #! the new thread signals \a end when it ends: the code that the expression calls is checked when it is called
+    #! (qore#7087)
+    public sub runComputed(string how, code<nothing(int, *auto)> c, int x, Counter end) {
+        bool b = True;
+        list<code> l = (c,);
+        hash<auto> h = {"f": c};
+        g_callable = c;
+        StaticHolder::callable = c;
+        switch (how) {
+            case "null coalescing": background (c ?? c)(x + 1, signalEnd(end)); break;
+            case "conditional": background (b ? c : c)(x + 1, signalEnd(end)); break;
+            case "index": background l[0](x + 1, signalEnd(end)); break;
+            case "hash member": background h.f(x + 1, signalEnd(end)); break;
+            case "call result": background identity(c)(x + 1, signalEnd(end)); break;
+            case "global variable": background g_callable(x + 1, signalEnd(end)); break;
+            case "static class variable": background (StaticHolder::callable)(x + 1, signalEnd(end)); break;
+            case "call_function": background call_function(c, x + 1, signalEnd(end)); break;
+            case "call_function_args": background call_function_args(c, (x + 1, signalEnd(end))); break;
+            default: throw "UNKNOWN", how;
+        }
+    }
+
+    #! calls a method of an object that the new thread computes, in the way that \a how names; see runComputed()
+    public sub runComputedMethod(string how, object o, int x, Counter end) {
+        list<object> l = (o,);
+        switch (how) {
+            case "index": background l[0].runWith(x + 1, signalEnd(end)); break;
+            case "method reference": background (\o.runWith())(x + 1, signalEnd(end)); break;
+            case "call_object_method": background call_object_method(o, "runWith", x + 1, signalEnd(end)); break;
+            case "call_object_method_args":
+                background call_object_method_args(o, "runWith", (x + 1, signalEnd(end)));
+                break;
+            default: throw "UNKNOWN", how;
+        }
+    }
+
+    #! runs a closure of the module that calls the callable that it is given, which the new thread computes: the
+    #! callee is module code, which calls its caller's code
+    public sub runComputedModuleCode(code<nothing(int, *auto)> c, int x, Counter end) {
+        code mc = sub (int y, *auto e) { c(y, e); };
+        background (mc ?? mc)(x + 1, signalEnd(end));
+    }
+
+    #! calls a method of the object on a new thread, without and with an argument that the new thread computes: a
+    #! subclass can override it (qore#7087)
+    public class SelfRunner {
+        work(int x, *auto e) {
+        }
+
+        runSelf(int x, Counter end) {
+            background work(x + 1, signalEnd(end));
+        }
+    }
+
+    #! runs the top-level code of a Program on a new thread (qore#7087)
+    public sub runProgram(Program p, Counter end) {
+        background (signalEnd(end), p.run());
+    }
+
+    #! evaluates an expression on a new thread (qore#7087)
+    public sub runExpression(Expression e, Counter end) {
+        background (signalEnd(end), e.eval());
+    }
+
+    #! gives a new thread a callable to run when it ends (qore#7087)
+    public sub runAsThreadResource(code c, Counter end) {
+        background set_thread_resource(c, signalEnd(end));
+    }
+}

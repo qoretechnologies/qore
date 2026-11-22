@@ -979,6 +979,22 @@ public:
     */
     static uint64_t getMaxJITHandlerCost();
 
+    //! Returns the largest number of LLVM instructions of the module of a function (or batch) that is optimized and
+    //! compiled to native code, 0 for no limit (qore#7174)
+    /** The IR instruction count (getMaxJITIRInstructions()) does not tell how large the native code of a function is:
+        an instruction on an untyped value lowers to about three times the LLVM code of one on a typed value (about
+        41 against 14 LLVM instructions per IR instruction), and LLVM's optimization and code generation, which take
+        nearly all the time of a compilation, grow faster than the size of the function; a function of untyped
+        locals within the IR budget took 40 s and 0.9 GB to compile.  The size of the lowered module is checked
+        before it is optimized: a function over it stays on the IR tier, as one over the IR budget does.
+
+        The default is 150000 LLVM instructions (a function of typed locals at the IR budget lowers to about 140000);
+        override it with the QORE_JIT_MAX_LLVM_INSTRUCTIONS environment variable, where 0 means "no limit".  An
+        invalid or empty value is ignored; when it is not set and QORE_JIT_MAX_IR_INSTRUCTIONS is 0 (no limit),
+        there is no limit either.
+    */
+    static uint64_t getMaxJITLLVMInstructions();
+
     //! Returns the process-wide LLVM optimization level used for JIT compilation.
     /** 0 (no optimization) to 3 (most aggressive); the default is 3, matching the default of the
         qcc AOT compiler.  Overridable with the

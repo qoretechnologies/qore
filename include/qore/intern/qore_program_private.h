@@ -1475,10 +1475,6 @@ public:
     //! qore_program_set_module_lifetime()); never cleared once set
     std::atomic<bool> module_lifetime{false};
 
-    //! true if a trusted build created the Program (SandboxManager::createTrustedBuildCall()); its code does not
-    //! identify the code that it serves, so qore_find_caller_program() reports an unknown caller there (qore#6852)
-    bool created_in_trusted_build = false;
-
     // define map
     dmap_t dmap;
 
@@ -2596,6 +2592,12 @@ public:
         @throw std::bad_alloc the composition of the two managers could not be allocated
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
+
+    //! Returns true once the teardown of the Program has started (its private data is being or has been deleted)
+    DLLLOCAL bool isTornDown() {
+        AutoLocker al(plock);
+        return ptid != 0;
+    }
 
     //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
     /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
@@ -5936,6 +5938,11 @@ public:
     }
 
     DLLLOCAL QoreValue evalExpression(q_exp_t exp, ExceptionSink* xsink) {
+        // an expression of a Program that may not control threads is not evaluated by the expression of the
+        // background operator itself (qore#7087)
+        if (qore_check_background_direct_entry(pgm, false, xsink)) {
+            return QoreValue();
+        }
         ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();
@@ -6412,9 +6419,15 @@ public:
     DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
             LexicalSemanticPolicy policy);
 
+    //! Calls a function by name with a temporary list of evaluated arguments that the caller owns
+    /** The call takes the values of the list over, as a direct call takes its evaluated arguments: the ones that the
+        function has no parameter for are moved into its \c argv variable (qore#6052); the caller releases the list
+    */
+    DLLLOCAL QoreValue callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink);
+
     template <bool LexicalInvocation>
     DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, bool given_args = false);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

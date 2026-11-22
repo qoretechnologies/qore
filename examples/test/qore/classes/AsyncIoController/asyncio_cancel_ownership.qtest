@@ -428,6 +428,8 @@ bool sub direct_key(string key) {
         addTestCase("a sandboxed caller cannot cancel another code's operations by their owner", \ownerTest());
         addTestCase("a sandboxed caller cancels its own operations", \ownTest());
         addTestCase("a sandboxed submit does not take the key of another code's operation", \collisionTest());
+        addTestCase("trusted code's submissions with the key of another operation are unchanged",
+            \trustedCollisionTest());
         addTestCase("sandboxed code gets the settings of the controller only", \infoTest());
         addTestCase("a sandboxed flush does not discard another code's callbacks", \flushTest());
         addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
@@ -505,15 +507,42 @@ bool sub direct_key(string key) {
             on_exit AsyncIoController::cancelByOwner(key + "-tenant");
             list<auto> r = tenant.callFunction("collide", key, 8, replace);
             # each of the tenant's submissions (from a thread that is not the I/O thread) is refused: its operation is
-            # not started, and its result is a canceled result
+            # not started, and its result is a canceled result; without replace_existing it is refused as any caller's
+            # is (qore#7108), with it as one that may not replace another application's operation
             foreach auto i in (r) {
                 assertEq(NT_OBJECT, i.typeCode(), sprintf("replace %y: %y", replace, i));
-                assertTrue(i.get(HangGuard).canceled, "replace: " + replace);
+                hash<auto> res = i.get(HangGuard);
+                assertTrue(res.canceled, "replace: " + replace);
+                assertEq(replace ? "ASYNC-IO-KEY-ERROR" : "ASYNC-IO-ERROR", res.ex.err, "replace: " + replace);
             }
             assertEq(0, rq.size(), "the host's operation was not canceled (replace: " + replace + ")");
             assertTrue(AsyncIoController::cancelByKey(key), "the host's operation is still there");
             assertTrue(rq.get(HangGuard).canceled);
         }
+    }
+
+    #! trusted code that submits an operation with the key of another operation from a thread that is not the I/O
+    #! thread: with replace_existing False its submission is refused with an error (qore#7108), with True it replaces the
+    #! operation
+    trustedCollisionTest() {
+        string key = getName("host-trusted-collision");
+        EventNotifier n();
+        auto rq = submitHost(key, key, n);
+        on_exit AsyncIoController::cancelByOwner(key);
+        on_exit AsyncIoController::cancelByOwner(key + "-2");
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        EventNotifier n2();
+        auto rq2 = AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n2, "spop": hold(new WaitingOperation(n2)),
+            "owner": key + "-2", "key": key, "to": -1s}, False);
+        hash<auto> res = rq2.get(HangGuard);
+        assertTrue(res.canceled, "refused with replace_existing False");
+        assertEq("ASYNC-IO-ERROR", res.ex.err);
+        assertEq(0, rq.size(), "the operation with the key is left alone");
+        EventNotifier n3();
+        auto rq3 = AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n3, "spop": hold(new WaitingOperation(n3)),
+            "owner": key + "-2", "key": key, "to": -1s}, True);
+        assertTrue(rq.get(HangGuard).canceled, "replaced with replace_existing True");
+        assertEq(0, rq3.size(), "the replacing operation runs");
     }
 
     infoTest() {
@@ -739,7 +768,8 @@ bool sub direct_key(string key) {
         # the host's operation is in the cache of the one I/O thread
         assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
         int before = call_function("dbg_async_io_qop_registered_count");
-        list<auto> r = tenant.callFunction("collide", key, 4, False);
+        # refused without replace_existing (qore#7108) and with it (another application's operation, qore#7010)
+        list<auto> r = tenant.callFunction("collide", key, 4, False) + tenant.callFunction("collide", key, 4, True);
         foreach auto i in (r) {
             assertTrue(i.get(HangGuard).canceled, "the submission is refused");
         }

@@ -12646,6 +12646,11 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     // Equivalent to: int size(any val) { ... }
     QoreValue arg = fromBits(arg_bits);
 
+    // Handle an inline short string: its length in characters, as for a string node below
+    if (arg.isShortString()) {
+        return qore_fast_length(arg_bits, xsink);
+    }
+
     // Handle null/nothing
     if (!arg.hasNode()) {
         return toBits(0);
@@ -12664,8 +12669,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSin
     }
 
     // Handle string
-    // note: safe; the node of arg, whose inline short string returns above (!arg.hasNode()); the caller gives strings
-    // in both representations to qore_fast_length() and qore_fast_strlen() first
+    // note: safe; the node of arg, whose inline short string returns above (arg.isShortString())
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         return toBits(static_cast<int64_t>(str->length()));
     }
@@ -13726,6 +13730,13 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(Qor
     return target_ctx;
 }
 
+//! Enters the Program of the callee of a native cross-module call; see QoreRtCrossModuleCallState
+/** The AOT code that makes the call (QoreIRToLLVM::emitEnterCrossModuleCall()) must push the frame of the call at once
+    after this returns 0, with the frame of the call's expression slot (emitPushAotInlineCallFrame(), a
+    QoreAOTNativeCallStackLocation): that frame takes the caller's Program that this sets for it
+    (set_runtime_call_site_program()), and no other frame may be pushed in between (qore#7101); debug builds assert
+    that no other frame finds it set
+*/
 extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, int32_t slot, void* state_buf,
         ExceptionSink* xsink) {
     auto* state = new (state_buf) QoreRtCrossModuleCallState;
@@ -13943,46 +13954,20 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // Filtering used the callee receiver before its runtime context is installed.
             sig->lv[i]->instantiate(val, paramTypeInfo);
         } else if (i < defaultArgList.size() && defaultArgList[i]) {
-            // Evaluate default argument expression
-            QoreValue val = defaultArgList[i].eval(xsink);
-            if (*xsink) {
-                // Uninstantiate already-instantiated params in reverse
-                for (int j = (int)i - 1; j >= 0; --j) {
-                    sig->lv[j]->uninstantiate(xsink);
-                }
-                return -1;
+            // never reached: the fast call paths take only variants with no default values
+            // (UserVariantBase::isStaticallyFastCallEligible()) and closures given a value for every parameter
+            // (closureDirectArgsNeedNoBinding()); a default value is evaluated in the context of the code that
+            // declared it, not in the caller's, by the generic call path
+            // (CodeEvaluationHelper::prepareDefaultArgsImpl(), qore#7066), which this branch does not set up
+            // a release build refuses the call rather than evaluate the default value in the caller's context
+            assert(false);
+            xsink->raiseException("JIT-ERROR", "internal error: a parameter with a default value reached the fast "
+                "call path, which does not evaluate default values");
+            // Uninstantiate already-instantiated params in reverse
+            for (int j = (int)i - 1; j >= 0; --j) {
+                sig->lv[j]->uninstantiate(xsink);
             }
-
-            // Apply type filter like CodeEvaluationHelper::prepareDefaultArgs(): a typed param is always checked
-            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-            if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
-            }
-            if (QoreTypeInfo::hasType(paramTypeInfo) || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
-                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
-                if (*xsink) {
-                    val.discard(xsink);
-                    // Uninstantiate already-instantiated params in reverse
-                    for (int j = (int)i - 1; j >= 0; --j) {
-                        sig->lv[j]->uninstantiate(xsink);
-                    }
-                    return -1;
-                }
-            }
-
-            // Normalize no-narrow container params like LValueHelper::assign()
-            // does for assignments (matches UserVariantBase::setupCall())
-            sig->lv[i]->applyNoNarrowContainerType(val, xsink);
-            if (*xsink) {
-                val.discard(xsink);
-                for (int j = (int)i - 1; j >= 0; --j) {
-                    sig->lv[j]->uninstantiate(xsink);
-                }
-                return -1;
-            }
-
-            // Filtering used the callee receiver before its runtime context is installed.
-            sig->lv[i]->instantiate(val, paramTypeInfo);
+            return -1;
         } else {
             // Match CodeEvaluationHelper::prepareDefaultArgs() for missing args: a typed param filters the missing
             // value, so a soft list param receives an empty list rather than NOTHING
@@ -14362,7 +14347,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
     QoreProgram* caller_pgm = getProgram();
 
     // Program context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -14754,7 +14742,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
     }
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
@@ -15019,7 +15010,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
     }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
@@ -15394,7 +15388,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -21906,7 +21903,10 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         result = toBits(QoreValue());
         return true;
@@ -23647,7 +23647,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -25252,9 +25255,20 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
     return rv;
 }
 
+// the callee of the expression of a background helper, as the lowering recorded it (qore#7087)
+static_assert(QBH_CALLEE_UNKNOWN == -1 && QBH_CHECK_IN_THREAD == -2, "QoreIRBackgroundInstruction::helper_callee");
+static int qore_background_helper_callee(const QoreIRBackgroundInstruction& inst) {
+    int callee = inst.helper_callee;
+    // an index that is not one of the parameters is never trusted: every value is checked then
+    if (callee >= static_cast<int>(inst.helper_params.size()) || callee < QBH_CHECK_IN_THREAD) {
+        return QBH_CALLEE_UNKNOWN;
+    }
+    return callee;
+}
+
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, int callee, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -25265,7 +25279,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        self_mode, xsink));
+        self_mode, callee, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -25274,7 +25288,7 @@ QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& ins
     QoreBackgroundHelperCode code;
     code.ir = inst.helper_ir.get();
     return do_op_background_helper(code, inst.helper_params.data(), values, inst.helper_params.size(),
-        inst.helper_uses_self, xsink);
+        inst.helper_uses_self, qore_background_helper_callee(inst), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
@@ -25285,7 +25299,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundIn
     code.ir = inst->helper_ir.get();
     code.jit_fn = helper_fn;
     return qore_background_helper_start(code, inst->helper_params.data(), values, nvalues, inst->helper_uses_self,
-        xsink);
+        qore_background_helper_callee(*inst), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
@@ -25304,8 +25318,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     code.aot_ctx = ctx;
     // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
     assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
+    // the compiled code does not give the callee: every closure and call reference is checked (qore#7056, qore#7087)
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), QBH_CALLEE_UNKNOWN, xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

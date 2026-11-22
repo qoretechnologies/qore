@@ -1833,6 +1833,8 @@ class WebSocketStreamProcessor {
 
         #! Timer generation used to ignore stale callbacks after reschedule/cancel
         int heartbeat_generation = 0;
+        #! True once a refused re-arm of the heartbeat timer at the end of the process has been logged (qore#7027)
+        bool heartbeat_shutdown_logged = False;
 
         #! True when the stream has been closed
         /** Protected by @ref close_lock, not @ref process_mutex. */
@@ -1871,9 +1873,14 @@ class WebSocketStreamProcessor {
 
         @param cb the code to call
 
+        @throw PERMISSION-DENIED \a cb was created by code restricted from the \c THREAD_CONTROL domain, as it is
+        called in the thread that closes the stream (see @ref Qore::check_thread_callable() "check_thread_callable()")
+
         @since WebSocketHandler 2.8
     */
     setDoneCallback(code<nothing()> cb) {
+        # the code is called in another thread: an async I/O worker that closes the stream (qore#7056)
+        check_thread_callable(cb, "WebSocketStreamProcessor::setDoneCallback()");
         {
             AutoLock al(close_lock);
             if (!closed) {
@@ -1991,14 +1998,33 @@ class WebSocketStreamProcessor {
             markClosedOnce();
             return;
         }
-        AutoLock al(close_lock);
-        # the client's close frame may have arrived meanwhile
-        if (closed) {
-            return;
+        *hash<ExceptionInfo> refused;
+        {
+            AutoLock al(close_lock);
+            # the client's close frame may have arrived meanwhile
+            if (closed) {
+                return;
+            }
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
+                    sub () { self.handleCloseTimer(); });
+            } catch (hash<ExceptionInfo> ex) {
+                # at the end of the process, the work of the module cleanup cannot add timers after its deadline
+                # (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream is ended
+                # at once, as without a close timeout (qore#7027)
+                if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                    rethrow;
+                }
+                refused = ex;
+            }
         }
-        AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-        close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
-            sub () { self.handleCloseTimer(); });
+        if (refused) {
+            handler.logDebug("H2/H3 WebSocket close timer not armed at the end of the process: %s: %s", refused.err,
+                refused.desc);
+            endStream(ctx);
+            markClosedOnce();
+        }
     }
 
     #! Ends the stream when the client has not answered the server's close frame within the close timeout
@@ -2393,9 +2419,23 @@ class WebSocketStreamProcessor {
         }
 
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream goes on without its
+            # heartbeat and idle timeout (qore#7027); logged once, as every frame re-arms the timer
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            if (!heartbeat_shutdown_logged) {
+                heartbeat_shutdown_logged = True;
+                handler.logDebug("H2/H3 WebSocket heartbeat timer not re-armed at the end of the process: %s: %s",
+                    ex.err, ex.desc);
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

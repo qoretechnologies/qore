@@ -3210,19 +3210,19 @@ class RestClientIoTest inherits QUnit::Test {
     #! Drive a RestClientIoPingPollOperation state machine without PollingConnectionMonitor
     private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
         try {
-            date deadline = now_us() + 30s;
+            int deadline = clock_get_monotonic_us() + 30000000;
             while (True) {
                 *hash<SocketPollInfo> info = op.continuePoll();
                 if (!info) {
                     break;
                 }
-                timeout remaining = deadline - now_us();
+                timeout remaining = microseconds(deadline - clock_get_monotonic_us());
                 if (remaining <= 0) {
                     throw "POLL-TIMEOUT", sprintf("poll operation did not complete; state: %s",
                         op.getState());
                 }
                 while (!Socket::poll((info,), min(remaining, 1s))) {
-                    remaining = deadline - now_us();
+                    remaining = microseconds(deadline - clock_get_monotonic_us());
                     if (remaining <= 0) {
                         throw "POLL-TIMEOUT", sprintf("poll operation did not complete; state: %s",
                             op.getState());

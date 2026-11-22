@@ -622,7 +622,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         });
         on_exit rest.close();
         HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
-        date started = now_us();
+        date started = microseconds(clock_get_monotonic_us());
         try {
             switch (api) {
                 case "REST":
@@ -646,7 +646,8 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             assertRegex("certificate verify failed", ex.desc, msg);
             assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
                 : "unable to get local issuer certificate", ex.desc, msg);
-            assertLt(5000, (now_us() - started).durationMilliseconds(), msg + ": prompt refusal");
+            assertLt(5000, (microseconds(clock_get_monotonic_us()) - started).durationMilliseconds(),
+                msg + ": prompt refusal");
         }
         # The rejected first handshake was the only TCP connection, regardless of the default retry budget.
         finished.waitForZero(15s);

@@ -833,6 +833,212 @@ auto sub retDeepLast(int n) {
     return n;
 }
 
+# a request in a handler that is not the last one of its exit: a return request is kept by the normal end of the next
+# handlers, which run, and a break or a continue request is replaced by it (qore#6999: qcc executables dropped the
+# return request)
+auto sub twoHandlersLoop(int n) {
+    for (int i = 0; i < 2; ++i) {
+        on_exit {
+            push log, "a" + i;
+        }
+        on_exit {
+            push log, "b" + i;                      ### two_handlers_loop_a
+        }
+        push log, "body" + i;
+    }
+    push log, "after";
+    return n;
+}
+
+auto sub twoHandlers(int n) {
+    {
+        on_exit {
+            push log, "a";
+        }
+        on_exit {
+            push log, "b";                          ### two_handlers_a
+        }
+        push log, "blk";
+    }
+    push log, "after";
+    return n;
+}
+
+auto sub twoHandlersInner(int n) {
+    {
+        on_exit {
+            {
+                on_exit {
+                    push log, "a";
+                }
+                on_exit {
+                    push log, "b";                  ### two_handlers_inner_a
+                }
+            }
+            push log, "outer";
+        }
+        push log, "blk";
+    }
+    push log, "after";
+    return n;
+}
+
+auto sub twoHandlersInnerReturn(int n) {
+    on_exit {
+        {
+            on_exit {
+                push log, "a";                      ### two_handlers_inner_return_a
+            }
+            on_exit {
+                push log, "b";                      ### two_handlers_inner_return_b
+            }
+            push log, "blk";
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+auto sub twoHandlersMid(int n) {
+    on_exit {
+        {
+            on_exit {
+                push log, "m1";                     ### two_handlers_mid_a
+                if (n > 100) {
+                    return -5;
+                }
+            }
+            on_exit {
+                push log, "m2";                     ### two_handlers_mid_b
+                if (n > 100) {
+                    return -6;
+                }
+            }
+            {
+                on_exit {
+                    push log, "in";                 ### two_handlers_mid_c
+                }
+                push log, "x";
+            }
+            push log, "y";
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+# a return request in a try statement of a handler that is not the last one of the cleanups of a return statement: the
+# try statement ends with its own value, and the other handler runs (qore#6999)
+auto sub twoHandlersTry(int n) {
+    on_exit {
+        push log, "a";
+    }
+    on_exit {
+        try {
+            push log, "t";                          ### two_handlers_try_a
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        push log, "b";
+    }
+    return n;
+}
+
+# the handler that runs after the request can return: its return replaces the request's (qore#6999)
+auto sub twoHandlersLaterReturn(int n) {
+    {
+        on_exit {
+            push log, "a";                          ### two_handlers_later_return_b
+            if (n == 3) {
+                return -5;
+            }
+        }
+        on_exit {
+            push log, "b";                          ### two_handlers_later_return_a
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# three handlers: the two after the request run (qore#6999)
+auto sub threeHandlers(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "a" + j;
+        }
+        on_exit {
+            push log, "b" + j;
+        }
+        on_exit {
+            push log, "c" + j;                      ### three_handlers_a
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# a block with on_exit and on_error handlers runs them at runtime: the normal end of the next handler keeps a return
+# request (qore#6999)
+auto sub mixedHandlers(int n) {
+    {
+        on_error {
+            push log, "e";
+        }
+        on_exit {
+            push log, "a";
+        }
+        on_exit {
+            push log, "b";                          ### mixed_handlers
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# the same in a loop body, where a break request's path runs the handlers, and one of them makes a request (qore#6999)
+auto sub mixedHandlersLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_error {
+            push log, "e" + j;
+        }
+        on_exit {
+            push log, "a" + j;
+        }
+        on_exit {
+            push log, "b" + j;                      ### mixed_handlers_loop_b
+        }
+        push log, "x" + j;                          ### mixed_handlers_loop_x
+        push log, "w" + j;
+    }
+    push log, "after";
+    return n;
+}
+
+# a block with on_exit and on_error handlers in the body of a handler: a request in them goes on in that handler
+# (qore#6999)
+auto sub mixedInHandler(int n) {
+    {
+        on_exit {
+            {
+                on_error {
+                    push log, "e";
+                }
+                on_exit {
+                    push log, "a";                  ### mixed_in_handler
+                }
+                push log, "x";
+            }
+            push log, "h_end";
+        }
+        push log, "blk";
+    }
+    push log, "after";
+    return n;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;

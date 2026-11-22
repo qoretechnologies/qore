@@ -6732,7 +6732,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     }
     // entering the Program refuses a call into a Program that has been deleted (PROGRAM-ERROR), as the call path
     // does: a reference to it, such as a call reference stored in another Program, keeps it registered
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -6863,7 +6866,10 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         return false;
     }
     QoreProgram* method_caller_pgm = getProgram();
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -7195,7 +7201,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
+    // after the Program is entered; a refused call does not enter it (qore#7087)
+    ProgramThreadCountContextHelper ptcch(xsink,
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -9321,7 +9330,8 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
-// StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
+// StatementBlock::execIntern() semantics.  Returns the request of the handlers (a normal end keeps a return and
+// replaces a break or a continue), if any.
 static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink,
         IRCallFrame* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr) {
@@ -9347,10 +9357,13 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    // the block takes the request of the last handler run, as with the AST interpreter
-                    // (StatementBlock::execIntern())
-                    nrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm,
-                        error || (xsink && xsink->isThreadExit()));
+                    // the block takes the request of the last handler run, except that a handler that ends normally
+                    // keeps a return request, as with the AST interpreter (StatementBlock::execIntern(), qore#6999)
+                    const int hrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements,
+                        dbg_pgm, error || (xsink && xsink->isThreadExit()));
+                    if (hrc || nrc != RC_RETURN) {
+                        nrc = hrc;
+                    }
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -19076,7 +19089,7 @@ load_local_done:
                         qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size() + 1, xsink);
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
-                        // a debugger's request that the last handler run ended with (#6201)
+                        // a debugger's request that the handlers ended with (#6201)
                         int handler_flow = 0;
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
@@ -19092,8 +19105,8 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    handler_flow = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
-                                        dbgHandlerStatements(), dbgHandlerProgram(),
+                                    const int hrc = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink,
+                                        &frame, dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
                                         // where a try statement of the function catches the exception, a handler's
                                         // return replaces the value of its try block's return (#6074); in the
@@ -19101,6 +19114,11 @@ load_local_done:
                                         // see executeHandlerBody())
                                         qore_ir_exception_catch_returns(func, scope_inst->exception_target),
                                         scope_inst);
+                                    // a handler that ends normally keeps a return request of a handler before it, and
+                                    // replaces a break or a continue, as with the AST interpreter (qore#6999)
+                                    if (hrc || handler_flow != RC_RETURN) {
+                                        handler_flow = hrc;
+                                    }
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -23044,8 +23062,8 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
                 return QoreValue(static_cast<int64>(value.get<const QoreBufferNode>()->size()));
             }
             if (t == NT_OBJECT) {
-                return QoreValue(static_cast<int64>(
-                    const_cast<QoreObject*>(value.get<const QoreObject>())->size(xsink)));
+                // the members that the calling code can see (#7048)
+                return QoreValue(qore_object_private::get(*value.get<const QoreObject>())->getRuntimeMemberCount());
             }
             return QoreValue(0ll);
         }
@@ -24894,9 +24912,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 // can be one of them (qore#7107)
                 ReferenceHolder<QoreHashNode> members(new QoreHashNode(autoTypeInfo), xsink);
                 if constexpr (Lexical) {
-                    op->mergeDataToHash(*members, sdh, xsink, policy, false);
+                    op->mergeDataToHashHeld(*members, sdh, xsink, policy);
                 } else {
-                    op->mergeDataToHash(*members, sdh, xsink, false);
+                    op->mergeDataToHashHeld(*members, sdh, xsink);
                 }
                 if (*xsink) {
                     return QoreValue();
@@ -24921,13 +24939,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         // a char is added as its one-character string is
         const QoreValue operand = right.isChar() ? qore_plus_equals_replace_char(right_holder) : right;
         QoreObject* o = v.getValue().get<QoreObject>();
-        if (right.getType() == NT_HASH || right.getType() == NT_OBJECT) {
-            // the lock that the lvalue holds: that of the object whose member is the lvalue
-            const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
-            if (qore_class_private::get(*o->getClass())->has_member_accessors
-                    || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
-                        || (right.getType() == NT_OBJECT
-                            && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml)))) {
+        // the lock that the lvalue holds: that of the object whose member is the lvalue (qore#7107); the operand's
+        // type is needed only with accessor members or such a lock, so a merge into an object in a local variable
+        // costs nothing more
+        const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
+        bool accessors = qore_class_private::get(*o->getClass())->has_member_accessors;
+        if (accessors || vl_lock) {
+            qore_type_t rtype = right.getType();
+            if ((rtype == NT_HASH || rtype == NT_OBJECT)
+                    && (accessors || vl_lock == &qore_object_private::get(*o)->rml
+                        || (rtype == NT_OBJECT
+                            && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml))) {
                 return mergeObjectMembersUnlocked<Lexical>(v, o, right, xsink, policy);
             }
         }

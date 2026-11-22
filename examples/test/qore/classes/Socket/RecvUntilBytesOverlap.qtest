@@ -127,9 +127,9 @@ class RecvUntilBytesOverlapTest inherits QUnit::Test {
 
     #! drives a poll operation to its goal
     private drive(AbstractPollOperation op) {
-        date deadline = now_us() + Timeout;
+        date deadline = microseconds(clock_get_monotonic_us()) + Timeout;
         while (!op.goalReached()) {
-            if (now_us() > deadline) {
+            if (microseconds(clock_get_monotonic_us()) > deadline) {
                 throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y", op.getState());
             }
             *hash<SocketPollInfo> pi = op.continuePoll();

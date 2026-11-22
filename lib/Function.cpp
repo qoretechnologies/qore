@@ -2145,7 +2145,7 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
         // A parse-time commitment may fail because a value is NOTHING (a deleted object keeps its class, issue #6159).
         // Retry with the caller's original arguments; the newly selected variant supplies its own argument-binding
         // entry.
-        if (prepareDefaultArgsImpl<ARG_OTHER>(&xsink2, sig, is_copy, self, &saved.args, policy)) {
+        if (prepareDefaultArgsImpl<ARG_OTHER>(&xsink2, sig, variant, is_copy, self, &saved.args, policy)) {
             saved.restore(tmp);
             // A closure keeps the generic bindings of the code that created it when an argument is rejected.
             bool closure_type_args = variant_needs_type_param_substitution && variant->isUser()
@@ -2205,7 +2205,7 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
         if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
             return {};
         }
-        if (prepareDefaultArgsImpl<ARG_DEF>(xsink, sig, is_copy, self, nullptr, policy)) {
+        if (prepareDefaultArgsImpl<ARG_DEF>(xsink, sig, variant, is_copy, self, nullptr, policy)) {
             return {};
         }
         if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
@@ -2218,7 +2218,7 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
     if (check_sandbox_uncontrolled_api(func, variant, xsink)) {
         return {};
     }
-    if (prepareDefaultArgsImpl<ARG_DEF | ARG_OTHER>(xsink, sig, is_copy, self, nullptr, policy)) {
+    if (prepareDefaultArgsImpl<ARG_DEF | ARG_OTHER>(xsink, sig, variant, is_copy, self, nullptr, policy)) {
         return {};
     }
     if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
@@ -2445,29 +2445,23 @@ private:
     ExceptionSink* xsink;
 };
 
-//! Evaluates a default value of a closure's parameter with the variables that the closure captured and its object
-/** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
-    Program is the closure's here, whose closure variables they are.  The self of a closure created in a method is its
-    object, which an AOT image does not capture as a variable, and which a closure created by the default value takes
-    as its object (issue #5931).  The value is evaluated by the callee, as a statement of its own (see
-    design/temporary-lifetime.md)
+//! Evaluates a default value of a closure's parameter with the variables that the closure captured
+/** In the closure's context (see qore_eval_default_arg()); the variables can be gone from the stack of the code that
+    created the closure when it is called (issue #5923); the call's Program is the closure's here, whose closure
+    variables they are
 */
-static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(const QoreClosureBase& closure,
-        const QoreValue& exp, ExceptionSink* xsink) {
+static __attribute__((noinline)) QoreValue qore_eval_closure_default_arg(const QoreClosureBase& closure,
+        QoreObject* obj, const QoreValue& exp, ExceptionSink* xsink) {
     CVecInstantiator closure_vars(closure.getCvec(), xsink);
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(&closure);
     // the closure's frame, as for its code: a captured variable is found in the closure's environment, not in the
     // frame of the code that calls the closure, which can hold a variable of the same name (qore#6050)
     ThreadFrameBoundaryHelper closure_frame(true);
-    // the closure's object and class context, as for the closure's code: a closure created by the default value takes
-    // the object of the closure and not that of the caller (issue #5931)
-    std::optional<ObjectSubstitutionHelper> closure_self;
     // the self variable of the closure, which its default values use as its code does: an assignment through it
     // (qore#5949) and a reference to it or to a member through it (qore#6417) need the variable itself, which the
     // closure's code binds only when it runs, after its default values
     std::optional<ClosureSelfDefaultHelper> closure_self_var;
-    if (QoreObject* obj = closure.getObject()) {
-        closure_self.emplace(obj, closure.getClassCtx());
+    if (obj) {
         if (const LocalVar* selfid = ClosureSelfDefaultHelper::getSelfId(closure)) {
             closure_self_var.emplace(selfid, obj, xsink);
         }
@@ -2479,9 +2473,36 @@ static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(c
     return dv.takeReferencedValue();
 }
 
+//! Evaluates a default value of a parameter in the context of the code that declared it, when the thread does not
+//! have that context or the value is a closure's that needs its captured variables (qore#7066)
+/** See CodeEvaluationHelper::prepareDefaultArgsImpl(), which evaluates a value inline when the thread has the
+    context already
+
+    @param td the thread's data if the context must be switched, otherwise nullptr
+    @param obj the object of the context
+    @param cls the class of the context
+    @param closure the closure if the value is evaluated with its captured variables, otherwise nullptr
+*/
+static __attribute__((noinline)) QoreValue qore_eval_default_arg(void* td, QoreObject* obj,
+        const qore_class_private* cls, const QoreClosureBase* closure, const QoreValue& exp, ExceptionSink* xsink) {
+    std::optional<CalleeContextHelper> callee_ctx;
+    if (td) {
+        callee_ctx.emplace(td, obj, cls);
+    }
+    if (closure) {
+        return qore_eval_closure_default_arg(*closure, obj, exp, xsink);
+    }
+    QoreScopedEvalHolder dv(exp, true, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dv.takeReferencedValue();
+}
+
 template <int ArgType, typename FilterPolicy>
 int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractFunctionSignature* sig,
-        bool is_copy, QoreObject* self, std::unique_ptr<arg_restore_vec_t>* saved, FilterPolicy policy) {
+        const AbstractQoreFunctionVariant* variant, bool is_copy, QoreObject* self,
+        std::unique_ptr<arg_restore_vec_t>* saved, FilterPolicy policy) {
     assert(!restore_rtflags); // the closure/old_rtflags storage is still in its argument-preparation phase
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
@@ -2490,7 +2511,6 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
     if (!max) {
         return 0;
     }
-    OptionalObjectOnlySubstitutionHelper self_helper;
     for (unsigned i = 0; i < max; ++i) {
         const QoreTypeInfo* paramTypeInfo = nullptr;
         auto get_param_type_info = [&]() -> const QoreTypeInfo* {
@@ -2517,26 +2537,53 @@ int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractF
             if constexpr (ArgType & ARG_DEF) {
                 QoreValue& p = tmp.getEntryReference(i);
 
-                // issue #3240: set self in case the default arg expression references a member of the current object
-                // must be set only for evaluation, cannot be set when verifying types below in
-                // QoreTypeInfo::acceptInputParam() as it will cause errors handling references related to the current
-                // object - "self" is the object for the call but not necessarily the current "self"
-                if (self && !self_helper) {
-                    self_helper.set(self);
-                }
-
-                if (closure && ((closure->getCvec() && !closure->getCvec()->empty())
-                        || closure->getClosureParseNode()->defaultsNeedObject())) [[unlikely]] {
-                    // a default value of a closure that captured variables or uses a self that it did not capture is
-                    // evaluated with them (issues #5923, #5931)
-                    p = qore_eval_closure_default_arg(*closure, defaultArgList[i], xsink);
-                    if (*xsink) {
-                        return -1;
+                const QoreValue& exp = defaultArgList[i];
+                // a default value that is an expression is code of the callee, and is evaluated in the context of the
+                // code that declared it, never in the caller's (qore#7066):
+                // - a method's: its class (the class that declared the variant, which an inherited method shares with
+                //   its child classes, as for the method's code: UserMethodVariant::evalMethod()), with the object of
+                //   the call as self for a normal method (issue #3240) and with no object for a static method;
+                // - a function's: no class context and no object;
+                // - a closure's: the class context and the object that the closure captured, if any, and the
+                //   variables that it captured (issues #5923, #5931), as for the closure's code
+                // The call's Program, its runtime parse options and its sandbox are already the callee's here (see
+                // init()).  The context is set only for the evaluation: "self" is the object for the call but not
+                // necessarily the current "self" when the value is checked below in QoreTypeInfo::acceptInputParam(),
+                // which handles references related to the current object.  A constant needs no context.
+                bool evaluated = false;
+                if (qore_value_ops(exp).needsEval()) {
+                    QoreObject* obj;
+                    const qore_class_private* cls;
+                    const QoreClosureBase* closure_vars = nullptr;
+                    if (closure) {
+                        obj = closure->getObject();
+                        cls = closure->getClassCtx();
+                        if ((closure->getCvec() && !closure->getCvec()->empty())
+                                || closure->getClosureParseNode()->defaultsNeedObject()) [[unlikely]] {
+                            closure_vars = closure;
+                        }
+                    } else {
+                        const MethodVariantBase* mvb = variant->getMethodVariantBase();
+                        // the defaults of a static method have no object
+                        obj = (mvb && !mvb->method()->isStatic()) ? self : nullptr;
+                        cls = mvb ? mvb->getClassPriv() : nullptr;
                     }
-                } else {
-                    // the default value is evaluated by the callee, as a statement of its own: a value that it reads
-                    // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
-                    QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
+                    // the thread's context, which the access checks read, is compared: a value is evaluated inline
+                    // when the thread has the context already, such as for a function called from code with no class
+                    // context or a method called on its own object
+                    void* td = runtime_thread_data_if_not_in_context(obj, cls);
+                    if (td || closure_vars) {
+                        p = qore_eval_default_arg(td, obj, cls, closure_vars, exp, xsink);
+                        if (*xsink) {
+                            return -1;
+                        }
+                        evaluated = true;
+                    }
+                }
+                if (!evaluated) {
+                    // the value is the callee's, as a statement of its own: a value that it reads or creates is not a
+                    // temporary of the caller's statement (see design/temporary-lifetime.md)
+                    QoreScopedEvalHolder dv(exp, true, xsink);
                     if (*xsink) {
                         return -1;
                     }
@@ -9723,8 +9770,9 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 val = ir_return_value;
             } else if (*xsink) {
                 // a return that an exception raised after it (by the destructor of a local) leaves the value it
-                // returns to be released here, after the locals, as the AST interpreter releases it (#6029)
-                ir_return_value.discard(xsink);
+                // returns to the caller, which releases it after the locals (#6029) and after the extra arguments
+                // ($argv, released below), as the AST interpreter and native code release it (qore#6052)
+                val = ir_return_value;
             } else {
                 if (QORE_ENV_IS_SET("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
@@ -10144,9 +10192,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = ir_return_value;
                 } else if (*xsink) {
                     // exception raised: propagate; a return that an exception raised after it (by the destructor of a
-                    // local) leaves the value it returns to be released here, after the locals, as the AST interpreter
-                    // releases it (#6029)
-                    ir_return_value.discard(xsink);
+                    // local) leaves the value it returns to the caller, which releases it after the locals (#6029)
+                    // and after the extra arguments ($argv, released below), as the AST interpreter and native code
+                    // release it (qore#6052)
+                    val = ir_return_value;
                 } else {
                     // IR execution failed without raising an exception.  Under %modern
                     // (which is guaranteed on this path — ensureIrExecMode downgrades

@@ -1673,6 +1673,33 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 }
 
+bool qore_class_private::spansPrograms() const {
+    signed char cached = spans_programs_cache.load(std::memory_order_relaxed);
+    if (cached) {
+        return cached == 2;
+    }
+    bool rv = false;
+    const QoreProgram* own = spgm.load(std::memory_order_acquire);
+    if (scl) {
+        for (auto& i : *scl) {
+            if (!i->sclass) {
+                continue;
+            }
+            const qore_class_private* parent = qore_class_private::get(*i->sclass);
+            const QoreProgram* parent_pgm = parent->spgm.load(std::memory_order_acquire);
+            // only a base class of a module: the code of another Program that is not a module's runs with that Program
+            // on the stack, which decides for it
+            if ((parent_pgm && parent_pgm != own && qore_program_is_module_inline(parent_pgm))
+                    || parent->spansPrograms()) {
+                rv = true;
+                break;
+            }
+        }
+    }
+    spans_programs_cache.store(rv ? 2 : 1, std::memory_order_relaxed);
+    return rv;
+}
+
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
     releaseMethodsAndData(false);
@@ -6813,6 +6840,11 @@ void qore_class_private::parseRollback() {
     has_new_user_changes = false;
 }
 
+uint64_t qore_method_private::nextDeclSeq() {
+    static std::atomic<uint64_t> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed);
+}
+
 QoreMethod::QoreMethod(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
         : priv(new qore_method_private(n_parent_class, n_func, n_static)) {
 }
@@ -6892,7 +6924,10 @@ bool qore_method_ops::inMethodImpl(QoreMethod* b, const QoreObject* self) {
 }
 
 QoreMethod* qore_method_ops::copyImpl(QoreMethod* b, const QoreClass* p_class) {
-    return new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag);
+    std::unique_ptr<QoreMethod> m(new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag));
+    // the copy is declared where the method that it is a copy of is (issue #7169)
+    m->priv->decl_seq = b->priv->decl_seq;
+    return m.release();
 }
 
 const QoreTypeInfo* QoreMethod::getUniqueReturnTypeInfo() const {
@@ -7667,6 +7702,46 @@ const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const cha
         }
     }
     return nullptr;
+}
+
+bool qore_class_private::runtimeFindAllMembersPublic() const {
+    // the members of a class that is not initialized or frozen are not known yet: they are checked one by one
+    if (!initialized || !members.isFrozen()) {
+        return false;
+    }
+    bool all_public = !members.hasInternalEntries();
+    // the members declared in the class and in the classes that it inherits, checked as code outside the class's
+    // hierarchy sees them
+    std::vector<const qore_class_private*> stack{this};
+    std::unordered_set<const qore_class_private*> seen;
+    // a class that can still get members can change the result
+    bool cacheable = true;
+    while (all_public && !stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (!seen.insert(c).second) {
+            continue;
+        }
+        cacheable = cacheable && c->isReachable();
+        for (const auto& i : c->members.getList()) {
+            if (runtimeIsPrivateMemberIntern(i.first, true)) {
+                all_public = false;
+                break;
+            }
+        }
+        if (c->scl) {
+            for (const BCNode* n : *c->scl) {
+                if (n->sclass) {
+                    stack.push_back(n->sclass->priv);
+                }
+            }
+        }
+    }
+    // cached only once no member can be added any more to a class that was checked (see addMemberApi())
+    if (cacheable) {
+        runtime_all_members_public.store(all_public ? 1 : 0, std::memory_order_release);
+    }
+    return all_public;
 }
 
 bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const {
@@ -8661,16 +8736,18 @@ void QoreClass::setSystemConstructor(q_system_constructor_t m) {
 QoreListNode* QoreClass::getMethodList() const {
     QoreListNode* l = new QoreListNode(stringTypeInfo);
 
-    for (hm_method_t::const_iterator i = priv->hm.begin(), e = priv->hm.end(); i != e; ++i)
-        l->push(new QoreStringNode(i->first), nullptr);
+    for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
+        l->push(new QoreStringNode(m->getNameStr()), nullptr);
+    }
     return l;
 }
 
 QoreListNode* QoreClass::getStaticMethodList() const {
     QoreListNode* l = new QoreListNode(stringTypeInfo);
 
-    for (hm_method_t::const_iterator i = priv->shm.begin(), e = priv->shm.end(); i != e; ++i)
-        l->push(new QoreStringNode(i->first), nullptr);
+    for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
+        l->push(new QoreStringNode(m->getNameStr()), nullptr);
+    }
     return l;
 }
 
@@ -9948,6 +10025,8 @@ void QoreClass::recheckBuiltinMethodHierarchy() {
 
 void QoreClass::addBuiltinConstant(const char* name, QoreValue value, ClassAccess access,
         const QoreTypeInfo* typeInfo) {
+    // an object of a builtin constant is shared by every Program: no code can change its members (qore#6749)
+    qore_object_mark_process_constant(value);
     priv->addBuiltinConstant(name, value, access, typeInfo);
 }
 
@@ -11907,27 +11986,42 @@ QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, Co
     });
 }
 
+std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m) {
+    std::vector<QoreMethod*> v;
+    v.reserve(m.size());
+    for (auto& i : m) {
+        v.push_back(i.second);
+    }
+    std::sort(v.begin(), v.end(), [](const QoreMethod* a, const QoreMethod* b) {
+        return qore_method_private::getDeclSeq(*a) < qore_method_private::getDeclSeq(*b);
+    });
+    return v;
+}
+
 class qmi_priv {
 public:
-    hm_method_t& m;
-    hm_method_t::iterator i;
+    //! the methods in the order of their declaration
+    std::vector<QoreMethod*> v;
+    //! the index of the current method; the size of the vector before the first call to next()
+    size_t i;
+    bool started = false;
 
-    DLLLOCAL qmi_priv(hm_method_t& n_m) : m(n_m) {
-        i = m.end();
+    DLLLOCAL qmi_priv(hm_method_t& n_m) : v(qore_methods_in_declaration_order(n_m)), i(0) {
     }
 
     DLLLOCAL bool next() {
-        if (i == m.end()) {
-            i = m.begin();
-        } else {
+        if (!started) {
+            started = true;
+            i = 0;
+        } else if (i < v.size()) {
             ++i;
         }
-        return i != m.end();
+        return i < v.size();
     }
 
     DLLLOCAL const QoreMethod* getMethod() const {
-        assert(i != m.end());
-        return i->second;
+        assert(started && i < v.size());
+        return v[i];
     }
 };
 #define HMI_CAST(p) (reinterpret_cast<qmi_priv*>(p))

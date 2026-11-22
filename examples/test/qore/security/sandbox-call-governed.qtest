@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandbox network policy on sockets, interrupts of threads and async I/O timers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+
+%exec-class SandboxCallGovernedTest
+
+#! host code that a container creates for a sandboxed Program
+class HostConn {
+    private {
+        int port;
+        string data;
+    }
+
+    constructor(int port, string data = "") {
+        self.port = port;
+        self.data = data;
+    }
+
+    string connect() {
+        try {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 5s);
+            s.close();
+            return "CONNECTED";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! runs until an interrupt ends it
+    string loop(Queue started) {
+        started.push(True);
+        try {
+            while (True) {
+                usleep(5ms);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! Tests SandboxManager::callGoverned() (issue #7052)
+/** Host code creates objects for a sandboxed Program with the host's parse options, governed by the sandbox of that
+    Program: its policy, interrupts and limits govern the objects, and the work that they start belongs to its
+    application
+*/
+class SandboxCallGovernedTest inherits QUnit::Test {
+    private {
+        SandboxManager sm();
+        Program governed;
+        #! another sandboxed Program, with an application of its own
+        Program other;
+        Socket listener();
+        int port;
+    }
+
+    const GovernedSource = "%modern
+%requires AsyncSocketIo
+# module code that cancels a timer for its restricted caller: it can cancel only the timers of the caller's
+# application
+bool sub cancel(int id) {
+    AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+    return c.cancelTimer(id);
+}
+code sub callback() {
+    return bool sub () { return SandboxManager::isCallerRestricted(DOM_FILESYSTEM); };
+}
+code sub factory() {
+    return sub () {};
+}
+";
+
+    const CallerSource = "%modern
+auto sub call(Program g) {
+    try {
+        return SandboxManager::callGoverned(sub () {}, g);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    constructor() : Test("SandboxCallGoverned", "1.0", \ARGV) {
+        addTestCase("refusals", \refusalTest());
+        addTestCase("the sandbox's policy governs the objects", \policyTest());
+        addTestCase("the sandbox's interrupts reach the objects", \interruptTest());
+        addTestCase("the sandbox's memory charge counts the objects", \memoryTest());
+        addTestCase("the work started belongs to the governed Program", \ownershipTest());
+        addTestCase("an exception leaves nothing behind", \exceptionTest());
+        addTestCase("code of the governed Program stays restricted", \callbackTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        sm.setNetworkDefaultPolicy(False);
+        sm.setMemoryLimit(1024 * 1024 * 1024);
+        governed = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        governed.setSandboxManager(sm);
+        governed.parse(GovernedSource, "governed");
+        other = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        other.setSandboxManager(new SandboxManager());
+        other.parse(GovernedSource, "other");
+    }
+
+    globalTearDown() {
+        listener.close();
+    }
+
+    refusalTest() {
+        # a sandboxed caller
+        Program sp(PO_NEW_STYLE);
+        sp.setSandboxManager(new SandboxManager());
+        sp.parse(CallerSource, "sandboxed-caller");
+        # (refused by the sandbox's policy for uncontrolled APIs, or by the method)
+        string sandboxed_err = sp.callFunction("call", governed);
+        assertTrue(inlist(sandboxed_err, ("SANDBOX-CALL-GOVERNED-ERROR", "INVALID-FUNCTION-ACCESS")),
+            "a sandboxed caller: " + sandboxed_err);
+        # a caller with restricted functional domains
+        Program rp(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+        rp.parse(CallerSource, "restricted-caller");
+        assertEq("SANDBOX-CALL-GOVERNED-ERROR", rp.callFunction("call", governed), "a restricted caller");
+        # a factory that the governed (restricted) Program created
+        assertThrows("SANDBOX-CALL-GOVERNED-ERROR", \SandboxManager::callGoverned(),
+            (governed.callFunction("factory"), governed), "a factory of restricted code");
+        # a Program without a sandbox manager
+        Program plain(PO_NEW_STYLE);
+        assertThrows("SANDBOX-CALL-GOVERNED-ERROR", \SandboxManager::callGoverned(), (sub () {}, plain),
+            "no sandbox manager");
+        # a deleted Program
+        Program deleted(PO_NEW_STYLE);
+        deleted.setSandboxManager(new SandboxManager());
+        # another reference to the object, which stays after it is deleted
+        Program kept = deleted;
+        delete deleted;
+        assertThrows("OBJECT-ALREADY-DELETED", \SandboxManager::callGoverned(), (sub () {}, kept),
+            "a deleted Program");
+    }
+
+    policyTest() {
+        HostConn direct(port);
+        assertEq("CONNECTED", direct.connect(), "created by the host");
+        HostConn c = SandboxManager::callGoverned(HostConn sub () { return new HostConn(port); }, governed);
+        assertEq("NETWORK-ACCESS-DENIED", c.connect(), "created for the governed Program");
+    }
+
+    interruptTest() {
+        HostConn c = SandboxManager::callGoverned(HostConn sub () { return new HostConn(port); }, governed);
+        Queue started();
+        Queue result();
+        background result.push(c.loop(started));
+        started.get();
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+        string err = result.get(30s);
+        assertTrue(err.val(), "the method was interrupted: " + err);
+    }
+
+    memoryTest() {
+        int before = sm.getMemoryUsage();
+        HostConn c = SandboxManager::callGoverned(HostConn sub () {
+            return new HostConn(port, strmul("x", 4 * 1024 * 1024));
+        }, governed);
+        assertGe(before + 4 * 1024 * 1024, sm.getMemoryUsage(), "the data is charged to the sandbox");
+        delete c;
+    }
+
+    ownershipTest() {
+        int governed_timer = SandboxManager::callGoverned(int sub () {
+            return AsyncIoController::addTimerDelay(1h, sub () {});
+        }, governed);
+        # the timer belongs to the governed Program's application, which cancels it as its own (that another
+        # application cannot cancel it depends on the ownership checks of the cancellation, issue #7010)
+        assertTrue(governed.callFunction("cancel", governed_timer), "the governed Program cancels it");
+    }
+
+    exceptionTest() {
+        assertThrows("TEST-ERROR", \SandboxManager::callGoverned(), (sub () { throw "TEST-ERROR"; }, governed));
+        # no sandbox or application of the call is left on the thread
+        HostConn c(port);
+        assertEq("CONNECTED", c.connect(), "an object created after the call");
+        # a timer added after the call belongs to no application: any code may cancel it
+        int host_timer = AsyncIoController::addTimerDelay(1h, sub () {});
+        assertTrue(other.callFunction("cancel", host_timer), "a timer added after the call is the host's");
+    }
+
+    #! code that the governed Program gives the factory runs as its code
+    callbackTest() {
+        code cb = governed.callFunction("callback");
+        assertTrue(SandboxManager::callGoverned(bool sub (code c) { return c(); }, governed, cb));
+        # the factory itself is not restricted
+        assertFalse(SandboxManager::callGoverned(bool sub () {
+            return SandboxManager::isCallerRestricted(DOM_FILESYSTEM);
+        }, governed));
+    }
+}
