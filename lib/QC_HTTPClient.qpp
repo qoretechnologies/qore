@@ -679,7 +679,10 @@ HTTPClient::constructor() {
 }
 
 //! Creates an HTTP client with TLS credentials supplied for use by this client
-/** @param options ordinary HTTP client constructor options
+/** This overload takes positional arguments. For named credentials at the primary origin only, pass
+    \c additional_origins: () to the overload below.
+
+    @param options ordinary HTTP client constructor options
     @param certificate when present, supplies the TLS certificate in place of the certificate options
     @param private_key when present, supplies the TLS private key in place of the key options
 
@@ -691,7 +694,7 @@ HTTPClient::constructor() {
     @since %Qore 3.0
 */
 HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
-        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
     qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), nullptr, xsink);
     if (!client->setOptions(options, xsink)) {
