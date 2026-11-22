@@ -22,9 +22,9 @@
     assigned back (issue #7264).  cases.q passes references to locals of the parameter's type (holding typed hashes,
     hashdecl hashes and lists, weak references, or no value, in a loop, through call references, from closures and
     other threads), to locals of other types (values converted, or rejected with an exception), and to members, hash
-    keys, list elements, globals, references, and locals of other Programs, also deleted ones; every execution mode
-    and executables compiled with qcc -O0 and -O3 must give the output of the AST interpreter, which is checked here
-    as well.
+    keys, list elements, globals, references, and locals of other Programs, also deleted ones, in recursions that
+    reach the stack limit and in destructors; every execution mode and executables compiled with qcc -O0 and -O3
+    must give the output of the AST interpreter, which is checked here as well.
 */
 class ReferenceArgTypesTest inherits QUnit::Test {
     public {
@@ -90,7 +90,15 @@ class ReferenceArgTypesTest inherits QUnit::Test {
             "other-program-reference => hash<string, int> {a: 1, w: 1}",
             "other-program-args-list => 2",
             "deleted-program-reference => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
-            "deleted-program-args-list => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime"
+            "deleted-program-args-list => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
+            "stack-limit => STACK-LIMIT-EXCEEDED chained: False",
+            "stack-limit-after => hash<string, int> {x: 1, w: 1}",
+            "stack-limit-chain => STACK-LIMIT-EXCEEDED chained: False",
+            "stack-limit-chain-after => hash<string, int> {x: 1, w: 1}",
+            "destructor-local => hash<string, int> {d: 1, w: 1}",
+            "destructor-list => list<int> [1, 1]",
+            "destructor-local => hash<string, int> {d: 1, w: 1}",
+            "destructor-list => list<int> [1, 1]"
         );
     }
 

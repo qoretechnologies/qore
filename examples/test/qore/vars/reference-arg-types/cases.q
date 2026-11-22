@@ -452,9 +452,62 @@ sub program_cases() {
     }
 }
 
+# a recursion that passes a reference on reaches the stack limit, which raises one exception; the thread then binds
+# references as before
+int sub stack_rec(reference<hash<auto>> r, int d) {
+    hash<auto> h = {"d": d};
+    return stack_rec(\h, d + 1);
+}
+
+int sub stack_chain(reference<hash<auto>> r, int d) {
+    return stack_chain(\r, d + 1);
+}
+
+sub stack_cases() {
+    foreach string name in (("stack-limit", "stack-limit-chain")) {
+        try {
+            hash<auto> h = {};
+            if (name == "stack-limit") {
+                stack_rec(\h, 0);
+            } else {
+                stack_chain(\h, 0);
+            }
+            printf("%s => no exception\n", name);
+        } catch (hash<ExceptionInfo> ex) {
+            # the description gives the stack size, which depends on the execution mode
+            printf("%s => %s chained: %y\n", name, ex.err, exists ex.next);
+        }
+        hash<auto> h = {"x": 1};
+        hash_ref(\h, True);
+        out(name + "-after", h);
+    }
+}
+
+# a reference bound in a destructor
+class RefArgDtor {
+    destructor() {
+        hash<auto> h = {"d": 1};
+        hash_ref(\h, True);
+        out("destructor-local", h);
+        list<auto> l = (1,);
+        list_ref(\l, True);
+        out("destructor-list", l);
+    }
+}
+
+sub destructor_cases() {
+    {
+        RefArgDtor d();
+    }
+    RefArgDtor d2();
+    delete d2;
+}
+
 same_type_cases();
 weak_cases();
 other_type_cases();
 path_cases();
 closure_cases();
 program_cases();
+stack_cases();
+destructor_cases();
