@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the pseudo-method dispatch
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class PseudoMethodValueTypeTest
+
+#! A pseudo-method call on a value of another type than its parse type runs the method of the value's type (qore#7363)
+/** The cases of PseudoMethodValueTypeCases.ql run in the script (PseudoMethodValueType.q) and in a sandboxed Program
+    (PseudoMethodValueTypeSandbox.q):
+    - the cases that every execution mode makes through the dispatch of the call give the results in
+      PseudoMethodValueType.expected in every execution mode and compiled with qcc;
+    - the cases that compiled code can make without the dispatch of the call, for a receiver of their parse type, give
+      the results in PseudoMethodValueTypeFast.expected with the AST interpreter; the other modes must run each of them
+      to its end, with a result or an exception (the results of their fast paths for a receiver of another type are
+      those of qore#6813).
+    PseudoMethodValueTypeAccessors.q gives values of every type to the code of each pseudo-class directly (a debug-only
+    builtin), which must refuse those of another type with an exception; it runs in debug builds only.
+*/
+class PseudoMethodValueTypeTest inherits QUnit::Test {
+    public {
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+
+        #! the fixtures
+        const Fixtures = {
+            "dispatch": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueType",
+                "expected": "PseudoMethodValueType",
+            },
+            "dispatch sandboxed": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueTypeSandbox",
+                "expected": "PseudoMethodValueType",
+            },
+            "fast path": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueType",
+                "arg": "fast",
+                "expected": "PseudoMethodValueTypeFast",
+                "exact_in_ast_only": True,
+            },
+            "fast path sandboxed": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueTypeSandbox",
+                "arg": "fast",
+                "expected": "PseudoMethodValueTypeFast",
+                "exact_in_ast_only": True,
+            },
+            "accessors": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueTypeAccessors",
+                "expected": "PseudoMethodValueTypeAccessors",
+                "debug_only": True,
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("PseudoMethodValueTypeTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        foreach string fixture in (keys Fixtures) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                addTestCase(sprintf("%s %s", fixture, mode), \modeTest(), (fixture, mode));
+            }
+            addTestCase(sprintf("%s %s", fixture, ExecModeHarness::IRTierName), \irTierTest(), (fixture,));
+            addTestCase(sprintf("%s jit with synchronous compiles", fixture), \syncJitTest(), (fixture,));
+            foreach int opt in (OptLevels) {
+                addTestCase(sprintf("%s qcc -O%d", fixture, opt), \aotTest(), (fixture, opt));
+            }
+        }
+        set_return_value(main());
+    }
+
+    private string script(string fixture) {
+        if (Fixtures{fixture}.debug_only && !Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the fixture needs a debug build of the library (dbg_call_pseudo_method())");
+        }
+        return get_script_dir() + "/" + Fixtures{fixture}.script + ".q";
+    }
+
+    private string args(string fixture) {
+        return Fixtures{fixture}.arg ? " " + Fixtures{fixture}.arg : "";
+    }
+
+    private string expected(string fixture) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + "/" + Fixtures{fixture}.expected + ".expected");
+    }
+
+    #! checks the result of a run: its output, or for a fixture whose results are exact in the AST interpreter only,
+    #! in another mode, that it ran each case to its end
+    private check(string fixture, bool ast, hash<ExecModeHarness::ModeRunResult> r, string label) {
+        string exp = expected(fixture);
+        if (ast || !Fixtures{fixture}.exact_in_ast_only) {
+            assertEq(exp, r.out, label);
+            return;
+        }
+        assertEq(0, r.rc, label + ": exit code");
+        # each line names its case before the result: "<round> <value> <case>: <result>"
+        code cases = list<string> sub (string out) {
+            return map ($1 =~ x/^([^:]+):/)[0] ?? $1, out.split("\n");
+        };
+        assertEq(cases(exp), cases(r.out), label + ": the cases run");
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runMode(string command, *string env) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command, NOTHING, env);
+        ExecModeHarness::check_loader_warnings(r);
+        return r;
+    }
+
+    modeTest(string fixture, string mode) {
+        string s = script(fixture);
+        hash<ExecModeHarness::ModeRunResult> r = runMode(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=%s %s%s", libqore_dir, libqore_dir, qore_bin, mode, s, args(fixture)));
+        ExecModeHarness::check_native(r);
+        check(fixture, mode == "ast", r, mode);
+    }
+
+    irTierTest(string fixture) {
+        string s = script(fixture);
+        hash<ExecModeHarness::ModeRunResult> r = runMode(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s --exec-mode=tiered %s%s", libqore_dir, libqore_dir, qore_bin, s, args(fixture)),
+            ExecModeHarness::IRTierEnv);
+        ExecModeHarness::check_ir_tier(r);
+        check(fixture, False, r, ExecModeHarness::IRTierName);
+    }
+
+    #! JIT with its default thresholds and synchronous compiles: the first call of a function runs its native code
+    syncJitTest(string fixture) {
+        string s = script(fixture);
+        hash<ExecModeHarness::ModeRunResult> r = runMode(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s%s", libqore_dir, libqore_dir, qore_bin, s,
+            args(fixture)), "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
+        ExecModeHarness::check_native(r);
+        check(fixture, False, r, "jit with synchronous compiles");
+    }
+
+    aotTest(string fixture, int opt) {
+        string s = script(fixture);
+        TmpDir tmp("qore-pseudo-method-value-type-");
+        string exe = tmp.path + DirSep + Fixtures{fixture}.script;
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, s));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        hash<ExecModeHarness::ModeRunResult> r = runMode(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s%s",
+            libqore_dir, libqore_dir, exe, args(fixture)));
+        check(fixture, False, r, sprintf("qcc -O%d", opt));
+    }
+}
+
+#! a fixture of the test
+hashdecl PseudoMethodValueTypeFixture {
+    #! the name of the script, without its extension
+    string script;
+    #! the argument of the script
+    *string arg;
+    #! the name of the file of its expected output, without its extension
+    string expected;
+    #! if its results are exact with the AST interpreter only (see PseudoMethodValueTypeTest)
+    bool exact_in_ast_only = False;
+    #! if it needs a debug build of the library
+    bool debug_only = False;
+}

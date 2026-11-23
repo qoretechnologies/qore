@@ -46,6 +46,48 @@ DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreV
 /** @return -1 if the exception was raised, 0 if not
 */
 DLLLOCAL int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink);
+
+//! Returns true if a pseudo-method of the class \a qc, resolved at parse time, can be called on a value of type \a t
+/** It can if the pseudo-class of the type is \a qc or a class that inherits it, or \a qc is the <value> class; a value
+    of another type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class
+    of its type instead (qore#6813).  The one predicate of the check of the receiver before the arguments are evaluated
+    (qore_check_method_call_receiver()) and of the call (MethodCallNode::execPseudo(), the pseudo-method dispatch of
+    the IR interpreter and native code), so that both take the same path.  A value with no value is not given: it
+    uses the <nothing> class, as before
+*/
+DLLLOCAL bool qore_pseudo_class_accepts_type(const QoreClass* qc, qore_type_t t);
+
+//! Raises the exception of a pseudo-method of the class named \a class_name given a value of another type (qore#7363)
+DLLLOCAL void qore_raise_pseudo_receiver_type_error(const QoreValue& v, const char* class_name, ExceptionSink* xsink);
+
+//! Returns the node of the value that a pseudo-method of a class of node type \a t is called on (qore#7363)
+/** The code of a pseudo-method takes the node for one of its class's type; a value of another type is never taken
+    for it: the exception is raised and nullptr is returned, and the method returns with no value (see the receiver
+    of a pseudo-class in qpp)
+*/
+template <typename T>
+DLLLOCAL inline const T* qore_pseudo_receiver(const QoreValue& v, qore_type_t t, const char* class_name,
+        ExceptionSink* xsink) {
+    if (!v.isEnum() && !v.isShortString() && v.getType() == t) [[likely]] {
+        return v.get<const T>();
+    }
+    qore_raise_pseudo_receiver_type_error(v, class_name, xsink);
+    return nullptr;
+}
+
+//! Returns the call reference that a pseudo-method of the <callref> class (\a closure_only false) or of the <closure>
+//! class (\a closure_only true) is called on (see qore_pseudo_receiver())
+DLLLOCAL inline const ResolvedCallReferenceNode* qore_pseudo_callref_receiver(const QoreValue& v, bool closure_only,
+        const char* class_name, ExceptionSink* xsink) {
+    if (!v.isEnum()) [[likely]] {
+        qore_type_t t = v.getType();
+        if (t == NT_RUNTIME_CLOSURE || (!closure_only && t == NT_FUNCREF)) [[likely]] {
+            return v.get<const ResolvedCallReferenceNode>();
+        }
+    }
+    qore_raise_pseudo_receiver_type_error(v, class_name, xsink);
+    return nullptr;
+}
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(qore_type_t t, const char* mname, QoreClass*& qc);
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(const QoreTypeInfo* typeInfo, const char* mname, QoreClass*& qc, bool& possible_match);
 DLLLOCAL void qore_pseudo_check_return_type_info(const QoreFunction* func, const QoreTypeInfo* pseudoTypeInfo, const QoreTypeInfo*& returnTypeInfo);

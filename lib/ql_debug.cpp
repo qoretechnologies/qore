@@ -79,6 +79,8 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
@@ -31051,7 +31053,35 @@ static QoreValue f_dbg_nanosleep_eintr(const QoreListNode* params, RuntimeConfig
 }
 #endif
 
+//! Debug-only test hook: calls a pseudo-method of the pseudo-class of the type of \a class_value on \a value, whatever
+//! the type of \a value
+/** The calls of the language give a pseudo-method only a value of its class's type; this one gives it any value, so
+    that a test can check that the code of each pseudo-class refuses a value of another type with an exception
+    (qore#7363).  DEBUG builds only.
+*/
+static QoreValue f_dbg_call_pseudo_method(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    QoreValue class_value = get_param_value(params, 0);
+    QoreStringValueHelper name(get_hard_value_param(params, 1));
+    QoreValue value = get_param_value(params, 2);
+    QoreClass* qc = nullptr;
+    const QoreMethod* m = pseudo_classes_find_method(class_value.getType(), name->c_str(), qc);
+    if (!m) {
+        xsink->raiseException("DEBUG-ERROR", "the pseudo-class of type '%s' has no method %s()",
+            class_value.getFullTypeName(), name->c_str());
+        return QoreValue();
+    }
+    return qore_class_private::evalPseudoMethod(qc, m, nullptr, value, nullptr, rc, xsink);
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_call_pseudo_method() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
 void init_debug_functions(QoreNamespace& qns) {
+    qns.addBuiltinVariant("dbg_call_pseudo_method", f_dbg_call_pseudo_method, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        anyTypeInfo, 3, anyTypeInfo, QORE_PARAM_NO_ARG, "class_value", stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        anyTypeInfo, QORE_PARAM_NO_ARG, "value");
 #ifdef HAVE_NANOSLEEP
     qns.addBuiltinVariant("dbg_nanosleep_eintr", f_dbg_nanosleep_eintr, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ns", listTypeInfo, QORE_PARAM_NO_ARG, "remainders",
