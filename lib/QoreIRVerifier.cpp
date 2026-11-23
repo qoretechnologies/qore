@@ -4208,6 +4208,26 @@ void QoreIRFunction::computeIROnlyLocals() {
                         unknown_node_found, &reference_created, &expr_seen);
             }
 
+            // the parameters given to an unqualified call of a method of self (m(p)), whose argument expressions are
+            // not evaluated (see getInstructionExpr()), keep their storage on the runtime local stack: every call path
+            // that enters a method instantiates its parameters there (UserVariantBase::setupCall(),
+            // instantiateFastCallParams()), and an IR-only parameter would be read from it as a native value only to
+            // be boxed again for the argument array of the call; only the body locals that the call takes become
+            // IR-only (issue #7267)
+            if (inst->opcode == QoreIROpcode::CallMethod) {
+                const QoreValue& call_expr = static_cast<const QoreIRExprInstruction*>(inst.get())->expr;
+                if (qore_get_self_function_call_node(call_expr.getInternalNode())) {
+                    std::unordered_set<const void*> arg_locals;
+                    bool arg_unknown_node = false;
+                    collectLocalsFromExpr(call_expr, arg_locals, arg_unknown_node);
+                    for (const void* key : arg_locals) {
+                        if (!handler_body_local_keys.count(key)) {
+                            ast_referenced_locals.insert(key);
+                        }
+                    }
+                }
+            }
+
             // Reference-creating instructions, plus instructions whose AST bodies are walked by
             // helpers that do not report reference creation: all of these are treated as
             // creating a reference so untyped locals in the function stay AST-visible.
