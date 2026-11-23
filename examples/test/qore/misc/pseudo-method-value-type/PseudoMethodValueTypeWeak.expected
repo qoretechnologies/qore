@@ -23,6 +23,22 @@
 0 hash list member typeCode: 8
 0 hash list member type: "list"
 0 hash list member val: True
+0 hash list member toString: ""
+0 hash list member toInt: 0
+0 hash list member toBool: True
+0 hash list member toFloat: 0.0
+0 hash list member toNumber: 0
+0 hash list member contains: True
+0 hash list member callp: False
+0 hash list member sizep: True
+0 hash list member complexType: False
+0 hash member values: [1, 2]
+0 hash member lastKey: "b"
+0 hash member hasKey: True
+0 hash member toString: ""
+0 hash member toInt: 0
+0 hash member toNumber: 0
+0 hash member sizep: True
 0 hash list member join named: "1-2-3"
 0 hash list member join reference: "1,2,3"
 0 param first: 1
@@ -59,6 +75,12 @@
 0 member hash member type: "hash"
 0 member object className: "WeakObjectTarget"
 0 member object typeCode: 10
+0 member object type: "object"
+0 member object val: True
+0 member list toString: ""
+0 member list toNumber: 0
+0 member hash values: [1, 2]
+0 member hash typeCode: 9
 1 local list size: 3
 1 local list first: 1
 1 local list join: "1,2,3"
@@ -84,6 +106,22 @@
 1 hash list member typeCode: 8
 1 hash list member type: "list"
 1 hash list member val: True
+1 hash list member toString: ""
+1 hash list member toInt: 0
+1 hash list member toBool: True
+1 hash list member toFloat: 0.0
+1 hash list member toNumber: 0
+1 hash list member contains: True
+1 hash list member callp: False
+1 hash list member sizep: True
+1 hash list member complexType: False
+1 hash member values: [1, 2]
+1 hash member lastKey: "b"
+1 hash member hasKey: True
+1 hash member toString: ""
+1 hash member toInt: 0
+1 hash member toNumber: 0
+1 hash member sizep: True
 1 hash list member join named: "1-2-3"
 1 hash list member join reference: "1,2,3"
 1 param first: 1
@@ -120,6 +158,12 @@
 1 member hash member type: "hash"
 1 member object className: "WeakObjectTarget"
 1 member object typeCode: 10
+1 member object type: "object"
+1 member object val: True
+1 member list toString: ""
+1 member list toNumber: 0
+1 member hash values: [1, 2]
+1 member hash typeCode: 9
 2 local list size: 3
 2 local list first: 1
 2 local list join: "1,2,3"
@@ -145,6 +189,22 @@
 2 hash list member typeCode: 8
 2 hash list member type: "list"
 2 hash list member val: True
+2 hash list member toString: ""
+2 hash list member toInt: 0
+2 hash list member toBool: True
+2 hash list member toFloat: 0.0
+2 hash list member toNumber: 0
+2 hash list member contains: True
+2 hash list member callp: False
+2 hash list member sizep: True
+2 hash list member complexType: False
+2 hash member values: [1, 2]
+2 hash member lastKey: "b"
+2 hash member hasKey: True
+2 hash member toString: ""
+2 hash member toInt: 0
+2 hash member toNumber: 0
+2 hash member sizep: True
 2 hash list member join named: "1-2-3"
 2 hash list member join reference: "1,2,3"
 2 param first: 1
@@ -181,3 +241,9 @@
 2 member hash member type: "hash"
 2 member object className: "WeakObjectTarget"
 2 member object typeCode: 10
+2 member object type: "object"
+2 member object val: True
+2 member list toString: ""
+2 member list toNumber: 0
+2 member hash values: [1, 2]
+2 member hash typeCode: 9

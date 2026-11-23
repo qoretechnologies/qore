@@ -59,6 +59,12 @@ class WeakMembers {
         rv += sprintf("%d member hash member type: %s", round, result(auto sub () { return hhm.x.type(); }));
         rv += sprintf("%d member object className: %s", round, result(auto sub () { return wo.className(); }));
         rv += sprintf("%d member object typeCode: %s", round, result(auto sub () { return wo.typeCode(); }));
+        rv += sprintf("%d member object type: %s", round, result(auto sub () { return wo.type(); }));
+        rv += sprintf("%d member object val: %s", round, result(auto sub () { return wo.val(); }));
+        rv += sprintf("%d member list toString: %s", round, result(auto sub () { return wlm.toString(); }));
+        rv += sprintf("%d member list toNumber: %s", round, result(auto sub () { return wlm.toNumber(); }));
+        rv += sprintf("%d member hash values: %s", round, result(auto sub () { return wh.values(); }));
+        rv += sprintf("%d member hash typeCode: %s", round, result(auto sub () { return wh.typeCode(); }));
         return rv;
     }
 }
@@ -103,6 +109,23 @@ list<string> sub run(int round) {
     rv += sprintf("%d hash list member typeCode: %s", round, result(auto sub () { return hl.x.typeCode(); }));
     rv += sprintf("%d hash list member type: %s", round, result(auto sub () { return hl.x.type(); }));
     rv += sprintf("%d hash list member val: %s", round, result(auto sub () { return hl.x.val(); }));
+    rv += sprintf("%d hash list member toString: %s", round, result(auto sub () { return hl.x.toString(); }));
+    rv += sprintf("%d hash list member toInt: %s", round, result(auto sub () { return hl.x.toInt(); }));
+    rv += sprintf("%d hash list member toBool: %s", round, result(auto sub () { return hl.x.toBool(); }));
+    rv += sprintf("%d hash list member toFloat: %s", round, result(auto sub () { return hl.x.toFloat(); }));
+    rv += sprintf("%d hash list member toNumber: %s", round, result(auto sub () { return hl.x.toNumber(); }));
+    rv += sprintf("%d hash list member contains: %s", round, result(auto sub () { return hl.x.contains(2); }));
+    rv += sprintf("%d hash list member callp: %s", round, result(auto sub () { return hl.x.callp(); }));
+    rv += sprintf("%d hash list member sizep: %s", round, result(auto sub () { return hl.x.sizep(); }));
+    rv += sprintf("%d hash list member complexType: %s", round,
+        result(auto sub () { return hl.x.complexType(); }));
+    rv += sprintf("%d hash member values: %s", round, result(auto sub () { return hm.x.values(); }));
+    rv += sprintf("%d hash member lastKey: %s", round, result(auto sub () { return hm.x.lastKey(); }));
+    rv += sprintf("%d hash member hasKey: %s", round, result(auto sub () { return hm.x.hasKey("a"); }));
+    rv += sprintf("%d hash member toString: %s", round, result(auto sub () { return hm.x.toString(); }));
+    rv += sprintf("%d hash member toInt: %s", round, result(auto sub () { return hm.x.toInt(); }));
+    rv += sprintf("%d hash member toNumber: %s", round, result(auto sub () { return hm.x.toNumber(); }));
+    rv += sprintf("%d hash member sizep: %s", round, result(auto sub () { return hm.x.sizep(); }));
     rv += sprintf("%d hash list member join named: %s", round,
         result(auto sub () { return hl.x.join(separator: "-"); }));
     rv += sprintf("%d hash list member join reference: %s", round, result(auto sub () {
