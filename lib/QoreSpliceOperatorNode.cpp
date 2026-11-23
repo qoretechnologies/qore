@@ -227,6 +227,11 @@ QoreValue QoreSpliceOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* x
         return QoreValue();
     }
 
+    // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (vt == NT_LIST && qore_list_private::get(*val.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        return QoreValue();
+    }
+
     size_t offset = (size_t)eoffset->getAsBigInt();
 
 #ifdef DEBUG

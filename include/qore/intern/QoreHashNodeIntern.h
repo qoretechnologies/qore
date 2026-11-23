@@ -273,7 +273,10 @@ public:
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
-            xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            // as qore_list_private::checkValid(): a caller can have no exception sink (the merge of the public API)
+            if (xsink) {
+                xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            }
             return -1;
         }
         return 0;
@@ -743,6 +746,19 @@ public:
         if (!valid) {
             h.valid = false;
         }
+    }
+
+    //! returns a new hash with the members of this one, which can be changed also when this hash was freed
+    /** For a value computed from the hash (ex: <tt>h - "key"</tt>, <tt>h + obj</tt>), which is a new hash, as the sum
+        with another hash is (copyCheckNewType()); copy() keeps the freed state, for a copy that stands for the hash
+        itself (qore#7199)
+
+        @param strip true to copy without type information, as copy() does
+    */
+    DLLLOCAL QoreHashNode* copyValue(bool strip = false) const {
+        QoreHashNode* h = copy(strip);
+        h->priv->valid = true;
+        return h;
     }
 
     DLLLOCAL void copyIntern(qore_hash_private& h) const {

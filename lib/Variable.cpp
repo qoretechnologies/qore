@@ -5444,19 +5444,76 @@ void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const Q
     refTypeInfo = resolvedRefTypeInfo;
 }
 
-// documented in LocalVar.h
-QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
-    LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
-    if (!helper) {
-        return QoreValue();
+namespace {
+//! Removes a reference from the thread's references being resolved (see qore_reference_fast_resolution_enter())
+class ReferenceFastResolutionHelper {
+public:
+    DLLLOCAL ReferenceFastResolutionHelper(const lvalue_ref* r) : r(r) {
     }
 
-    lvalue_ref* lr = lvalue_ref::get(&ref);
-    ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
-    if (*xsink) {
+    DLLLOCAL ~ReferenceFastResolutionHelper() {
+        thread_ref_remove(r);
+    }
+
+    DLLLOCAL ReferenceFastResolutionHelper(const ReferenceFastResolutionHelper&) = delete;
+    DLLLOCAL ReferenceFastResolutionHelper& operator=(const ReferenceFastResolutionHelper&) = delete;
+
+private:
+    const lvalue_ref* r;
+};
+
+//! Reads a closure-bound variable that a reference refers to without the context of the reference (qore#7268)
+/** The read of the variable's value itself is the read that RuntimeReferenceHelper makes in the context of the
+    reference with VarRefNode::evalImpl() and ClosureVarValue::eval(), whose parts are each the same or do nothing here:
+    - the Program of the reference is the one that the thread runs, as RuntimeReferenceHelperBase finds it before it
+      enters it (qore_reference_fast_resolution_enter()), so that entering it does nothing; otherwise the read is not
+      made here
+    - the stack check and the detection of a circular reference are made, in the same order, by
+      qore_reference_fast_resolution_enter(), which adds the reference to the thread's references being resolved
+      while the variable is read
+    - the object context of the reference (ObjectSubstitutionHelper) is not set: the read takes a reference to the
+      value under the variable's read lock, which runs no code and reads no context; a variable that holds a
+      reference, whose resolution runs in the object context, or a weak reference, is not read here
+    - the temp scope of the statement is not suspended: the read is not held in it (QoreStatementTempScope::holdRead(),
+      which VarRefNode::evalImpl() calls, does nothing while it is suspended)
+
+    @param lr the reference
+    @param cvv the variable, the lvalue of the reference
+    @param needs_deref set to true if the variable was read
+    @param read set to true if the variable was read or an exception was raised; false if the reference must be read
+    with RuntimeReferenceHelper (nothing was changed then)
+    @param xsink for the exception of the stack check
+
+    @return the value of the variable, referenced, if it was read
+*/
+QoreValue reference_fast_read(const lvalue_ref& lr, const ClosureVarValue& cvv, bool& needs_deref, bool& read,
+        ExceptionSink* xsink) {
+    int rc = qore_reference_fast_resolution_enter(lr.pgm, &lr, xsink);
+    if (rc <= 0) {
+        read = rc < 0;
         return QoreValue();
     }
-    QoreValue rv = erh.takeValue(needs_deref);
+    ReferenceFastResolutionHelper rfrh(&lr);
+    // the type of the value is read under the lock, as another thread can assign the variable
+    QoreSafeVarRWReadLocker sl(cvv.rml, !cvv.frameExclusive());
+    switch (cvv.val.getType()) {
+        case NT_REFERENCE:
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            read = false;
+            return QoreValue();
+        default:
+            break;
+    }
+    read = true;
+    needs_deref = true;
+    // as ClosureVarValue::eval()
+    return cvv.val.getReferencedValue();
+}
+
+//! Returns the value read through a reference as qore_local_reference_eval() returns it
+QoreValue reference_read_result(QoreValue rv, bool& needs_deref, ExceptionSink* xsink) {
     if (rv.needsEval()) {
         bool ref_needs_deref = needs_deref;
         bool eval_needs_deref = true;
@@ -5468,6 +5525,44 @@ QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref,
         return *xsink ? QoreValue() : resolved;
     }
     return rv;
+}
+}
+
+// documented in LocalVar.h
+QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
+    lvalue_ref* lr = lvalue_ref::get(&ref);
+    // a reference to a closure-bound variable itself has the variable as its lvalue (ClosureVarValue::getReference()),
+    // which is read without the context of the reference if that changes nothing (qore#7268)
+    if (lr->vexp.getType() == NT_VARREF) {
+        const VarRefNode* v = lr->vexp.get<const VarRefNode>();
+        if (v->getType() == VT_IMMEDIATE) {
+            assert(v->ref.cvv);
+            bool read;
+            QoreValue rv = reference_fast_read(*lr, *v->ref.cvv, needs_deref, read, xsink);
+            if (read) {
+                // an exception raised before the read (one being propagated while a destructor runs) gives no value,
+                // as with RuntimeReferenceHelper below
+                if (*xsink) {
+                    if (needs_deref) {
+                        rv.discard(xsink);
+                    }
+                    return QoreValue();
+                }
+                return reference_read_result(rv, needs_deref, xsink);
+            }
+        }
+    }
+
+    LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+
+    ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return reference_read_result(erh.takeValue(needs_deref), needs_deref, xsink);
 }
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
