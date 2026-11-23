@@ -5827,6 +5827,9 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
     } else {
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
+        // the hash converted to another type is a new hash, as the copy above is, which can be changed also when the
+        // hash it was converted from was freed under a weak reference (qore#7199)
+        hp->valid = true;
     }
 
     // now we have to fold the value types into our type
@@ -5902,6 +5905,9 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
         // Use the base complex type, not the optional field type
         const QoreTypeInfo* complex_type = qore_get_complex_list_type(uTi());
         lp->complexTypeInfo = complex_type;
+        // the list converted to another type is a new list, as the copy above is, which can be changed also when the
+        // list it was converted from was freed under a weak reference (qore#7199)
+        lp->valid = true;
     }
 
     // now we have to fold the value types into our type

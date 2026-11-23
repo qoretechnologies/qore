@@ -2534,7 +2534,13 @@ if (x || y)
     performance with such graphs, however the programmer must ensure that the value has a valid
     strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
-    reference raises \c HASH-ERROR or \c LIST-ERROR.  An element or a key assigned, removed or deleted through a
+    reference raises \c HASH-ERROR or \c LIST-ERROR.  A @ref new "new" expression made from it, and a value made
+    from it with another type, by a @ref cast "cast" or the conversion of a variable, a parameter, a member or a return
+    value of a type that converts it (ex: \c hash, <tt>list&lt;softint&gt;</tt> for a <tt>list&lt;int&gt;</tt>), is a
+    new hash or list that can be changed (empty, or with the default values of a @ref hashdecl "hashdecl"), while any
+    other value that keeps its type (ex: a cast to its own type or to its or-nothing type, or a variable of type
+    \c auto, <tt>hash&lt;auto&gt;</tt> or <tt>*list&lt;int&gt;</tt> for a <tt>list&lt;int&gt;</tt>) is the same freed
+    hash or list.  An element or a key assigned, removed or deleted through a
     weak reference to a list or a hash changes the list or the hash that the weak reference designates (see
     @ref remove_weak_reference). Calling a method through a local weak reference to a destroyed
     object raises \c OBJECT-ALREADY-DELETED, including pseudo-methods such as <tt>val()</tt> and calls from

@@ -171,20 +171,22 @@ struct qore_list_private {
         return autoListTypeInfo;
     }
 
+    //! returns a copy of the list converted to another type: a new list, which can be changed also when this list was
+    //! freed under a weak reference, as the copy of a hash converted to another type (qore#7199; see copyFreedState())
     DLLLOCAL QoreListNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
         QoreListNode* l = new QoreListNode;
         l->priv->complexTypeInfo = newComplexTypeInfo;
         copyIntern(*l->priv);
-        copyFreedState(*l->priv);
         return l;
     }
 
     //! A copy of a freed list cannot be changed either (qore#7163)
     /** A list freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
         reference to it is never its only one, and changing the list through that reference copies it; the copy reads
-        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  The same
-        holds for its conversion to another list type, which is the list given to a typed variable or parameter.  A
-        value computed from it (sorted, or with an element added: see copyValue()) is a new list.
+        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  A value
+        computed from it (sorted, or with an element added: see copyValue()) is a new list, and so is its conversion to
+        another list type (a cast or the list given to a variable or parameter of another type: getPlainList(),
+        newComplexListFromValue()), which can be changed (qore#7199).
 
         The copy is not freed: it is freed as any other list when its last reference is released.
     */
@@ -716,7 +718,11 @@ struct qore_list_private {
             return l;
         // no exception is possible
         ReferenceHolder<QoreListNode> holder(l, nullptr);
-        return l->priv->copy(true);
+        // the list converted to a plain list is a new list, which can be changed also when the list was freed under
+        // a weak reference (qore#7199; see copyFreedState())
+        QoreListNode* rv = l->priv->copy(true);
+        rv->priv->valid = true;
+        return rv;
     }
 
     DLLLOCAL QoreValue swap(qore_offset_t offset, QoreValue val) {
