@@ -14126,6 +14126,7 @@ struct QoreNativeMethodContext {
     };
     [[no_unique_address]] LocalFrame local_frame;
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env{nullptr};
+    // the method runs in the call Program context of its class, as on the other fast method call paths (issue #7079)
     ObjectSubstitutionHelper receiver;
     ArgvContextHelper implicit_args;
     QoreRtUserCallOverrideHelper options;
@@ -14134,7 +14135,8 @@ struct QoreNativeMethodContext {
 
     QoreNativeMethodContext(QoreObject* obj, const MethodVariantBase* method, const UserVariantBase* uvb,
             QoreProgram* pgm, const QoreTypeInfo* receiver_ti, ExceptionSink* xsink)
-        : receiver(obj, method->getClassPriv()), implicit_args(nullptr, xsink), options(pgm, uvb, pgm),
+        : receiver(obj, method->getClassPriv(), QoreSetCallProgramContext(), xsink), implicit_args(nullptr, xsink),
+          options(pgm, uvb, pgm),
           receiver_type(receiver_ti) {
         if (uvb->getUserSignature()->getParseLocation()) {
             body_options.emplace(nullptr, uvb->getParseOptions(qore_program_private::getParseOptions(*pgm)));

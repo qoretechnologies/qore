@@ -1141,7 +1141,7 @@ int qore_rt_try_enter_native_method_v1(void* storage, QoreAOTContext* ctx, int32
     const void* expected_entry, uint64_t receiver, ExceptionSink* xsink);
 void qore_rt_leave_native_method_v1(void* storage);
 //! Storage reserved by callers of the v1 method entry in their native frame.
-constexpr size_t QORE_RT_NATIVE_METHOD_STATE_SIZE = 256;
+constexpr size_t QORE_RT_NATIVE_METHOD_STATE_SIZE = 320;
 constexpr size_t QORE_RT_NATIVE_METHOD_STATE_ALIGN = 16;
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
