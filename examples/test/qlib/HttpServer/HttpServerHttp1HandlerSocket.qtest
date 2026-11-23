@@ -716,6 +716,7 @@ nothing sub run_code(code c) {
         addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
         addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
         addTestCase("the base classes that give the socket to other code ask for it", \baseClassesTest());
+        addTestCase("a kept socket does not keep the server", \keptSocketTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
         set_return_value(main());
@@ -1339,6 +1340,33 @@ class NoView inherits AbstractHttpRequestHandler {
             assertTrue(rest.needsHandlerSocketView(), "RestHandler");
         }
         assertFalse(new PlainHandler().needsHandlerSocketView(), "a trusted handler that does not ask");
+    }
+
+    #! a socket that a handler keeps after its request does not keep the server's objects of the request, whose end
+    #! the server waits for when it is destroyed
+    keptSocketTest() {
+        ProbeHandler keeper();
+        HttpServer srv(<HttpServerOptionInfo>{});
+        srv.setHandler("probe", "", NOTHING, keeper);
+        srv.setDefaultHandler("probe", keeper);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /keep HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq({"kept": "yes"}, parse(readResponse(c)));
+        }
+        Socket kept = keeper.kept.get(HangGuard);
+        # the server is destroyed while the handler still has the socket of its request
+        Counter destroyed(1);
+        background sub () {
+            on_exit destroyed.dec();
+            delete srv;
+        }();
+        assertEq(0, destroyed.waitForZero(HangGuard), "the server is destroyed");
+        assertFalse(kept.isOpen(), "the kept socket is ended");
     }
 
     #! Sends requests to the tenant's HTTP handler and returns its first response's results, with the next response

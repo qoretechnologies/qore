@@ -156,8 +156,10 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     private:internal {
     }
 
-    # handle all requests as stream requests
+    # handle all requests as stream requests; the stream request that aborts the connection of its request gets the
+    # socket of the request (qore#7305)
     constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+        setHandlerSocketView();
     }
 
     # return the stream request handler

@@ -5219,8 +5219,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # socket that acts on the connection for the request only; another handler gets the connection's socket,
             # which code that is sandboxed cannot use (qore#7305)
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
-                request_helper.handler_sock = new Http1HandlerSocket(s, request_helper,
-                    request_helper.h1Start(head, hdr.http_version == "1.0"));
+                HandlerSocketState hs_state = request_helper.h1State();
+                request_helper.handler_sock = new Http1HandlerSocket(s, hs_state,
+                    hs_state.h1Start(head, hdr.http_version == "1.0"));
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -9989,7 +9990,7 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
             throw "HTTP3-HANDLER-SOCKET-ERROR", "the socket of an HTTP/3 request is given to its handler only for "
                 "its own session and stream";
         }
-        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, rh);
+        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, rh ? rh.streamState() : NOTHING);
     }
     # an HTTP/2 connection's requests share its socket (qore#7214); decided by the server's own header information of
     # the request, made by the connection's HTTP/2 transport: Socket::isHttp2() queries the connection's TLS state,
@@ -9999,7 +10000,7 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
             throw "HTTP2-HANDLER-SOCKET-ERROR", "the socket of an HTTP/2 request is given to its handler only for "
                 "its own stream";
         }
-        return new Http2HandlerSocket(s, header_info.stream_id, rh);
+        return new Http2HandlerSocket(s, header_info.stream_id, rh ? rh.streamState() : NOTHING);
     }
     return s;
 }
@@ -10038,12 +10039,12 @@ class Http3HandlerSocket inherits Qore::Socket {
         bool closed;
         #! set when a response has been submitted on the handler's own stream through this object
         bool response_started;
-        #! the server's object of the request, which records that its response was started (qore#7305)
-        *RequestHelper rh;
+        #! the state of the request's socket, which records that its response was started (qore#7305)
+        *HandlerSocketState rh;
     }
 
     #! Creates the object for the given stream of a session of the listener's socket
-    constructor(Socket real, int session_id, int stream_id, *RequestHelper rh) {
+    constructor(Socket real, int session_id, int stream_id, *HandlerSocketState rh) {
         self.real = real;
         self.session_id = session_id;
         self.stream_id = stream_id;
@@ -10469,12 +10470,12 @@ class Http2HandlerSocket inherits Qore::Socket {
         bool closed;
         #! set when the handler started the response of its stream through this object
         bool response_started;
-        #! the server's object of the request, which records that its response was started (qore#7305)
-        *RequestHelper rh;
+        #! the state of the request's socket, which records that its response was started (qore#7305)
+        *HandlerSocketState rh;
     }
 
     #! Creates the object for the given stream of the connection's socket
-    constructor(Socket real, int stream_id, *RequestHelper rh) {
+    constructor(Socket real, int stream_id, *HandlerSocketState rh) {
         self.real = real;
         self.stream_id = stream_id;
         self.rh = rh;
@@ -10904,8 +10905,8 @@ enum Http1ResponseSend : int {
     of the handler's methods, \c cx.socketobject of a REST handler, the socket of a stream request, and the socket
     that an @ref HttpServer::Http1BodyReader "Http1BodyReader" reads a streamed body through): a socket of its own
     that is not connected, whose methods act on the connection's socket for the handler's own request only.  Its
-    state is the server's (in the request's RequestHelper), which no method of this object changes but for the
-    request's own I/O.
+    state is the server's (a HandlerSocketState that the request's RequestHelper holds), which no method of this
+    object changes but for the request's own I/O.
 
     It sends the request's own response, once, framed as HTTP/1.x requires:
     - sendHTTPResponse() and sendHTTPResponseWithCallback() send a complete response, which they frame themselves;
@@ -10958,8 +10959,8 @@ class Http1HandlerSocket inherits Qore::Socket {
     private:internal {
         #! the connection's socket, which the server keeps
         Socket real;
-        #! the server's object of the request, which holds the state of the request's socket
-        RequestHelper rh;
+        #! the state of the request's socket, which the server holds
+        HandlerSocketState rh;
         #! the generation of the request on the server's object: the object ends when it is no longer the current one
         int gen;
         #! the timeout of the object's sends that are given none; -1 for the connection's
@@ -10970,10 +10971,10 @@ class Http1HandlerSocket inherits Qore::Socket {
 
     #! Creates the object for the current request on the connection's socket
     /** @param real the connection's socket
-        @param rh the server's object of the request
-        @param gen the generation of the request's socket on the server's object (see RequestHelper::h1Start())
+        @param rh the state of the request's socket, which the server holds
+        @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Start())
     */
-    constructor(Socket real, RequestHelper rh, int gen) {
+    constructor(Socket real, HandlerSocketState rh, int gen) {
         self.real = real;
         self.rh = rh;
         self.gen = gen;
@@ -12857,6 +12858,192 @@ class RequestHelper {
         #! True while the request counts in the active WaitGroup (c); see releaseForStop()
         bool counted = True;
 
+        #! the state of the socket of the request's handler, which its socket references (qore#7305); made when it is
+        #! first needed
+        *HandlerSocketState hs_state;
+    }
+
+    /**
+        @param cThreads the counter for normal connection threads
+        @param dThreads the counter for dedicated connection threads (WebSocket, SSE)
+        @param s optional socket to manage (not passed for async connections where socket lifecycle
+               is managed by the async I/O controller)
+
+        @note The caller must have already called cThreads.add() before creating this object.
+              The destructor will call c.done() to balance this.
+    */
+    constructor(WaitGroup cThreads, WaitGroup dThreads, *Socket s) {
+        @assert(cThreads.getCount() > 0, "cThreads must be incremented before creating RequestHelper");
+        self.cThreads = cThreads;
+        self.dThreads = dThreads;
+        c = cThreads;
+        if (s) {
+            self.s = s;
+        }
+    }
+
+    #! Returns the state of the socket of the request's handler, made at the first call (qore#7305)
+    private HandlerSocketState getHandlerSocketState() {
+        return hs_state ?? (hs_state = new HandlerSocketState());
+    }
+
+    #! Starts the socket of a new HTTP/1.x request; returns its state and generation (see HandlerSocketState::h1Start())
+    HandlerSocketState h1State() {
+        return getHandlerSocketState();
+    }
+
+    #! Ends the socket of the current HTTP/1.x request (see HandlerSocketState::endHandlerSocket())
+    int endHandlerSocket() {
+        return hs_state ? hs_state.endHandlerSocket() : Http1ResponseState::None;
+    }
+
+    #! Sets the rest of the body of the current HTTP/1.x request that the server did not read
+    h1SetBodyLength(int length) {
+        if (hs_state) {
+            hs_state.h1SetBodyLength(length);
+        }
+    }
+
+    #! Records that the response of the request of an HTTP/2 or HTTP/3 stream was started
+    markStreamResponseStarted() {
+        getHandlerSocketState().markStreamResponseStarted();
+    }
+
+    #! Returns True if the response of the request of an HTTP/2 or HTTP/3 stream was started
+    bool isStreamResponseStarted() {
+        return hs_state ? hs_state.isStreamResponseStarted() : False;
+    }
+
+    #! Starts the state of the socket of the request of an HTTP/2 or HTTP/3 stream; returns it
+    HandlerSocketState streamState() {
+        HandlerSocketState st = getHandlerSocketState();
+        st.resetStream();
+        return st;
+    }
+
+    #! Destructor ensures counter is decremented and socket is cleaned up if needed
+    /**
+        - If not dedicated_external and socket exists and is open: shutdown and close the socket
+        - Decrements the active counter (c) to signal this connection is complete, unless releaseForStop() did
+
+        This allows HttpListener::stop() to wait for all connections to finish via
+        cThreads.wait() and dThreads.wait().
+
+        @note We check isOpen() to avoid double-close if the socket was already closed
+        (e.g., by the async I/O controller)
+    */
+    destructor() {
+        if (s && !dedicated_external && s.isOpen()) {
+            try {
+                s.shutdown();
+                s.close();
+            } catch () {
+                # Ignore close errors - socket may already be in error state
+            }
+        }
+        if (counted) {
+            c.done();
+        }
+    }
+
+    #! Switches from normal connection mode to dedicated connection mode
+    /**
+        Called when a connection is upgraded to a dedicated socket handler (WebSocket, SSE).
+        This transfers the counter tracking from cThreads to dThreads so that:
+        - Normal requests can complete (cThreads reaches zero)
+        - Dedicated connections are tracked separately (dThreads)
+        - Server shutdown waits for dedicated connections after normal connections
+
+        @note Must only be called once, when c === cThreads (asserted)
+    */
+    setDedicated() {
+        @assert(c === cThreads);
+        if (counted) {
+            dThreads.add();
+            cThreads.done();
+        }
+        c = dThreads;
+    }
+
+    #! Marks this connection as dedicated and externally managed
+    /**
+        Called when a dedicated socket handler (e.g., WebSocket) takes full control
+        of the connection and will manage the socket lifecycle itself.
+
+        This method:
+        1. Switches to dedicated mode if not already (handles race where setDedicated()
+           may have been called first in registerDedicatedSocket)
+        2. Sets dedicated_external = True so destructor won't close the socket
+
+        The handler that called this is responsible for:
+        - Closing the socket when done
+        - The connection counter is still decremented in destructor
+
+        @note This fixes a bug where calling setDedicatedExternal() after setDedicated()
+              would double-increment dThreads. The check <tt>c === cThreads</tt> prevents this.
+    */
+    setDedicatedExternal() {
+        # Only adjust counters if not already in dedicated mode
+        # (setDedicated() may have been called first in registerDedicatedSocket)
+        if (c === cThreads) {
+            if (counted) {
+                dThreads.add();
+                cThreads.done();
+            }
+            c = dThreads;
+        }
+        dedicated_external = True;
+    }
+
+    #! Ends the count of the request for a stop of its listener that runs in the request's thread
+    /** Called by HttpListener::stop() for the request that the current thread runs (see current_request): the
+        stop waits for the requests of the listener, and this request ends only when the stop has returned to it, as
+        when the request released the last reference to the server, whose destructor stops it.  The request does not
+        count from here on; the destructor does not end its count again.
+
+        @param listener_cthreads the counter of the normal connection threads of the listener that is stopped; the
+        count of a request of another listener is not ended
+    */
+    releaseForStop(WaitGroup listener_cthreads) {
+        if (!counted || cThreads !== listener_cthreads) {
+            return;
+        }
+        counted = False;
+        c.done();
+    }
+
+    #! Returns True if this connection is in dedicated mode (WebSocket, SSE)
+    /**
+        @return True if setDedicated() or setDedicatedExternal() was called
+
+        @note This returns True for BOTH internally and externally managed dedicated connections.
+              To check specifically for external management, use isDedicatedExternal().
+              When checking shutdown behavior, isDedicatedExternal() is usually what you want.
+    */
+    bool isDedicated() {
+        return c === dThreads;
+    }
+
+    #! Returns True if the socket is managed externally by the dedicated handler
+    /**
+        @return True if setDedicatedExternal() was called
+
+        @note If this returns True, isDedicated() also returns True.
+              This method specifically indicates the socket won't be closed by the destructor.
+    */
+    bool isDedicatedExternal() {
+        return dedicated_external;
+    }
+}
+
+#! The state of the socket that the handler of a request gets (qore#7305)
+/** Held by the server's per-request object (RequestHelper) and referenced by the handler's socket of the request
+    (Http1HandlerSocket, Http2HandlerSocket, Http3HandlerSocket) in a private:internal member: only the server's code
+    and the request's own socket reach it; the socket has no public method that changes it.  A socket that a handler
+    keeps keeps this object only, not the server's per-request object.
+*/
+class HandlerSocketState {
+    private {
         # the state of the socket of the current HTTP/1.x request (an Http1HandlerSocket; qore#7305): only the server's
         # code and the request's own socket, which keeps this object in a private:internal member, reach it
         #! the generation of the request's socket: a socket of another generation is ended
@@ -12881,25 +13068,6 @@ class RequestHelper {
         #! True once the handler of the request of an HTTP/2 or HTTP/3 stream started its response on the stream
         #! through its socket, or the server did (qore#7214, qore#7212, qore#7305)
         bool stream_response_started = False;
-    }
-
-    /**
-        @param cThreads the counter for normal connection threads
-        @param dThreads the counter for dedicated connection threads (WebSocket, SSE)
-        @param s optional socket to manage (not passed for async connections where socket lifecycle
-               is managed by the async I/O controller)
-
-        @note The caller must have already called cThreads.add() before creating this object.
-              The destructor will call c.done() to balance this.
-    */
-    constructor(WaitGroup cThreads, WaitGroup dThreads, *Socket s) {
-        @assert(cThreads.getCount() > 0, "cThreads must be incremented before creating RequestHelper");
-        self.cThreads = cThreads;
-        self.dThreads = dThreads;
-        c = cThreads;
-        if (s) {
-            self.s = s;
-        }
     }
 
     #! Starts the socket of a new HTTP/1.x request, after the end of the socket of the previous one (qore#7305)
@@ -13193,118 +13361,9 @@ class RequestHelper {
         throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): %s", method, why);
     }
 
-    #! Destructor ensures counter is decremented and socket is cleaned up if needed
-    /**
-        - If not dedicated_external and socket exists and is open: shutdown and close the socket
-        - Decrements the active counter (c) to signal this connection is complete, unless releaseForStop() did
-
-        This allows HttpListener::stop() to wait for all connections to finish via
-        cThreads.wait() and dThreads.wait().
-
-        @note We check isOpen() to avoid double-close if the socket was already closed
-        (e.g., by the async I/O controller)
-    */
-    destructor() {
-        if (s && !dedicated_external && s.isOpen()) {
-            try {
-                s.shutdown();
-                s.close();
-            } catch () {
-                # Ignore close errors - socket may already be in error state
-            }
-        }
-        if (counted) {
-            c.done();
-        }
-    }
-
-    #! Switches from normal connection mode to dedicated connection mode
-    /**
-        Called when a connection is upgraded to a dedicated socket handler (WebSocket, SSE).
-        This transfers the counter tracking from cThreads to dThreads so that:
-        - Normal requests can complete (cThreads reaches zero)
-        - Dedicated connections are tracked separately (dThreads)
-        - Server shutdown waits for dedicated connections after normal connections
-
-        @note Must only be called once, when c === cThreads (asserted)
-    */
-    setDedicated() {
-        @assert(c === cThreads);
-        if (counted) {
-            dThreads.add();
-            cThreads.done();
-        }
-        c = dThreads;
-    }
-
-    #! Marks this connection as dedicated and externally managed
-    /**
-        Called when a dedicated socket handler (e.g., WebSocket) takes full control
-        of the connection and will manage the socket lifecycle itself.
-
-        This method:
-        1. Switches to dedicated mode if not already (handles race where setDedicated()
-           may have been called first in registerDedicatedSocket)
-        2. Sets dedicated_external = True so destructor won't close the socket
-
-        The handler that called this is responsible for:
-        - Closing the socket when done
-        - The connection counter is still decremented in destructor
-
-        @note This fixes a bug where calling setDedicatedExternal() after setDedicated()
-              would double-increment dThreads. The check <tt>c === cThreads</tt> prevents this.
-    */
-    setDedicatedExternal() {
-        # Only adjust counters if not already in dedicated mode
-        # (setDedicated() may have been called first in registerDedicatedSocket)
-        if (c === cThreads) {
-            if (counted) {
-                dThreads.add();
-                cThreads.done();
-            }
-            c = dThreads;
-        }
-        dedicated_external = True;
-    }
-
-    #! Ends the count of the request for a stop of its listener that runs in the request's thread
-    /** Called by HttpListener::stop() for the request that the current thread runs (see current_request): the
-        stop waits for the requests of the listener, and this request ends only when the stop has returned to it, as
-        when the request released the last reference to the server, whose destructor stops it.  The request does not
-        count from here on; the destructor does not end its count again.
-
-        @param listener_cthreads the counter of the normal connection threads of the listener that is stopped; the
-        count of a request of another listener is not ended
-    */
-    releaseForStop(WaitGroup listener_cthreads) {
-        if (!counted || cThreads !== listener_cthreads) {
-            return;
-        }
-        counted = False;
-        c.done();
-    }
-
-    #! Returns True if this connection is in dedicated mode (WebSocket, SSE)
-    /**
-        @return True if setDedicated() or setDedicatedExternal() was called
-
-        @note This returns True for BOTH internally and externally managed dedicated connections.
-              To check specifically for external management, use isDedicatedExternal().
-              When checking shutdown behavior, isDedicatedExternal() is usually what you want.
-    */
-    bool isDedicated() {
-        return c === dThreads;
-    }
-
-    #! Returns True if the socket is managed externally by the dedicated handler
-    /**
-        @return True if setDedicatedExternal() was called
-
-        @note If this returns True, isDedicated() also returns True.
-              This method specifically indicates the socket won't be closed by the destructor.
-    */
-    bool isDedicatedExternal() {
-        return dedicated_external;
+    #! Resets the state for the request of an HTTP/2 or HTTP/3 stream
+    synchronized resetStream() {
+        stream_response_started = False;
     }
 }
 }
