@@ -1240,6 +1240,23 @@ public:
         Canceled,
     };
 
+    //! Selects the constructor that copies only the module cleanup flags of a context
+    enum class ModuleCleanupFlagsOnly {
+        Flags,
+    };
+
+    //! Creates a context that governs as no sandbox does and carries only the module cleanup flags of \a src: that
+    //! it is work that the module cleanup handed over (@ref module_cleanup_delegate), and that its operation was
+    //! canceled (@ref module_cleanup_canceled); it is not counted by the cleanup (@ref module_cleanup_work)
+    /** For code of the host that runs for work of other code that the module cleanup handed over (the timer callback
+        of the host for a timer of that work, qore#7010): the code is part of the cleanup, but runs in the context of
+        the host, without the sandbox, budgets, restrictions or work generation of the other code
+    */
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext& src, ModuleCleanupFlagsOnly)
+            : module_cleanup_delegate(src.module_cleanup_delegate),
+            module_cleanup_canceled(src.module_cleanup_canceled) {
+    }
+
     //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
     //! the module cleanup hands over (@ref module_cleanup_delegate) and waits for (@ref module_cleanup_work)
     /** For an operation that the module cleanup cancels or that its work submits: what the operation then runs is

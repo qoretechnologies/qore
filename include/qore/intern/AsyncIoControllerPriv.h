@@ -447,6 +447,11 @@ public:
         //! For DT_CALLBACK: the run-time parse options of the code that registered the callback, installed while it
         //! runs, or empty (see AsyncIoRuntimeOptions)
         AsyncIoRuntimeOptions runtime_po;
+        //! For DT_CALLBACK: the sandbox context applied while the item's arguments are released, or empty
+        /** The arguments of the timer callback of the host hold the data of a timer of other code, whose destructors
+            are that code's: they are released in its context, while the callback runs in the host's (qore#7010)
+        */
+        AsyncIoSandboxContext release_ctx;
         //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
         bool read_state = false;
         //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
@@ -506,7 +511,8 @@ public:
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0);
+        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0,
+        AsyncIoSandboxContext release_ctx = AsyncIoSandboxContext());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)

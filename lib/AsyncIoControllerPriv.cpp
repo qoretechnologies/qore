@@ -2314,12 +2314,13 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner, AsyncIoSandboxContext sandbox_ctx, AsyncIoRuntimeOptions runtime_po,
-        qore_program_id_t app_pgm_id) {
+        qore_program_id_t app_pgm_id, AsyncIoSandboxContext release_ctx) {
     AsyncWorkItem item{nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()};
     item.app_pgm_id = app_pgm_id;
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
     item.runtime_po = std::move(runtime_po);
+    item.release_ctx = std::move(release_ctx);
     enqueue(std::move(item));
 }
 
@@ -2431,7 +2432,20 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
         item.callback = nullptr;
     }
     if (item.args) {
-        item.args->deref(xsink);
+        // the arguments of the host's timer callback, which hold the timer's data, are released in the context of
+        // the code that added the timer (see AsyncWorkItem::release_ctx, qore#7010)
+        // the common case (no release context: every item but the host's timer callback) only tests the pointer
+        if (!item.release_ctx) {
+            item.args->deref(xsink);
+        } else {
+            std::unique_ptr<QoreSandboxContextHelper> release_guard;
+            if (item.release_ctx->manager || item.release_ctx->policy_manager || item.release_ctx->isolation) {
+                release_guard.reset(new QoreSandboxContextHelper(*item.release_ctx));
+            }
+            QoreSubmitterRestrictionsHelper release_restrictions(item.release_ctx->caller_restrictions);
+            QoreWorkGenerationHelper release_gen(item.release_ctx->work_gen);
+            item.args->deref(xsink);
+        }
         item.args = nullptr;
     }
     if (item.pgm) {
@@ -3779,7 +3793,21 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item.callback->deref(xsink);
         }
         if (async_item.args) {
-            async_item.args->deref(xsink);
+            // the arguments of the host's timer callback, which hold the timer's data, are released in the context of
+            // the code that added the timer (see AsyncWorkItem::release_ctx, qore#7010)
+            // the common case (no release context: every item but the host's timer callback) only tests the pointer
+            if (!async_item.release_ctx) {
+                async_item.args->deref(xsink);
+            } else {
+                std::unique_ptr<QoreSandboxContextHelper> release_guard;
+                if (async_item.release_ctx->manager || async_item.release_ctx->policy_manager
+                        || async_item.release_ctx->isolation) {
+                    release_guard.reset(new QoreSandboxContextHelper(*async_item.release_ctx));
+                }
+                QoreSubmitterRestrictionsHelper release_restrictions(async_item.release_ctx->caller_restrictions);
+                QoreWorkGenerationHelper release_gen(async_item.release_ctx->work_gen);
+                async_item.args->deref(xsink);
+            }
         }
 
         // Clear all thread-local data (program tld hash + thread_local vars + thread
@@ -9328,16 +9356,33 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // those of the code that set it (qore#6208)
             // the timer's own code runs in the sandbox of the code that added the timer, and continues its work (its
             // generation); the timer callback is the host's code (sandboxed code cannot set it), which runs in the
-            // host's context, as work of its own, also for the timer of sandboxed code (qore#7010); except for a timer
-            // of work that the module cleanup handed over, whose context makes the callback part of the cleanup (see
-            // QoreModuleCleanupDelegateHelper), as it can enter the Programs of the modules that the cleanup closed
+            // host's context, as work of its own, also for the timer of sandboxed code (qore#7010): for a timer of
+            // work that the module cleanup handed over, with only the cleanup's flags of the timer's context, which
+            // make the callback part of the cleanup (see QoreModuleCleanupDelegateHelper), as it can enter the
+            // Programs of the modules that the cleanup closed; the callback's arguments, which hold the timer's data,
+            // are released in the timer's context, as their destructors are the code's that added the timer
             AsyncIoSandboxContext item_ctx;
-            if (is_code || async_io_module_cleanup_delegate(te.sandbox_ctx)) {
+            AsyncIoSandboxContext release_ctx;
+            if (is_code) {
                 item_ctx = std::move(te.sandbox_ctx);
+            } else {
+                if (async_io_module_cleanup_delegate(te.sandbox_ctx)) {
+                    try {
+                        item_ctx = std::make_shared<const QoreSandboxContext>(*te.sandbox_ctx,
+                            QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+                    } catch (std::bad_alloc&) {
+                        // the callback is part of the cleanup all the same, in the timer's context: acceptable only as
+                        // the full context of the code that added the timer gives the host's callback weaker rights,
+                        // never more (it runs in that code's sandbox, with its restrictions)
+                        item_ctx = te.sandbox_ctx;
+                    }
+                }
+                release_ctx = std::move(te.sandbox_ctx);
             }
             call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref.release(), args.release(),
                 is_code ? te.owner : std::string(), std::move(item_ctx),
-                is_code ? std::move(te.runtime_po) : cb_snapshot_po, is_code ? te.cb_app_id : 0);
+                is_code ? std::move(te.runtime_po) : cb_snapshot_po, is_code ? te.cb_app_id : 0,
+                std::move(release_ctx));
 #ifdef DEBUG
             if (dbg_pause) {
                 dbgWaitAfterDelivery(DBG_PAUSE_DELIVERY);
