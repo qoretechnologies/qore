@@ -6794,11 +6794,18 @@ std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, c
         t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
     }
     std::shared_ptr<CloseWakeQueue> q = t.close_wakes;
+    // a close in a forked child notifies the notifier that it inherited from the parent: the parent's thread wakes
+    // and finds nothing to do (harmless)
     return [q, sock_hash]() {
         {
             // a leaf lock (see CloseWakeQueue)
             AutoLocker al(q->l);
-            q->hashes.push_back(sock_hash);
+            try {
+                q->hashes.push_back(sock_hash);
+            } catch (...) {
+                // no memory: the thread wakes all of its sockets (nothing may leave a close)
+                q->all = true;
+            }
         }
         if (q->notifier) {
             q->notifier->notify();
@@ -7947,6 +7954,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 t.wake_socket_hashes.insert(std::move(h));
             }
             t.close_wakes->hashes.clear();
+            if (t.close_wakes->all) {
+                t.close_wakes->all = false;
+                for (const auto& [hash, fd] : t.registered_fds) {
+                    t.wake_socket_hashes.insert(hash);
+                }
+            }
         }
 
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)

@@ -8630,6 +8630,8 @@ public:
     //! after the socket took the winner's descriptor, before the connection's state is set
     //! (qore_dbg_connect_before_connected)
     static constexpr int CLOSE_BEFORE_CONNECTED = -2;
+    //! after the connection's state was set (qore_dbg_connect_after_connected)
+    static constexpr int CLOSE_AFTER_CONNECTED = -3;
     //! The socket that runConnectCloseAt() closes, the place where it closes it, and whether it did
     static inline QoreSocket* close_at_sock = nullptr;
     static inline int close_at_where = -100;
@@ -8659,6 +8661,38 @@ public:
         closeAt(CLOSE_BEFORE_CONNECTED);
     }
 
+    //! The hook after the connection's state was set
+    static void closeAfterConnected() {
+        closeAt(CLOSE_AFTER_CONNECTED);
+    }
+
+    //! Returns the events of a socket's event queue in their order
+    static std::vector<int> socketEvents(Queue* q, ExceptionSink& xsink) {
+        std::vector<int> rv;
+        while (q->size()) {
+            bool timed_out = false;
+            ValueHolder e(q->shift(&xsink, 0, &timed_out), &xsink);
+            if (timed_out || xsink || e->getType() != NT_HASH) {
+                break;
+            }
+            rv.push_back((int)e->get<const QoreHashNode>()->getKeyValue("event").getAsBigInt());
+        }
+        return rv;
+    }
+
+    //! Returns true if no connected event comes after a closed event
+    static bool connectedBeforeClosed(const std::vector<int>& events) {
+        bool closed = false;
+        for (int e : events) {
+            if (e == QORE_EVENT_CHANNEL_CLOSED) {
+                closed = true;
+            } else if (e == QORE_EVENT_CONNECTED && closed) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     //! A connection whose socket is closed while it is resolving its host, between its check of the socket and the
     //! socket's adoption of a descriptor, or before the socket takes the winning attempt over, fails as closed and
     //! leaves the socket closed (qore#7003)
@@ -8670,7 +8704,10 @@ public:
         @p where is CLOSE_IN_RESOLVE (the close while the host is resolved, when the socket has no descriptor),
         CLOSE_BEFORE_ASSIGN (the close right before the socket takes the winner over, with two addresses),
         CLOSE_BEFORE_CONNECTED (the close after the socket took the winner's descriptor, before the connection's state
-        is set, which is set with the socket's close lock held only if the socket was not closed meanwhile), or a place
+        is set, which is set with the socket's close lock held only if the socket was not closed meanwhile),
+        CLOSE_AFTER_CONNECTED (the close right after the connection's state, host name, destinations and connected
+        event were set, in one section with the close lock held: the connection is made, and the close must leave no
+        host name or destinations and no connected event after its closed event), or a place
         of qore_dbg_connect_before_adopt (2: the winner replacing the socket's descriptor; 3: the second attempt
         replacing the descriptor of the first one, which failed, made to fail with qore_dbg_connect_fail_held_attempt
         once the second attempt is in progress, whose result is read only once it is writable with
@@ -8685,7 +8722,8 @@ public:
         const std::string when = " (closed " + (where == CLOSE_IN_RESOLVE ? std::string("while resolving")
             : (where == CLOSE_BEFORE_ASSIGN ? std::string("before the winner is taken over")
                 : (where == CLOSE_BEFORE_CONNECTED ? std::string("after the winner is taken over")
-                    : "before adoption " + std::to_string(where)))) + ")";
+                    : (where == CLOSE_AFTER_CONNECTED ? std::string("after the connection's state is set")
+                        : "before adoption " + std::to_string(where))))) + ")";
         ExceptionSink xsink;
         std::vector<int> fds;
         struct FdCloser {
@@ -8744,6 +8782,7 @@ public:
                 qore_dbg_connect_in_resolve.store(nullptr, std::memory_order_release);
                 qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
                 qore_dbg_connect_before_connected.store(nullptr, std::memory_order_release);
+                qore_dbg_connect_after_connected.store(nullptr, std::memory_order_release);
                 close_at_sock = nullptr;
             }
         } hook_cleanup;
@@ -8772,9 +8811,16 @@ public:
             qore_dbg_connect_before_assign_winner.store(closeBeforeAssign, std::memory_order_release);
         } else if (where == CLOSE_BEFORE_CONNECTED) {
             qore_dbg_connect_before_connected.store(closeBeforeConnected, std::memory_order_release);
+        } else if (where == CLOSE_AFTER_CONNECTED) {
+            qore_dbg_connect_after_connected.store(closeAfterConnected, std::memory_order_release);
         } else {
             qore_dbg_connect_before_adopt.store(closeAt, std::memory_order_release);
         }
+        // the socket's events
+        qore_socket_private* sp = qore_socket_private::get(*s);
+        ReferenceHolder<Queue> events_q(new Queue, &xsink);
+        events_q->ref();
+        sp->setEventQueue(&xsink, *events_q, QoreValue(), false);
         int rc = -1;
         {
             // the state is destroyed before the socket
@@ -8785,13 +8831,28 @@ public:
             }
         }
         UT_ASSERT(c, close_at_done, ("the socket was closed at the place of the test" + when).c_str());
-        UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
-        if (xsink) {
-            QoreStringValueHelper err(xsink.getExceptionErr());
-            UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"), ("the connection fails as closed" + when).c_str());
+        if (where == CLOSE_AFTER_CONNECTED) {
+            // the connection was made, then the socket was closed
+            UT_ASSERT(c, !rc && !xsink, ("the connection is made before the close" + when).c_str());
+        } else {
+            UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
+            if (xsink) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                    ("the connection fails as closed" + when).c_str());
+            }
         }
         xsink.clear();
         UT_ASSERT(c, s->getDescriptorForLibrary() < 0, ("the closed socket stays closed" + when).c_str());
+        // the close leaves no host name or destinations of the connection, and no connected event after its closed
+        // event
+        // read after the connection and the close have ended
+        UT_ASSERT(c, sp->client_target.empty(), ("the closed socket has no host name" + when).c_str());
+        UT_ASSERT(c, !sp->getConnectedDestinations(), ("the closed socket has no destinations" + when).c_str());
+        std::vector<int> events = socketEvents(*events_q, xsink);
+        UT_ASSERT(c, connectedBeforeClosed(events), ("no connected event comes after the closed event" + when).c_str());
+        sp->setEventQueue(&xsink, nullptr, QoreValue(), false);
+        xsink.clear();
         s->close();
     }
 
@@ -26743,6 +26804,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_ASSIGN, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_CONNECTED, false);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_AFTER_CONNECTED, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_IN_RESOLVE, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
