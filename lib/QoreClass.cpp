@@ -1005,6 +1005,122 @@ void AbstractMethod::parseOverride(MethodVariantBase* v) {
     }
 }
 
+namespace {
+//! the variants of an abstract variant map whose keys are not their current abstract signatures (qore#7331)
+/** A variant's key is not its current abstract signature if it was made from the parse types of its signature, or
+    if the map was given the variant (from a parent class) before the variant's own class made its key again from
+    its resolved types (a subclass that is initialized while its parent class is initialized, ex: by a default
+    argument of a parent class's method that creates an object of the subclass), or if the key is that of another
+    variant of the signature (the variant that replaced it is const).
+
+    The variants are taken out of the map, the parse keys of the variants of the class \a qc itself are made again
+    from their resolved types, and the variants are added to the map again with their current keys; the destructor
+    releases the references of the variants that were not added again (if an exception was raised).  The key strings
+    are never released while the variants exist, so the maps of other classes can still have them as keys until
+    they are keyed again themselves.
+*/
+class AbstractStaleKeyedVariants {
+public:
+    AbstractStaleKeyedVariants(vmap_t& vm, const qore_class_private& qc) : vm(vm), qc(qc) {
+        size_t count = 0;
+        for (auto& i : vm) {
+            if (stale(i)) {
+                ++count;
+            }
+        }
+        if (!count) {
+            return;
+        }
+        vl.reserve(count);
+        for (vmap_t::iterator i = vm.begin(), e = vm.end(); i != e;) {
+            if (stale(*i)) {
+                vl.push_back(i->second);
+                i = vm.erase(i);
+                continue;
+            }
+            ++i;
+        }
+    }
+
+    ~AbstractStaleKeyedVariants() {
+        for (size_t i = done, e = vl.size(); i < e; ++i) {
+            vl[i]->deref();
+        }
+    }
+
+    //! makes the keys of the class's own variants again from their resolved types
+    void resolve() {
+        for (MethodVariantBase* v : vl) {
+            // a variant can be in both maps of an abstract method
+            if (own(v) && v->hasParseAbstractSignature()) {
+                v->parseResolveAbstractSignature();
+            }
+        }
+    }
+
+    //! adds the variants to the map again with their current keys
+    /** Of two variants that then have the same key, one is kept, as when the second one is added (parseAdd()): a
+        const one in the variant list (\a keep_const, qore#7317), else the first; the reference of the other one is
+        released.
+    */
+    void add(bool keep_const) {
+        for (size_t e = vl.size(); done < e;) {
+            MethodVariantBase* v = vl[done];
+            const char* sig = v->getAbstractSignature();
+            vmap_t::iterator i = vm.find(sig);
+            if (i == vm.end()) {
+                vm.insert(vmap_t::value_type(sig, v));
+                ++done;
+                continue;
+            }
+            if (keep_const && v->isConstMethod() && !i->second->isConstMethod()) {
+                // the key is that of the variant kept, which can outlive the other one
+                MethodVariantBase* old = i->second;
+                vm.erase(i);
+                try {
+                    vm.insert(vmap_t::value_type(sig, v));
+                } catch (...) {
+                    old->deref();
+                    throw;
+                }
+                ++done;
+                old->deref();
+                continue;
+            }
+            ++done;
+            v->deref();
+        }
+    }
+
+private:
+    vmap_t& vm;
+    const qore_class_private& qc;
+    std::vector<MethodVariantBase*> vl;
+    //! the number of variants added to the map again
+    size_t done = 0;
+
+    bool own(const MethodVariantBase* v) const {
+        const QoreClass* vc = v->getClass();
+        return vc && qore_class_private::get(*vc) == &qc;
+    }
+
+    bool stale(const vmap_t::value_type& i) const {
+        return i.first != i.second->getAbstractSignature()
+            || (own(i.second) && i.second->hasParseAbstractSignature());
+    }
+};
+}
+
+void AbstractMethod::parseResolveSignatures(const qore_class_private& qc) {
+    // the variants are taken out of both maps before any key is made again
+    AbstractStaleKeyedVariants vv(vlist, qc);
+    AbstractStaleKeyedVariants pv(pending_save, qc);
+    vv.resolve();
+    pv.resolve();
+    vv.add(true);
+    pv.add(false);
+}
+
 void AbstractMethod::add(MethodVariantBase* v) {
     // see if there is already an committed variant matching this signature
     // in this case it must be inherited
@@ -1257,7 +1373,7 @@ void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc,
         for (vmap_t::iterator vi = am.vlist.begin(), ve = am.vlist.end(); vi != ve;) {
             // the class's own abstract variants are kept, as are those that a parent class has pending
             if (qore_class_private::get(*vi->second->getClass()) == &qc
-                    || parent_has_pending_abstract_variant(scl, i->first, vi->first)) {
+                    || parent_has_pending_abstract_variant(scl, i->first, vi->second->getAbstractSignature())) {
                 ++vi;
                 continue;
             }
@@ -1358,6 +1474,12 @@ void AbstractMethodMap::parseAddAbstractVariant(const char* name, MethodVariantB
     }
     printd(5, "AbstractMethodMap::parseAddAbstractVariant(name: '%s', v: %p) this: %p additional\n", name, f, this);
     i->second->parseAdd(f);
+}
+
+void AbstractMethodMap::parseResolveSignatures(const qore_class_private& qc) {
+    for (auto& i : *this) {
+        i.second->parseResolveSignatures(qc);
+    }
 }
 
 void AbstractMethodMap::parseOverrideAbstractVariant(const char* name, MethodVariantBase* f) {
@@ -2603,6 +2725,9 @@ int qore_class_private::initializeIntern() {
     for (auto& i : shm) {
         i.second->priv->func->resolvePendingSignatures();
     }
+    // the class's own abstract variants are keyed by their resolved types before the abstract variants of the parent
+    // classes are merged (qore#7331)
+    ahm.parseResolveSignatures(*this);
 
     int err = bound_err;
 
@@ -9664,6 +9789,10 @@ int qore_class_private::parseInitPartialIntern() {
 
                 // copy pending abstract changes from parent classes to the local class
 
+                // the variants that the class was given by its parent classes before they made their keys from their
+                // resolved types are keyed again (qore#7331)
+                ahm.parseResolveSignatures(*this);
+
                 // get parent's abstract method map
                 AbstractMethodMap& mm = (*i)->sclass->priv->ahm;
 
@@ -10456,6 +10585,12 @@ void qore_class_private::parseResolveAbstract() {
         // the methods that the parent classes have created by resolving abstract methods are in the inheritance lists
         // of the class's methods (qore#7307)
         parseUpdateAbstractAncestors(false);
+
+        // the variants that the class was given by a parent class that made their keys from their resolved types
+        // only after the class was initialized (a subclass initialized while its parent class is initialized: by a
+        // default argument of a method of the parent class) are keyed again; the parent classes are initialized now
+        // (qore#7331)
+        ahm.parseResolveSignatures(*this);
 
         // the abstract variants that the parent classes have implemented since they were merged are not pending here
         // (qore#7206)
@@ -12854,9 +12989,26 @@ const qore_class_private* MethodVariantBase::getClassPriv() const {
 }
 
 const char* MethodVariantBase::getAbstractSignature() {
-    if (asig.empty())
-        getSignature()->addAbstractParameterSignature(asig);
-    return asig.c_str();
+    if (!asig_set) {
+        std::string key;
+        asig_resolved = getSignature()->addAbstractSignatureKey(key);
+        asig.swap(key);
+        asig_set = true;
+    }
+    return asig_remade ? resolved_asig.c_str() : asig.c_str();
+}
+
+void MethodVariantBase::parseResolveAbstractSignature() {
+    assert(hasParseAbstractSignature());
+    assert(!asig_remade);
+    parseResolveUserSignature();
+    std::string key;
+    asig_resolved = getSignature()->addAbstractSignatureKey(key);
+    // the signature is resolved now
+    assert(asig_resolved);
+    // asig is kept unchanged: maps can still have it as a key
+    resolved_asig.swap(key);
+    asig_remade = true;
 }
 
 thread_local const QoreLexicalMethodRegistrationHelper* QoreLexicalMethodRegistrationHelper::active = nullptr;

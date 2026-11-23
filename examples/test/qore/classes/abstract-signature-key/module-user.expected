@@ -1,0 +1,61 @@
+VInt: ABSTRACT-CLASS-ERROR: class 'VInt' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VInt::m(int i)
+VOptStr: ABSTRACT-CLASS-ERROR: class 'VOptStr' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VOptStr::m(*string x)
+VListInt: ABSTRACT-CLASS-ERROR: class 'VListInt' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VListInt::m(list<int> l)
+VTypedef: ABSTRACT-CLASS-ERROR: class 'VTypedef' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VTypedef::m(list<int> l)
+VHashSI: ABSTRACT-CLASS-ERROR: class 'VHashSI' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VHashSI::m(hash<string, int> x)
+VObjFoo: ABSTRACT-CLASS-ERROR: class 'VObjFoo' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VObjFoo::m(object<::ASK::Foo> o)
+VFoo: ABSTRACT-CLASS-ERROR: class 'VFoo' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VFoo::m(object<::ASK::Foo> f)
+VHashDecl: ABSTRACT-CLASS-ERROR: class 'VHashDecl' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VHashDecl::m(hash<::ASK::H> h)
+VLater: ABSTRACT-CLASS-ERROR: class 'VLater' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VLater::m(object<::ASK::Later> x)
+VSoftList: ABSTRACT-CLASS-ERROR: class 'VSoftList' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VSoftList::m(softlist<string> l)
+VCode: ABSTRACT-CLASS-ERROR: class 'VCode' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VCode::m(code c)
+VTwo: ABSTRACT-CLASS-ERROR: class 'VTwo' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VTwo::m(int i, *string s)
+VLists: ABSTRACT-CLASS-ERROR: class 'VLists' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VLists::m(list<int> l)
+XStr: ABSTRACT-CLASS-ERROR: class 'XStr' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string XStr::m(int i)
+ * abstract string XStr::m(string s)
+XReqStr: ABSTRACT-CLASS-ERROR: class 'XReqStr' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string XReqStr::m(*string s)
+ * abstract string XReqStr::m(string s)
+XListStr: ABSTRACT-CLASS-ERROR: class 'XListStr' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string XListStr::m(list<int> l)
+ * abstract string XListStr::m(list<string> l)
+XHash: ABSTRACT-CLASS-ERROR: class 'XHash' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string XHash::m(hash<auto> h)
+ * abstract string XHash::m(hash<string, int> h)
+XTwo: ABSTRACT-CLASS-ERROR: class 'XTwo' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string XTwo::m(int i)
+ * abstract string XTwo::m(int i, *string s)
+WInt: WInt::m(int)
+WOptStr: WOptStr::m(*string)
+WListInt: WListInt::m(list<int>)
+WTypedef: WTypedef::m(IntList)
+WHashSI: WHashSI::m(hash)
+WObjFoo: WObjFoo::m(Foo)
+WFoo: WFoo::m(Foo)
+WHashDecl: WHashDecl::m(hash<H>)
+WLater: WLater::m(Later)
+WSoftList: WSoftList::m
+WCode: WCode::m(code)
+WTwo: WTwo::m(int, *string)
+WBox: WBox::m(int)
+U1: m(1) from outside: K::m(int)
+U2: m(1) from outside: K::m(int)
+U3: m(1) from outside: M::m(int)
+U4: m(1) from outside: M::m(int)
+U5: m(1) from outside: M::m(int)
+U6: m(1) from outside: K::m(int)
+U7: m(1) from outside: RUNTIME-OVERLOAD-ERROR: no variant matching '::U7::m(integer)' can be found; no variants were accessible in this execution context

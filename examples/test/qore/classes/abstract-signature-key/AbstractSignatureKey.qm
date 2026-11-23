@@ -1,0 +1,56 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-signature-key.qtest in a module, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractSignatureKey {
+    version = "1.0";
+    desc = "abstract declarations whose signatures programs declare again";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ASK {
+public hashdecl H {
+    int a = 1;
+}
+
+public typedef IntList = list<int>;
+
+public class Foo {
+    string name() {
+        return "Foo";
+    }
+}
+
+# one abstract declaration of each type; the class of ILater is declared after it
+public class IInt { abstract string m(int i); }
+public class IOptStr { abstract string m(*string s); }
+public class IListInt { abstract string m(list<int> l); }
+public class ITypedef { abstract string m(IntList l); }
+public class IHashSI { abstract string m(hash<string, int> h); }
+public class IObjFoo { abstract string m(object<Foo> o); }
+public class IFoo { abstract string m(Foo f); }
+public class IHashDecl { abstract string m(hash<H> h); }
+public class ILater { abstract string m(Later l); }
+public class ISoftList { abstract string m(softlist<string> l); }
+public class ICode { abstract string m(code c); }
+public class ITwo { abstract string m(int i, *string s); }
+public class IBox<T> { abstract string m(T t); }
+
+public class Later {
+    string name() {
+        return "Later";
+    }
+}
+
+# two abstract parent classes with the same declaration, implemented by the class itself
+public class I1 { abstract string m(int i); }
+public class I2 { abstract string m(int i); }
+public class M inherits I1, I2 {
+    string m(int i) {
+        return "M::m(int)";
+    }
+}
+}
