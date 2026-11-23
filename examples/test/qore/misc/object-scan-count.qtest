@@ -63,6 +63,28 @@ class Owner {
     }
 }
 
+class Counted {
+    public {
+        auto x;
+        auto peer;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Counted::destroyed;
+    }
+}
+
+class CountedHolder {
+    public {
+        hash<auto> h = {};
+    }
+
+    destructor() {
+        ++Counted::destroyed;
+    }
+}
+
 class Outer {
     public {
         Owner o("inner", False);
@@ -79,6 +101,7 @@ class ObjectScanCountTest inherits QUnit::Test {
         addTestCase("a write in a closure", \testClosure());
         addTestCase("a member removed from an object held by an object", \testRemoveHeld());
         addTestCase("a member removed from an object held by a hash", \testRemoveHeldInHash());
+        addTestCase("a cycle through an object whose member was removed", \testCycleAfterRemoval());
         set_return_value(main());
     }
 
@@ -178,5 +201,19 @@ class ObjectScanCountTest inherits QUnit::Test {
         assertEq(1, scanCount(h), "the hash still counts the object");
         remove h.o;
         assertEq(0, scanCount(h), "the object removed from the hash");
+    }
+
+    # the removal lowered the count of the hash holding the object, so the cycle closed through it later was not
+    # collected (in every build)
+    testCycleAfterRemoval() {
+        Counted::destroyed = 0;
+        {
+            CountedHolder a();
+            a.h.o = new Counted();
+            a.h.o.x = new Counted();
+            remove a.h.o.x;
+            a.h.o.peer = a;
+        }
+        assertEq(3, Counted::destroyed, "the removed object and the cycle are collected");
     }
 }
