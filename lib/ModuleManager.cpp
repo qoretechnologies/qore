@@ -3701,6 +3701,19 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
     }
 }
 
+//! Returns the name that the module search appended to \a dir to make \a path (qore#7319)
+/** \a path must be \a dir followed by a directory separator and the name; returns an empty string otherwise, which
+    is never library code (see QoreModuleManager::isTrustedModulePath())
+*/
+static std::string qore_module_found_rel(const QoreString& path, const std::string& dir) {
+    size_t len = dir.size();
+    if (path.size() <= len + 1 || strncmp(path.c_str(), dir.c_str(), len) || path.c_str()[len] != QORE_DIR_SEP) {
+        assert(false);
+        return std::string();
+    }
+    return std::string(path.c_str() + len + 1, path.size() - len - 1);
+}
+
 QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, bool reexport, mod_op_e op, version_list_t* version, const char* src, QoreProgram* mpgm,
         unsigned load_opt, int warning_mask, qore_binary_module_desc_t mod_desc_func, QoreProgram* path_pgm,
@@ -4194,6 +4207,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             return nullptr;
         }
         found = true;
+        // where it was found: whether it is library code does not depend on the form of the directory's path
+        // (qore#7319)
+        QoreModuleFoundIn found_in{dir.c_str(), separated ? std::string(name) : std::string(name) + ".qm"};
 
         if (!q_absolute_path(source_path.c_str())) {
             q_normalize_path(source_path);
@@ -4205,13 +4221,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 found_source_path->sprintf(QORE_DIR_SEP_STR "%s.qm", name);
             }
             return loadSeparatedModule(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask, &found_in);
         }
         if (found_source_path) {
             *found_source_path = source_path;
         }
         return loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
-            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask, &found_in);
     };
 
     // an AOT module of a build tree (linked into a source tree, or a built module with its depfile) is not loaded if
@@ -4296,6 +4312,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
 
             //printd(5, "ModuleManager::loadModule(%s) trying binary module: %s\n", name, str.c_str());
+            // the name that the search appended to the directory, taken before qore_find_build_qmod() can replace
+            // the path with this build's module (qore#7319)
+            const std::string found_rel = qore_module_found_rel(str, dir);
             // a link into another build of the source tree: this build's module, or none (qore#7030)
             QoreString found_link;
             if (qore_find_build_qmod(str, found_link, sb)) {
@@ -4331,10 +4350,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     return nullptr;
                 }
                 ExceptionSink binary_xsink;
+                // where it was found: whether it is library code does not depend on the form of the directory's
+                // path (qore#7319)
+                QoreModuleFoundIn found_in{dir.c_str(), found_rel};
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
                     &wsink == &xsink ? nullptr : &wsink, warning_mask,
-                    found_link.empty() ? nullptr : found_link.c_str());
+                    found_link.empty() ? nullptr : found_link.c_str(), &found_in);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -4378,6 +4400,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             } else {
                 str.concat(".qmod");
             }
+            // as above (qore#7319)
+            const std::string found_rel = qore_module_found_rel(str, dir);
             // as above (qore#7030)
             QoreString found_link;
             if (qore_find_build_qmod(str, found_link, sb)) {
@@ -4407,10 +4431,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     return nullptr;
                 }
                 ExceptionSink binary_xsink;
+                // where it was found: whether it is library code does not depend on the form of the directory's
+                // path (qore#7319)
+                QoreModuleFoundIn found_in{dir.c_str(), found_rel};
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
                     &wsink == &xsink ? nullptr : &wsink, warning_mask,
-                    found_link.empty() ? nullptr : found_link.c_str());
+                    found_link.empty() ? nullptr : found_link.c_str(), &found_in);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -4501,7 +4528,91 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 }
 
 
-bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_path) const {
+//! Returns true if \a rel is a name that the module search appends: relative, with no empty, \c "." or \c ".."
+//! component
+static bool qore_module_found_rel_is_clean(const std::string& rel) {
+    if (rel.empty() || rel[0] == '/') {
+        return false;
+    }
+    size_t start = 0;
+    while (true) {
+        size_t end = rel.find('/', start);
+        std::string c = rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (c.empty() || c == "." || c == "..") {
+            return false;
+        }
+        if (end == std::string::npos) {
+            return true;
+        }
+        start = end + 1;
+    }
+}
+
+//! Returns true if \a file is the name of a module file in a module directory named \a dir_name
+/** The forms that the module search finds in a module's own directory: \c "<name>.qm" (a separated module's main
+    source), \c "<name>.qmod" and \c "<name>-api-X.Y.qmod" (a split AOT or binary module)
+*/
+static bool qore_module_file_in_own_dir(const std::string& dir_name, const std::string& file) {
+    if (dir_name.empty() || dir_name == "." || dir_name == ".." || file.size() <= dir_name.size()
+        || file.compare(0, dir_name.size(), dir_name)) {
+        return false;
+    }
+    std::string rest = file.substr(dir_name.size());
+    if (rest == ".qm" || rest == ".qmod") {
+        return true;
+    }
+    return rest.size() > 10 && !rest.compare(0, 5, "-api-") && !rest.compare(rest.size() - 5, 5, ".qmod");
+}
+
+//! Sets \a location to where the module at \a path is: the canonical path of the directory that holds its entry,
+//! followed by the entry
+/** The entry of a module is the file itself, or the module's own directory for a file in it (see
+    qore_module_file_in_own_dir()), as the module search finds it (see QoreModuleManager::loadModuleIntern()); the
+    entry is not resolved, so a link in a module directory, to a file or to a module's own directory, stays where it
+    is, while a link to another directory in the path is resolved (qore#7319).
+
+    @return false if the path has no usable last component (empty, \c "." or \c "..") or the directory cannot be
+    resolved, so that the caller treats the path as not library code (fails closed)
+*/
+static bool qore_module_canonical_location(const char* path, std::string& location) {
+    std::string p(path);
+    // a trailing separator does not name another component (a separated module's directory)
+    while (p.size() > 1 && p.back() == '/') {
+        p.pop_back();
+    }
+    auto split = [] (const std::string& s, std::string& dir, std::string& name) {
+        size_t sep = s.rfind('/');
+        dir = sep == std::string::npos ? std::string(".") : (sep ? s.substr(0, sep) : std::string("/"));
+        name = sep == std::string::npos ? s : s.substr(sep + 1);
+    };
+    std::string dir, name;
+    split(p, dir, name);
+    if (name.empty() || name == "." || name == "..") {
+        return false;
+    }
+    // a file in a module's own directory: the entry is that directory
+    if (dir != "." && dir != "/") {
+        std::string parent, dir_name;
+        split(dir, parent, dir_name);
+        if (qore_module_file_in_own_dir(dir_name, name)) {
+            dir = parent;
+            name = dir_name + "/" + name;
+        }
+    }
+    std::unique_ptr<char, decltype(&free)> real_dir(realpath(dir.c_str(), nullptr), &free);
+    if (!real_dir) {
+        return false;
+    }
+    location = real_dir.get();
+    if (location.back() != '/') {
+        location += '/';
+    }
+    location += name;
+    return true;
+}
+
+bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_path,
+        const QoreModuleFoundIn* found_in) const {
     if (!path || !*path) {
         return false;
     }
@@ -4509,25 +4620,57 @@ bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_
         return !dir.empty() && nlen > dir.size() + 1 && !strncmp(name, dir.c_str(), dir.size())
             && name[dir.size()] == '/';
     };
-    // the file as named, under a directory as configured: a module directory can hold links to the files of a
-    // build; a name that is relative or has a "." or ".." component is not used
-    size_t plen = strlen(path);
-    if (path[0] == '/' && !strstr(path, "/../") && !strstr(path, "/./")) {
+    // a module that the module search found: judged by where it was found, whatever the form of the directory's path
+    // (a directory that a Program prepends is judged by its canonical path only), so that a link or a linked
+    // directory under a module directory is library code as when it is reached by its plain path (qore#7319)
+    if (found_in) {
+        // the name that the search appended; never a name from the caller (fails closed)
+        assert(qore_module_found_rel_is_clean(found_in->rel));
+        if (!found_in->dir || !*found_in->dir || !qore_module_found_rel_is_clean(found_in->rel)) {
+            return false;
+        }
+        std::unique_ptr<char, decltype(&free)> real_dir(realpath(found_in->dir, nullptr), &free);
+        if (!real_dir) {
+            return false;
+        }
+        std::string d = real_dir.get();
         for (const TrustedModuleDir& dir : trusted_module_dirs) {
-            if (within(path, plen, dir.named)) {
+            if ((!dir.real.empty() && d == dir.real) || (!dir.named.empty() && d == dir.named)
+                || within(d.c_str(), d.size(), dir.real) || within(d.c_str(), d.size(), dir.named)) {
                 if (load_path) {
-                    *load_path = path;
+                    *load_path = d + (d.back() == '/' ? "" : "/") + found_in->rel;
                 }
                 return true;
             }
         }
+        return false;
     }
-    // the file it is, under a directory's canonical path; a relative path is resolved against the current
-    // directory, which is safe: it is resolved exactly as open() or dlopen() will resolve it, and a trusted load
-    // uses the resolved canonical path (load_path), so the file loaded is always the file judged here.  Relative
-    // paths are legitimate here: a binary or AOT module found by name in a relative module directory (a relative
+    // a module given by its path: judged by where it is, as the module search judges where it found a module: the
+    // canonical path of the directory that holds its entry (see qore_module_canonical_location()) must be a
+    // directory of library code or be within one, whatever the form of the path, so that a link in a module directory
+    // (also one whose target does not exist, which the loader can replace with this build's module, qore#7030) is
+    // library code, while a file in a linked directory in a module directory that leads elsewhere is not (qore#7319).
+    // A relative path is resolved against the current directory, as open() and dlopen() resolve it, and a trusted
+    // load uses the path judged here (load_path), so the file loaded is always the file judged; relative paths are
+    // legitimate here: a binary or AOT module given by a path in a relative module directory (a relative
     // QORE_MODULE_DIR entry, for example) keeps a relative path, while explicit paths from a Program are made
     // absolute before they reach this check
+    std::string location;
+    if (!qore_module_canonical_location(path, location)) {
+        return false;
+    }
+    for (const TrustedModuleDir& dir : trusted_module_dirs) {
+        if (within(location.c_str(), location.size(), dir.real)
+            || within(location.c_str(), location.size(), dir.named)) {
+            if (load_path) {
+                *load_path = location;
+            }
+            return true;
+        }
+    }
+    // or by the file that it is: a path whose canonical file is in a module directory, such as a link elsewhere to an
+    // installed module, is library code, loaded by its canonical path, so that the file loaded is the file judged;
+    // a file that does not exist is not library code (fails closed)
     std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
     if (!real) {
         return false;
@@ -4899,7 +5042,7 @@ QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const Qore
 
 QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
-        QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
+        QoreProgram* path_pgm, unsigned load_opt, int warning_mask, const QoreModuleFoundIn* found_in) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // a module Program that is not handed on is destroyed without the module manager mutex
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
@@ -4925,7 +5068,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
     if (trusted) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();
@@ -6168,7 +6311,7 @@ int QoreModuleManager::checkBlacklist(ExceptionSink& xsink, const char* name) {
 
 QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* tpgm, bool reexport, QoreProgram* mpgm,
-        QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
+        QoreProgram* path_pgm, unsigned load_opt, int warning_mask, const QoreModuleFoundIn* found_in) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // a module Program that is not handed on is destroyed without the module manager mutex
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
@@ -6186,7 +6329,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path);
+    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
     if (trusted) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();
@@ -6626,7 +6769,7 @@ static int qore_check_module_file_integrity(const char* path, QoreString& err) {
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
         const char* feature, bool reexport, QoreProgram* mpgm, QoreProgram* path_pgm,
         unsigned load_opt, qore_binary_module_desc_t mod_desc, bool source_available, ExceptionSink* wsink,
-        int warning_mask, const char* found_path) {
+        int warning_mask, const char* found_path, const QoreModuleFoundIn* found_in) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     QoreModuleInfo mod_info;
 
@@ -6647,7 +6790,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // qore#7030) is library code if the module found is: it is chosen by the build of the library, not by the code
     // loading it, and its path is canonical
     std::string trusted_path;
-    const bool trusted = isTrustedModulePath(found_path ? found_path : path, &trusted_path);
+    const bool trusted = isTrustedModulePath(found_path ? found_path : path, &trusted_path, found_in);
     if (trusted && !found_path) {
         // the file that was found to be library code is the file that is loaded
         path = trusted_path.c_str();

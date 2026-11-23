@@ -400,6 +400,55 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
+//! Returns whether the module manager judges a module path to be library code, and the path that it then loads
+/** For tests of every path form, also those that the loaders normalize before the check (qore#7319): \a path as the
+    loaders give it, and the directory of the module search path and the name appended to it if the search found the
+    module there; the appended name must be one that the search makes (relative, with no empty, \c "." or \c ".."
+    component)
+*/
+static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(path, const QoreStringNode, params, 0);
+    QoreValue dir_val = get_param_value(params, 1);
+    QoreValue rel_val = get_param_value(params, 2);
+    if ((dir_val.getType() == NT_STRING) != (rel_val.getType() == NT_STRING)) {
+        xsink->raiseException("DBG-MODULE-PATH-ERROR", "the directory and the appended name are given together");
+        return QoreValue();
+    }
+    std::string load_path;
+    bool trusted;
+    if (dir_val.getType() == NT_STRING) {
+        std::string rel = rel_val.get<const QoreStringNode>()->c_str();
+        // only names that the module search makes: the module manager asserts it
+        bool clean = !rel.empty() && rel[0] != '/';
+        for (size_t start = 0; clean;) {
+            size_t end = rel.find('/', start);
+            std::string c = rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (c.empty() || c == "." || c == "..") {
+                clean = false;
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        if (!clean) {
+            xsink->raiseException("DBG-MODULE-PATH-ERROR", "'%s' is not a name that the module search appends",
+                rel.c_str());
+            return QoreValue();
+        }
+        QoreModuleFoundIn found_in{dir_val.get<const QoreStringNode>()->c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path->c_str(), &load_path, &found_in);
+    } else {
+        trusted = QMM.isTrustedModulePath(path->c_str(), &load_path);
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("trusted", trusted, xsink);
+    if (trusted) {
+        h->setKeyValue("load_path", new QoreStringNode(load_path), xsink);
+    }
+    return h.release();
+}
+
 //! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
 static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -31796,6 +31845,9 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_module_path_trust", f_dbg_module_path_trust, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,

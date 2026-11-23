@@ -1,0 +1,337 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - module path trust with links, linked and relative module directories, AOT modules, child qore and qcc programs
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ModulePathFormsTest
+
+#! Verifies that whether a module is library code does not depend on the form of the path that reaches it (qore#7319)
+/** A module that the module search finds in a directory of the process-wide module path set when the library is
+    initialized is library code, judged by where it was found: also when the module (a file, a separated module
+    directory or a split AOT module directory) is a link in that directory, when the directory is reached through a
+    path with ".." components that a Program prepends, through a link to it, or through a relative entry of the
+    module path.  A module found in a directory outside them is not library code, also when the directory's name
+    only starts with the name of a module directory.
+
+    The loads run in child processes whose module path is set with \c QORE_MODULE_DIR, in every execution mode, and
+    the load of a linked AOT module by name also as programs compiled with qcc -O0 and -O3 (qcc compiles the source
+    modules that a program requires into the program); a probe module reports whether it is library code by running
+    a closure that a helper module's initialization created with call_module_init_closure(), which only the code of
+    a library module can do.
+
+    With a debug build of the library, dbg_module_path_trust() checks the forms that the loaders normalize before the
+    check: a path whose last component is ".." is not in a module directory, nor is a module directory written with
+    trailing separators, and a link in a module directory is judged where it is, also when its target does not exist
+    (the loader can use this build's AOT module for it).  A path is judged as the search judges where it found a
+    module, whatever its form: a link in a module directory to a module's own directory is library code, while a file
+    in a linked directory there that leads elsewhere is not; a link elsewhere to a file in a module directory is
+    library code, loaded as the file in the module directory.
+*/
+class ModulePathFormsTest inherits QUnit::Test {
+    public {
+        #! a source module in the module directory whose initialization creates a closure
+        const HelperModule = "%modern
+module InitHelper {
+    version = \"1.0\";
+    desc = \"creates a module initialization closure\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+    init = \\InitHelper::init();
+}
+
+public namespace InitHelper {
+our *code init_closure;
+
+sub init() {
+    init_closure = string sub () { return \"library\"; };
+}
+
+public code sub getClosure() {
+    return init_closure;
+}
+}
+";
+
+        #! a module that reports whether it is library code: only a library module's code can run the helper's closure
+        const ProbeModule = "%modern
+%requires InitHelper
+
+module @NAME@ {
+    version = \"1.0\";
+    desc = \"library-module classification probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace @NAME@ {
+public string sub classify() {
+    try {
+        return call_module_init_closure(InitHelper::getClosure());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"MODULE-INIT-CLOSURE-ERROR\" ? \"not library\" : ex.err;
+    }
+}
+}
+";
+
+        #! a program that loads a module by name through a module path that it prepends; @PREPEND@ and @NAME@ set
+        const ByPrepend = "%modern
+%prepend-module-path \"@PREPEND@\"
+%requires @NAME@
+printf(\"%s\\n\", @NAME@::classify());
+";
+
+        #! a program that loads LinkedAot by name from the module path of the process
+        const ByName = "%modern
+%requires LinkedAot
+printf(\"%s\\n\", LinkedAot::classify());
+";
+
+        #! the loads: label -> (program, QORE_MODULE_DIR, expected); the programs are run from the test directory
+        const Loads = (
+            ("a linked module file, prepended path with ..", "linked", "@D@/mods", "library"),
+            ("a link to a file outside, prepended path with ..", "out", "@D@/mods", "library"),
+            ("a linked separated module directory, prepended path with ..", "sep", "@D@/mods", "library"),
+            ("a linked split AOT module directory, prepended path with ..", "split", "@D@/mods", "library"),
+            ("a linked AOT module file, prepended path with ..", "aot", "@D@/mods", "library"),
+            ("a prepended link to the module directory", "modslink", "@D@/mods", "library"),
+            ("a relative module directory with ..", "by-name", "scripts/../mods", "library"),
+            ("a prepended directory outside the module directories", "outside", "@D@/mods", "not library"),
+            ("a directory whose name starts with a module directory's", "evil", "@D@/mods", "not library"),
+        );
+
+        #! the programs that prepend a module path: name -> (prepended path, module)
+        const Prepends = {
+            "linked": ("${SCRIPT_DIR}/sub/../../mods", "LinkedProbe"),
+            "out": ("${SCRIPT_DIR}/sub/../../mods", "OutProbe"),
+            "sep": ("${SCRIPT_DIR}/sub/../../mods", "SepProbe"),
+            "split": ("${SCRIPT_DIR}/sub/../../mods", "SplitProbe"),
+            "aot": ("${SCRIPT_DIR}/sub/../../mods", "LinkedAot"),
+            "modslink": ("${SCRIPT_DIR}/../modslink", "LinkedProbe"),
+            "outside": ("${SCRIPT_DIR}/../outside", "Out2Probe"),
+            "evil": ("${SCRIPT_DIR}/../mods-evil", "EvilProbe"),
+        };
+
+        #! the program of the debug-build checks: prints each case's label, whether it is library code and what loads
+        const DebugChecks = "%modern
+string d = ENV.PROBE_DIR;
+list<list<auto>> cases = (
+    (\"the parent of a module directory\", d + \"/mods/..\"),
+    (\"the parent of a linked directory in a module directory\", d + \"/mods/dirlink/..\"),
+    (\"a dangling link in a module directory, path with ..\", d + \"/scripts/../mods/Dangling.qmod\"),
+    (\"found: a dangling link in a module directory\", \"\", d + \"/scripts/../mods\", \"Dangling.qmod\"),
+    (\"found: a linked split AOT module directory\", \"\", d + \"/scripts/../mods\", \"SplitProbe/SplitProbe.qmod\"),
+    (\"found: a link to the module directory\", \"\", d + \"/scripts/../modslink\", \"LinkedProbe.qm\"),
+    (\"found: a directory outside the module directories\", \"\", d + \"/outside\", \"Out2Probe.qm\"),
+    (\"found: a directory whose name starts with a module directory's\", \"\", d + \"/mods-evil\",
+        \"EvilProbe.qm\"),
+    (\"a module directory with two trailing separators\", d + \"/mods//\"),
+    (\"a module directory with three trailing separators\", d + \"/mods///\"),
+    (\"a file in a linked directory in a module directory\", d + \"/mods/dirlink/Out2Probe.qm\"),
+    (\"a file in a linked directory in a module directory, path with ..\",
+        d + \"/scripts/../mods/dirlink/Out2Probe.qm\"),
+    (\"found: a linked directory in a module directory\", \"\", d + \"/mods/dirlink\", \"Out2Probe.qm\"),
+    (\"a module in a linked split AOT module directory\", d + \"/mods/SplitProbe/SplitProbe.qmod\"),
+    (\"a linked separated module directory\", d + \"/mods/SepProbe\"),
+    (\"a link elsewhere to a file in a module directory\", d + \"/outside/ToMods.qm\"),
+);
+foreach list<auto> c in (cases) {
+    hash<auto> h = c.size() > 2
+        ? call_function(\"dbg_module_path_trust\", c[2] + \"/\" + c[3], c[2], c[3])
+        : call_function(\"dbg_module_path_trust\", c[1]);
+    printf(\"%s: %s %s\\n\", c[0], h.trusted ? \"library\" : \"not library\",
+        h.load_path ? replace(h.load_path, d, \"@D@\") : \"-\");
+}
+";
+
+        #! what the debug-build checks print; @D@ is the test directory as the library resolves it
+        const DebugExpected = "the parent of a module directory: not library -
+the parent of a linked directory in a module directory: not library -
+a dangling link in a module directory, path with ..: library @D@/mods/Dangling.qmod
+found: a dangling link in a module directory: library @D@/mods/Dangling.qmod
+found: a linked split AOT module directory: library @D@/mods/SplitProbe/SplitProbe.qmod
+found: a link to the module directory: library @D@/mods/LinkedProbe.qm
+found: a directory outside the module directories: not library -
+found: a directory whose name starts with a module directory's: not library -
+a module directory with two trailing separators: not library -
+a module directory with three trailing separators: not library -
+a file in a linked directory in a module directory: not library -
+a file in a linked directory in a module directory, path with ..: not library -
+found: a linked directory in a module directory: not library -
+a module in a linked split AOT module directory: library @D@/mods/SplitProbe/SplitProbe.qmod
+a linked separated module directory: library @D@/mods/SepProbe
+a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
+";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string qcc_bin;
+        #! the test directory, as the library resolves it (no link in its path)
+        string dir;
+    }
+
+    constructor() : QUnit::Test("module path forms", "1.0", \ARGV) {
+        qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        dir = realpath(tmp);
+        makeTree();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () { checkMode(execution_mode); });
+        }
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("path forms that the loaders normalize", \checkDebug());
+
+        set_return_value(main());
+    }
+
+    #! creates the modules, links and programs of the test directory
+    private makeTree() {
+        foreach string d in (("mods", "mods-evil", "build", "outside/SepProbe", "outside/SplitProbe", "scripts/sub")) {
+            mkdir(dir + "/" + d, 0700, True);
+        }
+        # the helper whose closure only the code of a library module can run
+        writeFile(dir + "/mods/InitHelper.qm", HelperModule);
+        # a module whose file is a link in the module directory to a file of a build
+        writeModule(dir + "/build/LinkedProbe.qm", "LinkedProbe");
+        symlink(dir + "/build/LinkedProbe.qm", dir + "/mods/LinkedProbe.qm");
+        # a link in the module directory to a file in a directory that is not a module directory
+        writeModule(dir + "/outside/OutProbe.qm", "OutProbe");
+        symlink(dir + "/outside/OutProbe.qm", dir + "/mods/OutProbe.qm");
+        # a separated module directory that is a link in the module directory
+        writeModule(dir + "/outside/SepProbe/SepProbe.qm", "SepProbe");
+        symlink(dir + "/outside/SepProbe", dir + "/mods/SepProbe");
+        # a split AOT module directory that is a link in the module directory
+        writeModule(dir + "/outside/SplitProbe/SplitProbe.qm", "SplitProbe");
+        compileModule(dir + "/outside/SplitProbe/SplitProbe.qm", dir + "/outside/SplitProbe/SplitProbe.qmod");
+        symlink(dir + "/outside/SplitProbe", dir + "/mods/SplitProbe");
+        # an AOT module whose file is a link in the module directory to a file of a build
+        writeModule(dir + "/build/LinkedAot.qm", "LinkedAot");
+        compileModule(dir + "/build/LinkedAot.qm", dir + "/build/LinkedAot.qmod");
+        symlink(dir + "/build/LinkedAot.qmod", dir + "/mods/LinkedAot.qmod");
+        # a module in a directory outside the module directories
+        writeModule(dir + "/outside/Out2Probe.qm", "Out2Probe");
+        # a module in a directory whose name starts with the module directory's name
+        writeModule(dir + "/mods-evil/EvilProbe.qm", "EvilProbe");
+        # a link to a file that does not exist, and a linked directory, in the module directory
+        symlink(dir + "/nowhere/Dangling.qmod", dir + "/mods/Dangling.qmod");
+        symlink(dir + "/outside", dir + "/mods/dirlink");
+        # a link to the module directory, and a link elsewhere to a file in it
+        symlink(dir + "/mods", dir + "/modslink");
+        symlink(dir + "/mods/InitHelper.qm", dir + "/outside/ToMods.qm");
+        foreach hash<auto> i in (Prepends.pairIterator()) {
+            writeFile(dir + "/scripts/" + i.key + ".q", replace(replace(ByPrepend, "@PREPEND@", i.value[0]), "@NAME@",
+                i.value[1]));
+        }
+        writeFile(dir + "/scripts/by-name.q", ByName);
+        writeFile(dir + "/scripts/debug-checks.q", DebugChecks);
+    }
+
+    private writeModule(string path, string name) {
+        writeFile(path, replace(ProbeModule, "@NAME@", name));
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(text);
+    }
+
+    #! compiles a module with qcc into an AOT module; the helper that it requires is in the module directory
+    private compileModule(string src, string target) {
+        string out = backquote(sprintf("%s %s --module -o %s %s 2>&1", env("@D@/mods"), shellQuote(qcc_bin),
+            shellQuote(target), shellQuote(src)));
+        if (!is_file(target)) {
+            throw "TEST-ERROR", sprintf("cannot compile %s: %s", src, out);
+        }
+    }
+
+    #! the library path of the build under test
+    private string libEnv() {
+        string libqore_dir = dirname(qore_bin);
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", shellQuote(libqore_dir), shellQuote(libqore_dir));
+    }
+
+    #! the environment of a child: the module path given, and only that
+    private string env(string module_dir) {
+        return sprintf("%s QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s PROBE_DIR=%s", libEnv(),
+            shellQuote(replace(module_dir, "@D@", dir)), shellQuote(dir));
+    }
+
+    #! runs every load with the interpreter in the given execution mode
+    /** The programs are run by their absolute paths, so that the module paths that they prepend relative to their own
+        directories are absolute and have ".." components
+    */
+    private checkMode(string mode) {
+        # every load's result is compared at once, so that a failure shows each load that fails
+        hash<string, string> expected;
+        hash<string, string> actual;
+        foreach list<auto> c in (Loads) {
+            string out = backquote(sprintf("cd %s && %s %s --exec-mode=%s %s 2>&1", shellQuote(dir), env(c[2]),
+                shellQuote(qore_bin), mode, shellQuote(sprintf("%s/scripts/%s.q", dir, c[1]))));
+            expected{c[0]} = c[3];
+            actual{c[0]} = lastLine(out);
+        }
+        assertEq(expected, actual);
+    }
+
+    #! runs the loads from the module path of the process with programs compiled with qcc
+    /** qcc compiles a source module that a program requires into the program, which is then not a module of the
+        process that could be library code, so only the load of an AOT module by name is run here
+    */
+    private checkQcc(int opt) {
+        string bin = sprintf("%s/scripts/by-name-O%d", dir, opt);
+        string out = backquote(sprintf("cd %s && %s %s -O%d -o %s scripts/by-name.q 2>&1", shellQuote(dir),
+            env("@D@/mods"), shellQuote(qcc_bin), opt, shellQuote(bin)));
+        assertTrue(is_file(bin), "the program compiled: " + out);
+        hash<string, string> expected;
+        hash<string, string> actual;
+        foreach list<auto> c in (Loads) {
+            if (c[1] != "by-name") {
+                continue;
+            }
+            out = backquote(sprintf("cd %s && %s %s 2>&1", shellQuote(dir), env(c[2]), shellQuote(bin)));
+            expected{c[0]} = c[3];
+            actual{c[0]} = lastLine(out);
+        }
+        assertEq(expected, actual);
+    }
+
+    #! checks the forms that the loaders normalize with the debug hook of a debug build of the library
+    private checkDebug() {
+        string out = backquote(sprintf("%s %s %s 2>&1", env("@D@/mods"), shellQuote(qore_bin),
+            shellQuote(dir + "/scripts/debug-checks.q")));
+        if (out =~ /NO-FUNCTION: function 'dbg_module_path_trust' does not exist/) {
+            testSkip("the debug hook exists in a debug build of the library only");
+        }
+        assertEq(DebugExpected, out);
+    }
+
+    private static string lastLine(string out) {
+        list<string> l = select out.split("\n"), $1.val();
+        return l ? l.last() : "";
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
