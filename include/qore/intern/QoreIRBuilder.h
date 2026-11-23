@@ -310,6 +310,8 @@ public:
     QoreIRInstruction* createPopImplicitArg(QoreIRValue old_context, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createPushImplicitElement(QoreIRValue index, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc = nullptr);
+    //! Sets $# to \a index, the index of the next element of a foreach statement (see QoreIROpcode::SetImplicitElement)
+    QoreIRInstruction* createSetImplicitElement(QoreIRValue index, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);

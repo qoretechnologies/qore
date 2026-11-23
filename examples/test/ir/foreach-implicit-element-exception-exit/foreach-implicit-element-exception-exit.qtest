@@ -19,7 +19,10 @@
     loop did not restore the implicit element that the loop set, so after the call the code of the caller that reads
     the thread's implicit element (find expressions, context statements) saw the callee's index instead of its own in
     ir, jit, tiered and AOT executables.  The handlers of the blocks in the loop's body run with the loop's element
-    before the restoration, as in the AST interpreter.
+    before the restoration, as in the AST interpreter.  A return from the body of a foreach over a lazy pipeline did
+    not restore it either.  The loops save the enclosing element once and set the index of each element, so the
+    script also checks the ends of the loops (a return, a break, an empty or unassigned list, skipped elements) and
+    an exception from the iterator's next().
 
     foreach-implicit-element-exception-exit.q prints the values; the AST interpreter's output must be the expected
     one, and every other execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
@@ -81,8 +84,19 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
             "block on_error 4 4",
             "block on_error 4 4",
             "handler in block 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "iterator next throws 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "iterator handler on_error 1 1",
+            "iterator handler on_error 1 1",
+            "iterator handler on_error 1 1",
+            "iterator next throws handler 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
             "outer 0 0",
             "outer 1 1",
+            "skipped fused [0, 1, 2, 3]",
+            "ends 0 0",
+            "skipped fused [0, 1, 2, 3]",
+            "ends 1 1",
+            "skipped fused [0, 1, 2, 3]",
+            "ends 2 2",
             "thread_exit on_exit 0 0",
             "thread_exit on_exit 1 1",
         );

@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 443,
+static_assert(QORE_IR_MAX_OPCODE == 444,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -18229,6 +18229,13 @@ load_local_done:
             case QoreIROpcode::PopImplicitElement: {
                 QoreValue old_val = getIRValue(values, inst->operands[0]);
                 save_implicit_element(static_cast<int>(old_val.getAsBigInt()));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SetImplicitElement: {
+                // the index of the next element of a foreach statement (qore#7379)
+                QoreValue idx = getIRValue(values, inst->operands[0]);
+                save_implicit_element(static_cast<int>(idx.getAsBigInt()));
                 ++ip;
                 break;
             }

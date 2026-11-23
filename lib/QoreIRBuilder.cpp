@@ -1169,6 +1169,14 @@ QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_eleme
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSetImplicitElement(QoreIRValue index, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SetImplicitElement);
+    inst->loc = loc;
+    inst->operands.push_back(index);
+    // no result: the element that it replaces is the one that the loop's PushImplicitElement set
+    return inst;
+}
+
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;

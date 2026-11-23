@@ -235,6 +235,50 @@ sub handler_in_block() {
     }
 }
 
+# an iterator whose next() raises: the exception leaves the loop from its header
+class ThrowingIterator inherits AbstractIterator {
+    private {
+        int i = -1;
+    }
+
+    bool next() {
+        if (++i == 3) {
+            throw "X";
+        }
+        return i < 6;
+    }
+
+    auto getValue() {
+        return i;
+    }
+
+    bool valid() {
+        return i >= 0 && i < 6;
+    }
+}
+
+sub iterator_next_throws() {
+    foreach auto a in (new ThrowingIterator()) {
+        if ($# == 1) {
+            nop();
+        }
+    }
+}
+
+# the same with a handler of the function around the loop, which reads the enclosing element
+sub iterator_next_throws_handler() {
+    foreach auto o in ((40, 41)) {
+        on_error log += sprintf("iterator handler on_error %d %d", $#, (find %a in Data where (%a == $#)));
+        if ($# == 1) {
+            foreach auto a in (new ThrowingIterator()) {
+                if ($# == 1) {
+                    nop();
+                }
+            }
+        }
+    }
+}
+
 # the caller: the thread's $# after the exception is read by a find expression, a context statement and the catch
 # block, in a loop of the caller
 sub check(string label, code c) {
@@ -277,6 +321,8 @@ check("handlers in body", \handlers_in_body());
 check("handlers nested", \handlers_nested());
 check("handler map", \handler_map());
 check("handler in block", \handler_in_block());
+check("iterator next throws", \iterator_next_throws());
+check("iterator next throws handler", \iterator_next_throws_handler());
 
 # the caller's foreach is itself in a callee of a loop: the outer caller's $# after the exception
 sub outer_check() {
@@ -291,6 +337,77 @@ sub outer_check() {
     }
 }
 outer_check();
+
+# normal ends of the loops of a callee: a return and a break from the body, skipped elements, an empty list and an
+# unassigned typed list; the body reads its $# in a find expression, and the caller then reads its own
+sub return_plain() {
+    foreach auto a in (Src) {
+        if ((find %a in Data where (%a == $#)) == 2) {
+            return;
+        }
+    }
+}
+
+sub return_fused() {
+    foreach auto a in (select Src, $1 % 2) {
+        if ((find %a in Data where (%a == $#)) == 2) {
+            return;
+        }
+    }
+}
+
+sub break_plain() {
+    foreach auto a in (Src) {
+        if ((find %a in Data where (%a == $#)) == 2) {
+            break;
+        }
+    }
+}
+
+sub break_fused() {
+    foreach auto a in (select Src, $1 % 2) {
+        if ((find %a in Data where (%a == $#)) == 2) {
+            break;
+        }
+    }
+}
+
+# the elements that the select skips take no index: the body sees 0, 1, 2, 3
+sub skipped_fused() {
+    list<int> seen = ();
+    foreach auto a in (select Src, $1 % 2) {
+        seen += (find %a in Data where (%a == $#));
+    }
+    log += sprintf("skipped fused %y", seen);
+}
+
+sub empty_list() {
+    list<auto> l = ();
+    foreach auto a in (l) {
+        log += sprintf("empty %d", $#);
+    }
+}
+
+sub unassigned_typed_list() {
+    list<int> l;
+    foreach int a in (l) {
+        log += sprintf("unassigned %d", $#);
+    }
+}
+
+sub ends_caller() {
+    foreach auto o in ((60, 61, 62)) {
+        return_plain();
+        return_fused();
+        break_plain();
+        break_fused();
+        skipped_fused();
+        empty_list();
+        unassigned_typed_list();
+        log += sprintf("ends %d %d", $#, (find %a in Data where (%a == $#)));
+    }
+}
+ends_caller();
 
 # a thread_exit from the body of a foreach in a callee: the handlers of the caller's loop that it runs see the caller's
 # $#
