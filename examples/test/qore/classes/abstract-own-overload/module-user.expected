@@ -1,18 +1,28 @@
-AOO::C3: m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-AOO::C4: m(integer): Sint::m(int); m(string): C4::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-AOO::C5: m(integer): C5::m(int); m(string): Sstr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-AOO::C13: m(integer): Sint::m(int); m(string): Sstr::m(string); m(bool): C13::m(bool)
-AOO::P1: m(integer): Sint::m(int); m(string): P1::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-AOO::Q1: m(integer): Sint::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::C3: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::C4: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C4::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::C5: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): C5::m(int); m(string): Sstr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::C13: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): Sstr::m(string); m(bool): C13::m(bool)
+AOO::P1: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): P1::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::Q1: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
 AOO::C12: ABSTRACT-CLASS-ERROR
 AOO::C18: ABSTRACT-CLASS-ERROR
 AOO::K6: ABSTRACT-CLASS-ERROR
-U3: m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-U3b: m(integer): Sint::m(int); m(string): C3::m(string); m(bool): SBool::m(bool)
-U3c: m(integer): Sint::m(int); m(string): C3::m(string); m(bool): U3c::m(bool)
+AOO::N4: m(nothing): N4::m(); m(integer): Sint::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::X1: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOO::X5: ABSTRACT-CLASS-ERROR
+AOO::X6: ABSTRACT-CLASS-ERROR
+U3: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U3b: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): SBool::m(bool)
+U3c: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): U3c::m(bool)
 U3d: ABSTRACT-CLASS-ERROR
-U18: m(integer): Sint::m(int); m(string): C18::m(string); m(bool): U18::m(bool)
-U12: m(integer): Sint::m(int); m(string): Sstr::m(string); m(bool): U12::m(bool)
-UC: m(integer): Sint::m(int); m(string): UC::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
-UC5: m(integer): UC5::m(int); m(string): Sstr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U18: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C18::m(string); m(bool): U18::m(bool)
+U12: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): Sstr::m(string); m(bool): U12::m(bool)
+UC: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): UC::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UC5: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): UC5::m(int); m(string): Sstr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UX1: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): C3::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UX5: ABSTRACT-CLASS-ERROR
+UX6: ABSTRACT-CLASS-ERROR
+UM4: m(nothing): N4::m(); m(integer): Sint::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+UH1: ABSTRACT-CLASS-ERROR
+UH2: ABSTRACT-CLASS-ERROR
 AOO::Q1 via: Sint::m(int) Q1::m(string)

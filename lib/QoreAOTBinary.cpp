@@ -21695,10 +21695,8 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         priv->parse_resolve_abstract = true;
     }
     // the abstract variants that the classes have implemented (their pending_save lists) are released, as
-    // AbstractMethod::parseCommit() releases them when a parsed class is committed; otherwise a class of a later source
-    // parse that inherits a loaded class would take them as implemented and get no method of its own for a variant
-    // that another of its parent classes declares, as it gets with the module's source (qore#7313).  The import of
-    // every session's classes has used them; resolution uses only the parent classes' pending variants
+    // AbstractMethod::parseCommit() releases them when a parsed class is committed (qore#7313); a merge does not use
+    // a parent class's pending_save list (qore#7330), and resolution uses only the parent classes' pending variants
     for (uint32_t i : order) {
         if (i >= class_list.size() || preexisting_classes.count(i) || !class_list[i]) {
             continue;

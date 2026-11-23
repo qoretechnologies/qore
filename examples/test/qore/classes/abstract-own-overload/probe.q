@@ -64,6 +64,34 @@ class D3 inherits C3 {}
 class D3b inherits C3, I3, Sbool {}
 class D3c inherits C3, I3 { string m(bool b) { return "D3c::m(bool)"; } }
 class D3d inherits I3, C3 {}
+# subclasses with another abstract parent class that declares a variant that the parent class implements itself:
+# they resolve it as with a parent class of a module (qore#7330)
+class X1 inherits I2, C3 {}
+class X2 inherits I1, C3 {}
+class X3 inherits C3, I2 {}
+# a const declaration that C3's non-const variant cannot implement
+class X5 inherits I2c, C3 {}
+class X6 inherits C3, I2c {}
+class Ia { abstract string m(); }
+class Qn { abstract string m(); }
+class Qc { abstract string m() const; }
+class N4 inherits Ia, I1, Sint { string m() { return "N4::m()"; } }
+class N5 inherits Sint, I1, Ia { string m() { return "N5::m()"; } }
+class M4 inherits Qn, N4 {}
+class M5 inherits N5, Qn {}
+class H1 inherits Qc, N4 {}
+class H2 inherits N4, Qc {}
+# a public redeclaration of an abstract variant that a parent class implements itself
+class Fi { string m(int i) { return "Fi::m(int)"; } }
+class F0 {
+    abstract private string m(bool b);
+    abstract private string m(int i);
+}
+class F3 inherits F0 { string m(bool b) { return "F3::m(bool)"; } }
+class F6 inherits private:internal Fi, F3 {
+    abstract string m(bool b);
+    string via(auto a) { return m(a); }
+}
 
 # private parent classes: the access of the variants is that of the class without the other overload
 class P1 inherits private Sint, I1, I2 { string m(string s) { return "P1::m(string)"; } }
@@ -118,9 +146,10 @@ string sub selfcall(object o, auto arg) {
     }
 }
 
-foreach string cn in ("C3", "C4", "C5", "C6", "C15", "C16", "C17", "C7", "C13", "C14", "C8", "C9", "C12", "C18",
-        "C10", "C11", "A1", "A2", "A3", "A4", "A5", "D3", "D3b", "D3c", "D3d", "P1", "P1r", "P2", "P2r", "P3", "P3r", "P4", "P4r", "P5", "Q1",
-        "Q1r", "Q2", "Q2r", "Q3", "K1", "K2", "K3", "K4", "K5", "K6", "K7") {
+foreach string cn in ("C3", "C4", "C5", "C6", "C15", "C16", "C17", "C7", "C13", "C14", "C8", "C9", "C12", "C18", "C10",
+        "C11", "A1", "A2", "A3", "A4", "A5", "D3", "D3b", "D3c", "D3d", "X1", "X2", "X3", "X5", "X6", "N4", "N5", "M4",
+        "M5", "H1", "H2", "F6", "P1", "P1r", "P2", "P2r", "P3", "P3r", "P4", "P4r", "P5", "Q1", "Q1r", "Q2", "Q2r",
+        "Q3", "K1", "K2", "K3", "K4", "K5", "K6", "K7") {
     object o;
     try {
         o = create_object(cn);
@@ -128,9 +157,9 @@ foreach string cn in ("C3", "C4", "C5", "C6", "C15", "C16", "C17", "C7", "C13", 
         printf("%s: %s\n", cn, ex.err);
         continue;
     }
-    printf("%s: %s\n", cn, (map sprintf("m(%s): %s", $1.type(), call(o, $1)), (1, "a", True)).join("; "));
+    printf("%s: %s\n", cn, (map sprintf("m(%s): %s", $1.type(), call(o, $1)), (NOTHING, 1, "a", True)).join("; "));
     # the class's own code calls its own variants whatever their access
-    if (cn =~ /^Q/) {
+    if (cn =~ /^[QF]/) {
         printf("%s via: %s\n", cn, (map sprintf("m(%s): %s", $1.type(), selfcall(o, $1)), (1, "a")).join("; "));
     }
 }

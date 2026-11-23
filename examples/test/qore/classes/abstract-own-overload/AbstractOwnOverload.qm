@@ -32,4 +32,11 @@ public class Q1 inherits Sint, I1, I2 {
 public class C12 inherits I1, I2, I3, Sint, Sstr {}
 public class C18 inherits Sint, I1, I2, I3 { string m(string s) { return "C18::m(string)"; } }
 public class K6 inherits Sint, I1c, I2 { string m(string s) { return "K6::m(string)"; } }
+public class I2c { abstract string m(string s) const; }
+public class Ia { abstract string m(); }
+public class N4 inherits Ia, I1, Sint { string m() { return "N4::m()"; } }
+# subclasses of the module's classes in the module itself
+public class X1 inherits I2, C3 {}
+public class X5 inherits I2c, C3 {}
+public class X6 inherits C3, I2c {}
 }

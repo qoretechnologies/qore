@@ -898,18 +898,10 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
     //printd(5, "AbstractMethod::parseMergeBase(m: %p, f: %p %s::%s) this: %p m.pending_save: %d m.vlist: %d\n", &m,
     //    f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, !m.pending_save.empty(),
     //    !m.vlist.empty());
-    // move pending committed variants from our vlist that are in parent's pending_save list to our pending_save
-    for (auto& i : m.pending_save) {
-        const char* sig = i.second->getAbstractSignature();
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            // the reference of the vlist entry is released if a variant with the signature is already saved
-            if (!pending_save.insert(vmap_t::value_type(sig, vi->second)).second) {
-                vi->second->deref();
-            }
-            vlist.erase(vi);
-        }
-    }
+    // the variants that the parent class has implemented itself (its pending_save list) do not implement the class's
+    // variants of their signatures here: the class resolves them as with a committed parent class, whose pending_save
+    // list is empty (AbstractMethodMap::parseInit()), so that the class gets the method that implements them, with
+    // the const contract of its own declaration (qore#7330)
 
     // issue #5773: the abstract variant's types are those of the specialization that the implementing class inherits
     const QoreTypeInfo* receiver = f && f->getClass() ? f->getClass()->getTypeInfo() : nullptr;
@@ -1269,7 +1261,7 @@ void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc,
                 ++vi;
                 continue;
             }
-            // as for a variant that a parent class implemented before the merge (AbstractMethod::parseMergeBase())
+            // the parent classes implement it, as a committed parent class's abstract method has no such variant
             if (!am.pending_save.insert(*vi).second) {
                 // the reference of the vlist entry is released if the variant is already saved
                 vi->second->deref();
