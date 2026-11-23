@@ -59,6 +59,7 @@ class QoreIRFunction;
 struct QoreJITObjectLayout;
 class QoreCallTargetCheckCache;
 class QoreIRBasicBlock;
+class QoreIRBlockReachability;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
@@ -2197,6 +2198,26 @@ private:
         the inline form for every function.
     */
     static size_t getReloadChainCallThreshold();
+
+    //! The product of the tracked locals and the IR instructions of a function at which the temp-boundary flush uses
+    //! the runtime helpers with fewer tracked locals than getReloadChainCallThreshold() (qore#7187)
+    /** The inline form's code is in the product of the tracked locals and the boundaries.  Overridable with
+        QORE_JIT_RELOAD_CHAIN_COST_BUDGET; 0 disables the rule.  Not applied when QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD
+        is 0 (the inline form for every function).
+    */
+    static size_t getReloadChainCostBudget();
+
+    //! returns true if the IR block being lowered is in a cycle of its function (a loop), or if that is not known
+    /** Computed for each block once per function, with the reachability of the function's blocks (qore#7187)
+    */
+    bool isLoweringBlockInCycle();
+
+    //! the reachability of the blocks of the function being lowered, built on the first use of isLoweringBlockInCycle()
+    /** A shared pointer, whose deleter is made where the type is complete (QoreIRToLLVM.cpp)
+    */
+    std::shared_ptr<QoreIRBlockReachability> block_reachability;
+    //! whether each block of the function being lowered is in a cycle (isLoweringBlockInCycle())
+    std::unordered_map<const QoreIRBasicBlock*, bool> block_in_cycle;
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
