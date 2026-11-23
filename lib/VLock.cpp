@@ -31,6 +31,8 @@
 #include <qore/Qore.h>
 #include <qore/AutoVLock.h>
 #include <qore/intern/QoreLibIntern.h>
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/qore_var_rwlock_priv.h"
 #ifdef DEBUG
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
@@ -193,6 +195,15 @@ QoreObject* qore_auto_vlock_ops::getObjectImpl(AutoVLock* b) {
 void qore_auto_vlock_ops::addMemberNotificationImpl(AutoVLock* b, QoreObject* obj, const char* member) {
     // ignore member notifications for updates made within the class
     if (obj == runtime_get_stack_object() || !qore_object_ops(obj).hasMemberNotification()) {
+        return;
+    }
+
+    // a member notification is Qore code, which cannot run under the lock of the assignment being checked (qore#7380,
+    // qore#7391)
+    QoreVarRWLock& obj_lock = qore_object_private::get(*obj)->rml;
+    // a lock that this helper took itself is released before its notifications run
+    if (qore_auto_vlock_ops(b).getRWL() != &obj_lock && qore_var_rwlock_ops(obj_lock).heldForBind(b)) {
+        qore_raise_reference_bind_user_code(obj, member, b->xsink);
         return;
     }
 

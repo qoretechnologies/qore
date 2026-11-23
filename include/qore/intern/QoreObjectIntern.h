@@ -1210,8 +1210,12 @@ public:
         // unlock previous lock and release from AutoVLock structure
         vl.del();
 
-        // lock current object
-        qore_var_rwlock_ops(pobj->rml).wrlock();
+        // lock current object, unless the assignment of this thread holds its lock while it binds a reference: the lock
+        // and the reference to the object stay with that assignment (qore#7380)
+        if (!qore_var_rwlock_ops(pobj->rml).wrlockUnlessHeldForBind(&vl)) {
+            pobj->obj->tDeref();
+            pobj = nullptr;
+        }
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {
@@ -1224,8 +1228,10 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
-        pobj = nullptr;
+        if (pobj) {
+            qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
+            pobj = nullptr;
+        }
     }
 };
 
