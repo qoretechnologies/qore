@@ -39,6 +39,33 @@
 #include "qore/intern/QoreDeferredRelease.h"
 
 namespace {
+//! sets the thread's implicit index (\c $#) for an element of a foreach statement whose body reads it, and restores
+//! the index of the code around the statement when it goes out of scope (qore#7270)
+/** A body that reads no implicit index of its own (ForEachStatement::readsImplicitElement()) runs with the index of
+    the code around the statement, which nothing in it can read.
+*/
+class ForEachElementHelper {
+public:
+    DLLLOCAL ForEachElementHelper(bool set, int n_element) : set(set),
+            element(set ? save_implicit_element(n_element) : 0) {
+    }
+
+    DLLLOCAL ~ForEachElementHelper() {
+        if (set) {
+            save_implicit_element(element);
+        }
+    }
+
+    ForEachElementHelper(const ForEachElementHelper&) = delete;
+    ForEachElementHelper& operator=(const ForEachElementHelper&) = delete;
+
+private:
+    //! true if the helper set the index
+    bool set;
+    //! the index that the helper replaced
+    int element;
+};
+
 class LexicalForEachStatement : public ForEachStatement {
 public:
     using ForEachStatement::ForEachStatement;
@@ -135,8 +162,8 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
                 break;
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(i++);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
         if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
@@ -208,8 +235,8 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
                 break;
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(i++);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
         if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
@@ -280,8 +307,8 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             }
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
         rc = code->execImpl(return_value, xsink);
@@ -398,8 +425,8 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
             }
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
         rc_state = code->execImpl(rc, return_value, xsink);
