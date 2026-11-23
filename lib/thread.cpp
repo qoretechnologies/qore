@@ -1031,8 +1031,12 @@ public:
         //! after it is the Program that created the capability, whose sandbox governs the build, also when it was
         //! already current when the barrier was set (its code called the capability), so it is never hidden
         bool build = false;
-        //! the Program of the library module initialized under the barrier, once it exists, or nullptr; never set
-        //! for a lift or for the barrier of a deferred initialization (see qore_module_init_set_program())
+        //! the Program of the library module initialized under the barrier, once it exists, or nullptr: the first
+        //! library Program created under it (a module loaded from source or the load of a qcc-compiled module), the
+        //! module's own Program on the barrier under which a qcc-compiled module is initialized when it is first
+        //! applied to a Program (qore#7335), or the Program of the closure that a deferred initialization runs
+        //! (call_module_init_closure()); never set for a lift or for the barrier of a trusted build (see
+        //! qore_module_init_set_program())
         const QoreProgram* module_pgm = nullptr;
         //! for the barrier of a trusted build: the Program that created the capability, whose restrictions apply to
         //! the code of the build as those of its calling code, also when its own code called the capability (no
