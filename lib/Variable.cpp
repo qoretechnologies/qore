@@ -714,11 +714,11 @@ void Var::assignModule() {
     }
 }
 
-ObjCountRec::ObjCountRec(const QoreListNode* c) : con(c), before((bool)qore_list_private::getScanCount(*c)) {
+ObjCountRec::ObjCountRec(const QoreListNode* c) : con(c), before(qore_list_private::needsScan(*c)) {
     //printd(5, "ObjCountRec::ObjCountRec() list %p count: %d\n", c, qore_list_private::getScanCount(*c));
 }
 
-ObjCountRec::ObjCountRec(const QoreHashNode* c) : con(c), before((bool)qore_hash_private::getScanCount(*c)) {
+ObjCountRec::ObjCountRec(const QoreHashNode* c) : con(c), before(qore_hash_private::needsScan(*c)) {
     //printd(5, "ObjCountRec::ObjCountRec() hash %p count: %d\n", c, qore_hash_private::getScanCount(*c));
 }
 
@@ -1193,6 +1193,8 @@ LValueHelper::~LValueHelper() {
 
     bool obj_chg = before;
     bool obj_ref = false;
+    // the value written through a weak reference, whose objects are scanned (qore#7318)
+    QoreValue weak_written;
 
     // the object counts and the scan follow the values that the lvalue's containers hold now, also when the operation
     // raised an exception: one that raised after changing a container, such as a merge that stored a key before it
@@ -1250,6 +1252,15 @@ LValueHelper::~LValueHelper() {
         if (robj) {
             robj->tRef();
             obj_ref = true;
+        }
+        // a write through a weak reference: the holders of the container that it changed are not on the path, so a
+        // cycle that it made through the container is found from the objects of the value written, which is taken
+        // before the locks are released (qore#7318)
+        if (path_has_weak_step && obj_chg) [[unlikely]] {
+            QoreValue written = val ? val->getValue() : *qv;
+            if (needs_scan(written)) {
+                weak_written = written.refSelf();
+            }
         }
         //printd(5, "LValueHelper::~LValueHelper() robj: %p before: %d rdt: %d obj_chg: %d (val: %s qv: %s v: %s)\n",
         //    robj, before, rdt, obj_chg, val ? val->getTypeName() : "n/a", qv ? qv->getTypeName() : "n/a",
@@ -1379,6 +1390,14 @@ LValueHelper::~LValueHelper() {
         if (obj_ref) {
             robj->tDeref();
         }
+    }
+
+    if (weak_written.hasNode()) [[unlikely]] {
+#ifdef DEBUG
+        ++lvalue_scan_count;
+#endif
+        qore_scan_weak_written_value_objects(weak_written, robj, vl.xsink);
+        weak_written.discard(vl.xsink);
     }
 
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
@@ -5081,7 +5100,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
             qore_object_private::takeMembers(*o, rv, lvh, l, for_del);
             lvh.removedValue(rv);
         } else {
-            unsigned old_count = qore_hash_private::getScanCount(*h);
+            bool old_needs_scan = qore_hash_private::needsScan(*h);
 
             QoreHashNode* rvh = new QoreHashNode(autoTypeInfo);
             discard(rv.assignInitial(rvh), xsink);
@@ -5110,7 +5129,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
                 return;
             }
 
-            if (old_count && !qore_hash_private::getScanCount(*h))
+            if (old_needs_scan && !qore_hash_private::needsScan(*h))
                 lvh.setRemovalDelta(-1, t == NT_WEAKREF_HASH);
             lvh.removedValue(rvh);
         }
@@ -5130,7 +5149,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         // NOTHING if the key does not exist, also with HASH-ERROR for a freed hash
         v = qore_hash_private::get(*h)->takeRemovedKey(mem.c_str(), xsink);
         if (needs_scan(v)) {
-            if (!qore_hash_private::getScanCount(*h))
+            if (!qore_hash_private::needsScan(*h))
                 lvh.setRemovalDelta(-1, t == NT_WEAKREF_HASH);
         }
     }

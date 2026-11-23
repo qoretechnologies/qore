@@ -196,6 +196,10 @@ public:
     const TypedHashDecl* hashdecl = nullptr;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     unsigned obj_count = 0;
+    //! set when a weak reference is made to the hash (or a copy-on-write copy of such a hash): it needs a scan
+    //! whatever it holds (needsScan()), so that the counts of its holders do not change with the values stored in it
+    //! through a weak reference, as the holders off the path of such a write are not known (qore#7318); never cleared
+    std::atomic<bool> weak_pinned{false};
     QoreContainerWeakRefs weakRefs;
 #ifdef DEBUG
     bool is_obj = false;
@@ -1132,6 +1136,21 @@ public:
     template <bool Lexical>
     DLLLOCAL static QoreHashNode* newComplexHashFromHashImpl(const QoreTypeInfo* typeInfo, QoreHashNode* init,
             ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy);
+
+    //! returns true if the hash needs a scan: it holds a value that needs one, or it is pinned (qore#7318)
+    DLLLOCAL static bool needsScan(const QoreHashNode& h) {
+        return h.priv->obj_count || h.priv->weak_pinned.load(std::memory_order_relaxed);
+    }
+
+    //! pins the hash (see weak_pinned)
+    DLLLOCAL static void pin(const QoreHashNode& h) {
+        h.priv->weak_pinned.store(true, std::memory_order_relaxed);
+    }
+
+    //! returns true if the hash is pinned (see weak_pinned)
+    DLLLOCAL static bool isPinned(const QoreHashNode& h) {
+        return h.priv->weak_pinned.load(std::memory_order_relaxed);
+    }
 
     DLLLOCAL static unsigned getScanCount(const QoreHashNode& h) {
         assert(!h.priv->is_obj);

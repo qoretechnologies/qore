@@ -20864,6 +20864,9 @@ load_local_done:
                                 qore_type_t t = lvh.getType();
                                 if (t == NT_HASH || t == NT_LIST) {
                                     lvh.ensureUnique();
+                                    // the weak reference designates it: it is pinned, and the helper writes the
+                                    // change of its state up the path (qore#7318)
+                                    qore_weak_target_pin(lvh.getValue());
                                 }
                                 // the value of the variable as it is read, taken under the lock of the variable: the
                                 // weak assignment assigns it, so that a variable that another thread assigns is not
@@ -25510,7 +25513,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 }
                 QoreValue removed = vh->takeKeyValue(str.c_str());
                 if (needs_scan(removed)) {
-                    if (!qore_hash_private::getScanCount(*vh)) {
+                    if (!qore_hash_private::needsScan(*vh)) {
                         v.setDelta(-1);
                     }
                 }

@@ -111,7 +111,7 @@ QoreValue QoreTypeSafeReferenceHelper::removeHashObjKey(const char* key) {
         QoreHashNode* h = priv->getValue().get<QoreHashNode>();
         ValueHolder rv(h->takeKeyValue(key), priv->lvalue.vl.xsink);
         if (needs_scan(*rv)) {
-            if (!qore_hash_private::getScanCount(*h)) {
+            if (!qore_hash_private::needsScan(*h)) {
                 priv->lvalue.setDelta(-1);
             }
         }

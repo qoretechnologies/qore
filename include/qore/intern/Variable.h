@@ -900,12 +900,15 @@ protected:
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
             saveTemp(qore_value_copy_on_write(*qv));
+            // the copy of a pinned container is pinned, as the container that holds it counts it so (qore#7318)
+            qore_weak_target_pin_copy(current_value, qv->getInternalNode());
             return;
         }
         // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
         assert(!val->getValue().isOpaque());
         AbstractQoreNode* old = current_value;
         assignNodeIntern(current_value->realCopy());
+        qore_weak_target_pin_copy(old, val->getValue().getInternalNode());
         saveTemp(old);
     }
 

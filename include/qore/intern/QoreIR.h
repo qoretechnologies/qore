@@ -2675,11 +2675,18 @@ static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& c
         return value;
     }
     const AbstractQoreNode* node = value.getInternalNode();
-    if (!node || node->is_unique()) {
+    if (!node) {
+        return value;
+    }
+    if (node->is_unique()) {
+        // the weak reference designates it: it is pinned (qore#7318); the variable is its only holder
+        qore_weak_target_pin(value);
         return value;
     }
     copied = true;
-    return QoreValue(node->realCopy());
+    QoreValue rv(node->realCopy());
+    qore_weak_target_pin(rv);
+    return rv;
 }
 
 class QoreIRLValuePathInstruction : public QoreIRInstruction {

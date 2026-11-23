@@ -208,6 +208,12 @@ class VRMutex;
     which does not reach them when the removed edge was its only path to them (#6335).
 */
 DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
+//! scans each object of a value written through a weak reference, directly or in its lists and hashes, other than
+//! \a root, which the caller scanned (qore#7318)
+/** The containers and objects that hold the container that the write changed are not on the lvalue's path, so a
+    cycle that the write made through it is found from the objects of the value written
+*/
+DLLLOCAL void qore_scan_weak_written_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
 
 //! Marks the objects in \a v as constants of the whole process, whose members no code can change (qore#6749)
 /** Called for the value of each builtin constant of the library and of binary modules (QoreNamespace::addConstant(),

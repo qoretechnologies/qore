@@ -1192,8 +1192,8 @@ bool needs_scan(const AbstractQoreNode* n) {
         return false;
 
     switch (n->getType()) {
-        case NT_LIST: return qore_list_private::getScanCount(*static_cast<const QoreListNode*>(n)) ? true : false;
-        case NT_HASH: return qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(n)) ? true : false;
+        case NT_LIST: return qore_list_private::needsScan(*static_cast<const QoreListNode*>(n));
+        case NT_HASH: return qore_hash_private::needsScan(*static_cast<const QoreHashNode*>(n));
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
         case NT_FUNCREF: {
@@ -1205,6 +1205,38 @@ bool needs_scan(const AbstractQoreNode* n) {
     }
 
     return false;
+}
+
+void qore_weak_target_pin(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_LIST:
+            qore_list_private::pin(*v.get<const QoreListNode>());
+            break;
+        case NT_HASH:
+            qore_hash_private::pin(*v.get<const QoreHashNode>());
+            break;
+        default:
+            break;
+    }
+}
+
+void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy) {
+    switch (get_node_type(orig)) {
+        case NT_LIST:
+            if (qore_list_private::isPinned(*static_cast<const QoreListNode*>(orig))
+                    && get_node_type(copy) == NT_LIST) {
+                qore_list_private::pin(*static_cast<const QoreListNode*>(copy));
+            }
+            break;
+        case NT_HASH:
+            if (qore_hash_private::isPinned(*static_cast<const QoreHashNode*>(orig))
+                    && get_node_type(copy) == NT_HASH) {
+                qore_hash_private::pin(*static_cast<const QoreHashNode*>(copy));
+            }
+            break;
+        default:
+            break;
+    }
 }
 
 bool needs_scan(const QoreValue& v) {

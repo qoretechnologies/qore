@@ -18246,7 +18246,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         qore_hash_private* hp = qore_hash_private::get(*h);
-        const unsigned old_count = qore_hash_private::getScanCount(*h);
+        const bool old_needs_scan = qore_hash_private::needsScan(*h);
         ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
         if (for_each_key([&](const QoreValue& key_val) -> bool {
             QoreHashKeyHelper mem(key_val, xsink);
@@ -18271,7 +18271,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (rvh->empty() && hp->checkRemovalValid(xsink)) {
             return QoreValue();
         }
-        if (old_count && !qore_hash_private::getScanCount(*h)) {
+        if (old_needs_scan && !qore_hash_private::needsScan(*h)) {
             lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_HASH);
         }
         lvh.removedValue(QoreValue(*rvh));
@@ -18435,7 +18435,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             }
         }
         if (needs_scan(*v)) {
-            if (!qore_list_private::getScanCount(*l)) {
+            if (!qore_list_private::needsScan(*l)) {
                 lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_LIST);
             }
         }
@@ -19014,6 +19014,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
+                    // the weak reference designates it: it is pinned, and the helper writes the change of its state
+                    // up the path (qore#7318)
+                    qore_weak_target_pin(lvh.getValue());
                 }
                 // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
                 // reference that the variable holds reads as its target

@@ -50,6 +50,10 @@ struct qore_list_private {
     size_t length = 0;
     size_t allocated = 0;
     unsigned obj_count = 0;
+    //! set when a weak reference is made to the list (or a copy-on-write copy of such a list): it needs a scan
+    //! whatever it holds (needsScan()), so that the counts of its holders do not change with the values stored in it
+    //! through a weak reference, as the holders off the path of such a write are not known (qore#7318); never cleared
+    std::atomic<bool> weak_pinned{false};
     const QoreTypeInfo* complexTypeInfo = nullptr;
     QoreContainerWeakRefs weakRefs;
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
@@ -1089,6 +1093,21 @@ public:
 
     DLLLOCAL void setVariableList() {
         vlist = true;
+    }
+
+    //! returns true if the list needs a scan: it holds a value that needs one, or it is pinned (qore#7318)
+    DLLLOCAL static bool needsScan(const QoreListNode& l) {
+        return l.priv->obj_count || l.priv->weak_pinned.load(std::memory_order_relaxed);
+    }
+
+    //! pins the list (see weak_pinned)
+    DLLLOCAL static void pin(const QoreListNode& l) {
+        l.priv->weak_pinned.store(true, std::memory_order_relaxed);
+    }
+
+    //! returns true if the list is pinned (see weak_pinned)
+    DLLLOCAL static bool isPinned(const QoreListNode& l) {
+        return l.priv->weak_pinned.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL static unsigned getScanCount(const QoreListNode& l) {

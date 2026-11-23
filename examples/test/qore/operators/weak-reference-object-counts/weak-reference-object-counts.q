@@ -67,7 +67,8 @@ sub same_container_twice() {
 }
 
 # qore#7321: an object added through the weak step to the container already on the path is counted once: once it
-# is removed, the hash holds no object, and taking it as an lvalue scans nothing
+# is removed, the hash counts no object (the scan count; the hash is pinned by the weak reference, so it is scanned
+# whatever it holds: qore#7318)
 sub same_container_twice_add() {
     C c("c3");
     c.holder = {};
@@ -77,11 +78,7 @@ sub same_container_twice_add() {
     c.holder.wk.obj = new C("added");
     printf("added through the weak step: %y\n", c.holder.obj.name);
     remove c.holder.obj;
-    # dbg_get_lvalue_scan_count() exists in debug builds only
-    *code scan_count = get_lvalue_scan_count_func();
-    int start = scan_count ? scan_count() : 0;
-    c.holder += {};
-    printf("scans after the object was removed: %d\n", scan_count ? scan_count() - start : 0);
+    printf("object count after the object was removed: %d\n", object_count(c.holder));
     remove c.holder;
 }
 
@@ -119,11 +116,8 @@ sub ancestor_twice_add() {
     w.wk := c.holder;
     c.holder.inner.wk.inner.k = new C("x");
     remove c.holder.inner.k;
-    *code scan_count = get_lvalue_scan_count_func();
-    int start = scan_count ? scan_count() : 0;
-    c.holder += {};
-    printf("scans after the object added through a weak step to an ancestor was removed: %d\n",
-        scan_count ? scan_count() - start : 0);
+    printf("object count after the object added through a weak step to an ancestor was removed: %d\n",
+        object_count(c.holder.inner));
     remove c.holder;
 }
 
@@ -154,11 +148,8 @@ sub two_weak_steps_replace() {
     w2 := c.holder.z.v2;
     w2.w2 := c.holder.z.v;
     c.holder.z.v.w1.z.v2.w2.t.k = 1;
-    *code scan_count = get_lvalue_scan_count_func();
-    int start = scan_count ? scan_count() : 0;
-    c.holder += {};
-    printf("scans after the object was replaced through two weak steps: %d\n",
-        scan_count ? scan_count() - start : 0);
+    printf("object count after the object was replaced through two weak steps: %d\n",
+        object_count(c.holder.z.v.t));
     remove c.holder;
 }
 
@@ -175,11 +166,8 @@ sub weak_step_down_and_back() {
     wy.back := c.holder;
     c.holder.wk.y.back.x.y.t.k = new C("o");
     remove c.holder.x.y.t.k;
-    *code scan_count = get_lvalue_scan_count_func();
-    int start = scan_count ? scan_count() : 0;
-    c.holder += {};
-    printf("scans after the object added down and back through weak steps was removed: %d\n",
-        scan_count ? scan_count() - start : 0);
+    printf("object count after the object added down and back through weak steps was removed: %d\n",
+        object_count(c.holder.x.y.t));
     remove c.holder;
 }
 
@@ -209,11 +197,9 @@ sub same_container_twice_keys() {
     remove c.holder;
 }
 
-*code sub get_lvalue_scan_count_func() {
-    if (!exists_function("dbg_get_lvalue_scan_count")) {
-        return;
-    }
-    return int sub () { return call_function("dbg_get_lvalue_scan_count"); };
+# the number of values that need a scan that a container holds (dbg_get_scan_count() exists in debug builds only)
+int sub object_count(auto v) {
+    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", v) : 0;
 }
 
 # qore#7322: k is stored, then zz raises

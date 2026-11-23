@@ -536,6 +536,13 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+//! pins a list or hash that a weak reference designates (qore#7318); another value is left as it is
+/** The caller makes sure that the holders of the container count it as needing a scan: the container is held by
+    nothing but a variable, or the lvalue helper whose path holds it writes the change up the path
+*/
+DLLLOCAL void qore_weak_target_pin(const QoreValue& v);
+//! pins \a copy if \a orig, which it is a copy-on-write copy of, is pinned (qore#7318)
+DLLLOCAL void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy);
 
 //! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
 /** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)

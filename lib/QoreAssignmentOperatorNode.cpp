@@ -1023,6 +1023,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
                     // operand evaluates a weak reference to its target
                     if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
                         source.ensureUnique();
+                        // the weak reference designates it: it is pinned, and the helper writes the change of its
+                        // state up the path (qore#7318)
+                        qore_weak_target_pin(source.getValue());
                     }
                     unique_source = source.getReferencedValue();
                 } else {

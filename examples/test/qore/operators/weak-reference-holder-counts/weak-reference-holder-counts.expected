@@ -1,0 +1,20 @@
+list element: "x1"
+destroyed x1
+list element: removed: null
+destroyed c1
+hash key: "x2"
+destroyed x2
+hash key: removed: null
+destroyed c2
+append: "x3"
+destroyed x3
+append: removed: null
+destroyed c3
+destroyed c4
+destroyed x4
+cycle: scope left
+destroyed x5
+weak remove: {}
+weak remove: removed: null
+destroyed c5
+done
