@@ -22748,8 +22748,32 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         }
                         fast_params.push_back(ptr_ty);
                         fast_params.push_back(ptr_ty);
-                        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                        // the entry returns the value of the kind that its body is lowered with (setFastEntryMode()
+                        // below); a guarded method entry (#6860) can reach here without the declaration of its native
+                        // return type, which a declaration of another type that nothing calls is replaced with
+                        BatchCalleeReturnKind declared_return_kind = BatchCalleeReturnKind::Boxed;
+                        if (aot_batch_callee_map) {
+                            auto kind_it = aot_batch_callee_map->find(variant);
+                            if (kind_it != aot_batch_callee_map->end()) {
+                                declared_return_kind = kind_it->second.return_kind;
+                            }
+                        }
+                        auto* fast_fn_type = llvm::FunctionType::get(
+                            qore_aot_fast_entry_return_type(declared_return_kind, i64_ty, double_ty), fast_params,
+                            false);
                         llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                        if (fast_fn && fast_fn->getFunctionType() != fast_fn_type) {
+                            if (!fast_fn->empty() || !fast_fn->use_empty()) {
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "method", variant_key, "fast-entry declaration",
+                                    "the fast entry '" + fast_entry_name + "' is declared with another type than "
+                                    "its return kind gives");
+                                delete ir_func;
+                                return;
+                            }
+                            fast_fn->eraseFromParent();
+                            fast_fn = nullptr;
+                        }
                         if (!fast_fn) {
                             fast_fn = llvm::Function::Create(fast_fn_type,
                                     llvm::Function::InternalLinkage, fast_entry_name, module);

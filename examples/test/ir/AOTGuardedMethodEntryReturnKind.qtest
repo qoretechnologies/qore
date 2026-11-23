@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc in child processes started without an execution mode
+# test-platform: macos - the AOT code generation of the fast entries of methods and their return ABI
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTGuardedMethodEntryReturnKindTest
+
+#! the fast entry of a method that only an explicit receiver calls is declared with the return ABI of its body
+/** A method of an overridable class whose fast entry cannot speculate on the receiver's class keeps a guarded fast
+    entry (#6860).  In a batch compile of several sources (qcc -c --output-dir), such an entry of a method returning a
+    native scalar (here bool) could be lowered with native returns into a function declared to return a boxed value,
+    which failed LLVM verification ("Function return type does not match operand type of return inst"), so the batch
+    failed to compile.  The entry is now declared with the return kind that its body is lowered with.
+*/
+class AOTGuardedMethodEntryReturnKindTest inherits QUnit::Test {
+    public {
+        #! the class: an instance method called as an implicit self call and a static method called qualified, both
+        #! returning bool
+        const ClassSource = "%modern
+class Opts {
+    int check(*int flags) {
+        return networkKeyOptionRequired(flags) ? 1 : 0;
+    }
+    private bool networkKeyOptionRequired(*int flags) {
+        return (flags & 2) && !ENV.QORE_TEST_NO_SUCH_VARIABLE_7406.val();
+    }
+    static bool checkFilter(hash<auto> ref, hash<auto> entry) {
+        foreach string k in ((\"a\", \"b\")) {
+            if (ref{k} && ref{k} != entry{k}) {
+                return False;
+            }
+        }
+        return True;
+    }
+    static bool filter(list<auto> wt, hash<auto> e) {
+        foreach hash<auto> ref in (wt) {
+            if (!Opts::checkFilter(ref, e)) {
+                return False;
+            }
+        }
+        return True;
+    }
+}
+";
+        #! the script, with a subclass so that the class is overridable
+        const ScriptSource = "%modern
+class Sub inherits Opts {
+}
+Opts o = new Sub();
+printf(\"%d %d %y %y\\n\", o.check(2), o.check(1), Opts::filter(({\"a\": 1},), {\"a\": 1}),
+    Opts::filter(({\"a\": 1},), {\"a\": 2}));
+";
+    }
+
+    private {
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOT guarded method entry return kind", "1.0", \ARGV) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        addTestCase("a batch compile lowers the guarded entries of bool methods", \testBatch());
+        set_return_value(main());
+    }
+
+    testBatch() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("aot-guarded-method-entry-");
+        string cls = dir.path + "/Opts.qc";
+        string script = dir.path + "/main.q";
+        File f();
+        f.open2(cls, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ClassSource);
+        f.close();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ScriptSource);
+        f.close();
+        string out_dir = dir.path + "/out";
+        mkdir(out_dir);
+        foreach string opt in (("-O0", "-O3")) {
+            int rc;
+            string out = backquote(sprintf("cd %s && %s %s %s -c --output-dir=%s Opts.qc main.q 2>&1", dir.path,
+                env, qcc_bin, opt, out_dir), \rc);
+            assertEq(-1, out.find("LLVM verification failed"), opt + ": no invalid fast entry: " + out);
+            assertEq(0, rc, opt + ": the batch compiles: " + out);
+            Dir d();
+            d.chdir(out_dir);
+            assertEq(2, (select d.listFiles(), $1 =~ /\.qo$/).size(), opt + ": an object for each source");
+        }
+    }
+}
