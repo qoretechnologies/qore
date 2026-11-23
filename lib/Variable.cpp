@@ -976,7 +976,7 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        before(o.before),
+        holds_weak_locks(o.holds_weak_locks), before(o.before),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1705,24 +1705,50 @@ void LValueHelper::keepCreatedNode(QoreValue rv) const {
 
 QoreListNode* LValueHelper::lockWeakList() {
     QoreListNode* l = getValue().get<WeakListReferenceNode>()->lock();
-    try {
-        tvec.push_back(l);
-    } catch (...) {
-        l->deref(nullptr);
-        throw;
-    }
+    holdWeakLock(l);
     return l;
 }
 
 QoreHashNode* LValueHelper::lockWeakHash() {
     QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
+    holdWeakLock(h);
+    return h;
+}
+
+void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
+    // the reference is released with the helper's other temporaries
     try {
-        tvec.push_back(h);
+        tvec.push_back(n);
     } catch (...) {
-        h->deref(nullptr);
+        n->deref(nullptr);
         throw;
     }
-    return h;
+    holds_weak_locks = true;
+}
+
+bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
+    // each entry of tvec holds a reference of the helper: to a container that an lvalue of the path holds, the ones
+    // taken as it was locked at weak steps, and the original that a copy-on-write step of the path replaced with a
+    // copy, if the path reached it again; no one else can see a change of it
+    int held = 0;
+    for (const AbstractQoreNode* i : tvec) {
+        if (i == n) {
+            ++held;
+        }
+    }
+    // the lvalue holding the node holds one reference
+    if (!held || n->reference_count() != held + 1) {
+        return false;
+    }
+    // vector::erase() neither allocates nor throws
+    for (size_t i = tvec.size(); i-- > 0;) {
+        if (tvec[i] == n) {
+            tvec.erase(tvec.begin() + i);
+            // not the last reference: the lvalue holds the node
+            n->deref(nullptr);
+        }
+    }
+    return true;
 }
 
 QoreListNode* LValueHelper::getWeakRemovalList() {

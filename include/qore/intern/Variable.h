@@ -844,6 +844,14 @@ protected:
         if (current_value->is_unique()) {
             return;
         }
+        // the references that the helper itself holds to a container that it reached through a weak reference
+        // earlier on its path do not make the container shared: a copy would leave the weak references on the
+        // original, which the helper then releases (qore#7352).  The lvalue holds the container now, so the helper
+        // releases them, and the container is unique
+        if (holds_weak_locks && releaseOwnWeakLocks(current_value)) [[unlikely]] {
+            assert(current_value->is_unique());
+            return;
+        }
         if (qv) {
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
@@ -856,6 +864,13 @@ protected:
         assignNodeIntern(current_value->realCopy());
         saveTemp(old);
     }
+
+    //! if the only references to \a n other than that of the lvalue holding it are the ones that the helper holds
+    //! in its temporaries (the references it took as it locked \a n at weak steps of its path, or the original that
+    //! a copy-on-write step of the path replaced), releases them and returns true (qore#7352)
+    /** The lvalue holds \a n, under its lock, so \a n is not freed; nothing is allocated and nothing throws
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
@@ -968,6 +983,8 @@ private:
     ocvec_t ocvec;
     //! true if a container of ocvec was reached through a weak reference (qore#7321)
     bool path_has_weak_step = false;
+    //! true if the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
+    bool holds_weak_locks = false;
 
     // flag if the changed value was a container before the assignment
     bool before = false;
@@ -1519,6 +1536,9 @@ public:
     //! Returns the list of the weak reference that the lvalue holds, with a reference that the helper holds until it
     //! is destroyed, or a new empty list that cannot be changed if the list was freed (qore#7198)
     DLLLOCAL __attribute__((cold)) QoreListNode* lockWeakList();
+
+    //! keeps the reference \a n that lockWeakList() or lockWeakHash() took until the helper releases its temporaries
+    DLLLOCAL void holdWeakLock(AbstractQoreNode* n);
 
     //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
     DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
