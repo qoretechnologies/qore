@@ -7203,9 +7203,15 @@ void qore_class_private::parseRollback() {
     has_new_user_changes = false;
 }
 
+//! the next declaration sequence number of a method (see qore_method_private::decl_seq)
+static std::atomic<uint64_t> qore_method_decl_seq{0};
+
 uint64_t qore_method_private::nextDeclSeq() {
-    static std::atomic<uint64_t> seq{0};
-    return seq.fetch_add(1, std::memory_order_relaxed);
+    return qore_method_decl_seq.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t qore_method_private::reserveDeclSeq(uint64_t n) {
+    return qore_method_decl_seq.fetch_add(n, std::memory_order_relaxed);
 }
 
 QoreMethod::QoreMethod(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
@@ -9109,7 +9115,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     return 0;
 }
 
-int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static) {
+int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static, int64_t decl_seq) {
     // FIXME: set class name at parse time
     const char* tname = name.c_str();
     printd(5, "QoreClass::addUserMethod(%s, umv: %p, priv: %d, static: %d) this: %p %s\n", mname, f, f->isPrivate(),
@@ -9215,6 +9221,10 @@ int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, b
         }
 
         m = new QoreMethod(cls, mfb, n_static);
+        // a method that the loader of an AOT image creates has the sequence of its declaration (issue #7169)
+        if (decl_seq >= 0) {
+            m->priv->decl_seq = static_cast<uint64_t>(decl_seq);
+        }
     }
 
     // add this variant to the method
