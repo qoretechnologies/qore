@@ -573,8 +573,80 @@ unsigned q_parse_overlay_count(const SyncParseOptions* key) {
     return rv;
 }
 
-// for detecting circular references at runtime
-typedef std::set<const lvalue_ref*> ref_set_t;
+//! The references that a thread is resolving, for the detection of circular references (qore#7268)
+/** RuntimeReferenceHelperBase adds a reference when its resolution starts, and raises CIRCULAR-REFERENCE-ERROR if the
+    reference is already there; the fast read of a reference (qore_reference_fast_resolution_enter()) does the same.
+    The resolutions of a thread nest (the lvalue of a reference can be a variable that holds another reference, which
+    is resolved in the resolution of the first), and they end in the reverse order of their start, as the objects that
+    add and remove the references are on the stack; so the references form a stack.
+
+    The first \c InlineDepth references of the stack are kept in an array, without an allocation, which holds every
+    reference of a read through a reference, or through a few references to references; the deeper ones, of a chain of
+    references as long as a recursion that passes a reference on to itself, are kept in a set, allocated when it is
+    first needed, so that the test stays logarithmic for them: a chain is limited only by the stack size (the stack
+    check of RuntimeReferenceHelperBase).  Before qore#7268 every reference was kept in a std::set, which made every
+    resolution allocate and free a node of it.
+
+    The object has the size of the std::set that it replaces (with libstdc++), so that the members of ThreadData after
+    it keep their offsets: a change of their alignment changed the code that the compiler generated for code that
+    copies them (an extra instruction for each pair of members that it had copied with one SSE load and store).
+*/
+class ThreadReferenceResolutionStack {
+public:
+    //! the number of references that are kept in the array
+    static constexpr unsigned InlineDepth = 4;
+
+    //! Returns true if the reference is being resolved
+    DLLLOCAL bool contains(const lvalue_ref* r) const {
+        unsigned n = depth < InlineDepth ? depth : InlineDepth;
+        for (unsigned i = 0; i < n; ++i) {
+            if (inline_refs[i] == r) {
+                return true;
+            }
+        }
+        return depth > InlineDepth && deep_refs->find(r) != deep_refs->end();
+    }
+
+    //! Adds a reference that is not being resolved
+    /** Throws std::bad_alloc if the set of the deeper references cannot take it, which leaves the stack unchanged
+    */
+    DLLLOCAL void push(const lvalue_ref* r) {
+        assert(!contains(r));
+        if (depth < InlineDepth) {
+            inline_refs[depth] = r;
+        } else {
+            if (!deep_refs) {
+                deep_refs.reset(new std::set<const lvalue_ref*>);
+            }
+            deep_refs->insert(r);
+        }
+        ++depth;
+    }
+
+    //! Removes the reference added last, which is \a r
+    DLLLOCAL void pop(const lvalue_ref* r) {
+        assert(depth);
+        --depth;
+        if (depth < InlineDepth) {
+            assert(inline_refs[depth] == r);
+        } else {
+            assert(deep_refs && deep_refs->find(r) != deep_refs->end());
+            deep_refs->erase(r);
+        }
+    }
+
+private:
+    //! the first references of the stack, in their order; only the first \c depth entries are set
+    const lvalue_ref* inline_refs[InlineDepth];
+    //! the number of references of the stack
+    unsigned depth = 0;
+    //! the references of the stack after the first \c InlineDepth, if there have been any
+    std::unique_ptr<std::set<const lvalue_ref*>> deep_refs;
+};
+
+// the size of a std::set of libstdc++ (see above)
+static_assert(sizeof(ThreadReferenceResolutionStack) == 6 * sizeof(void*), "ThreadReferenceResolutionStack must keep "
+    "the layout of ThreadData");
 
 // for user TLD
 typedef std::map<int, q_user_tld> u_tld_map_t;
@@ -799,7 +871,7 @@ public:
     ThreadResourceList* trlist = new ThreadResourceList;
 
     // for detecting circular references at runtime
-    ref_set_t ref_set;
+    ThreadReferenceResolutionStack ref_stack;
 
     // current function/method name
     const char* current_code = nullptr;
@@ -3558,17 +3630,21 @@ void thread_pop_container(const AbstractQoreNode* n) {
 
 int thread_ref_set(const lvalue_ref* r) {
     ThreadData* td = thread_data.get();
-    return !td->ref_set.insert(r).second ? -1 : 0;
+    if (td->ref_stack.contains(r)) {
+        return -1;
+    }
+    td->ref_stack.push(r);
+    return 0;
 }
 
 void thread_ref_remove(const lvalue_ref* r) {
-    ThreadData* td = thread_data.get();
-    assert(td->ref_set.find(r) != td->ref_set.end());
-    td->ref_set.erase(r);
+    thread_data.get()->ref_stack.pop(r);
 }
 
-int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
-    ThreadData* td = thread_data.get();
+//! The checks of qore_reference_resolution_check() and qore_reference_fast_resolution_enter(), in the order of
+//! RuntimeReferenceHelperBase: the entry into the Program, the stack, the circular reference
+static __attribute__((always_inline)) inline int reference_resolution_check_intern(ThreadData* td,
+        const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
     // the entry into the Program does nothing only in the case of ProgramThreadCountContextHelper::set() that returns
     // at once (no Program, or thread_program_entry_is_noop()); the others enter the Program, which can fail
     if (pgm && !thread_program_entry_is_noop(td, pgm)) {
@@ -3579,10 +3655,24 @@ int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r,
         return -1;
     }
     // a reference being resolved raises CIRCULAR-REFERENCE-ERROR
-    if (!td->ref_set.empty() && td->ref_set.find(r) != td->ref_set.end()) {
+    if (td->ref_stack.contains(r)) {
         return 0;
     }
     return 1;
+}
+
+int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    return reference_resolution_check_intern(thread_data.get(), pgm, r, xsink);
+}
+
+int qore_reference_fast_resolution_enter(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    int rc = reference_resolution_check_intern(td, pgm, r, xsink);
+    if (rc == 1) {
+        // as thread_ref_set() of RuntimeReferenceHelperBase
+        td->ref_stack.push(r);
+    }
+    return rc;
 }
 
 LocalVarValue* thread_instantiate_lvar() {
