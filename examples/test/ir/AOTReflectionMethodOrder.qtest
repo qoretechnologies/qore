@@ -18,7 +18,7 @@
     an AOT module (.qmod) in the Program that loads it and in every execution mode, and a method that a class gets when
     it is committed for an inherited concrete variant of an abstract method, which follows the methods it declares.
     A qcc image records the methods of a class in the order of its method maps and the position of each in the
-    declaration order (format v53), which the loader restores.
+    declaration order (format v52), which the loader restores.
 */
 class AOTReflectionMethodOrderTest inherits QUnit::Test {
     private {

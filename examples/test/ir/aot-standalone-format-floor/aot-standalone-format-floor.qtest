@@ -27,10 +27,11 @@
     - the version after: refused with exit code 2 and a message to update Qore.
     With QORE_TEST_AOT_V51_LIBDIR set to a v51 runtime, the test also runs the unmodified wildcard
     executable and a source-free qmod against that runtime and requires rejection before user code runs.
-    With QORE_TEST_AOT_V52_LIBDIR set to the directory of a v52 build (its qcc and libqore), the test compiles an
-    executable and a source-free qmod with that qcc and requires this runtime to refuse them before user code runs:
-    a v52 image has METHODS records without the declaration index of v53 (qore#7169), which this reader must never
-    read; the executable is refused by its format version, the module by its AOT runtime identity.
+    When that directory also has the qcc of the v51 build, the test compiles an executable and a source-free qmod
+    with it and requires this runtime to refuse them before user code runs: a v51 image has no owner-qualified
+    wildcard bounds (qore#7184), no declaration index in its METHODS records (qore#7169) and no callee in its
+    background helpers (qore#7087), which this reader must never read; the executable is refused by its format
+    version, the module by its AOT runtime identity.
     On macOS the patched executable is signed again (ad hoc), as the system does not run an executable whose
     signature no longer matches.
 */
@@ -59,8 +60,8 @@ class AotStandaloneFormatFloorTest inherits QUnit::Test {
         addTestCase("newer format refused", \newerFormatTest());
         addTestCase("v51 runtime refuses the wildcard image", \oldRuntimeTest());
         addTestCase("v51 runtime refuses the wildcard qmod", \oldModuleRuntimeTest());
-        addTestCase("a v52 executable is refused", \v52ImageTest());
-        addTestCase("a v52 qmod is refused", \v52ModuleTest());
+        addTestCase("a v51 executable is refused", \v51ImageTest());
+        addTestCase("a v51 qmod is refused", \v51ModuleTest());
         set_return_value(main());
     }
 
@@ -141,49 +142,50 @@ class AotStandaloneFormatFloorTest inherits QUnit::Test {
         return v.toInt();
     }
 
-    #! returns the directory of a v52 build (its qcc and libqore), or skips the test case
-    private string v52BuildDir() {
-        *string libdir = ENV.QORE_TEST_AOT_V52_LIBDIR;
+    #! returns the directory of a v51 build (its qcc and libqore), or skips the test case
+    private string v51BuildDir() {
+        *string libdir = ENV.QORE_TEST_AOT_V51_LIBDIR;
         if (!libdir) {
-            testSkip("set QORE_TEST_AOT_V52_LIBDIR to the directory of a v52 build (qcc and libqore) to test v52 "
+            testSkip("set QORE_TEST_AOT_V51_LIBDIR to the directory of a v51 build (qcc and libqore) to test v51 "
                 "artifacts");
         }
+        # the directory can be a v51 runtime without its qcc, which the cases of the v51 runtime use alone
         if (!is_file(libdir + "/qcc")) {
-            throw "TEST-SETUP-ERROR", sprintf("QORE_TEST_AOT_V52_LIBDIR=%y has no qcc", libdir);
+            testSkip(sprintf("QORE_TEST_AOT_V51_LIBDIR=%y has no qcc to compile v51 artifacts with", libdir));
         }
         return libdir;
     }
 
-    #! compiles a source with the qcc of the v52 build and checks that the artifact is a v52 image
-    private compileV52(string libdir, string args, string target) {
+    #! compiles a source with the qcc of the v51 build and checks that the artifact is a v51 image
+    private compileV51(string libdir, string args, string target) {
         int rc;
         string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s 2>&1",
             shellQuote(libdir), shellQuote(libdir), shellQuote(libdir), shellQuote(libdir + "/qcc"), args), \rc);
-        assertEq(0, rc, "v52 qcc: " + out);
+        assertEq(0, rc, "v51 qcc: " + out);
         binary image = ReadOnlyFile::readBinaryFile(target);
-        assertEq(52, getU16(image, formatVersionOffset(image)), "the v52 qcc wrote a v52 image");
+        assertEq(51, getU16(image, formatVersionOffset(image)), "the v51 qcc wrote a v51 image");
     }
 
-    v52ImageTest() {
-        string libdir = v52BuildDir();
-        TmpDir tmp("aot-v52-image-");
-        string exe = tmp.path + "/v52";
-        compileV52(libdir, sprintf("-O0 -o %s %s", shellQuote(exe), shellQuote(dir + "/aot-standalone-format-floor.q")),
+    v51ImageTest() {
+        string libdir = v51BuildDir();
+        TmpDir tmp("aot-v51-image-");
+        string exe = tmp.path + "/v51";
+        compileV51(libdir, sprintf("-O0 -o %s %s", shellQuote(exe), shellQuote(dir + "/aot-standalone-format-floor.q")),
             exe);
         int rc;
         string out = backquote(sprintf("%s %s -b 2>&1", env, shellQuote(exe)), \rc);
         assertEq(2, rc, out);
         assertRegex("AOT-ERROR: the AOT-compiled program .* cannot be loaded", out);
-        assertTrue(out.find(sprintf("unsupported binary format version 52 (supported %d-%d); rebuild the artifact "
+        assertTrue(out.find(sprintf("unsupported binary format version 51 (supported %d-%d); rebuild the artifact "
             "with this version of qcc", currentFormat(), currentFormat())) >= 0, out);
         assertFalse(out.find("standalone program ran") >= 0, out);
     }
 
-    v52ModuleTest() {
-        string libdir = v52BuildDir();
-        TmpDir tmp("aot-v52-module-");
+    v51ModuleTest() {
+        string libdir = v51BuildDir();
+        TmpDir tmp("aot-v51-module-");
         string image = tmp.path + "/WildcardFloor.qmod";
-        compileV52(libdir, sprintf("-O0 -m -o %s %s", shellQuote(image), shellQuote(dir + "/WildcardFloor.qm")),
+        compileV51(libdir, sprintf("-O0 -m -o %s %s", shellQuote(image), shellQuote(dir + "/WildcardFloor.qm")),
             image);
         # load only the compiled module: its source would be loaded instead of a refused image otherwise
         int rc;
@@ -194,7 +196,7 @@ class AotStandaloneFormatFloorTest inherits QUnit::Test {
         assertEq(2, rc, out);
         assertTrue(out.find("WildcardFloor.qmod") >= 0, out);
         # an AOT module records the AOT runtime identity of the libqore that it was compiled for, which the loader checks
-        # before it reads the image, so a v52 module is refused by its identity
+        # before it reads the image, so a v51 module is refused by its identity
         assertTrue(out.find("LOAD-MODULE-ERROR: AOT module") >= 0, out);
         assertRegex("the module was compiled for AOT runtime identity '[0-9a-f]+', but this Qore runtime \\(libqore "
             "[^)]+\\) has AOT runtime identity '[0-9a-f]+'", out);

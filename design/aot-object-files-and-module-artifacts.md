@@ -594,7 +594,8 @@ fields of the declared domains, with AOT format version 45
 (`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
 reports tells which record it has; version 5 adds the builtin API identity of
 the compiling libqore (64 lowercase hexadecimal digits; see "AOT Module Builtin
-API Identity"). A runtime reads only its own record version and refuses any
+API Identity"), with AOT format version 52
+(`QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION`). A runtime reads only its own record version and refuses any
 other, asking for the module to be rebuilt; `qcc --check-module-sources` finds
 a module whose record it cannot read out of date, so the build compiles it
 again. Every string is

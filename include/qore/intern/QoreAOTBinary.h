@@ -788,6 +788,15 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
     record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
 */
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! First format version whose modules have the module metadata record with the builtin API identity (see v52 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 5 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#7183)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION = 52;
+static_assert(QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
+    "the format changes of the AOT-identity batch share one format version (v52)");
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
 //! The format version of the format changes of batch AK (see v47 above)
@@ -3646,7 +3655,7 @@ static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
     functional domains that the module declares in its header, the dependencies it requires only after its header and
     the functional domains its own code restricts (qore#6351), from AOT format version 45
     (QORE_AOT_MODULE_INFO_DOMAINS_VERSION); version 5 the builtin API identity of the libqore that compiled the module
-    (qore#7183).  A record of another version is refused, asking for the module to be rebuilt.
+    (qore#7183), from AOT format version 52 (QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION).  A record of another version is refused, asking for the module to be rebuilt.
 */
 static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 5u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
