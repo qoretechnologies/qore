@@ -564,6 +564,15 @@ private:
     // Boxed source values retained when a typed collection read is unboxed.
     // Generic calls and NOTHING guards must observe the source value rather
     // than re-boxing a native zero produced from a sparse list entry.
+    // The source of a ListGetInt or ListGetFloat is an element borrowed from its list, which boxValue() and the
+    // arguments of a compiled call give to later consumers without a reference of their own.  This is safe because
+    // the IR reads a typed element so only where nothing can release the list while the read is used (qore#7372):
+    // in a bounded loop over a list local, only when the loop neither assigns nor changes the list and makes no call
+    // that can (qore_ir_specialize_bounded_typed_list_reads()), and the read is used only in the loop; and in a
+    // functional operator (map, select, foldl, foldr, map with select), from its input list, which is held for all
+    // its iterations (a read of a local that the operator's expressions can assign takes a reference of its own,
+    // see qore_ir_find_local_reads_overwritten_before_use()), whose results are new values or Phis of native
+    // values, not the read itself
     std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
     std::unordered_map<uint32_t, BatchCalleeParamKind>
         native_boxed_source_kinds;
@@ -1252,9 +1261,9 @@ private:
     //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
     //! temporary's
     std::unordered_set<uint32_t> overwritten_local_reads;
-    //! The reads of a local whose value has a native representation (NativeInt or NativeFloat facts) and is used after
-    //! the end of the statement that reads it (see findNativeLocalReadsUsedAfterStatement())
-    std::unordered_set<uint32_t> native_local_reads_used_after_statement;
+    //! The reads of a local whose value has a native representation (NativeInt or NativeFloat facts), which are
+    //! unboxed where they are read (see findNativeLocalReads())
+    std::unordered_set<uint32_t> native_local_reads;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target
@@ -2929,27 +2938,23 @@ private:
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
 
-    //! Finds the reads of locals that have a native representation and are used after the statement that reads them
-    /** Fills native_local_reads_used_after_statement with the LoadLocal results whose facts are NativeInt or
-        NativeFloat (assigned, never NOTHING) and that an instruction of another temporary scope, or a Phi, uses: the
-        IR gives such a value no owner in the statement (see design/qore-ir-spec.md), and the fixed-aggregate scalar
-        replacement forwards it to the statements that read the members (qore#7372).  A use in another scope is taken
-        as a use after the statement; this includes a use in a scope nested in the statement's, for which the native
-        value is not needed but is correct.
+    //! Finds the reads of locals that have a native representation
+    /** Fills native_local_reads with the LoadLocal results whose facts are NativeInt or NativeFloat (assigned, never
+        NOTHING).  The IR gives such a value no owner in the statement that reads it (see design/qore-ir-spec.md),
+        and the fixed-aggregate scalar replacement forwards it to the statements that read the members; a local
+        whose storage is boxed here gives a value of the local, which is borrowed or released with the temporaries of
+        the statement, so each such read is unboxed where it is read (qore#7372).
 
         @return false if the analysis was cancelled
     */
-    bool findNativeLocalReadsUsedAfterStatement(const QoreIRFunction& func);
+    bool findNativeLocalReads(const QoreIRFunction& func);
 
 #ifndef NDEBUG
-    //! Asserts that no operand of the instruction is a boxed native read of a local made by another statement
-    /** A read of a local whose value is boxed here is borrowed from the local, or holds a reference that is released
-        with the temporaries of its statement: a later write to the local, or the end of its statement, can release
-        it.  The native reads of locals used after their statement (native_local_reads_used_after_statement) must
-        therefore have their native value where a Phi or an instruction of another temporary scope uses them
-        (qore#7372).
+    //! Asserts that every read in native_local_reads that was lowered has its native value
+    /** Called after the function's blocks are lowered, so that it covers the reads used by Phis whose incoming
+        values are added after the Phi, and those used in blocks lowered before the defining block.
     */
-    void assertLocalReadsKeptInStatement(const QoreIRInstruction* inst) const;
+    void assertNativeLocalReadsUnboxed() const;
 #endif
 
     // Releases the object that the load of a weak-assigned local kept for the call \a inst whose receiver it is

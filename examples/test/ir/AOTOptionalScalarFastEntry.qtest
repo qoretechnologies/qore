@@ -141,7 +141,8 @@ if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
         enabled_compile, disabled_compile);
     exit(2);
 }
-if (!(enabled_compile =~ /eliding fast-entry argument NOTHING guard/)) {
+# the assigned argument is passed without a NOTHING guard: a boxed one whose facts prove it assigned, or a native one
+if (!(enabled_compile =~ /(eliding fast-entry argument NOTHING guard|native fast-entry argument needs no NOTHING guard)/)) {
     printf("assigned-state argument guard was not elided:\n%s", enabled_compile);
     exit(2);
 }

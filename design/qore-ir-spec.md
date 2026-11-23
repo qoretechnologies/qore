@@ -234,12 +234,14 @@ storage there is boxed (a local that may be unassigned somewhere, a parameter,
 a local of the runtime stack) gives a read that is borrowed from the local, or
 a reference of its own released with the temporaries of the statement, which a
 later write to the local or the end of its statement releases.  The lowering
-(`QoreIRToLLVM::findNativeLocalReadsUsedAfterStatement()`) unboxes a read of a
-local with native facts that an instruction of another temporary scope or a Phi
-uses, where it is read (qore#7372); in a debug build,
-`QoreIRToLLVM::assertLocalReadsKeptInStatement()` asserts that no such read is
-boxed where it is used.  `IRForwardedLocalRead.qtest` checks
+(`QoreIRToLLVM::findNativeLocalReads()`) therefore unboxes every read of a local
+with native facts where it is read (qore#7372); in a debug build,
+`QoreIRToLLVM::assertNativeLocalReadsUnboxed()` asserts it after the function's
+blocks are lowered.  The facts must therefore be exact: the refinement takes a
+local whose type accepts NOTHING as assigned only after a store of a value that
+cannot be NULL, as such a local stores NULL as NOTHING.
+`IRForwardedLocalRead.qtest` checks
 members whose local is written after the aggregate is built (compound
 assignments, increments, assignments, writes through a reference and by a
-closure, writes in loops and branches) or goes out of scope, in every execution
-mode and compiled code.
+closure, writes in loops and branches, member and element stores) or goes out of
+scope, in every execution mode and compiled code.

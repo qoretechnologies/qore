@@ -9255,15 +9255,12 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
 }
 
 // documented in QoreIRToLLVM.h
-bool QoreIRToLLVM::findNativeLocalReadsUsedAfterStatement(const QoreIRFunction& func) {
-    native_local_reads_used_after_statement.clear();
-    // the native reads of locals, with the temporary scope of each
-    std::unordered_map<uint32_t, uint32_t> native_reads;
+bool QoreIRToLLVM::findNativeLocalReads(const QoreIRFunction& func) {
+    native_local_reads.clear();
     size_t check_count = 0;
-    const char* operation = "LLVM native local read analysis";
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
-            if (!(++check_count % 100) && qore_check_cancel(nullptr, operation)) {
+            if (!(++check_count % 100) && qore_check_cancel(nullptr, "LLVM native local read analysis")) {
                 return false;
             }
             if (inst->opcode != QoreIROpcode::LoadLocal || !inst->result.isValid()
@@ -9274,23 +9271,7 @@ bool QoreIRToLLVM::findNativeLocalReadsUsedAfterStatement(const QoreIRFunction& 
             if (facts && facts->assigned_state == QoreIRAssignedState::Assigned && facts->never_nothing
                     && (facts->representation == QoreIRValueRepresentation::NativeInt
                         || facts->representation == QoreIRValueRepresentation::NativeFloat)) {
-                native_reads.emplace(inst->result.id, inst->temp_scope_id);
-            }
-        }
-    }
-    if (native_reads.empty()) {
-        return true;
-    }
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
-                        auto it = native_reads.find(operand.id);
-                        if (it != native_reads.end() && (inst->opcode == QoreIROpcode::Phi
-                                || inst->temp_scope_id != it->second)) {
-                            native_local_reads_used_after_statement.insert(operand.id);
-                        }
-                    }, &check_count, operation)) {
-                return false;
+                native_local_reads.insert(inst->result.id);
             }
         }
     }
@@ -9299,19 +9280,11 @@ bool QoreIRToLLVM::findNativeLocalReadsUsedAfterStatement(const QoreIRFunction& 
 
 #ifndef NDEBUG
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::assertLocalReadsKeptInStatement(const QoreIRInstruction* inst) const {
-    qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
-        if (!native_local_reads_used_after_statement.count(operand.id)) {
-            return;
-        }
-        auto it = value_def_temp_scope.find(operand.id);
-        if (inst->opcode != QoreIROpcode::Phi && it != value_def_temp_scope.end()
-                && it->second == inst->temp_scope_id) {
-            return;
-        }
-        // a boxed read used after its statement
-        assert(!nanboxed_values.count(operand.id));
-    });
+void QoreIRToLLVM::assertNativeLocalReadsUnboxed() const {
+    for (uint32_t id : native_local_reads) {
+        // a read that was lowered has its native value; one in a block that was not lowered has no value
+        assert(!nanboxed_values.count(id));
+    }
 }
 #endif
 
@@ -10815,9 +10788,18 @@ bool QoreIRToLLVM::fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& in
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::fastEntryArgumentNeedsNothingGuard(const BatchCalleeInfo& callee_info, unsigned index,
         uint32_t value_id) const {
-    return fastEntryParamRejectsNothing(callee_info, index)
-        && (nanboxed_values.count(value_id) || native_boxed_sources.count(value_id))
-        && !fastEntryArgumentKnownNotNothing(value_id);
+    if (!fastEntryParamRejectsNothing(callee_info, index)) {
+        return false;
+    }
+    if (!nanboxed_values.count(value_id) && !native_boxed_sources.count(value_id)) {
+        // a native value (such as the read of a local with native facts, qore#7372) is never NOTHING
+        if (aot_mode && current_ir_func && QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: native fast-entry argument needs no NOTHING guard for SSA value %u in '%s'\n",
+                value_id, current_ir_func->getDisplayName().c_str());
+        }
+        return false;
+    }
+    return !fastEntryArgumentKnownNotNothing(value_id);
 }
 
 bool QoreIRToLLVM::fastEntryArgumentKnownNotNothing(uint32_t value_id) const {
@@ -16931,8 +16913,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         error = "cancelled during LLVM overwritten local read analysis";
         return false;
     }
-    // the native values read from a local that a later statement uses are unboxed where they are read (qore#7372)
-    if (!findNativeLocalReadsUsedAfterStatement(func)) {
+    // the native values read from a local are unboxed where they are read (qore#7372)
+    if (!findNativeLocalReads(func)) {
         error = "cancelled during LLVM native local read analysis";
         return false;
     }
@@ -19288,6 +19270,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             assigned_hash_guard_elisions);
     }
 
+#ifndef NDEBUG
+    // after every block, so that the reads given to Phis after them and used in blocks lowered first are checked too
+    assertNativeLocalReadsUnboxed();
+#endif
+
     // Reset per-function state
     current_ir_func = nullptr;
     current_module = nullptr;
@@ -19429,9 +19416,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
     } call_array_scope{call_array_top, call_array_top};
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
-#ifndef NDEBUG
-    assertLocalReadsKeptInStatement(inst);
-#endif
     // whether the call gives the callee a temporary argument, for the choice of its fast entry (issue #5958)
     const bool call_gives_args = callGivesArgs(inst);
     auto emit_string_case_comparison = [&]() -> llvm::Value* {
@@ -20649,6 +20633,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = llvm::ConstantInt::get(i64_type,
                     VAL_NOTHING);
                 nanboxed_values.insert(inst->result.id);
+                // the access is elided: its value is not a value of the local (see assertNativeLocalReadsUnboxed())
+                native_local_reads.erase(inst->result.id);
                 return true;
             }
             auto key = reinterpret_cast<const void*>(linst->local);
@@ -20678,10 +20664,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // A local whose storage here is boxed gives a value borrowed from the local, or a reference of its own
             // that is released as a temporary of the statement: an integer outside the inline range or a double whose
             // bits collide with a value tag is then a node that a later write to the local, or the end of its scope,
-            // releases before the later statement uses it.  Such a read used after its statement is therefore unboxed
-            // here, as the read of a native local is (qore#7372)
+            // releases before the later statement uses it.  Every such read is therefore unboxed here, as the read of
+            // a native local is, whether or not a later statement uses it (qore#7372)
             const QoreIRValueFacts* unboxed_read_facts = !is_native_int && !is_native_float && !is_native_bool
-                    && native_local_reads_used_after_statement.count(inst->result.id)
+                    && native_local_reads.count(inst->result.id)
                 ? current_ir_func->getValueFacts(inst->result) : nullptr;
             // a value with a native representation is never read through a weak reference, nor by the borrowed load
             // of a container that a store changes in place

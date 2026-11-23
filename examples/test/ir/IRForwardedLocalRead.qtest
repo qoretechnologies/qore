@@ -24,8 +24,8 @@
     with a value tag or an integer outside the inline range was a node that a later write to the local (or the end of
     its scope) released before the member was read.  The scenario runs in every tier, in the IR tier alone and as a
     compiled executable, and must print what the AST tier prints.  In a debug build, the native code generator asserts that
-    such a read is native where a later statement uses it (QoreIRToLLVM::assertLocalReadsKeptInStatement()), which
-    the compiles of the scenario (qcc, jit and tiered) fail every time without the fix.
+    every such read is native (QoreIRToLLVM::assertNativeLocalReadsUnboxed()), which the compiles of the scenario
+    (qcc, jit and tiered) fail every time without the fix.
 */
 class IRForwardedLocalReadTest inherits QUnit::Test {
     private {
@@ -54,6 +54,16 @@ class IRForwardedLocalReadTest inherits QUnit::Test {
             "typedHash: [-4e+307, -8e+307]",
             "hashDecl: [-4e+307, 1152921504606846979, -8e+307, 3458764513820540937]",
             "loopCarried: [-4e+307, 1152921504606846979, -8e+307, 3458764513820540937]",
+            "memberStore: [-4e+307, -4e+307, -8e+307]",
+            "memberStoreParam: [-4e+307, -8e+307]",
+            "memberStoreParam.lt: False",
+            "elementStore: [-4e+307, -8e+307]",
+            "intMemberStore: [1152921504606846979, 5]",
+            "optionalNull: [True, True, True, True, True]",
+            "selfCalls: \"True -4e+307 9007199254740993 -9223372036854775807 True -4e+307 9007199254740993 "
+                "9007199254740995 -8e+307\"",
+            "namedArgs: \"True 1.25 9007199254740993 -9223372036854775807 True 1.25 9007199254740993 "
+                "9007199254740995 2.5\"",
             "intOps: [1152921504606846979, 6917529027641081875]",
             "intOps: [7, 43]",
             "intList: [-2305843009213693957, -2305843009213693993]",
@@ -112,7 +122,7 @@ class IRForwardedLocalReadTest inherits QUnit::Test {
         TmpDir tmp("qore-ir-forwarded-local-read-");
         foreach int level in ((0, 3)) {
             string exe = sprintf("%s/scenario-O%d", tmp.path, level);
-            # in a debug build, the compile asserts that a native read of a local used after its statement is native
+            # in a debug build, the compile asserts that every native read of a local is native
             string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
                 shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
             assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
