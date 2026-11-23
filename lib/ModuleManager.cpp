@@ -4486,8 +4486,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             if (!q_absolute_path(str.c_str())) {
                 q_normalize_path(str);
             }
+            // where it was found: whether it is library code does not depend on the form of the directory's path
+            // (qore#7319)
+            QoreModuleFoundIn found_in{dir.c_str(), std::string(name) + ".qm", is_process_module_dir(dir)};
             mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask, &found_in);
             return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
         }
 
@@ -4507,8 +4510,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 q_normalize_path(modulePath);
             }
             //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
+            // as above (qore#7319)
+            QoreModuleFoundIn found_in{dir.c_str(), std::string(name), is_process_module_dir(dir)};
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask, &found_in);
             return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;
         }
     }
