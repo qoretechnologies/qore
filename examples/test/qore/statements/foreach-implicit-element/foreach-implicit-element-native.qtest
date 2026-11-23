@@ -19,20 +19,20 @@
     \c $# of their own: one that calls a function, one over a reference, one over lazy operators and one with an
     operator that reads its own index; their native code (AOT and JIT) must not call
     \c qore_rt_push_implicit_element().  The functions named \c keep_* read the loop's index at run time (a context
-    statement, a background expression) or in a loop over a reference, and must call it.  With
+    statement, a background expression) or in a loop over a reference or lazy operators, and must call it.  With
     \c QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT, every foreach statement sets its index.  The script must give the
     output of the AST interpreter in every case.
 */
 class ForeachImplicitElementNativeTest inherits QUnit::Test {
     public {
         #! the output of the script
-        const Output = "[2, 40, 6, 10, 44, 6, 1, 15]\n";
+        const Output = "[2, 40, 6, 10, 44, 6, 1, 15, 6]\n";
 
         #! the functions whose foreach statements set no implicit index
         const SkipFunctions = ("skip_keys", "skip_call", "skip_ref", "skip_lazy", "skip_operator");
 
         #! the functions whose foreach statements set the implicit index
-        const KeepFunctions = ("keep_context", "keep_background", "keep_ref");
+        const KeepFunctions = ("keep_context", "keep_background", "keep_ref", "keep_lazy");
 
         #! the environment that keeps the implicit index of every foreach statement
         const KeepAllEnv = "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1";

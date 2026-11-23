@@ -92,5 +92,15 @@ int sub keep_ref() {
     return l[2];
 }
 
+# a loop over lazy operators whose body reads its index
+int sub keep_lazy() {
+    list<int> l = (1, 2, 3);
+    int n = 0;
+    foreach int v in (map $1 * 2, select l, $1 > 1) {
+        n += v * $#;
+    }
+    return n;
+}
+
 printf("%y\n", (skip_keys(), skip_call(), skip_ref(), skip_lazy(), skip_operator(), keep_context(),
-    keep_background(), keep_ref()));
+    keep_background(), keep_ref(), keep_lazy()));
