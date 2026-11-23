@@ -905,6 +905,11 @@ class QdpCmd {
         if (!stdin.isTty()) {
             QdpCmd::error("the interactive mode requires a terminal on stdin; use \"listen\" instead");
         }
+        # a background job cannot read from its terminal (qore#7387)
+        if (!stdin.isForegroundTty()) {
+            QdpCmd::error("the interactive mode cannot run in the background, as it reads from the terminal; use "
+                "\"listen\" instead");
+        }
         hash<DataProviderInfo> info = provider.getInfo();
         MyObserver observer(info);
         Observable observable = cast<Observable>(provider);
@@ -1056,10 +1061,10 @@ class QdpCmd {
             cast<DataProvider::DelayedObservable>(observable).observersReady();
         }
 
-        # a key stops listening only if stdin is a terminal; otherwise (input from /dev/null, a pipe or a file, as in
-        # CI or a background job) listening stops on its timeout, on a signal or when the event source ends
-        # (qore#7130)
-        bool read_keys = stdin.isTty();
+        # a key stops listening only if stdin is a terminal and qdp is in its foreground; otherwise (input from
+        # /dev/null, a pipe or a file, as in CI, or a background job, which cannot read from its terminal) listening
+        # stops on its timeout, on a signal or when the event source ends (qore#7130, qore#7387)
+        bool read_keys = stdin.isForegroundTty();
 
         # a Ctrl+C during the open has already asked for shutdown; do not then invite a keystroke
         if (!shutdown_requested) {
@@ -3013,16 +3018,19 @@ class ProgressMetricsCollector inherits DataProvider::AbstractPipelineMetricsCol
     }
 }
 
-#! Puts the terminal on stdin in raw mode for its lifetime, if stdin is a terminal (qore#7130)
+#! Puts the terminal on stdin in raw mode for its lifetime, if stdin is a terminal and qdp is in its foreground
+/** a background job leaves the terminal of the shell in the foreground as it is (qore#7130, qore#7387)
+*/
 class Term {
     public {}
     private {
-        #! the original attributes of the terminal on stdin; not set if stdin is not a terminal
+        #! the original attributes of the terminal on stdin; not set if stdin is not a terminal or qdp is not
+        #! in its foreground
         *TermIOS orig;
     }
 
     constructor() {
-        if (!stdin.isTty()) {
+        if (!stdin.isForegroundTty()) {
             return;
         }
         TermIOS t();
@@ -3076,13 +3084,15 @@ class MyObserver inherits Observer {
     private {
         hash<DataProviderInfo> info;
         #! the attributes of the terminal on stdin, restored when the process exits; not set if stdin is not a terminal
+        #! or qdp is not in its foreground
         *TermIOS t;
     }
 
     constructor(hash<DataProviderInfo> info) {
         self.info = info;
-        # get current terminal attributes for stdin, if stdin is a terminal (qore#7130)
-        if (stdin.isTty()) {
+        # get current terminal attributes for stdin, if stdin is a terminal and qdp is in its foreground (qore#7130,
+        # qore#7387)
+        if (stdin.isForegroundTty()) {
             t = new TermIOS();
             stdin.getTerminalAttributes(t);
         }

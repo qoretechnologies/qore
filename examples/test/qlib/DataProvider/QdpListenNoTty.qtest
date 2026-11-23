@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - qdp's terminal attribute handling with stdin from /dev/null or a pipe in a new session
+# test-platform: macos - qdp's terminal attribute handling with stdin not a terminal and in a background process group
 # test-exec-mode: children - its checks run in qdp child processes of its own binary started without an execution mode
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -19,6 +19,11 @@
     TERMIOS-GET-ERROR exception before it listened.  It now reads keys only from a terminal, and otherwise stops on
     its timeout or a signal; the interactive mode, which reads lines from a terminal, ends with a usage error.  qdp
     runs here in a new session, which has no controlling terminal.
+
+    As a background job of a shell with job control, stdin is the shell's terminal, which a background job cannot read
+    from: "listen" ended with an unhandled FILE-READ-ERROR exception (EIO) at the first input on the terminal, and
+    put the terminal of the shell in the foreground in raw mode while it ran (qore#7387).  It now reads keys and
+    sets the terminal's attributes only in the terminal's foreground process group.
 */
 public class QdpListenNoTtyTest inherits QUnit::Test {
     public {
@@ -56,6 +61,8 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         addTestCase("listen with stdin from a file", \listenFileTest());
         addTestCase("listen stops on a signal", \listenSignalTest());
         addTestCase("interactive without a terminal", \interactiveTest());
+        addTestCase("listen as a background job of a terminal", \listenBackgroundTest());
+        addTestCase("interactive as a background job of a terminal", \interactiveBackgroundTest());
         set_return_value(main());
     }
 
@@ -158,6 +165,90 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         assertRegex("listening stopped due to signal", out, "listening stops on the signal");
         assertFalse(regex(out, "TIMEOUT:"), "no timeout");
         assertFalse(regex(out, "on its timeout|on user request"), "the signal is the only reason given");
+    }
+
+    #! runs qdp as a background job of a shell with job control whose stdin is a terminal (qore#7387)
+    /** script(1) gives the shell a new terminal; util-linux script sends the end of its own input, which is
+        /dev/null, to it, so input is waiting on the terminal, which a background job cannot read.  The shell waits
+        for qdp to print its prompt, if any, saves the terminal's settings, and then waits for qdp to end, or kills it
+        after 20 seconds.
+
+        @param args the qdp arguments
+        @param prompt a string in the output of qdp after which the terminal's settings are saved, if any
+    */
+    private hash<auto> runQdpInBackground(string args, *string prompt) {
+        # script(1) runs a command on a new terminal: util-linux and BusyBox take it with -c, BSD as arguments
+        string script_cmd;
+        if (regex(backquote("script --version 2>&1 || true"), "util-linux|BusyBox")) {
+            script_cmd = "script -q -c %s /dev/null";
+        } else if (PlatformOS == "Darwin" || PlatformOS == "FreeBSD") {
+            script_cmd = "script -q /dev/null %s";
+        } else {
+            testSkip("script(1) is not available to run a shell with job control on a new terminal");
+        }
+        string out_path = dir.path + "/bg-out.txt";
+        string err_path = dir.path + "/bg-err.txt";
+        string stty_path = dir.path + "/bg-stty.txt";
+        string rc_path = dir.path + "/bg-rc.txt";
+        string script = dir.path + "/bg.sh";
+        map unlink($1), (out_path, err_path, stty_path, rc_path);
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        # "sh -m" runs each background job in a process group of its own and leaves its stdin the terminal; the job
+        # is a subshell that records the exit code of qdp, as the shell reaps a job that ends before it waits for it
+        f.printf("(env -u QORE_DATA_PROVIDERS %s --enable-debug %s -m %s %s %s > %s 2> %s; echo \"$?\" > %s) &\n"
+            "pid=$!\n"
+            "i=0\n",
+            quote(TestInterpreter::qore_interpreter()), quote(script_dir + "/../../../../bin/qdp"),
+            quote(script_dir + "/" + FixtureModule), quote(Provider), args, quote(out_path), quote(err_path),
+            quote(rc_path));
+        if (prompt) {
+            f.printf("while [ $i -lt 200 ] && kill -0 \"$pid\" 2>/dev/null && ! grep -q %s %s; do\n"
+                "    sleep 0.1; i=$((i+1))\n"
+                "done\n"
+                "stty -a > %s\n", quote(prompt), quote(out_path), quote(stty_path));
+        }
+        # the job's process group is killed if qdp has not ended after 20 seconds
+        f.printf("while [ $i -lt 200 ] && kill -0 \"$pid\" 2>/dev/null; do sleep 0.1; i=$((i+1)); done\n"
+            "if kill -0 \"$pid\" 2>/dev/null; then echo 'qdp killed' >> %s; kill -KILL \"-$pid\"; fi\n"
+            "wait \"$pid\" 2>/dev/null\n", quote(err_path));
+        f.close();
+        system(sprintf(script_cmd, quote("sh -m " + quote(script))) + " < /dev/null > /dev/null 2>&1");
+        hash<auto> rv = {
+            "out": ReadOnlyFile::readTextFile(out_path),
+            "err": ReadOnlyFile::readTextFile(err_path),
+            "rc": is_file(rc_path) ? trim(ReadOnlyFile::readTextFile(rc_path)).toInt() : -1,
+        };
+        if (is_file(stty_path)) {
+            rv.stty = ReadOnlyFile::readTextFile(stty_path);
+        }
+        return rv;
+    }
+
+    #! a background job listens and leaves the terminal alone (qore#7387)
+    listenBackgroundTest() {
+        hash<auto> r = runQdpInBackground("listen --timeout=1", "to stop listening");
+        # the shell put qdp in the background: the prompt asks for a signal, not a key
+        assertRegex("send .*SIGINT.* or .*SIGTERM.* to stop listening", r.out,
+            "the prompt names the signals that stop listening: " + r.out + r.err);
+        assertFalse(regex(r.out, "press any key"), "no keystroke is invited");
+        assertEq(0, r.rc, "qdp ends normally: " + r.err);
+        assertFalse(regex(r.err + r.out, "TERMIOS|FILE-READ-ERROR|unhandled|qdp killed"), "no error: " + r.err);
+        assertRegex(EventValue, r.out, "the event's data is printed");
+        assertRegex("listening stopped on its timeout", r.out, "listening stops on its timeout");
+        # the terminal of the shell in the foreground is not put in raw mode
+        assertRegex("(^|[^-])icanon", r.stty ?? "", "the terminal stays in canonical mode: " + r.stty);
+        assertRegex("(^|[^-])echo([^a-z]|$)", r.stty ?? "", "the terminal still echoes: " + r.stty);
+    }
+
+    #! the interactive mode cannot read its lines as a background job: a usage error (qore#7387)
+    interactiveBackgroundTest() {
+        hash<auto> r = runQdpInBackground("interactive");
+        assertEq(1, r.rc, "qdp ends with a usage error: " + r.err);
+        assertRegex("ERROR: the interactive mode cannot run in the background", r.err,
+            "the error names the background: " + r.err);
+        assertFalse(regex(r.err + r.out, "TERMIOS|FILE-READ-ERROR|unhandled|call stack|qdp killed"),
+            "no exception: " + r.err);
     }
 
     #! the interactive mode reads lines from a terminal: a usage error without one

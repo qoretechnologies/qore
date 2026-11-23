@@ -1208,6 +1208,32 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
    return f->isTty();
 }
 
+//! returns @ref True "True" if the File is the controlling terminal and the process is in its foreground group
+/** A process that is not in the foreground process group of its controlling terminal (a background job of an
+    interactive shell) cannot read from the terminal, and setting the terminal's attributes changes them under the
+    process in the foreground; a program that reads keys from a terminal or sets its attributes checks this before
+    doing so.
+
+    @par Example:
+    @code{.py}
+if (stdin.isForegroundTty()) {
+    # read keys from the terminal
+}
+    @endcode
+
+    @return @ref True "True" if the File is the controlling terminal of the process and the process is in the
+    terminal's foreground process group, @ref False "False" if not (also if the File is not connected to a terminal
+    device or the terminal is not the controlling terminal of the process); on Windows, which has no process groups,
+    the same as @ref ReadOnlyFile::isTty()
+
+    @see @ref ReadOnlyFile::isTty()
+
+    @since %Qore 3.0
+*/
+bool ReadOnlyFile::isForegroundTty() [flags=CONSTANT] {
+   return f->isForegroundTty();
+}
+
 //! returns the file path/name used to open the file if the file is open, otherwise @ref nothing
 /** @par Example:
     @code{.py}

@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the controlling terminal and the foreground process group of a terminal (tcgetpgrp)
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# ReadOnlyFile::isForegroundTty() tells whether a file is the controlling terminal and the process is in the
+# terminal's foreground process group (qore#7387): a background job of a shell with job control has the terminal on
+# stdin, but cannot read from it, and setting its attributes changes them under the job in the foreground.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class FileForegroundTtyTest
+
+class FileForegroundTtyTest inherits QUnit::Test {
+    public {
+        #! the code that the child processes run
+        const Code = "printf(\"isTty=%y isForegroundTty=%y\\n\", stdin.isTty(), stdin.isForegroundTty());";
+    }
+
+    private {
+        TmpDir dir;
+        #! the command that runs a shell script on a new terminal, with the script's path as its only argument
+        *string script_cmd;
+    }
+
+    constructor() : Test("FileForegroundTtyTest", "1.0") {
+        dir = new TmpDir("file-foreground-tty-");
+        # script(1) runs a command on a new terminal: util-linux and BusyBox take it with -c, BSD as arguments
+        string version = backquote("script --version 2>&1 || true");
+        if (regex(version, "util-linux|BusyBox")) {
+            script_cmd = "script -q -c %s /dev/null";
+        } else if (PlatformOS == "Darwin" || PlatformOS == "FreeBSD") {
+            script_cmd = "script -q /dev/null %s";
+        }
+        addTestCase("not a terminal", \notTtyTest());
+        addTestCase("the foreground of a terminal", \foregroundTest());
+        addTestCase("a background job of a terminal", \backgroundTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    private string child() {
+        return sprintf("%s -e %s", quote(TestInterpreter::qore_interpreter()), quote(Code));
+    }
+
+    #! runs a shell script with job control on a new terminal and returns the output of the child process
+    private string runOnTerminal(string body) {
+        if (!script_cmd) {
+            testSkip("script(1) is not available to run a command on a new terminal");
+        }
+        string out_path = dir.path + "/out.txt";
+        string script = dir.path + "/run.sh";
+        unlink(out_path);
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.print(replace(body, "%OUT%", quote(out_path)));
+        f.close();
+        # "sh -m" runs each background job in a process group of its own and leaves its stdin the terminal
+        system(sprintf(script_cmd, quote("sh -m " + quote(script))) + " < /dev/null > /dev/null 2>&1");
+        return is_file(out_path) ? ReadOnlyFile::readTextFile(out_path) : "";
+    }
+
+    notTtyTest() {
+        string out = backquote(child() + " < /dev/null");
+        assertEq("isTty=False isForegroundTty=False\n", out);
+    }
+
+    foregroundTest() {
+        string out = runOnTerminal(child() + " > %OUT% 2>&1\n");
+        assertEq("isTty=True isForegroundTty=True\n", out);
+    }
+
+    backgroundTest() {
+        string out = runOnTerminal(child() + " > %OUT% 2>&1 &\nwait $!\n");
+        assertEq("isTty=True isForegroundTty=False\n", out);
+    }
+}
