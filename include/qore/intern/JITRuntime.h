@@ -318,12 +318,12 @@ uint64_t qore_rt_background_helper_throwing(const QoreIRBackgroundInstruction* i
 */
 uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
-    int nvalues, int uses_self, ExceptionSink* xsink);
+    int nvalues, int uses_self, int callee, ExceptionSink* xsink);
 
 //! Throwing wrapper for EH paths.
 uint64_t qore_rt_background_helper_aot_throwing(QoreAOTContext* ctx,
     uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
-    int nvalues, int uses_self, ExceptionSink* xsink);
+    int nvalues, int uses_self, int callee, ExceptionSink* xsink);
 
 //! Returns 1 if the sink holds a thread_exit, else 0; CatchException branches past the catch block when it does.
 //! An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does when the

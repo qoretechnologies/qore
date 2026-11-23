@@ -25750,7 +25750,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundIn
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
         uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
-        int nvalues, int uses_self, ExceptionSink* xsink) {
+        int nvalues, int uses_self, int callee, ExceptionSink* xsink) {
     assert(ctx && helper_fn);
     // the helper's parameters are local variables of the starting function's context, which the helper shares
     std::vector<LocalVar*> params;
@@ -25764,9 +25764,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     code.aot_ctx = ctx;
     // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
     assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
-    // the compiled code does not give the callee: every closure and call reference is checked (qore#7056, qore#7087)
+    // the callee of the expression as the lowering classified it (QoreIRBackgroundInstruction::helper_callee): the
+    // index of the value that is checked when the thread starts, QBH_CHECK_IN_THREAD, or QBH_CALLEE_UNKNOWN; an index
+    // that is not a value's is unknown, so every closure, call reference and object of the values is checked
+    // (qore#7056, qore#7087)
+    if (callee >= nvalues || callee < QBH_CHECK_IN_THREAD) {
+        callee = QBH_CALLEE_UNKNOWN;
+    }
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        static_cast<QoreBackgroundHelperSelf>(uses_self), QBH_CALLEE_UNKNOWN, xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), callee, xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(
@@ -25781,8 +25787,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helpe
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_aot_throwing(
         QoreAOTContext* ctx, uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots,
-        uint64_t* values, int nvalues, int uses_self, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_background_helper_aot(ctx, helper_fn, param_slots, values, nvalues, uses_self,
+        uint64_t* values, int nvalues, int uses_self, int callee, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_helper_aot(ctx, helper_fn, param_slots, values, nvalues, uses_self, callee,
         xsink);
     if (xsink && *xsink) {
         throw QoreJITException();

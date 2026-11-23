@@ -15044,13 +15044,16 @@ bool QoreIRToLLVM::emitBackgroundHelper(const QoreIRBackgroundInstruction* bg_in
                 helper_name + "_params");
             slots_ptr = slots_gv;
         }
+        // the callee of the expression as the lowering classified it (qore#7087); the runtime takes an index that
+        // is not a value's as unknown
         auto ft = llvm::FunctionType::get(i64_type,
-            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, i32_type, ptr_type}, false);
+            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, i32_type, i32_type, ptr_type}, false);
         auto helper = module.getOrInsertFunction("qore_rt_background_helper_aot", ft);
         auto helper_throwing = module.getOrInsertFunction("qore_rt_background_helper_aot_throwing", ft);
         *result_out = emitMaybeInvoke(helper, helper_throwing,
             {aot_ctx_arg, helper_fn, slots_ptr, values_array, nvalues_val,
-             llvm::ConstantInt::get(i32_type, bg_inst->helper_uses_self), xsink_arg},
+             llvm::ConstantInt::get(i32_type, bg_inst->helper_uses_self),
+             llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(bg_inst->helper_callee)), xsink_arg},
             module, llvm_func, bg_inst);
         return true;
     }
