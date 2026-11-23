@@ -31,8 +31,12 @@
     a library module can do.
 
     With a debug build of the library, dbg_module_path_trust() checks the forms that the loaders normalize before the
-    check: a path whose last component is ".." is not in a module directory, and a link in a module directory is
-    judged where it is, also when its target does not exist (the loader can use this build's AOT module for it).
+    check: a path whose last component is ".." is not in a module directory, nor is a module directory written with
+    trailing separators, and a link in a module directory is judged where it is, also when its target does not exist
+    (the loader can use this build's AOT module for it).  A path is judged as the search judges where it found a
+    module, whatever its form: a link in a module directory to a module's own directory is library code, while a file
+    in a linked directory there that leads elsewhere is not; a link elsewhere to a file in a module directory is
+    library code, loaded as the file in the module directory.
 */
 class ModulePathFormsTest inherits QUnit::Test {
     public {
@@ -134,6 +138,15 @@ list<list<auto>> cases = (
     (\"found: a directory outside the module directories\", \"\", d + \"/outside\", \"Out2Probe.qm\"),
     (\"found: a directory whose name starts with a module directory's\", \"\", d + \"/mods-evil\",
         \"EvilProbe.qm\"),
+    (\"a module directory with two trailing separators\", d + \"/mods//\"),
+    (\"a module directory with three trailing separators\", d + \"/mods///\"),
+    (\"a file in a linked directory in a module directory\", d + \"/mods/dirlink/Out2Probe.qm\"),
+    (\"a file in a linked directory in a module directory, path with ..\",
+        d + \"/scripts/../mods/dirlink/Out2Probe.qm\"),
+    (\"found: a linked directory in a module directory\", \"\", d + \"/mods/dirlink\", \"Out2Probe.qm\"),
+    (\"a module in a linked split AOT module directory\", d + \"/mods/SplitProbe/SplitProbe.qmod\"),
+    (\"a linked separated module directory\", d + \"/mods/SepProbe\"),
+    (\"a link elsewhere to a file in a module directory\", d + \"/outside/ToMods.qm\"),
 );
 foreach list<auto> c in (cases) {
     hash<auto> h = c.size() > 2
@@ -153,6 +166,14 @@ found: a linked split AOT module directory: library @D@/mods/SplitProbe/SplitPro
 found: a link to the module directory: library @D@/mods/LinkedProbe.qm
 found: a directory outside the module directories: not library -
 found: a directory whose name starts with a module directory's: not library -
+a module directory with two trailing separators: not library -
+a module directory with three trailing separators: not library -
+a file in a linked directory in a module directory: not library -
+a file in a linked directory in a module directory, path with ..: not library -
+found: a linked directory in a module directory: not library -
+a module in a linked split AOT module directory: library @D@/mods/SplitProbe/SplitProbe.qmod
+a linked separated module directory: library @D@/mods/SepProbe
+a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
 ";
     }
 
@@ -214,8 +235,9 @@ found: a directory whose name starts with a module directory's: not library -
         # a link to a file that does not exist, and a linked directory, in the module directory
         symlink(dir + "/nowhere/Dangling.qmod", dir + "/mods/Dangling.qmod");
         symlink(dir + "/outside", dir + "/mods/dirlink");
-        # a link to the module directory
+        # a link to the module directory, and a link elsewhere to a file in it
         symlink(dir + "/mods", dir + "/modslink");
+        symlink(dir + "/mods/InitHelper.qm", dir + "/outside/ToMods.qm");
         foreach hash<auto> i in (Prepends.pairIterator()) {
             writeFile(dir + "/scripts/" + i.key + ".q", replace(replace(ByPrepend, "@PREPEND@", i.value[0]), "@NAME@",
                 i.value[1]));
