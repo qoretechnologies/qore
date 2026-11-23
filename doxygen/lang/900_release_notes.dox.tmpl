@@ -1354,6 +1354,10 @@
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
+    @par Foreground Terminal Test
+    @ref Qore::ReadOnlyFile::isForegroundTty() "ReadOnlyFile::isForegroundTty()" tells whether a file is the
+    controlling terminal and the process is in its foreground, so that it can read keys and set the terminal's
+    attributes (<a href="https://github.com/qoretechnologies/qore/issues/7387">issue 7387</a>).
 
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
@@ -2969,6 +2973,10 @@
     - fixed \c qdp \c listen ending with an unhandled \c TERMIOS-GET-ERROR exception when stdin was not a terminal; it
       then stops on its timeout or a signal instead of a keystroke, and the interactive mode ends with a usage error
       (<a href="https://github.com/qoretechnologies/qore/issues/7130">issue 7130</a>)
+    - fixed \c qdp \c listen as a background job of a shell ending with an unhandled \c FILE-READ-ERROR exception
+      at the first input on the terminal, and putting the terminal in raw mode while it ran; it then stops on its
+      timeout or a signal, and the interactive mode ends with a usage error
+      (<a href="https://github.com/qoretechnologies/qore/issues/7387">issue 7387</a>)
     - a data provider instance or action set that callers with different restrictions share no longer keeps a type
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;
