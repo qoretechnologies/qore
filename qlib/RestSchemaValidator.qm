@@ -106,6 +106,10 @@ module RestSchemaValidator {
       fields that its type builds cache (see
       @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildCache() "recordTypeBuildCache()";
       <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - the cache writes of a type build are undone from records that are data
+      (@ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildUndo() "recordTypeBuildUndo()"), and a
+      nested type build that fails undoes its own writes
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the server-side request validation reads the fields of a request, including the header parameters, which it
       checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
       level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
@@ -1850,17 +1854,7 @@ public namespace RestSchemaValidator {
                 schema.stopOpaqueTypeCaches();
             }
             if (schema && schema.isTypeBuildActive()) {
-                *AbstractDataProviderType prev = replacedDataType;
-                # an undo runs once only, in the build that recorded it (qore#6843)
-                int undo_build = schema.getTypeBuildId();
-                bool undone;
-                schema.recordTypeBuildWrite(sub () {
-                    if (undone || schema.getTypeBuildId() != undo_build) {
-                        return;
-                    }
-                    undone = True;
-                    replacedDataType = prev;
-                });
+                recordCacheUndo(schema, "replaced", NOTHING, NOTHING, replacedDataType, True, True);
             }
             replacedDataType = t;
             if (t.isOrNothingType()) {
@@ -1880,6 +1874,102 @@ public namespace RestSchemaValidator {
             }
         }
 
+        #! Records how to undo a write of a cache entry of this object in the type build in progress (qore#6843)
+        /** The record is data (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildUndo() "AbstractRestSchemaValidator::recordTypeBuildUndo()"),
+            which only this class restores, in the failure path of the build that recorded it
+
+            @param schema the schema whose type build is in progress in the calling thread
+            @param kind the cache: \c "type" (\a key \c "Y" for the mandatory type, \c "N" for the "or nothing" type),
+            \c "replaced" (the type given to replaceType()), \c "field" (a canonical field) or \c "use" (a per-use field)
+            @param key the key of a field (its name or use key), or the type variant
+            @param rstr the requiredness key of a field
+            @param prev the value that the write replaces
+            @param had_key @ref True if the field cache had an entry for the key and requiredness (always for the other
+            caches)
+            @param had_outer @ref True if the field cache had an entry for the key
+
+            @since RestSchemaValidator 2.5
+        */
+        private:internal recordCacheUndo(AbstractRestSchemaValidator schema, string kind, *string key, *string rstr,
+                auto prev, bool had_key, bool had_outer) {
+            schema.recordTypeBuildUndo({
+                "restore": getCacheUndoRestore(),
+                "kind": kind,
+                "key": key,
+                "rstr": rstr,
+                "prev": prev,
+                "had_key": had_key,
+                "had_outer": had_outer,
+            });
+        }
+
+        #! Returns the code that restores a record of recordCacheUndo(); it binds no variable of a caller
+        private:internal code getCacheUndoRestore() {
+            return sub (hash<auto> record) { undoCacheEntry(record); };
+        }
+
+        #! Restores a cache entry from a record of recordCacheUndo()
+        /** Only in the failure path of the type build that made the record (it fails closed): see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::isUndoingTypeBuild() "AbstractRestSchemaValidator::isUndoingTypeBuild()"
+        */
+        private:internal undoCacheEntry(hash<auto> record) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (!schema || !schema.isUndoingTypeBuild(record.build)) {
+                return;
+            }
+            # the schema can have stopped opaque type caches since the write
+            bool opaque_undo = record.kind != "replaced" && record.had_key && holdCacheEntryOpaquely(schema);
+            update_shared_cache(self, sub () {
+                switch (record.kind) {
+                    case "replaced":
+                        replacedDataType = record.prev;
+                        break;
+                    case "type":
+                        if (record.key == "Y") {
+                            if (opaque_undo) {
+                                dataType @= record.prev;
+                            } else {
+                                dataType = record.prev;
+                            }
+                        } else if (opaque_undo) {
+                            orNothingDataType @= record.prev;
+                        } else {
+                            orNothingDataType = record.prev;
+                        }
+                        break;
+                    case "use":
+                        if (record.had_key) {
+                            if (opaque_undo) {
+                                usemap{record.key}{record.rstr} @= record.prev;
+                            } else {
+                                usemap{record.key}{record.rstr} = record.prev;
+                            }
+                        } else {
+                            remove usemap{record.key}{record.rstr};
+                            if (!record.had_outer) {
+                                remove usemap{record.key};
+                            }
+                        }
+                        break;
+                    case "field":
+                        if (record.had_key) {
+                            if (opaque_undo) {
+                                fieldmap{record.key}{record.rstr} @= record.prev;
+                            } else {
+                                fieldmap{record.key}{record.rstr} = record.prev;
+                            }
+                        } else {
+                            remove fieldmap{record.key}{record.rstr};
+                            if (!record.had_outer) {
+                                remove fieldmap{record.key};
+                            }
+                        }
+                        break;
+                }
+            });
+        }
+
         #! Sets a cached data type of this schema, recording the write in the type build in progress
         /** @param required @ref True for the mandatory type, @ref False for the "or nothing" type
             @param t the type to cache
@@ -1892,31 +1982,8 @@ public namespace RestSchemaValidator {
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
                 schema.recordTypeBuildCache(t);
-                *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
-                # an undo runs once only, in the build that recorded it (qore#6843)
-                int undo_build = schema.getTypeBuildId();
-                bool undone;
-                schema.recordTypeBuildWrite(sub () {
-                    if (undone || schema.getTypeBuildId() != undo_build) {
-                        return;
-                    }
-                    undone = True;
-                    # the schema can have stopped opaque type caches since the write
-                    bool opaque_undo = holdCacheEntryOpaquely(schema);
-                    update_shared_cache(self, sub () {
-                        if (required) {
-                            if (opaque_undo) {
-                                dataType @= prev;
-                            } else {
-                                dataType = prev;
-                            }
-                        } else if (opaque_undo) {
-                            orNothingDataType @= prev;
-                        } else {
-                            orNothingDataType = prev;
-                        }
-                    });
-                });
+                recordCacheUndo(schema, "type", required ? "Y" : "N", NOTHING, required ? dataType : orNothingDataType,
+                    True, True);
             }
             # the type built from this schema object
             update_shared_cache(self, sub () {
@@ -2006,45 +2073,10 @@ public namespace RestSchemaValidator {
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
                 schema.recordTypeBuildCache(field);
-                *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
-                # an undo runs once only, in the build that recorded it (qore#6843)
-                int undo_build = schema.getTypeBuildId();
-                bool undone;
-                schema.recordTypeBuildWrite(sub () {
-                    if (undone || schema.getTypeBuildId() != undo_build) {
-                        return;
-                    }
-                    undone = True;
-                    # the schema can have stopped opaque type caches since the write
-                    bool opaque_undo = prev && holdCacheEntryOpaquely(schema);
-                    update_shared_cache(self, sub () {
-                        if (use) {
-                            if (prev) {
-                                if (opaque_undo) {
-                                    usemap{key}{rstr} @= prev;
-                                } else {
-                                    usemap{key}{rstr} = prev;
-                                }
-                            } else {
-                                remove usemap{key}{rstr};
-                                if (!usemap{key}) {
-                                    remove usemap{key};
-                                }
-                            }
-                        } else if (prev) {
-                            if (opaque_undo) {
-                                fieldmap{key}{rstr} @= prev;
-                            } else {
-                                fieldmap{key}{rstr} = prev;
-                            }
-                        } else {
-                            remove fieldmap{key}{rstr};
-                            if (!fieldmap{key}) {
-                                remove fieldmap{key};
-                            }
-                        }
-                    });
-                });
+                *hash<auto> cache = use ? usemap : fieldmap;
+                bool had_outer = cache.hasKey(key);
+                recordCacheUndo(schema, use ? "use" : "field", key, rstr, cache{key}{rstr},
+                    had_outer && cache{key}.typeCode() == NT_HASH && cache{key}.hasKey(rstr), had_outer);
             }
             # the field built from this schema object
             update_shared_cache(self, sub () {
@@ -2967,7 +2999,10 @@ public namespace RestSchemaValidator {
             transient Mutex type_build_lock();
 
             #! How to undo the cache writes of the type build in progress, in the order they were made
-            transient list<code> type_build_undo = ();
+            transient list<auto> type_build_undo = ();
+
+            #! True while the type build in progress undoes its writes; see isUndoingTypeBuild()
+            transient bool type_build_undoing = False;
 
             #! Whether schema objects may hold the types they cache through opaque references; see holdTypeCacheOpaquely()
             transient bool opaque_type_caches;
@@ -3020,7 +3055,9 @@ public namespace RestSchemaValidator {
             The type builds of the schema are serialized, so a thread never reads a placeholder another thread is
             still completing; builds of different schemas run in parallel.
 
-            If the calling thread is already building types of this schema, the code runs as part of that build.
+            If the calling thread is already building types of this schema, the code runs as part of that build; if it
+            throws, the writes that it made are undone before the exception propagates (the writes of the enclosing
+            build are kept), so the enclosing build can handle the exception.
 
             @param build the code that builds types
 
@@ -3042,7 +3079,14 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             # sandboxed code cannot hold the schema's lock (qore#6843)
             SandboxManager::checkSharedObjectCallback(self, build, "run a type build");
             if (type_build_lock.lockOwner()) {
-                return build();
+                # a nested build undoes its own writes if it fails, which the enclosing build can then handle
+                int mark = type_build_undo.size();
+                try {
+                    return build();
+                } catch (hash<ExceptionInfo> ex) {
+                    undoTypeBuildWrites(mark);
+                    rethrow;
+                }
             }
             type_build_lock.lock();
             on_exit type_build_lock.unlock();
@@ -3067,12 +3111,32 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
                     }
                     return rv;
                 } catch (hash<ExceptionInfo> ex) {
-                    # undo the writes of the build, the latest first
-                    while (type_build_undo) {
-                        code undo_write = pop type_build_undo;
+                    undoTypeBuildWrites(0);
+                    rethrow;
+                }
+            });
+        }
+
+        #! Undoes the writes of the type build in progress recorded after the first \a mark records, the latest first
+        /** The records of recordTypeBuildUndo() and the code of recordTypeBuildWrite(), in the reverse order they were
+            made
+
+            @param mark the number of records to keep: 0 for a build, the number of records when a nested build
+            started for the nested build
+
+            @since RestSchemaValidator 2.5
+        */
+        private:internal undoTypeBuildWrites(int mark) {
+            update_shared_cache(self, sub () {
+                type_build_undoing = True;
+                on_exit type_build_undoing = False;
+                while (type_build_undo.size() > mark) {
+                    auto undo_write = pop type_build_undo;
+                    if (undo_write.typeCode() == NT_HASH) {
+                        undo_write.restore(undo_write);
+                    } else {
                         undo_write();
                     }
-                    rethrow;
                 }
             });
         }
@@ -3258,6 +3322,46 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             if (type_build_lock.lockOwner()) {
                 update_shared_cache(self, sub () { push type_build_undo, undo_write; });
             }
+        }
+
+        #! Records how to undo a cache write of the type build of this schema in progress, as data
+        /** As recordTypeBuildWrite(), with a record instead of code, which keeps no variable of the code that writes
+            the cache alive until the build has finished: the schema objects of the library record the writes of
+            their caches in this way.  If the build fails, the code under the \c "restore" key is called with the
+            record, the latest record first, together with the code given to recordTypeBuildWrite(); the record has
+            the number of the build under the \c "build" key, and the code restores the entry only if
+            isUndoingTypeBuild() returns @ref True for it (qore#6843).
+
+            Has no effect if the calling thread is not building types of this schema.
+
+            @param record the record: the code that restores the entry under the \c "restore" key, which must not
+            throw, and the data that it needs
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        recordTypeBuildUndo(hash<auto> record) {
+            # the restore code of a record of a shared schema's build is code of a trusted library class
+            SandboxManager::checkSharedObjectCallback(self, record.restore, "record a write of a type build");
+            if (type_build_lock.lockOwner()) {
+                # a record of its own, whatever the type of the hash given
+                hash<auto> entry = {};
+                entry += record;
+                entry.build = type_build_id;
+                update_shared_cache(self, sub () { push type_build_undo, entry; });
+            }
+        }
+
+        #! Returns @ref True if the calling thread is undoing the writes of the type build with the given number
+        /** A record of recordTypeBuildUndo() is restored only then: in the failure path of the build that made it
+
+            @param build the number of the build that made the record
+
+            @since RestSchemaValidator 2.5
+        */
+        bool isUndoingTypeBuild(int build) {
+            return type_build_lock.lockOwner() && type_build_undoing && build == type_build_id;
         }
 
         #! Records a type or field that the type build of this schema in progress on the calling thread caches

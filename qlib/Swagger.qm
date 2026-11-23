@@ -1270,10 +1270,44 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             return rv;
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
-        # the type built from the document, which is shared as the document is (qore#6843)
-        recordTypeBuildCache(rv);
-        update_shared_cache(self, sub () { typemap{id}{required ? "Y" : "N"} = rv; });
+        string key = required ? "Y" : "N";
+        if (isTypeBuildActive()) {
+            # the type built from the document, which is shared as the document is (qore#6843)
+            recordTypeBuildCache(rv);
+            bool had_outer = typemap.hasKey(id);
+            recordTypeBuildUndo({
+                "restore": getTypeUndoRestore(),
+                "id": id,
+                "key": key,
+                "prev": typemap{id}{key},
+                "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
+                "had_outer": had_outer,
+            });
+        }
+        update_shared_cache(self, sub () { typemap{id}{key} = rv; });
         return rv;
+    }
+
+    #! Returns the code that restores a record of getType(); it binds no variable of a caller
+    private:internal code getTypeUndoRestore() {
+        return sub (hash<auto> record) { undoCachedType(record); };
+    }
+
+    #! Restores an entry of the type cache in the failure path of the type build that made the record (qore#6843)
+    private:internal undoCachedType(hash<auto> record) {
+        if (!isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () {
+            if (record.had_key) {
+                typemap{record.id}{record.key} = record.prev;
+            } else {
+                remove typemap{record.id}{record.key};
+                if (!record.had_outer) {
+                    remove typemap{record.id};
+                }
+            }
+        });
     }
 
     #! Returns a type that a sandboxed caller of a shared document asks for; see getType()

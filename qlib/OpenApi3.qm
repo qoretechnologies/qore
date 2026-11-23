@@ -2006,30 +2006,41 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     #! Caches a type, recording the write in the type build in progress
     private setCachedType(string id, string key, AbstractDataProviderType t) {
         if (isTypeBuildActive()) {
-            *AbstractDataProviderType prev = typemap{id}{key};
-            # an undo runs once only, in the build that recorded it (qore#6843)
-            int undo_build = getTypeBuildId();
-            bool undone;
-            recordTypeBuildWrite(sub () {
-                if (undone || getTypeBuildId() != undo_build) {
-                    return;
-                }
-                undone = True;
-                update_shared_cache(self, sub () {
-                    if (prev) {
-                        typemap{id}{key} = prev;
-                    } else {
-                        remove typemap{id}{key};
-                        if (!typemap{id}) {
-                            remove typemap{id};
-                        }
-                    }
-                });
+            bool had_outer = typemap.hasKey(id);
+            recordTypeBuildUndo({
+                "restore": getTypeUndoRestore(),
+                "id": id,
+                "key": key,
+                "prev": typemap{id}{key},
+                "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
+                "had_outer": had_outer,
             });
         }
         # the type built from the document, which is shared as the document is (qore#6843)
         recordTypeBuildCache(t);
         update_shared_cache(self, sub () { typemap{id}{key} = t; });
+    }
+
+    #! Returns the code that restores a record of setCachedType(); it binds no variable of a caller
+    private:internal code getTypeUndoRestore() {
+        return sub (hash<auto> record) { undoCachedType(record); };
+    }
+
+    #! Restores an entry of the type cache in the failure path of the type build that made the record (qore#6843)
+    private:internal undoCachedType(hash<auto> record) {
+        if (!isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () {
+            if (record.had_key) {
+                typemap{record.id}{record.key} = record.prev;
+            } else {
+                remove typemap{record.id}{record.key};
+                if (!record.had_outer) {
+                    remove typemap{record.id};
+                }
+            }
+        });
     }
 
     #! Returns the data type corresponding to the values
@@ -6531,15 +6542,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
                 schema.recordTypeBuildCache(t);
-                # an undo runs once only, in the build that recorded it (qore#6843)
-                int undo_build = schema.getTypeBuildId();
-                bool undone;
-                schema.recordTypeBuildWrite(sub () {
-                    if (undone || schema.getTypeBuildId() != undo_build) {
-                        return;
-                    }
-                    undone = True;
-                    update_shared_cache(self, sub () { remove alternativeDataType; });
+                schema.recordTypeBuildUndo({
+                    "restore": getAlternativeUndoRestore(),
+                    "prev": alternativeDataType,
                 });
             }
             # the type built from this schema object
@@ -6552,6 +6557,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             });
         }
         return alternativeDataType;
+    }
+
+    #! Returns the code that restores a record of getAlternativeDataType(); it binds no variable of a caller
+    private:internal code getAlternativeUndoRestore() {
+        return sub (hash<auto> record) { undoAlternativeDataType(record); };
+    }
+
+    #! Restores the alternative type in the failure path of the type build that made the record (qore#6843)
+    private:internal undoAlternativeDataType(hash<auto> record) {
+        *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
+        if (!schema || !schema.isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () { alternativeDataType = record.prev; });
     }
 
     #! Returns @ref True if getDataType() returns a plain scalar or array type, which getAlternativeDataType() builds itself

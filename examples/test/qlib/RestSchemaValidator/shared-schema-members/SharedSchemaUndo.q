@@ -31,12 +31,18 @@ const OpenApi3Doc = {
 const TenantCode = "
 %modern
 
-# runs each undo record that it is given
-string sub run_undos(list<code> undos) {
+# runs each undo record that it is given: the code of a record, or the code of a record that is data, given the
+# record, also as it would be in a later build
+string sub run_undos(list<auto> undos) {
     list<string> l = ();
-    foreach code undo in (undos) {
+    foreach auto undo in (undos) {
         try {
-            undo();
+            if (undo.typeCode() == NT_HASH) {
+                undo.restore(undo);
+                undo.restore(undo + {\"build\": undo.build + 1});
+            } else {
+                undo();
+            }
             l += \"ran\";
         } catch (hash<ExceptionInfo> ex) {
             l += ex.err;
@@ -65,7 +71,7 @@ string sub snapshot(OpenApi3Schema schema) {
 }
 
 # the undo records of the type build in progress, read with Reflection by trusted test code
-list<code> sub undo_records(OpenApi3Schema schema) {
+list<auto> sub undo_records(OpenApi3Schema schema) {
     foreach Class c in (Class::getClass(schema).getClassHierarchy()) {
         foreach AbstractClassMember m in (c.getMembers()) {
             if (m.getName() == "type_build_undo" && m instanceof NormalMember) {
@@ -77,7 +83,7 @@ list<code> sub undo_records(OpenApi3Schema schema) {
 }
 
 OpenApi3Schema schema = OpenApi3Loader::fromString(make_json(OpenApi3Doc), True);
-list<code> undos;
+list<auto> undos;
 # trusted code builds the types of the shared schema; the undo records of the build are taken before it ends
 schema.runTypeBuild(sub () {
     schema.getTypeForReference("Thing");
@@ -89,6 +95,12 @@ printf("the tenant runs them after the build: %s\n", p.callFunction("run_undos",
 printf("the caches are unchanged: %y\n", snapshot(schema) == before);
 # trusted code runs them in a later build
 schema.runTypeBuild(sub () {
-    map $1(), undos;
+    foreach auto undo in (undos) {
+        if (undo.typeCode() == NT_HASH) {
+            undo.restore(undo + {"build": schema.getTypeBuildId()});
+        } else {
+            undo();
+        }
+    }
 });
 printf("trusted code runs them in a later build, the caches are unchanged: %y\n", snapshot(schema) == before);

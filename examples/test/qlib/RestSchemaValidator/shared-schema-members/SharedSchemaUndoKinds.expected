@@ -1,0 +1,10 @@
+the types of a schema object: BUILD-ERROR, the caches are as before: True
+the canonical and per-use fields: BUILD-ERROR, the caches are as before: True
+the type cache of the document: BUILD-ERROR, the caches are as before: True
+an alternative type: BUILD-ERROR, the caches are as before: True
+a replaced type: BUILD-ERROR, the caches are as before: True
+the type cache of a Swagger document: BUILD-ERROR, as before: True
+a nested build that fails: the outer write is kept: True, the inner write is undone: True, the rest is as before: True
+a build with records and code: BUILD-ERROR, undone: ["last code record: the field is cached: True", "first code record: the field is cached: False"]
+a replaced type: BUILD-ERROR, restored: True, the same object: True, intact: True
+a tenant reads the records with Reflection: REFLECTION-ACCESS-ERROR; calls the method that gives the restore code: METHOD-DOES-NOT-EXIST
