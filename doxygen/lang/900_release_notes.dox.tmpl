@@ -2869,6 +2869,10 @@
       @ref weak_assignment_operator "weak reference" in the AST interpreter, as in the other execution modes, and no
       longer let an object that is still referenced be collected after such a removal in any mode
       (<a href="https://github.com/qoretechnologies/qore/issues/7346">issue 7346</a>)
+    - a value removed or replaced in a list or hash that an object holds (by remove, delete, an assignment, shift, pop,
+      splice or extract), through a @ref weak_assignment_operator "weak reference" to the list or hash, no longer lets
+      an object that is still referenced be collected
+      (<a href="https://github.com/qoretechnologies/qore/issues/7373">issue 7373</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
